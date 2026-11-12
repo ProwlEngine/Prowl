@@ -325,7 +325,7 @@ internal sealed partial class ProfilerView
         double[] average = Enumerable.Repeat(avg, v.Length).ToArray();
         string cur = current >= 0 && current < v.Length ? chart.Format(v[current]) : "-";
         Color secondColor = chart.SecondColor ?? Style.Snapshot;
-        using (_paper.Row("head").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Gap(Metrics.Spacing).AlignItems(LayoutAlignment.Center).Enter())
+        using (_paper.Row("head").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(Metrics.Spacing).LineGap(2).Enter())
         {
             if (chart.Second != null)
             {

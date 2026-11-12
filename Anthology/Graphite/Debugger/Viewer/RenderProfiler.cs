@@ -107,7 +107,7 @@ internal sealed partial class ProfilerView
                 {
                     DrawFramesRow(frames, null, null);
                     Divider("sep_top");
-                    DrawLiveDashboard(frames);
+                    DrawLiveDashboard(frames, width - Gap * 2);
                 }
                 else
                 {
@@ -203,11 +203,16 @@ internal sealed partial class ProfilerView
     private void TakeSnapshot()
     {
         IReadOnlyList<Recording> frames = _source.Frames;
-        int index = ShownIndex(frames);
-        if (index < 0)
-            return;
+        int index = CurrentLive(frames);
+        bool pinned = index >= 0;
+        if (!pinned)
+        {
+            if (!_follow || frames.Count == 0)
+                return;
+            index = frames.Count - 1;
+        }
         _source.Capture(index, DeepMode.Full);
-        _message = $"Snapshot / frame #{frames[index].ExecutionId}";
+        _message = pinned ? $"Snapshot / frame #{frames[index].ExecutionId}" : "Snapshot / latest frame";
         _snapshotTaken();
     }
 
@@ -368,7 +373,7 @@ internal sealed partial class ProfilerView
     private void DrawFramesRow(IReadOnlyList<Recording> frames, Recording? live, FrameModel? model)
     {
         float cardHeight = FramesHeight - PanelHeaderHeight;
-        bool pinned = _pinned != null;
+        bool pinned = live != null && _pinned == live.ExecutionId;
         using (_paper.Row("rp_frames_row").Height(FramesHeight).Gap(Gap).Enter())
         {
             using (_paper.Column("frames").Width(UnitValue.Stretch()).Height(FramesHeight).Enter())
@@ -380,7 +385,7 @@ internal sealed partial class ProfilerView
                     Spacer("sp");
                     LegendItem("lg_avg", Style.Ink, "Cumulative avg");
                     LegendItem("lg_over", Style.OverBudget, $"Over {BudgetMs} ms");
-                    Mono("follow", pinned ? $"Selected #{live!.ExecutionId}" : _follow ? "Following latest" : "No frame selected", pinned ? Style.Selection : Style.InkDim);
+                    Mono("follow_state", pinned ? $"Selected #{live!.ExecutionId}" : _follow ? "Following latest" : "No frame selected", pinned ? Style.Selection : Style.InkDim);
                 }
 
                 using (_paper.Column("card").Height(cardHeight).Enter())
@@ -427,13 +432,16 @@ internal sealed partial class ProfilerView
     private const float HeroHeight = 84f;
     private const float StatRowHeight = 20f;
     private const int SparkPoints = 32;
+    private const float MinColumnWidth = 210f;
+    private const float HeroValueSize = 26f;
 
-    private static Color CpuColor => Style.Theme.Blue.C500;
-    private static Color GpuColor => Style.Write;
+    // The colors the inspector's CPU vs GPU chart draws its two lines in
+    private static Color CpuColor => Style.KindDot(NodeKind.Pass);
+    private static Color GpuColor => Style.Snapshot;
 
     // The summary shown while no frame is open: numbers the source already measured, rebuilt once per FollowInterval.
     // It is one element painted with plain rects and text, so it adds no layout work and no path tessellation
-    private void DrawLiveDashboard(IReadOnlyList<Recording> frames)
+    private void DrawLiveDashboard(IReadOnlyList<Recording> frames, float width)
     {
         if (_liveStats == null || Stopwatch.GetElapsedTime(_liveStatsAt) >= FollowInterval)
         {
@@ -443,37 +451,50 @@ internal sealed partial class ProfilerView
 
         LiveDashboard live = _liveStats;
         float gap = Gap;
-        using (_paper.Box("live").Width(UnitValue.Stretch()).Height(ColumnHeight(live)).IsNotInteractable().Enter())
-            _paper.Draw((canvas, r) => PaintLiveDashboard(canvas, live, (float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, gap));
+        int columns = LiveColumns(live, width, gap);
+        int rows = (live.Heroes.Length + columns - 1) / columns;
+        float height = rows * ColumnHeight(live) + (rows - 1) * gap;
+        using (_paper.Box("live").Width(UnitValue.Stretch()).Height(height).IsNotInteractable().Enter())
+            _paper.Draw((canvas, r) => PaintLiveDashboard(canvas, live, columns, (float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, gap));
+    }
+
+    // As many columns as fit at MinColumnWidth: all in one row, or folded into rows of two or one in a narrow panel
+    private static int LiveColumns(LiveDashboard live, float width, float gap)
+    {
+        int fit = Math.Max(1, (int)((width + gap) / (MinColumnWidth + gap)));
+        int count = live.Heroes.Length;
+        return fit >= count ? count : fit >= 2 ? 2 : 1;
     }
 
     private static float ColumnHeight(LiveDashboard live) => HeroHeight + live.StatRows * StatRowHeight + 10f;
 
-    private static void PaintLiveDashboard(Prowl.Quill.Canvas canvas, LiveDashboard live, float x0, float y0, float w, float gap)
+    private static void PaintLiveDashboard(Prowl.Quill.Canvas canvas, LiveDashboard live, int columns, float x0, float y0, float w, float gap)
     {
         FontFile mono = Style.Mono, text = Style.Theme.Font ?? Style.Mono;
         Prowl.Vector.Float2 right = new(1, 0);
 
         // One column per main number, as wide as the panel allows, with the numbers that explain it listed underneath
         float columnHeight = ColumnHeight(live);
-        float cw = (w - gap * (live.Heroes.Length - 1)) / live.Heroes.Length;
+        float cw = (w - gap * (columns - 1)) / columns;
         for (int i = 0; i < live.Heroes.Length; i++)
         {
             LiveHero hero = live.Heroes[i];
-            float x = x0 + i * (cw + gap), y = y0;
+            float x = x0 + i % columns * (cw + gap), y = y0 + i / columns * (columnHeight + gap);
             canvas.RectFilled(x, y, cw, columnHeight, Style.CardFill);
             canvas.DrawText(hero.Label, x + 12, y + 12, hero.Accent, Style.Small, text);
-            canvas.DrawText(hero.Value, x + 12, y + 34, hero.ValueColor, 26f, mono);
+            canvas.DrawText(hero.Value, x + 12, y + 34, hero.ValueColor, HeroValueSize, mono);
 
             float[] spark = hero.Spark;
-            if (spark.Length > 0)
+            // Starts past the value, taken as a mono glyph being 0.6 of its size wide, and is dropped when little is left
+            float sx = MathF.Max(x + cw * 0.5f, x + 24f + hero.Value.Length * HeroValueSize * 0.6f), sw = x + cw - 12f - sx;
+            if (spark.Length > 0 && sw >= 48f)
             {
-                float sx = x + cw * 0.5f, sw = cw * 0.5f - 12f, bottom = y + HeroHeight - 12f, sh = HeroHeight - 46f;
+                float bottom = y + HeroHeight - 12f, sh = HeroHeight - 46f;
                 float slot = sw / spark.Length, bw = MathF.Max(1f, slot - 1f);
                 Color bar = Style.Alpha(hero.Accent, 110);
                 for (int b = 0; b < spark.Length; b++)
                 {
-                    float bh = MathF.Max(2f, sh * (0.15f + 0.85f * spark[b]));
+                    float bh = MathF.Max(2f, sh * spark[b]);
                     canvas.RectFilled(sx + b * slot, bottom - bh, bw, bh, b == spark.Length - 1 ? hero.Accent : bar);
                 }
             }
@@ -516,16 +537,7 @@ internal sealed partial class ProfilerView
 
         Recording newest = frames[^1];
         FrameTiming timing = _source.Timing(count - 1);
-        ulong draws = 0, dispatches = 0, binds = 0, shaders = 0;
-        foreach (RecordedGroup group in newest.Groups)
-            foreach (RecordedPass pass in group.Passes)
-            {
-                PassStats stats = pass.Stats;
-                draws += stats.Draws + stats.IndirectDraws;
-                dispatches += stats.Dispatches;
-                binds += stats.PipelineBinds;
-                shaders += stats.ShaderSwitches;
-            }
+        FrameMetrics metrics = FrameMetrics.From(newest);
 
         bool slow = timing.FrameMilliseconds > BudgetMs;
         double nowFps = fps[count - 1], avgFps = avgFrame > 0 ? 1000.0 / avgFrame : 0;
@@ -546,14 +558,14 @@ internal sealed partial class ProfilerView
             Hero("CPU record / ms", Style.F(timing.CpuMilliseconds, "0.00"), CpuColor, false, cpu,
             [
                 new("Average", Style.F(avgCpu, "0.00")),
-                new("Draws", Style.Int(draws)),
-                new("Dispatches", Style.Int(dispatches)),
+                new("Draw calls", Style.Int(metrics.Draws)),
+                new("Dispatches", Style.Int(metrics.Dispatches)),
             ]),
             Hero("GPU draw / ms", Style.F(timing.GpuMilliseconds, "0.00"), GpuColor, false, gpu,
             [
                 new("Average", Style.F(avgGpu, "0.00")),
-                new("Pipeline binds", Style.Int(binds)),
-                new("Shader switches", Style.Int(shaders)),
+                new("Pipeline binds", Style.Int(metrics.PipelineBinds)),
+                new("Shader switches", Style.Int(metrics.ShaderSwitches)),
             ]),
         ];
 
@@ -565,7 +577,8 @@ internal sealed partial class ProfilerView
         return new LiveHero(label, value, accent, slow ? Style.OverBudget : Style.Ink, SparkPointsOf(series), stats);
     }
 
-    // The series averaged into at most SparkPoints buckets and scaled into 0..1 across its own range
+    // The series averaged into at most SparkPoints buckets, each as a fraction of the largest, so a bar's height is
+    // its value measured from zero and a steady series stays level
     private static float[] SparkPointsOf(double[] series)
     {
         int points = Math.Min(SparkPoints, series.Length);
@@ -573,7 +586,7 @@ internal sealed partial class ProfilerView
             return [];
 
         double[] buckets = new double[points];
-        double lo = double.MaxValue, hi = double.MinValue;
+        double hi = 0;
         for (int b = 0; b < points; b++)
         {
             int from = b * series.Length / points, to = Math.Max(from + 1, (b + 1) * series.Length / points);
@@ -581,14 +594,12 @@ internal sealed partial class ProfilerView
             for (int i = from; i < to; i++)
                 sum += series[i];
             buckets[b] = sum / (to - from);
-            lo = Math.Min(lo, buckets[b]);
             hi = Math.Max(hi, buckets[b]);
         }
 
         float[] spark = new float[points];
-        double range = hi - lo;
         for (int b = 0; b < points; b++)
-            spark[b] = range > 1e-9 ? (float)((buckets[b] - lo) / range) : 0.5f;
+            spark[b] = hi > 1e-9 ? (float)Math.Clamp(buckets[b] / hi, 0.0, 1.0) : 0f;
         return spark;
     }
 

@@ -55,7 +55,7 @@ internal sealed partial class ProfilerView
                 if (!Heavy)
                     ChartsSection("Trend", $"{frames.Count} frames / dotted line = this frame / dashed = window average", CurrentIndex(frames, model), new[]
                     {
-                        new Sparkline("CPU", t.Select(x => x.CpuMilliseconds).ToArray(), Style.KindDot(NodeKind.Pass), Style.Ms2, t.Select(x => x.GpuMilliseconds).ToArray(), Style.Snapshot, "GPU", "vs", "time"),
+                        new Sparkline("CPU", t.Select(x => x.CpuMilliseconds).ToArray(), Style.KindDot(NodeKind.Pass), Style.Ms2, t.Select(x => x.GpuMilliseconds).ToArray(), Style.Snapshot, SecondTitle: "GPU", Joiner: "vs", Suffix: "time"),
                         new Sparkline("Draw calls", fm.Select(x => (double)x.Draws).ToArray(), Style.KindDot(NodeKind.Draw), Style.Int),
                     }, 420f, 180f);
 
@@ -277,9 +277,9 @@ internal sealed partial class ProfilerView
         Func<double, string> ms = Style.Ms2, count = Style.Int;
         ChartsSection("Frame history", $"{frames.Count} frames / yellow dot = this frame / dashed = window average", current, new[]
         {
-            new Sparkline("CPU", t.Select(x => x.CpuMilliseconds).ToArray(), Style.KindDot(NodeKind.Pass), ms, t.Select(x => x.GpuMilliseconds).ToArray(), Style.Snapshot, "GPU", "vs", "time"),
+            new Sparkline("CPU", t.Select(x => x.CpuMilliseconds).ToArray(), Style.KindDot(NodeKind.Pass), ms, t.Select(x => x.GpuMilliseconds).ToArray(), Style.Snapshot, SecondTitle: "GPU", Joiner: "vs", Suffix: "time"),
             new Sparkline("Draw calls", m.Select(x => (double)x.Draws).ToArray(), Style.KindDot(NodeKind.Draw), count),
-            new Sparkline("Shader switches", m.Select(x => (double)x.ShaderSwitches).ToArray(), Style.Accent, count, m.Select(x => (double)x.PipelineBinds).ToArray(), Style.Good, "pipeline binds"),
+            new Sparkline("Shader switches", m.Select(x => (double)x.ShaderSwitches).ToArray(), Style.Accent, count, m.Select(x => (double)x.PipelineBinds).ToArray(), Style.Good, SecondTitle: "pipeline binds"),
             new Sparkline("Triangles", m.Select(x => (double)x.Triangles / 1e6).ToArray(), Style.Read, v => Style.F(v, "0.00") + " M"),
             new Sparkline("VRAM in use", m.Select(x => (double)x.VramUsage).ToArray(), Style.KindDot(NodeKind.CommandBuffer), Style.Bytes),
             new Sparkline("Live object delta", m.Select(x => (double)x.LiveDelta).ToArray(), Style.Bad, count),
