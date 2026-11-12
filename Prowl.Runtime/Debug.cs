@@ -387,7 +387,7 @@ public static class Debug
         DebugStackTrace? trace = DebugStackTrace.FromException(exception, out string message);
 
         // Log it.
-        LogCore(message, LogSeverity.Exception, trace);
+        LogCore(context + " " + message, LogSeverity.Exception, trace);
     }
 
     /// <summary>
