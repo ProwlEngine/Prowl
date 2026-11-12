@@ -507,7 +507,7 @@ public class AssetDatabaseTests : RuntimeTestBase
 
         Assert.Equal(id.ToString(), echo["Later"]["$assetRef"].StringValue);
         Assert.Equal(AssetState.Unloaded, copy.Later.Get()!.State);
-        Assert.Equal(8, copy.Later.Load()!.Size);
+        Assert.Equal(8, copy.Later.LoadImmediate()!.Size);
     }
 
     #endregion

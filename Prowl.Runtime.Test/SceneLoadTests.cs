@@ -81,6 +81,19 @@ public class SceneLoadTests : RuntimeTestBase
     }
 
     [Fact]
+    public void LoadThroughAReference_LoadsTheLevel()
+    {
+        AssetRef<Scene> next = Stored("Level", "Door");
+
+        SceneLoad load = next.Load();
+        load.Wait();
+
+        Assert.Equal(SceneLoadPhase.Done, load.Phase);
+        Assert.Same(load.Section, SceneInstance.Main.ActiveSection);
+        Assert.Equal("Door", Only(load.Section!).Name);
+    }
+
+    [Fact]
     public void MadePersistentWhileALoadDisablesIt_TheObjectSurvivesEnabled()
     {
         SceneInstance main = SceneInstance.Main;

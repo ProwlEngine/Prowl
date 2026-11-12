@@ -36,7 +36,7 @@ public struct AssetRef<T> : IAssetRef, IEquatable<AssetRef<T>>, ISerializable wh
     public T? Get() => AssetDatabase.Get<T>(_assetId);
 
     /// <summary>The asset, loaded. Blocks.</summary>
-    public T? Load() => AssetDatabase.Load<T>(_assetId);
+    public T? LoadImmediate() => AssetDatabase.Load<T>(_assetId);
 
     public Task<T?> LoadAsync(CancellationToken cancel = default) => AssetDatabase.LoadAsync<T>(_assetId, cancel);
 
