@@ -122,6 +122,12 @@ public sealed class RenderView : IDisposable
 
     public uint CullingMask { get; set; } = ~0u;
 
+    /// <summary>Multiplies the screen size every renderable's level of detail is chosen by in this view. Above 1 keeps detail longer.</summary>
+    public float LodBias { get; set; } = 1;
+
+    /// <summary>The level of detail every renderable draws at in this view, 0 their own mesh, or -1 to choose by size.</summary>
+    public int ForcedLod { get; set; } = -1;
+
     /// <summary>Its alpha is ignored, views clear opaque.</summary>
     public Float4 ClearColor { get; set; }
 
@@ -215,6 +221,8 @@ public sealed class RenderView : IDisposable
             LayerCount = camera.LayerCount,
             Target = Target!,
             CullingMask = CullingMask,
+            LodBias = LodBias,
+            ForcedLod = ForcedLod,
             ClearColor = ClearColor,
             Sky = Sky,
             Near = camera.Near,
@@ -252,6 +260,8 @@ internal struct ViewDesc
     public byte LayerCount;
     public Framebuffer Target;
     public uint CullingMask;
+    public float LodBias;
+    public int ForcedLod;
     public Float4 ClearColor;
     public bool Sky;
     public float Near;
@@ -275,6 +285,8 @@ internal struct ViewDesc
         Target = null!;
         LayerCount = 1;
         CullingMask = ~0u;
+        LodBias = 1;
+        ForcedLod = -1;
         Sky = true;
         Near = 0.1f;
         FarDistance = 1000;

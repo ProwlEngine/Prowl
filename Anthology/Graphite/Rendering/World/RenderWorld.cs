@@ -108,7 +108,14 @@ public struct TransientDraw
 
 public struct RenderableDesc
 {
+    /// <summary>The mesh, and level 0 when <see cref="Lods"/> is set.</summary>
     public GpuMesh Mesh;
+
+    /// <summary>Coarser meshes drawn in place of Mesh as the renderable gets smaller on screen, or null for Mesh alone.</summary>
+    public LodSet? Lods;
+
+    /// <summary>Multiplies the screen size the renderable's level is chosen by. Above 1 keeps detail longer.</summary>
+    public float LodBias;
 
     /// <summary>Name debug tools show, or null.</summary>
     public string? Name;
@@ -141,6 +148,7 @@ public struct RenderableDesc
         Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
         Lightmap = LightmapBinding.None;
         Color = Float4.One;
+        LodBias = 1;
     }
 }
 
@@ -276,6 +284,12 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>The shadow settings as of the last SubmitFrame. The render thread reads only this.</summary>
     internal ShadowSettings ShadowSnapshot = new();
 
+    /// <summary>How the world's renderables pick their levels of detail. Host thread, read at SubmitFrame.</summary>
+    public LodSettings Lod { get; } = new();
+
+    /// <summary>The LOD settings as of the last SubmitFrame. The render thread reads only this.</summary>
+    internal LodSettings LodSnapshot = new();
+
     /// <summary>Features every view of the world runs. Host thread.</summary>
     public ExtensionSet<RenderFeature> Features { get; }
 
@@ -327,6 +341,9 @@ public sealed partial class RenderWorld : IDisposable
     private string?[] _name = [];
     private bool[] _alive = [];
     private GpuMesh?[] _mesh = [];
+    private LodSet?[] _lods = [];
+    private float[] _lodBias = [];
+    private sbyte[] _forcedLod = [];
     private RangeAllocation[] _slice = [];
     private Double4x4[] _transform = [];
     private uint[] _layerMask = [];
@@ -403,6 +420,9 @@ public sealed partial class RenderWorld : IDisposable
         _alive[index] = true;
         _name[index] = desc.Name;
         _mesh[index] = desc.Mesh;
+        _lods[index] = desc.Lods;
+        _lodBias[index] = desc.LodBias;
+        _forcedLod[index] = -1;
         _transform[index] = desc.Transform;
         _layerMask[index] = desc.LayerMask;
         _flags[index] = desc.Flags;
@@ -427,6 +447,7 @@ public sealed partial class RenderWorld : IDisposable
         _alive[index] = false;
         _generation[index]++;
         _mesh[index] = null;
+        _lods[index] = null;
         _bones[index] = null;
         _shapeWeights[index] = null;
         FreeSlice(_slice[index]);
@@ -462,6 +483,38 @@ public sealed partial class RenderWorld : IDisposable
             return;
         _mesh[index] = mesh;
         MarkDirty(index, Dirt.Draw | Dirt.Bounds);
+    }
+
+    /// <summary>Sets the coarser levels drawn in place of the mesh, or null for the mesh alone. A skinned or blend shape renderable draws its mesh whatever this holds.</summary>
+    public void SetLods(RenderableHandle handle, LodSet? lods)
+    {
+        int index = Check(handle);
+        if (_lods[index] == lods)
+            return;
+        _lods[index] = lods;
+        MarkDirty(index, Dirt.Draw | Dirt.Bounds);
+    }
+
+    /// <summary>Sets the multiplier of the screen size the renderable's level is chosen by, see <see cref="RenderableDesc.LodBias"/>.</summary>
+    public void SetLodBias(RenderableHandle handle, float bias)
+    {
+        int index = Check(handle);
+        if (_lodBias[index] == bias)
+            return;
+        _lodBias[index] = bias;
+        MarkDirty(index, Dirt.Attributes);
+    }
+
+    /// <summary>Draws one level in every view, 0 the mesh, for tools and debugging, or -1 to choose by size again.</summary>
+    public void ForceLod(RenderableHandle handle, int level)
+    {
+        int index = Check(handle);
+        if (level < -1 || level > LodSet.MaxLevels)
+            throw new ArgumentOutOfRangeException(nameof(level));
+        if (_forcedLod[index] == level)
+            return;
+        _forcedLod[index] = (sbyte)level;
+        MarkDirty(index, Dirt.Attributes);
     }
 
     public void SetMaterials(RenderableHandle handle, ReadOnlySpan<Material> materials)
@@ -642,6 +695,7 @@ public sealed partial class RenderWorld : IDisposable
     internal void Extract()
     {
         ShadowSnapshot = Shadows.Copy();
+        LodSnapshot = Lod.Copy();
         ProviderSnapshot = Providers.Snapshot();
         foreach (RenderProvider provider in ProviderSnapshot)
         {
@@ -747,6 +801,9 @@ public sealed partial class RenderWorld : IDisposable
         Array.Resize(ref _name, capacity);
         Array.Resize(ref _alive, capacity);
         Array.Resize(ref _mesh, capacity);
+        Array.Resize(ref _lods, capacity);
+        Array.Resize(ref _lodBias, capacity);
+        Array.Resize(ref _forcedLod, capacity);
         Array.Resize(ref _slice, capacity);
         Array.Resize(ref _transform, capacity);
         Array.Resize(ref _layerMask, capacity);
@@ -843,6 +900,12 @@ public sealed partial class RenderWorld : IDisposable
         /// <summary>The placement a renderable draws: its deformed copy, else its mesh's.</summary>
         public MeshPlacement? PlacementOf(int index) => Deformed[index] ?? Mesh[index]?.Placement;
 
+        /// <summary>The levels a renderable draws from, its own mesh's among them. A deforming one has only its own.</summary>
+        public int LevelCount(int index) => Deformed[index] != null || Lods[index] is not { } lods ? 1 : lods.Levels.Count + 1;
+
+        /// <summary>The placement a renderable draws at a level, 0 being <see cref="PlacementOf"/>.</summary>
+        public MeshPlacement? LevelPlacement(int index, int level) => level == 0 ? PlacementOf(index) : Lods[index]!.Levels[level - 1].Mesh.Placement;
+
         /// <summary>The first skin matrix of a renderable in <see cref="SkinMatrices"/>, and how many it has.</summary>
         public (uint First, uint Count) BonesOf(int index) => (_boneRange[index].Offset, _boneRange[index].Size);
 
@@ -854,6 +917,9 @@ public sealed partial class RenderWorld : IDisposable
         public int[] Generation = [];
         public string?[] Name = [];
         public GpuMesh?[] Mesh = [];
+        public LodSet?[] Lods = [];
+        public float[] LodBias = [];
+        public sbyte[] ForcedLod = [];
         public Double4x4[] Transform = [];
         public uint[] LayerMask = [];
         public RenderableFlags[] Flags = [];
@@ -999,6 +1065,8 @@ public sealed partial class RenderWorld : IDisposable
             Flags[index] = host._flags[index];
             LayerMask[index] = host._layerMask[index];
             SortBias[index] = host._sortBias[index];
+            LodBias[index] = host._lodBias[index];
+            ForcedLod[index] = host._forcedLod[index];
             BoundsOverride[index] = host._hasBoundsOverride[index] ? host._boundsOverride[index] : null;
 
             ref ObjectAttributes attributes = ref _attributes[index];
@@ -1033,11 +1101,13 @@ public sealed partial class RenderWorld : IDisposable
             if ((dirt & Dirt.Draw) != 0)
             {
                 GpuMesh mesh = host._mesh[index]!;
-                if (Mesh[index] != mesh)
+                LodSet? lods = host._lods[index];
+                if (Mesh[index] != mesh || Lods[index] != lods)
                 {
                     RemoveMeshUser(index);
                     Mesh[index] = mesh;
-                    AddMeshUser(mesh, index);
+                    Lods[index] = lods;
+                    AddMeshUser(index);
                 }
 
                 RemoveSliceEntries(index);
@@ -1300,7 +1370,7 @@ public sealed partial class RenderWorld : IDisposable
 
         private void UpdateBounds(int index)
         {
-            AABB local = BoundsOverride[index] ?? Mesh[index]?.Placement?.Bounds ?? default;
+            AABB local = BoundsOverride[index] ?? LocalBounds(index);
             (Double3 center, Float3 extents) = TransformBox(Transform[index], local);
             WorldCenter[index] = center;
             WorldExtents[index] = extents;
@@ -1316,6 +1386,27 @@ public sealed partial class RenderWorld : IDisposable
                 CenterLow = new Float4(low.X, low.Y, low.Z, 0),
                 Extents = new Float4(extents.X, extents.Y, extents.Z, 0),
             });
+        }
+
+        // The mesh's bounds grown over every level's
+        private AABB LocalBounds(int index)
+        {
+            AABB bounds = Mesh[index]?.Placement?.Bounds ?? default;
+            foreach (LodLevel level in (IEnumerable<LodLevel>?)Lods[index]?.Levels ?? [])
+            {
+                if (level.Mesh.Placement is { } placement)
+                    bounds.Encapsulate(placement.Bounds);
+            }
+            return bounds;
+        }
+
+        // A slice covers the most submeshes of any level
+        private int SubMeshCount(int index)
+        {
+            int count = Math.Max(Mesh[index]?.Placement?.SubMeshes.Length ?? 1, 1);
+            foreach (LodLevel level in (IEnumerable<LodLevel>?)Lods[index]?.Levels ?? [])
+                count = Math.Max(count, level.Mesh.Placement?.SubMeshes.Length ?? 1);
+            return count;
         }
 
         /// <summary>The world center and axis aligned half size of a local box under a transform.</summary>
@@ -1337,7 +1428,7 @@ public sealed partial class RenderWorld : IDisposable
         // A slice covers every submesh of the mesh, the last given material repeating, so any draw's subMesh indexes it.
         private void WriteSlice(int index, ReadOnlySpan<Material?> given)
         {
-            int count = Math.Max(given.Length, Math.Max(Mesh[index]?.Placement?.SubMeshes.Length ?? 1, 1));
+            int count = Math.Max(given.Length, SubMeshCount(index));
             if (!_sliceSpace.TryAllocate((uint)count, 1, out RangeAllocation range))
                 throw new InvalidOperationException("The world's material slots are full.");
 
@@ -1389,7 +1480,7 @@ public sealed partial class RenderWorld : IDisposable
         // Rebuilds a slice whose mesh gained or lost submeshes, from the materials it was given.
         private void Repad(int index)
         {
-            int wanted = Math.Max(GivenCount[index], Math.Max(Mesh[index]?.Placement?.SubMeshes.Length ?? 1, 1));
+            int wanted = Math.Max(GivenCount[index], SubMeshCount(index));
             if (wanted == SliceCount[index])
                 return;
 
@@ -1407,6 +1498,7 @@ public sealed partial class RenderWorld : IDisposable
             _deformDirty.Add(index);
             (_hasPose[index], _seenLastFrame[index]) = (false, false);
             Mesh[index] = null;
+            Lods[index] = null;
             if (Previous[index] != ObjectAttributes.NoPrevious)
                 _freePrevious.Push(Previous[index]);
             Previous[index] = ObjectAttributes.NoPrevious;
@@ -1424,24 +1516,37 @@ public sealed partial class RenderWorld : IDisposable
                 DrawChanged.Add(index);
         }
 
-        private void AddMeshUser(GpuMesh mesh, int index)
+        private IEnumerable<GpuMesh> MeshesOf(int index)
         {
-            if (!_meshUsers.TryGetValue(mesh, out HashSet<int>? users))
+            if (Mesh[index] is { } mesh)
+                yield return mesh;
+            foreach (LodLevel level in (IEnumerable<LodLevel>?)Lods[index]?.Levels ?? [])
+                yield return level.Mesh;
+        }
+
+        private void AddMeshUser(int index)
+        {
+            foreach (GpuMesh mesh in MeshesOf(index))
             {
-                users = new HashSet<int>();
-                _meshUsers[mesh] = users;
+                if (!_meshUsers.TryGetValue(mesh, out HashSet<int>? users))
+                {
+                    users = new HashSet<int>();
+                    _meshUsers[mesh] = users;
+                }
+                users.Add(index);
             }
-            users.Add(index);
         }
 
         private void RemoveMeshUser(int index)
         {
-            GpuMesh? mesh = Mesh[index];
-            if (mesh == null || !_meshUsers.TryGetValue(mesh, out HashSet<int>? users))
-                return;
-            users.Remove(index);
-            if (users.Count == 0)
-                _meshUsers.Remove(mesh);
+            foreach (GpuMesh mesh in MeshesOf(index))
+            {
+                if (!_meshUsers.TryGetValue(mesh, out HashSet<int>? users))
+                    continue;
+                users.Remove(index);
+                if (users.Count == 0)
+                    _meshUsers.Remove(mesh);
+            }
         }
 
         internal static double Determinant3(in Double4x4 m)
@@ -1456,6 +1561,9 @@ public sealed partial class RenderWorld : IDisposable
             Array.Resize(ref Generation, capacity);
             Array.Resize(ref Name, capacity);
             Array.Resize(ref Mesh, capacity);
+            Array.Resize(ref Lods, capacity);
+            Array.Resize(ref LodBias, capacity);
+            Array.Resize(ref ForcedLod, capacity);
             Array.Resize(ref Transform, capacity);
             Array.Resize(ref LayerMask, capacity);
             Array.Resize(ref Flags, capacity);

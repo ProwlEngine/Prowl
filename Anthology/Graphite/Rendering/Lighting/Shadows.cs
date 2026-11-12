@@ -1594,19 +1594,19 @@ internal sealed partial class FramePipeline
                 if (light.StaticDirty)
                 {
                     CameraFrame statics = RentShadowCamera();
-                    DrawShadowView(statics, world, light.StaticTiles[f].Size, layer, cull, near, far, CasterFilter.StaticOnly);
+                    DrawShadowView(statics, world, light.StaticTiles[f].Size, layer, cull, near, far, CasterFilter.StaticOnly, TileLod(world, layer, light.StaticTiles[f].Size));
                     light.StaticPages[f]!.Draws.Add(new ShadowDraw(statics, light.StaticTiles[f], Clear: true, index, f));
                     staticEveryFrame |= EveryFrameCasters(statics);
                     staticComplete &= ShadowReady(statics);
                     CollectShaders(statics, light.StaticShaders);
                 }
                 shadows.Copies.Add(new ShadowCopy(light.StaticPages[f]!, light.StaticTiles[f], light.Pages[f]!, light.Tiles[f]));
-                DrawShadowView(camera, world, light.Tiles[f].Size, layer, cull, near, far, CasterFilter.MovingOnly);
+                DrawShadowView(camera, world, light.Tiles[f].Size, layer, cull, near, far, CasterFilter.MovingOnly, TileLod(world, layer, light.Tiles[f].Size));
                 light.Pages[f]!.Draws.Add(new ShadowDraw(camera, light.Tiles[f], Clear: false, index, f));
             }
             else
             {
-                DrawShadowView(camera, world, light.Tiles[f].Size, layer, cull, near, far, CasterFilter.All);
+                DrawShadowView(camera, world, light.Tiles[f].Size, layer, cull, near, far, CasterFilter.All, TileLod(world, layer, light.Tiles[f].Size));
                 light.Pages[f]!.Draws.Add(new ShadowDraw(camera, light.Tiles[f], Clear: true, index, f));
             }
             everyFrame |= EveryFrameCasters(camera);
@@ -2018,9 +2018,12 @@ internal sealed partial class FramePipeline
         return camera;
     }
 
+    private static LodView TileLod(WorldFrame world, in ViewLayer layer, int tile)
+        => LodView.Texels(layer, tile, world.World.LodSnapshot, world.World.LodSnapshot.ShadowOffset);
+
     // A shadow view's casters culled against the given frustum for a tile of the given size, its draw lists ready to record
-    private void DrawShadowView(CameraFrame camera, WorldFrame world, int tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter, Keyword[]? keywords = null,
-        RenderableFlags hidden = RenderableFlags.Hidden)
+    private void DrawShadowView(CameraFrame camera, WorldFrame world, int tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter, in LodView lod,
+        Keyword[]? keywords = null, RenderableFlags hidden = RenderableFlags.Hidden)
     {
         ViewDesc view = new()
         {
@@ -2036,6 +2039,7 @@ internal sealed partial class FramePipeline
         camera.ShadowCull = cull;
         camera.ShadowFilter = filter;
         camera.ShadowHidden = hidden;
+        camera.OwnLod = lod;
         ShadowViewsDrawn++;
         PrepareShadowView(camera, view, world, (uint)tile);
     }
@@ -2197,8 +2201,10 @@ internal sealed partial class FramePipeline
                 cascade.DepthRange = radius + reach;
                 ShadowTile whole = new(0, 0, (int)resolution);
                 ViewLayer layer = new() { View = rotation, Projection = projection, Position = cascade.Center };
-                DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All, camera.Desc.Keywords,
-                    RenderableFlagsExtensions.HiddenIn(camera.Desc.Kind));
+                LodSettings lods = camera.World.World.LodSnapshot;
+                LodView lod = LodView.Of(camera.Desc, lods, null);
+                DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All,
+                    lod with { Offset = lod.Offset + lods.ShadowOffset }, camera.Desc.Keywords, RenderableFlagsExtensions.HiddenIn(camera.Desc.Kind));
                 cascade.Draws.Add(new ShadowDraw(cascade.Camera!, whole, Clear: true, cascadeLight.Light, c, Cascade: true));
             }
 

@@ -912,10 +912,11 @@ internal sealed partial class FramePipeline : IDisposable
         int layers = view.LayerCount;
         bool shadow = camera.IsShadowView;
         CullFrustum frustum = shadow ? camera.ShadowCull : new(view.Layers, layers);
+        LodView lod = shadow || view.Kind == ViewKind.Voxelization ? camera.OwnLod : LodView.Of(view, world.World.LodSnapshot, camera.LodState);
         Array.Fill(camera.Roots, SpatialRoots.None);
         if (shadow)
         {
-            world.Buckets.Cull(frustum, view.CullingMask, camera.ShadowFilter, camera.ShadowHidden);
+            world.Buckets.Cull(frustum, view.CullingMask, lod, camera.ShadowFilter, camera.ShadowHidden);
             if (camera.ShadowFilter == CasterFilter.StaticOnly)
                 camera.Sink.Begin(camera, world, frustum, 0);
             else
@@ -934,7 +935,7 @@ internal sealed partial class FramePipeline : IDisposable
         }
         else
         {
-            world.Buckets.Cull(frustum, view.CullingMask, hidden: RenderableFlagsExtensions.HiddenIn(view.Kind));
+            world.Buckets.Cull(frustum, view.CullingMask, lod, hidden: RenderableFlagsExtensions.HiddenIn(view.Kind));
             CullProviders(camera, view, world, frustum);
             DrawItemSink sink = camera.Sink;
             world.Buckets.Build(0, frustum, camera.Prepass, sink.For(camera.Prepass));

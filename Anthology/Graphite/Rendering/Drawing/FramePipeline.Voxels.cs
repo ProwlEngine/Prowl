@@ -47,6 +47,9 @@ internal sealed partial class FramePipeline
             view.Layers[2] = VoxelLayer(voxels.Center, new Float3(0, 0, 1), new Float3(0, 1, 0), largest, extent.Z);
 
             // The whole box's view holds the light trees the radiance cache reads, each region's draws its renderables
+            LodSettings lods = world.World.LodSnapshot;
+            LodView lod = LodView.Texels(view.Layers[0], largest / voxels.Header.VoxelSize, lods, lods.VoxelOffset);
+            camera.OwnLod = lod;
             PrepareVoxelView(camera, view, world, size, voxelize: false);
             world.VoxelDrawCamerasUsed = 0;
             Double3 corner = voxels.Center - new Double3(extent.X, extent.Y, extent.Z) * 0.5;
@@ -62,6 +65,7 @@ internal sealed partial class FramePipeline
                 ViewLayer bounds = ViewCamera.Orthographic(regionCenter, new Float3(0, 0, 1), new Float3(0, 1, 0), regionSize.Y, -regionSize.Z * 0.5f, regionSize.Z * 0.5f, regionSize.X / regionSize.Y).Layers[0];
                 draw.ShadowCull = new CullFrustum(bounds.Projection * bounds.View, regionCenter);
                 draw.ShadowFilter = CasterFilter.All;
+                draw.OwnLod = lod;
                 PrepareVoxelView(draw, view with { ViewId = draw.View.ViewId }, world, size, voxelize: true);
             }
             PrepareVoxelLighting(world, voxels);
@@ -121,7 +125,8 @@ internal sealed partial class FramePipeline
             {
                 CameraFrame camera = world.VoxelShadowCamera ??= ShadowCamera();
                 ViewLayer layer = new() { View = rotation, Projection = projection, Position = center };
-                DrawShadowView(camera, world, VoxelShadowResolution, layer, new CullFrustum(shape, center, nearPlane: false), -reach, radius, CasterFilter.All);
+                DrawShadowView(camera, world, VoxelShadowResolution, layer, new CullFrustum(shape, center, nearPlane: false), -reach, radius, CasterFilter.All,
+                    LodView.Texels(layer, VoxelShadowResolution, world.World.LodSnapshot, world.World.LodSnapshot.VoxelOffset));
                 world.VoxelShadowDraws.Add(new ShadowDraw(camera, new ShadowTile(0, 0, VoxelShadowResolution), Clear: true));
             }
 

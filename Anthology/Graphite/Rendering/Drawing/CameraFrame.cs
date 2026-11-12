@@ -220,6 +220,12 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>The flags that keep a caster out of this shadow view: those of the view it is drawn for, for a view's own cascades.</summary>
     public RenderableFlags ShadowHidden = RenderableFlags.Hidden;
 
+    /// <summary>How a shadow or voxel view picks levels of detail, set before it is prepared. Other views pick by their layers.</summary>
+    public LodView OwnLod = LodView.OwnMesh;
+
+    /// <summary>The levels this view chose last frame, held under hysteresis.</summary>
+    public readonly LodState LodState = new();
+
     /// <summary>Whether this is one of the renderer's own shadow views, drawing its casters alone.</summary>
     public bool IsShadowView { get; init; }
 

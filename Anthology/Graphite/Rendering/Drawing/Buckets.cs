@@ -584,7 +584,7 @@ internal sealed class BucketSet
 
     internal readonly record struct BucketId(int Pass, ushort Program, int Queue, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk);
 
-    private readonly record struct Membership(Bucket Bucket, int Position);
+    private readonly record struct Membership(Bucket Bucket, int Position, byte Level);
 
     internal readonly record struct ChunkRef(uint Chunk, int ChunkInMesh, uint FirstIndex, uint IndexCount);
 
@@ -611,6 +611,9 @@ internal sealed class BucketSet
         public required uint SubMesh;
         public required ChunkRef[] Chunks;
         public int Position;
+
+        /// <summary>The level of detail of its object it draws.</summary>
+        public int Level;
     }
 
     internal sealed class Bucket
@@ -659,6 +662,7 @@ internal sealed class BucketSet
     private List<ItemDraw>?[] _transparentOf = [];
     private readonly List<(ulong Key, ItemDraw Item)> _sorted = new();
     private bool[] _visible = [];
+    private byte[] _level = [];
     private readonly List<int> _visibleList = new();
     private readonly List<int> _candidates = new();
     private readonly List<Bucket> _touched = new();
@@ -694,11 +698,16 @@ internal sealed class BucketSet
         _orderDirty.Add(true);
         for (int index = 0; index < _world.Capacity; index++)
         {
-            if (!_world.Alive[index] || _world.PlacementOf(index) is not { } placement)
+            if (!_world.Alive[index])
                 continue;
-            AddToPass(index, pass, placement);
-            if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
-                AddTransparent(index, placement, _world.Mirrored[index], pass);
+            for (int level = 0; level < _world.LevelCount(index); level++)
+            {
+                if (_world.LevelPlacement(index, level) is not { } placement)
+                    continue;
+                AddToPass(index, pass, placement, level);
+                if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
+                    AddTransparent(index, placement, _world.Mirrored[index], pass, level);
+            }
         }
         RefreshRanks();
         return pass;
@@ -770,7 +779,7 @@ internal sealed class BucketSet
             foreach (Membership membership in members)
             {
                 Bucket found = membership.Bucket;
-                if (found.Pass != pass)
+                if (found.Pass != pass || membership.Level != _level[index])
                     continue;
                 if (found.BuildStamp != _buildStamp)
                 {
@@ -845,7 +854,7 @@ internal sealed class BucketSet
         Dictionary<int, int> ranks = RanksWith(provided);
         foreach (ItemDraw item in _transparent)
         {
-            if (item.Pass == pass && _visible[item.Object])
+            if (item.Pass == pass && _visible[item.Object] && item.Level == _level[item.Object])
                 _sorted.Add((TransparentKey(item, frustum, ranks), item));
         }
         if (provided != null)
@@ -972,8 +981,12 @@ internal sealed class BucketSet
     /// sees deform this frame.
     /// </summary>
     public void Cull(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
+        => Cull(frustum, cullingMask, LodView.OwnMesh, filter, hidden);
+
+    /// <summary>Culls as the other overload does, each renderable at the level of detail the view picks for it.</summary>
+    public void Cull(in CullFrustum frustum, uint cullingMask, in LodView lod, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
     {
-        CullObjects(frustum, cullingMask, filter, hidden);
+        CullObjects(frustum, cullingMask, lod, filter, hidden);
         foreach (int index in _world.Deforming)
         {
             if (index < _visible.Length && _visible[index])
@@ -981,11 +994,12 @@ internal sealed class BucketSet
         }
     }
 
-    private void CullObjects(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
+    private void CullObjects(in CullFrustum frustum, uint cullingMask, in LodView lod, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
     {
         if (_visible.Length < _world.Capacity)
         {
             _visible = new bool[_world.Capacity];
+            _level = new byte[_world.Capacity];
             Array.Resize(ref _chunkStamp, _world.Capacity);
             Array.Resize(ref _chunkStart, _world.Capacity);
         }
@@ -995,6 +1009,7 @@ internal sealed class BucketSet
             _visible[index] = false;
         _visibleList.Clear();
 
+        lod.State?.Begin(_world.Capacity);
         _tree.Cull(frustum, _candidates);
         foreach (int index in _candidates)
         {
@@ -1004,16 +1019,69 @@ internal sealed class BucketSet
                 && (_world.LayerMask[index] & cullingMask) != 0
                 && frustum.Sphere(_world.WorldCenter[index], _world.WorldRadius[index]))
             {
+                int level = Level(index, lod);
+                if (level < 0)
+                    continue;
+                _level[index] = (byte)level;
                 _visible[index] = true;
                 _visibleList.Add(index);
             }
         }
     }
 
+    // The level a view draws a renderable at, -1 when it is under its cull size
+    private int Level(int index, in LodView lod)
+    {
+        int levels = _world.LevelCount(index);
+        if (levels == 1)
+            return 0;
+
+        int level = lod.Forced >= 0 ? lod.Forced : _world.ForcedLod[index];
+        if (level < 0)
+        {
+            level = SizeLevel(index, lod, levels);
+            if (level < 0)
+                return -1;
+            lod.State?.Keep(index, level);
+            level = Math.Max(level + lod.Offset, lod.Finest);
+        }
+        level = Math.Min(level, levels - 1);
+        while (level > 0 && _world.LevelPlacement(index, level) == null)
+            level--;
+        return level;
+    }
+
+    // A level coarser than the one the view last drew waits until the size falls the hysteresis share under its own
+    private int SizeLevel(int index, in LodView lod, int levels)
+    {
+        float size = _world.WorldRadius[index] * lod.Scale * _world.LodBias[index];
+        if (!lod.Orthographic)
+        {
+            Double3 offset = _world.WorldCenter[index] - lod.Position;
+            size /= (float)Math.Max(Math.Sqrt(offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z), 1e-6);
+        }
+
+        int previous = lod.State?.Previous(index) ?? -1;
+        if (previous < 0)
+            previous = levels;
+        LodSet lods = _world.Lods[index]!;
+        int level = 0;
+        while (level < levels)
+        {
+            float under = level + 1 < levels ? lods.Levels[level].ScreenSize : lods.CullScreenSize;
+            if (level + 1 > previous)
+                under *= 1 - lod.Hysteresis;
+            if (!(size < under))
+                break;
+            level++;
+        }
+        return level == levels ? -1 : level;
+    }
+
     /// <summary>The static and the moving shadow casters a frustum holds, culling the world for it.</summary>
     public (int Static, int Moving) CountCasters(in CullFrustum frustum, uint cullingMask)
     {
-        CullObjects(frustum, cullingMask);
+        CullObjects(frustum, cullingMask, LodView.OwnMesh);
         int statics = 0, moving = 0;
         int pass = _passes.IndexOf(PassType.ShadowCaster);
         foreach (int index in _visibleList)
@@ -1034,7 +1102,7 @@ internal sealed class BucketSet
             return false;
         foreach (Membership membership in members)
         {
-            if (membership.Bucket.Pass == pass)
+            if (membership.Bucket.Pass == pass && membership.Level == 0)
                 return true;
         }
         return false;
@@ -1052,7 +1120,7 @@ internal sealed class BucketSet
             return true;
         if (_chunkStamp[index] != _cullStamp)
         {
-            MeshChunk[] chunks = _world.Mesh[index]!.Placement!.Chunks;
+            MeshChunk[] chunks = _world.LevelPlacement(index, _level[index])!.Chunks;
             if (_chunkCount + chunks.Length > _chunkVisible.Length)
                 Array.Resize(ref _chunkVisible, Math.Max(_chunkCount + chunks.Length, _chunkVisible.Length * 2));
             Double4x4 transform = _world.Transform[index];
@@ -1076,28 +1144,35 @@ internal sealed class BucketSet
 
     private void AddObject(int index)
     {
-        if (_world.PlacementOf(index) is not { } placement)
+        if (_world.PlacementOf(index) == null)
             return;
 
-        for (int pass = 0; pass < _passes.Count; pass++)
-            AddToPass(index, pass, placement);
-        if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
+        for (int level = 0; level < _world.LevelCount(index); level++)
         {
-            AddTransparent(index, placement, _world.Mirrored[index], 1);
-            for (int pass = BuiltInPasses; pass < _passes.Count; pass++)
-                AddTransparent(index, placement, _world.Mirrored[index], pass);
+            if (_world.LevelPlacement(index, level) is not { } placement)
+                continue;
+            for (int pass = 0; pass < _passes.Count; pass++)
+                AddToPass(index, pass, placement, level);
+            if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
+            {
+                AddTransparent(index, placement, _world.Mirrored[index], 1, level);
+                for (int pass = BuiltInPasses; pass < _passes.Count; pass++)
+                    AddTransparent(index, placement, _world.Mirrored[index], pass, level);
+            }
         }
     }
 
     // Built in passes draw opaque materials, the shadow pass every caster, transparent ones included; a feature's pass draws every material having it
-    private void AddToPass(int index, int pass, MeshPlacement placement)
+    private void AddToPass(int index, int pass, MeshPlacement placement, int level)
     {
         RenderableFlags flags = _world.Flags[index];
         bool shadows = _passes[pass] == PassType.ShadowCaster;
         if (shadows ? (flags & RenderableFlags.CastShadows) == 0 : (flags & RenderableFlags.ShadowsOnly) != 0)
             return;
+        if (shadows && level > 0 && !_world.Lods[index]!.Levels[level - 1].CastShadows)
+            return;
 
-        GpuMesh mesh = _world.Mesh[index]!;
+        GpuMesh mesh = level == 0 ? _world.Mesh[index]! : _world.Lods[index]!.Levels[level - 1].Mesh;
         bool mirrored = _world.Mirrored[index];
         for (int c = 0; c < placement.Chunks.Length; c++)
         {
@@ -1131,11 +1206,11 @@ internal sealed class BucketSet
                 bucket.Key = Key(bucket);
                 _orderDirty[pass] = true;
             }
-            Join(bucket, index);
+            Join(bucket, index, level);
         }
     }
 
-    private void AddTransparent(int index, MeshPlacement placement, bool mirrored, int pass)
+    private void AddTransparent(int index, MeshPlacement placement, bool mirrored, int pass, int level)
     {
         for (int s = 0; s < placement.SubMeshes.Length; s++)
         {
@@ -1170,6 +1245,7 @@ internal sealed class BucketSet
                 Chunks = [.. chunks],
                 Position = _transparent.Count,
                 BackProgram = back,
+                Level = level,
             };
             _transparent.Add(item);
             _programs.Acquire(program);
@@ -1182,12 +1258,12 @@ internal sealed class BucketSet
         }
     }
 
-    private void Join(Bucket bucket, int index)
+    private void Join(Bucket bucket, int index, int level)
     {
         if (bucket.Count == bucket.Objects.Length)
             Array.Resize(ref bucket.Objects, bucket.Objects.Length * 2);
         bucket.Objects[bucket.Count] = index;
-        Members(index).Add(new Membership(bucket, bucket.Count));
+        Members(index).Add(new Membership(bucket, bucket.Count, (byte)level));
         bucket.Count++;
     }
 
