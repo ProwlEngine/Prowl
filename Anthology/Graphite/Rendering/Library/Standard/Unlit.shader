@@ -46,6 +46,7 @@ Shader "Graphite/Unlit"
         {
             #define GRAPHITE_STANDARD_DEPTH
             #pragma variant global GRAPHITE_PREPASS DEPTH MOTION NORMALS
+            #pragma variant global GRAPHITE_LOD_FADE
             #include "Graphite/Standard/UnlitSurface.glsl"
         }
         Vertex

@@ -205,6 +205,7 @@ Shader "Graphite/Lit"
         {
             #define GRAPHITE_STANDARD_DEPTH
             #pragma variant global GRAPHITE_PREPASS DEPTH MOTION NORMALS
+            #pragma variant global GRAPHITE_LOD_FADE
             #pragma variant PBR_PARALLAX
             #include "Graphite/Standard/PBRSurface.glsl"
         }

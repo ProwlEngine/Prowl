@@ -128,6 +128,9 @@ public sealed class RenderView : IDisposable
     /// <summary>The level of detail every renderable draws at in this view, 0 their own mesh, or -1 to choose by size.</summary>
     public int ForcedLod { get; set; } = -1;
 
+    /// <summary>How this view switches levels of detail over the world's <see cref="LodSettings.Transition"/>, or null for the world's.</summary>
+    public LodTransition? LodTransition { get; set; }
+
     /// <summary>Its alpha is ignored, views clear opaque.</summary>
     public Float4 ClearColor { get; set; }
 
@@ -223,6 +226,7 @@ public sealed class RenderView : IDisposable
             CullingMask = CullingMask,
             LodBias = LodBias,
             ForcedLod = ForcedLod,
+            LodTransition = LodTransition,
             ClearColor = ClearColor,
             Sky = Sky,
             Near = camera.Near,
@@ -262,6 +266,7 @@ internal struct ViewDesc
     public uint CullingMask;
     public float LodBias;
     public int ForcedLod;
+    public LodTransition? LodTransition;
     public Float4 ClearColor;
     public bool Sky;
     public float Near;

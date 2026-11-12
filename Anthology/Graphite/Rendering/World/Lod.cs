@@ -64,9 +64,25 @@ public sealed class LodSet
     public float CullScreenSize { get; }
 }
 
+/// <summary>How a camera view moves a renderable from one level to the next.</summary>
+public enum LodTransition : byte
+{
+    /// <summary>Both levels draw for <see cref="LodSettings.FadeSeconds"/>, dithered into each other. Needs the view's prepass.</summary>
+    CrossFade,
+
+    /// <summary>The new level replaces the old at once, the cheapest.</summary>
+    Pop,
+}
+
 /// <summary>A world's LOD rules. Host thread, read at SubmitFrame.</summary>
 public sealed class LodSettings
 {
+    /// <summary>How camera views switch levels. Captures, shadows and voxels always pop.</summary>
+    public LodTransition Transition = LodTransition.CrossFade;
+
+    /// <summary>How long a cross fade takes.</summary>
+    public float FadeSeconds = 0.25f;
+
     /// <summary>Multiplies every renderable's screen size, the quality knob. Above 1 keeps detail longer.</summary>
     public float Bias = 1;
 
@@ -97,8 +113,13 @@ public sealed class LodSettings
 /// <summary>The levels a view chose last time, so its next choice can hold them under hysteresis. Render thread.</summary>
 internal sealed class LodState
 {
+    private const byte None = byte.MaxValue;
     private byte[] _level = [];
     private uint[] _seen = [];
+    private byte[] _drawnLevel = [];
+    private byte[] _from = [];
+    private double[] _start = [];
+    private uint[] _drawn = [];
     private uint _stamp = 1;
 
     /// <summary>Starts a cull: choices of the last one are what a renderable seen there holds.</summary>
@@ -108,8 +129,33 @@ internal sealed class LodState
         {
             Array.Resize(ref _level, capacity);
             Array.Resize(ref _seen, capacity);
+            Array.Resize(ref _drawnLevel, capacity);
+            Array.Resize(ref _from, capacity);
+            Array.Resize(ref _start, capacity);
+            Array.Resize(ref _drawn, capacity);
         }
         _stamp++;
+    }
+
+    /// <summary>
+    /// Keeps the level a renderable draws at, and returns the level it fades out of with how far the fade is, -1 when
+    /// none. A fade starts when the level changes from the last cull's, so a renderable the view did not see pops.
+    /// </summary>
+    public (int From, float Progress) Draw(int index, int level, double now, float seconds)
+    {
+        if (_drawn[index] != _stamp - 1)
+            _from[index] = None;
+        else if (_drawnLevel[index] != level)
+            (_from[index], _start[index]) = (_drawnLevel[index], now);
+        _drawnLevel[index] = (byte)level;
+        _drawn[index] = _stamp;
+        if (_from[index] == None)
+            return (-1, 1);
+        float progress = (float)((now - _start[index]) / seconds);
+        if (progress < 1)
+            return (_from[index], progress);
+        _from[index] = None;
+        return (-1, 1);
     }
 
     /// <summary>The level the last cull chose for a renderable, -1 when it did not choose one.</summary>
@@ -143,11 +189,20 @@ internal readonly record struct LodView(Double3 Position, float Scale, bool Orth
     /// <summary>The view's choices, read for hysteresis and kept, or null for none.</summary>
     public LodState? State { get; init; }
 
+    /// <summary>How long a renderable cross fades between levels, 0 to pop. Fades need a State.</summary>
+    public float FadeSeconds { get; init; }
+
+    /// <summary>The time in seconds fades are measured by.</summary>
+    public double Now { get; init; }
+
     /// <summary>Draws every renderable's own mesh.</summary>
     public static LodView OwnMesh { get; } = new(Double3.Zero, 0, false) { Forced = 0 };
 
-    /// <summary>A view's choice through its first layer: cameras hold their levels under hysteresis, captures draw coarser.</summary>
-    public static LodView Of(in ViewDesc view, LodSettings settings, LodState? state)
+    /// <summary>
+    /// A view's choice through its first layer: cameras hold their levels under hysteresis and cross fade them when
+    /// they draw a prepass, captures draw coarser.
+    /// </summary>
+    public static LodView Of(in ViewDesc view, LodSettings settings, LodState? state, double now = 0, bool prepass = false)
     {
         ViewLayer layer = view.Layers[0];
         bool camera = ((ViewKinds)(1 << (int)view.Kind) & ViewKinds.Cameras) != 0;
@@ -159,6 +214,8 @@ internal readonly record struct LodView(Double3 Position, float Scale, bool Orth
             Finest = settings.FinestLevel,
             Hysteresis = camera ? settings.Hysteresis : 0,
             State = camera ? state : null,
+            FadeSeconds = camera && state != null && prepass && (view.LodTransition ?? settings.Transition) == LodTransition.CrossFade ? settings.FadeSeconds : 0,
+            Now = now,
         };
     }
 

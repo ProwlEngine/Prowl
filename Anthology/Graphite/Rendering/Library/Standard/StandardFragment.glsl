@@ -226,6 +226,9 @@ float graphite_ShadowCosine()
 // through. The prepass also writes motion and normals while its GRAPHITE_PREPASS variant asks.
 void Graphite_StandardFragment()
 {
+#ifdef GRAPHITE_LOD_FADE
+    Graphite_LodFadeDiscard();
+#endif
 #if defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
     Graphite_SurfaceData i = graphite_StandardInputs();
 #ifdef GRAPHITE_STANDARD_UNLIT

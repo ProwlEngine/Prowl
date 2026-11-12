@@ -38,6 +38,9 @@ public sealed class GlobalAxis
     /// <summary>On while the world has decals, set by the renderer.</summary>
     public static readonly GlobalAxis Decals = Toggle("GRAPHITE_DECALS");
 
+    /// <summary>On for the prepass draws of levels of detail cross fading, set per draw by the renderer. See Graphite/Core.glsl.</summary>
+    public static readonly GlobalAxis LodFade = Toggle("GRAPHITE_LOD_FADE");
+
     private GlobalAxis(string name, IReadOnlyList<string> values, bool isToggle)
     {
         Name = name;

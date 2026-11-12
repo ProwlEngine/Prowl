@@ -11,6 +11,9 @@ layout(location = 24) out vec4 graphite_MotionCurrent;
 layout(location = 25) out vec4 graphite_MotionPrevious;
 layout(location = 26) flat out uint graphite_ObjectIndex;
 layout(location = 27) flat out uint graphite_MaterialSlot;
+#ifdef GRAPHITE_LOD_FADE
+layout(location = 28) flat out uint graphite_LodFade;
+#endif
 
 invariant gl_Position;
 
@@ -98,9 +101,14 @@ void Graphite_BeginVertex()
     // A draw's command carries its record's index as its first instance, as gl_DrawID has no Metal equivalent
     graphite_Draw = graphite_DrawRecords[uint(gl_BaseInstance)];
     graphite_Chunk = graphite_Chunks[graphite_Draw.chunk];
-    graphite_Object = (graphite_Draw.flags & 1u) != 0u
+    // An instance word holds its object in the low 24 bits, a cross fade in the high 8
+    uint word = (graphite_Draw.flags & 1u) != 0u
         ? graphite_Draw.object + ((graphite_Draw.flags & 4u) != 0u ? Graphite_InstanceIndex() : 0u)
         : graphite_Instances[graphite_Push.instanceBase + graphite_Draw.firstInstance + Graphite_InstanceIndex()];
+    graphite_Object = word & 0xFFFFFFu;
+#ifdef GRAPHITE_LOD_FADE
+    graphite_LodFade = word >> 24;
+#endif
     uint currentPositions = graphite_Objects[graphite_Object].currentPositions;
     if (currentPositions != 0u)
         graphite_Chunk.streamOffsets[0] = currentPositions - 1u;

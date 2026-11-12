@@ -35,7 +35,7 @@ internal static class DebugGroups
             DrawnRenderable[] drawn = new DrawnRenderable[shared && !consecutive ? 1 : count];
             for (int i = 0; i < drawn.Length; i++)
             {
-                int index = consecutive ? (int)record.Object + i : shared ? (int)record.Object : (int)list.Instances[record.FirstInstance + i];
+                int index = consecutive ? (int)record.Object + i : shared ? (int)record.Object : (int)(list.Instances[record.FirstInstance + i] & DrawList.ObjectMask);
                 drawn[i] = Renderable(side, index, record);
             }
             commands[c] = new DrawnCommand(drawn);

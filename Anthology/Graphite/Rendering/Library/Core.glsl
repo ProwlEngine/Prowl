@@ -135,3 +135,23 @@ layout(location = 26) flat in uint graphite_ObjectIndex;
 uint Graphite_ObjectIndex() { return graphite_ObjectIndex; }
 Graphite_ObjectData Graphite_Object() { return graphite_Objects[graphite_ObjectIndex]; }
 #endif
+
+#if defined(GRAPHITE_FRAGMENT) && defined(GRAPHITE_LOD_FADE)
+layout(location = 28) flat in uint graphite_LodFade;
+
+// A cross fading level's prepass keeps the pixels of its half of a 4 x 4 ordered dither: the incoming level those under
+// its fade, the outgoing level the rest. The dither turns each frame while the view jitters, so TAA blends the two.
+void Graphite_LodFadeDiscard()
+{
+    float fade = float(graphite_LodFade & 0x7Fu) / 127.0;
+    ivec2 p = ivec2(mod(floor(gl_FragCoord.xy), 4.0));
+    const float bayer[16] = float[](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    float threshold = (bayer[p.y * 4 + p.x] + 0.5) / 16.0;
+    Graphite_ViewData view = Graphite_View();
+    if (view.jitter.x != 0.0 || view.jitter.y != 0.0)
+        threshold = fract(threshold + view.time.z * 0.618034);
+    bool incoming = (graphite_LodFade & 0x80u) == 0u;
+    if ((threshold < fade) != incoming)
+        discard;
+}
+#endif

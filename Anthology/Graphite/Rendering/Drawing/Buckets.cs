@@ -203,11 +203,11 @@ internal readonly record struct DrawCall(ushort Program, int Page, PrimitiveTopo
 /// A material pass resolved up to its global keywords: shader pass, material variant and state override. Buckets and
 /// merges compare these ids. The final program picks the global keywords per view.
 /// </summary>
-internal readonly record struct DrawProgram(Shader Shader, int PassIndex, ulong Variant, PassState? StateOverride, Keyword[] Keywords)
+internal readonly record struct DrawProgram(Shader Shader, int PassIndex, ulong Variant, PassState? StateOverride, Keyword[] Keywords, bool LodFade = false)
 {
-    public bool Equals(DrawProgram other) => Shader == other.Shader && PassIndex == other.PassIndex && Variant == other.Variant && Equals(StateOverride, other.StateOverride);
+    public bool Equals(DrawProgram other) => Shader == other.Shader && PassIndex == other.PassIndex && Variant == other.Variant && Equals(StateOverride, other.StateOverride) && LodFade == other.LodFade;
 
-    public override int GetHashCode() => HashCode.Combine(Shader, PassIndex, Variant, StateOverride);
+    public override int GetHashCode() => HashCode.Combine(Shader, PassIndex, Variant, StateOverride, LodFade);
 }
 
 /// <summary>
@@ -308,6 +308,28 @@ internal sealed class DrawPrograms
             program = new(DepthCaster!, 0, 0, culling, []);
         else
             return false;
+        return Intern(program, out id);
+    }
+
+    private static readonly PassState s_depthEqual = new()
+    {
+        Set = PassStateFields.DepthComparison | PassStateFields.DepthWrite,
+        DepthStencil = new DepthStencilStateDescription { DepthComparison = ComparisonKind.Equal, DepthWriteEnabled = false },
+    };
+
+    /// <summary>
+    /// The program a cross fading draw of a prepass or forward program draws with: the prepass with its dither variant,
+    /// the forward pass testing depth equal to what the prepass left, so only the level owning a pixel shades it.
+    /// </summary>
+    public bool TryFading(ushort id, bool prepass, out ushort fading)
+    {
+        DrawProgram program = _programs[id];
+        DrawProgram fade = prepass ? program with { LodFade = true } : program with { StateOverride = s_depthEqual.Apply(program.StateOverride ?? new PassState()) };
+        return Intern(fade, out fading);
+    }
+
+    private bool Intern(DrawProgram program, out ushort id)
+    {
         if (_ids.TryGetValue(program, out id))
             return true;
 
@@ -514,6 +536,9 @@ internal readonly struct CullFrustum
 /// <summary>What one pass of one view draws this frame: the instance list, the indirect commands, their draw records and the calls over them.</summary>
 internal sealed class DrawList
 {
+    /// <summary>The bits of an instance word holding its object, the rest carrying a cross fade.</summary>
+    public const uint ObjectMask = 0xFFFFFF;
+
     public uint[] Instances = new uint[256];
     public int InstanceCount;
     public IndirectDrawIndexedArguments[] Commands = new IndirectDrawIndexedArguments[64];
@@ -635,6 +660,12 @@ internal sealed class BucketSet
         public int BuildStamp;
         public int[] Found = new int[4];
         public int FoundCount;
+
+        /// <summary>The instance words of the cross fading objects a build found, and the program they draw with, -1 when they cannot fade.</summary>
+        public uint[] Fading = new uint[4];
+        public int FadingCount;
+        public int FadeProgram = -1;
+        public bool FadeResolved;
         public int Pass => Id.Pass;
         public ushort Program => Id.Program;
         public int Page => Id.Page;
@@ -657,12 +688,15 @@ internal sealed class BucketSet
     private readonly Dictionary<int, int> _unionRanks = new();
     private bool _ranksDirty;
     private readonly HashSet<int> _rebuild = new();
-    private readonly List<(ulong Key, int Bucket, int FirstInstance, int Count)> _prepass = new();
+    private readonly List<(ulong Key, int Bucket, ushort Program, int FirstInstance, int Count)> _prepass = new();
     private readonly List<ItemDraw> _transparent = new();
     private List<ItemDraw>?[] _transparentOf = [];
     private readonly List<(ulong Key, ItemDraw Item)> _sorted = new();
     private bool[] _visible = [];
     private byte[] _level = [];
+    private byte[] _from = [];
+    private byte[] _fade = [];
+    private const byte NoLevel = byte.MaxValue;
     private readonly List<int> _visibleList = new();
     private readonly List<int> _candidates = new();
     private readonly List<Bucket> _touched = new();
@@ -769,24 +803,40 @@ internal sealed class BucketSet
         bool prepass = pass == 0;
         _prepass.Clear();
 
-        // The visible objects' buckets of this pass, in the pass's order, each with its objects in index order
+        // The visible objects' buckets of this pass, in the pass's order, each with its objects in index order. The
+        // prepass and forward pass draw both levels of a cross fading object, the others its incoming level alone
+        bool fades = pass < 2;
         _buildStamp++;
         _touched.Clear();
         foreach (int index in _visibleList)
         {
             if (index >= _members.Length || _members[index] is not { } members)
                 continue;
+            bool fading = fades && _from[index] != NoLevel;
             foreach (Membership membership in members)
             {
                 Bucket found = membership.Bucket;
-                if (found.Pass != pass || membership.Level != _level[index])
+                if (found.Pass != pass)
+                    continue;
+                bool outgoing = fading && membership.Level == _from[index];
+                if (membership.Level != _level[index] && !outgoing)
                     continue;
                 if (found.BuildStamp != _buildStamp)
                 {
                     found.BuildStamp = _buildStamp;
                     found.FoundCount = 0;
+                    found.FadingCount = 0;
                     _touched.Add(found);
                 }
+                if (fading && FadeProgram(found) >= 0)
+                {
+                    if (found.FadingCount == found.Fading.Length)
+                        Array.Resize(ref found.Fading, found.Fading.Length * 2);
+                    found.Fading[found.FadingCount++] = (uint)index | (uint)_fade[index] << 24 | (outgoing ? 1u << 31 : 0);
+                    continue;
+                }
+                if (outgoing)
+                    continue;
                 if (found.FoundCount == found.Found.Length)
                     Array.Resize(ref found.Found, found.Found.Length * 2);
                 found.Found[found.FoundCount++] = index;
@@ -809,24 +859,31 @@ internal sealed class BucketSet
                 if (prepass)
                     nearest = MathF.Min(nearest, Distance(frustum, index));
             }
+            Add(list, bucket, b, bucket.Program, first, nearest, prepass);
 
-            int count = list.InstanceCount - first;
-            if (count == 0)
-                continue;
-
-            if (prepass)
+            // An outgoing level's chunks are not the ones the view tested, so each of them draws
+            first = list.InstanceCount;
+            nearest = float.MaxValue;
+            Array.Sort(bucket.Fading, 0, bucket.FadingCount);
+            for (int i = 0; i < bucket.FadingCount; i++)
             {
-                _prepass.Add((PrepassKey(bucket, nearest), b, first, count));
-                continue;
+                uint word = bucket.Fading[i];
+                int index = (int)(word & DrawList.ObjectMask);
+                if (bucket.MultiChunk && word >> 31 == 0 && !ChunkVisible(frustum, index, (int)bucket.ChunkInMesh))
+                    continue;
+                list.AddInstance(word);
+                if (prepass)
+                    nearest = MathF.Min(nearest, Distance(frustum, index));
             }
-            Emit(list, bucket, first, count);
+            if (bucket.FadingCount > 0)
+                Add(list, bucket, b, (ushort)bucket.FadeProgram, first, nearest, prepass);
         }
 
         if (prepass)
         {
             _prepass.Sort((a, c) => a.Key.CompareTo(c.Key));
-            foreach ((_, int b, int first, int count) in _prepass)
-                Emit(list, _touched[b], first, count);
+            foreach ((_, int b, ushort program, int first, int count) in _prepass)
+                Emit(list, _touched[b], program, first, count);
         }
         foreach (ItemDraw item in provided?.Opaque ?? [])
         {
@@ -967,12 +1024,38 @@ internal sealed class BucketSet
         return (rank << 58) | (bias << 50) | (depth << 18) | (((ulong)item.Program & 0xFFF) << 6);
     }
 
-    private static void Emit(DrawList list, Bucket bucket, int first, int count)
+    // Emits the instances added since first, or queues them to be sorted near to far in the prepass
+    private void Add(DrawList list, Bucket bucket, int b, ushort program, int first, float nearest, bool prepass)
+    {
+        int count = list.InstanceCount - first;
+        if (count == 0)
+            return;
+        if (prepass)
+            _prepass.Add((PrepassKey(bucket, nearest), b, program, first, count));
+        else
+            Emit(list, bucket, program, first, count);
+    }
+
+    private static void Emit(DrawList list, Bucket bucket, ushort program, int first, int count)
     {
         list.AddCommand(
             new IndirectDrawIndexedArguments { IndexCount = bucket.IndexCount, InstanceCount = (uint)count, FirstIndex = bucket.FirstIndex, FirstInstance = (uint)first },
             new DrawRecord { Chunk = bucket.Chunk, SubMesh = bucket.SubMesh });
-        list.Merge(bucket.Program, bucket.Page, bucket.Topology, bucket.Mirrored);
+        list.Merge(program, bucket.Page, bucket.Topology, bucket.Mirrored);
+    }
+
+    // The program a bucket's cross fading instances draw with, made the first time one fades, -1 when its pass has none
+    private int FadeProgram(Bucket bucket)
+    {
+        if (bucket.FadeResolved)
+            return bucket.FadeProgram;
+        bucket.FadeResolved = true;
+        if (_programs.TryFading(bucket.Program, bucket.Pass == 0, out ushort fading))
+        {
+            bucket.FadeProgram = fading;
+            _programs.Acquire(fading);
+        }
+        return bucket.FadeProgram;
     }
 
     /// <summary>
@@ -1000,6 +1083,8 @@ internal sealed class BucketSet
         {
             _visible = new bool[_world.Capacity];
             _level = new byte[_world.Capacity];
+            _from = new byte[_world.Capacity];
+            _fade = new byte[_world.Capacity];
             Array.Resize(ref _chunkStamp, _world.Capacity);
             Array.Resize(ref _chunkStart, _world.Capacity);
         }
@@ -1023,6 +1108,7 @@ internal sealed class BucketSet
                 if (level < 0)
                     continue;
                 _level[index] = (byte)level;
+                _from[index] = Fading(index, level, lod);
                 _visible[index] = true;
                 _visibleList.Add(index);
             }
@@ -1049,6 +1135,19 @@ internal sealed class BucketSet
         while (level > 0 && _world.LevelPlacement(index, level) == null)
             level--;
         return level;
+    }
+
+    // The level a renderable fades out of under the view's cross fade, its progress kept in _fade
+    private byte Fading(int index, int level, in LodView lod)
+    {
+        int levels = _world.LevelCount(index);
+        if (lod.FadeSeconds <= 0 || lod.State is not { } state || levels == 1)
+            return NoLevel;
+        (int from, float progress) = state.Draw(index, level, lod.Now, lod.FadeSeconds);
+        if (from < 0 || from >= levels || _world.LevelPlacement(index, from) == null)
+            return NoLevel;
+        _fade[index] = (byte)Math.Clamp((int)(progress * 127), 1, 126);
+        return (byte)from;
     }
 
     // A level coarser than the one the view last drew waits until the size falls the hysteresis share under its own
@@ -1311,6 +1410,8 @@ internal sealed class BucketSet
                 _buckets.Remove(bucket.Id);
                 UseQueue(bucket.Queue, -1);
                 _programs.Release(bucket.Program);
+                if (bucket.FadeProgram >= 0)
+                    _programs.Release((ushort)bucket.FadeProgram);
                 _orderDirty[bucket.Pass] = true;
             }
         }

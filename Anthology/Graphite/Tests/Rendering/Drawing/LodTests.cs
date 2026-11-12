@@ -83,12 +83,12 @@ public sealed class LodTests : IDisposable
         => _world.Add(new RenderableDesc { Mesh = _fine, Lods = lods, LodBias = bias, Transform = Double4x4.CreateTranslation(new Double3(x, 0, 5)), Flags = flags }, [_materials.Create(_lit)]);
 
     // A perspective view at the origin under which the renderable's projected diameter over the view height is size
-    private LodView ViewAt(RenderableHandle sized, float size, LodState? state = null, int offset = 0, int forced = -1, float hysteresis = 0)
+    private LodView ViewAt(RenderableHandle sized, float size, LodState? state = null, int offset = 0, int forced = -1, float hysteresis = 0, float fade = 0, double now = 0)
     {
         Double3 center = _world.Render.WorldCenter[sized.Index];
         float distance = (float)Math.Sqrt(center.X * center.X + center.Y * center.Y + center.Z * center.Z);
         float scale = size * distance / _world.Render.WorldRadius[sized.Index];
-        return new LodView(Double3.Zero, scale, Orthographic: false) { Offset = offset, Forced = forced, Hysteresis = hysteresis, State = state };
+        return new LodView(Double3.Zero, scale, Orthographic: false) { Offset = offset, Forced = forced, Hysteresis = hysteresis, State = state, FadeSeconds = fade, Now = now };
     }
 
     private void Extract()
@@ -260,5 +260,116 @@ public sealed class LodTests : IDisposable
         Assert.Throws<ArgumentException>(() => new LodSet([new LodLevel(_middle, 0.3f), new LodLevel(_coarse, 0.5f)]));
         Assert.Throws<ArgumentException>(() => new LodSet([]));
         Assert.Throws<ArgumentException>(() => new LodSet([new LodLevel(_middle, 0.3f)], cullScreenSize: 0.3f));
+    }
+
+    private const int Prepass = 0;
+
+    // The instance words of each command, by the mesh it draws
+    private (GpuMesh Mesh, ushort Program, uint[] Words)[] Commands(DrawList list)
+    {
+        GpuMesh[] meshes = [_fine, _middle, _coarse];
+        List<(GpuMesh, ushort, uint[])> commands = new();
+        foreach (DrawCall call in list.Calls)
+        {
+            for (int c = call.FirstCommand; c < call.FirstCommand + call.CommandCount; c++)
+            {
+                IndirectDrawIndexedArguments command = list.Commands[c];
+                GpuMesh mesh = meshes.First(m => m.Placement!.FirstChunk == list.Records[c].Chunk);
+                commands.Add((mesh, call.Program, list.Instances.AsSpan((int)list.Records[c].FirstInstance, (int)command.InstanceCount).ToArray()));
+            }
+        }
+        return [.. commands];
+    }
+
+    [Fact]
+    public void ACrossFade_DrawsBothLevels_TheOutgoingOneMarked()
+    {
+        RenderableHandle handle = Add(Set());
+        LodState state = new();
+        uint index = (uint)handle.Index;
+        Extract();
+        Frame(Prepass, () => ViewAt(handle, 0.8f, state, fade: 1, now: 0));
+        Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0));
+        var commands = Commands(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5)));
+
+        Assert.Equal(2, commands.Length);
+        uint incoming = commands.Single(c => c.Mesh == _coarse).Words.Single();
+        uint outgoing = commands.Single(c => c.Mesh == _fine).Words.Single();
+        Assert.Equal(index, incoming & DrawList.ObjectMask);
+        Assert.Equal(index, outgoing & DrawList.ObjectMask);
+        Assert.InRange((int)((incoming >> 24) & 0x7F), 60, 67);
+        Assert.Equal(0u, incoming >> 31);
+        Assert.Equal(1u, outgoing >> 31);
+        Assert.Equal(incoming & 0x7F000000u, outgoing & 0x7F000000u);
+    }
+
+    [Fact]
+    public void ACrossFade_Ends_AfterItsSeconds()
+    {
+        RenderableHandle handle = Add(Set());
+        LodState state = new();
+        Extract();
+        Frame(Prepass, () => ViewAt(handle, 0.8f, state, fade: 1, now: 0));
+        Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5));
+        var commands = Commands(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 1.6)));
+        Assert.Equal((uint)handle.Index, Assert.Single(commands).Words.Single());
+        Assert.Equal(_coarse, commands[0].Mesh);
+    }
+
+    [Fact]
+    public void FadingDraws_UseTheirOwnPrograms_ForwardTestingDepthEqual()
+    {
+        RenderableHandle steady = Add(Set(), x: 1, bias: 0.1f);
+        RenderableHandle fading = Add(Set());
+        LodState state = new();
+        Extract();
+        Frame(Forward, () => ViewAt(fading, 0.1f, state, fade: 1, now: 0));
+        Frame(Forward, () => ViewAt(fading, 0.8f, state, fade: 1, now: 0));
+        DrawList prepass = Frame(Prepass, () => ViewAt(fading, 0.1f, state, fade: 1, now: 0.5));
+        var prepassCommands = Commands(prepass);
+        ushort steadyPrepass = prepassCommands.Single(c => c.Words.Contains((uint)steady.Index)).Program;
+        ushort fadingPrepass = prepassCommands.Single(c => c.Mesh == _coarse && !c.Words.Contains((uint)steady.Index)).Program;
+        Assert.NotEqual(steadyPrepass, fadingPrepass);
+        Assert.True(_programs[fadingPrepass].LodFade);
+        Assert.False(_programs[steadyPrepass].LodFade);
+
+        state = new LodState();
+        Frame(Forward, () => ViewAt(fading, 0.8f, state, fade: 1, now: 0));
+        var forward = Commands(Frame(Forward, () => ViewAt(fading, 0.1f, state, fade: 1, now: 0.5)));
+        ushort fadingForward = forward.Single(c => c.Mesh == _fine).Program;
+        PassState? equal = _programs[fadingForward].StateOverride;
+        Assert.NotNull(equal);
+        Assert.Equal(ComparisonKind.Equal, equal!.DepthStencil.DepthComparison);
+        Assert.False(equal.DepthStencil.DepthWriteEnabled);
+    }
+
+    [Fact]
+    public void WithoutFadeSeconds_TheLevelPops()
+    {
+        RenderableHandle handle = Add(Set());
+        LodState state = new();
+        Extract();
+        Frame(Prepass, () => ViewAt(handle, 0.8f, state, fade: 0, now: 0));
+        Assert.Equal([_coarse], Drawn(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 0, now: 0.5))));
+    }
+
+    [Fact]
+    public void OtherPasses_DrawOnlyTheIncomingLevel()
+    {
+        RenderableHandle handle = Add(Set());
+        LodState state = new();
+        Extract();
+        Frame(Shadows, () => ViewAt(handle, 0.8f, state, fade: 1, now: 0));
+        var commands = Commands(Frame(Shadows, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5)));
+        Assert.Equal((uint)handle.Index, Assert.Single(commands).Words.Single());
+        Assert.Equal(_coarse, commands[0].Mesh);
+    }
+
+    [Fact]
+    public void ARenderableTheViewDidNotSee_DoesNotFadeIn()
+    {
+        RenderableHandle handle = Add(Set());
+        Extract();
+        Assert.Equal([_coarse], Drawn(Frame(Prepass, () => ViewAt(handle, 0.1f, new LodState(), fade: 1, now: 0.5))));
     }
 }

@@ -190,7 +190,11 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         for (int i = 0; i < materialAxes.Count; i++)
             combo[i] = program.Keywords[i];
         for (int i = 0; i < globalAxes.Count; i++)
-            combo[materialAxes.Count + i] = new Keyword(globalAxes[i].Name, keywords.GetValueOrDefault(globalAxes[i].Name) ?? "");
+        {
+            string name = globalAxes[i].Name;
+            string value = program.LodFade && name == GlobalAxis.LodFade.Name ? GlobalAxis.LodFade.ToggleValue(true) : keywords.GetValueOrDefault(name) ?? "";
+            combo[materialAxes.Count + i] = new Keyword(name, value);
+        }
 
         PassVariants variants = program.Shader.Definition.Passes![program.PassIndex].Variants(compiler, device.BackendType);
         return Acquire(new BuildKey(variants, variants.KeyOf(combo), program.StateOverride, mirrored), program, priority);
