@@ -83,7 +83,8 @@ internal sealed partial class ProfilerView
             _contentWidth = innerWidth - Metrics.PaddingLarge * 2f;
             _sectionIndex = 0;
 
-            Origami.ScrollView(_paper, "rp_insp_scroll", innerWidth, scrollHeight).Padding(Metrics.PaddingLarge, Metrics.PaddingLarge, Metrics.Spacing, Metrics.PaddingLarge).Body(() =>
+            // The tab is part of the id, so each tab is its own scroll view and opens at the top
+            Origami.ScrollView(_paper, $"rp_insp_scroll_{tab}", innerWidth, scrollHeight).Padding(Metrics.PaddingLarge, Metrics.PaddingLarge, Metrics.Spacing, Metrics.PaddingLarge).Body(() =>
             {
                 using (_paper.Row("secs").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(SectionGap).LineGap(SectionGap).AlignItems(LayoutAlignment.Stretch).Enter())
                     DrawInspectorBody(model, node, tab, frames, live);
@@ -304,7 +305,8 @@ internal sealed partial class ProfilerView
         }
     }
 
-    private readonly record struct Sparkline(string Title, double[] Values, Color Color, Func<double, string> Format, double[]? Second = null, Color? SecondColor = null, string Legend = "");
+    // With a second series, Title names the first and SecondTitle the second: the heading shows each in its line's color
+    private readonly record struct Sparkline(string Title, double[] Values, Color Color, Func<double, string> Format, double[]? Second = null, Color? SecondColor = null, string SecondTitle = "", string Joiner = "/", string Suffix = "");
 
     private void ChartsSection(string title, string note, int current, IReadOnlyList<Sparkline> charts, float minColumn = 260f, float height = 120f)
         => Section(title, 0, note, width =>
@@ -323,8 +325,25 @@ internal sealed partial class ProfilerView
         double avg = v.Length > 0 ? v.Average() : 0;
         double[] average = Enumerable.Repeat(avg, v.Length).ToArray();
         string cur = current >= 0 && current < v.Length ? chart.Format(v[current]) : "-";
+        Color secondColor = chart.SecondColor ?? Style.Snapshot;
+        using (_paper.Row("head").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Gap(Metrics.Spacing).AlignItems(LayoutAlignment.Center).Enter())
+        {
+            if (chart.Second != null)
+            {
+                Origami.Label(_paper, "t1", chart.Title).MD().TextColor(chart.Color).Show();
+                Origami.Label(_paper, "tj", chart.Joiner).MD().TextColor(Style.InkDim).Show();
+                Origami.Label(_paper, "t2", chart.SecondTitle).MD().TextColor(secondColor).Show();
+                if (chart.Suffix.Length > 0)
+                    Origami.Label(_paper, "ts", chart.Suffix).MD().Show();
+            }
+            else
+                Origami.Label(_paper, "t1", chart.Title).MD().Show();
+            // The value sits on the title's line, pushed to the right edge, as a label of the same height
+            Spacer("sp");
+            Origami.Label(_paper, "cur", cur).MD().TextColor(Style.InkSoft).Show();
+        }
+
         CartesianChart<object> c = Chart.CreateCartesian<object>(_paper, "c")
-            .Title($"{chart.Title}   {cur}")
             .Size(width, height)
             .Legend(false)
             .Bordered(false)
@@ -338,7 +357,7 @@ internal sealed partial class ProfilerView
         LineModule<object> lines = c.AddLineChart();
         lines.Series("avg", Style.InkFaint, average).Dashed();
         if (chart.Second != null)
-            lines.Series(chart.Legend.Length > 0 ? chart.Legend.Split('/').Last().Trim() : "second", chart.SecondColor ?? Style.Snapshot, chart.Second).StrokeWidth(1.25f);
+            lines.Series(chart.SecondTitle.Length > 0 ? chart.SecondTitle : "second", secondColor, chart.Second).StrokeWidth(1.25f);
         lines.Series(chart.Title, chart.Color, v).StrokeWidth(1.25f);
         if (current >= 0 && current < v.Length)
             lines.MarkerLine(current, Style.Selection);
@@ -347,8 +366,6 @@ internal sealed partial class ProfilerView
         string min = v.Length > 0 ? chart.Format(v.Min()) : "-", max = v.Length > 0 ? chart.Format(v.Max()) : "-";
         using (_paper.Row("foot").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(8).LineGap(2).Enter())
         {
-            if (chart.Legend.Length > 0)
-                Mono("l", chart.Legend, Style.InkDim);
             Mono("r", $"min {min} / avg {chart.Format(avg)} / max {max}", Style.InkDim);
         }
     }
