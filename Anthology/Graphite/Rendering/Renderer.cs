@@ -64,7 +64,7 @@ public sealed class RendererOptions
 
 /// <summary>
 /// The skies Graphite ships, loaded the first time they are asked for: the procedural sky lit by the world's sun
-/// (_SunSize, _SunGlow, intensity, _Tint, _GroundColor), a two colour gradient (_TopColor, _BottomColor, _Exponent), a
+/// (_SunSize, _SunGlow, intensity, _Tint, _GroundColor), a two colour gradient (_TopColor, _BottomColor, _Exponent, intensity), a
 /// cube texture (_Cubemap), an equirectangular panorama (_Panorama), both with _Tint, intensity and _Rotation in degrees,
 /// and a cube from six images (_CubeRight, _CubeLeft, _CubeTop, _CubeBottom, _CubeFront, _CubeBack, _Tint, intensity).
 /// Each is a Surface "Sky" shader, see Graphite/Standard/Sky.shader.

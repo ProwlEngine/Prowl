@@ -3044,12 +3044,13 @@ public sealed partial class LightingTests : IDisposable
         gradient.SetColor("_TopColor", new Float4(0.1f, 0.3f, 0.9f, 1));
         gradient.SetColor("_BottomColor", new Float4(0.9f, 0.6f, 0.2f, 1));
         gradient.SetFloat("_Exponent", 2);
+        gradient.SetFloat("intensity", 0.5f);
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = gradient };
 
         Vector3 Gradient(Vector3 dir)
         {
             float t = MathF.Pow(Math.Clamp(dir.Y * 0.5f + 0.5f, 0, 1), 2);
-            return Vector3.Lerp(new Vector3(0.9f, 0.6f, 0.2f), new Vector3(0.1f, 0.3f, 0.9f), t);
+            return Vector3.Lerp(new Vector3(0.9f, 0.6f, 0.2f), new Vector3(0.1f, 0.3f, 0.9f), t) * 0.5f;
         }
         AssertPixels(i =>
         {

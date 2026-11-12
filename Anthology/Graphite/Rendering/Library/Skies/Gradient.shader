@@ -5,6 +5,7 @@ Shader "Graphite/Sky/Gradient"
         _TopColor("Top Color", Color) = (0.4, 0.6, 0.9, 1.0)
         _BottomColor("Bottom Color", Color) = (0.8, 0.8, 0.7, 1.0)
         _Exponent("Exponent", Float) = 1.0
+        intensity("Intensity", Float) = 20000.0
     }
 
     Surface "Sky"
@@ -13,11 +14,12 @@ Shader "Graphite/Sky/Gradient"
         uniform vec4 _TopColor;
         uniform vec4 _BottomColor;
         uniform float _Exponent;
+        uniform float intensity;
 
         vec3 Sky(vec3 direction)
         {
             float t = pow(clamp(direction.y * 0.5 + 0.5, 0.0, 1.0), _Exponent);
-            return mix(_BottomColor.rgb, _TopColor.rgb, t);
+            return mix(_BottomColor.rgb, _TopColor.rgb, t) * intensity;
         }
         ENDGLSL
     }
