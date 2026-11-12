@@ -1911,7 +1911,6 @@ public sealed class DrawItemSink
         PreviousTransform = ObjectAttributes.NoPrevious,
         LightmapTexture = ObjectAttributes.NoLightmap,
         ProbeIndex = item.Probe.IsValid ? _world.World.Probes.AnchorSlotOf(item.Probe.Index) : uint.MaxValue,
-        LodFade = 1,
         LayerMask = item.LayerMask,
         LightmapScaleOffset = new Float4(1, 1, 0, 0),
         Color = item.Color,

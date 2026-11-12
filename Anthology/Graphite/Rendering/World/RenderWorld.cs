@@ -200,7 +200,6 @@ internal struct ObjectAttributes
 
     public uint LightmapTexture;
     public uint ProbeIndex;
-    public float LodFade;
     public uint LayerMask;
     public uint LightmapSampler;
 
@@ -208,6 +207,7 @@ internal struct ObjectAttributes
     public uint CurrentPositions;
     public uint PreviousPositions;
     public float LightmapScale;
+    private uint _pad;
     public Float4 LightmapScaleOffset;
     public Float4 Color;
     public Float4 Custom0;
@@ -1011,7 +1011,6 @@ public sealed partial class RenderWorld : IDisposable
             attributes.Color = host._color[index];
             attributes.Custom0 = host._custom0[index];
             attributes.Custom1 = host._custom1[index];
-            attributes.LodFade = 1;
             attributes.LayerMask = host._layerMask[index];
             attributes.ProbeIndex = UpdateProbeSlot(index, _probes.Active && !lightmap.Lightmapped);
             if (added)

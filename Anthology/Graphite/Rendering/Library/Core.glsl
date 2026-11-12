@@ -27,12 +27,12 @@ struct Graphite_ObjectData
     uint previousTransform;
     uint lightmapTexture;           // the lightmap's 2D slot, all ones for none, all ones but one while it loads
     uint probeIndex;
-    float lodFade;
     uint layerMask;
     uint lightmapSampler;           // the lightmap's sampler slot, its encoding in the high 16 bits (0 linear, 1 RGBM)
     uint currentPositions;          // a skinned copy's current and last frame's positions, first word plus one, 0 for none
     uint previousPositions;
     float lightmapScale;            // what decoded lightmap texels are multiplied by
+    uint pad;
     vec4 lightmapScaleOffset;
     vec4 color;                     // multiplies the standard surfaces' vertex colour
     vec4 custom0;
