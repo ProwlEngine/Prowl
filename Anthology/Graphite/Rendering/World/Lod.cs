@@ -8,12 +8,13 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>A coarser level of a <see cref="LodSet"/>: its mesh and the screen size below which it takes over.</summary>
 public readonly struct LodLevel
 {
-    public LodLevel(GpuMesh mesh, float screenSize, bool castShadows = true)
+    public LodLevel(GpuMesh mesh, float screenSize, bool castShadows = true, Material? material = null)
     {
         ArgumentNullException.ThrowIfNull(mesh);
         Mesh = mesh;
         ScreenSize = screenSize;
         CastShadows = castShadows;
+        Material = material;
     }
 
     public GpuMesh Mesh { get; }
@@ -23,6 +24,9 @@ public readonly struct LodLevel
 
     /// <summary>Whether the level casts shadows when the renderable does.</summary>
     public bool CastShadows { get; }
+
+    /// <summary>The material every submesh of the level draws with in place of the renderable's, such as an impostor's, or null.</summary>
+    public Material? Material { get; }
 }
 
 /// <summary>

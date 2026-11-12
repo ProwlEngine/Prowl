@@ -372,4 +372,26 @@ public sealed class LodTests : IDisposable
         Extract();
         Assert.Equal([_coarse], Drawn(Frame(Prepass, () => ViewAt(handle, 0.1f, new LodState(), fade: 1, now: 0.5))));
     }
+
+    [Fact]
+    public void ALevelWithItsOwnMaterial_DrawsEverySubmeshWithIt()
+    {
+        Material own = _materials.Create(_lit);
+        RenderableHandle handle = _world.Add(new RenderableDesc
+        {
+            Mesh = _fine,
+            Lods = new LodSet([new LodLevel(_coarse, 0.5f, material: own)]),
+            Transform = Double4x4.CreateTranslation(new Double3(0, 0, 5)),
+        }, [_materials.Create(_lit)]);
+        Extract();
+
+        DrawList near = Frame(Forward, () => ViewAt(handle, 0.8f));
+        Assert.Equal([_fine], Drawn(near));
+        Assert.Equal(0u, near.Records[0].Flags & DrawRecord.DirectSlot);
+
+        DrawList far = Frame(Forward, () => ViewAt(handle, 0.1f));
+        Assert.Equal([_coarse], Drawn(far));
+        Assert.Equal(DrawRecord.DirectSlot, far.Records[0].Flags & DrawRecord.DirectSlot);
+        Assert.Equal(own.Slot, far.Records[0].SubMesh);
+    }
 }

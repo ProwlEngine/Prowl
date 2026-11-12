@@ -607,7 +607,7 @@ internal sealed class BucketSet
     private readonly List<PassType> _passes = [PassType.Prepass, PassType.Forward, PassType.ShadowCaster];
     private const int BuiltInPasses = 3;
 
-    internal readonly record struct BucketId(int Pass, ushort Program, int Queue, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk);
+    internal readonly record struct BucketId(int Pass, ushort Program, int Queue, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk, Material? Own);
 
     private readonly record struct Membership(Bucket Bucket, int Position, byte Level);
 
@@ -639,6 +639,9 @@ internal sealed class BucketSet
 
         /// <summary>The level of detail of its object it draws.</summary>
         public int Level;
+
+        /// <summary>The material its level draws with in place of the renderable's, or null.</summary>
+        public Material? Own;
     }
 
     internal sealed class Bucket
@@ -651,6 +654,9 @@ internal sealed class BucketSet
         public required uint IndexCount;
         public required uint SubMesh;
         public required bool MultiChunk;
+
+        /// <summary>The material its level draws with in place of the renderable's, whose slot its commands carry, or null.</summary>
+        public Material? Own;
         public ulong Key;
         public int[] Objects = new int[4];
         public int Count;
@@ -950,7 +956,7 @@ internal sealed class BucketSet
 
                     list.AddCommand(
                         new IndirectDrawIndexedArguments { IndexCount = chunk.IndexCount, InstanceCount = 1, FirstIndex = chunk.FirstIndex, FirstInstance = (uint)(list.InstanceCount - 1) },
-                        new DrawRecord { Chunk = chunk.Chunk, SubMesh = item.SubMesh });
+                        Record(chunk.Chunk, item.SubMesh, item.Own));
                     list.Merge(program, item.Page, item.Topology, item.Mirrored);
                     previous = current;
                 }
@@ -1024,6 +1030,10 @@ internal sealed class BucketSet
         return (rank << 58) | (bias << 50) | (depth << 18) | (((ulong)item.Program & 0xFFF) << 6);
     }
 
+    // A level with a material of its own reads that material's slot rather than the renderable's slice
+    private static DrawRecord Record(uint chunk, uint subMesh, Material? own)
+        => own == null ? new DrawRecord { Chunk = chunk, SubMesh = subMesh } : new DrawRecord { Chunk = chunk, SubMesh = own.Slot, Flags = DrawRecord.DirectSlot };
+
     // Emits the instances added since first, or queues them to be sorted near to far in the prepass
     private void Add(DrawList list, Bucket bucket, int b, ushort program, int first, float nearest, bool prepass)
     {
@@ -1040,7 +1050,7 @@ internal sealed class BucketSet
     {
         list.AddCommand(
             new IndirectDrawIndexedArguments { IndexCount = bucket.IndexCount, InstanceCount = (uint)count, FirstIndex = bucket.FirstIndex, FirstInstance = (uint)first },
-            new DrawRecord { Chunk = bucket.Chunk, SubMesh = bucket.SubMesh });
+            Record(bucket.Chunk, bucket.SubMesh, bucket.Own));
         list.Merge(program, bucket.Page, bucket.Topology, bucket.Mirrored);
     }
 
@@ -1272,11 +1282,12 @@ internal sealed class BucketSet
             return;
 
         GpuMesh mesh = level == 0 ? _world.Mesh[index]! : _world.Lods[index]!.Levels[level - 1].Mesh;
+        Material? own = OwnMaterial(index, level);
         bool mirrored = _world.Mirrored[index];
         for (int c = 0; c < placement.Chunks.Length; c++)
         {
             MeshChunk chunk = placement.Chunks[c];
-            Material? material = _world.SliceMaterials[_world.SliceBase[index] + (uint)chunk.SubMesh];
+            Material? material = own ?? _world.SliceMaterials[_world.SliceBase[index] + (uint)chunk.SubMesh];
             if (material == null || material.IsDisposed || material.Draw is not { } draw)
                 continue;
             if (shadows ? !draw.CastShadows : draw.Transparent)
@@ -1285,7 +1296,7 @@ internal sealed class BucketSet
                 continue;
 
             Track(material, index);
-            BucketId id = new(pass, program, draw.RenderQueue, placement.Page, placement.SubMeshes[chunk.SubMesh].Topology, mirrored, placement.FirstChunk + (uint)c);
+            BucketId id = new(pass, program, draw.RenderQueue, placement.Page, placement.SubMeshes[chunk.SubMesh].Topology, mirrored, placement.FirstChunk + (uint)c, own);
             if (!_buckets.TryGetValue(id, out Bucket? bucket))
             {
                 bucket = new Bucket
@@ -1298,6 +1309,7 @@ internal sealed class BucketSet
                     IndexCount = chunk.IndexCount,
                     SubMesh = (uint)chunk.SubMesh,
                     MultiChunk = placement.Chunks.Length > 1,
+                    Own = own,
                 };
                 _buckets[id] = bucket;
                 _programs.Acquire(program);
@@ -1309,11 +1321,14 @@ internal sealed class BucketSet
         }
     }
 
+    private Material? OwnMaterial(int index, int level) => level == 0 ? null : _world.Lods[index]!.Levels[level - 1].Material;
+
     private void AddTransparent(int index, MeshPlacement placement, bool mirrored, int pass, int level)
     {
+        Material? own = OwnMaterial(index, level);
         for (int s = 0; s < placement.SubMeshes.Length; s++)
         {
-            Material? material = _world.SliceMaterials[_world.SliceBase[index] + (uint)s];
+            Material? material = own ?? _world.SliceMaterials[_world.SliceBase[index] + (uint)s];
             if (material == null || material.IsDisposed || material.Draw is not { } draw || !draw.Transparent)
                 continue;
             if (!_programs.TryGet(draw.Sides?.Front ?? draw, _passes[pass], out ushort program))
@@ -1345,6 +1360,7 @@ internal sealed class BucketSet
                 Position = _transparent.Count,
                 BackProgram = back,
                 Level = level,
+                Own = own,
             };
             _transparent.Add(item);
             _programs.Acquire(program);
