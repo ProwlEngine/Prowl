@@ -30,9 +30,10 @@ internal sealed class RendererHarness : IDisposable
 
     private readonly DeviceBuffer _readback;
 
-    public RendererHarness(IShaderCompiler? compiler = null, CompilePolicy compile = CompilePolicy.Sync)
+    public RendererHarness(IShaderCompiler? compiler = null, CompilePolicy compile = CompilePolicy.Sync, bool gpuCulling = true)
     {
         Options.Compile = compile;
+        Options.GpuCulling = gpuCulling;
         Target = Device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         Framebuffer = Device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, Target));
         _readback = Device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));

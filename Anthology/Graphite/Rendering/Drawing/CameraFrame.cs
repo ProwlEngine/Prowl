@@ -210,6 +210,23 @@ internal sealed class CameraFrame : IDisposable
     public readonly ViewShadows Shadows = new();
     public readonly GpuArray Cascades;
 
+    /// <summary>What the GPU cull reads of the view, its lists' bucket to command maps, and where it counts each command's instances.</summary>
+    public readonly GpuArray CullView, CullMaps, CullCursors;
+
+    /// <summary>The LOD levels the GPU cull kept for the view's renderables, 16 bytes each, for views that keep state.</summary>
+    public DeviceBuffer? CullState;
+    private readonly PersistentBuffer _cullState;
+
+    /// <summary>Whether this frame's lists have commands the GPU cull fills, and the stamp of that cull.</summary>
+    public bool GpuCulls;
+    public uint CullStamp = 1;
+
+    /// <summary>The renderables the GPU cull tests this frame, one thread each.</summary>
+    public uint CullObjects;
+    private uint[] _cullWords = new uint[CullViewWords];
+    private uint[] _maps = [];
+    private const int CullViewWords = 184 + 8 * MaxCullLists, MaxCullLists = 8;
+
     /// <summary>The buffers the view and its draws read, collected each frame.</summary>
     public readonly BufferSet Buffers = new();
 
@@ -363,6 +380,10 @@ internal sealed class CameraFrame : IDisposable
         ViewBlocks = _tables.Array("ViewBlocks");
         SpatialRoots = _tables.Array("SpatialRoots");
         Cascades = _tables.Array("Cascades");
+        CullView = _tables.Array("CullView");
+        CullMaps = _tables.Array("CullMaps");
+        CullCursors = _tables.Array("CullCursors");
+        _cullState = new PersistentBuffer(RenderResourceID.Intern($"Graphite.Camera{viewId}.CullState"), BufferUsage.StructuredBufferReadWrite);
         _device = device;
     }
 
@@ -480,6 +501,11 @@ internal sealed class CameraFrame : IDisposable
         Buffers.Add(ViewBlocks.Persistent);
         Buffers.Add(SpatialRoots.Persistent);
         Buffers.Add(Cascades.Persistent);
+        Buffers.Add(CullView.Persistent);
+        Buffers.Add(CullMaps.Persistent);
+        Buffers.Add(CullCursors.Persistent);
+        if (_cullState.Buffer != null)
+            Buffers.Add(_cullState);
         foreach (SpatialView? view in Spatial)
             view?.AddBuffers(Buffers);
     }
@@ -577,10 +603,86 @@ internal sealed class CameraFrame : IDisposable
             instanceBase += list.InstanceCount;
         }
 
+        // The GPU cull writes each segment's instances after every list's own
+        uint gpuWords = 0;
+        foreach (DrawList list in Lists)
+            gpuWords += list.Gpu?.Words ?? 0;
+
         Commands.Write<IndirectDrawIndexedArguments>(uploader, _commands.AsSpan(0, commands));
         Records.Write<DrawRecord>(uploader, _records.AsSpan(0, commands));
-        Instances.Write<uint>(uploader, _instances.AsSpan(0, instances));
+        Instances.Write<uint>(uploader, _instances.AsSpan(0, instances), ((uint)instances + gpuWords) * 4);
         ViewBlocks.Write<ViewBlock>(uploader, blocks);
+        PrepareCull(uploader, commands, (uint)instances);
+    }
+
+    // The view as the GPU cull reads it, see Graphite/Internal/Cull.glsl
+    private void PrepareCull(Uploader uploader, int commands, uint instances)
+    {
+        GpuCulls = false;
+        int lists = 0, maps = 0;
+        GpuSegment? first = null;
+        foreach (DrawList list in Lists)
+        {
+            if (list.Gpu is not { } segment || lists == MaxCullLists)
+                continue;
+            first ??= segment;
+            lists++;
+            maps += segment.MapLength;
+        }
+        if (first == null)
+            return;
+
+        GpuCulls = true;
+        CullStamp++;
+        RenderWorld.RenderSide world = World.World.Render;
+        GpuCullView view = first.View;
+        Array.Clear(_cullWords);
+        Span<float> floats = MemoryMarshal.Cast<uint, float>(_cullWords.AsSpan());
+        for (int layer = 0; layer < view.Frustum.Layers; layer++)
+        {
+            for (int i = 0; i < view.Frustum.PlaneCount(layer); i++)
+            {
+                Float4 plane = view.Frustum.Plane(layer, i);
+                int at = (layer * 6 + i) * 4;
+                (floats[at], floats[at + 1], floats[at + 2], floats[at + 3]) = (plane.X, plane.Y, plane.Z, plane.W);
+            }
+            _cullWords[144 + layer] = (uint)view.Frustum.PlaneCount(layer);
+        }
+        (Float3 cameraHigh, Float3 cameraLow) = Precise.Split(view.Frustum.Camera);
+        (Float3 lodHigh, Float3 lodLow) = Precise.Split(view.Lod.Position);
+        (floats[152], floats[153], floats[154]) = (cameraHigh.X, cameraHigh.Y, cameraHigh.Z);
+        (floats[156], floats[157], floats[158]) = (cameraLow.X, cameraLow.Y, cameraLow.Z);
+        (floats[160], floats[161], floats[162]) = (lodHigh.X, lodHigh.Y, lodHigh.Z);
+        (floats[164], floats[165], floats[166]) = (lodLow.X, lodLow.Y, lodLow.Z);
+        (floats[168], floats[169], floats[170], floats[171]) = (view.Lod.Scale, view.Lod.Hysteresis, view.Lod.FadeSeconds, (float)view.Lod.Now);
+        (_cullWords[172], _cullWords[173], _cullWords[174], _cullWords[175]) = ((uint)view.Lod.Offset, (uint)view.Lod.Forced, (uint)view.Lod.Finest, view.Lod.Orthographic ? 1u : 0);
+        (_cullWords[176], _cullWords[177], _cullWords[178], _cullWords[179]) = (view.CullingMask, (uint)view.Hidden, (uint)view.Filter, (uint)view.Frustum.Layers);
+        uint objects = Math.Min((uint)world.Capacity, world.CullObjects.Count);
+        bool keeps = view.Lod.State != null;
+        (_cullWords[180], _cullWords[181], _cullWords[182], _cullWords[183]) = (objects, (uint)lists, CullStamp, keeps ? 1u : 0);
+        CullObjects = objects;
+
+        if (_maps.Length < Math.Max(maps, 1))
+            _maps = new uint[Math.Max(maps, Math.Max(_maps.Length * 2, 64))];
+        int slot = 0, mapBase = 0;
+        uint gpuBase = instances;
+        for (int l = 0; l < Lists.Count; l++)
+        {
+            if (Lists[l].Gpu is not { } segment || slot == MaxCullLists)
+                continue;
+            int at = 184 + slot * 8;
+            (_cullWords[at], _cullWords[at + 1], _cullWords[at + 2], _cullWords[at + 3]) = ((uint)segment.Pass, (uint)(CommandBases[l] + segment.FirstCommand), (uint)segment.CommandCount, gpuBase);
+            (_cullWords[at + 4], _cullWords[at + 5]) = ((uint)mapBase, segment.Fades ? 1u : 0);
+            Array.Copy(segment.Map, 0, _maps, mapBase, segment.MapLength);
+            mapBase += segment.MapLength;
+            gpuBase += segment.Words;
+            slot++;
+        }
+
+        CullView.Write<uint>(uploader, _cullWords);
+        CullMaps.Write<uint>(uploader, _maps.AsSpan(0, Math.Max(maps, 1)));
+        CullCursors.Reserve((uint)Math.Max(commands, 1) * 4);
+        CullState = keeps ? _cullState.Resolve(_device, _frame.Store, System.Numerics.BitOperations.RoundUpToPowerOf2(Math.Max(objects, 64)) * 16) : null;
     }
 
     public void Dispose()
@@ -598,8 +700,9 @@ internal sealed class CameraFrame : IDisposable
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
         Shadows.Dispose();
-        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades })
+        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades, CullView, CullMaps, CullCursors })
             array.Release();
+        _cullState.Release(_frame.Store);
         foreach (SpatialView? view in Spatial)
             view?.Release();
         _visibilityView.View?.Dispose();

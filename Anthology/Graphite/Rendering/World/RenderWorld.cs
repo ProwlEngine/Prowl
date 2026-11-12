@@ -857,7 +857,9 @@ public sealed partial class RenderWorld : IDisposable
             Attributes = tables.Of<ObjectAttributes>("Attributes");
             MaterialSlots = tables.Table("MaterialSlots", 1);
             SkinMatrices = tables.Of<Float4x4>("SkinMatrices", 64);
-            Tables = [Transforms, PreviousTransforms, Bounds, Attributes, MaterialSlots, SkinMatrices];
+            CullObjects = tables.Table("CullObjects", 4);
+            CullShapes = tables.Table("CullShapes", 1, 1024);
+            Tables = [Transforms, PreviousTransforms, Bounds, Attributes, MaterialSlots, SkinMatrices, CullObjects, CullShapes];
         }
 
         /// <summary>Every skinned renderable's matrices, each in its own range.</summary>
@@ -939,6 +941,18 @@ public sealed partial class RenderWorld : IDisposable
         public GpuTable PreviousTransforms { get; }
         public GpuTable Bounds { get; }
         public GpuTable Attributes { get; }
+
+        /// <summary>
+        /// What the GPU cull reads of each renderable, 4 words: its shape's first word in <see cref="CullShapes"/> plus one,
+        /// 0 for none, then its LOD bias and forced level. See Graphite/Internal/Cull.glsl.
+        /// </summary>
+        public GpuTable CullObjects { get; }
+
+        /// <summary>The bucket memberships renderables share, as words the GPU cull reads, see <see cref="BucketSet"/>.</summary>
+        public GpuTable CullShapes { get; }
+
+        /// <summary>Sets the shape the GPU cull draws a renderable with, its first word, or none.</summary>
+        public void SetCullShape(int index, uint? shape) => CullObjects.Edit((uint)index)[0] = shape is { } word ? word + 1 : 0;
 
         /// <summary>The material's slot in its shader's table for every slice entry, one entry per submesh at least.</summary>
         public GpuTable MaterialSlots { get; }
@@ -1067,6 +1081,9 @@ public sealed partial class RenderWorld : IDisposable
             SortBias[index] = host._sortBias[index];
             LodBias[index] = host._lodBias[index];
             ForcedLod[index] = host._forcedLod[index];
+            Span<uint> cull = CullObjects.Edit((uint)index);
+            cull[1] = BitConverter.SingleToUInt32Bits(LodBias[index]);
+            cull[2] = (uint)ForcedLod[index];
             BoundsOverride[index] = host._hasBoundsOverride[index] ? host._boundsOverride[index] : null;
 
             ref ObjectAttributes attributes = ref _attributes[index];

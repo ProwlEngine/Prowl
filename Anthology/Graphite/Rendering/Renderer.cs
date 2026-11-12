@@ -41,6 +41,12 @@ public sealed class RendererOptions
     public uint PageIndices = GeometryPool.DefaultPageIndices;
 
     /// <summary>
+    /// Culls renderables and picks their levels of detail on the GPU, sparing the CPU a pass over every visible one. The
+    /// CPU still culls deforming renderables, ones with transparent submeshes, and providers' items.
+    /// </summary>
+    public bool GpuCulling = true;
+
+    /// <summary>
     /// When shader variants compile. Sync with Inline threading never draws a stand in, for golden images and tests.
     /// Players shipping only baked shaders pass a <see cref="BakedVariants"/> without a compiler as the compiler and use BakedOnly.
     /// </summary>
@@ -299,7 +305,7 @@ public sealed class Renderer : IDisposable
             RenderWorld world = new(Device, _store, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
             (GlobalProperties globals, int region) = _globals.AddWorld();
             world.Globals = globals;
-            _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs), region, _programs);
+            _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs, _options.GpuCulling), region, _programs);
             return world;
         }
         finally

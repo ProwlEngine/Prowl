@@ -13,7 +13,7 @@ namespace Prowl.Graphite.Rendering;
 /// they change, and one over the rest, built in Morton order on frames something in it moved. A static renderable that
 /// moves is culled as moving from then on. A node wholly inside the frustum gives everything under it without testing.
 /// </summary>
-internal sealed class RenderableTree(RenderWorld.RenderSide world)
+internal sealed class RenderableTree(RenderWorld.RenderSide world, Func<int, bool>? include = null)
 {
     private const int LeafSize = 4;
     private const byte None = 0, Static = 1, Moving = 2;
@@ -93,7 +93,7 @@ internal sealed class RenderableTree(RenderWorld.RenderSide world)
     {
         if (!world.Alive[index])
             _demoted[index] = false;
-        byte want = !world.Alive[index] ? None : (world.Flags[index] & RenderableFlags.Static) != 0 && !_demoted[index] ? Static : Moving;
+        byte want = !world.Alive[index] || include?.Invoke(index) == false ? None : (world.Flags[index] & RenderableFlags.Static) != 0 && !_demoted[index] ? Static : Moving;
         if (want == _in[index])
             return;
         if (_in[index] != None)
@@ -470,6 +470,13 @@ internal readonly struct CullFrustum
     /// <summary>The first layer's camera position, which positions are tested relative to.</summary>
     public Double3 Camera { get; }
 
+    public int Layers => _layers;
+
+    public int PlaneCount(int layer) => _counts[layer];
+
+    /// <summary>A plane of a layer, relative to <see cref="Camera"/>, inside where its distance is positive.</summary>
+    public Float4 Plane(int layer, int index) => _planes[layer * 6 + index];
+
     public Float3 Relative(Double3 world) => new((float)(world.X - Camera.X), (float)(world.Y - Camera.Y), (float)(world.Z - Camera.Z));
 
     public bool Sphere(Double3 center, float radius)
@@ -533,6 +540,27 @@ internal readonly struct CullFrustum
     }
 }
 
+/// <summary>How a view culls on the GPU: the frustum, which renderables it takes and how it picks their levels.</summary>
+internal readonly record struct GpuCullView(CullFrustum Frustum, uint CullingMask, CasterFilter Filter, RenderableFlags Hidden, LodView Lod);
+
+/// <summary>
+/// The commands of a list the GPU cull fills: one for each bucket of the pass in order, then a fade command after each
+/// that can fade when the view fades, its counts and instances left for the GPU to write, with at most Words instances.
+/// </summary>
+internal sealed class GpuSegment
+{
+    public int Pass;
+    public int FirstCommand;
+    public int CommandCount;
+
+    /// <summary>A bucket's command in the segment by its GPU id, the top bit set when its fade command follows, all ones for none.</summary>
+    public uint[] Map = [];
+    public int MapLength;
+    public bool Fades;
+    public uint Words;
+    public GpuCullView View;
+}
+
 /// <summary>What one pass of one view draws this frame: the instance list, the indirect commands, their draw records and the calls over them.</summary>
 internal sealed class DrawList
 {
@@ -546,11 +574,22 @@ internal sealed class DrawList
     public int CommandCount;
     public readonly List<DrawCall> Calls = new();
 
+    /// <summary>The commands the GPU cull fills, after those the CPU wrote, or null.</summary>
+    public GpuSegment? Gpu;
+    private readonly GpuSegment _gpu = new();
+
     public void Clear()
     {
         InstanceCount = 0;
         CommandCount = 0;
         Calls.Clear();
+        Gpu = null;
+    }
+
+    public GpuSegment StartGpu()
+    {
+        Gpu = _gpu;
+        return _gpu;
     }
 
     public void AddInstance(uint objectIndex)
@@ -675,6 +714,9 @@ internal sealed class BucketSet
         public int FadingCount;
         public int FadeProgram = -1;
         public bool FadeResolved;
+
+        /// <summary>A dense id the GPU cull's shapes name the bucket by.</summary>
+        public int GpuId;
         public int Pass => Id.Pass;
         public ushort Program => Id.Program;
         public int Page => Id.Page;
@@ -712,18 +754,41 @@ internal sealed class BucketSet
     private readonly List<Bucket> _touched = new();
     private int _buildStamp;
     private readonly RenderableTree _tree;
+
+    // Renderables the GPU culls stay out of this tree, which the CPU culls the rest by
+    private readonly RenderableTree _cpuTree;
+    private bool[] _onGpu = [];
+    private readonly List<int> _rebuilt = new();
+    private GpuCullView? _gpuView;
+    private int _gpuIds;
+    private readonly Stack<int> _freeGpuIds = new();
+    private Shape?[] _shapeOf = [];
+    private readonly Dictionary<uint[], Shape> _shapes = new(new WordsComparer());
+    private readonly RangeAllocator _shapeSpace = new(1u << 28);
+    private long[] _gpuWords = new long[3];
     private int[] _chunkStamp = [];
     private int[] _chunkStart = [];
     private bool[] _chunkVisible = new bool[256];
     private int _chunkCount;
     private int _cullStamp;
 
-    public BucketSet(RenderWorld.RenderSide world, DrawPrograms programs)
+    public BucketSet(RenderWorld.RenderSide world, DrawPrograms programs, bool gpuCulling = false)
     {
         _world = world;
         _programs = programs;
         _tree = new RenderableTree(world);
+        GpuCulling = gpuCulling;
+        _cpuTree = new RenderableTree(world, index => index >= _onGpu.Length || !_onGpu[index]);
     }
+
+    /// <summary>
+    /// Whether views cull on the GPU the renderables it can draw, those neither deforming nor transparent anywhere, the
+    /// CPU culling the rest as before. Their commands come out of <see cref="Build"/> as a <see cref="GpuSegment"/>.
+    /// </summary>
+    public bool GpuCulling { get; }
+
+    /// <summary>Whether this frame's views cull on the GPU, off for frames whose command streams tools record, which name what each draw draws.</summary>
+    public bool UseGpu { get; set; } = true;
 
     public int BucketCount => _buckets.Count;
 
@@ -753,6 +818,16 @@ internal sealed class BucketSet
                     AddTransparent(index, placement, _world.Mirrored[index], pass, level);
             }
             Group(index);
+        }
+        if (GpuCulling)
+        {
+            Array.Resize(ref _gpuWords, _passes.Count);
+            for (int index = 0; index < _world.Capacity; index++)
+            {
+                ReleaseShape(index);
+                if (_world.Alive[index])
+                    AssignShape(index);
+            }
         }
         RefreshRanks();
         return pass;
@@ -785,6 +860,12 @@ internal sealed class BucketSet
             RemoveObject(index);
             if (index < _world.Capacity && _world.Alive[index])
                 AddObject(index);
+        }
+        if (GpuCulling)
+        {
+            _rebuilt.Clear();
+            _rebuilt.AddRange(_rebuild);
+            _cpuTree.Update(_rebuilt, boundsChanged);
         }
 
         RefreshRanks();
@@ -877,6 +958,8 @@ internal sealed class BucketSet
             foreach ((_, int b, ushort program, int first, int count) in _prepass)
                 Emit(list, _touched[b], program, first, count);
         }
+        if (_gpuView is { } view)
+            AppendGpu(pass, list, view);
         foreach (ItemDraw item in provided?.Opaque ?? [])
         {
             item.FirstCommand = list.CommandCount;
@@ -884,6 +967,35 @@ internal sealed class BucketSet
         }
         if (pass >= BuiltInPasses)
             AppendTransparent(frustum, list, pass, provided?.Sorted);
+    }
+
+    // A command for every bucket of the pass with no instances, and a fade command after those that can fade when the
+    // view fades, which the GPU cull fills
+    private void AppendGpu(int pass, DrawList list, in GpuCullView view)
+    {
+        Order(pass);
+        GpuSegment segment = list.StartGpu();
+        segment.Pass = pass;
+        segment.FirstCommand = list.CommandCount;
+        segment.Fades = pass < 2 && view.Lod.FadeSeconds > 0 && view.Lod.State != null;
+        segment.Words = (uint)Math.Min(_gpuWords[pass] * (segment.Fades ? 2 : 1), uint.MaxValue);
+        segment.View = view;
+        segment.MapLength = _gpuIds;
+        if (segment.Map.Length < _gpuIds)
+            segment.Map = new uint[Math.Max(_gpuIds, segment.Map.Length * 2)];
+        Array.Fill(segment.Map, uint.MaxValue, 0, _gpuIds);
+        foreach (Bucket bucket in _ordered[pass])
+        {
+            uint command = (uint)(list.CommandCount - segment.FirstCommand);
+            Emit(list, bucket, bucket.Program, 0, 0);
+            if (segment.Fades && FadeProgram(bucket) >= 0)
+            {
+                Emit(list, bucket, (ushort)bucket.FadeProgram, 0, 0);
+                command |= 1u << 31;
+            }
+            segment.Map[bucket.GpuId] = command;
+        }
+        segment.CommandCount = list.CommandCount - segment.FirstCommand;
     }
 
     /// <summary>
@@ -1089,7 +1201,9 @@ internal sealed class BucketSet
     /// <summary>Culls as the other overload does, each renderable at the level of detail the view picks for it.</summary>
     public void Cull(in CullFrustum frustum, uint cullingMask, in LodView lod, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
     {
-        CullObjects(frustum, cullingMask, lod, filter, hidden);
+        bool gpu = GpuCulling && UseGpu;
+        _gpuView = gpu ? new GpuCullView(frustum, cullingMask, filter, hidden, lod) : null;
+        CullObjects(gpu ? _cpuTree : _tree, frustum, cullingMask, lod, filter, hidden);
         foreach (int index in _world.Deforming)
         {
             if (index < _visible.Length && _visible[index])
@@ -1097,7 +1211,7 @@ internal sealed class BucketSet
         }
     }
 
-    private void CullObjects(in CullFrustum frustum, uint cullingMask, in LodView lod, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
+    private void CullObjects(RenderableTree tree, in CullFrustum frustum, uint cullingMask, in LodView lod, CasterFilter filter = CasterFilter.All, RenderableFlags hidden = RenderableFlags.Hidden)
     {
         if (_visible.Length < _world.Capacity)
         {
@@ -1115,7 +1229,7 @@ internal sealed class BucketSet
         _visibleList.Clear();
 
         lod.State?.Begin(_world.Capacity);
-        _tree.Cull(frustum, _candidates);
+        tree.Cull(frustum, _candidates);
         foreach (int index in _candidates)
         {
             if (_world.Alive[index]
@@ -1201,7 +1315,7 @@ internal sealed class BucketSet
     /// <summary>The static and the moving shadow casters a frustum holds, culling the world for it.</summary>
     public (int Static, int Moving) CountCasters(in CullFrustum frustum, uint cullingMask)
     {
-        CullObjects(frustum, cullingMask, LodView.OwnMesh);
+        CullObjects(_tree, frustum, cullingMask, LodView.OwnMesh);
         int statics = 0, moving = 0;
         int pass = _passes.IndexOf(PassType.ShadowCaster);
         foreach (int index in _visibleList)
@@ -1281,6 +1395,8 @@ internal sealed class BucketSet
             }
         }
         Group(index);
+        if (GpuCulling)
+            AssignShape(index);
     }
 
     // Built in passes draw opaque materials, the shadow pass every caster, transparent ones included; a feature's pass draws every material having it
@@ -1323,6 +1439,7 @@ internal sealed class BucketSet
                     MultiChunk = placement.Chunks.Length > 1,
                     Own = own,
                 };
+                bucket.GpuId = _freeGpuIds.Count > 0 ? _freeGpuIds.Pop() : _gpuIds++;
                 _buckets[id] = bucket;
                 _programs.Acquire(program);
                 UseQueue(bucket.Queue, 1);
@@ -1396,6 +1513,8 @@ internal sealed class BucketSet
 
     private void RemoveObject(int index)
     {
+        if (GpuCulling)
+            ReleaseShape(index);
         if (index < _transparentOf.Length && _transparentOf[index] is { } items)
         {
             foreach (ItemDraw item in items)
@@ -1436,6 +1555,7 @@ internal sealed class BucketSet
             if (bucket.Count == 0)
             {
                 _buckets.Remove(bucket.Id);
+                _freeGpuIds.Push(bucket.GpuId);
                 UseQueue(bucket.Queue, -1);
                 _programs.Release(bucket.Program);
                 if (bucket.FadeProgram >= 0)
@@ -1471,6 +1591,118 @@ internal sealed class BucketSet
         if (index >= _objectMaterials.Length)
             Array.Resize(ref _objectMaterials, Math.Max(index + 1, _objectMaterials.Length * 2));
         (_objectMaterials[index] ??= new List<Material>()).Add(material);
+    }
+
+    /// <summary>
+    /// The memberships renderables share as the GPU cull reads them, one block of words: levels and passes, the cull
+    /// size, the screen size of each level after the first, each level's nearest placed level at or under it 4 bits
+    /// apiece, then a run of entries per pass and level as start and count, then the entries, each the bucket's GPU id
+    /// and its chunk with the top bit when the chunk is tested on its own.
+    /// </summary>
+    private sealed class Shape
+    {
+        public required uint[] Words;
+        public required RangeAllocation Range;
+        public required int[] MostEntries;
+        public int Users;
+    }
+
+    private sealed class WordsComparer : IEqualityComparer<uint[]>
+    {
+        public bool Equals(uint[]? a, uint[]? b) => a.AsSpan().SequenceEqual(b);
+
+        public int GetHashCode(uint[] words)
+        {
+            HashCode hash = new();
+            hash.AddBytes(MemoryMarshal.AsBytes(words.AsSpan()));
+            return hash.ToHashCode();
+        }
+    }
+
+    // Puts a renderable the GPU can cull on its shape, else leaves it to the CPU
+    private void AssignShape(int index)
+    {
+        if (index >= _onGpu.Length)
+        {
+            Array.Resize(ref _onGpu, Math.Max(index + 1, _onGpu.Length * 2));
+            Array.Resize(ref _shapeOf, _onGpu.Length);
+        }
+        bool transparent = index < _transparentOf.Length && _transparentOf[index] is { Count: > 0 };
+        if (_world.Deformed[index] != null || _world.Deforming.Contains(index) || transparent || index >= _ranges.Length || _ranges[index] is not { } ranges)
+            return;
+
+        uint[] words = ShapeWords(index, ranges, out int[] most);
+        if (!_shapes.TryGetValue(words, out Shape? shape))
+        {
+            if (!_shapeSpace.TryAllocate((uint)words.Length, 1, out RangeAllocation range))
+                return;
+            shape = new Shape { Words = words, Range = range, MostEntries = most };
+            _shapes[words] = shape;
+            for (int w = 0; w < words.Length; w++)
+                _world.CullShapes.Edit(range.Offset + (uint)w)[0] = words[w];
+        }
+        shape.Users++;
+        for (int pass = 0; pass < shape.MostEntries.Length; pass++)
+            _gpuWords[pass] += shape.MostEntries[pass];
+        _shapeOf[index] = shape;
+        _onGpu[index] = true;
+        _world.SetCullShape(index, shape.Range.Offset);
+    }
+
+    private void ReleaseShape(int index)
+    {
+        if (index < _onGpu.Length)
+            _onGpu[index] = false;
+        if (index < _world.Capacity)
+            _world.SetCullShape(index, null);
+        if (index >= _shapeOf.Length || _shapeOf[index] is not { } shape)
+            return;
+        _shapeOf[index] = null;
+        for (int pass = 0; pass < shape.MostEntries.Length; pass++)
+            _gpuWords[pass] -= shape.MostEntries[pass];
+        if (--shape.Users > 0)
+            return;
+        _shapes.Remove(shape.Words);
+        _shapeSpace.Free(shape.Range);
+    }
+
+    private uint[] ShapeWords(int index, MemberRange[] ranges, out int[] most)
+    {
+        int levels = _world.LevelCount(index), passes = _passes.Count;
+        LodSet? lods = levels > 1 ? _world.Lods[index] : null;
+        List<uint> words = new() { (uint)levels | (uint)passes << 8, BitConverter.SingleToUInt32Bits(lods?.CullScreenSize ?? 0) };
+        for (int level = 0; level < LodSet.MaxLevels; level++)
+            words.Add(BitConverter.SingleToUInt32Bits(level < levels - 1 ? lods!.Levels[level].ScreenSize : 0));
+        uint placed = 0;
+        for (int level = 0; level <= LodSet.MaxLevels; level++)
+        {
+            int at = Math.Min(level, levels - 1);
+            while (at > 0 && _world.LevelPlacement(index, at) == null)
+                at--;
+            placed |= (uint)at << (level * 4);
+        }
+        words.Add(placed);
+
+        int runs = words.Count;
+        for (int i = 0; i < passes * (LodSet.MaxLevels + 1); i++)
+            words.Add(0);
+        most = new int[passes];
+        bool tested = _world.Deformed[index] == null && _world.BoundsOverride[index] == null;
+        ReadOnlySpan<Membership> members = CollectionsMarshal.AsSpan(_members[index]);
+        int entries = 0;
+        foreach (MemberRange range in ranges)
+        {
+            words[runs + range.Pass * (LodSet.MaxLevels + 1) + range.Level] = (uint)entries << 16 | (uint)range.Count;
+            most[range.Pass] = Math.Max(most[range.Pass], range.Count);
+            for (int m = range.Start; m < range.Start + range.Count; m++)
+            {
+                Bucket bucket = members[m].Bucket;
+                words.Add((uint)bucket.GpuId);
+                words.Add(bucket.Chunk | (bucket.MultiChunk && tested ? 1u << 31 : 0));
+                entries++;
+            }
+        }
+        return [.. words];
     }
 
     // Orders an object's memberships by pass then level and finds the run of each
