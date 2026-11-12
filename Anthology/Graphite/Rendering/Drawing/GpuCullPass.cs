@@ -12,9 +12,9 @@ namespace Prowl.Graphite.Rendering;
 /// </summary>
 internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry) : IDisposable
 {
-    private static readonly PropertyID s_objects = "Cull_Objects", s_shapes = "Cull_Shapes", s_bounds = "Cull_Bounds", s_attributes = "Cull_Attributes",
+    private static readonly PropertyID s_objects = "Cull_Objects", s_shapes = "Cull_Shapes", s_bounds = "Cull_Bounds",
         s_transforms = "Cull_Transforms", s_chunks = "Cull_Chunks", s_view = "Cull_View", s_maps = "Cull_Maps", s_commands = "Cull_Commands",
-        s_records = "Cull_Records", s_instances = "Cull_Instances", s_cursors = "Cull_Cursors", s_state = "Cull_State";
+        s_records = "Cull_Records", s_instances = "Cull_Instances", s_cursors = "Cull_Cursors", s_state = "Cull_State", s_results = "Cull_Results";
 
     private const uint MaxGroups = 65535;
 
@@ -49,7 +49,6 @@ internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry
                 Read(world.CullObjects.Buffer);
                 Read(world.CullShapes.Buffer);
                 Read(world.Bounds.Buffer);
-                Read(world.Attributes.Buffer);
                 Read(world.Transforms.Buffer);
                 Read(camera.CullView.Buffer);
                 Read(camera.CullMaps.Buffer);
@@ -57,6 +56,7 @@ internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry
                 Write(camera.Records.Buffer);
                 Write(camera.Instances.Buffer);
                 Write(camera.CullCursors.Buffer);
+                Write(camera.CullResults.Buffer);
                 if (camera.CullState != null)
                     Write(camera.CullState);
             }
@@ -73,7 +73,6 @@ internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry
             _properties.SetBuffer(s_objects, world.CullObjects.Buffer);
             _properties.SetBuffer(s_shapes, world.CullShapes.Buffer);
             _properties.SetBuffer(s_bounds, world.Bounds.Buffer);
-            _properties.SetBuffer(s_attributes, world.Attributes.Buffer);
             _properties.SetBuffer(s_transforms, world.Transforms.Buffer);
             _properties.SetBuffer(s_chunks, geometry.Chunks.Buffer);
             _properties.SetBuffer(s_view, camera.CullView.Buffer);
@@ -82,6 +81,7 @@ internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry
             _properties.SetBuffer(s_records, camera.Records.Buffer);
             _properties.SetBuffer(s_instances, camera.Instances.Buffer);
             _properties.SetBuffer(s_cursors, camera.CullCursors.Buffer);
+            _properties.SetBuffer(s_results, camera.CullResults.Buffer);
             _properties.SetBuffer(s_state, camera.CullState ?? camera.CullCursors.Buffer);
             cmd.SetProperties(_properties);
 

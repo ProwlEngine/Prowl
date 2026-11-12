@@ -944,7 +944,7 @@ public sealed partial class RenderWorld : IDisposable
 
         /// <summary>
         /// What the GPU cull reads of each renderable, 4 words: its shape's first word in <see cref="CullShapes"/> plus one,
-        /// 0 for none, then its LOD bias and forced level. See Graphite/Internal/Cull.glsl.
+        /// 0 for none, then its LOD bias, its forced level in 16 bits under its flags, and its layer mask. See Graphite/Internal/Cull.glsl.
         /// </summary>
         public GpuTable CullObjects { get; }
 
@@ -1083,7 +1083,8 @@ public sealed partial class RenderWorld : IDisposable
             ForcedLod[index] = host._forcedLod[index];
             Span<uint> cull = CullObjects.Edit((uint)index);
             cull[1] = BitConverter.SingleToUInt32Bits(LodBias[index]);
-            cull[2] = (uint)ForcedLod[index];
+            cull[2] = (ushort)ForcedLod[index] | (uint)Flags[index] << 16;
+            cull[3] = LayerMask[index];
             BoundsOverride[index] = host._hasBoundsOverride[index] ? host._boundsOverride[index] : null;
 
             ref ObjectAttributes attributes = ref _attributes[index];

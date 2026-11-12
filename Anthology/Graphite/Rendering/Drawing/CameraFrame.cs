@@ -210,8 +210,8 @@ internal sealed class CameraFrame : IDisposable
     public readonly ViewShadows Shadows = new();
     public readonly GpuArray Cascades;
 
-    /// <summary>What the GPU cull reads of the view, its lists' bucket to command maps, and where it counts each command's instances.</summary>
-    public readonly GpuArray CullView, CullMaps, CullCursors;
+    /// <summary>What the GPU cull reads of the view, its lists' bucket to command maps, where it counts each command's instances, and what it chose for each renderable.</summary>
+    public readonly GpuArray CullView, CullMaps, CullCursors, CullResults;
 
     /// <summary>The LOD levels the GPU cull kept for the view's renderables, 16 bytes each, for views that keep state.</summary>
     public DeviceBuffer? CullState;
@@ -383,6 +383,7 @@ internal sealed class CameraFrame : IDisposable
         CullView = _tables.Array("CullView");
         CullMaps = _tables.Array("CullMaps");
         CullCursors = _tables.Array("CullCursors");
+        CullResults = _tables.Array("CullResults");
         _cullState = new PersistentBuffer(RenderResourceID.Intern($"Graphite.Camera{viewId}.CullState"), BufferUsage.StructuredBufferReadWrite);
         _device = device;
     }
@@ -504,6 +505,7 @@ internal sealed class CameraFrame : IDisposable
         Buffers.Add(CullView.Persistent);
         Buffers.Add(CullMaps.Persistent);
         Buffers.Add(CullCursors.Persistent);
+        Buffers.Add(CullResults.Persistent);
         if (_cullState.Buffer != null)
             Buffers.Add(_cullState);
         foreach (SpatialView? view in Spatial)
@@ -682,6 +684,7 @@ internal sealed class CameraFrame : IDisposable
         CullView.Write<uint>(uploader, _cullWords);
         CullMaps.Write<uint>(uploader, _maps.AsSpan(0, Math.Max(maps, 1)));
         CullCursors.Reserve((uint)Math.Max(commands, 1) * 4);
+        CullResults.Reserve(Math.Max(objects, 1) * 4);
         CullState = keeps ? _cullState.Resolve(_device, _frame.Store, System.Numerics.BitOperations.RoundUpToPowerOf2(Math.Max(objects, 64)) * 16) : null;
     }
 
@@ -700,7 +703,7 @@ internal sealed class CameraFrame : IDisposable
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
         Shadows.Dispose();
-        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades, CullView, CullMaps, CullCursors })
+        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades, CullView, CullMaps, CullCursors, CullResults })
             array.Release();
         _cullState.Release(_frame.Store);
         foreach (SpatialView? view in Spatial)
