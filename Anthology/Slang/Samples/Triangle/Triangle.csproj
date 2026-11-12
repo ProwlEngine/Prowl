@@ -3,8 +3,7 @@
     <PropertyGroup>
         <TargetFramework>$(ProwlSampleTargetFramework)</TargetFramework>
         <OutputType>Exe</OutputType>
-        <IsPackable>false</IsPackable>
-        <Nullable>enable</Nullable>
+            <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 

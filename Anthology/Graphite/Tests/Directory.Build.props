@@ -5,8 +5,7 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <IsPackable>false</IsPackable>
-        <Nullable>enable</Nullable>
+            <Nullable>enable</Nullable>
         <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
     </PropertyGroup>
 

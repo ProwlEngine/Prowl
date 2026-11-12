@@ -3,8 +3,7 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
-        <IsPackable>false</IsPackable>
-        <AllowUnsafeCode>true</AllowUnsafeCode>
+            <AllowUnsafeCode>true</AllowUnsafeCode>
         <DefineConstants Condition="'$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN</DefineConstants>
     </PropertyGroup>
 

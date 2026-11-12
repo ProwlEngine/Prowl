@@ -2,8 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
-        <IsPackable>false</IsPackable>
-        <RootNamespace>Prowl.Graphite.Debugger.Tests</RootNamespace>
+            <RootNamespace>Prowl.Graphite.Debugger.Tests</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>

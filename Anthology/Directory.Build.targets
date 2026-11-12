@@ -5,7 +5,7 @@
           body, so the PackageId a project declares is already visible here - unlike
           Directory.Build.props, which is imported before it. Tests/Samples/Demos/Tools never
           set PackageId, so they are unaffected without needing any changes of their own. -->
-     <PropertyGroup Condition="'$(PackageId)' != ''">
+     <PropertyGroup Condition="'$(PackageId)' != '' And '$(Configuration)' == 'Release'">
           <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
           <PackageReadmeFile>README.md</PackageReadmeFile>
 
