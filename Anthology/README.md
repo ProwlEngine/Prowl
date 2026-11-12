@@ -95,17 +95,17 @@ full past of that library.
 		</tr>
 		<tr>
             <td align="center">
-                <a href="https://github.com/PaperPrototype">
-                    <img src="https://avatars.githubusercontent.com/u/48071553?v=4" width="100;" alt="PaperPrototype"/>
-                    <br />
-                    <sub><b>Abdiel Lopez</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/paulbartrum">
                     <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
                     <br />
                     <sub><b>paulbartrum</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/PaperPrototype">
+                    <img src="https://avatars.githubusercontent.com/u/48071553?v=4" width="100;" alt="PaperPrototype"/>
+                    <br />
+                    <sub><b>Abdiel Lopez</b></sub>
                 </a>
             </td>
             <td align="center">
