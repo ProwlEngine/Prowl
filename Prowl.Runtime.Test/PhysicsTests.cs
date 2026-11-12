@@ -2790,10 +2790,14 @@ public class PhysicsTests : RuntimeTestBase
         {
             Assert.True(Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, out RaycastHit hit));
             Assert.True(hit.Distance > 0);
+            Assert.Equal(1, Physics.RaycastAll(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, new List<RaycastHit>()));
             Physics.Gravity = new Float3(0, -3, 0);
         }
         using (empty.Enter())
+        {
             Assert.False(Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f));
+            Assert.Equal(0, Physics.RaycastAll(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, new List<RaycastHit>(), QueryFilter.Default));
+        }
 
         Assert.Equal(new Float3(0, -3, 0), withBox.Physics.Gravity);
         Assert.NotEqual(new Float3(0, -3, 0), empty.Physics.Gravity);

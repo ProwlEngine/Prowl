@@ -247,6 +247,7 @@
   "hierarchy.save_scene": "Enregistrer la scene",
   "hierarchy.save_scene_as": "Enregistrer la scene sous",
   "hierarchy.save_all": "Tout enregistrer",
+  "hierarchy.add_new_scene": "Ajouter une nouvelle scene",
   "hierarchy.load_scene": "Charger la scene",
   "hierarchy.unload_scene": "Decharger la scene",
   "hierarchy.remove_scene": "Retirer la scene",

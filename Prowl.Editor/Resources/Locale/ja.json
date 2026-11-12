@@ -247,6 +247,7 @@
   "hierarchy.save_scene": "シーンを保存",
   "hierarchy.save_scene_as": "名前を付けてシーンを保存",
   "hierarchy.save_all": "すべて保存",
+  "hierarchy.add_new_scene": "新規シーンを追加",
   "hierarchy.load_scene": "シーンを読み込む",
   "hierarchy.unload_scene": "シーンをアンロード",
   "hierarchy.remove_scene": "シーンを削除",

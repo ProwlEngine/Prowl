@@ -35,6 +35,8 @@ public static class Physics
     public static bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo) => World.Raycast(origin, direction, out hitInfo);
     public static bool Raycast(Float3 origin, Float3 direction, float maxDistance, out RaycastHit hitInfo) => World.Raycast(origin, direction, maxDistance, out hitInfo);
     public static bool Raycast(Float3 origin, Float3 direction, float maxDistance, out RaycastHit hitInfo, QueryFilter filter) => World.Raycast(origin, direction, maxDistance, out hitInfo, filter);
+    public static int RaycastAll(Float3 origin, Float3 direction, float maxDistance, List<RaycastHit> hits) => World.RaycastAll(origin, direction, maxDistance, hits);
+    public static int RaycastAll(Float3 origin, Float3 direction, float maxDistance, List<RaycastHit> hits, QueryFilter filter) => World.RaycastAll(origin, direction, maxDistance, hits, filter);
     public static bool Linecast(Float3 from, Float3 to, out RaycastHit hitInfo) => World.Linecast(from, to, out hitInfo);
     public static bool Linecast(Float3 from, Float3 to, out RaycastHit hitInfo, QueryFilter filter) => World.Linecast(from, to, out hitInfo, filter);
     public static bool Linecast(Float3 from, Float3 to) => World.Linecast(from, to);

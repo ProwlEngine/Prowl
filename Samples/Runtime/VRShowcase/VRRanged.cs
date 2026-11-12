@@ -429,7 +429,7 @@ public sealed class Gun : Component
         if (MagazineWell.Item.IsValid()) _ignore.Add(MagazineWell.Item.Body);
 
         Float3 end = muzzle + forward * Range;
-        if (GameObject.Scene.Physics.Raycast(muzzle, forward, out RaycastHit hit, Range, QueryFilter.Default.Ignoring(_ignore)))
+        if (GameObject.Scene.Physics.Raycast(muzzle, forward, Range, out RaycastHit hit, QueryFilter.Default.Ignoring(_ignore)))
         {
             end = hit.Point;
             Rigidbody3D? target = hit.Rigidbody;
@@ -497,7 +497,7 @@ public sealed class Gun : Component
         rigidbody.Mass = 0.012f;
         rigidbody.EnableSpeculativeContacts = true;
         casing.AddComponent<Expire>().Seconds = 6f;
-        GameObject.Scene.Add(casing);
+        casing.MoveTo(GameObject.Scene);
 
         Float3 right = body.Rotation * Float3.UnitX;
         Float3 up = body.Rotation * Float3.UnitY;
@@ -871,7 +871,7 @@ public sealed class Arrow : Component
         // Look ahead of the tip for what it is about to hit, since a fast arrow covers most of its length each step.
         Float3 tip = body.Position + body.Rotation * Tip;
         _ignore.Add(body);
-        if (!GameObject.Scene.Physics.Raycast(tip, direction, out RaycastHit hit, speed * dt + 0.02f, QueryFilter.Default.Ignoring(_ignore))) return;
+        if (!GameObject.Scene.Physics.Raycast(tip, direction, speed * dt + 0.02f, out RaycastHit hit, QueryFilter.Default.Ignoring(_ignore))) return;
 
         Stabbable? target = hit.Rigidbody.IsValid() ? hit.Rigidbody.GetComponent<Stabbable>() : null;
         Stabber? stabber = GetComponent<Stabber>();

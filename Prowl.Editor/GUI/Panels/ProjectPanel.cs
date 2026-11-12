@@ -53,7 +53,8 @@ public class ProjectPanel : DockPanel
 
     // The content model is rebuilt only when something it derives from moves, since the panel itself
     // redraws every frame.
-    private List<ContentItem>? _contentCache;
+    private List<ContentItem> _topLevelContent = [];
+    private List<ContentItem> _flattenedContent = [];
     private int _contentCacheVersion = -1;
     private string _contentCacheFolder = "";
     private string _contentCacheSearch = "";
@@ -64,7 +65,7 @@ public class ProjectPanel : DockPanel
 
     // The folder tree depends only on the folder index. Expansion and selection live outside the nodes
     // (Paper element storage and Selection), so they survive the nodes being reused.
-    private List<OrigamiUI.TreeNode>? _folderTreeNodes;
+    private List<TreeNode>? _folderTreeNodes;
     private List<object>? _folderTreeItems;
     private readonly Dictionary<string, ContentItem> _folderTreeItemsByPath = [];
     private int _folderTreeVersion = -1;
@@ -175,6 +176,7 @@ public class ProjectPanel : DockPanel
                 {
                     path = parentPath;
                     _expandedAssets.Add(parentGuid);
+                    RebuildFlattenedContent();
                 }
 
                 if (path != null)
@@ -227,9 +229,7 @@ public class ProjectPanel : DockPanel
             _dragDwellTimer = 0f;
         }
 
-        EditorAssetBackend? assetDb = EditorAssetBackend.Instance;
-        List<ContentItem> entries = assetDb != null ? GetContentEntries(assetDb) : [];
-
+        UpdateContent();
         using (paper.Row("proj_root").Size(width, height).Enter())
         {
             DrawFolderTree(paper, font, height);
@@ -238,8 +238,8 @@ public class ProjectPanel : DockPanel
             using (paper.Column("proj_main").Width(mainW).Height(height).Enter())
             {
                 DrawToolbar(paper, font, mainW);
-                DrawContent(paper, font, entries, mainW, height - ToolbarHeight - FooterHeight);
-                DrawFooter(paper, font, entries, mainW);
+                DrawContent(paper, font, mainW, height - ToolbarHeight - FooterHeight);
+                DrawFooter(paper, font, mainW);
             }
         }
 
@@ -354,7 +354,7 @@ public class ProjectPanel : DockPanel
     //  Footer (count + thumbnail size slider)
     // ================================================================
 
-    private void DrawFooter(Paper paper, Scribe.FontFile font, List<ContentItem> entries, float width)
+    private void DrawFooter(Paper paper, Scribe.FontFile font, float width)
     {
         Scribe.FontFile mono = EditorTheme.FontMono ?? font;
         int selCount = Selection.GetSelected<ContentItem>().Count();
@@ -368,7 +368,7 @@ public class ProjectPanel : DockPanel
                 .BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
             paper.Box("proj_foot_count").Width(UnitValue.Auto).Height(FooterHeight).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-                .Text(Loc.Get("project.item_count", new { count = entries.Count }), mono).TextColor(EditorTheme.InkDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                .Text(Loc.Get("project.item_count", new { count = _topLevelContent.Count }), mono).TextColor(EditorTheme.InkDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
             if (selCount > 0)
                 paper.Box("proj_foot_sel").Width(UnitValue.Auto).Height(FooterHeight).Margin(6, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .Text("- " + Loc.Get("project.selected_count", new { count = selCount }), mono).TextColor(EditorTheme.AccentText).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
@@ -404,22 +404,13 @@ public class ProjectPanel : DockPanel
         if (!item.IsFolder && item.Guid != Guid.Empty)
             primaryType = EditorAssetBackend.Instance?.GetEntry(item.RelativePath)?.MainAssetType;
 
-        // Expand to the full selection ONLY if the grabbed item is inside it. That matches
-        // how Explorer / Finder behave: clicking-and-dragging an unselected item drags just
-        // that item, not the prior selection.
+        // _selectionHelper has all selected items prior to the mouse button being released.
         var bundle = new List<ContentItem>();
-        if (Selection.IsSelected(item))
-        {
-            foreach (ContentItem s in Selection.GetSelected<ContentItem>())
-                if (!s.IsSubAsset) bundle.Add(s);
-            // Ensure the grabbed item is first (payload.AssetGuid/Name reflect primary).
-            bundle.Remove(item);
-            bundle.Insert(0, item);
-        }
-        else
-        {
-            bundle.Add(item);
-        }
+        foreach (ContentItem s in SelectionHelper.GetSelected<ContentItem>())
+            if (!s.IsSubAsset) bundle.Add(s);
+        // Ensure the grabbed item is first (payload.AssetGuid/Name reflect primary).
+        bundle.Remove(item);
+        bundle.Insert(0, item);
 
         Guid[] guids = [.. bundle.Select(b => b.Guid)];
         string[] paths = [.. bundle.Select(b => b.RelativePath)];
@@ -542,6 +533,13 @@ public class ProjectPanel : DockPanel
                     if (DropHoverTrackingActive)
                         _dragHoverFolderNext = (string)n.UserData!;
                 })
+                .OnRightClick(e =>
+                {
+                    // Right-click context menu on folder tree.
+                    string relativePath = (string)e.Node.UserData!;
+                    NavigateTo(relativePath);
+                    Origami.ContextMenu(paper.PointerPos.X, paper.PointerPos.Y, ItemContextMenu(_folderTreeItemsByPath[relativePath], inTree: true));
+                })
                 .CustomRowContent((p, node, isSel, isExp) =>
                 {
                     string relativePath = (string)node.UserData!;
@@ -572,9 +570,6 @@ public class ProjectPanel : DockPanel
                             .FontSize(EditorTheme.FontSize)
                             .Alignment(TextAlignment.MiddleLeft);
                     }
-
-                    // Right-click context menu on folder tree
-                    BuildItemContextMenu(p, "proj_ft_ctx", _folderTreeItemsByPath[relativePath], inTree: true);
 
                     // Drop-target highlight
                     if (_dragHoverFolder == relativePath
@@ -644,15 +639,14 @@ public class ProjectPanel : DockPanel
     //  Content Area (right)
     // ================================================================
 
-    private void DrawContent(Paper paper, Scribe.FontFile font, List<ContentItem> entries, float width, float height)
+    private void DrawContent(Paper paper, Scribe.FontFile font, float width, float height)
     {
         bool isList = IsListView;
 
         // Transparent background so the dock panel's glass (over the nebula) shows through.
         using (paper.Box("proj_content_bg")
             .Size(width, height)
-            .OnClick(_ => { if (isList) Selection.Clear(); })
-            .OnPress(_ => { if (!isList) Selection.Clear(); })
+            .OnPress(_ => { Selection.Clear(); })
             .OnPostLayout((_, rect) => _contentViewRect = rect)
             .Enter())
         {
@@ -706,7 +700,7 @@ public class ProjectPanel : DockPanel
             if (isList)
             {
                 // List mode uses the tree widget which has its own scroll
-                DrawListView(paper, font, entries, width, height);
+                DrawListView(paper, font, width, height);
             }
             else
             {
@@ -718,7 +712,7 @@ public class ProjectPanel : DockPanel
                         .Height(UnitValue.Auto)
                         .Enter())
                     {
-                        if (entries.Count == 0)
+                        if (_topLevelContent.Count == 0)
                         {
                             paper.Box("proj_empty")
                                 .Height(60)
@@ -729,7 +723,7 @@ public class ProjectPanel : DockPanel
                         }
                         else
                         {
-                            DrawGridView(paper, font, entries, width);
+                            DrawGridView(paper, font, width);
                         }
                     }
                 });
@@ -744,24 +738,14 @@ public class ProjectPanel : DockPanel
 
     private static float TableRowH => EditorTheme.RowHeight;
 
-    private void DrawListView(Paper paper, Scribe.FontFile font, List<ContentItem> entries, float width, float height)
+    private void DrawListView(Paper paper, Scribe.FontFile font, float width, float height)
     {
         Scribe.FontFile mono = EditorTheme.FontMono ?? font;
         Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;
 
-        // Flat visible list (top-level rows + the sub-asset rows of any expanded parent).
-        var visible = new List<(ContentItem item, bool isSub)>();
-        foreach (ContentItem e in entries)
-        {
-            visible.Add((e, false));
-            if (e.Subs.Count > 0 && _expandedAssets.Contains(e.Guid))
-                foreach (ContentItem s in e.Subs) visible.Add((s, true));
-        }
-        var flatObjects = visible.Select(v => (object)v.item).ToList();
-
         if (_revealGuid != Guid.Empty)
         {
-            int row = visible.FindIndex(v => v.item.Guid == _revealGuid);
+            int row = _flattenedContent.FindIndex(v => v.Guid == _revealGuid);
             if (row >= 0)
             {
                 Origami.ScrollTo("proj_table_sv", new Float2(0, MathF.Max(0, row * TableRowH - height * 0.5f)));
@@ -771,7 +755,7 @@ public class ProjectPanel : DockPanel
 
         int activeCol = _sortBy switch { SortMode.Name => 0, SortMode.Type => 1, SortMode.Size => 2, _ => -1 };
 
-        Origami.Table(paper, "proj_table", -1, _ => { })
+        Origami.Table(paper, "proj_table")
             .Bordered(false)
             .Scroll(width, height)
             .RowHeight(TableRowH)
@@ -780,29 +764,20 @@ public class ProjectPanel : DockPanel
             .Column("Size", 0.7f, sortable: true, align: TextAlignment.MiddleRight)
             .Sort(activeCol, _sortBy != SortMode.Size, col =>
                 _sortBy = col switch { 0 => SortMode.Name, 1 => SortMode.Type, 2 => SortMode.Size, _ => _sortBy })
-            .MultiSelect()
-            .IsSelected(i => Selection.IsSelected(visible[i].item))
-            .OnSelectModified((i, ctrl, shift) => Selection.HandleListClick(visible[i].item, flatObjects, i, ctrl, shift))
+            .HandleMultiSelect(paper, _flattenedContent, ItemContextMenu)
             .OnRowActivate(i =>
             {
-                ContentItem it = visible[i].item;
+                ContentItem it = _flattenedContent[i];
                 if (!it.IsFolder && it.Subs.Count > 0)
                 {
-                    if (_expandedAssets.Contains(it.Guid)) _expandedAssets.Remove(it.Guid);
-                    else _expandedAssets.Add(it.Guid);
+                    if (!_expandedAssets.Remove(it.Guid)) _expandedAssets.Add(it.Guid);
+                    RebuildFlattenedContent();
                 }
                 else OpenItem(it);
             })
-            .OnRowContext(i =>
-            {
-                ContentItem it = visible[i].item;
-                if (!Selection.IsSelected(it))
-                    Selection.Select(it);
-                Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, ItemContextMenu(it));
-            })
             .OnRowDragStart(i =>
             {
-                ContentItem it = visible[i].item;
+                ContentItem it = _flattenedContent[i];
                 if (it.IsSubAsset && it.Guid != Guid.Empty)
                 {
                     EditorAssetBackend? db = EditorAssetBackend.Instance;
@@ -817,13 +792,13 @@ public class ProjectPanel : DockPanel
             })
             .OnRowHover((i, _) =>
             {
-                ContentItem it = visible[i].item;
+                ContentItem it = _flattenedContent[i];
                 if (it.IsFolder && DropHoverTrackingActive) _dragHoverFolderNext = it.RelativePath;
             })
-            .IsPinged(i => { Guid g = visible[i].item.Guid; return g != Guid.Empty && g == Selection.PingedGuid; })
+            .IsPinged(i => { Guid g = _flattenedContent[i].Guid; return g != Guid.Empty && g == Selection.PingedGuid; })
             .PingAlpha(() => Selection.GetPingAlpha())
-            .RowCount(visible.Count)
-            .CellContent((rowIdx, col) => DrawTableCell(paper, font, mono, semi, visible[rowIdx].item, visible[rowIdx].isSub, col))
+            .RowCount(_flattenedContent.Count)
+            .CellContent((rowIdx, col) => DrawTableCell(paper, font, mono, semi, _flattenedContent[rowIdx], _flattenedContent[rowIdx].IsSubAsset, col))
             .Show();
     }
 
@@ -832,7 +807,6 @@ public class ProjectPanel : DockPanel
         ContentItem item, bool isSub, int col)
     {
         string id = item.Guid != Guid.Empty ? item.Guid.ToString() : item.RelativePath;
-        bool isSelected = Selection.IsSelected(item);
         bool hasSubs = item.Subs.Count > 0;
         bool expanded = hasSubs && _expandedAssets.Contains(item.Guid);
         AssetTypeStyle style = item.IsFolder ? FolderStyle(item.RelativePath) : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
@@ -847,8 +821,8 @@ public class ProjectPanel : DockPanel
                     .StopEventPropagation()
                     .OnClick(item.Guid, (g, _) =>
                     {
-                        if (_expandedAssets.Contains(g)) _expandedAssets.Remove(g);
-                        else _expandedAssets.Add(g);
+                        if (!_expandedAssets.Remove(g)) _expandedAssets.Add(g);
+                        RebuildFlattenedContent();
                     })
                     .Icon(paper, expanded ? EditorIcons.ChevronDown_I : EditorIcons.ChevronRight_I, EditorTheme.InkDim, size: 11f);
             else
@@ -903,12 +877,11 @@ public class ProjectPanel : DockPanel
         }
     }
 
-    private void BuildItemContextMenu(Paper paper, string id, ContentItem item, bool inTree = false)
-        => Origami.RightClickMenu(paper, id, ItemContextMenu(item, inTree));
+    // Called when right-clicking on an item in the content browser (but not the folder tree).
+    private Action<ContextBuilder> ItemContextMenu(object clickedItem) => ItemContextMenu((ContentItem)clickedItem, inTree: false);
 
-    // The item context menu as a reusable ContextBuilder action (for RightClickMenu on an element, or
-    // Origami.ContextMenu at a point - the table opens it from OnRowContext).
-    private Action<ContextBuilder> ItemContextMenu(ContentItem item, bool inTree = false) => builder =>
+    // Builds the context menu for one or more ContentItems.
+    private Action<ContextBuilder> ItemContextMenu(ContentItem item, bool inTree) => builder =>
         {
             bool isMulti = Selection.Count > 1;
             bool isRoot = string.IsNullOrEmpty(item.RelativePath);
@@ -1154,10 +1127,9 @@ public class ProjectPanel : DockPanel
     //  Grid View
     // ================================================================
 
-    private void DrawGridView(Paper paper, Scribe.FontFile font, List<ContentItem> entries, float width)
+    private void DrawGridView(Paper paper, Scribe.FontFile font, float width)
     {
         float cellSize = _thumbnailSize + 8f;
-        var itemObjects = entries.Select(e => (object)e).ToList();
 
         // Flex-wrap: cards flow left-to-right and wrap; each card auto-grows in height to fit its
         // (wrapping) name. A full-width sub-asset drawer inserted after an expanded card forces a
@@ -1165,11 +1137,18 @@ public class ProjectPanel : DockPanel
         using (paper.Row("proj_grid_wrap").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
             .WrapContent().Gap(12).LineGap(6).Enter())
         {
-            for (int i = 0; i < entries.Count; i++)
+            for (int i = 0; i < _flattenedContent.Count; i++)
             {
-                DrawGridItem(paper, font, entries[i], i, itemObjects, cellSize);
-                if (entries[i].Subs.Count > 0 && _expandedAssets.Contains(entries[i].Guid))
-                    DrawSubDrawer(paper, font, entries[i], width);
+                ContentItem item = _flattenedContent[i];
+                if (item.IsSubAsset)
+                    continue;
+                DrawGridItem(paper, font, item, i, cellSize);
+                if (item.Subs.Count > 0 && _expandedAssets.Contains(item.Guid))
+                {
+                    DrawSubDrawer(paper, font, item, globalIndex: i);
+                    while (i < _flattenedContent.Count - 1 && _flattenedContent[i + 1].IsSubAsset)
+                        i++;
+                }
             }
         }
     }
@@ -1215,7 +1194,7 @@ public class ProjectPanel : DockPanel
         EditorApplication.Instance?.FocusPanelInstance(Instance);
     }
 
-    private void DrawSubDrawer(Paper paper, Scribe.FontFile font, ContentItem parent, float width)
+    private void DrawSubDrawer(Paper paper, Scribe.FontFile font, ContentItem parent, int globalIndex)
     {
         string pid = parent.Guid.ToString();
         using (paper.Column($"proj_drawer_{pid}").Width(UnitValue.Percentage(100)).Height(UnitValue.Auto)
@@ -1237,34 +1216,22 @@ public class ProjectPanel : DockPanel
 
             using (paper.Row($"proj_drawerrow_{pid}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Enter())
             {
-                var subObjects = parent.Subs.Select(s => (object)s).ToList();
                 for (int i = 0; i < parent.Subs.Count; i++)
-                    DrawSubThumb(paper, font, parent.Subs[i], i, subObjects);
+                    DrawSubThumb(paper, font, parent.Subs[i], globalIndex + 1 + i);
             }
         }
     }
 
-    private void DrawSubThumb(Paper paper, Scribe.FontFile font, ContentItem sub, int idx, List<object> subObjects)
+    private void DrawSubThumb(Paper paper, Scribe.FontFile font, ContentItem sub, int globalIndex)
     {
         AssetTypeStyle style = AssetTypeStyles.For(Path.GetExtension(sub.Name), sub.TypeLabel);
-        bool isSelected = Selection.IsSelected(sub);
+        bool isSelected = SelectionHelper.IsSelected(sub);
 
         using (paper.Column($"proj_sub_{sub.Guid}").Width(62).Height(UnitValue.Auto).Margin(0, 6, 0, 6)
             .Padding(3, 3, 5, 5).Rounded(Origami.Current.Metrics.ContainerRounding).Gap(5)
             .BackgroundColor(isSelected ? EditorTheme.Selected : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
-            .OnPress((sub, idx, subObjects), (cap, e) =>
-            {
-                e.StopPropagation();
-                bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
-                bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
-                Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
-            })
-            .OnRightClick(sub, (item, e) =>
-            {
-                if (!Selection.IsSelected(item))
-                    Selection.Select(item);
-            })
+            .HandleMultiSelect(paper, sub, _flattenedContent, globalIndex, ItemContextMenu)
             .OnDragStart(sub, (s, _) =>
             {
                 EditorAssetBackend? db = EditorAssetBackend.Instance;
@@ -1309,45 +1276,31 @@ public class ProjectPanel : DockPanel
 
             paper.Box($"proj_subnm_{sub.Guid}").Width(UnitValue.Stretch()).Height(14).Clip()
                 .Text(sub.Name, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-
-            BuildItemContextMenu(paper, $"proj_sub_ctx_{sub.Guid}", sub);
         }
     }
 
-    private void DrawGridItem(Paper paper, Scribe.FontFile font, ContentItem item,
-        int idx, List<object> itemObjects, float cellSize)
+    private void DrawGridItem(Paper paper, Scribe.FontFile font, ContentItem item, int globalIndex, float cellSize)
     {
-        bool isSelected = Selection.IsSelected(item);
+        bool isSelected = SelectionHelper.IsSelected(item);
         bool isSubAsset = item.IsSubAsset;
         bool isPinged = item.Guid != Guid.Empty && item.Guid == Selection.PingedGuid;
         float cellRound = Origami.Current.Metrics.ContainerRounding;
 
         // Everything below is scoped to the cell, so its element ids are constants.
-        using (paper.Column("proj_gc", idx)
+        using (paper.Column("proj_gc", globalIndex)
             .Width(cellSize).Height(UnitValue.Auto)
             .BackgroundColor(isSelected ? EditorTheme.Selected : (isSubAsset ? Color.FromArgb(20, EditorTheme.Accent) : Color.Transparent))
             .BorderColor(isSelected ? Color.FromArgb(102, EditorTheme.Purple400) : Color.Transparent).BorderWidth(1)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
             .Rounded(cellRound)
             .Opacity(AssetClipboard.IsCut(item) ? CutOpacity : 1f)
-            .OnPress((item, idx, itemObjects), (cap, e) =>
-            {
-                e.StopPropagation();
-                bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
-                bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
-                Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
-            })
-            .OnRightClick(item, (item, e) =>
-            {
-                if (!Selection.IsSelected(item))
-                    Selection.Select(item);
-            })
+            .HandleMultiSelect(paper, item, _flattenedContent, globalIndex, ItemContextMenu)
             .OnDoubleClick(item, (it, _) =>
             {
                 if (!it.IsFolder && it.HasSubAssets)
                 {
-                    if (_expandedAssets.Contains(it.Guid)) _expandedAssets.Remove(it.Guid);
-                    else _expandedAssets.Add(it.Guid);
+                    if (!_expandedAssets.Remove(it.Guid)) _expandedAssets.Add(it.Guid);
+                    RebuildFlattenedContent();
                 }
                 else
                     OpenItem(it);
@@ -1451,8 +1404,8 @@ public class ProjectPanel : DockPanel
                     .StopEventPropagation()
                     .OnClick(item.Guid, (guid, _) =>
                     {
-                        if (_expandedAssets.Contains(guid)) _expandedAssets.Remove(guid);
-                        else _expandedAssets.Add(guid);
+                        if (!_expandedAssets.Remove(guid)) _expandedAssets.Add(guid);
+                        RebuildFlattenedContent();
                     })
                     .Enter())
                 {
@@ -1481,8 +1434,6 @@ public class ProjectPanel : DockPanel
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.Center);
             }
 
-            BuildItemContextMenu(paper, "ctx", item);
-
             // Folder grid items are drop targets highlight overlay painted when the cursor
             // is over this item during a valid drag. Central dispatch in OnGUI.
             if (item.IsFolder && _dragHoverFolder == item.RelativePath
@@ -1503,21 +1454,22 @@ public class ProjectPanel : DockPanel
     //  Content Item Helpers
     // ================================================================
 
-    private List<ContentItem> GetContentEntries(EditorAssetBackend db)
+    private void UpdateContent()
     {
-        if (_contentCache != null
-            && _contentCacheVersion == db.IndexVersion
+        EditorAssetBackend? db = EditorAssetBackend.Instance;
+        if (db is null)
+            return;
+
+        if (_contentCacheVersion == db.IndexVersion
             && _contentCacheFolder == _currentFolder
             && _contentCacheSearch == _searchText
             && _contentCacheVirtualCount == VirtualContentItems.Count
             && _contentCacheSort == _sortBy
             && _contentCacheGroupByType == _groupByType
             && _contentCacheShowHidden == _showHidden)
-            return _contentCache;
+            return;
 
-        List<ContentItem> built = BuildContentEntries(db);
-
-        _contentCache = built;
+        _topLevelContent = BuildContentEntries(db);
         _contentCacheVersion = db.IndexVersion;
         _contentCacheFolder = _currentFolder;
         _contentCacheSearch = _searchText;
@@ -1525,8 +1477,19 @@ public class ProjectPanel : DockPanel
         _contentCacheSort = _sortBy;
         _contentCacheGroupByType = _groupByType;
         _contentCacheShowHidden = _showHidden;
+        RebuildFlattenedContent();
+    }
 
-        return built;
+    private void RebuildFlattenedContent()
+    {
+        // Flat visible list (top-level rows + the sub-asset rows of any expanded parent).
+        _flattenedContent.Clear();
+        foreach (ContentItem ci in _topLevelContent)
+        {
+            _flattenedContent.Add(ci);
+            if (ci.Subs.Count > 0 && _expandedAssets.Contains(ci.Guid))
+                foreach (ContentItem s in ci.Subs) _flattenedContent.Add(s);
+        }
     }
 
     private List<ContentItem> BuildContentEntries(EditorAssetBackend db)

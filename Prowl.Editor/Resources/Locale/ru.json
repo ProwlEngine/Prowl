@@ -247,6 +247,7 @@
   "hierarchy.save_scene": "Сохранить сцену",
   "hierarchy.save_scene_as": "Сохранить сцену как",
   "hierarchy.save_all": "Сохранить все",
+  "hierarchy.add_new_scene": "Добавить новую сцену",
   "hierarchy.load_scene": "Загрузить сцену",
   "hierarchy.unload_scene": "Выгрузить сцену",
   "hierarchy.remove_scene": "Удалить сцену",

@@ -252,6 +252,7 @@
   "hierarchy.save_scene": "Save Scene",
   "hierarchy.save_scene_as": "Save Scene As",
   "hierarchy.save_all": "Save All",
+  "hierarchy.add_new_scene": "Add New Scene",
   "hierarchy.load_scene": "Load Scene",
   "hierarchy.unload_scene": "Unload Scene",
   "hierarchy.remove_scene": "Remove Scene",

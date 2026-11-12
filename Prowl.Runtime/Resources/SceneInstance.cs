@@ -1382,7 +1382,7 @@ public class SceneInstance : EngineObject, ISerializable
         lock (s_live) s_live.Add(new WeakReference<SceneInstance>(this));
     }
 
-    /// <summary>Wakes this world: it runs, and its components get OnEnable. A load or open activates the worlds it makes.</summary>
+    /// <summary>Wakes this world: it runs, and its components get OnEnable. A world made by Open stays dormant until this is called.</summary>
     public void Activate()
     {
         EnsureLive();

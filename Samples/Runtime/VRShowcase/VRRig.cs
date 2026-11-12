@@ -501,7 +501,7 @@ public sealed class VRRig : Component
 
             Float3 step = next - point;
             float length = Float3.Length(step);
-            if (length > 1e-5f && physics.Raycast(point, step / length, out RaycastHit hit, length, filter))
+            if (length > 1e-5f && physics.Raycast(point, step / length, length, out RaycastHit hit, filter))
             {
                 _arc.Points.Add(hit.Point);
                 _hasTarget = hit.Normal.Y >= minNormalY;
