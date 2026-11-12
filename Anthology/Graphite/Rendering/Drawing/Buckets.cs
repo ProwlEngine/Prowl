@@ -609,7 +609,10 @@ internal sealed class BucketSet
 
     internal readonly record struct BucketId(int Pass, ushort Program, int Queue, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk, Material? Own);
 
-    private readonly record struct Membership(Bucket Bucket, int Position, byte Level);
+    private readonly record struct Membership(Bucket Bucket, int Position, int Pass, byte Level);
+
+    // A run of an object's memberships of one pass and level, so a build reads only those it draws
+    private readonly record struct MemberRange(int Pass, byte Level, int Start, int Count);
 
     internal readonly record struct ChunkRef(uint Chunk, int ChunkInMesh, uint FirstIndex, uint IndexCount);
 
@@ -686,6 +689,7 @@ internal sealed class BucketSet
     private readonly List<List<Bucket>> _ordered = [new(), new(), new()];
     private readonly List<bool> _orderDirty = [true, true, true];
     private List<Membership>[] _members = [];
+    private MemberRange[]?[] _ranges = [];
     private readonly Dictionary<Material, HashSet<int>> _materialUsers = new();
     private List<Material>?[] _objectMaterials = [];
     private readonly Dictionary<int, int> _queueRanks = new();
@@ -748,6 +752,7 @@ internal sealed class BucketSet
                 if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
                     AddTransparent(index, placement, _world.Mirrored[index], pass, level);
             }
+            Group(index);
         }
         RefreshRanks();
         return pass;
@@ -816,36 +821,19 @@ internal sealed class BucketSet
         _touched.Clear();
         foreach (int index in _visibleList)
         {
-            if (index >= _members.Length || _members[index] is not { } members)
+            if (index >= _ranges.Length || _ranges[index] is not { } ranges)
                 continue;
+            ReadOnlySpan<Membership> members = CollectionsMarshal.AsSpan(_members[index]);
             bool fading = fades && _from[index] != NoLevel;
-            foreach (Membership membership in members)
+            foreach (MemberRange range in ranges)
             {
-                Bucket found = membership.Bucket;
-                if (found.Pass != pass)
+                if (range.Pass != pass)
                     continue;
-                bool outgoing = fading && membership.Level == _from[index];
-                if (membership.Level != _level[index] && !outgoing)
+                bool outgoing = fading && range.Level == _from[index];
+                if (range.Level != _level[index] && !outgoing)
                     continue;
-                if (found.BuildStamp != _buildStamp)
-                {
-                    found.BuildStamp = _buildStamp;
-                    found.FoundCount = 0;
-                    found.FadingCount = 0;
-                    _touched.Add(found);
-                }
-                if (fading && FadeProgram(found) >= 0)
-                {
-                    if (found.FadingCount == found.Fading.Length)
-                        Array.Resize(ref found.Fading, found.Fading.Length * 2);
-                    found.Fading[found.FadingCount++] = (uint)index | (uint)_fade[index] << 24 | (outgoing ? 1u << 31 : 0);
-                    continue;
-                }
-                if (outgoing)
-                    continue;
-                if (found.FoundCount == found.Found.Length)
-                    Array.Resize(ref found.Found, found.Found.Length * 2);
-                found.Found[found.FoundCount++] = index;
+                for (int m = range.Start; m < range.Start + range.Count; m++)
+                    Find(members[m].Bucket, index, fading, outgoing);
             }
         }
         _touched.Sort((a, c) => a.OrderIndex.CompareTo(c.OrderIndex));
@@ -855,7 +843,6 @@ internal sealed class BucketSet
             Bucket bucket = _touched[b];
             int first = list.InstanceCount;
             float nearest = float.MaxValue;
-            Array.Sort(bucket.Found, 0, bucket.FoundCount);
             for (int i = 0; i < bucket.FoundCount; i++)
             {
                 int index = bucket.Found[i];
@@ -870,7 +857,6 @@ internal sealed class BucketSet
             // An outgoing level's chunks are not the ones the view tested, so each of them draws
             first = list.InstanceCount;
             nearest = float.MaxValue;
-            Array.Sort(bucket.Fading, 0, bucket.FadingCount);
             for (int i = 0; i < bucket.FadingCount; i++)
             {
                 uint word = bucket.Fading[i];
@@ -1034,6 +1020,30 @@ internal sealed class BucketSet
     private static DrawRecord Record(uint chunk, uint subMesh, Material? own)
         => own == null ? new DrawRecord { Chunk = chunk, SubMesh = subMesh } : new DrawRecord { Chunk = chunk, SubMesh = own.Slot, Flags = DrawRecord.DirectSlot };
 
+    // Adds an object to a bucket's objects this build, cross fading ones to its fading words
+    private void Find(Bucket found, int index, bool fading, bool outgoing)
+    {
+        if (found.BuildStamp != _buildStamp)
+        {
+            found.BuildStamp = _buildStamp;
+            found.FoundCount = 0;
+            found.FadingCount = 0;
+            _touched.Add(found);
+        }
+        if (fading && FadeProgram(found) >= 0)
+        {
+            if (found.FadingCount == found.Fading.Length)
+                Array.Resize(ref found.Fading, found.Fading.Length * 2);
+            found.Fading[found.FadingCount++] = (uint)index | (uint)_fade[index] << 24 | (outgoing ? 1u << 31 : 0);
+            return;
+        }
+        if (outgoing)
+            return;
+        if (found.FoundCount == found.Found.Length)
+            Array.Resize(ref found.Found, found.Found.Length * 2);
+        found.Found[found.FoundCount++] = index;
+    }
+
     // Emits the instances added since first, or queues them to be sorted near to far in the prepass
     private void Add(DrawList list, Bucket bucket, int b, ushort program, int first, float nearest, bool prepass)
     {
@@ -1123,6 +1133,7 @@ internal sealed class BucketSet
                 _visibleList.Add(index);
             }
         }
+        _visibleList.Sort();
     }
 
     // The level a view draws a renderable at, -1 when it is under its cull size
@@ -1269,6 +1280,7 @@ internal sealed class BucketSet
                     AddTransparent(index, placement, _world.Mirrored[index], pass, level);
             }
         }
+        Group(index);
     }
 
     // Built in passes draw opaque materials, the shadow pass every caster, transparent ones included; a feature's pass draws every material having it
@@ -1378,7 +1390,7 @@ internal sealed class BucketSet
         if (bucket.Count == bucket.Objects.Length)
             Array.Resize(ref bucket.Objects, bucket.Objects.Length * 2);
         bucket.Objects[bucket.Count] = index;
-        Members(index).Add(new Membership(bucket, bucket.Count, (byte)level));
+        Members(index).Add(new Membership(bucket, bucket.Count, bucket.Pass, (byte)level));
         bucket.Count++;
     }
 
@@ -1432,6 +1444,8 @@ internal sealed class BucketSet
             }
         }
         members.Clear();
+        if (index < _ranges.Length)
+            _ranges[index] = null;
 
         if (index < _objectMaterials.Length && _objectMaterials[index] is { } materials)
         {
@@ -1457,6 +1471,26 @@ internal sealed class BucketSet
         if (index >= _objectMaterials.Length)
             Array.Resize(ref _objectMaterials, Math.Max(index + 1, _objectMaterials.Length * 2));
         (_objectMaterials[index] ??= new List<Material>()).Add(material);
+    }
+
+    // Orders an object's memberships by pass then level and finds the run of each
+    private void Group(int index)
+    {
+        if (index >= _members.Length || _members[index] is not { Count: > 0 } members)
+            return;
+        members.Sort(static (a, b) => a.Pass != b.Pass ? a.Pass.CompareTo(b.Pass) : a.Level.CompareTo(b.Level));
+        List<MemberRange> ranges = new();
+        int start = 0;
+        for (int m = 1; m <= members.Count; m++)
+        {
+            if (m < members.Count && members[m].Pass == members[start].Pass && members[m].Level == members[start].Level)
+                continue;
+            ranges.Add(new MemberRange(members[start].Pass, members[start].Level, start, m - start));
+            start = m;
+        }
+        if (index >= _ranges.Length)
+            Array.Resize(ref _ranges, Math.Max(index + 1, _ranges.Length * 2));
+        _ranges[index] = [.. ranges];
     }
 
     private List<Membership> Members(int index)
