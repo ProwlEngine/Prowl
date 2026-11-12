@@ -85,9 +85,31 @@ public sealed class CSGScene
     /// identifies which surface a fragment belongs to.</summary>
     public const string SourceFaceAttribute = "csg:face";
 
-    private const float DistanceEpsilon = 0.0001f;
+    private const float DegenerateEpsilon = 0.0001f;
+    private float DistanceEpsilon = 0.0001f;
     private const float NormalEpsilon = 1.0f / 65535.0f;
-    private const float WeldTolerance = 0.0001f;
+    // A corner within the distance tolerance of a plane counts as on it but is not moved there, so two
+    // brushes can place the same corner that far apart. Welding has to reach across that.
+    private const float WeldReach = 3.0f;
+    private float WeldTolerance = 0.0001f * WeldReach;
+
+    /// <summary>
+    /// How far apart two points or planes may be and still count as the same, in world units.
+    /// Default 0.0001. Raise it when brush corners are only accurate to more than that, for example
+    /// after rotating them far from the origin, or faces meant to coincide will not be recognised.
+    /// </summary>
+    public float Tolerance
+    {
+        get => DistanceEpsilon;
+        set
+        {
+            if (DistanceEpsilon == value) return;
+            DistanceEpsilon = value;
+            WeldTolerance = value * WeldReach;
+            MarkEvaluationDirty();
+            InvalidateOutput(reweld: true);
+        }
+    }
 
     // The tree is the model. _brushes is a flattened cache of its leaves, rebuilt whenever the tree
     // changes, because fragmentation still tests every brush against every overlapping brush
@@ -99,6 +121,7 @@ public sealed class CSGScene
     private bool _treeDirty = true;      // the flattened brush cache is stale
     private bool _evalDirty = true;      // every brush must be re-evaluated, not just dirty ones
     private bool _hasIntersect;          // an Intersect anywhere makes edits act non-locally
+    private bool _flat;                  // no groups and no Intersect: the last brush containing a point decides it
     private GeometryData? _cachedOutput;
 
     private bool _weldTJunctions = true;
@@ -240,7 +263,7 @@ public sealed class CSGScene
         if (group.Op == operation) return;
         group.Op = operation;
         DirtySubtree(group);
-        MarkEvaluationDirty();
+        MarkTreeDirty();
     }
 
     /// <summary>Removes a group and everything inside it.</summary>
@@ -320,7 +343,21 @@ public sealed class CSGScene
         brush.Op = operation;
         brush.Dirty = true;
         _pendingDirtyRegions.Add(BrushBox(brush));
-        MarkEvaluationDirty();
+        MarkTreeDirty();
+    }
+
+    /// <summary>
+    /// Sets whether a brush contributes its own surface to the output. A brush that does not emit
+    /// still cuts and hides the brushes around it, which suits context loaded only so that the
+    /// brushes of interest come out right.
+    /// </summary>
+    public void SetEmits(CSGBrushHandle handle, bool emits)
+    {
+        var brush = Validate(handle);
+        if (brush.Emits == emits) return;
+        brush.Emits = emits;
+        brush.Dirty = true;
+        _cachedOutput = null;
     }
 
     /// <summary>Re-orders a brush to a new index, preserving everyone else's relative order.</summary>
@@ -477,7 +514,9 @@ public sealed class CSGScene
 
         _brushes.Clear();
         _hasIntersect = false;
+        bool hasGroups = false;
         Walk(_root);
+        _flat = !hasGroups && !_hasIntersect;
 
         void Walk(SceneGroup group)
         {
@@ -490,7 +529,11 @@ public sealed class CSGScene
                     brush.EvalOrder = _brushes.Count;
                     _brushes.Add(brush);
                 }
-                else if (child is SceneGroup sub) Walk(sub);
+                else if (child is SceneGroup sub)
+                {
+                    hasGroups = true;
+                    Walk(sub);
+                }
             }
         }
     }
@@ -578,7 +621,7 @@ public sealed class CSGScene
                 normal.Z += (cur.X - nxt.X) * (cur.Y + nxt.Y);
                 centroid += cur;
             }
-            if (Float3.LengthSquared(normal) < DistanceEpsilon * DistanceEpsilon) continue;
+            if (Float3.LengthSquared(normal) < DegenerateEpsilon * DegenerateEpsilon) continue;
 
             var plane = Plane.FromNormalAndPoint(Float3.Normalize(normal), centroid / n);
 
@@ -625,15 +668,25 @@ public sealed class CSGScene
     {
         public List<Float3> Poly;
         public List<Rel> Rels;
+        /// <summary>Its visibility is settled, so no further brush needs to cut it.</summary>
+        public bool Final;
         public Fragment(List<Float3> poly, List<Rel> rels) { Poly = poly; Rels = rels; }
     }
+
+    private static readonly Comparison<SceneBrush> s_latestFirst = (a, b) => b.EvalOrder.CompareTo(a.EvalOrder);
 
     private void Recompute(SceneBrush self, Bvh<SceneBrush> bvh, List<SceneBrush> neighborBuffer)
     {
         self.Output.Clear();
+        if (!self.Emits) return;
 
+        // Boxes are widened by the tolerance, or two faces a hair apart would never be tested against each other
         neighborBuffer.Clear();
-        bvh.QueryAABB(BrushBox(self), neighborBuffer);
+        bvh.QueryAABB(BrushBox(self).Expanded(DistanceEpsilon), neighborBuffer);
+
+        // In a flat scene a fragment inside a brush is decided by that brush and the ones after it,
+        // so walking the neighbours latest first lets such a fragment stop early.
+        if (_flat) neighborBuffer.Sort(s_latestFirst);
 
         var work = new List<Fragment>();
         var next = new List<Fragment>();
@@ -646,12 +699,15 @@ public sealed class CSGScene
             foreach (var b in neighborBuffer)
             {
                 if (b == self) continue;
-                if (!face.Bounds.Intersects(b.Bounds))
+                if (!face.Bounds.Expanded(DistanceEpsilon).Intersects(b.Bounds))
                     continue;
 
                 next.Clear();
                 foreach (var frag in work)
-                    SplitByBrush(frag, b, face.Plane, next);
+                {
+                    if (frag.Final || !Reaches(frag.Poly, b.Bounds)) next.Add(frag);
+                    else SplitByBrush(frag, b, face.Plane, self, next);
+                }
 
                 (work, next) = (next, work);
             }
@@ -665,9 +721,31 @@ public sealed class CSGScene
         }
     }
 
+    // Whether every corner of a polygon lies on a plane. Measured at the corners themselves, because
+    // two planes through the same points can still differ in their constants by rounding.
+    private bool LiesOn(IReadOnlyList<Float3> poly, Plane plane)
+    {
+        foreach (var p in poly)
+            if (Maths.Abs(Float3.Dot(plane.Normal, p) - plane.D) > DistanceEpsilon) return false;
+        return true;
+    }
+
+    private bool Reaches(List<Float3> poly, AABB box)
+    {
+        Float3 min = poly[0], max = poly[0];
+        for (int i = 1; i < poly.Count; i++)
+        {
+            min = Maths.Min(min, poly[i]);
+            max = Maths.Max(max, poly[i]);
+        }
+        return min.X <= box.Max.X + DistanceEpsilon && max.X >= box.Min.X - DistanceEpsilon
+            && min.Y <= box.Max.Y + DistanceEpsilon && max.Y >= box.Min.Y - DistanceEpsilon
+            && min.Z <= box.Max.Z + DistanceEpsilon && max.Z >= box.Min.Z - DistanceEpsilon;
+    }
+
     // Splits a face fragment by a neighbour brush into the piece inside/on the brush (tagged with the
-    // relation) and the pieces outside it (untagged). All pieces are appended to <paramref name="results"/>.
-    private static void SplitByBrush(Fragment frag, SceneBrush b, Plane facePlane, List<Fragment> results)
+    // relation) and the pieces outside it (untagged). A fragment the brush does not reach stays whole.
+    private void SplitByBrush(Fragment frag, SceneBrush b, Plane facePlane, SceneBrush self, List<Fragment> results)
     {
         // Detect a brush face coplanar with this face (a shared surface).
         int coincident = -1;
@@ -676,17 +754,17 @@ public sealed class CSGScene
         {
             Plane bp = b.Faces[i].Plane;
             float dn = Float3.Dot(bp.Normal, facePlane.Normal);
-            if (dn > 1.0f - NormalEpsilon && Maths.Abs(bp.D - facePlane.D) < DistanceEpsilon)
-            {
-                coincident = i; coincRelation = Relation.Aligned; break;
-            }
-            if (dn < -(1.0f - NormalEpsilon) && Maths.Abs(bp.D + facePlane.D) < DistanceEpsilon)
-            {
-                coincident = i; coincRelation = Relation.Opposite; break;
-            }
+            if (Maths.Abs(dn) < 1.0f - NormalEpsilon) continue;
+
+            // Either face may be the small one whose plane is only roughly known, so the test runs both ways
+            if (!LiesOn(frag.Poly, bp) && !LiesOn(b.Faces[i].World, facePlane)) continue;
+            coincident = i;
+            coincRelation = dn > 0 ? Relation.Aligned : Relation.Opposite;
+            break;
         }
 
-        var inside = new List<Float3>(frag.Poly);
+        int start = results.Count;
+        var inside = frag.Poly;
         var back = new List<Float3>();
         var front = new List<Float3>();
 
@@ -694,20 +772,33 @@ public sealed class CSGScene
         {
             if (i == coincident) continue;
 
-            ClipByPlane(inside, b.Faces[i].Plane, back, front);
+            ClipByPlane(inside, b.Faces[i].Plane, back, front, out bool anyBack, out bool anyFront);
 
+            if (!anyBack || back.Count < 3)
+            {
+                results.RemoveRange(start, results.Count - start);
+                results.Add(frag);
+                return;
+            }
+
+            if (!anyFront) continue;
             if (front.Count >= 3)
                 results.Add(new Fragment(new List<Float3>(front), frag.Rels));
-
-            if (back.Count < 3) { inside = null!; break; }
             inside = new List<Float3>(back);
         }
 
-        if (inside != null && inside.Count >= 3)
+        // Two brushes sharing a surface would each emit it. The later one in traversal order owns it.
+        if (coincident >= 0 && coincRelation == Relation.Aligned && b.EvalOrder > self.EvalOrder)
+            return;
+
+        var rels = new List<Rel>(frag.Rels) { new Rel(b, coincident >= 0 ? coincRelation : Relation.Interior) };
+        var piece = new Fragment(inside, rels);
+        if (_flat && coincident < 0)
         {
-            var rels = new List<Rel>(frag.Rels) { new Rel(b, coincident >= 0 ? coincRelation : Relation.Interior) };
-            results.Add(new Fragment(inside, rels));
+            if (!Visible(rels, self, out _)) return;
+            piece.Final = true;
         }
+        results.Add(piece);
     }
 
     /// <summary>
@@ -724,14 +815,35 @@ public sealed class CSGScene
             if (r.Relation == Relation.Aligned && r.Brush.EvalOrder > self.EvalOrder)
                 return false;
 
-        bool innerSolid = EvaluateTree(_root, rels, self, inner: true);
-        bool outerSolid = EvaluateTree(_root, rels, self, inner: false);
+        bool innerSolid = _flat ? FlatSolid(rels, self, inner: true) : EvaluateTree(_root, rels, self, inner: true);
+        bool outerSolid = _flat ? FlatSolid(rels, self, inner: false) : EvaluateTree(_root, rels, self, inner: false);
 
         if (innerSolid == outerSolid)
             return false; // both sides solid or both empty: not a boundary
 
         flip = !innerSolid && outerSolid; // solid is in front: the face must point the other way
         return true;
+    }
+
+    /// <summary>The flat scene answer for a side of a fragment: the latest brush filling that side
+    /// decides it. Relations are listed latest brush first.</summary>
+    private static bool FlatSolid(List<Rel> rels, SceneBrush self, bool inner)
+    {
+        bool selfPending = inner;
+        foreach (var r in rels)
+        {
+            if (selfPending && r.Brush.EvalOrder < self.EvalOrder)
+                return self.Op == CSGOperation.Additive;
+
+            bool fills = r.Relation switch
+            {
+                Relation.Interior => true,
+                Relation.Aligned => inner,
+                _ => !inner,
+            };
+            if (fills) return r.Brush.Op == CSGOperation.Additive;
+        }
+        return selfPending && self.Op == CSGOperation.Additive;
     }
 
     /// <summary>Fold a group's children into one solid/empty answer for a side of a fragment. Each
@@ -780,10 +892,12 @@ public sealed class CSGScene
 
     // Splits a convex polygon by a plane into the part behind it (back, inside half-space) and in
     // front of it (front, outside half-space). Points on the plane go to both.
-    private static void ClipByPlane(List<Float3> poly, Plane plane, List<Float3> back, List<Float3> front)
+    private void ClipByPlane(List<Float3> poly, Plane plane, List<Float3> back, List<Float3> front,
+        out bool anyBack, out bool anyFront)
     {
         back.Clear();
         front.Clear();
+        anyBack = anyFront = false;
 
         int n = poly.Count;
         for (int i = 0; i < n; i++)
@@ -797,6 +911,8 @@ public sealed class CSGScene
 
             if (sa <= 0) back.Add(a);
             if (sa >= 0) front.Add(a);
+            anyBack |= sa < 0;
+            anyFront |= sa > 0;
 
             if ((sa > 0 && sb < 0) || (sa < 0 && sb > 0))
             {
@@ -834,7 +950,7 @@ public sealed class CSGScene
 
         var items = BuildEmitItems();
 
-        var weld = new Dictionary<SnapKey, GeometryData.Vertex>();
+        var weld = new Dictionary<SnapKey, List<GeometryData.Vertex>>();
         foreach (var item in items)
             EmitPolygon(result, weld, item, hasAttributes);
 
@@ -912,9 +1028,9 @@ public sealed class CSGScene
             item.Ring = InsertCollinearPoints(item.Ring, bvh, candidates);
     }
 
-    private static List<Float3> InsertCollinearPoints(List<Float3> ring, Bvh<Float3> points, List<Float3> candidates)
+    private List<Float3> InsertCollinearPoints(List<Float3> ring, Bvh<Float3> points, List<Float3> candidates)
     {
-        const float tol2 = WeldTolerance * WeldTolerance;
+        float tol2 = WeldTolerance * WeldTolerance;
         int n = ring.Count;
         var output = new List<Float3>(n);
         var inserts = new List<(float t, Float3 point)>();
@@ -962,7 +1078,7 @@ public sealed class CSGScene
 
     #region Emission + attribute carrying
 
-    private void EmitPolygon(GeometryData result, Dictionary<SnapKey, GeometryData.Vertex> weld, EmitItem item, bool hasAttributes)
+    private void EmitPolygon(GeometryData result, Dictionary<SnapKey, List<GeometryData.Vertex>> weld, EmitItem item, bool hasAttributes)
     {
         var ring = item.Ring;
         int count = ring.Count;
@@ -1067,7 +1183,7 @@ public sealed class CSGScene
             CarryEdges(result, shape, source, verts, positions);
     }
 
-    private static void CarryEdges(GeometryData result, GeometryData shape, FaceData source,
+    private void CarryEdges(GeometryData result, GeometryData shape, FaceData source,
         List<GeometryData.Vertex> verts, List<Float3> positions)
     {
         int n = verts.Count;
@@ -1160,20 +1276,42 @@ public sealed class CSGScene
         return new GeometryData.IntAttributeValue { Data = rounded };
     }
 
-    private static GeometryData.Vertex GetOrAddVertex(GeometryData result,
-        Dictionary<SnapKey, GeometryData.Vertex> weld, Float3 point)
+    // Finds the vertex already standing within the weld tolerance of a point, or adds one. Vertices are
+    // kept in a grid, and every cell the tolerance reaches is searched, so two points a hair apart
+    // still weld when a cell border runs between them.
+    private GeometryData.Vertex GetOrAddVertex(GeometryData result,
+        Dictionary<SnapKey, List<GeometryData.Vertex>> weld, Float3 point)
     {
-        var key = new SnapKey(point, WeldTolerance);
-        if (weld.TryGetValue(key, out var existing))
-            return existing;
+        float cell = WeldTolerance * 4;
+        int x0 = (int)MathF.Floor((point.X - WeldTolerance) / cell), x1 = (int)MathF.Floor((point.X + WeldTolerance) / cell);
+        int y0 = (int)MathF.Floor((point.Y - WeldTolerance) / cell), y1 = (int)MathF.Floor((point.Y + WeldTolerance) / cell);
+        int z0 = (int)MathF.Floor((point.Z - WeldTolerance) / cell), z1 = (int)MathF.Floor((point.Z + WeldTolerance) / cell);
+
+        for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++)
+                {
+                    if (!weld.TryGetValue(new SnapKey(x, y, z), out var bucket)) continue;
+                    foreach (var candidate in bucket)
+                    {
+                        Float3 d = candidate.Point - point;
+                        if (MathF.Abs(d.X) <= WeldTolerance && MathF.Abs(d.Y) <= WeldTolerance && MathF.Abs(d.Z) <= WeldTolerance)
+                            return candidate;
+                    }
+                }
+
         var vertex = result.AddVertex(point);
-        weld[key] = vertex;
+        var home = new SnapKey((int)MathF.Floor(point.X / cell), (int)MathF.Floor(point.Y / cell), (int)MathF.Floor(point.Z / cell));
+        if (!weld.TryGetValue(home, out var list)) weld[home] = list = new List<GeometryData.Vertex>(1);
+        list.Add(vertex);
         return vertex;
     }
 
     private readonly struct SnapKey : IEquatable<SnapKey>
     {
         private readonly int _x, _y, _z;
+        public SnapKey(int x, int y, int z) { _x = x; _y = y; _z = z; }
+
         public SnapKey(Float3 point, float tolerance)
         {
             _x = (int)MathF.Round(point.X / tolerance);
@@ -1229,6 +1367,7 @@ public sealed class CSGScene
         public GeometryData Shape = null!;
         public Float4x4 Transform;
         public bool Dirty;
+        public bool Emits = true;
 
         public readonly List<FaceData> Faces = new();
         public AABB Bounds;
