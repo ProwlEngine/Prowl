@@ -144,7 +144,7 @@ premultiplied colour with `geometry_opacity` as coverage. Its Forward, Transmiss
 Alpha and Premultiplied as One, InverseSourceAlpha, Additive as One, One.
 
 Graphite/Unlit emits light like Lit's emission: `base_color` times its map and the vertex colour, at
-`emission_luminance` nits, 1 by default, times the view's exposure. It follows exposure as everything lit does, so a
+`emission_luminance` nits, 20000 by default, white at EV100 14, times the view's exposure. It follows exposure as everything lit does, so a
 reflection probe captured at any EV100 shows it as the view does. Something that must keep its colour on screen
 whatever the exposure, such as a HUD drawn in the scene, sets `emission_luminance` to one over the view's exposure.
 

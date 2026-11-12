@@ -8,7 +8,7 @@ Shader "Graphite/Unlit"
     {
         base_color("Base Color", Color) = (1.0, 1.0, 1.0, 1.0)
         base_color_map("Base Color Map", Texture2D) = "white" {} [Map]
-        emission_luminance("Emission Luminance", Float) = 1.0
+        emission_luminance("Emission Luminance", Float) = 20000.0
         alpha_cutoff("Alpha Cutoff", Float) = 0.5 [Range(0, 1)] [ShowIf(_SURFACE, CUTOUT)]
     }
 

@@ -339,6 +339,20 @@ public sealed partial class LightingTests
         Assert.True(cut > 0 && kept > 0, $"{cut} cut, {kept} kept");
     }
 
+    // Unlit glows at a daylight exposure's white by default, so its base colour shows as it is at EV100 14
+    [Fact]
+    public void Unlit_ShowsItsBaseColourAtDaylightExposure_ByDefault()
+    {
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default, Sky = SkyMaterial(new Float3(0, 0, 0), 0) };
+        Material unlit = _renderer.CreateMaterial(_renderer.Standard.Unlit);
+        unlit.SetColor("base_color", new Float4(0.5f, 0.5f, 0.5f, 1));
+        _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) }, [unlit]);
+        _ev100 = 14;
+        Frame();
+        float shown = 0.5f * 20000f * RenderView.ExposureOf(14);
+        RendererHarness.AssertAll(new Float3(shown, shown, shown), Frame());
+    }
+
     // The object's colour multiplies the base colour of Lit and Unlit, white leaving it as it is, set at Add or later
     [Fact]
     public void ObjectColor_TintsTheBaseColour_WhiteByDefault()
