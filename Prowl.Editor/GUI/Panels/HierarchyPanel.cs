@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 
 using Prowl.Editor.Core;
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Prefabs;
@@ -59,6 +58,13 @@ public class HierarchyPanel : DockPanel
         public readonly TreeNode Node = new() { DefaultExpanded = true };
     }
 
+    /// <summary>Hides the default inspector content when a <see cref="SceneHeader"/> is selected.</summary>
+    [CustomEditor(typeof(SceneHeader))]
+    private class SceneHeaderEditor : CustomEditor
+    {
+        public override void OnGUI(Paper paper, string id, object target) { }
+    }
+
     private readonly ConditionalWeakTable<object, SceneHeader> _headers = [];
 
     // Ping state which GOs in the hierarchy match the pinged GUID
@@ -73,7 +79,6 @@ public class HierarchyPanel : DockPanel
 
     // Rebuilt every frame from the scene. Nodes are kept per GameObject so their id string is only made once.
     private readonly List<TreeNode> _treeNodes = [];
-    private readonly List<object> _flatObjects = [];
     private readonly ConditionalWeakTable<GameObject, TreeNode> _nodeCache = [];
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -259,10 +264,8 @@ public class HierarchyPanel : DockPanel
                     usedHeight += 28; // prefab breadcrumb row + margins
                 float scrollHeight = height - usedHeight;
                 List<TreeNode> treeNodes = _treeNodes;
-                List<object> flatObjects = _flatObjects;
                 treeNodes.Clear();
-                flatObjects.Clear();
-                BuildSceneNodes(scene, treeNodes, flatObjects);
+                BuildSceneNodes(scene, treeNodes);
 
                 // Scroll-to-ping: when a newly-pinged GO lives in the scene, center its row in the
                 // scroll view so the yellow highlight is actually visible.
@@ -280,17 +283,9 @@ public class HierarchyPanel : DockPanel
                 // Tree view
                 Origami.Tree(paper, "hier_tree", width, scrollHeight)
                     .Nodes(treeNodes)
-                    .MultiSelect()
                     .Reorderable()
-                    .IsSelected(n => n.UserData is GameObject g && Selection.IsSelected(g))
-                    .OnSelectModified((e, ctrl, shift) =>
-                    {
-                        if (DragDrop.IsDragging || DragDrop.IsDropFrame) return;
-                        if (e.Node.UserData is not GameObject go) return;
-                        Selection.HandleListClick(go, (IReadOnlyList<object>)flatObjects, e.Index, ctrl, shift);
-                        foreach (object picked in Selection.Selected.ToArray())
-                            if (picked is SceneHeader) Selection.RemoveFromSelection(picked);
-                    })
+                    .IsSelected(n => SelectionHelper.IsSelected(n.UserData))
+                    .HandleMultiSelect(paper, treeNodes, BuildItemContextMenu)
                     .OnDoubleClick(e =>
                     {
                         if (e.Node.UserData is SceneHeader { Open: { IsLoaded: false } unloaded })
@@ -303,22 +298,11 @@ public class HierarchyPanel : DockPanel
                         Selection.Select(go);
                         SceneViewPanel.ActiveCamera?.FocusSelection();
                     })
-                    .OnRightClick(e =>
-                    {
-                        if (e.Node.UserData is not GameObject go) return;
-                        // Select the object with Right click as well if we're not performing a multiple selection action
-                        if (!paper.IsKeyDown(PaperKey.LeftControl) && !paper.IsKeyDown(PaperKey.LeftShift))
-                            Selection.Select(go);
-                        if (!Selection.IsSelected(go)) Selection.AddToSelection(go);
-                    })
                     .OnDragStart(n =>
                     {
                         if (DragDrop.IsDragging || n.UserData is not GameObject go) return;
-                        GameObject[] selected = [.. Selection.GetSelected<GameObject>()];
-                        if (selected.Length > 0 && Selection.IsSelected(go))
-                            DragDrop.StartDrag(new GameObjectDragPayload(selected));
-                        else
-                            DragDrop.StartDrag(new GameObjectDragPayload(go));
+                        GameObject[] selected = [.. SelectionHelper.GetSelected<GameObject>()];
+                        DragDrop.StartDrag(new GameObjectDragPayload(selected));
                     })
                     .OnHover((n, normY) =>
                     {
@@ -385,9 +369,6 @@ public class HierarchyPanel : DockPanel
                                 Undo.RecordObject(g, "Toggle Visibility");
                                 g.Enabled = !g.Enabled;
                             });
-
-                        // Per-GameObject right-click menu
-                        BuildGameObjectContextMenu(paper, "hier_go_ctx");
                     })
                     .IsPinged(n => IsPingedNode(n) && Selection.PingedGuid != Guid.Empty)
                     .PingAlpha(() => Selection.GetPingAlpha())
@@ -482,12 +463,12 @@ public class HierarchyPanel : DockPanel
 
     // One header per open scene in the edit world, per section in the play world (Persistent once it holds anything),
     // and none in the prefab world, which is one prefab.
-    private void BuildSceneNodes(SceneInstance world, List<TreeNode> nodes, List<object> flatObjects)
+    private void BuildSceneNodes(SceneInstance world, List<TreeNode> nodes)
     {
         if (PrefabEditingMode.IsEditing)
         {
             foreach (GameObject root in GetDisplayRoots(world.Roots))
-                BuildNodeList(root, 0, nodes, flatObjects);
+                BuildNodeList(root, 0, nodes);
             return;
         }
 
@@ -517,9 +498,8 @@ public class HierarchyPanel : DockPanel
             node.HasChildren = roots.Count > 0;
             node.DropIndicator = DragDrop.IsDragging && ReferenceEquals(_dragHoverHeader, header) ? TreeDropPosition.Into : null;
             nodes.Add(node);
-            flatObjects.Add(header);
             foreach (GameObject root in roots)
-                BuildNodeList(root, 1, nodes, flatObjects);
+                BuildNodeList(root, 1, nodes);
         }
     }
 
@@ -702,7 +682,7 @@ public class HierarchyPanel : DockPanel
         }
     }
 
-    private void BuildNodeList(GameObject go, int depth, List<TreeNode> nodes, List<object> flatObjects)
+    private void BuildNodeList(GameObject go, int depth, List<TreeNode> nodes)
     {
         if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
             return;
@@ -737,11 +717,10 @@ public class HierarchyPanel : DockPanel
         node.OverrideExpanded = _forceExpandedIds.Contains(goId) ? true : null;
 
         nodes.Add(node);
-        flatObjects.Add(go);
 
         // Recurse children (the tree widget handles skipping collapsed children internally)
         foreach (GameObject child in go.Children)
-            BuildNodeList(child, depth + 1, nodes, flatObjects);
+            BuildNodeList(child, depth + 1, nodes);
     }
 
     // ================================================================
@@ -882,170 +861,187 @@ public class HierarchyPanel : DockPanel
         });
     }
 
-    private void BuildGameObjectContextMenu(Paper paper, string id)
+    // Called when the user right-clicks an item in the tree.
+    Action<ContextBuilder> BuildItemContextMenu(object clickedItem)
     {
-        Origami.RightClickMenu(paper, id, builder =>
+        if (clickedItem is SceneHeader sceneHeader)
         {
-            var selectedGOs = Selection.GetSelected<GameObject>().ToList();
-            GameObject? firstSelected = selectedGOs.FirstOrDefault();
-            if (selectedGOs.Count == 0) return;
-
-            bool multiSelect = selectedGOs.Count > 1;
-
-            builder.Title(multiSelect ? Loc.Get("project.item_count", new { count = Selection.Count }) : firstSelected.Name, iconDraw: GetGoStyle(firstSelected).icon);
-
-            builder.Submenu(Loc.Get("hierarchy.create"), (b) => { BuildCreateMenuFor(b, selectedGOs); }, EditorIcons.Plus);
-
-            builder.Separator();
-
-            if (multiSelect)
+            // Build the scene header context menu.
+            // Note: the selection might contain other items, which -- consistent with Unity -- we ignore.
+            return builder =>
             {
-                builder.Item($"{Loc.Get("hierarchy.duplicate")} ({selectedGOs.Count})", () =>
-                {
-                    List<GameObject> dupes = GameObjectClipboard.Duplicate(selectedGOs);
-                    foreach (GameObject d in dupes) Undo.RegisterCreatedObjectUndo(d, "Duplicate");
-                }, icon: EditorIcons.Copy);
-
-                builder.Item($"{Loc.Get("hierarchy.rename")} ({selectedGOs.Count})", () =>
-                {
-                    StartRenameGO(firstSelected!, selectedGOs);
-                }, icon: EditorIcons.PenToSquare);
-
-                builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
-                {
-                    DeleteGameObjects([.. ExcludeNestedSelections(selectedGOs)]);
-                }, icon: EditorIcons.Trash);
-
-                builder.Separator();
-
-                bool anyEnabled = selectedGOs.Any(g => g.Enabled);
-                builder.Item(anyEnabled ? Loc.Get("hierarchy.disable_all") : Loc.Get("hierarchy.enable_all"), () =>
-                {
-                    bool newState = !anyEnabled;
-                    Undo.RecordObjects(selectedGOs, newState ? "Enable All" : "Disable All");
-                    foreach (GameObject? go in selectedGOs) go.Enabled = newState;
-                }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
-            }
-            else
-            {
-                GameObject go = firstSelected!;
-                builder.Item(Loc.Get("hierarchy.duplicate"), () =>
-                {
-                    List<GameObject> dupes = GameObjectClipboard.Duplicate([go]);
-                    foreach (GameObject d in dupes) Undo.RegisterCreatedObjectUndo(d, "Duplicate");
-                }, icon: EditorIcons.Copy);
-                builder.Item(Loc.Get("hierarchy.rename"), () =>
-                {
-                    StartRenameGO(go, [go]);
-                }, icon: EditorIcons.PenToSquare);
-                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash);
-                builder.Separator();
-                builder.Item(go.Enabled ? Loc.Get("hierarchy.disable") : Loc.Get("hierarchy.enable"), () =>
-                {
-                    Undo.RecordObject(go, "Toggle Visibility");
-                    go.Enabled = !go.Enabled;
-                }, icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
-            }
-
-            builder.Separator();
-
-            // Move to View / Align With View / Move View To
-            EditorCamera? cam = SceneViewPanel.ActiveCamera;
-            if (cam != null)
-            {
-                // Pose writes go to the top-level selection only: a GameObject whose ancestor is
-                // also selected already travels with that ancestor, so writing its world pose
-                // separately would fight the parent's write (order-dependent) and bloat the undo step.
-                List<GameObject> poseTargets = ExcludeNestedSelections(selectedGOs);
-
-                // Position only, at the centre of the view - rotation is deliberately untouched.
-                builder.Item(Loc.Get("hierarchy.move_to_view"), () =>
-                {
-                    Undo.RecordObjects(poseTargets, "Move to View");
-                    foreach (GameObject g in poseTargets) g.Transform.Position = cam.ViewFocusPoint;
-                }, icon: EditorIcons.ArrowRight);
-
-                // Position *and* rotation, so the object looks exactly where the view looks.
-                builder.Item(Loc.Get("hierarchy.align_with_view"), () =>
-                {
-                    Undo.RecordObjects(poseTargets, "Align With View");
-                    foreach (GameObject g in poseTargets) g.Transform.SetPositionAndRotation(cam.Position, cam.Rotation);
-                }, icon: EditorIcons.ArrowsToEye);
-
-                builder.Item(Loc.Get("hierarchy.move_view_to"), () =>
-                {
-                    cam.SetPosition(firstSelected!.Transform.Position);
-                    cam.SetOrientation((float)firstSelected!.Transform.LocalEulerAngles.Y, (float)firstSelected!.Transform.LocalEulerAngles.X);
-                }, icon: EditorIcons.Eye);
-
-                builder.Separator();
-            }
-
-            // Creating a prefab from what is selected, rather than only by dragging into the project
-            // panel, which nothing advertises.
-            builder.Item(Loc.Get("hierarchy.create_prefab"), () => CreatePrefabsFrom(selectedGOs),
-                icon: EditorIcons.Cubes);
-
-            // Prefab operations, over every selected instance rather than only the first.
-            List<GameObject> prefabRoots = PrefabInstanceRootsOf(selectedGOs);
-            if (prefabRoots.Count > 0)
-            {
-                string suffix = prefabRoots.Count > 1 ? $" ({prefabRoots.Count})" : "";
-
-                if (prefabRoots.Count == 1)
-                {
-                    Guid assetId = prefabRoots[0].PrefabAssetId;
-
-                    // Straight into the prefab, rather than pinging the asset and leaving the user to
-                    // find it in the project panel and double click it.
-                    builder.Item(Loc.Get("hierarchy.open_prefab"), () => PrefabEditingMode.Enter(assetId),
-                        icon: EditorIcons.PenToSquare, enabled: PrefabUtility.IsEditablePrefab(assetId));
-
-                    builder.Item(Loc.Get("hierarchy.select_prefab_asset"),
-                        () => Selection.Ping(assetId), icon: EditorIcons.Cubes);
-                }
-
-                bool anyOverrides = prefabRoots.Any(PrefabUtility.HasAnyOverrides);
-                // A generated prefab (a model) is rebuilt from its source on every import, so there
-                // is nothing to apply to. Reverting still works.
-                bool anyApplyable = prefabRoots.Any(r =>
-                    PrefabUtility.HasAnyOverrides(r) && PrefabUtility.IsEditablePrefab(r.PrefabAssetId));
-
-                builder.Item(Loc.Get("hierarchy.apply_prefab_overrides") + suffix, () =>
-                {
-                    foreach (GameObject root in prefabRoots)
-                        if (PrefabUtility.IsEditablePrefab(root.PrefabAssetId))
-                            PrefabUtility.ApplyOverrides(root);
-                }, enabled: anyApplyable, icon: EditorIcons.Check);
-
-                builder.Item(Loc.Get("hierarchy.revert_to_prefab") + suffix, () =>
-                {
-                    foreach (GameObject root in prefabRoots) PrefabUtility.RevertOverrides(root);
-                }, enabled: anyOverrides, icon: EditorIcons.ArrowsRotate);
-
-                builder.Item(Loc.Get("hierarchy.break_prefab_instance") + suffix, () =>
-                {
-                    foreach (GameObject root in prefabRoots) PrefabUtility.UnpackPrefabInstance(root);
-                }, icon: EditorIcons.LinkSlash);
-
-                builder.Separator();
-            }
-
-            if (multiSelect)
-            {
-                builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
-                {
-                    DeleteGameObjects([.. ExcludeNestedSelections(selectedGOs)]);
-                }, icon: EditorIcons.Trash, danger: true);
-            }
-            else
-            {
-                GameObject go = firstSelected!;
-                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash, danger: true);
-            }
-
-        });
+                builder.Title(sceneHeader.Section.Name, iconDraw: EditorIcons.Shapes_I);
+                builder.Submenu(Loc.Get("hierarchy.create"), (b) => { BuildCreateMenuFor(b, parent: null); }, EditorIcons.Plus);
+            };
+        }
+        else if (clickedItem is GameObject gameObject)
+        {
+            // Build the game object context menu.
+            return BuildGameObjectContextMenu(gameObject);
+        }
+        return builder => { };
     }
+
+    // Called when the user right-clicks a game object in the tree.
+    Action<ContextBuilder> BuildGameObjectContextMenu(GameObject clickedItem) => builder =>
+    {
+        // Note: the Selection may contain a SceneHeader.
+        // This menu was designed to support GameObjects only, so filter out non-GameObjects.
+        var selectedGOs = Selection.GetSelected<GameObject>().ToList();
+        if (selectedGOs.Count == 0) return;
+        
+        bool multiSelect = selectedGOs.Count > 1;
+
+        builder.Title(multiSelect ? Loc.Get("project.item_count", new { count = selectedGOs.Count }) : clickedItem.Name, iconDraw: GetGoStyle(clickedItem).icon);
+
+        builder.Submenu(Loc.Get("hierarchy.create"), (b) => { BuildCreateMenuFor(b, selectedGOs); }, EditorIcons.Plus);
+
+        builder.Separator();
+
+        if (multiSelect)
+        {
+            builder.Item($"{Loc.Get("hierarchy.duplicate")} ({selectedGOs.Count})", () =>
+            {
+                List<GameObject> dupes = GameObjectClipboard.Duplicate(selectedGOs);
+                foreach (GameObject d in dupes) Undo.RegisterCreatedObjectUndo(d, "Duplicate");
+            }, icon: EditorIcons.Copy);
+
+            builder.Item($"{Loc.Get("hierarchy.rename")} ({selectedGOs.Count})", () =>
+            {
+                StartRenameGO(clickedItem, selectedGOs);
+            }, icon: EditorIcons.PenToSquare);
+
+            builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
+            {
+                DeleteGameObjects([.. ExcludeNestedSelections(selectedGOs)]);
+            }, icon: EditorIcons.Trash);
+
+            builder.Separator();
+
+            bool anyEnabled = selectedGOs.Any(g => g.Enabled);
+            builder.Item(anyEnabled ? Loc.Get("hierarchy.disable_all") : Loc.Get("hierarchy.enable_all"), () =>
+            {
+                bool newState = !anyEnabled;
+                Undo.RecordObjects(selectedGOs, newState ? "Enable All" : "Disable All");
+                foreach (GameObject? go in selectedGOs) go.Enabled = newState;
+            }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+        }
+        else
+        {
+            builder.Item(Loc.Get("hierarchy.duplicate"), () =>
+            {
+                List<GameObject> dupes = GameObjectClipboard.Duplicate([clickedItem]);
+                foreach (GameObject d in dupes) Undo.RegisterCreatedObjectUndo(d, "Duplicate");
+            }, icon: EditorIcons.Copy);
+            builder.Item(Loc.Get("hierarchy.rename"), () =>
+            {
+                StartRenameGO(clickedItem, [clickedItem]);
+            }, icon: EditorIcons.PenToSquare);
+            builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(clickedItem), icon: EditorIcons.Trash);
+            builder.Separator();
+            builder.Item(clickedItem.Enabled ? Loc.Get("hierarchy.disable") : Loc.Get("hierarchy.enable"), () =>
+            {
+                Undo.RecordObject(clickedItem, "Toggle Visibility");
+                clickedItem.Enabled = !clickedItem.Enabled;
+            }, icon: clickedItem.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+        }
+
+        builder.Separator();
+
+        // Move to View / Align With View / Move View To
+        EditorCamera? cam = SceneViewPanel.ActiveCamera;
+        if (cam != null)
+        {
+            // Pose writes go to the top-level selection only: a GameObject whose ancestor is
+            // also selected already travels with that ancestor, so writing its world pose
+            // separately would fight the parent's write (order-dependent) and bloat the undo step.
+            List<GameObject> poseTargets = ExcludeNestedSelections(selectedGOs);
+
+            // Position only, at the centre of the view - rotation is deliberately untouched.
+            builder.Item(Loc.Get("hierarchy.move_to_view"), () =>
+            {
+                Undo.RecordObjects(poseTargets, "Move to View");
+                foreach (GameObject g in poseTargets) g.Transform.Position = cam.ViewFocusPoint;
+            }, icon: EditorIcons.ArrowRight);
+
+            // Position *and* rotation, so the object looks exactly where the view looks.
+            builder.Item(Loc.Get("hierarchy.align_with_view"), () =>
+            {
+                Undo.RecordObjects(poseTargets, "Align With View");
+                foreach (GameObject g in poseTargets) g.Transform.SetPositionAndRotation(cam.Position, cam.Rotation);
+            }, icon: EditorIcons.ArrowsToEye);
+
+            builder.Item(Loc.Get("hierarchy.move_view_to"), () =>
+            {
+                cam.SetPosition(clickedItem.Transform.Position);
+                cam.SetOrientation(clickedItem.Transform.LocalEulerAngles.Y, clickedItem.Transform.LocalEulerAngles.X);
+            }, icon: EditorIcons.Eye);
+
+            builder.Separator();
+        }
+
+        // Creating a prefab from what is selected, rather than only by dragging into the project
+        // panel, which nothing advertises.
+        builder.Item(Loc.Get("hierarchy.create_prefab"), () => CreatePrefabsFrom(selectedGOs),
+            icon: EditorIcons.Cubes);
+
+        // Prefab operations, over every selected instance rather than only the first.
+        List<GameObject> prefabRoots = PrefabInstanceRootsOf(selectedGOs);
+        if (prefabRoots.Count > 0)
+        {
+            string suffix = prefabRoots.Count > 1 ? $" ({prefabRoots.Count})" : "";
+
+            if (prefabRoots.Count == 1)
+            {
+                Guid assetId = prefabRoots[0].PrefabAssetId;
+
+                // Straight into the prefab, rather than pinging the asset and leaving the user to
+                // find it in the project panel and double click it.
+                builder.Item(Loc.Get("hierarchy.open_prefab"), () => PrefabEditingMode.Enter(assetId),
+                    icon: EditorIcons.PenToSquare, enabled: PrefabUtility.IsEditablePrefab(assetId));
+
+                builder.Item(Loc.Get("hierarchy.select_prefab_asset"),
+                    () => Selection.Ping(assetId), icon: EditorIcons.Cubes);
+            }
+
+            bool anyOverrides = prefabRoots.Any(PrefabUtility.HasAnyOverrides);
+            // A generated prefab (a model) is rebuilt from its source on every import, so there
+            // is nothing to apply to. Reverting still works.
+            bool anyApplyable = prefabRoots.Any(r =>
+                PrefabUtility.HasAnyOverrides(r) && PrefabUtility.IsEditablePrefab(r.PrefabAssetId));
+
+            builder.Item(Loc.Get("hierarchy.apply_prefab_overrides") + suffix, () =>
+            {
+                foreach (GameObject root in prefabRoots)
+                    if (PrefabUtility.IsEditablePrefab(root.PrefabAssetId))
+                        PrefabUtility.ApplyOverrides(root);
+            }, enabled: anyApplyable, icon: EditorIcons.Check);
+
+            builder.Item(Loc.Get("hierarchy.revert_to_prefab") + suffix, () =>
+            {
+                foreach (GameObject root in prefabRoots) PrefabUtility.RevertOverrides(root);
+            }, enabled: anyOverrides, icon: EditorIcons.ArrowsRotate);
+
+            builder.Item(Loc.Get("hierarchy.break_prefab_instance") + suffix, () =>
+            {
+                foreach (GameObject root in prefabRoots) PrefabUtility.UnpackPrefabInstance(root);
+            }, icon: EditorIcons.LinkSlash);
+
+            builder.Separator();
+        }
+
+        if (multiSelect)
+        {
+            builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
+            {
+                DeleteGameObjects([.. ExcludeNestedSelections(selectedGOs)]);
+            }, icon: EditorIcons.Trash, danger: true);
+        }
+        else
+        {
+            builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(clickedItem), icon: EditorIcons.Trash, danger: true);
+        }
+    };
 
     // ================================================================
     //  Create Menu
