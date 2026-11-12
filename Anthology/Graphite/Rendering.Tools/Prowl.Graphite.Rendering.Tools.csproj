@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>$(ProwlSampleTargetFramework)</TargetFramework>
+        <OutputType>Library</OutputType>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Prowl.Graphite.Rendering.Tools</PackageId>
+        <Description>Editor and import time tools for Prowl.Graphite.Rendering: LOD chains and impostors.</Description>
+        <PackageTags>graphics renderer lod impostor</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Rendering\Prowl.Graphite.Rendering.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Prowl.Graphite.Rendering.Tools.Tests" />
+    </ItemGroup>
+</Project>

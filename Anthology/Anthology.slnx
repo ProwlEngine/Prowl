@@ -18,6 +18,7 @@
     <Project Path="Slang/Slang/Prowl.Slang.csproj" />
     <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
     <Project Path="Graphite/Rendering/Prowl.Graphite.Rendering.csproj" />
+    <Project Path="Graphite/Rendering.Tools/Prowl.Graphite.Rendering.Tools.csproj" />
     <Project Path="Graphite/ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
     <Project Path="Graphite/ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
     <Project Path="Graphite/Debugger/Prowl.Graphite.Debugger.csproj" />
@@ -98,6 +99,7 @@
     <Project Path="Slang/Tests/Prowl.Slang.Tests.csproj" />
     <Project Path="Graphite/Tests/Graphite/Prowl.Graphite.Tests.csproj" />
     <Project Path="Graphite/Tests/Rendering/Prowl.Graphite.Rendering.Tests.csproj" />
+    <Project Path="Graphite/Tests/Rendering.Tools/Prowl.Graphite.Rendering.Tools.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
     <Project Path="Graphite/Tests/Debugger/Prowl.Graphite.Debugger.Tests.csproj" />

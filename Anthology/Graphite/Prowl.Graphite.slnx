@@ -5,6 +5,7 @@
         <Project Path="Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
         <Project Path="Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
         <Project Path="Tests/Rendering/Prowl.Graphite.Rendering.Tests.csproj" />
+        <Project Path="Tests/Rendering.Tools/Prowl.Graphite.Rendering.Tools.Tests.csproj" />
     </Folder>
     <Folder Name="/Graphite/">
         <Project Path="Graphite/Prowl.Graphite.csproj" />
@@ -15,6 +16,7 @@
     </Folder>
     <Folder Name="/Rendering/">
         <Project Path="Rendering/Prowl.Graphite.Rendering.csproj" />
+        <Project Path="Rendering.Tools/Prowl.Graphite.Rendering.Tools.csproj" />
     </Folder>
     <Folder Name="/ShaderDef/">
         <Project Path="ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />

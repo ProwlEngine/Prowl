@@ -27,5 +27,6 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="Prowl.Graphite.Rendering.Tests" />
+        <InternalsVisibleTo Include="Prowl.Graphite.Rendering.Tools" />
     </ItemGroup>
 </Project>

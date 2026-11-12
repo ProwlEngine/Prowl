@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Rendering\Prowl.Graphite.Rendering.csproj" />
+        <ProjectReference Include="..\..\Rendering.Tools\Prowl.Graphite.Rendering.Tools.csproj" />
+    </ItemGroup>
+
+</Project>
