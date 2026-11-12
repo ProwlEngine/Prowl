@@ -145,7 +145,7 @@ internal sealed class LodScene : DemoScene
             }
         }
         for (uint x = 0; x < segments; x++)
-            trunk.AddRange([x * 2, x * 2 + 3, x * 2 + 1, x * 2, x * 2 + 2, x * 2 + 3]);
+            trunk.AddRange([x * 2, x * 2 + 1, x * 2 + 3, x * 2, x * 2 + 3, x * 2 + 2]);
 
         (Float3 Center, float Radius)[] blobs = [(new(0, 3.6f, 0), 1.8f), (new(0.6f, 4.8f, 0.3f), 1.4f), (new(-0.4f, 5.7f, -0.2f), 1.0f)];
         const int rings = 40, around = 80;
