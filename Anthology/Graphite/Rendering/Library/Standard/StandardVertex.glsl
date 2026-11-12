@@ -35,7 +35,7 @@ void Graphite_StandardVertex()
     vec3 relative = Graphite_ObjectToRelative(v.position);
     gl_Position = Graphite_RelativeToClip(relative);
 
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || defined(GRAPHITE_STANDARD_IMPOSTOR)
     vUV = v.uv;
     vUV1 = v.uv1;
 #endif

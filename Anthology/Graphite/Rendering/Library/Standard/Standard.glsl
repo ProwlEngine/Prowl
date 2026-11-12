@@ -11,6 +11,7 @@
 // GRAPHITE_STANDARD_SHADOW: with the depth define, the shadow caster. Transparent casters, and PBR ones letting light
 // through by transmission or thin walled subsurface, dither their coverage by what they let through.
 // GRAPHITE_STANDARD_DEBUG: with the forward define, the Debug pass, showing the view's GRAPHITE_DEBUG value. See Graphite/Debug.glsl.
+// GRAPHITE_STANDARD_IMPOSTOR: the Impostor pass, writing the surface's material into an impostor bake's three targets.
 // Model define: GRAPHITE_STANDARD_UNLIT for no lighting, which Graphite/Standard/UnlitSurface.glsl defines, else the PBR
 // model, Graphite/PBR/Closure.glsl.
 // GRAPHITE_SURFACE_FUNCTION: the shader defines the model's Surface function, run before lighting over the read only
@@ -51,13 +52,13 @@
 
 // Passes whose fragments read the vertex colour and relative position: forward, back depth, voxelize, dithered shadow
 // casters, the depth passes of cutout surfaces and a prepass writing normals
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || defined(GRAPHITE_STANDARD_IMPOSTOR)
     #define GRAPHITE_STANDARD_VERTEX_DATA
 #endif
 
 // Passes whose fragments read the tangent frame: lit ones, a prepass writing normals, and under PBR parallax the depth
 // passes reading the material
-#if defined(GRAPHITE_STANDARD_LIT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
+#if defined(GRAPHITE_STANDARD_LIT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || defined(GRAPHITE_STANDARD_IMPOSTOR) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
     #define GRAPHITE_STANDARD_FRAME
 #endif
 
@@ -80,10 +81,13 @@
     #ifdef GRAPHITE_STANDARD_DEBUG
         #include "Graphite/Debug.glsl"
     #endif
+    #ifdef GRAPHITE_STANDARD_IMPOSTOR
+        #include "Graphite/Octahedral.glsl"
+    #endif
 #endif
 
 // vUV and vUV1 are the mesh's two UV sets as they are, vLightmapUV the lightmap UV placed
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || defined(GRAPHITE_STANDARD_IMPOSTOR)
 GRAPHITE_STANDARD_VARYING vec2 vUV;
 GRAPHITE_STANDARD_VARYING vec2 vUV1;
 #endif

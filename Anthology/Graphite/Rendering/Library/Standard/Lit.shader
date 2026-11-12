@@ -281,6 +281,32 @@ Shader "Graphite/Lit"
 
     Pass
     {
+        Name "Impostor"
+        Tags { "LightMode" = "Impostor" }
+        GLSLPROGRAM
+        Shared
+        {
+            #define GRAPHITE_STANDARD_IMPOSTOR
+            #pragma variant PBR_PARALLAX
+            #include "Graphite/Standard/PBRSurface.glsl"
+        }
+        Vertex
+        {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
+            void main() { Graphite_StandardVertex(); }
+        }
+        Fragment
+        {
+            #pragma surface
+            #include "Graphite/Standard/StandardFragment.glsl"
+            void main() { Graphite_StandardFragment(); }
+        }
+        ENDGLSL
+    }
+
+    Pass
+    {
         Name "Debug"
         Tags { "LightMode" = "Debug" "Output" = "Premultiplied" }
         GLSLPROGRAM

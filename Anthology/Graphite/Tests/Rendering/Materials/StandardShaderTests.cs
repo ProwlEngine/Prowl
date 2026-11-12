@@ -122,7 +122,7 @@ public sealed class StandardShaderTests : IDisposable
         }
         """;
 
-    private static readonly string[] s_pbrPasses = ["Forward", "Transmission", "BackDepth", "Prepass", "ShadowCaster", "Debug"];
+    private static readonly string[] s_pbrPasses = ["Forward", "Transmission", "BackDepth", "Prepass", "ShadowCaster", "Voxelize", "Impostor", "Debug"];
 
     [Theory]
     [InlineData("OPAQUE")]
@@ -224,7 +224,7 @@ public sealed class StandardShaderTests : IDisposable
     public void SurfaceVertex_RunsInEveryPass_AndCompiles(string model, string surface)
     {
         ShaderDefinition definition = new Shader(ShaderParser.Parse(WaveSource(model)), _compiler).Definition;
-        Assert.Equal(model == "Lit" ? s_pbrPasses : ["Forward", "Prepass", "ShadowCaster", "Debug"], definition.Passes!.Select(p => p.Name));
+        Assert.Equal(model == "Lit" ? s_pbrPasses : ["Forward", "Prepass", "ShadowCaster", "Voxelize", "Debug"], definition.Passes!.Select(p => p.Name));
 
         foreach (ShaderPass pass in definition.Passes!)
         {

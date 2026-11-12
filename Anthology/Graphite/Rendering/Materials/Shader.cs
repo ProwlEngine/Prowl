@@ -22,6 +22,9 @@ public readonly record struct PassType(string Name)
     public static readonly PassType ShadowCaster = new("ShadowCaster");
     public static readonly PassType ObjectId = new("ObjectId");
 
+    /// <summary>Writes a surface's material into an impostor bake's albedo, normal and depth, and material targets.</summary>
+    public static readonly PassType Impostor = new("Impostor");
+
     /// <summary>
     /// A surface's albedo and emission written into the world's voxel volume, drawn once along each axis with culling,
     /// depth and colour off. See Graphite/VoxelData.glsl.

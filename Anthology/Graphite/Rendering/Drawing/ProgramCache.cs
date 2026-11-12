@@ -455,6 +455,13 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             description.DepthStencilState = DepthStencilStateDescription.DepthOnlyGreaterEqual;
             raster.CullMode = FaceCullMode.Front;
         }
+        // An impostor bake writes its three targets as they are
+        if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Impostor.Name))
+        {
+            BlendAttachmentDescription target = BlendAttachmentDescription.OverrideBlend;
+            description.BlendState = BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [target, target, target] };
+            description.DepthStencilState = DepthStencilStateDescription.DepthOnlyGreaterEqual;
+        }
         // Voxelize writes the voxel buffer alone, every triangle from both sides and whatever is in front of it
         if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Voxelize.Name))
         {
