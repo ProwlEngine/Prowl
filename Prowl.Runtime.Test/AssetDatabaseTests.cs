@@ -310,9 +310,9 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void EveryBuiltInAsset_LoadsOnTheLoaderThread_WithoutLoadingAnother()
     {
         var nested = new List<string>();
-        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        void Capture(LogEvent e)
         {
-            if (message.Contains("inside another load") || message.Contains("while another asset was loading")) lock (nested) nested.Add(message);
+            if (e.Message.Contains("inside another load") || e.Message.Contains("while another asset was loading")) lock (nested) nested.Add(e.Message);
         }
 
         Debug.OnLog += Capture;

@@ -621,7 +621,7 @@ public class ThreadingTests : RuntimeTestBase
     {
         using var loop = new LoopScope();
         var errors = new List<string>();
-        void capture(string message, DebugStackTrace? _, LogSeverity severity) { if (severity == LogSeverity.Exception) lock (errors) errors.Add(message); }
+        void capture(LogEvent e) { if (e.Severity == LogSeverity.Exception) lock (errors) errors.Add(e.Message); }
         Debug.OnLog += capture;
         try
         {
@@ -713,7 +713,7 @@ public class ThreadingTests : RuntimeTestBase
         using var loop = new LoopScope();
         var slow = new TaskCompletionSource();
         string? logged = null;
-        void capture(string message, DebugStackTrace? _, LogSeverity severity) { if (severity == LogSeverity.Exception && message.Contains("late failure")) logged = message; }
+        void capture(LogEvent e) { if (e.Severity == LogSeverity.Exception && e.Message.Contains("late failure")) logged = e.Message; }
         Debug.OnLog += capture;
         try
         {

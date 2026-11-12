@@ -26,7 +26,6 @@ using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Echo;
-using Prowl.Runtime.Rendering;
 using Prowl.Editor.Build;
 using Shader = Prowl.Runtime.Resources.Shader;
 using Material = Prowl.Runtime.Resources.Material;
@@ -46,12 +45,12 @@ public static class LogHistory
     /// <summary> The sequence number the next log will get. </summary>
     public static long NextSeq { get { lock (s_lock) return s_next; } }
 
-    public static void Add(string message, DebugStackTrace? stack, LogSeverity severity)
+    public static void Add(LogEvent e)
     {
         lock (s_lock)
         {
             long seq = s_next++;
-            s_ring[seq % Capacity] = new Entry(seq, DateTime.UtcNow, severity, message, stack);
+            s_ring[seq % Capacity] = new Entry(seq, DateTime.UtcNow, e.Severity, e.Message, e.StackTrace);
         }
     }
 

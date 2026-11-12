@@ -2376,10 +2376,10 @@ public partial class PrefabTests : EditorTestHarness
     private static List<string> CaptureWarnings(Action act)
     {
         var logs = new List<string>();
-        void Capture(string m, DebugStackTrace? _, LogSeverity s)
+        void Capture(LogEvent e)
         {
-            if (s is LogSeverity.Error or LogSeverity.Warning)
-                lock (logs) logs.Add(m);
+            if (e.Severity is LogSeverity.Error or LogSeverity.Warning)
+                lock (logs) logs.Add(e.Message);
         }
 
         Debug.OnLog += Capture;

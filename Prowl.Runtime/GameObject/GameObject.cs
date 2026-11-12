@@ -815,13 +815,12 @@ public partial class GameObject : EngineObject, ISerializable
         }
         catch (Exception e)
         {
-            Exception cause = e is TargetInvocationException { InnerException: not null } wrapped
-                ? wrapped.InnerException!
-                : e;
+            // Unwrap TargetInvocationException: Exception has been thrown by the target of an invocation.
+            Exception cause = e is TargetInvocationException { InnerException: not null } wrapped ? wrapped.InnerException : e;
 
-            Debug.LogError($"'{type.Name}' threw while being constructed, so it was not added. " +
-                           $"A field initializer runs in the constructor, before the component is " +
-                           $"attached and before any Start or OnEnable. {cause.GetType().Name}: {cause.Message}");
+            Debug.LogException($"'{type.Name}' threw while being constructed, so it was not added. " +
+                               $"A field initializer runs in the constructor, before the component is " +
+                               $"attached and before any Start or OnEnable.", cause);
             return false;
         }
     }
