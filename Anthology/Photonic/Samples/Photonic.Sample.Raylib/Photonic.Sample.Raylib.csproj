@@ -5,7 +5,7 @@
     <IsPackable>false</IsPackable>
     <TargetFramework>$(ProwlSampleTargetFramework)</TargetFramework>
     <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>15</LangVersion>
     <RootNamespace>Photonic.Sample.Raylib</RootNamespace>
     <AssemblyName>Photonic.Sample.Raylib</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

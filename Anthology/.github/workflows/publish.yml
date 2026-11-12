@@ -23,6 +23,7 @@ jobs:
             8.0.x
             9.0.x
             10.0.x
+            11.0.x
 
       # Releases leave out every sample project and the Graphite test projects, which need a GPU.
       - name: Trim solution

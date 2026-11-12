@@ -31,7 +31,7 @@
 
   <Target Name="QuillGenerateShaders"
           AfterTargets="Build"
-          Condition="'$(QuillSkipShaderGen)' != 'true' AND '$(TargetFramework)' == 'net10.0' AND Exists('$(QuillShaderGenDir)\Quill.ShaderGen.csproj')"
+          Condition="'$(QuillSkipShaderGen)' != 'true' AND '$(TargetFramework)' == 'net11.0' AND Exists('$(QuillShaderGenDir)\Quill.ShaderGen.csproj')"
           Inputs="$(QuillShaderSource)"
           Outputs="$(QuillGeneratedShader)">
     <Message Importance="high" Text="Quill: regenerating backend shaders from Canvas.slang" />
