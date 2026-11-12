@@ -9,7 +9,7 @@
           <Copyright>Copyright (c) Prowl Group 2026.</Copyright>
           <Product>Prowl</Product>
           <NeutralLanguage>en-AU</NeutralLanguage>
-          <LangVersion>15</LangVersion>
+          <LangVersion>latest</LangVersion>
 
           <!-- One version for the whole family. Bump this single line to release everything.
                Baseline 2.3.0 sits above the highest legacy package (Prowl.Echo 2.2.1) so the
