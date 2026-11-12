@@ -16,7 +16,7 @@ namespace Prowl.Graphite.Samples.PBRRenderer;
 internal sealed class LodScene : DemoScene
 {
     private const int Side = 316;
-    private const float Spacing = 8f;
+    private const float Spacing = 5.66f;
 
     private readonly List<GpuMesh> _meshes = new();
     private readonly ImpostorAsset _impostor;
@@ -28,7 +28,7 @@ internal sealed class LodScene : DemoScene
         Material leaves = Pbr(new Float3(0.18f, 0.45f, 0.12f), 0f, 0.7f);
         Material[] materials = [bark, leaves];
 
-        MeshData tree = Tree();
+        MeshData tree = MeshOptimizer.Optimize(Tree());
         GpuMesh full = Mesh(tree);
         LodChain chain = LodBuilder.Build(tree, new LodBuildOptions { Ratios = [0.5f, 0.25f, 0.1f] });
         ImpostorData baked = ImpostorBuilder.Bake(demo.Renderer, full, materials, new ImpostorBakeDesc { Frames = 12, CellSize = 128 });
@@ -40,6 +40,7 @@ internal sealed class LodScene : DemoScene
             levels.Add(new LodLevel(Mesh(chain.Levels[i]), sizes[i]));
         levels.Add(_impostor.Level(0.035f));
         LodSet lods = new(levels.ToArray());
+        World.Lod.ShadowOffset = 1;
         _levels = levels.Count + 1;
 
         Add(Demo.Cube, Pbr(new Float3(0.3f, 0.32f, 0.25f), 0f, 0.9f), new Double3(0, -0.25, 0), new Double3(5200, 0.5, 5200));
@@ -56,7 +57,7 @@ internal sealed class LodScene : DemoScene
                     Mesh = full,
                     Lods = lods,
                     Name = $"Tree {x} {z}",
-                    Transform = Double4x4.CreateTRS(position, turn, new Double3(1, 1, 1) * (0.8 + random.NextDouble() * 0.4)),
+                    Transform = Double4x4.CreateTRS(position, turn, new Double3(1, 1, 1) * (1.6 + random.NextDouble() * 0.8)),
                     Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows,
                 }, materials);
             }
