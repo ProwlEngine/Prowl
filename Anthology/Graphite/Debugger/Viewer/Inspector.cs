@@ -83,7 +83,8 @@ internal sealed partial class ProfilerView
             _contentWidth = innerWidth - Metrics.PaddingLarge * 2f;
             _sectionIndex = 0;
 
-            Origami.ScrollView(_paper, "rp_insp_scroll", innerWidth, scrollHeight).Padding(Metrics.PaddingLarge, Metrics.PaddingLarge, Metrics.Spacing, Metrics.PaddingLarge).Body(() =>
+            // The tab is part of the id, so each tab is its own scroll view and opens at the top
+            Origami.ScrollView(_paper, $"rp_insp_scroll_{tab}", innerWidth, scrollHeight).Padding(Metrics.PaddingLarge, Metrics.PaddingLarge, Metrics.Spacing, Metrics.PaddingLarge).Body(() =>
             {
                 using (_paper.Row("secs").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(SectionGap).LineGap(SectionGap).AlignItems(LayoutAlignment.Stretch).Enter())
                     DrawInspectorBody(model, node, tab, frames, live);
@@ -325,7 +326,7 @@ internal sealed partial class ProfilerView
         double[] average = Enumerable.Repeat(avg, v.Length).ToArray();
         string cur = current >= 0 && current < v.Length ? chart.Format(v[current]) : "-";
         Color secondColor = chart.SecondColor ?? Style.Snapshot;
-        using (_paper.Row("head").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(Metrics.Spacing).LineGap(2).Enter())
+        using (_paper.Row("head").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Gap(Metrics.Spacing).AlignItems(LayoutAlignment.Center).Enter())
         {
             if (chart.Second != null)
             {
@@ -337,7 +338,9 @@ internal sealed partial class ProfilerView
             }
             else
                 Origami.Label(_paper, "t1", chart.Title).MD().Show();
-            Mono("cur", cur, Style.InkSoft);
+            // The value sits on the title's line, pushed to the right edge, as a label of the same height
+            Spacer("sp");
+            Origami.Label(_paper, "cur", cur).MD().TextColor(Style.InkSoft).Show();
         }
 
         CartesianChart<object> c = Chart.CreateCartesian<object>(_paper, "c")
