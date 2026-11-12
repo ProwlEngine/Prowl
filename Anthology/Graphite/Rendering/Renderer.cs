@@ -88,10 +88,13 @@ public sealed class BuiltInSkies(Renderer renderer)
 /// </summary>
 public sealed class BuiltInStandard(Renderer renderer)
 {
-    private Shader? _lit, _unlit;
+    private Shader? _lit, _unlit, _impostor;
 
     public Shader Lit => _lit ??= Load("Lit");
     public Shader Unlit => _unlit ??= Load("Unlit");
+
+    /// <summary>The card an <see cref="ImpostorAsset"/> draws with.</summary>
+    public Shader Impostor => _impostor ??= Load("Impostor");
 
     private Shader Load(string name) => renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader")!));
 }
@@ -395,6 +398,32 @@ public sealed class Renderer : IDisposable
     {
         if (_compiler == null || _options.Compile == CompilePolicy.BakedOnly)
             return;
+        (Shader shader, Keyword[] combo) = Combo(material, keywords);
+        foreach (ShaderPass pass in shader.Definition.Passes ?? [])
+        {
+            if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Debug.Name))
+                continue;
+            PassVariants variants = pass.Variants(_compiler, Device.BackendType);
+            variants.Request(variants.KeyOf(combo), CompilePolicy.Async, CompilePriority.Background, out _, out _);
+        }
+    }
+
+    /// <summary>Compiles the variant a material draws a pass type with before returning, its global axes at their first value. Host thread.</summary>
+    internal void CompileNow(Material material, PassType type)
+    {
+        if (_compiler == null || _options.Compile == CompilePolicy.BakedOnly)
+            return;
+        (Shader shader, Keyword[] combo) = Combo(material, []);
+        int index = shader.PassIndex(type);
+        if (index < 0)
+            return;
+        PassVariants variants = shader.Definition.Passes![index].Variants(_compiler, Device.BackendType);
+        variants.Request(variants.KeyOf(combo), CompilePolicy.Sync, CompilePriority.Visible, out _, out _);
+    }
+
+    // A material's variant keywords then every global axis of its shader at the given value, else its first
+    private static (Shader Shader, Keyword[] Combo) Combo(Material material, ReadOnlySpan<GlobalKeyword> keywords)
+    {
         MaterialDraw draw = material.SnapshotDraw();
         Shader shader = draw.Shader;
         Keyword[] combo = new Keyword[draw.Keywords.Length + shader.GlobalAxes.Count];
@@ -404,13 +433,7 @@ public sealed class Renderer : IDisposable
             VariantSpace axis = shader.GlobalAxes[i];
             combo[draw.Keywords.Length + i] = new Keyword(axis.Name, ValueIn(keywords, axis.Name) ?? axis.Values[0]);
         }
-        foreach (ShaderPass pass in shader.Definition.Passes ?? [])
-        {
-            if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Debug.Name))
-                continue;
-            PassVariants variants = pass.Variants(_compiler, Device.BackendType);
-            variants.Request(variants.KeyOf(combo), CompilePolicy.Async, CompilePriority.Background, out _, out _);
-        }
+        return (shader, combo);
     }
 
     private static string? ValueIn(ReadOnlySpan<GlobalKeyword> keywords, string axis)

@@ -15,6 +15,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Rendering\Prowl.Graphite.Rendering.csproj" />
+        <ProjectReference Include="..\..\Aperture\Aperture\Aperture.csproj" />
     </ItemGroup>
 
     <ItemGroup>
