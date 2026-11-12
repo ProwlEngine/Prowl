@@ -200,7 +200,7 @@ public static class MultiplayerPlay
     internal static void RunInstance(string projectPath, string address, string name, int index, bool headless = false)
     {
         // Every log line also goes out marked, for the editor that launched this to show.
-        Debug.OnLog += (message, _, severity) => Console.Out.WriteLine(FormatInstanceLog(severity, message));
+        Debug.OnLog += log => Console.Out.WriteLine(FormatInstanceLog(log.Severity, log.Message));
 
         EditorRegistries.Initialize();
         Project project = Project.Open(projectPath);

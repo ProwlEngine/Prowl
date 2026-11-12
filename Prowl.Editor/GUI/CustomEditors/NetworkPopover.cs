@@ -134,7 +134,7 @@ internal static class NetworkPopover
                 NetworkMode chosen = mode;
                 Option(paper, font, $"gi_net_mode_{mode}", icon, color, ModeName(mode), go.Network.Mode == mode, () =>
                 {
-                    Undo.RecordGameObjectChange(go, "Change Network Mode", go.Network.Mode, chosen, (g, x) => g.Network.Mode = x);
+                    Undo.RecordObject(go, "Change Network Mode");
                     go.Network.Mode = chosen;
                 });
             }
@@ -196,7 +196,7 @@ internal static class NetworkPopover
         Origami.Checkbox(paper, id, enabled, on =>
         {
             NetworkFlags value = on ? go.Network.Flags | flag : go.Network.Flags & ~flag;
-            Undo.RecordGameObjectChange(go, "Change Transform Sync", go.Network.Flags, value, (g, x) => g.Network.Flags = x);
+            Undo.RecordObject(go, "Change Transform Sync");
             go.Network.Flags = value;
         }).LabelRight(label).Show();
     }
@@ -204,14 +204,14 @@ internal static class NetworkPopover
     private static void OwnerTransferOption(Paper paper, FontFile font, GameObject go, OwnerTransfer value, IOrigamiIcon icon, string label) =>
         Option(paper, font, $"gi_net_transfer_{value}", icon, EditorTheme.Ink400, label, go.Network.OwnerTransfer == value, () =>
         {
-            Undo.RecordGameObjectChange(go, "Change Owner Transfer", go.Network.OwnerTransfer, value, (g, x) => g.Network.OwnerTransfer = x);
+            Undo.RecordObject(go, "Change Owner Transfer");
             go.Network.OwnerTransfer = value;
         });
 
     private static void OrphanedOption(Paper paper, FontFile font, GameObject go, NetworkOrphaned value, IOrigamiIcon icon, string label) =>
         Option(paper, font, $"gi_net_orph_{value}", icon, EditorTheme.Ink400, label, go.Network.Orphaned == value, () =>
         {
-            Undo.RecordGameObjectChange(go, "Change Orphaned Mode", go.Network.Orphaned, value, (g, x) => g.Network.Orphaned = x);
+            Undo.RecordObject(go, "Change Orphaned Mode");
             go.Network.Orphaned = value;
         });
 

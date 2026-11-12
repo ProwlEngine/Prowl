@@ -51,10 +51,10 @@ public class HotReloadSceneTests : EditorTestHarness
         Assert.NotSame(v1, v2);
 
         var logs = new System.Collections.Generic.List<string>();
-        void Capture(string m, DebugStackTrace? _, LogSeverity s)
+        void Capture(LogEvent log)
         {
-            if (s is LogSeverity.Error or LogSeverity.Warning)
-                lock (logs) logs.Add(m);
+            if (log.Severity is LogSeverity.Error or LogSeverity.Warning)
+                lock (logs) logs.Add(log.Message);
         }
 
         Debug.OnLog += Capture;

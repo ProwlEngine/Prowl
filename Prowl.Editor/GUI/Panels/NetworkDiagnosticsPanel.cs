@@ -23,7 +23,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class NetworkDiagnosticsPanel : DockPanel
 {
     [MenuItem("Window/Debug/Network Analyzer", priority: 102)]
-    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(NetworkDiagnosticsPanel));
+    static void Open() => EditorApplication.Instance?.OpenPanel<NetworkDiagnosticsPanel>();
 
     public override string Title => "Network Analyzer";
     public override string Icon => EditorIcons.Wifi;
