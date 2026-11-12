@@ -8,6 +8,7 @@
 
     <ItemGroup>
         <ProjectReference Include="../Shared/Shared.csproj" />
+        <ProjectReference Include="../../Rendering.Tools/Prowl.Graphite.Rendering.Tools.csproj" />
         <ProjectReference Include="../../../Clay/Clay/Clay.csproj" />
         <ProjectReference Include="../../../Aperture/Aperture/Aperture.csproj" />
     </ItemGroup>
