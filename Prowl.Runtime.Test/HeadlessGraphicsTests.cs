@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Graphite;
 using Prowl.Graphite.Rendering;
@@ -60,13 +61,99 @@ public class HeadlessGraphicsTests
     [MemberData(nameof(AllDefaultShaders))]
     public void DefaultShader_EveryPassCompiles(DefaultShader shader)
     {
-        foreach (ShaderPass pass in Passes(Shader.LoadDefault(shader)))
-        {
-            List<Keyword> combo = [];
-            foreach (VariantSpace axis in Graphics.Compiler.GetAxes(pass))
-                combo.Add(new Keyword(axis.Name, axis.Values[0]));
-            Graphics.Compiler.CompileProgram(pass, [.. combo]);
-        }
+        CompileEveryPass(Shader.LoadDefault(shader));
+    }
+
+    private const string GridInclude = "float GridShade(vec3 p) { return fract(p.x); }";
+
+    [Theory]
+    [InlineData("#include \"Grid\"", "#include \"Grid\"")]
+    [InlineData("#include \"Grid\"\n#include \"Grid\"", "#include \"Grid.glsl\"")]
+    [InlineData("#include \"Grid\"\n#include \"Grid.glsl\"", "#include \"Grid\"")]
+    [InlineData("#if 0\n#include \"Grid\"\n#endif\n#include \"Grid\"", "#include \"Grid\"")]
+    [InlineData("#pragma variant FOO\n#ifdef FOO\n#include \"Grid\"\n#endif\n#include \"Grid\"", "#include \"Grid\"")]
+    public void AnInclude_ReachesEveryStageOnce(string vertexIncludes, string fragmentIncludes)
+    {
+        CompileEveryVariant(WithGridIncludes($$"""
+            Shader "Test/Includes"
+            {
+                Pass
+                {
+                    GLSLPROGRAM
+                    Vertex
+                    {
+                        {{vertexIncludes}}
+                        void main() { gl_Position = vec4(GridShade(vec3(0.5))); }
+                    }
+                    Fragment
+                    {
+                        {{fragmentIncludes}}
+                        layout(location = 0) out vec4 color;
+                        void main() { color = vec4(GridShade(vec3(0.5))); }
+                    }
+                    ENDGLSL
+                }
+            }
+            """));
+    }
+
+    [Fact]
+    public void ASurfaceShader_IncludesOneFileInItsSurfaceAndVertexBlocks()
+    {
+        CompileEveryPass(WithGridIncludes("""
+            Shader "Test/Surface Includes"
+            {
+                Surface "Lit"
+                {
+                    GLSLPROGRAM
+                    #include "Grid"
+                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { p.baseColor = vec3(GridShade(i.vertexColor.rgb)); }
+                    ENDGLSL
+
+                    Vertex
+                    {
+                        GLSLPROGRAM
+                        #include "Grid"
+                        void SurfaceVertex(inout Graphite_SurfaceVertex v) { v.color.rgb *= GridShade(v.position); }
+                        ENDGLSL
+                    }
+                }
+            }
+            """));
+    }
+
+    [Fact]
+    public void AnIncludePastedOnce_CanHoldAWholeSection()
+    {
+        const string vertex = "Vertex\n{\n    void main() { gl_Position = vec4(0.0); }\n}";
+        CompileEveryPass(Shader.FromSource(Shader.ExpandIncludes("""
+            Shader "Test/Section Include"
+            {
+                Pass
+                {
+                    GLSLPROGRAM
+                    #include "Vertex Section"
+                    Fragment
+                    {
+                        layout(location = 0) out vec4 color;
+                        void main() { color = vec4(1.0); }
+                    }
+                    ENDGLSL
+                }
+            }
+            """, name => name == "Vertex Section" ? vertex : null)));
+    }
+
+    [Fact]
+    public void IncludesThatIncludeEachOther_ExpandEachFileOnce()
+    {
+        // Y names X with .glsl, so the loop comes back to X under another name
+        Dictionary<string, string> files = new() { ["X"] = "#include \"Y\"\nfloat FromX() { return 1.0; }", ["Y"] = "#include \"X.glsl\"\nfloat FromY() { return 2.0; }" };
+
+        string expanded = Shader.ExpandIncludes("#include \"X\"", name => files.GetValueOrDefault(name.Replace(".glsl", "")));
+
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Count(expanded, "FromX"));
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Count(expanded, "FromY"));
     }
 
     [Fact]
@@ -152,6 +239,28 @@ public class HeadlessGraphicsTests
     }
 
     private static ShaderPass[] Passes(Shader shader) => shader.GpuShader!.Definition.Passes ?? [];
+
+    // Resolves like the shader importer, as written or with .glsl added
+    private static Shader WithGridIncludes(string source)
+        => Shader.FromSource(Shader.ExpandIncludes(source, name => name is "Grid" or "Grid.glsl" ? GridInclude : null));
+
+    private static void CompileEveryPass(Shader shader) => Compile(shader, 1);
+
+    private static void CompileEveryVariant(Shader shader) => Compile(shader, int.MaxValue);
+
+    // Every pass with each axis's first valuesPerAxis values, in every combination
+    private static void Compile(Shader shader, int valuesPerAxis)
+    {
+        Assert.Null(shader.Error);
+        foreach (ShaderPass pass in Passes(shader))
+        {
+            List<Keyword[]> combos = [[]];
+            foreach (VariantSpace axis in Graphics.Compiler.GetAxes(pass))
+                combos = [.. combos.SelectMany(combo => axis.Values.Take(valuesPerAxis).Select(value => (Keyword[])[.. combo, new Keyword(axis.Name, value)]))];
+            foreach (Keyword[] combo in combos)
+                Graphics.Compiler.CompileProgram(pass, combo);
+        }
+    }
 
     private static HashSet<string> PropertyNames(Shader shader)
     {
