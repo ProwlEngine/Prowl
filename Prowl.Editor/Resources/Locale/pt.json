@@ -392,6 +392,7 @@
   "project.show_extensions": "Mostrar extensoes",
   "project.grid_view": "Visualizacao em grade",
   "project.list_view": "Visualizacao em lista / tabela",
+  "project.tree_view": "Visualizacao em arvore",
   "project.sort_by": "Ordenar por",
   "project.filter": "Filtro",
   "project.show_hidden": "Mostrar arquivos ocultos",

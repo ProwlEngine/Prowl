@@ -392,6 +392,7 @@
   "project.show_extensions": "Uzantilari goster",
   "project.grid_view": "Izgara gorunumu",
   "project.list_view": "Liste / Tablo gorunumu",
+  "project.tree_view": "Agac gorunumu",
   "project.sort_by": "Sirala",
   "project.filter": "Filtre",
   "project.show_hidden": "Gizli dosyalari goster",

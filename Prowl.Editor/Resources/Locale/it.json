@@ -392,6 +392,7 @@
   "project.show_extensions": "Mostra estensioni",
   "project.grid_view": "Vista griglia",
   "project.list_view": "Vista elenco / tabella",
+  "project.tree_view": "Vista ad albero",
   "project.sort_by": "Ordina per",
   "project.filter": "Filtro",
   "project.show_hidden": "Mostra file nascosti",
