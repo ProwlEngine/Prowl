@@ -17,6 +17,7 @@ public sealed class NetworkAccessor
     private OwnerTransfer _ownerTransfer = OwnerTransfer.Fixed;
     private NetworkVisibility _visibility;
     private float _cullDistance;
+    private NetworkGroups _groups;
 
     internal NetworkAccessor(GameObject owner) => _object = owner;
 
@@ -141,6 +142,27 @@ public sealed class NetworkAccessor
             }
 
             _cullDistance = value;
+        }
+    }
+
+    /// <summary>
+    ///     The groups whose clients receive this object, such as a team. None sends it to every client. Only the host may
+    ///     change this after spawning.
+    /// </summary>
+    public NetworkGroups Groups
+    {
+        get => _groups;
+        set
+        {
+            if (value == _groups)
+            {
+                return;
+            }
+
+            NetworkSystem? system = Networking.System;
+            system?.CheckVisibilityChange(_object);
+            _groups = value;
+            system?.RefreshVisibility(_object);
         }
     }
 

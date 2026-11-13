@@ -101,6 +101,7 @@ internal sealed partial class NetworkObject
         {
             if (SpawnNotified && SpawnListeners.Contains((Component)e))
             {
+                System.VisibilityCallbacks++;
                 e.OnNetworkVisibilityChanged(peer, visible);
             }
         });

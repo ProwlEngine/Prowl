@@ -47,12 +47,22 @@ internal sealed partial class NetworkSystem
             return visible;
         }
 
-        return go.Network.Visibility switch
+        switch (go.Network.Visibility)
         {
-            NetworkVisibility.Always => true,
-            NetworkVisibility.OwnerOnly or NetworkVisibility.Manual => false,
-            _ => null
-        };
+            case NetworkVisibility.Always:
+                return true;
+            case NetworkVisibility.OwnerOnly or NetworkVisibility.Manual:
+                return false;
+        }
+
+        _interests.TryGetValue(peer.Id, out PeerInterest? interest);
+        if (interest?.SeesEverything == true)
+        {
+            return true;
+        }
+
+        NetworkGroups groups = go.Network.Groups;
+        return groups.IsEmpty || interest?.Groups.Overlaps(groups) == true ? null : false;
     }
 
     private bool ShouldSee(GameObject go, int owner, NetPeer peer) => Rule(go, owner, peer) ?? true;
@@ -69,8 +79,7 @@ internal sealed partial class NetworkSystem
             return true;
         }
 
-        PeerInterest interest = gathered ?? ViewpointsOf(peer);
-        return interest.SeesEverything || InRange(entry, interest, wasVisible);
+        return InRange(entry, gathered ?? ViewpointsOf(peer), wasVisible);
     }
 
     internal bool IsForcedHidden(GameObject go) =>
@@ -81,8 +90,11 @@ internal sealed partial class NetworkSystem
 
     private void SetHidden(NetworkObject entry, int peer, bool hidden)
     {
-        if (_interests.Count > 0 && Configuration.InterestMode != InterestMode.None &&
-            _interests.TryGetValue(peer, out PeerInterest? interest))
+        if (!hidden && Configuration.InterestMode == InterestMode.None)
+        {
+            _revealedWithoutInterest = true;
+        }
+        else if (_interests.Count > 0 && _interests.TryGetValue(peer, out PeerInterest? interest))
         {
             if (hidden)
             {
@@ -172,6 +184,8 @@ internal sealed partial class NetworkSystem
     {
         _interests.Clear();
         _warnedNoViewpoint.Clear();
+        _grid.Clear();
+        _nearby.Clear();
         Restricted.Clear();
         _sentAsContent.Clear();
         VisibilityOverrides.Clear();

@@ -82,11 +82,11 @@ internal static class NetworkSerialization
 
     /// <summary>
     ///     True if the networked object <paramref name="go" /> is in is kept from clients by a rule, not by distance:
-    ///     Manual, OwnerOnly, or hidden from someone with HideFrom. Links to those never carry its identifier.
+    ///     Manual, OwnerOnly, in a group, or hidden from someone with HideFrom. Links to those never carry its identifier.
     /// </summary>
     internal static bool IsSecret(GameObject go) =>
         NetworkAccessor.RootOf(go) is { } root &&
-        (root.Network.Visibility is NetworkVisibility.Manual or NetworkVisibility.OwnerOnly ||
+        (root.Network.Visibility is NetworkVisibility.Manual or NetworkVisibility.OwnerOnly || !root.Network.Groups.IsEmpty ||
          Networking.System?.IsForcedHidden(root) == true);
 
     /// <summary>The identifier to write for an engine reference: Guid.Empty for an object a receiver lacks.</summary>
@@ -161,7 +161,8 @@ internal static class NetworkSerialization
         NetworkAccessor? network = go._network;
         if (network == null || (network.Mode == NetworkMode.Snapshot && network.OwnerTransfer == OwnerTransfer.Fixed &&
                                 network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None &&
-                                network.Visibility == NetworkVisibility.Default && network.CullDistance == 0))
+                                network.Visibility == NetworkVisibility.Default && network.CullDistance == 0 &&
+                                network.Groups.IsEmpty))
         {
             return;
         }
@@ -179,6 +180,11 @@ internal static class NetworkSerialization
         if (network.CullDistance != 0)
         {
             settings.Add("CullDistance", new EchoObject(network.CullDistance));
+        }
+
+        if (!network.Groups.IsEmpty)
+        {
+            settings.Add("Groups", new EchoObject(network.Groups.Mask));
         }
 
         output.Add("Network", settings);
@@ -199,6 +205,7 @@ internal static class NetworkSerialization
             existing.Flags = NetworkFlags.None;
             existing.Visibility = NetworkVisibility.Default;
             existing.CullDistance = 0;
+            existing.Groups = NetworkGroups.None;
             return;
         }
 
@@ -210,6 +217,7 @@ internal static class NetworkSerialization
         network.Visibility = (NetworkVisibility)(settings["Visibility"]?.ByteValue ?? (byte)NetworkVisibility.Default);
         float cullDistance = settings["CullDistance"]?.FloatValue ?? 0;
         network.CullDistance = float.IsFinite(cullDistance) && cullDistance > 0 ? cullDistance : 0;
+        network.Groups = new NetworkGroups(settings["Groups"]?.ULongValue ?? 0);
     }
 
     /// <summary>

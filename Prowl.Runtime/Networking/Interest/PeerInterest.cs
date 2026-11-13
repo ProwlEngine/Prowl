@@ -14,6 +14,7 @@ public sealed class PeerInterest
 {
     private readonly NetworkSystem? _system;
     private bool _seesEverything;
+    private NetworkGroups _groups;
 
     internal readonly List<Float3> Explicit = new();
     internal bool HasExplicit;
@@ -35,7 +36,7 @@ public sealed class PeerInterest
     public NetPeer Peer { get; }
 
     /// <summary>
-    ///     Receives every object whatever the distance, as a spectator or admin would. Objects that are
+    ///     Receives every object whatever the distance or groups, as a spectator or admin would. Objects that are
     ///     <see cref="NetworkVisibility.Manual" /> or <see cref="NetworkVisibility.OwnerOnly" /> stay hidden. Applies at once.
     /// </summary>
     public bool SeesEverything
@@ -49,6 +50,22 @@ public sealed class PeerInterest
             }
 
             _seesEverything = value;
+            _system?.RefreshInterest(this);
+        }
+    }
+
+    /// <summary>The groups this client belongs to. It receives grouped objects only when it shares a group. Applies at once.</summary>
+    public NetworkGroups Groups
+    {
+        get => _groups;
+        set
+        {
+            if (value == _groups)
+            {
+                return;
+            }
+
+            _groups = value;
             _system?.RefreshInterest(this);
         }
     }

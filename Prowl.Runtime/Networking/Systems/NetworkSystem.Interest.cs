@@ -15,8 +15,14 @@ internal sealed partial class NetworkSystem
     private readonly List<NetPeer> _interestPeers = new();
     private readonly List<(NetworkObject Entry, bool Visible)> _interestChanges = new();
     private readonly HashSet<int> _warnedNoViewpoint = new();
+    private readonly InterestGrid _grid = new();
+    private readonly HashSet<NetworkObject> _nearby = new(ReferenceEqualityComparer.Instance);
     private NetworkInterest? _interest;
     private InterestMode _interestMode;
+    private bool _revealedWithoutInterest;
+
+    // Counts visibility listener calls, whose game code may move objects after the grid was built.
+    internal int VisibilityCallbacks;
     private uint _interestTick;
 
     internal NetworkInterest Interest => _interest ??= new NetworkInterest(this);
@@ -63,9 +69,11 @@ internal sealed partial class NetworkSystem
         }
 
         // A changed mode applies to every client at once, so turning it off sends what distance held back.
-        if (Configuration.InterestMode != _interestMode)
+        if (Configuration.InterestMode != _interestMode ||
+            (_revealedWithoutInterest && Configuration.InterestMode != InterestMode.None))
         {
             _interestMode = Configuration.InterestMode;
+            _revealedWithoutInterest = false;
             foreach (NetPeer peer in RemotePeers())
             {
                 if (Session != session)
@@ -102,7 +110,7 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
-            CheckInterest(peer);
+            CheckInterest(peer, true);
         }
     }
 
@@ -114,7 +122,7 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    private void CheckInterest(NetPeer peer)
+    private void CheckInterest(NetPeer peer, bool onlyNearby = false)
     {
         if (!HasCurrentWorld(peer))
         {
@@ -132,19 +140,18 @@ internal sealed partial class NetworkSystem
         }
 
         _interestChanges.Clear();
-        foreach (NetworkObject entry in Entries.Values)
+        if (onlyNearby && interest != null)
         {
-            // Objects of a section being sent reach each client inside it.
-            if (entry.TearingDown || !entry.GameObject.IsValid() ||
-                (_sectionBeingSent != null && ReferenceEquals(entry.GameObject.Section, _sectionBeingSent)))
+            foreach (NetworkObject entry in Nearby(interest))
             {
-                continue;
+                CheckInterest(entry, peer, interest);
             }
-
-            bool seen = Sees(entry, peer);
-            if (ShouldSee(entry, peer, seen, interest) != seen)
+        }
+        else
+        {
+            foreach (NetworkObject entry in Entries.Values)
             {
-                _interestChanges.Add((entry, !seen));
+                CheckInterest(entry, peer, interest);
             }
         }
 
@@ -168,6 +175,44 @@ internal sealed partial class NetworkSystem
                 SendVisibility(entry, visible ? [peer] : [], visible ? [] : [peer]);
             }
         }
+    }
+
+    private void CheckInterest(NetworkObject entry, NetPeer peer, PeerInterest? interest)
+    {
+        // Objects of a section being sent reach each client inside it.
+        if (entry.TearingDown || !entry.GameObject.IsValid() || FindEntry(entry.GameObject) != entry ||
+            (_sectionBeingSent != null && ReferenceEquals(entry.GameObject.Section, _sectionBeingSent)))
+        {
+            return;
+        }
+
+        bool seen = Sees(entry, peer);
+        if (ShouldSee(entry, peer, seen, interest) != seen)
+        {
+            _interestChanges.Add((entry, !seen));
+        }
+    }
+
+    // The objects a periodic check can change for interest: the ones it has, and the ones near its viewpoints.
+    private HashSet<NetworkObject> Nearby(PeerInterest interest)
+    {
+        if (!_grid.Built || _grid.BuiltTick != Tick || _grid.BuiltCallbacks != VisibilityCallbacks)
+        {
+            _grid.Build(Entries.Values, Configuration.InterestRadius, Tick, VisibilityCallbacks);
+        }
+
+        _nearby.Clear();
+        foreach ((Float3 viewpoint, float radius) in interest.Viewpoints)
+        {
+            _grid.Gather(viewpoint, radius, _nearby);
+        }
+
+        foreach (NetworkObject entry in interest.InRangeAt.Keys)
+        {
+            _nearby.Add(entry);
+        }
+
+        return _nearby;
     }
 
     // The viewpoints of peer as gathered this tick, gathering them if they weren't.

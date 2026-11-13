@@ -946,4 +946,55 @@ public partial class NetworkingTests
         float radius = new NetworkConfiguration { InterestRadius = 0 }.ValidatedCopy().InterestRadius;
         Assert.True(radius > 0);
     }
+
+    [Fact]
+    public void AnObserverWithAnEndlessRadiusSeesEveryObject()
+    {
+        using InterestSession session = InterestHost();
+        GameObject crate = CrateAt(session.World, 50000);
+        crate.Network.Spawn();
+        PumpFor(50, session.Alice, session.Bob);
+        Assert.False(crate.Network.IsVisibleTo(session.AliceHere));
+
+        GameObject avatar = CreateGameObject("Avatar");
+        avatar.AddComponent<NetworkObserver>().Radius = float.PositiveInfinity;
+        session.World.Add(avatar);
+        avatar.Network.Spawn(session.AliceHere);
+        Pump(() => crate.Network.IsVisibleTo(session.AliceHere), session.Alice, session.Bob);
+    }
+
+    [Fact]
+    public void AGridLooksUpAHugeRangeWithoutWalkingEveryCell()
+    {
+        InterestGrid grid = new();
+        grid.Build([], 10, 1);
+        HashSet<NetworkObject> found = new();
+        Task lookup = Task.Run(() =>
+        {
+            grid.Gather(Float3.Zero, 1e9f, found);
+            grid.Gather(Float3.Zero, float.MaxValue, found);
+        });
+        Assert.True(lookup.Wait(TimeSpan.FromSeconds(5)));
+        Assert.Empty(found);
+    }
+
+    [Fact]
+    public void TurningInterestOffAndOnWithinATickStillHidesFarObjects()
+    {
+        using InterestSession session = InterestHost();
+        session.AliceSees.SetViewpoints([Float3.Zero]);
+        GameObject far = CrateAt(session.World, 500, NetworkVisibility.Manual);
+        far.Network.Spawn();
+        PumpFor(50, session.Alice, session.Bob);
+
+        NetworkConfiguration configuration = Networking.Networking.Configuration;
+        configuration.InterestMode = InterestMode.None;
+        Networking.Networking.Configure(configuration);
+        far.Network.Visibility = NetworkVisibility.Default;
+        Assert.True(far.Network.IsVisibleTo(session.AliceHere));
+        configuration.InterestMode = InterestMode.Distance;
+        Networking.Networking.Configure(configuration);
+
+        Pump(() => !far.Network.IsVisibleTo(session.AliceHere), session.Alice, session.Bob);
+    }
 }
