@@ -53,6 +53,7 @@ internal sealed class SnapshotSystem : IDisposable
     private readonly List<NetworkObject> _scratchObjects = new();
     private readonly List<SyncKey> _scratchKeys = new();
     private readonly List<Component> _scratchComponents = new();
+    private readonly List<GameObject> _scratchRoots = new();
     private readonly List<uint> _scratchIds = new();
     private readonly List<NetPeer> _sendTargets = new();
     private readonly Stack<SentSnapshot> _sentPool = new();
@@ -111,6 +112,8 @@ internal sealed class SnapshotSystem : IDisposable
             state.Poses.Clear();
             state.Rejecting.Clear();
             state.Missing.Clear();
+            state.Named.Clear();
+            state.NamedBy.Clear();
             Forget(state);
         }
     }
@@ -178,7 +181,185 @@ internal sealed class SnapshotSystem : IDisposable
         {
             sent.Definitions.RemoveAll(component => component.IsDisposed || InTree(component.GameObject, root));
         }
+
+        // Values that named it now name nothing there, so they go again if it comes back.
+        if (state.NamedBy.TryGetValue(root, out HashSet<SyncKey>? keys))
+        {
+            foreach (SyncKey key in keys)
+            {
+                NamedRoots roots = state.Named[key];
+                if (Holds(roots.Linked, root))
+                {
+                    state.Named[key] = new NamedRoots([.. roots.Masked, root], Without(roots.Linked, root));
+                }
+            }
+        }
     }
+
+    /// <summary>
+    ///     <paramref name="root" /> reached <paramref name="peer" />: values that were masked for it go again, and the values
+    ///     written for it are remembered, owed again too when <paramref name="owe" /> as some other receiver lacked one.
+    /// </summary>
+    internal void Entered(NetPeer peer, GameObject root, List<WrittenValue> written, bool owe)
+    {
+        PeerState state = State(peer);
+        uint tick = _scene.Tick + 1;
+        if (state.NamedBy.TryGetValue(root, out HashSet<SyncKey>? keys))
+        {
+            foreach (SyncKey key in keys)
+            {
+                if (!key.Component.IsDisposed && Holds(state.Named[key].Masked, root))
+                {
+                    Owe(state, key, tick);
+                }
+            }
+        }
+
+        Wrote(peer, written, owe);
+    }
+
+    /// <summary>Remembers which networked roots the values written for <paramref name="peer" /> were masked for, or named.</summary>
+    internal void Wrote(NetPeer peer, List<WrittenValue> written, bool owe = false)
+    {
+        if (written.Count == 0)
+        {
+            return;
+        }
+
+        PeerState state = State(peer);
+        uint tick = _scene.Tick + 1;
+        foreach (WrittenValue value in written)
+        {
+            SyncKey key = new(value.Component, value.Slot);
+            Remember(state, key, value.Masked, value.Linked);
+            if (owe && value.Masked.Length > 0)
+            {
+                Owe(state, key, tick);
+            }
+        }
+    }
+
+    private static void Remember(PeerState state, SyncKey key, IReadOnlyList<GameObject> masked, IReadOnlyList<GameObject> linked)
+    {
+        bool had = state.Named.TryGetValue(key, out NamedRoots old);
+        if (!had && masked.Count == 0 && linked.Count == 0)
+        {
+            return;
+        }
+
+        if (had && Same(old.Masked, masked) && Same(old.Linked, linked))
+        {
+            return;
+        }
+
+        if (had)
+        {
+            Unname(state, key, old);
+        }
+
+        if (masked.Count == 0 && linked.Count == 0)
+        {
+            state.Named.Remove(key);
+            return;
+        }
+
+        NamedRoots roots = new([.. masked], [.. linked]);
+        state.Named[key] = roots;
+        Name(state, key, roots.Masked);
+        Name(state, key, roots.Linked);
+    }
+
+    private static void Name(PeerState state, SyncKey key, GameObject[] roots)
+    {
+        foreach (GameObject root in roots)
+        {
+            if (!state.NamedBy.TryGetValue(root, out HashSet<SyncKey>? keys))
+            {
+                state.NamedBy[root] = keys = new HashSet<SyncKey>();
+            }
+
+            keys.Add(key);
+        }
+    }
+
+    private static void Unname(PeerState state, SyncKey key, NamedRoots roots)
+    {
+        Unname(state, key, roots.Masked);
+        Unname(state, key, roots.Linked);
+    }
+
+    private static void Unname(PeerState state, SyncKey key, GameObject[] roots)
+    {
+        foreach (GameObject root in roots)
+        {
+            if (state.NamedBy.TryGetValue(root, out HashSet<SyncKey>? keys) && keys.Remove(key) && keys.Count == 0)
+            {
+                state.NamedBy.Remove(root);
+            }
+        }
+    }
+
+    // Forgets root in every value that named it.
+    private static void Unname(PeerState state, GameObject root)
+    {
+        if (!state.NamedBy.Remove(root, out HashSet<SyncKey>? keys))
+        {
+            return;
+        }
+
+        foreach (SyncKey key in keys)
+        {
+            NamedRoots roots = state.Named[key];
+            NamedRoots rest = new(Without(roots.Masked, root), Without(roots.Linked, root));
+            if (rest.Masked.Length == 0 && rest.Linked.Length == 0)
+            {
+                state.Named.Remove(key);
+            }
+            else
+            {
+                state.Named[key] = rest;
+            }
+        }
+    }
+
+    private static bool Same(GameObject[] remembered, IReadOnlyList<GameObject> written)
+    {
+        if (remembered.Length != written.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < remembered.Length; i++)
+        {
+            if (!ReferenceEquals(remembered[i], written[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool Holds(GameObject[] roots, GameObject root)
+    {
+        foreach (GameObject named in roots)
+        {
+            if (ReferenceEquals(named, root))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static GameObject[] Without(GameObject[] roots, GameObject root) =>
+        Holds(roots, root) ? [.. roots.Where(named => !ReferenceEquals(named, root))] : roots;
+
+    private static void Owe(PeerState state, SyncKey key, uint tick) =>
+        state.Values[key] = state.Values.TryGetValue(key, out Pending pending)
+            ? pending with { Changed = tick }
+            : new Pending(tick, 0);
 
     /// <summary>Hands every remembered sent snapshot back to the pool.</summary>
     private void Forget(PeerState state)
@@ -331,6 +512,20 @@ internal sealed class SnapshotSystem : IDisposable
             }
 
             state.Missing.RemoveWhere(component => component.IsDisposed);
+            _scratchKeys.Clear();
+            _scratchKeys.AddRange(state.Named.Keys.Where(key => key.Component.IsDisposed));
+            foreach (SyncKey key in _scratchKeys)
+            {
+                Remember(state, key, [], []);
+            }
+
+            _scratchRoots.Clear();
+            _scratchRoots.AddRange(state.NamedBy.Keys.Where(root => root.IsDisposed));
+            foreach (GameObject root in _scratchRoots)
+            {
+                Unname(state, root);
+            }
+
             _scratchComponents.Clear();
             _scratchComponents.AddRange(state.Rejecting.Keys.Where(component => component.IsDisposed));
             foreach (Component component in _scratchComponents)
@@ -428,6 +623,7 @@ internal sealed class SnapshotSystem : IDisposable
         }
 
         _scratchKeys.Clear();
+        using NetworkSerialization.WritingFor receiver = new(_scene.IsHost ? peer : null, null, null);
         foreach ((SyncKey key, Pending pending) in state.Values)
         {
             Component component = key.Component;
@@ -470,6 +666,11 @@ internal sealed class SnapshotSystem : IDisposable
         if (!_scene.Sync.TryWrite(component, sync, _valueWriter))
         {
             return false;
+        }
+
+        if (_scene.IsHost)
+        {
+            Remember(state, key, NetworkSerialization.MaskedRoots, NetworkSerialization.LinkedRoots);
         }
 
         if (!state.ComponentIds.TryGetValue(component, out uint id))
@@ -1211,6 +1412,8 @@ internal sealed class SnapshotSystem : IDisposable
         double SentAt,
         TransformUpdate Update);
 
+    private readonly record struct NamedRoots(GameObject[] Masked, GameObject[] Linked);
+
     /// <summary>A received value naming an object this peer didn't have yet.</summary>
     private readonly record struct UnresolvedValue(byte[] Value, uint Tick, uint Generation);
 
@@ -1261,6 +1464,10 @@ internal sealed class SnapshotSystem : IDisposable
         public readonly Queue<uint> SentOrder = new();
         public readonly Dictionary<SyncKey, Pending> Values = new();
         public readonly Dictionary<SyncKey, UnresolvedValue> Unresolved = new();
+
+        // The networked roots each value's last write here was masked for, or named, and the values naming each root.
+        public readonly Dictionary<SyncKey, NamedRoots> Named = new();
+        public readonly Dictionary<GameObject, HashSet<SyncKey>> NamedBy = new(ReferenceEqualityComparer.Instance);
         public uint NextComponentId = 1;
     }
 }

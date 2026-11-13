@@ -15,6 +15,24 @@ public sealed class NetworkConfiguration
     public NetworkExecution Execution = NetworkExecution.Auto;
     public int FastResend = 2;
     public float InterpolationMilliseconds = 100;
+
+    /// <summary>Whether clients receive only the objects near their viewpoints.</summary>
+    public InterestMode InterestMode = InterestMode.None;
+
+    internal const float MinInterestRadius = 0.01f;
+
+    /// <summary>How far a viewpoint sees, unless its NetworkObserver or the object's CullDistance says otherwise.</summary>
+    public float InterestRadius = 100;
+
+    /// <summary>Ticks between checks of who is near what. Each client is checked on a different tick.</summary>
+    public int InterestUpdateTicks = 6;
+
+    /// <summary>How much further than its range an object must go before a client loses it, as a fraction of that range.</summary>
+    public float InterestHysteresis = 0.15f;
+
+    /// <summary>Seconds a client keeps an object after it was last in range, before distance takes it away.</summary>
+    public float InterestLingerSeconds = 1;
+
     public float JitterMilliseconds;
     public float JoinTimeoutSeconds = 10;
     public float LatencyMilliseconds;
@@ -71,6 +89,15 @@ public sealed class NetworkConfiguration
             copy.Execution = NetworkExecution.Auto;
         }
 
+        if (!Enum.IsDefined(copy.InterestMode))
+        {
+            copy.InterestMode = InterestMode.None;
+        }
+
+        copy.InterestRadius = Limit(copy.InterestRadius, MinInterestRadius, float.MaxValue, 100);
+        copy.InterestUpdateTicks = Math.Clamp(copy.InterestUpdateTicks, 1, 600);
+        copy.InterestHysteresis = Limit(copy.InterestHysteresis, 0, 10, 0.15f);
+        copy.InterestLingerSeconds = Limit(copy.InterestLingerSeconds, 0, 600, 1);
         copy.Port = Math.Clamp(copy.Port, 0, 65535);
         if (string.IsNullOrWhiteSpace(copy.LocalAddress))
         {

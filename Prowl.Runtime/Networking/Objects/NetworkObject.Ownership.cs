@@ -122,18 +122,30 @@ internal sealed partial class NetworkObject
         // Collection changes go ahead of the handoff. Other values go with it, since snapshots would stop carrying
         // them to the new owner once it controls them, acknowledged or not.
         System.Sync.SendSyncChanges();
-        using NetWriter poses = new(), values = new(), message = new();
-        WriteHandoffPoses(poses, true);
-        System.Snapshots.WriteHandoffValues(values, this, true);
-        new OwnershipStateMessage(GameObject.Identifier, Generation, velocity, poses.WrittenSpan, values.WrittenSpan)
-            .Write(message);
-        System.SendToObservers(this, EngineMessage.OwnershipState, message.WrittenSpan);
+        List<NetPeer> observers = new();
         foreach (NetPeer peer in System.Session!.Peers)
         {
             if (!peer.IsLocal && Sees(this, peer))
             {
-                System.Snapshots.Delivered(peer, GameObject);
+                observers.Add(peer);
             }
+        }
+
+        List<WrittenValue> written = new();
+        using NetWriter poses = new(), values = new(), message = new();
+        WriteHandoffPoses(poses, true);
+        using (new NetworkSerialization.WritingFor(null, observers, written))
+        {
+            System.Snapshots.WriteHandoffValues(values, this, true);
+        }
+
+        new OwnershipStateMessage(GameObject.Identifier, Generation, velocity, poses.WrittenSpan, values.WrittenSpan)
+            .Write(message);
+        System.SendToObservers(this, EngineMessage.OwnershipState, message.WrittenSpan);
+        foreach (NetPeer peer in observers)
+        {
+            System.Snapshots.Delivered(peer, GameObject);
+            System.Snapshots.Wrote(peer, written, observers.Count > 1);
         }
     }
 }

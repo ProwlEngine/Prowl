@@ -24,6 +24,9 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     internal readonly HashSet<string> _rpcWarnings = new();
     internal readonly NetWriter _rpcWriter = new();
 
+    // Where the arguments of a call made here, or relayed, name engine objects.
+    private readonly ReferenceSites _sites = new(), _relaySites = new();
+
     // The call whose body is running, received or made here, so its prologue runs the body instead of sending it
     // again. It holds for the whole body, so an override calling base.Method() runs the base body here too.
     internal (Component Component, uint Id)? _incoming;
@@ -34,7 +37,13 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     /// <summary>The peer whose RPC is running, while one that came over the network runs.</summary>
     internal NetPeer? CurrentCaller { get; private set; }
 
-    public void Dispose() => _rpcWriter.Dispose();
+    public void Dispose()
+    {
+        _rpcWriter.Dispose();
+        _sites.Dispose();
+        _relaySites.Dispose();
+        _staticSites.Dispose();
+    }
 
     internal bool BeginRpc(Component component, RpcMember rpc, out NetWriter writer)
     {
@@ -66,12 +75,21 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         _rpcWriter.Reset();
         RpcCallMessage.WriteTarget(_rpcWriter, component.Identifier, rpc.Id);
         writer = _rpcWriter;
+        RecordReferences(_sites, writer, writer.Length);
         return true;
+    }
+
+    // Host: notes where the arguments about to be written name engine objects.
+    private void RecordReferences(ReferenceSites sites, NetWriter writer, int start)
+    {
+        sites.Begin(writer, start);
+        NetSerializers.WrittenSites = scene.IsHost ? sites : null;
     }
 
     internal bool SendRpc(Component component, RpcMember rpc, NetWriter writer)
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
+        ReferenceSites? sites = ReferenceSites.Finish(writer);
         NetSession session = scene.Session!;
         if (!scene.IsHost && !scene.IsReady)
         {
@@ -142,18 +160,21 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         NetworkDiagnostics.TraceMember("RPC", "Send", null, component, id, true, $"{mode}, {delivery}",
             writer.WrittenSpan);
 
+        // The arguments end the message.
+        int arguments = message.Length - (writer.Length - (sites?.Start ?? 0));
         switch (mode)
         {
             case RpcMode.Broadcast:
                 SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients,
-                    channel: rpc.Channel, target: component.GameObject);
+                    channel: rpc.Channel, target: component.GameObject, sites: sites, arguments: arguments);
                 return localIncluded;
 
             case RpcMode.Owner:
                 // The prologue only sends when another peer controls it.
                 if (scene.GetOwner(component.GameObject) is { } owner && RpcRecipients.Includes(recipients, owner))
                 {
-                    scene.SendEngine(owner, EngineMessage.RpcFromHost, message.WrittenSpan, delivery, rpc.Channel);
+                    scene.SendEngine(owner, EngineMessage.RpcFromHost,
+                        Masked(sites, owner, null, message.WrittenSpan, arguments), delivery, rpc.Channel);
                 }
 
                 return false;
@@ -207,13 +228,23 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         // Validate on the host even when only another owner will execute the call.
         NetReader validation = new(arguments);
-        rpc.ValidateArguments(component, ref validation);
+        _relaySites.Begin(null, 0);
+        NetSerializers.ReadSites = _relaySites;
+        try
+        {
+            rpc.ValidateArguments(component, ref validation);
+        }
+        finally
+        {
+            NetSerializers.ReadSites = null;
+        }
 
         Delivery relayDelivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
         switch (mode)
         {
             case RpcMode.Broadcast:
-                Relay(sender, id, method, arguments, relayDelivery, null, recipients, rpc.Channel, component.GameObject);
+                Relay(sender, id, method, arguments, relayDelivery, null, recipients, rpc.Channel, component.GameObject,
+                    _relaySites);
                 if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
                 {
                     Invoke(component, rpc, arguments, sender);
@@ -240,7 +271,8 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
                 }
                 else if (owner != sender.Id && scene.Session!.TryGetPeer(owner, out NetPeer? ownerPeer))
                 {
-                    Relay(sender, id, method, arguments, relayDelivery, ownerPeer, recipients, rpc.Channel);
+                    Relay(sender, id, method, arguments, relayDelivery, ownerPeer, recipients, rpc.Channel,
+                        sites: _relaySites);
                 }
 
                 break;
@@ -248,7 +280,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     }
 
     internal void Relay(NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments, Delivery delivery,
-        NetPeer? to, RpcRecipients? recipients, byte channel = 0, GameObject? target = null)
+        NetPeer? to, RpcRecipients? recipients, byte channel = 0, GameObject? target = null, ReferenceSites? sites = null)
     {
         // The caller's Sync changes were relayed as they arrived, ahead of this; send the host's own the same way.
         if (delivery == Delivery.Reliable && channel == 0)
@@ -259,19 +291,27 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         using NetWriter message = new(arguments.Length + 32);
         new RpcCallerMessage(caller.Id).Write(message);
         new RpcCallMessage(id, method, arguments).Write(message);
+        int at = message.Length - arguments.Length;
 
         if (to != null)
         {
             if (RpcRecipients.Includes(recipients, to))
             {
-                scene.SendEngine(to, EngineMessage.RpcFromHost, message.WrittenSpan, delivery, channel);
+                scene.SendEngine(to, EngineMessage.RpcFromHost, Masked(sites, to, caller, message.WrittenSpan, at),
+                    delivery, channel);
             }
         }
         else
         {
-            SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients, caller, channel, target);
+            SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients, caller, channel, target,
+                sites, at, caller);
         }
     }
+
+    // The call as peer may receive it, its references to objects it lacks made empty.
+    private ReadOnlySpan<byte> Masked(ReferenceSites? sites, NetPeer peer, NetPeer? caller, ReadOnlySpan<byte> payload,
+        int arguments) =>
+        sites == null ? payload : sites.For(scene, peer, caller, payload, arguments);
 
     internal void OnRpcFromHost(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
@@ -362,14 +402,15 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     }
 
     internal void SendRpcRecipients(EngineMessage kind, ReadOnlySpan<byte> payload, Delivery delivery,
-        RpcRecipients? recipients, NetPeer? except = null, byte channel = 0, GameObject? target = null)
+        RpcRecipients? recipients, NetPeer? except = null, byte channel = 0, GameObject? target = null,
+        ReferenceSites? sites = null, int arguments = 0, NetPeer? caller = null)
     {
         foreach (NetPeer peer in scene.Session!.Peers)
         {
             if (!peer.IsLocal && peer != except && RpcRecipients.Includes(recipients, peer) &&
                 (target.IsNotValid() || scene.Sees(target, peer)))
             {
-                scene.SendEngine(peer, kind, payload, delivery, channel);
+                scene.SendEngine(peer, kind, Masked(sites, peer, caller, payload, arguments), delivery, channel);
             }
         }
     }

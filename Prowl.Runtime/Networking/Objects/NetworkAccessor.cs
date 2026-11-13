@@ -16,6 +16,7 @@ public sealed class NetworkAccessor
     private NetworkOrphaned _orphaned = NetworkOrphaned.Destroy;
     private OwnerTransfer _ownerTransfer = OwnerTransfer.Fixed;
     private NetworkVisibility _visibility;
+    private float _cullDistance;
 
     internal NetworkAccessor(GameObject owner) => _object = owner;
 
@@ -122,6 +123,24 @@ public sealed class NetworkAccessor
             system?.CheckVisibilityChange(_object);
             _visibility = value;
             system?.RefreshVisibility(_object);
+        }
+    }
+
+    /// <summary>
+    ///     How far from a viewpoint a client still receives this object under <see cref="InterestMode.Distance" />, in place
+    ///     of the viewpoint's own radius. Zero leaves it to the viewpoint.
+    /// </summary>
+    public float CullDistance
+    {
+        get => _cullDistance;
+        set
+        {
+            if (!float.IsFinite(value) || value < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            _cullDistance = value;
         }
     }
 

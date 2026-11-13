@@ -131,6 +131,31 @@ internal static class NetSerializers
         public void Dispose() => ReferencesFrom = _previous;
     }
 
+    /// <summary>Host: where engine references are written to, or read from, the arguments being recorded.</summary>
+    [ThreadStatic] internal static ReferenceSites? WrittenSites, ReadSites;
+
+    private static GameObject? OwnerOf(object? value) => value switch
+    {
+        GameObject go => go.IsValid() ? go : null,
+        Component component => component.IsValid() && component.GameObject.IsValid() ? component.GameObject : null,
+        _ => null
+    };
+
+    private static void WriteReference(NetWriter w, object? value)
+    {
+        Guid id = value switch { GameObject go => go.Identifier, Component c => c.Identifier, _ => Guid.Empty };
+        if (OwnerOf(value) is { } owner)
+        {
+            id = NetworkSerialization.ReferenceId(owner, id);
+            if (id != Guid.Empty && WrittenSites is { } sites && ReferenceEquals(sites.Writer, w))
+            {
+                sites.Add(w.Length, owner);
+            }
+        }
+
+        w.WriteGuid(id);
+    }
+
     public static (NetSerializer<T>.Writer?, NetSerializer<T>.Reader?) Create<T>()
     {
         Type t = typeof(T);
@@ -292,12 +317,10 @@ internal static class NetSerializers
         if (typeof(GameObject).IsAssignableFrom(t) || typeof(Component).IsAssignableFrom(t))
         {
             return (
-                (w, v) => w.WriteGuid(v switch
-                {
-                    GameObject go => go.Identifier, Component c => c.Identifier, _ => Guid.Empty
-                }),
+                (w, v) => WriteReference(w, v),
                 (ref r) =>
                 {
+                    int at = r.Position;
                     Guid id = r.ReadGuid();
                     if (Networking.System is not { } system || id == Guid.Empty)
                     {
@@ -309,14 +332,13 @@ internal static class NetSerializers
                     {
                         UnresolvedReferences++;
                     }
-                    else if (ReferencesFrom is { } client && found switch
-                             {
-                                 GameObject go => !system.Sees(go, client),
-                                 Component component => !system.Sees(component.GameObject, client),
-                                 _ => false
-                             })
+                    else if (OwnerOf(found!) is { } owner)
                     {
-                        return default!;
+                        ReadSites?.Add(at, owner);
+                        if (ReferencesFrom is { } client && !system.Sees(owner, client))
+                        {
+                            return default!;
+                        }
                     }
 
                     return found is T value ? value : default!;

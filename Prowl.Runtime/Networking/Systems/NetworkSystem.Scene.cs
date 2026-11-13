@@ -297,6 +297,7 @@ internal sealed partial class NetworkSystem
         }
 
         SceneGeneration++;
+        ClearViewpoints();
         LocalJoinState = NetworkJoinState.Loading;
         Index.Clear();
         Sync.Dirty.Clear();
@@ -361,7 +362,7 @@ internal sealed partial class NetworkSystem
             }
 
             entries = SectionEntries(section);
-            if (!SendSection(section, entries, session))
+            if (!SendSection(section, session))
             {
                 return;
             }
@@ -394,23 +395,39 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    /// <summary>Sends a section to each client without the networked objects it does not have. False if the session ended.</summary>
-    private bool SendSection(SceneSection section, NetworkObject[] entries, NetSession session)
+    /// <summary>
+    ///     Sends a section to each client without the networked objects it does not have, nor links to any it lacks
+    ///     elsewhere. False if the session ended.
+    /// </summary>
+    private bool SendSection(SceneSection section, NetSession session)
     {
-        if (entries.Any(e => e.HiddenFrom is { Count: > 0 }))
+        if (Restricted.Count > 0)
         {
             return SendPerPeer(EngineMessage.SectionAdd, [.. session.Peers.Where(p => !p.IsLocal)],
-                peer => HiddenRoots(peer, entries), message => WriteSection(section, message), session);
+                peer => HiddenRoots(peer), message => WriteSection(section, message), session);
         }
 
+        List<WrittenValue> written = new();
         using NetWriter message = new(64 * 1024);
-        WriteSection(section, message);
+        using (new NetworkSerialization.WritingFor(null, null, written))
+        {
+            WriteSection(section, message);
+        }
+
         if (Session != session)
         {
             return false;
         }
 
         BroadcastEngine(EngineMessage.SectionAdd, message.WrittenSpan);
+        foreach (NetPeer peer in session.Peers)
+        {
+            if (!peer.IsLocal)
+            {
+                Snapshots.Wrote(peer, written);
+            }
+        }
+
         return true;
     }
 
@@ -447,8 +464,13 @@ internal sealed partial class NetworkSystem
     private bool SendWritten(EngineMessage kind, IEnumerable<NetPeer> peers, HashSet<GameObject>? hidden,
         Action<NetWriter> write, NetSession session)
     {
+        List<WrittenValue> written = new();
         using NetWriter message = new(64 * 1024);
-        WithoutRoots(hidden, () => write(message));
+        using (new NetworkSerialization.WritingFor(null, null, written))
+        {
+            WithoutRoots(hidden, () => write(message));
+        }
+
         // Writing runs components' serialization callbacks, which could end the session.
         if (Session != session)
         {
@@ -458,6 +480,7 @@ internal sealed partial class NetworkSystem
         foreach (NetPeer peer in peers)
         {
             SendEngine(peer, kind, message.WrittenSpan);
+            Snapshots.Wrote(peer, written);
         }
 
         return true;
@@ -614,6 +637,10 @@ internal sealed partial class NetworkSystem
             contents = tree == null
                 ? null
                 : GameObject.PreservingIdentifiersWhile(() => Serializer.Deserialize<SceneContent?[]>(tree, context));
+            if (tree != null && contents != null)
+            {
+                CollectLinks(tree, context);
+            }
             if (contents == null || headers == null || headers.Count != contents.Length || contents.Length == 0)
             {
                 throw new InvalidDataException("The host's sections could not be read.");
@@ -788,6 +815,8 @@ internal sealed partial class NetworkSystem
         {
             return;
         }
+
+        FillAllLinks();
 
         DispatchNetworkListener(e => e.OnNetworkLoading());
         if (Session != session)
@@ -964,6 +993,7 @@ internal sealed partial class NetworkSystem
                 IndexTree(root);
             }
 
+            FillAllLinks();
             DispatchSectionListener(section, e => e.OnNetworkLoading());
             if (Session == session && IsReady)
             {

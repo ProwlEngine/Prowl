@@ -203,23 +203,23 @@ internal sealed partial class NetworkSystem
             return;
         }
 
+        bool heldAsContent = Configuration.InterestMode != InterestMode.None && HeldAsContent(go);
         NetworkObject entry =
             new(this, go) { Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId() };
         Entries.Add(entry);
         IndexTree(go);
-        InitVisibility(entry);
+        InitVisibility(entry, heldAsContent);
 
-        using NetWriter message = new(4096);
-        WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation, entry.NetId);
-        SendToObservers(entry, EngineMessage.Spawn, message.WrittenSpan);
+        List<NetPeer> observers = new();
         foreach (NetPeer peer in Session!.Peers)
         {
             if (!peer.IsLocal && Sees(entry, peer))
             {
-                Snapshots.Delivered(peer, go);
+                observers.Add(peer);
             }
         }
 
+        SendSpawn(entry, observers, false);
         entry.UpdatePhysics();
         entry.NotifySpawn();
     }
@@ -270,8 +270,8 @@ internal sealed partial class NetworkSystem
         uint generation = message.Generation, netId = message.NetId;
         EchoObject echo = Decompress(message.Snapshot);
 
-        GameObject? go =
-            GameObject.DeserializePreservingIdentifiers(echo, SceneReferenceResolver.ContextForLinking(scene));
+        SerializationContext context = SceneReferenceResolver.ContextForLinking(scene);
+        GameObject? go = GameObject.DeserializePreservingIdentifiers(echo, context);
         if (go.IsNotValid())
         {
             throw new InvalidDataException("The host sent a networked object that could not be read.");
@@ -365,6 +365,12 @@ internal sealed partial class NetworkSystem
             }
 
             IndexTree(go);
+            FillLinks(go);
+            if (!adopted)
+            {
+                CollectLinks(echo, context);
+            }
+
             entry.NotifySpawn();
         }
         finally
@@ -419,6 +425,7 @@ internal sealed partial class NetworkSystem
         }
 
         ForgetSentContent(go);
+        ForgetLinksFrom(go);
 
         if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)
         {
@@ -428,6 +435,7 @@ internal sealed partial class NetworkSystem
         using FrameStatScope stats = FrameStats.Network.Scope();
         Entries.Remove(go.Identifier);
         Restricted.Remove(entry);
+        ForgetInRange(entry);
 
         // A section being unloaded, or a world being torn down, goes away on clients as a whole.
         if (!IsHost || !IsActive || go.Scene != ReplicatedWorld || ReplicatedWorld!.State != SceneState.Running ||
@@ -451,6 +459,7 @@ internal sealed partial class NetworkSystem
         DespawnMessage message = DespawnMessage.Read(ref reader);
         if (Entries.Remove(message.Identifier, out NetworkObject? entry) && entry.GameObject.IsValid())
         {
+            ForgetLinksFrom(entry.GameObject);
             entry.NotifyDespawn(message.Reason);
             entry.GameObject.Destroy();
         }

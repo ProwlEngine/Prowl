@@ -192,7 +192,17 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         _valueWriter.Reset();
         if (changes)
         {
-            sync.WriteChanges(component, _valueWriter);
+            bool keep = NetworkSerialization.KeepReferences;
+            NetworkSerialization.KeepReferences = true;
+            try
+            {
+                sync.WriteChanges(component, _valueWriter);
+            }
+            finally
+            {
+                NetworkSerialization.KeepReferences = keep;
+            }
+
             sync.ChangesSent(component);
         }
         else if (!TryWrite(component, sync, _valueWriter))
@@ -208,19 +218,39 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         return true;
     }
 
-    /// <summary>Writes the whole value into <paramref name="scratch" />, or warns once and returns false if it can't be serialized.</summary>
+    /// <summary>
+    ///     Writes the whole value into <paramref name="scratch" />, or warns once and returns false if it can't be
+    ///     serialized. Its references to objects the receivers lack are masked, except in a network collection.
+    /// </summary>
     internal bool TryWrite(Component component, SyncMember sync, NetWriter scratch)
     {
+        List<GameObject> masked = NetworkSerialization.MaskedRoots, linked = NetworkSerialization.LinkedRoots;
+        masked.Clear();
+        linked.Clear();
+        bool keep = NetworkSerialization.KeepReferences, collecting = NetworkSerialization.CollectingRoots;
+        NetworkSerialization.KeepReferences = sync.IsCollection;
+        NetworkSerialization.CollectingRoots = scene.IsHost;
         try
         {
             sync.Write(component, scratch);
-            return true;
         }
         catch (Exception e)
         {
             WarnSyncOnce(component, sync, $"could not be serialized ({e.Message})");
             return false;
         }
+        finally
+        {
+            NetworkSerialization.KeepReferences = keep;
+            NetworkSerialization.CollectingRoots = collecting;
+        }
+
+        if (NetworkSerialization.WrittenValues is { } written && (masked.Count > 0 || linked.Count > 0))
+        {
+            written.Add(new WrittenValue(component, sync.Slot, [.. masked], [.. linked]));
+        }
+
+        return true;
     }
 
     /// <summary>Writes every [Sync] value of every component on <paramref name="objects" />, for a snapshot or spawn.</summary>

@@ -69,6 +69,19 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         Number(paper, "rotationthreshold", "Rotation Settle Threshold (degrees)", Configuration.TransformRotationThresholdDegrees, v => Configuration.TransformRotationThresholdDegrees = v, 0, 180);
         Number(paper, "scalethreshold", "Scale Settle Threshold", Configuration.TransformScaleThreshold, v => Configuration.TransformScaleThreshold = v, 0, float.MaxValue);
 
+        Header(paper, "interest", "Interest");
+        EditorGUI.SettingsRow(paper, "netsettings_interestmode", "Mode", () =>
+            Origami.Dropdown(paper, "netsettings_interestmode_v", (int)Configuration.InterestMode,
+                v => { Configuration.InterestMode = (InterestMode)v; Changed(); }, ["None", "Distance"]).Show());
+        if (Configuration.InterestMode == InterestMode.Distance)
+        {
+            Number(paper, "interestradius", "Radius (units)", Configuration.InterestRadius, v => Configuration.InterestRadius = v, NetworkConfiguration.MinInterestRadius, float.MaxValue);
+            Integer(paper, "interestticks", "Update Interval (ticks)", Configuration.InterestUpdateTicks, v => Configuration.InterestUpdateTicks = v, 1, 600);
+            Number(paper, "interesthysteresis", "Hysteresis (fraction of range)", Configuration.InterestHysteresis, v => Configuration.InterestHysteresis = v, 0, 10);
+            Number(paper, "interestlinger", "Linger (s)", Configuration.InterestLingerSeconds, v => Configuration.InterestLingerSeconds = v, 0, 600);
+            Origami.Label(paper, "netsettings_interest_note", "Clients receive the objects near their NetworkObservers or the viewpoints set through Networking.Interest.").Show();
+        }
+
         Header(paper, "snapshots", "Snapshot Limits");
         Integer(paper, "snapshotbytes", "Maximum Decompressed Bytes", Configuration.MaxSnapshotDecompressedBytes, v => Configuration.MaxSnapshotDecompressedBytes = v, 1, 1073741824);
         Integer(paper, "snapshotdepth", "Maximum Nesting Depth", Configuration.MaxSnapshotDepth, v => Configuration.MaxSnapshotDepth = v, 1, 256);

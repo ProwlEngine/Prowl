@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 using Prowl.Runtime.Resources;
 using Prowl.Courier;
@@ -34,7 +33,8 @@ internal sealed partial class NetworkSystem
     /// <summary>On the host, <paramref name="peer" /> when it is a client, whose references are checked as they are read.</summary>
     internal NetPeer? RemoteClient(NetPeer peer) => IsHost && !peer.IsLocal ? peer : null;
 
-    private bool ShouldSee(GameObject go, int owner, NetPeer peer)
+    // What the visibility rules say about peer having go, or null to leave it to interest.
+    private bool? Rule(GameObject go, int owner, NetPeer peer)
     {
         if (peer.IsLocal || owner == peer.Id)
         {
@@ -47,16 +47,53 @@ internal sealed partial class NetworkSystem
             return visible;
         }
 
-        return go.Network.Visibility is NetworkVisibility.Default or NetworkVisibility.Always;
+        return go.Network.Visibility switch
+        {
+            NetworkVisibility.Always => true,
+            NetworkVisibility.OwnerOnly or NetworkVisibility.Manual => false,
+            _ => null
+        };
     }
 
-    private bool ShouldSee(NetworkObject entry, NetPeer peer) => ShouldSee(entry.GameObject, entry.Owner, peer);
+    private bool ShouldSee(GameObject go, int owner, NetPeer peer) => Rule(go, owner, peer) ?? true;
+
+    private bool ShouldSee(NetworkObject entry, NetPeer peer, bool wasVisible = false, PeerInterest? gathered = null)
+    {
+        if (Rule(entry.GameObject, entry.Owner, peer) is { } decided)
+        {
+            return decided;
+        }
+
+        if (Configuration.InterestMode == InterestMode.None)
+        {
+            return true;
+        }
+
+        PeerInterest interest = gathered ?? ViewpointsOf(peer);
+        return interest.SeesEverything || InRange(entry, interest, wasVisible);
+    }
+
+    internal bool IsForcedHidden(GameObject go) =>
+        VisibilityOverrides.TryGetValue(go, out Dictionary<int, bool>? forced) && forced.ContainsValue(false);
 
     private bool HasCurrentWorld(NetPeer peer) =>
         LoadingPeers.TryGetValue(peer.Id, out PeerReadiness? state) && state.Generation == SceneGeneration;
 
     private void SetHidden(NetworkObject entry, int peer, bool hidden)
     {
+        if (_interests.Count > 0 && Configuration.InterestMode != InterestMode.None &&
+            _interests.TryGetValue(peer, out PeerInterest? interest))
+        {
+            if (hidden)
+            {
+                interest.InRangeAt.Remove(entry);
+            }
+            else
+            {
+                interest.InRangeAt[entry] = Now;
+            }
+        }
+
         if (hidden)
         {
             (entry.HiddenFrom ??= new HashSet<int>()).Add(peer);
@@ -88,13 +125,14 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>Works out which clients have <paramref name="entry" /> when it becomes networked, sending nothing.</summary>
-    private void InitVisibility(NetworkObject entry)
+    private void InitVisibility(NetworkObject entry, bool heldAsContent = false)
     {
         foreach (NetPeer peer in Session!.Peers)
         {
-            if (!peer.IsLocal && !ShouldSee(entry, peer))
+            if (!peer.IsLocal)
             {
-                SetHidden(entry, peer.Id, true);
+                SetHidden(entry, peer.Id,
+                    !(heldAsContent ? ShouldSee(entry.GameObject, entry.Owner, peer) : ShouldSee(entry, peer)));
             }
         }
     }
@@ -102,14 +140,23 @@ internal sealed partial class NetworkSystem
     /// <summary>Works out every object <paramref name="peer" /> has, as it is sent the world.</summary>
     private void ResetVisibility(NetPeer peer)
     {
+        PeerInterest? interest = null;
+        if (Configuration.InterestMode != InterestMode.None)
+        {
+            interest = Gather(InterestOf(peer));
+            interest.InRangeAt.Clear();
+        }
+
         foreach (NetworkObject entry in Entries.Values)
         {
-            SetHidden(entry, peer.Id, !ShouldSee(entry, peer));
+            SetHidden(entry, peer.Id, !ShouldSee(entry, peer, false, interest));
         }
     }
 
     private void ForgetPeerVisibility(int peer)
     {
+        _interests.Remove(peer);
+        _warnedNoViewpoint.Remove(peer);
         foreach (NetworkObject entry in new List<NetworkObject>(Restricted))
         {
             SetHidden(entry, peer, false);
@@ -123,16 +170,18 @@ internal sealed partial class NetworkSystem
 
     private void ForgetVisibility()
     {
+        _interests.Clear();
+        _warnedNoViewpoint.Clear();
         Restricted.Clear();
         _sentAsContent.Clear();
         VisibilityOverrides.Clear();
     }
 
     /// <summary>The networked roots <paramref name="peer" /> does not have, or null if it has them all.</summary>
-    private HashSet<GameObject>? HiddenRoots(NetPeer peer, IEnumerable<NetworkObject>? among = null)
+    private HashSet<GameObject>? HiddenRoots(NetPeer peer)
     {
         HashSet<GameObject>? roots = null;
-        foreach (NetworkObject entry in among ?? Restricted)
+        foreach (NetworkObject entry in Restricted)
         {
             if (!Sees(entry, peer) && entry.GameObject.IsValid())
             {
@@ -166,7 +215,39 @@ internal sealed partial class NetworkSystem
             return false;
         }
 
-        return _sentAsContent.Contains(go) || go.GetChildrenDeep().Any(_sentAsContent.Contains);
+        return HeldAsContent(go);
+    }
+
+    // True if go, or part of its tree, was sent to clients as scene content.
+    private bool HeldAsContent(GameObject go)
+    {
+        if (_sentAsContent.Count == 0)
+        {
+            return false;
+        }
+
+        if (_sentAsContent.Contains(go))
+        {
+            return true;
+        }
+
+        foreach (GameObject child in go.Children)
+        {
+            if (HeldAsContent(child))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ForgetInRange(NetworkObject entry)
+    {
+        foreach (PeerInterest interest in _interests.Values)
+        {
+            interest.InRangeAt.Remove(entry);
+        }
     }
 
     private bool HiddenFromAnyLoadedPeer(GameObject go, int owner)
@@ -277,8 +358,13 @@ internal sealed partial class NetworkSystem
         _leaving.Clear();
         foreach (NetPeer peer in session.Peers)
         {
-            bool should = ShouldSee(entry, peer);
-            if (peer.IsLocal || should == Sees(entry, peer))
+            if (peer.IsLocal)
+            {
+                continue;
+            }
+
+            bool seen = Sees(entry, peer), should = ShouldSee(entry, peer, seen);
+            if (should == seen)
             {
                 continue;
             }
@@ -291,6 +377,12 @@ internal sealed partial class NetworkSystem
         }
 
         NetPeer[] entering = [.. _entering], leaving = [.. _leaving];
+        SendVisibility(entry, entering, leaving);
+    }
+
+    // Removes entry from leaving and sends it whole to entering, then tells its listeners.
+    private void SendVisibility(NetworkObject entry, NetPeer[] entering, NetPeer[] leaving)
+    {
         GameObject go = entry.GameObject;
         if (leaving.Length > 0)
         {
@@ -305,13 +397,7 @@ internal sealed partial class NetworkSystem
 
         if (entering.Length > 0)
         {
-            using NetWriter spawn = new(4096);
-            WriteSpawn(go, entry.Owner, entry.Orphaned, spawn, entry.Generation, entry.NetId, true);
-            foreach (NetPeer peer in entering)
-            {
-                SendEngine(peer, EngineMessage.Spawn, spawn.WrittenSpan);
-                Snapshots.Delivered(peer, go);
-            }
+            SendSpawn(entry, entering, true);
         }
 
         foreach (NetPeer peer in leaving)
@@ -323,5 +409,81 @@ internal sealed partial class NetworkSystem
         {
             entry.NotifyVisibility(peer, true);
         }
+    }
+
+    // Sends entry whole to peers, written once for each group of them that has the same secret objects it links to.
+    private void SendSpawn(NetworkObject entry, IReadOnlyList<NetPeer> peers, bool entering)
+    {
+        if (SendSpawn(entry, peers, entering, true) is not { } partlyHidden)
+        {
+            return;
+        }
+
+        List<(bool[] Seen, List<NetPeer> Peers)> groups = [];
+        foreach (NetPeer peer in peers)
+        {
+            bool[] seen = new bool[partlyHidden.Count];
+            for (int i = 0; i < seen.Length; i++)
+            {
+                seen[i] = Sees(FindEntry(partlyHidden[i]), peer);
+            }
+
+            int group = groups.FindIndex(g => g.Seen.AsSpan().SequenceEqual(seen));
+            if (group < 0)
+            {
+                groups.Add((seen, [peer]));
+            }
+            else
+            {
+                groups[group].Peers.Add(peer);
+            }
+        }
+
+        foreach ((_, List<NetPeer> members) in groups)
+        {
+            SendSpawn(entry, members, entering, false);
+        }
+    }
+
+    private List<GameObject>? SendSpawn(NetworkObject entry, IReadOnlyList<NetPeer> peers, bool entering, bool everyone)
+    {
+        GameObject go = entry.GameObject;
+        List<WrittenValue> written = new();
+        using NetWriter message = new(4096);
+        using (new NetworkSerialization.WritingFor(null, peers, written, everyone))
+        {
+            WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation, entry.NetId, entering);
+            if (NetworkSerialization.PartlyHidden is { } partlyHidden)
+            {
+                return partlyHidden;
+            }
+        }
+
+        if (everyone && !entering)
+        {
+            SendToObservers(entry, EngineMessage.Spawn, message.WrittenSpan);
+        }
+        else
+        {
+            foreach (NetPeer peer in peers)
+            {
+                SendEngine(peer, EngineMessage.Spawn, message.WrittenSpan);
+            }
+        }
+
+        foreach (NetPeer peer in peers)
+        {
+            Snapshots.Delivered(peer, go);
+            if (entering)
+            {
+                Snapshots.Entered(peer, go, written, peers.Count > 1);
+            }
+            else
+            {
+                Snapshots.Wrote(peer, written, peers.Count > 1);
+            }
+        }
+
+        return null;
     }
 }

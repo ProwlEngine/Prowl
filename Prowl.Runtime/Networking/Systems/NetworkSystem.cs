@@ -79,6 +79,7 @@ internal sealed partial class NetworkSystem : IDisposable
 
         Entries.Clear();
         ForgetVisibility();
+        ForgetLinks();
         Index.Clear();
         Spawning = null;
         ReplicatedWorld = null;
@@ -183,8 +184,12 @@ internal sealed partial class NetworkSystem : IDisposable
         {
             double interval = 1.0 / Math.Max(Networking.TickRate, 1f);
             NextTick = Math.Max(NextTick + interval, Now);
-            Sync.SendSyncChanges();
-            Snapshots.Send();
+            UpdateInterest();
+            if (IsActive)
+            {
+                Sync.SendSyncChanges();
+                Snapshots.Send();
+            }
         }
 
         // Acknowledged every frame, not every tick, so the sender learns as soon as it can.

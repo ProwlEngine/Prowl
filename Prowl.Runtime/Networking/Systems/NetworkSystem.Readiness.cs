@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -109,13 +110,19 @@ internal sealed partial class NetworkSystem
         using NetWriter message = new();
         Snapshots.Delivered(peer);
         new SceneCatchUpMessage(generation).Write(message);
-        WithoutRoots(HiddenRoots(peer), () =>
+        List<WrittenValue> written = new();
+        using (new NetworkSerialization.WritingFor(null, null, written))
         {
-            Sync.WriteSyncState(message, ReplicatedWorld.IsValid() ? ReplicatedWorld!.Objects : Enumerable.Empty<GameObject>());
-            WriteCatchUpTransforms(message);
-        });
+            WithoutRoots(HiddenRoots(peer), () =>
+            {
+                Sync.WriteSyncState(message, ReplicatedWorld.IsValid() ? ReplicatedWorld!.Objects : Enumerable.Empty<GameObject>());
+                WriteCatchUpTransforms(message);
+            });
+        }
+
         state!.Stage = NetworkJoinState.Synchronizing;
         SendEngine(peer, EngineMessage.SceneCatchUp, message.WrittenSpan);
+        Snapshots.Wrote(peer, written);
     }
 
     internal void OnSceneCatchUp(NetPeer peer, ref NetReader reader, Delivery delivery)
