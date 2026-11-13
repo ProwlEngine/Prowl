@@ -9,7 +9,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build: Prowl.Editor Debug",
-            "program": "${workspaceFolder}/Build/Editor/Debug/net10.0/Prowl.Editor.dll",
+            "program": "${workspaceFolder}/Build/Editor/Debug/net11.0/Prowl.Editor.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false
@@ -19,7 +19,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build: Prowl.Editor Release",
-            "program": "${workspaceFolder}/Build/Editor/Release/net10.0/Prowl.Editor.dll",
+            "program": "${workspaceFolder}/Build/Editor/Release/net11.0/Prowl.Editor.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false
