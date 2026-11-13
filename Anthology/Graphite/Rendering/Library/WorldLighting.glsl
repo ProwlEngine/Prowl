@@ -16,4 +16,5 @@ layout(set = 1, binding = 22, std430) readonly buffer Graphite_WorldLighting
     vec4 volumetricGrid;     // volumetric fog on, its reach in metres, depth slices, the first slice's start
     vec4 volumetricDensity;  // density per metre at the base height, base height, height falloff, anisotropy
     vec4 volumetricAlbedo;   // albedo, ambient scale
+    vec4 wind;               // the way it blows along x and z, its strength, how fast it gusts
 } graphite_World;

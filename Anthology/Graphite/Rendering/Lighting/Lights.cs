@@ -386,6 +386,16 @@ public struct FogVolumeDesc : IEquatable<FogVolumeDesc>
     public static bool operator !=(FogVolumeDesc a, FogVolumeDesc b) => !a.Equals(b);
 }
 
+/// <summary>A world's wind: the way it blows across the ground, how hard, and how fast its gusts come and go.</summary>
+public struct WindDesc
+{
+    public Float2 Direction = new(1f, 0f);
+    public float Strength = 0.6f;
+    public float GustSpeed = 1.3f;
+
+    public WindDesc() { }
+}
+
 /// <summary>A world's ambient light, fog and sun. Changes to the world's own instance apply at the next frame.</summary>
 public sealed class EnvironmentDesc
 {
@@ -405,6 +415,9 @@ public sealed class EnvironmentDesc
 
     /// <summary>The directional light that is the sun, else the most intense directional light is.</summary>
     public LightHandle Sun;
+
+    /// <summary>The wind foliage and anything else bends in, see Graphite/Wind.glsl.</summary>
+    public WindDesc Wind = new();
 
     /// <summary>The sky, a material with a Sky pass, drawn behind everything and captured into the sky probe. Null for none.</summary>
     public Material? Sky;
@@ -510,6 +523,9 @@ internal struct WorldLightingRecord
     public Float4 VolumetricGrid;
     public Float4 VolumetricDensity;
     public Float4 VolumetricAlbedo;
+
+    /// <summary>The wind's way along x and z, strength and gust speed.</summary>
+    public Float4 Wind;
 }
 
 /// <summary>A fog volume as the shaders read it, 112 bytes, matching Graphite_FogVolumeRecord.</summary>
@@ -1157,6 +1173,10 @@ internal sealed class WorldLighting
         record.VolumetricGrid = new Float4(volumetric.Enabled ? 1 : 0, reach, Math.Clamp(volumetric.Slices, 16, 256), MathF.Min(0.5f, reach * 0.25f));
         record.VolumetricDensity = new Float4(MathF.Max(volumetric.Density, 0f), volumetric.BaseHeight, MathF.Max(volumetric.HeightFalloff, 0f), Math.Clamp(volumetric.Anisotropy, -0.95f, 0.95f));
         record.VolumetricAlbedo = new Float4(volumetric.Albedo.X, volumetric.Albedo.Y, volumetric.Albedo.Z, MathF.Max(volumetric.AmbientScale, 0f));
+        Float2 blows = env.Wind.Direction;
+        float length = MathF.Sqrt(blows.X * blows.X + blows.Y * blows.Y);
+        blows = length > 1e-5f ? blows / length : new Float2(1f, 0f);
+        record.Wind = new Float4(blows.X, blows.Y, MathF.Max(env.Wind.Strength, 0f), MathF.Max(env.Wind.GustSpeed, 0f));
         int volumes = Math.Min(env.FogVolumes.Length, EnvironmentDesc.MaxFogVolumes);
         for (int i = 0; i < volumes; i++)
             FogVolumes.Set((uint)i, FogVolume(env.FogVolumes[i]));

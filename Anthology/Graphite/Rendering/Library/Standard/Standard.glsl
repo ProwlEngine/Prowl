@@ -18,6 +18,8 @@
 // inputs i: void Surface(inout PBR_Params p, Graphite_SurfaceData i), or void Surface(inout Unlit_Params p, Graphite_SurfaceData i).
 // GRAPHITE_SURFACE_VERTEX_FUNCTION: the shader defines void SurfaceVertex(inout Graphite_SurfaceVertex v), run in every
 // pass before the vertex is transformed, so shadows and depth match. It animates with v.time for motion vectors to follow.
+// GRAPHITE_STANDARD_INPUTS: a model's function, void (inout Graphite_SurfaceData i), that replaces the frame the
+// varyings gave in passes reading it, as Graphite/Standard/Terrain.shader does with its per pixel normals.
 //
 // Material axis, set by SurfaceSettings:
 //   _SURFACE  OPAQUE, CUTOUT (alpha test against the model's cutoff) or TRANSPARENT (coverage reaches the target)

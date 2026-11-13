@@ -25,6 +25,9 @@ Graphite_SurfaceData graphite_StandardInputs()
         i.tangent = -i.tangent;
         i.bitangent = -i.bitangent;
     }
+#ifdef GRAPHITE_STANDARD_INPUTS
+    GRAPHITE_STANDARD_INPUTS(i);
+#endif
 #endif
 #if defined(PBR_PARALLAX) && defined(GRAPHITE_STANDARD_FRAME)
 #ifdef GRAPHITE_STANDARD_SHADOW
