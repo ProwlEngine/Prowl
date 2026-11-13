@@ -70,6 +70,7 @@ Shader "Graphite/Impostor"
             p.geometryNormal = normalize(Graphite_NormalMatrix(graphite_Transforms[Graphite_ObjectIndex()]) * normal);
             p.specularRoughness = material.r;
             p.baseMetalness = material.g;
+            p.specularWeight = 1.0 - material.b;
             p.occlusion = normalDepth.a;
         }
         ENDGLSL

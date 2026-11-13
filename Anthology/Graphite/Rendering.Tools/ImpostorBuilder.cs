@@ -29,8 +29,8 @@ public sealed class ImpostorBakeDesc
 /// <summary>
 /// A baked impostor: its atlases as RGBA8 rows, top row first, and the sphere its frames frame. Albedo holds the base
 /// colour, sRGB, and coverage. NormalDepth holds the object space normal folded onto an octahedron in red and green, the
-/// depth from the front of the sphere (1) to its back (0) in blue, and occlusion in alpha. Material holds roughness and
-/// metalness.
+/// depth from the front of the sphere (1) to its back (0) in blue, and occlusion in alpha. Material holds roughness,
+/// metalness, and in blue how much the specular weight falls short of 1.
 /// </summary>
 public sealed class ImpostorData
 {

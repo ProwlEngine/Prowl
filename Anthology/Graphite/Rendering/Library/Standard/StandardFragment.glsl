@@ -139,8 +139,9 @@ layout(location = 0) out vec4 impostorAlbedo;
 layout(location = 1) out vec4 impostorNormalDepth;
 layout(location = 2) out vec4 impostorMaterial;
 
-// Impostor bake: the base colour and coverage, the octahedral normal with the view's depth and occlusion, and roughness
-// and metalness. A bake draws the object untransformed, so its world normals are its own.
+// Impostor bake: the base colour and coverage, the octahedral normal with the view's depth and occlusion, and roughness,
+// metalness and how much the specular weight falls short of 1. A bake draws the object untransformed, so its world
+// normals are its own.
 void Graphite_StandardFragment()
 {
     Graphite_SurfaceData i = graphite_StandardInputs();
@@ -155,7 +156,7 @@ void Graphite_StandardFragment()
 #endif
     impostorAlbedo = vec4(p.baseColor * p.baseWeight, 1.0);
     impostorNormalDepth = vec4(Graphite_OctEncode(normalize(p.geometryNormal)) * 0.5 + 0.5, gl_FragCoord.z, p.occlusion);
-    impostorMaterial = vec4(p.specularRoughness, p.baseMetalness, 0.0, 1.0);
+    impostorMaterial = vec4(p.specularRoughness, p.baseMetalness, 1.0 - p.specularWeight, 1.0);
 }
 
 #elif defined(GRAPHITE_STANDARD_VOXEL)
