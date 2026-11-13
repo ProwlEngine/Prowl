@@ -72,26 +72,26 @@ Shader "Quill/CanvasShader"
             #pragma warning(disable : 3557)
             #endif
 
-            #line 90 "core"
+            #line 93 "core"
             Texture2D<float4 > fontTexture;
 
-            #line 1094 "hlsl.meta.slang"
+            #line 1187 "hlsl.meta.slang"
             SamplerState sampler_fontTexture;
 
-            #line 1094
+            #line 1187
             Texture2D<float4 > texture0;
 
-            #line 1094
+            #line 1187
             SamplerState sampler_texture0;
 
-            #line 1094
+            #line 1187
             Texture2D<float4 > backdropTexture;
 
-            #line 1094
+            #line 1187
             SamplerState sampler_backdropTexture;
 
-            #line 11223
-            #line 11223
+            #line 11528
+            #line 11528
             float4 scissorTransform;
             float2 scissorTranslation;
             float2 scissorExt;

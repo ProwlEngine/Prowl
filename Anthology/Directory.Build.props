@@ -9,7 +9,7 @@
           <Copyright>Copyright (c) Prowl Group 2026.</Copyright>
           <Product>Prowl</Product>
           <NeutralLanguage>en-AU</NeutralLanguage>
-          <LangVersion>latest</LangVersion>
+          <LangVersion>15</LangVersion>
 
           <!-- One version for the whole family. Bump this single line to release everything.
                Baseline 2.3.0 sits above the highest legacy package (Prowl.Echo 2.2.1) so the
@@ -27,14 +27,14 @@
                <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
                - Default: the modern set every library supports.
                - Compat: adds netstandard2.1 for libraries that also support Unity / older runtimes. -->
-          <ProwlTargetFrameworks>net8.0;net9.0;net10.0</ProwlTargetFrameworks>
-          <ProwlTargetFrameworksCompat>netstandard2.1;net8.0;net9.0;net10.0</ProwlTargetFrameworksCompat>
+          <ProwlTargetFrameworks>net8.0;net9.0;net10.0;net11.0</ProwlTargetFrameworks>
+          <ProwlTargetFrameworksCompat>netstandard2.1;net8.0;net9.0;net10.0;net11.0</ProwlTargetFrameworksCompat>
 
           <!-- All testing-related projects share this target framework, including benchmarks. -->
-          <ProwlTestTargetFramework>net10.0</ProwlTestTargetFramework>
+          <ProwlTestTargetFramework>net11.0</ProwlTestTargetFramework>
 
           <!-- All samples share this target framework. -->
-          <ProwlSampleTargetFramework>net10.0</ProwlSampleTargetFramework>
+          <ProwlSampleTargetFramework>net11.0</ProwlSampleTargetFramework>
      </PropertyGroup>
 
      <!-- Polyfills the language-feature attributes (init / required / records, etc.) that
