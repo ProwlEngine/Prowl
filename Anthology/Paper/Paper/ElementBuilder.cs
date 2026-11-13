@@ -2105,6 +2105,9 @@ namespace Prowl.PaperUI
             // Handle mouse clicks for cursor positioning and Shift+Click range selection
             OnPress((ClickEvent e) =>
             {
+                if (e.Button != PaperMouseBtn.Left)
+                    return;
+
                 var currentState = LoadTextInputState(value, isMultiLine);
                 var clickPos = e.RelativePosition.X - TextInputArea.Min.X + currentState.ScrollOffsetX;
                 var clickPosY = isMultiLine ? e.RelativePosition.Y - TextInputArea.Min.Y + currentState.ScrollOffsetY : 0;

@@ -821,7 +821,9 @@ namespace Prowl.PaperUI
         private void HandleMouseEvents()
         {
             // Handle press
-            if (IsPointerPressed(PaperMouseBtn.Left))
+            bool leftMousePressed = IsPointerPressed(PaperMouseBtn.Left);
+            bool rightMousePressed = IsPointerPressed(PaperMouseBtn.Right);
+            if (leftMousePressed || rightMousePressed)
             {
                 if (_theHoveredElementId != 0)
                 {
@@ -834,7 +836,7 @@ namespace Prowl.PaperUI
                     {
                         ref ElementData data = ref activeElement.Data;
 
-                        var pressEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Press);
+                        var pressEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, leftMousePressed ? PaperMouseBtn.Left : PaperMouseBtn.Right, ClickPhase.Press);
                         data.OnPress?.Invoke(pressEvt);
                         PropagateClickToHookedChildren(activeElement, ClickPhase.Press);
                         BubbleEventToParents(activeElement, pressEvt);
@@ -920,7 +922,7 @@ namespace Prowl.PaperUI
                 }
             }
             // Handle right-click
-            else if (IsPointerPressed(PaperMouseBtn.Right))
+            else if (IsPointerReleased(PaperMouseBtn.Right))
             {
                 if (_theHoveredElementId != 0)
                 {
