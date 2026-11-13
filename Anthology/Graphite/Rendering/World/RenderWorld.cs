@@ -297,7 +297,7 @@ public sealed partial class RenderWorld : IDisposable
     public ExtensionSet<FrameFeature> FrameFeatures { get; }
 
     /// <summary>Host geometry drawn into each view through its passes without being renderables. Host thread.</summary>
-    public ExtensionSet<RenderProvider> Providers { get; } = new();
+    public ExtensionSet<RenderProvider> Providers { get; }
 
     /// <summary>The providers as of the last SubmitFrame. The render thread reads only this.</summary>
     internal RenderProvider[] ProviderSnapshot = [];
@@ -380,6 +380,7 @@ public sealed partial class RenderWorld : IDisposable
         _owner = owner;
         _device = device;
         Features = new ExtensionSet<RenderFeature>(this);
+        Providers = new ExtensionSet<RenderProvider>(this);
         FrameFeatures = new ExtensionSet<FrameFeature>(this) { new LightProbeFeature(), new LocalShadowFeature(), new VoxelizationFeature(), new CaptureFillFeature() };
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;

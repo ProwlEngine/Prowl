@@ -1763,6 +1763,8 @@ public readonly struct ProviderView
 
     /// <summary>Whether any layer of the view sees a sphere.</summary>
     public bool Sees(Double3 center, float radius) => _frustum.Sphere(center, radius);
+
+    internal CullFrustum Frustum => _frustum;
 }
 
 /// <summary>What one of a provider's items is drawn with: its object's data, as a renderable's.</summary>
