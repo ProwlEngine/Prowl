@@ -392,6 +392,7 @@
   "project.show_extensions": "拡張子を表示",
   "project.grid_view": "グリッド表示",
   "project.list_view": "リスト / テーブル表示",
+  "project.tree_view": "ツリー表示",
   "project.sort_by": "並べ替え",
   "project.filter": "フィルター",
   "project.show_hidden": "隠しファイルを表示",

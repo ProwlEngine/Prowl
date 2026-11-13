@@ -392,6 +392,7 @@
   "project.show_extensions": "显示扩展名",
   "project.grid_view": "网格视图",
   "project.list_view": "列表 / 表格视图",
+  "project.tree_view": "树状视图",
   "project.sort_by": "排序方式",
   "project.filter": "筛选",
   "project.show_hidden": "显示隐藏文件",
