@@ -156,7 +156,7 @@ public sealed class TabsBuilder
             .Cursor(PaperCursor.Pointer);
         if (pills) tabBox.Rounded(pillR).Margin(i == 0 ? 0 : 4, 0, 0, 0);
         if (_onTabPress != null)
-            tabBox.OnPress(e => _onTabPress!(idx, e.PointerPosition));
+            tabBox.OnPress(e => { if (e.Button == PaperMouseBtn.Left) _onTabPress(idx, e.PointerPosition); });
 
         using (tabBox.Enter())
         {

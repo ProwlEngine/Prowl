@@ -440,6 +440,7 @@ public sealed partial class CodeEditor
 
     private void HandleRelease(ClickEvent e)
     {
+        if (e.Button != PaperMouseBtn.Left) return;
         if (_drag == DragKind.Move)
         {
             // A drop inside the dragged text, or no drag at all, is a plain click.

@@ -300,6 +300,8 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                     // Click anywhere on track > set value to that position.
                     trackBuilder.OnPress(e =>
                     {
+                        if (e.Button != PaperMouseBtn.Left)
+                            return;
                         double newT = ClickToT(e, trackHandle);
                         T newV = SliderInternal.TToValue<T>(newT, _min, _max, _logarithmic);
                         if (_step.HasValue && _snapWhileDragging) newV = SliderInternal.Snap(newV, _min, _step.Value);

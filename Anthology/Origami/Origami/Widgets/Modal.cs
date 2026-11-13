@@ -9,6 +9,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 
 using Color = System.Drawing.Color;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Prowl.OrigamiUI;
 
@@ -272,10 +273,16 @@ public sealed class CustomDrawModal : IModal
 public static class Modal
 {
     private static readonly List<IModal> _stack = [];
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IModal, object> _openedAt = new();
 
     // A backdrop click this soon after opening is the second click of the double click that opened the modal.
-    private const long BackdropGraceMs = 300;
+    // TODO: unify this with Paper's MaxDoubleClickTime?
+    private const int BackdropGraceMs = 300;
+
+    // Keeps track of the most recently focused IModal.
+    private static IModal? _focusedModal;
+
+    // Keeps track of how long the _focusedModal has been active.
+    private static long _focusedTime;
 
     public static int Count => _stack.Count;
     public static bool IsOpen => _stack.Count > 0;
@@ -287,7 +294,6 @@ public static class Modal
     public static void Push(IModal modal)
     {
         _stack.Add(modal);
-        _openedAt.AddOrUpdate(modal, Environment.TickCount64);
     }
 
     /// <summary>Pop the topmost modal.</summary>
@@ -392,33 +398,53 @@ public static class Modal
 
         for (int i = 0; i < _stack.Count; i++)
         {
-            var modal = _stack[i];
+            IModal modal = _stack[i];
             int layer = BaseLayer + i * LayerStep;
-            int capturedIndex = i;
 
-            // Backdrop - progressively darker for each stacked modal
-            byte alpha = (byte)Math.Min(200, 80 + i * 40);
-            paper.Box($"omd_bg_{i}")
+            // It's relatively common for the user to double-click to open a modal.
+            // So we momentarily (300ms) block input from reaching anything outside the modal.
+            // Only the top-most modal blocks input.
+            bool blockInput = i == _stack.Count - 1 && (!modal.CloseOnBackdrop || modal != _focusedModal || Stopwatch.GetElapsedTime(_focusedTime).TotalMilliseconds < BackdropGraceMs);
+
+            // Create a backdrop parent element.
+            // If CloseOnBackdrop = False, it always covers everything, preventing event bubbling, and getting progressively darker for each stacked modal.
+            // If CloseOnBackdrop = True, it covers everything, but only temporarily, and it's invisible.
+            using (paper.Box($"omd_bg_{i}")
                 .PositionType(PositionType.SelfDirected)
                 .Position(0, 0)
-                .Size(UnitValue.Stretch(), UnitValue.Stretch())
-                .BackgroundColor(Color.FromArgb(alpha, 0, 0, 0))
+                .Size(blockInput ? UnitValue.Stretch() : 0, blockInput ? UnitValue.Stretch() : 0)
+                .BackgroundColor(Color.FromArgb(modal.CloseOnBackdrop ? (byte)0 : (byte)Math.Min(200, 80 + i * 40), 0, 0, 0))
                 .Layer(layer)
                 .StopEventPropagation()
-                .OnClick(capturedIndex, (idx, _) =>
+                .Enter())
+            {
+                // For modals with CloseOnBackdrop = True, the strategy for detecting clicks outside the modal is as follows:
+                // 1. If the modal is the top-most modal, and it wasn't last frame, set the focus to the modal.
+                // 2. Then, in subsequent frames the modal is top-most, check the focused element is the modal or a child of it.
+                //    If it's not, that can only have been because the user clicked outside the modal, so dismiss it.
+                if (modal.CloseOnBackdrop && i == _stack.Count - 1)
                 {
-                    if (idx >= _stack.Count || !_stack[idx].CloseOnBackdrop) return;
-                    if (_openedAt.TryGetValue(_stack[idx], out var opened) && Environment.TickCount64 - (long)opened < BackdropGraceMs) return;
-                    IModal dismissed = _stack[idx];
-                    _stack.RemoveAt(idx);
-                    dismissed.OnDismissed?.Invoke(ModalDismissReason.Backdrop);
-                });
+                    if (modal != _focusedModal)
+                    {
+                        // This modal is either new, or another modal was dismissed, leaving one this as the top-most.
+                        paper.SetFocus();   // This affects IsParentFocusWithin next frame.
+                        _focusedModal = modal;
+                        _focusedTime = Stopwatch.GetTimestamp();
+                    }
+                    else if(!paper.IsParentFocusWithin)
+                    {
+                        // The modal is no longer focused.
+                        Dismiss(modal, ModalDismissReason.Backdrop);
+                        break;
+                    }
+                }
 
-            // Let the modal draw itself on layer + 1, with its popups above it
-            int outerPopupLayer = Origami.PopupLayer;
-            Origami.PopupLayer = layer + 3;
-            try { modal.Draw(paper, layer + 1, i); }
-            finally { Origami.PopupLayer = outerPopupLayer; }
+                // Let the modal draw itself on layer + 1, with its popups above it
+                int outerPopupLayer = Origami.PopupLayer;
+                Origami.PopupLayer = layer + 3;
+                try { modal.Draw(paper, layer + 1, i); }
+                finally { Origami.PopupLayer = outerPopupLayer; }
+            }
 
             // Escape handling for the topmost modal only
             if (i == _stack.Count - 1 && modal.CloseOnEscape && paper.IsKeyPressed(PaperKey.Escape))
