@@ -162,6 +162,24 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
+    /// <summary><paramref name="peer" /> no longer has <paramref name="root" />'s tree: forgets what it was owed and knew of it.</summary>
+    internal void Withdraw(NetPeer peer, GameObject root)
+    {
+        if (!_peers.TryGetValue(peer.Id, out PeerState? state))
+        {
+            return;
+        }
+
+        Delivered(peer, root);
+        state.DefinedComponents.RemoveWhere(component => component.IsDisposed || InTree(component.GameObject, root));
+
+        // An acknowledgement still on its way must not mark them known again.
+        foreach (SentSnapshot sent in state.Sent.Values)
+        {
+            sent.Definitions.RemoveAll(component => component.IsDisposed || InTree(component.GameObject, root));
+        }
+    }
+
     /// <summary>Hands every remembered sent snapshot back to the pool.</summary>
     private void Forget(PeerState state)
     {
@@ -182,10 +200,11 @@ internal sealed class SnapshotSystem : IDisposable
         uint tick = _scene.Tick + 1;
         int controller = ControllerOf(component, sync.Flags);
         SyncKey key = new(component, sync.Slot);
+        NetworkObject? entry = _scene.Restricted.Count == 0 ? null : _scene.FindEntry(component.GameObject);
         foreach (NetPeer peer in Targets())
         {
             PeerState state = State(peer);
-            if (peer.Id == controller || state.Missing.Contains(component))
+            if (peer.Id == controller || state.Missing.Contains(component) || !Sees(entry, peer))
             {
                 continue;
             }
@@ -288,8 +307,9 @@ internal sealed class SnapshotSystem : IDisposable
             {
                 state.Applied.Remove(key);
 
-                // Forgets the id the host gave a component that is gone here.
-                if (!_scene.IsHost && state.ReceivedGuids.Remove(key.Component.Identifier, out uint id))
+                // Forgets the id the host gave a component that is gone here, unless it came back since.
+                if (!_scene.IsHost && _scene.FindByIdentifier(key.Component.Identifier) is not Component &&
+                    state.ReceivedGuids.Remove(key.Component.Identifier, out uint id))
                 {
                     state.ReceivedIds.Remove(id);
                 }
@@ -353,7 +373,7 @@ internal sealed class SnapshotSystem : IDisposable
     {
         foreach (NetPeer peer in Targets())
         {
-            if (peer.Id != except)
+            if (peer.Id != except && Sees(entry, peer))
             {
                 State(peer).Poses[entry] = pose;
             }
@@ -382,14 +402,17 @@ internal sealed class SnapshotSystem : IDisposable
         _itemBytes.Reset();
         foreach ((NetworkObject entry, TransformUpdate update) in _moving)
         {
-            AddRecord(tick, now, entry, update, null);
+            if (Sees(entry, peer))
+            {
+                AddRecord(tick, now, entry, update, null);
+            }
         }
 
         _scratchObjects.Clear();
         foreach ((NetworkObject entry, PendingPose pose) in state.Poses)
         {
             if (!entry.GameObject.IsValid() || !_scene.Entries.TryGetNet(entry.NetId, out NetworkObject? current) ||
-                current != entry || ControllerOf(entry.GameObject) != pose.Controller)
+                current != entry || ControllerOf(entry.GameObject) != pose.Controller || !Sees(entry, peer))
             {
                 _scratchObjects.Add(entry);
             }
@@ -409,7 +432,7 @@ internal sealed class SnapshotSystem : IDisposable
         {
             Component component = key.Component;
             if (component.IsDisposed || state.Missing.Contains(component) ||
-                NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
+                NetworkAccessor.IsExcludedFromNetwork(component.GameObject) || !_scene.Sees(component.GameObject, peer) ||
                 NetworkMembers.Of(component).Sync(key.Slot) is not { } sync ||
                 (_scene.IsHost ? ControllerOf(component, sync.Flags) == peer.Id : !_scene.HasControl(component, sync.Flags)))
             {
@@ -759,6 +782,16 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
+    /// <summary>Values <paramref name="sender" /> sent as of <paramref name="tick" />, so snapshots from before then are stale.</summary>
+    internal void Received(NetPeer sender, List<(Component Component, SyncMember Sync)> values, uint tick)
+    {
+        PeerState state = State(sender);
+        foreach ((Component component, SyncMember sync) in values)
+        {
+            state.Applied[new SyncKey(component, sync.Slot)] = tick;
+        }
+    }
+
     /// <summary>Applies again the received values whose referenced objects have arrived since, unless newer ones came.</summary>
     internal void ResolveReferences()
     {
@@ -772,6 +805,7 @@ internal sealed class SnapshotSystem : IDisposable
 
             _scratchKeys.Clear();
             session.TryGetPeer(peerId, out NetPeer? sender);
+            using NetSerializers.ReadingFrom references = new(sender == null ? null : _scene.RemoteClient(sender));
             foreach ((SyncKey key, UnresolvedValue pending) in state.Unresolved)
             {
                 Component component = key.Component;
@@ -924,8 +958,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// </summary>
     private void Relay(NetPeer sender)
     {
-        _items.Clear();
-        _itemBytes.Reset();
+        bool moving = false;
         foreach ((TransformGroup group, NetworkObject entry, TransformUpdate update) in _relay)
         {
             if ((update.Channels & TransformChannels.ExactRotation) != 0)
@@ -936,13 +969,19 @@ internal sealed class SnapshotSystem : IDisposable
             else
             {
                 ClearPose(entry);
-                AddRecord(group.Tick, group.SentAt, entry, update, null);
+                moving = true;
             }
         }
 
-        if (_items.Count == 0)
+        if (!moving)
         {
             return;
+        }
+
+        bool perPeer = _scene.Restricted.Count > 0;
+        if (!perPeer)
+        {
+            AddRelayRecords(null);
         }
 
         _sendTargets.Clear();
@@ -951,7 +990,29 @@ internal sealed class SnapshotSystem : IDisposable
         {
             if (peer != sender && _scene.IsPeerReady(peer) && peer.Connection is { IsConnected: true } connection)
             {
-                SendItems(peer, null, _scene.Tick, connection);
+                if (perPeer)
+                {
+                    AddRelayRecords(peer);
+                }
+
+                if (_items.Count > 0)
+                {
+                    SendItems(peer, null, _scene.Tick, connection);
+                }
+            }
+        }
+    }
+
+    /// <summary>The moving transforms being relayed, all of them, or only those <paramref name="peer" /> has.</summary>
+    private void AddRelayRecords(NetPeer? peer)
+    {
+        _items.Clear();
+        _itemBytes.Reset();
+        foreach ((TransformGroup group, NetworkObject entry, TransformUpdate update) in _relay)
+        {
+            if ((update.Channels & TransformChannels.ExactRotation) == 0 && (peer == null || Sees(entry, peer)))
+            {
+                AddRecord(group.Tick, group.SentAt, entry, update, null);
             }
         }
     }

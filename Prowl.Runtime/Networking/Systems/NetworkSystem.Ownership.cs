@@ -27,7 +27,7 @@ internal sealed partial class NetworkSystem
 
         using NetWriter message = new();
         new OwnerTransferMessage(go.Identifier, entry.Generation, policy).Write(message);
-        BroadcastEngine(EngineMessage.OwnerTransfer, message.WrittenSpan);
+        SendToObservers(entry, EngineMessage.OwnerTransfer, message.WrittenSpan);
     }
 
     internal void OnOwnerTransfer(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -115,7 +115,7 @@ internal sealed partial class NetworkSystem
 
         if (!Entries.TryGetValue(id, out NetworkObject? entry) || entry.TearingDown ||
             entry.Generation != generation ||
-            !entry.GameObject.IsValid())
+            !entry.GameObject.IsValid() || !Sees(entry, sender))
         {
             return;
         }
@@ -187,7 +187,7 @@ internal sealed partial class NetworkSystem
         ApplyNetworkFlags(go, flags, entry);
         using NetWriter message = new();
         new NetworkFlagsMessage(go.Identifier, entry.Generation, flags).Write(message);
-        BroadcastEngine(EngineMessage.NetworkFlags, message.WrittenSpan);
+        SendToObservers(entry, EngineMessage.NetworkFlags, message.WrittenSpan);
     }
 
     internal void OnNetworkFlags(NetPeer sender, ref NetReader reader, Delivery delivery)

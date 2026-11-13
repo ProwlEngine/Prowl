@@ -74,10 +74,11 @@ internal sealed partial class NetworkSystem : IDisposable
 
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
-            entry.NotifyDespawn();
+            entry.NotifyDespawn(NetworkDespawnReason.SessionEnded);
         }
 
         Entries.Clear();
+        ForgetVisibility();
         Index.Clear();
         Spawning = null;
         ReplicatedWorld = null;

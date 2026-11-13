@@ -127,10 +127,10 @@ internal sealed partial class NetworkObject
         System.Snapshots.WriteHandoffValues(values, this, true);
         new OwnershipStateMessage(GameObject.Identifier, Generation, velocity, poses.WrittenSpan, values.WrittenSpan)
             .Write(message);
-        System.BroadcastEngine(EngineMessage.OwnershipState, message.WrittenSpan);
+        System.SendToObservers(this, EngineMessage.OwnershipState, message.WrittenSpan);
         foreach (NetPeer peer in System.Session!.Peers)
         {
-            if (!peer.IsLocal)
+            if (!peer.IsLocal && Sees(this, peer))
             {
                 System.Snapshots.Delivered(peer, GameObject);
             }

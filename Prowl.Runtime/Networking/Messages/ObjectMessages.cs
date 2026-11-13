@@ -16,8 +16,13 @@ internal readonly ref struct SpawnMessage(
     NetworkOrphaned orphaned,
     uint generation,
     uint netId,
-    ReadOnlySpan<byte> snapshot)
+    ReadOnlySpan<byte> snapshot,
+    bool replace = false,
+    uint tick = 0)
 {
+    // Set in the orphaned byte when the object replaces any copy the client still has. The host tick then follows NetId.
+    private const byte ReplaceBit = 0x80;
+
     internal readonly Guid Identifier = identifier;
     internal readonly Guid ParentId = parentId;
     internal readonly uint SectionSlot = sectionSlot;
@@ -26,6 +31,8 @@ internal readonly ref struct SpawnMessage(
     internal readonly uint Generation = generation;
     internal readonly uint NetId = netId;
     internal readonly ReadOnlySpan<byte> Snapshot = snapshot;
+    internal readonly bool Replace = replace;
+    internal readonly uint Tick = tick;
 
     internal void Write(NetWriter writer)
     {
@@ -33,29 +40,48 @@ internal readonly ref struct SpawnMessage(
         writer.WriteGuid(ParentId);
         writer.WriteVarUInt32(SectionSlot);
         writer.WriteVarUInt32((uint)(OwnerId + 1));
-        writer.WriteByte((byte)Orphaned);
+        writer.WriteByte((byte)((byte)Orphaned | (Replace ? ReplaceBit : 0)));
         writer.WriteUInt32(Generation);
         writer.WriteVarUInt32(NetId);
+        if (Replace)
+        {
+            writer.WriteVarUInt32(Tick);
+        }
+
         writer.WriteBytesWithLength(Snapshot);
     }
 
-    internal static SpawnMessage Read(ref NetReader reader) => new(
-        reader.ReadGuid(),
-        reader.ReadGuid(),
-        reader.ReadVarUInt32(),
-        (int)reader.ReadVarUInt32() - 1,
-        NetworkValidation.Orphaned((NetworkOrphaned)reader.ReadByte()),
-        reader.ReadUInt32(),
-        NetworkValidation.NetId(reader.ReadVarUInt32()),
-        reader.ReadBytesWithLength());
+    internal static SpawnMessage Read(ref NetReader reader)
+    {
+        Guid identifier = reader.ReadGuid(), parentId = reader.ReadGuid();
+        uint sectionSlot = reader.ReadVarUInt32();
+        int ownerId = (int)reader.ReadVarUInt32() - 1;
+        byte policy = reader.ReadByte();
+        uint generation = reader.ReadUInt32();
+        uint netId = NetworkValidation.NetId(reader.ReadVarUInt32());
+        bool replace = (policy & ReplaceBit) != 0;
+        uint tick = replace ? reader.ReadVarUInt32() : 0;
+        return new SpawnMessage(identifier, parentId, sectionSlot, ownerId,
+            NetworkValidation.Orphaned((NetworkOrphaned)(policy & ~ReplaceBit)), generation, netId,
+            reader.ReadBytesWithLength(), replace, tick);
+    }
 }
 
-internal readonly record struct DespawnMessage(Guid Identifier)
+/// <summary>A despawn, with its reason only when it is not <see cref="NetworkDespawnReason.Destroyed" />.</summary>
+internal readonly record struct DespawnMessage(Guid Identifier, NetworkDespawnReason Reason = NetworkDespawnReason.Destroyed)
 {
-    internal void Write(NetWriter writer) => writer.WriteGuid(Identifier);
+    internal void Write(NetWriter writer)
+    {
+        writer.WriteGuid(Identifier);
+        if (Reason != NetworkDespawnReason.Destroyed)
+        {
+            writer.WriteByte((byte)Reason);
+        }
+    }
 
     internal static DespawnMessage Read(ref NetReader reader) => new(
-        reader.ReadGuid());
+        reader.ReadGuid(),
+        reader.IsAtEnd ? NetworkDespawnReason.Destroyed : NetworkValidation.DespawnReason((NetworkDespawnReason)reader.ReadByte()));
 }
 
 internal readonly record struct OwnerMessage(Guid Identifier, int OwnerId, uint Generation)

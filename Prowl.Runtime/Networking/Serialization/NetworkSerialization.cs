@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Vector;
@@ -12,22 +13,37 @@ internal static class NetworkSerialization
 {
     [ThreadStatic] internal static bool WritingSnapshot;
 
-    internal static bool Include(GameObject go) => !WritingSnapshot || NetworkAccessor.ModeOf(go) != NetworkMode.Never;
+    // Networked roots the receiver of what is being written does not have.
+    [ThreadStatic] internal static HashSet<GameObject>? HiddenRoots;
+
+    internal static bool Include(GameObject go) =>
+        !WritingSnapshot || (NetworkAccessor.ModeOf(go) != NetworkMode.Never && !IsHiddenRoot(go));
+
+    internal static bool IsHiddenRoot(GameObject go) => HiddenRoots?.Contains(go) == true;
+
+    internal static bool InHiddenTree(GameObject go) =>
+        HiddenRoots is { Count: > 0 } roots && NetworkAccessor.RootOf(go) is { } root && roots.Contains(root);
 
     internal static void Write(GameObject go, EchoObject output)
     {
         NetworkAccessor? network = go._network;
         if (network == null || (network.Mode == NetworkMode.Snapshot && network.OwnerTransfer == OwnerTransfer.Fixed &&
-                                network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None))
+                                network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None &&
+                                network.Visibility == NetworkVisibility.Default))
         {
             return;
         }
 
-        EchoObject settings = EchoObject.NewCompound(4);
+        EchoObject settings = EchoObject.NewCompound(5);
         settings.Add("Mode", new EchoObject((byte)network.Mode));
         settings.Add("OwnerTransfer", new EchoObject((byte)network.OwnerTransfer));
         settings.Add("Orphaned", new EchoObject((byte)network.Orphaned));
         settings.Add("Flags", new EchoObject((byte)network.Flags));
+        if (network.Visibility != NetworkVisibility.Default)
+        {
+            settings.Add("Visibility", new EchoObject((byte)network.Visibility));
+        }
+
         output.Add("Network", settings);
     }
 
@@ -44,6 +60,7 @@ internal static class NetworkSerialization
             existing.OwnerTransfer = OwnerTransfer.Fixed;
             existing.Orphaned = NetworkOrphaned.Destroy;
             existing.Flags = NetworkFlags.None;
+            existing.Visibility = NetworkVisibility.Default;
             return;
         }
 
@@ -52,12 +69,13 @@ internal static class NetworkSerialization
         network.OwnerTransfer = (OwnerTransfer)(settings["OwnerTransfer"]?.ByteValue ?? (byte)OwnerTransfer.Fixed);
         network.Orphaned = (NetworkOrphaned)(settings["Orphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
         network.Flags = (NetworkFlags)(settings["Flags"]?.ByteValue ?? (byte)NetworkFlags.None);
+        network.Visibility = (NetworkVisibility)(settings["Visibility"]?.ByteValue ?? (byte)NetworkVisibility.Default);
     }
 
     /// <summary>
-    ///     For writing what clients receive: a reference to anything <see cref="NetworkMode.Never" /> is linked to
-    ///     nothing instead of written by value, so a field pointing at it can't carry it along. Everything else
-    ///     goes to <paramref name="inner" />, or is written as usual without one.
+    ///     For writing what clients receive: a reference to anything <see cref="NetworkMode.Never" />, or in a hidden root,
+    ///     is linked to nothing instead of written by value, so a field pointing at it can't carry it along. Everything
+    ///     else goes to <paramref name="inner" />, or is written as usual without one.
     /// </summary>
     internal sealed class SnapshotReferences(IExternalReferenceResolver? inner = null) : IExternalReferenceResolver
     {
@@ -72,7 +90,7 @@ internal static class NetworkSerialization
             };
 
             // Guid.Empty names no object, so it reads back as null without revealing which one it was.
-            return owner.IsValid() && NetworkAccessor.IsExcludedFromNetwork(owner!)
+            return owner.IsValid() && (NetworkAccessor.IsExcludedFromNetwork(owner!) || InHiddenTree(owner!))
                 ? Guid.Empty
                 : inner?.GetReferenceKey(value);
         }

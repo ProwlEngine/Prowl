@@ -147,7 +147,8 @@ internal sealed partial class NetworkSystem
         EnsureAnnounced(section);
         using NetWriter message = new(32);
         new SectionMoveMessage(root.Identifier, SectionId(section)).Write(message);
-        BroadcastEngine(EngineMessage.SectionMove, message.WrittenSpan);
+        SendToObservers(FindEntry(root) is { } entry && entry.GameObject == root ? entry : null,
+            EngineMessage.SectionMove, message.WrittenSpan);
     }
 
     internal void OnSectionMove(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -304,7 +305,7 @@ internal sealed partial class NetworkSystem
         {
             if (!entry.GameObject.IsValid() || entry.GameObject.Scene != world)
             {
-                entry.NotifyDespawn();
+                entry.NotifyDespawn(NetworkDespawnReason.SceneChanged);
             }
 
             if (Session != session)
@@ -314,6 +315,7 @@ internal sealed partial class NetworkSystem
         }
 
         Entries.RemoveWhere(e => !e.GameObject.IsValid() || e.GameObject.Scene != world);
+        Restricted.RemoveWhere(e => !Entries.TryGetValue(e.GameObject.Identifier, out NetworkObject? kept) || kept != e);
         RegisterSceneObjects(world, world.Objects);
 
         if (Session != session)
@@ -347,21 +349,28 @@ internal sealed partial class NetworkSystem
         using FrameStatScope stats = FrameStats.Network.Scope();
         SendSectionRemovals();
         SectionId(section);
-        RegisterSceneObjects(section.Instance, SectionObjects(section));
-        if (Session != session)
+        NetworkObject[] entries;
+        SceneSection? previous = _sectionBeingSent;
+        _sectionBeingSent = section;
+        try
         {
-            return;
+            RegisterSceneObjects(section.Instance, SectionObjects(section));
+            if (Session != session)
+            {
+                return;
+            }
+
+            entries = SectionEntries(section);
+            if (!SendSection(section, entries, session))
+            {
+                return;
+            }
+        }
+        finally
+        {
+            _sectionBeingSent = previous;
         }
 
-        NetworkObject[] entries = SectionEntries(section);
-        using NetWriter message = new(64 * 1024);
-        WriteSection(section, message);
-        if (Session != session)
-        {
-            return;
-        }
-
-        BroadcastEngine(EngineMessage.SectionAdd, message.WrittenSpan);
         foreach (NetPeer peer in session.Peers)
         {
             if (peer.IsLocal)
@@ -371,7 +380,10 @@ internal sealed partial class NetworkSystem
 
             foreach (NetworkObject entry in entries)
             {
-                Snapshots.Delivered(peer, entry.GameObject);
+                if (Sees(entry, peer))
+                {
+                    Snapshots.Delivered(peer, entry.GameObject);
+                }
             }
         }
 
@@ -382,7 +394,76 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    /// <summary>Starts <paramref name="peers" /> loading the world, from one snapshot written for all of them.</summary>
+    /// <summary>Sends a section to each client without the networked objects it does not have. False if the session ended.</summary>
+    private bool SendSection(SceneSection section, NetworkObject[] entries, NetSession session)
+    {
+        if (entries.Any(e => e.HiddenFrom is { Count: > 0 }))
+        {
+            return SendPerPeer(EngineMessage.SectionAdd, [.. session.Peers.Where(p => !p.IsLocal)],
+                peer => HiddenRoots(peer, entries), message => WriteSection(section, message), session);
+        }
+
+        using NetWriter message = new(64 * 1024);
+        WriteSection(section, message);
+        if (Session != session)
+        {
+            return false;
+        }
+
+        BroadcastEngine(EngineMessage.SectionAdd, message.WrittenSpan);
+        return true;
+    }
+
+    /// <summary>Writes the message once for each distinct set of objects peers do not have. False if the session ended.</summary>
+    private bool SendPerPeer(EngineMessage kind, NetPeer[] peers, Func<NetPeer, HashSet<GameObject>?> hiddenFor,
+        Action<NetWriter> write, NetSession session)
+    {
+        List<(HashSet<GameObject>? Hidden, List<NetPeer> Peers)> groups = [];
+        foreach (NetPeer peer in peers)
+        {
+            HashSet<GameObject>? hidden = hiddenFor(peer);
+            int group = groups.FindIndex(g => g.Hidden == null ? hidden == null : hidden != null && g.Hidden.SetEquals(hidden));
+            if (group < 0)
+            {
+                groups.Add((hidden, [peer]));
+            }
+            else
+            {
+                groups[group].Peers.Add(peer);
+            }
+        }
+
+        foreach ((HashSet<GameObject>? hidden, List<NetPeer> members) in groups)
+        {
+            if (!SendWritten(kind, members, hidden, write, session))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool SendWritten(EngineMessage kind, IEnumerable<NetPeer> peers, HashSet<GameObject>? hidden,
+        Action<NetWriter> write, NetSession session)
+    {
+        using NetWriter message = new(64 * 1024);
+        WithoutRoots(hidden, () => write(message));
+        // Writing runs components' serialization callbacks, which could end the session.
+        if (Session != session)
+        {
+            return false;
+        }
+
+        foreach (NetPeer peer in peers)
+        {
+            SendEngine(peer, kind, message.WrittenSpan);
+        }
+
+        return true;
+    }
+
+    /// <summary>Starts <paramref name="peers" /> loading the world, from one snapshot written for all that have every object.</summary>
     internal void SendSnapshot(params NetPeer[] peers)
     {
         if (Session is not { } session || ReplicatedWorld.IsNotValid() || peers.Length == 0)
@@ -395,19 +476,10 @@ internal sealed partial class NetworkSystem
             BeginPeerLoad(peer);
         }
 
-        using NetWriter message = new(64 * 1024);
         using FrameStatScope stats = FrameStats.Network.Scope();
-        WriteSnapshot(ReplicatedWorld!, message);
-        // Writing runs components' serialization callbacks, which could end the session.
-        if (Session != session)
-        {
-            return;
-        }
-
-        foreach (NetPeer peer in peers)
-        {
-            SendEngine(peer, EngineMessage.SceneSnapshot, message.WrittenSpan);
-        }
+        SceneInstance world = ReplicatedWorld!;
+        SendPerPeer(EngineMessage.SceneSnapshot, peers, peer => HiddenRoots(peer), message => WriteSnapshot(world, message),
+            session);
     }
 
     /// <summary>
@@ -420,9 +492,11 @@ internal sealed partial class NetworkSystem
         new SceneSnapshotMessage(SceneSnapshotMessage.CurrentFormat, Math.Max(SceneGeneration, 1),
             Compress(WriteSections(world.Sections))).Write(output);
 
-        WriteObjectStates(output, Entries.Values);
+        WriteObjectStates(output, NetworkSerialization.HiddenRoots == null ? Entries.Values : [.. Entries.Values.Where(Shown)]);
         Sync.WriteSyncState(output, world.Objects);
     }
+
+    private static bool Shown(NetworkObject entry) => !NetworkSerialization.IsHiddenRoot(entry.GameObject);
 
     /// <summary>Writes one section as clients receive it, then its networked objects' owners and [Sync] values.</summary>
     internal void WriteSection(SceneSection section, NetWriter output)
@@ -434,7 +508,7 @@ internal sealed partial class NetworkSystem
     }
 
     private NetworkObject[] SectionEntries(SceneSection section) =>
-        [.. Entries.Values.Where(e => e.GameObject.IsValid() && ReferenceEquals(e.GameObject.Section, section))];
+        [.. Entries.Values.Where(e => e.GameObject.IsValid() && ReferenceEquals(e.GameObject.Section, section) && Shown(e))];
 
     private static void WriteObjectStates(NetWriter output, IReadOnlyCollection<NetworkObject> entries)
     {
@@ -464,9 +538,11 @@ internal sealed partial class NetworkSystem
             header.Add("Active", new EchoObject(section.IsActive));
             header.Add("Source", new EchoObject(ReferenceEquals(source, null) ? string.Empty : source.AssetID.ToString()));
             headers.ListAdd(header);
+            List<GameObject> objects = SectionObjects(section);
+            NoteSentObjects(objects);
             contents.Add(new SceneContent
             {
-                Objects = [.. SectionObjects(section)],
+                Objects = [.. objects],
                 Environment = section.Environment,
                 Lighting = section.Lighting,
                 LightmapBake = section.LightmapBake
@@ -493,7 +569,7 @@ internal sealed partial class NetworkSystem
         return root;
     }
 
-    /// <summary>The objects of a section clients receive: everything saved that is not under a NetworkMode.Never object.</summary>
+    /// <summary>The objects of a section clients receive: everything saved that is not under a NetworkMode.Never object or a hidden root.</summary>
     internal static List<GameObject> SectionObjects(SceneSection section)
     {
         List<GameObject> objects = [];
@@ -507,7 +583,7 @@ internal sealed partial class NetworkSystem
         void Collect(GameObject go)
         {
             if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0 ||
-                NetworkAccessor.ModeOf(go) == NetworkMode.Never)
+                NetworkAccessor.ModeOf(go) == NetworkMode.Never || NetworkSerialization.IsHiddenRoot(go))
             {
                 return;
             }
@@ -651,7 +727,7 @@ internal sealed partial class NetworkSystem
 
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
-            entry.NotifyDespawn();
+            entry.NotifyDespawn(NetworkDespawnReason.SceneChanged);
             if (Session != session)
             {
                 return;
@@ -977,6 +1053,7 @@ internal sealed partial class NetworkSystem
             {
                 NetworkObject entry = new(this, go) { Generation = NextGeneration(), NetId = NextNetId() };
                 Entries.Add(entry);
+                InitVisibility(entry);
                 entry.NotifySpawn();
             }
         }

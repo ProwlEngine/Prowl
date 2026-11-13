@@ -58,6 +58,13 @@ internal sealed class TransformSync
         ClearHistory();
     }
 
+    /// <summary>The object already holds its controller's pose as of <paramref name="tick" />, so older updates are dropped.</summary>
+    public void ReceivedAt(uint tick)
+    {
+        HasReceived = true;
+        LastReceivedTick = tick;
+    }
+
     /// <summary>Forgets interpolation history, which would otherwise pull the object back to older poses.</summary>
     public void ClearHistory()
     {

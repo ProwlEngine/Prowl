@@ -36,4 +36,12 @@ public interface INetworkEvents : ISceneEvent<INetworkEvents>
     void OnNetworkOwnerChanged(NetPeer? previousOwner, NetPeer? owner)
     {
     }
+
+    /// <summary>
+    ///     Host only: after this object spawned, <paramref name="peer" /> was sent it or had it removed. Not raised
+    ///     for who gets it at spawn, as a peer joins, or as a scene or section loads: use IsVisibleTo there.
+    /// </summary>
+    void OnNetworkVisibilityChanged(NetPeer peer, bool visible)
+    {
+    }
 }

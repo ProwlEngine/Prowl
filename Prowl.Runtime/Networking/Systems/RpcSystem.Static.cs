@@ -165,6 +165,7 @@ internal sealed partial class RpcSystem
         StaticRpcMember? previousIncoming = _incomingStatic;
         bool previousRead = _incomingRead;
         NetPeer? previousCaller = CurrentCaller;
+        using NetSerializers.ReadingFrom references = new(scene.RemoteClient(caller));
         _incomingStatic = rpc;
         _incomingRead = false;
         CurrentCaller = caller;

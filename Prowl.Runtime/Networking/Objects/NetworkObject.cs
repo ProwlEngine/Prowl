@@ -18,6 +18,9 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     public uint Generation;
     public bool HasLocalAuthority;
 
+    /// <summary>Host: the clients that do not have this object, or null when they all do.</summary>
+    public HashSet<int>? HiddenFrom;
+
     /// <summary>The host-assigned number messages use for this object in place of its identifier.</summary>
     public uint NetId;
 

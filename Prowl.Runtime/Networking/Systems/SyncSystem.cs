@@ -96,7 +96,6 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             return;
         }
 
-        using NetWriter message = new(1024);
         int count = 0;
         using NetWriter values = new(1024);
         foreach ((Component component, uint slot) in Dirty)
@@ -114,17 +113,71 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             return;
         }
 
+        if (scene.IsHost)
+        {
+            BroadcastSync(scene.Session!.LocalPeer!.Id, values.WrittenSpan, count, null);
+            return;
+        }
+
+        using NetWriter message = new(1024);
         new SyncMessage(scene.Session!.LocalPeer!.Id).Write(message);
         new SyncBlock((uint)count).Write(message);
         message.WriteBytes(values.WrittenSpan);
+        scene.SendEngine(scene.Session.HostPeer!, EngineMessage.Sync, message.WrittenSpan);
+    }
 
-        if (scene.IsHost)
+    /// <summary>Sends a block of values to every client but <paramref name="except" />, each only those of objects it has.</summary>
+    private void BroadcastSync(int origin, ReadOnlySpan<byte> values, int count, NetPeer? except)
+    {
+        using NetWriter message = new(values.Length + 16);
+        if (scene.Restricted.Count == 0)
         {
-            scene.BroadcastEngine(EngineMessage.Sync, message.WrittenSpan);
+            new SyncMessage(origin).Write(message);
+            new SyncBlock((uint)count).Write(message);
+            message.WriteBytes(values);
+            scene.BroadcastEngine(EngineMessage.Sync, message.WrittenSpan, except: except);
+            return;
         }
-        else
+
+        List<(int Start, int End, NetworkObject? Entry)> ranges = new(count);
+        NetReader reader = new(values);
+        for (int i = 0; i < count; i++)
         {
-            scene.SendEngine(scene.Session.HostPeer!, EngineMessage.Sync, message.WrittenSpan);
+            int start = reader.Position;
+            Guid component = SyncValue.Read(ref reader).ComponentId;
+            ranges.Add((start, reader.Position,
+                scene.FindByIdentifier(component) is Component part ? scene.FindEntry(part.GameObject) : null));
+        }
+
+        using NetWriter visible = new(values.Length);
+        foreach (NetPeer peer in scene.Session!.Peers)
+        {
+            if (peer.IsLocal || peer == except)
+            {
+                continue;
+            }
+
+            visible.Reset();
+            uint sent = 0;
+            foreach ((int start, int end, NetworkObject? entry) in ranges)
+            {
+                if (NetworkSystem.Sees(entry, peer))
+                {
+                    visible.WriteBytes(values[start..end]);
+                    sent++;
+                }
+            }
+
+            if (sent == 0)
+            {
+                continue;
+            }
+
+            message.Reset();
+            new SyncMessage(origin).Write(message);
+            new SyncBlock(sent).Write(message);
+            message.WriteBytes(visible.WrittenSpan);
+            scene.SendEngine(peer, EngineMessage.Sync, message.WrittenSpan);
         }
     }
 
@@ -177,7 +230,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         int count = 0;
         foreach (GameObject go in objects)
         {
-            if (NetworkAccessor.IsExcludedFromNetwork(go))
+            if (NetworkAccessor.IsExcludedFromNetwork(go) || NetworkSerialization.InHiddenTree(go))
             {
                 continue;
             }
@@ -223,11 +276,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         // The host passes on what it accepted from a client to everyone else.
         if (scene.Session == session && relay != null && relayed > 0)
         {
-            using NetWriter message = new(relay.Length + 8);
-            new SyncMessage(originId).Write(message);
-            new SyncBlock((uint)relayed).Write(message);
-            message.WriteBytes(relay.WrittenSpan);
-            scene.BroadcastEngine(EngineMessage.Sync, message.WrittenSpan, except: sender);
+            BroadcastSync(originId, relay.WrittenSpan, relayed, sender);
         }
     }
 
@@ -244,6 +293,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         List<(Component Component, SyncMember Sync)>? accepted = null, HashSet<Guid>? rejected = null,
         List<(Component Component, SyncMember Sync, byte[] Value)>? unresolved = null)
     {
+        using NetSerializers.ReadingFrom references = new(scene.RemoteClient(sender));
+
         // Validate all framing and accepted values before changing live state or relays.
         // Collection validation only reads, so partial operations cannot leak out.
         ValidateSyncState(sender, reader, initial, requireEnd, filter);

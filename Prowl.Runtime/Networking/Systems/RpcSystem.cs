@@ -146,7 +146,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         {
             case RpcMode.Broadcast:
                 SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients,
-                    channel: rpc.Channel);
+                    channel: rpc.Channel, target: component.GameObject);
                 return localIncluded;
 
             case RpcMode.Owner:
@@ -186,6 +186,13 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return;
         }
 
+        if (!scene.Sees(component.GameObject, sender))
+        {
+            NetworkDiagnostics.Record("RPC", "Rejected", sender, id, $"Object not sent to the caller, method #{method}",
+                arguments);
+            return;
+        }
+
         (RpcMode mode, RpcFlags flags) = (rpc.Mode, rpc.Flags);
         bool senderControls = scene.OwnerOf(component.GameObject) == sender.Id;
         if ((flags & RpcFlags.HostOnly) != 0 || ((flags & RpcFlags.OwnerOnly) != 0 && !senderControls))
@@ -206,7 +213,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         switch (mode)
         {
             case RpcMode.Broadcast:
-                Relay(sender, id, method, arguments, relayDelivery, null, recipients, rpc.Channel);
+                Relay(sender, id, method, arguments, relayDelivery, null, recipients, rpc.Channel, component.GameObject);
                 if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
                 {
                     Invoke(component, rpc, arguments, sender);
@@ -241,7 +248,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     }
 
     internal void Relay(NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments, Delivery delivery,
-        NetPeer? to, RpcRecipients? recipients, byte channel = 0)
+        NetPeer? to, RpcRecipients? recipients, byte channel = 0, GameObject? target = null)
     {
         // The caller's Sync changes were relayed as they arrived, ahead of this; send the host's own the same way.
         if (delivery == Delivery.Reliable && channel == 0)
@@ -262,7 +269,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         }
         else
         {
-            SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients, caller, channel);
+            SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients, caller, channel, target);
         }
     }
 
@@ -305,6 +312,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         (Component, uint)? previousIncoming = _incoming;
         bool previousRead = _incomingRead;
         NetPeer? previousCaller = CurrentCaller;
+        using NetSerializers.ReadingFrom references = new(scene.RemoteClient(caller));
         _incoming = (component, rpc.Id);
         _incomingRead = false;
         CurrentCaller = caller;
@@ -354,11 +362,12 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     }
 
     internal void SendRpcRecipients(EngineMessage kind, ReadOnlySpan<byte> payload, Delivery delivery,
-        RpcRecipients? recipients, NetPeer? except = null, byte channel = 0)
+        RpcRecipients? recipients, NetPeer? except = null, byte channel = 0, GameObject? target = null)
     {
         foreach (NetPeer peer in scene.Session!.Peers)
         {
-            if (!peer.IsLocal && peer != except && RpcRecipients.Includes(recipients, peer))
+            if (!peer.IsLocal && peer != except && RpcRecipients.Includes(recipients, peer) &&
+                (target.IsNotValid() || scene.Sees(target, peer)))
             {
                 scene.SendEngine(peer, kind, payload, delivery, channel);
             }

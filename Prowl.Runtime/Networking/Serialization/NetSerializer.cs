@@ -114,6 +114,23 @@ internal static class NetSerializers
     /// <summary>Engine object references read so far whose object this peer doesn't have.</summary>
     [ThreadStatic] internal static int UnresolvedReferences;
 
+    /// <summary>Host: the client whose data is being read. Its references to objects it doesn't have read as null.</summary>
+    [ThreadStatic] internal static NetPeer? ReferencesFrom;
+
+    /// <summary>Sets <see cref="ReferencesFrom" /> until disposed.</summary>
+    internal readonly ref struct ReadingFrom
+    {
+        private readonly NetPeer? _previous;
+
+        internal ReadingFrom(NetPeer? client)
+        {
+            _previous = ReferencesFrom;
+            ReferencesFrom = client;
+        }
+
+        public void Dispose() => ReferencesFrom = _previous;
+    }
+
     public static (NetSerializer<T>.Writer?, NetSerializer<T>.Reader?) Create<T>()
     {
         Type t = typeof(T);
@@ -291,6 +308,15 @@ internal static class NetSerializers
                     if (found.IsNotValid())
                     {
                         UnresolvedReferences++;
+                    }
+                    else if (ReferencesFrom is { } client && found switch
+                             {
+                                 GameObject go => !system.Sees(go, client),
+                                 Component component => !system.Sees(component.GameObject, client),
+                                 _ => false
+                             })
+                    {
+                        return default!;
                     }
 
                     return found is T value ? value : default!;

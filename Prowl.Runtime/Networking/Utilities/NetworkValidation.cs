@@ -20,6 +20,10 @@ internal static class NetworkValidation
         ? policy
         : throw new InvalidDataException("Invalid network orphaned policy.");
 
+    internal static NetworkDespawnReason DespawnReason(NetworkDespawnReason reason) => Enum.IsDefined(reason)
+        ? reason
+        : throw new InvalidDataException("Invalid despawn reason.");
+
     internal static void SnapshotFormat(byte format)
     {
         if (format != SceneSnapshotMessage.CurrentFormat)

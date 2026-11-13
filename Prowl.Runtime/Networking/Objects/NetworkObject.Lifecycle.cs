@@ -96,7 +96,16 @@ internal sealed partial class NetworkObject
         }
     }
 
-    internal void NotifyDespawn()
+    internal void NotifyVisibility(NetPeer peer, bool visible) =>
+        SceneEvents.RunLifecycle<INetworkEvents>(GameObject, e =>
+        {
+            if (SpawnNotified && SpawnListeners.Contains((Component)e))
+            {
+                e.OnNetworkVisibilityChanged(peer, visible);
+            }
+        });
+
+    internal void NotifyDespawn(NetworkDespawnReason reason = NetworkDespawnReason.Destroyed)
     {
         if (!SpawnNotified)
         {
@@ -105,6 +114,7 @@ internal sealed partial class NetworkObject
 
         // End membership before notifying listeners so nested teardown cannot notify twice.
         SpawnNotified = false;
+        GameObject.Network.DespawnReason = reason;
         TearingDown = true;
         HasLocalAuthority = false;
         NotifyAuthority(false);
@@ -133,8 +143,12 @@ internal sealed partial class NetworkObject
 
         using NetWriter message = new(32);
         new OwnerMessage(GameObject.Identifier, owner, Generation).Write(message);
-        System.BroadcastEngine(EngineMessage.Owner, message.WrittenSpan);
+        System.SendToObservers(this, EngineMessage.Owner, message.WrittenSpan);
         NotifyOwnership();
+        if (System.FindEntry(GameObject) == this && !TearingDown)
+        {
+            System.RefreshVisibility(this);
+        }
     }
 
     internal void ApplyOwner(int owner, uint generation, Float3 velocity)

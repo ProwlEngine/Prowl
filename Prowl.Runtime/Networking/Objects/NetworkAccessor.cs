@@ -15,6 +15,7 @@ public sealed class NetworkAccessor
     private NetworkMode _mode = NetworkMode.Snapshot;
     private NetworkOrphaned _orphaned = NetworkOrphaned.Destroy;
     private OwnerTransfer _ownerTransfer = OwnerTransfer.Fixed;
+    private NetworkVisibility _visibility;
 
     internal NetworkAccessor(GameObject owner) => _object = owner;
 
@@ -101,6 +102,32 @@ public sealed class NetworkAccessor
         }
     }
 
+    /// <summary>Which clients receive this object. Only the host may change this after spawning.</summary>
+    public NetworkVisibility Visibility
+    {
+        get => _visibility;
+        set
+        {
+            if (!Enum.IsDefined(value))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            if (value == _visibility)
+            {
+                return;
+            }
+
+            NetworkSystem? system = Networking.System;
+            system?.CheckVisibilityChange(_object);
+            _visibility = value;
+            system?.RefreshVisibility(_object);
+        }
+    }
+
+    /// <summary>Why the object left this peer. Read it in <see cref="INetworkEvents.OnNetworkDespawn" />.</summary>
+    public NetworkDespawnReason DespawnReason { get; internal set; }
+
     /// <summary>True while this object belongs to a live network session.</summary>
     public bool Active => Networking.System?.IsNetworked(_object) == true;
 
@@ -147,6 +174,32 @@ public sealed class NetworkAccessor
 
     /// <summary>Relinquishes ownership to the host's simulation.</summary>
     public bool DropOwnership() => Networking.System?.TransferOwnership(_object, false) == true;
+
+    /// <summary>Host: true if <paramref name="peer" /> has this object. Outside a session, always true.</summary>
+    public bool IsVisibleTo(NetPeer peer) => Networking.System?.IsVisibleTo(_object, peer) ?? true;
+
+    /// <summary>Host: sends this object to <paramref name="peer" />, whatever <see cref="Visibility" /> says. Ignored once the peer left.</summary>
+    public void ShowTo(NetPeer peer) => VisibilityOverride(peer, true);
+
+    /// <summary>Host: stops sending this object to <paramref name="peer" />. Ignored for its owner, or once the peer left.</summary>
+    public void HideFrom(NetPeer peer) => VisibilityOverride(peer, false);
+
+    /// <summary>Host: <see cref="Visibility" /> decides for <paramref name="peer" /> again. Ignored once the peer left.</summary>
+    public void ClearVisibilityOverride(NetPeer peer) => VisibilityOverride(peer, null);
+
+    /// <summary>Host: checks every peer again, sending or removing the object where that changed.</summary>
+    public void RefreshVisibility() => Networking.System?.RefreshVisibility(_object);
+
+    private void VisibilityOverride(NetPeer peer, bool? visible)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+        if (Networking.System is not { IsActive: true } system)
+        {
+            throw new InvalidOperationException("Visibility can only be overridden on the host of a running session.");
+        }
+
+        system.SetVisibilityOverride(_object, peer, visible);
+    }
 
     internal bool SyncsTransform(NetworkFlags exclusion) => (Flags & exclusion) == 0;
     internal void ApplyFlags(NetworkFlags value) => _flags = value;

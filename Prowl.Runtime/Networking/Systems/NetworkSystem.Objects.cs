@@ -176,6 +176,13 @@ internal sealed partial class NetworkSystem
                     $"'{go.Name}' is inside the networked object '{outer.Name}' already.");
             }
 
+            if (FindEntry(go) is null && HiddenFromItsCopies(go, owner?.Id ?? NoOwner))
+            {
+                throw new InvalidOperationException(
+                    $"'{go.Name}' is on clients already as part of the scene, so it can't be spawned hidden from any of them. " +
+                    "Spawn a new object instead, or make it NetworkMode.Object in the scene.");
+            }
+
             if (go.Section is { } section)
             {
                 EnsureAnnounced(section);
@@ -200,13 +207,14 @@ internal sealed partial class NetworkSystem
             new(this, go) { Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId() };
         Entries.Add(entry);
         IndexTree(go);
+        InitVisibility(entry);
 
         using NetWriter message = new(4096);
         WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation, entry.NetId);
-        BroadcastEngine(EngineMessage.Spawn, message.WrittenSpan);
+        SendToObservers(entry, EngineMessage.Spawn, message.WrittenSpan);
         foreach (NetPeer peer in Session!.Peers)
         {
-            if (!peer.IsLocal)
+            if (!peer.IsLocal && Sees(entry, peer))
             {
                 Snapshots.Delivered(peer, go);
             }
@@ -218,7 +226,7 @@ internal sealed partial class NetworkSystem
 
     /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
     internal void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output,
-        uint generation = 0, uint netId = 0)
+        uint generation = 0, uint netId = 0, bool replace = false)
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         EchoObject echo;
@@ -239,7 +247,7 @@ internal sealed partial class NetworkSystem
         }
 
         new SpawnMessage(go.Identifier, go.Parent.IsValid() ? go.Parent!.Identifier : Guid.Empty, SectionSlot(go),
-            owner, orphaned, generation, netId == 0 ? NextNetId() : netId, Compress(echo)).Write(output);
+            owner, orphaned, generation, netId == 0 ? NextNetId() : netId, Compress(echo), replace, Tick).Write(output);
 
         List<GameObject> tree = [go, .. go.GetChildrenDeep()];
         Sync.WriteSyncState(output, tree);
@@ -270,6 +278,7 @@ internal sealed partial class NetworkSystem
         }
 
         bool attached = false, adopted = false;
+        List<(Component Component, SyncMember Sync)>? applied = null;
         try
         {
             if (Session != session || ReplicatedWorld != scene)
@@ -280,6 +289,15 @@ internal sealed partial class NetworkSystem
             if (go!.Identifier != id)
             {
                 throw new InvalidDataException("A spawned object's identifier doesn't match its message.");
+            }
+
+            if (message.Replace)
+            {
+                ReplaceCopy(id);
+                if (Session != session || ReplicatedWorld != scene)
+                {
+                    return;
+                }
             }
 
             // An object the scene snapshot brought stays the same instance, so references to it keep working.
@@ -306,7 +324,8 @@ internal sealed partial class NetworkSystem
                     }
                 }
 
-                Sync.ApplySyncState(sender, ref reader, null, true, true);
+                applied = message.Replace ? [] : null;
+                Sync.ApplySyncState(sender, ref reader, null, true, true, accepted: applied);
             }
             finally
             {
@@ -321,6 +340,11 @@ internal sealed partial class NetworkSystem
             NetworkObject entry = new(this, go) { Owner = owner, Generation = generation, NetId = netId };
             go.Network.ApplyOrphaned(orphaned);
             Entries.Add(entry);
+            if (applied != null)
+            {
+                Snapshots.Received(sender, applied, message.Tick);
+                entry.TransformSync.ReceivedAt(message.Tick);
+            }
             entry.UpdatePhysics();
             if (FindByIdentifier(parentId) is GameObject parent)
             {
@@ -362,17 +386,40 @@ internal sealed partial class NetworkSystem
         }
     }
 
+    /// <summary>Removes the copy of an object the host is sending again, even one still being destroyed.</summary>
+    private void ReplaceCopy(Guid id)
+    {
+        if (Entries.Remove(id, out NetworkObject? stale))
+        {
+            stale.NotifyDespawn(NetworkDespawnReason.OutOfInterest);
+        }
+
+        if (FindByIdentifier(id) is GameObject copy)
+        {
+            copy.Dispose();
+        }
+    }
+
     internal void BeforeObjectDisposed(GameObject go)
     {
         if (Entries.TryGetValue(go.Identifier, out NetworkObject? entry) && entry.GameObject == go)
         {
-            entry.NotifyDespawn();
+            entry.NotifyDespawn(IsUnloading(go) || (IsClient && _applyingSections)
+                ? NetworkDespawnReason.SectionUnloaded
+                : NetworkDespawnReason.Destroyed);
         }
     }
 
     /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>
     internal void OnGameObjectDisposed(GameObject go)
     {
+        if (VisibilityOverrides.Count > 0)
+        {
+            VisibilityOverrides.Remove(go);
+        }
+
+        ForgetSentContent(go);
+
         if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)
         {
             return;
@@ -380,6 +427,7 @@ internal sealed partial class NetworkSystem
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         Entries.Remove(go.Identifier);
+        Restricted.Remove(entry);
 
         // A section being unloaded, or a world being torn down, goes away on clients as a whole.
         if (!IsHost || !IsActive || go.Scene != ReplicatedWorld || ReplicatedWorld!.State != SceneState.Running ||
@@ -390,7 +438,7 @@ internal sealed partial class NetworkSystem
 
         using NetWriter message = new(32);
         new DespawnMessage(go.Identifier).Write(message);
-        BroadcastEngine(EngineMessage.Despawn, message.WrittenSpan);
+        SendToObservers(entry, EngineMessage.Despawn, message.WrittenSpan);
     }
 
     internal void OnDespawn(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -400,10 +448,10 @@ internal sealed partial class NetworkSystem
             return;
         }
 
-        Guid id = DespawnMessage.Read(ref reader).Identifier;
-        if (Entries.Remove(id, out NetworkObject? entry) && entry.GameObject.IsValid())
+        DespawnMessage message = DespawnMessage.Read(ref reader);
+        if (Entries.Remove(message.Identifier, out NetworkObject? entry) && entry.GameObject.IsValid())
         {
-            entry.NotifyDespawn();
+            entry.NotifyDespawn(message.Reason);
             entry.GameObject.Destroy();
         }
     }
@@ -456,7 +504,7 @@ internal sealed partial class NetworkSystem
 
         using NetWriter message = new();
         new OrphanedMessage(go.Identifier, entry.Generation, orphaned).Write(message);
-        BroadcastEngine(EngineMessage.Orphaned, message.WrittenSpan);
+        SendToObservers(entry, EngineMessage.Orphaned, message.WrittenSpan);
     }
 
 
@@ -506,6 +554,7 @@ internal sealed partial class NetworkSystem
         NetSession? session = Session;
         LoadingPeers.Remove(peer.Id);
         Snapshots.RemovePeer(peer.Id);
+        ForgetPeerVisibility(peer.Id);
         DispatchNetworkListener(e => e.OnPeerDisconnected(peer, reason));
         if (Session != session)
         {

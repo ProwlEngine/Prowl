@@ -63,6 +63,7 @@ internal sealed partial class NetworkSystem
         }
 
         NetSession? session = Session;
+        ResetVisibility(peer);
         DispatchNetworkListener(e =>
         {
             if (session!.TryGetPeer(peer.Id, out NetPeer? current) && current == peer)
@@ -80,6 +81,7 @@ internal sealed partial class NetworkSystem
     {
         LoadingPeers[peer.Id] = new PeerReadiness(SceneGeneration, Now + Configuration.SceneLoadTimeoutSeconds);
         Snapshots.Delivered(peer);
+        ResetVisibility(peer);
     }
 
     /// <summary>The host's sections are in place on this client, so it asks for the values that changed meanwhile.</summary>
@@ -107,8 +109,11 @@ internal sealed partial class NetworkSystem
         using NetWriter message = new();
         Snapshots.Delivered(peer);
         new SceneCatchUpMessage(generation).Write(message);
-        Sync.WriteSyncState(message, ReplicatedWorld.IsValid() ? ReplicatedWorld!.Objects : Enumerable.Empty<GameObject>());
-        WriteCatchUpTransforms(message);
+        WithoutRoots(HiddenRoots(peer), () =>
+        {
+            Sync.WriteSyncState(message, ReplicatedWorld.IsValid() ? ReplicatedWorld!.Objects : Enumerable.Empty<GameObject>());
+            WriteCatchUpTransforms(message);
+        });
         state!.Stage = NetworkJoinState.Synchronizing;
         SendEngine(peer, EngineMessage.SceneCatchUp, message.WrittenSpan);
     }
@@ -322,7 +327,7 @@ internal sealed partial class NetworkSystem
     internal void WriteCatchUpTransforms(NetWriter message)
     {
         NetworkObject[] entries = Entries.Values
-            .Where(e => e.GameObject.IsValid() && e.GameObject.Network.HasTransformSync).ToArray();
+            .Where(e => e.GameObject.IsValid() && e.GameObject.Network.HasTransformSync && Shown(e)).ToArray();
         new CatchUpTransformBlock((uint)entries.Length).Write(message);
         foreach (NetworkObject entry in entries)
         {
