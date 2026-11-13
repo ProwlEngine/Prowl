@@ -820,9 +820,12 @@ namespace Prowl.PaperUI
         /// </summary>
         private void HandleMouseEvents()
         {
-            // Handle press
             bool leftMousePressed = IsPointerPressed(PaperMouseBtn.Left);
             bool rightMousePressed = IsPointerPressed(PaperMouseBtn.Right);
+            bool leftMouseReleased = IsPointerReleased(PaperMouseBtn.Left);
+            bool rightMouseReleased = IsPointerReleased(PaperMouseBtn.Right);
+
+            // Handle press
             if (leftMousePressed || rightMousePressed)
             {
                 if (_theHoveredElementId != 0)
@@ -875,7 +878,7 @@ namespace Prowl.PaperUI
                 }
             }
             // Handle release
-            else if (IsPointerReleased(PaperMouseBtn.Left))
+            else if (leftMouseReleased || rightMouseReleased)
             {
                 if (_activeElementId != 0)
                 {
@@ -903,7 +906,7 @@ namespace Prowl.PaperUI
                         }
 
                         // If released over the same element that was pressed AND not dragging, it's a click
-                        if (_theHoveredElementId == _activeElementId && !wasDragging)
+                        if (leftMouseReleased && _theHoveredElementId == _activeElementId && !wasDragging)
                         {
                             var clickEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Click);
                             data.OnClick?.Invoke(clickEvt);
@@ -912,36 +915,23 @@ namespace Prowl.PaperUI
                         }
 
                         // Release event
-                        var releaseEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Release);
+                        var releaseEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, leftMouseReleased ? PaperMouseBtn.Left : PaperMouseBtn.Right, ClickPhase.Release);
                         data.OnRelease?.Invoke(releaseEvt);
                         PropagateClickToHookedChildren(activeElement, ClickPhase.Release);
                         BubbleEventToParents(activeElement, releaseEvt);
+
+                        // If released over the same element that was pressed AND not dragging, it's a right click
+                        if (rightMouseReleased && _theHoveredElementId == _activeElementId && !wasDragging)
+                        {
+                            var rightClickEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Right, ClickPhase.RightClick);
+                            data.OnRightClick?.Invoke(rightClickEvt);
+                            PropagateClickToHookedChildren(activeElement, ClickPhase.RightClick);
+                            BubbleEventToParents(activeElement, rightClickEvt);
+                        }
                     }
 
                     _activeElementId = 0;
                 }
-            }
-            // Handle right-click
-            else if (IsPointerReleased(PaperMouseBtn.Right))
-            {
-                if (_theHoveredElementId != 0)
-                {
-                    ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
-                    if (hoveredElement.IsValid)
-                    {
-                        ref ElementData data = ref hoveredElement.Data;
-
-                        var rightClickEvt = new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Right, ClickPhase.RightClick);
-                        data.OnRightClick?.Invoke(rightClickEvt);
-                        PropagateClickToHookedChildren(hoveredElement, ClickPhase.RightClick, PaperMouseBtn.Right);
-                        BubbleEventToParents(hoveredElement, rightClickEvt);
-                    }
-                }
-
-                // A right-click anywhere other than the currently focused element (including empty
-                // space) clears focus; right-clicking the focused element itself leaves it focused.
-                if (_focusedElementId != 0 && !IsElementFocused(_theHoveredElementId))
-                    ClearFocus();
             }
 
             // Handle double-click
