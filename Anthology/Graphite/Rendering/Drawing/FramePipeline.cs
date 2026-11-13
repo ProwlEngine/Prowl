@@ -922,6 +922,17 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
+    // Opaque forward draws whose surfaces the prepass already drew test depth equal, so only the visible pixel shades
+    private void DepthEqualAfterPrepass(DrawList forward)
+    {
+        List<DrawCall> calls = forward.Calls;
+        for (int i = 0; i < calls.Count; i++)
+        {
+            if (DrawPrograms.HoldPrepassed(calls[i].Program, out ushort equal))
+                calls[i] = calls[i] with { Program = equal };
+        }
+    }
+
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time, uint width, uint height)
     {
         camera.Time = time;
@@ -957,6 +968,8 @@ internal sealed partial class FramePipeline : IDisposable
             DrawItemSink sink = camera.Sink;
             world.Buckets.Build(0, frustum, camera.Prepass, sink.For(camera.Prepass));
             world.Buckets.Build(1, frustum, camera.Forward, sink.For(camera.Forward));
+            if (drawsPrepass)
+                DepthEqualAfterPrepass(camera.Forward);
             foreach ((PassType type, DrawList list) in camera.PassLists)
                 world.Buckets.Build(world.Buckets.Pass(type), frustum, list, sink.For(list));
             world.Buckets.BuildTransparent(frustum, camera.Transparent, sink.For(camera.Transparent)?.Sorted);

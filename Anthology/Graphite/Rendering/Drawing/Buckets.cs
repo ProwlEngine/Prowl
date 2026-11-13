@@ -225,6 +225,9 @@ internal sealed class DrawPrograms
     private readonly HashSet<ushort> _idle = new();
     private readonly List<ushort> _expired = new();
     private List<ushort> _held = new(), _releasing = new();
+    private readonly Dictionary<ushort, int> _prepassed = new();
+
+    public DrawPrograms() => Freed += _ => _prepassed.Clear();
 
     public DrawProgram this[ushort id] => _programs[id];
 
@@ -316,6 +319,44 @@ internal sealed class DrawPrograms
         Set = PassStateFields.DepthComparison | PassStateFields.DepthWrite,
         DepthStencil = new DepthStencilStateDescription { DepthComparison = ComparisonKind.Equal, DepthWriteEnabled = false },
     };
+
+    /// <summary>
+    /// The program an opaque forward draw takes in a view whose prepass already laid its depth: testing depth equal and
+    /// writing none, so the hidden and cut out pixels fail before they shade even when the surface discards. Held like
+    /// <see cref="Hold"/>. False for programs that keep their own: blended, not writing depth, without a Prepass pass,
+    /// or already testing equal.
+    /// </summary>
+    public bool HoldPrepassed(ushort id, out ushort equal)
+    {
+        equal = id;
+        if (!_prepassed.TryGetValue(id, out int found))
+        {
+            found = Prepassed(id);
+            _prepassed[id] = found;
+        }
+        if (found < 0)
+            return false;
+        equal = (ushort)found;
+        Acquire(equal);
+        _held.Add(equal);
+        return true;
+    }
+
+    private int Prepassed(ushort id)
+    {
+        DrawProgram program = _programs[id];
+        Shader shader = program.Shader;
+        if (program.LodFade || shader.PassIndex(PassType.Prepass) < 0 || program.PassIndex != shader.PassIndex(PassType.Forward))
+            return -1;
+        ShaderPass pass = shader.Definition.Passes![program.PassIndex];
+        PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
+        BlendAttachmentDescription blend = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
+        bool blended = blend.BlendEnabled && !(blend.SourceColorFactor == BlendFactor.One && blend.DestinationColorFactor == BlendFactor.Zero);
+        DepthStencilStateDescription depth = state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
+        if (blended || !depth.DepthWriteEnabled || depth.DepthComparison == ComparisonKind.Equal)
+            return -1;
+        return Intern(program with { StateOverride = s_depthEqual.Apply(program.StateOverride ?? new PassState()) }, out ushort equal) ? equal : -1;
+    }
 
     /// <summary>
     /// The program a cross fading draw of a prepass or forward program draws with: the prepass with its dither variant,
