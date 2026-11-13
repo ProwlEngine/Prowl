@@ -3,8 +3,7 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <PropertyGroup>
-        <IsPackable>false</IsPackable>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+            <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <Nullable>enable</Nullable>
         <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
     </PropertyGroup>

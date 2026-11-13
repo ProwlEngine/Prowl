@@ -2,8 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
-        <IsPackable>false</IsPackable>
-    </PropertyGroup>
+        </PropertyGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\..\Vector\Vector\Vector.csproj" />
