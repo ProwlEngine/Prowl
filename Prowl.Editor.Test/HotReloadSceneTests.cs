@@ -1,9 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 
 using Prowl.Echo;
@@ -51,10 +48,10 @@ public class HotReloadSceneTests : EditorTestHarness
         Assert.NotSame(v1, v2);
 
         var logs = new System.Collections.Generic.List<string>();
-        void Capture(string m, DebugStackTrace? _, LogSeverity s)
+        void Capture(LogEvent e)
         {
-            if (s is LogSeverity.Error or LogSeverity.Warning)
-                lock (logs) logs.Add(m);
+            if (e.Severity is LogSeverity.Error or LogSeverity.Warning)
+                lock (logs) logs.Add(e.Message);
         }
 
         Debug.OnLog += Capture;
