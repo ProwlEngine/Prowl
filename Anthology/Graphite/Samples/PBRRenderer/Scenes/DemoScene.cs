@@ -31,6 +31,9 @@ internal abstract class DemoScene : IDisposable
     /// <summary>The camera into the world, keeping its history while other scenes show.</summary>
     public RenderView View { get; }
 
+    /// <summary>The fly camera that drives the view, set while the scene shows.</summary>
+    public FlyCamera? Camera { get; set; }
+
     public abstract string Name { get; }
 
     public abstract Double3 StartPosition { get; }

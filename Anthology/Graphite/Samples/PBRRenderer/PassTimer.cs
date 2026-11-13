@@ -25,7 +25,7 @@ internal sealed class PassTimer
                 return;
             double total = _gpu.Values.Sum();
             Console.WriteLine($"--- {_frames} frames, GPU {total / _frames:0.00} ms, CPU record {_cpu.Values.Sum() / _frames:0.00} ms");
-            foreach (var pair in _gpu.OrderByDescending(p => p.Value).Take(14))
+            foreach (var pair in _gpu.OrderByDescending(p => p.Value).Take(30))
             {
                 (ulong triangles, ulong fragments) = _stats.GetValueOrDefault(pair.Key);
                 string counts = triangles == 0 ? "" : $"  {triangles / (double)_frames / 1e6,7:0.00}M triangles {fragments / (double)_frames / 1e6,6:0.00}M fragments";

@@ -21,6 +21,8 @@ internal sealed class DemoWindow
     private readonly FlyCamera _camera = new();
     private readonly string? _shotPath;
     private readonly int _shotFrames;
+    private readonly double[]? _at;
+    private readonly Vector2D<int> _size = new(1600, 900);
     private IInputContext _input = null!;
     private GraphicsDevice _device = null!;
     private Demo _demo = null!;
@@ -79,13 +81,20 @@ internal sealed class DemoWindow
                 _freeze = true;
             else if (args[i] == "--frames" && i + 1 < args.Length)
                 _shotFrames = int.Parse(args[++i]);
+            else if (args[i] == "--size" && i + 1 < args.Length)
+            {
+                string[] parts = args[++i].Split('x');
+                _size = new Vector2D<int>(int.Parse(parts[0]), int.Parse(parts[1]));
+            }
+            else if (args[i] == "--at" && i + 1 < args.Length)
+                _at = Array.ConvertAll(args[++i].Split(','), s => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture));
         }
 
         DeviceCreateUtilities.InitializeWindowing();
         WindowOptions options = WindowOptions.Default with
         {
             Title = "Graphite Renderer",
-            Size = new Vector2D<int>(1600, 900),
+            Size = _size,
             IsVisible = _shotPath == null,
             VSync = false,
             ShouldSwapAutomatically = false,
@@ -114,13 +123,13 @@ internal sealed class DemoWindow
         _device.SyncToVerticalBlank = !_noVsync;
         if (_shotPath != null)
         {
-            _shotTexture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1600, 900, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.RenderTarget | TextureUsage.Sampled));
+            _shotTexture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D((uint)_size.X, (uint)_size.Y, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.RenderTarget | TextureUsage.Sampled));
             _shotTarget = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _shotTexture));
         }
         _demo = new Demo(_device);
         _demo.Bloom.Enabled = !_noBloom;
         _demo.Tonemap.Enabled = !_noTonemap;
-        SelectScene(Math.Clamp(_startScene, 0, 5));
+        SelectScene(Math.Clamp(_startScene, 0, 6));
         _paused = _freeze;
         _scene.View.ForcedLod = _forcedLod;
         if (_hour is { } hour && _scene is ShadowsScene shadows)
@@ -162,15 +171,23 @@ internal sealed class DemoWindow
                 2 => new ShadowsScene(_demo),
                 3 => new InstancingScene(_demo),
                 5 => new LodScene(_demo),
+                6 => new TerrainScene(_demo),
                 _ => new MaterialsScene(_demo),
             };
             _scenes[index] = scene;
         }
 
         _scene = scene;
+        scene.Camera = _camera;
         _camera.Position = scene.StartPosition;
         _camera.Yaw = scene.StartYaw;
         _camera.Pitch = scene.StartPitch;
+        if (_at is { Length: 5 })
+        {
+            _camera.Position = new Double3(_at[0], _at[1], _at[2]);
+            _camera.Yaw = (float)_at[3];
+            _camera.Pitch = (float)_at[4];
+        }
     }
 
     private void OnKey(Key key)
@@ -183,6 +200,7 @@ internal sealed class DemoWindow
             case Key.Number4: SelectScene(3); break;
             case Key.Number5: SelectScene(4); break;
             case Key.Number6: SelectScene(5); break;
+            case Key.Number7: SelectScene(6); break;
             case Key.F: _debugView = _debugView + 1 < DebugViews.Length ? _debugView + 1 : -1; break;
             case Key.G: _voxelView = _voxelView + 1 < Enum.GetValues<VoxelDebugMode>().Length ? _voxelView + 1 : -1; break;
             case Key.I: _gi = !_gi; break;
@@ -205,7 +223,7 @@ internal sealed class DemoWindow
             _time += deltaTime;
 
         IKeyboard keyboard = _input.Keyboards[0];
-        float speed = keyboard.IsKeyPressed(Key.ShiftLeft) ? 40f : 10f;
+        float speed = keyboard.IsKeyPressed(Key.ControlLeft) ? 400f : keyboard.IsKeyPressed(Key.ShiftLeft) ? 40f : 10f;
         float right = (keyboard.IsKeyPressed(Key.D) ? 1 : 0) - (keyboard.IsKeyPressed(Key.A) ? 1 : 0);
         float forward = (keyboard.IsKeyPressed(Key.W) ? 1 : 0) - (keyboard.IsKeyPressed(Key.S) ? 1 : 0);
         float up = (keyboard.IsKeyPressed(Key.E) ? 1 : 0) - (keyboard.IsKeyPressed(Key.Q) ? 1 : 0);
@@ -235,7 +253,7 @@ internal sealed class DemoWindow
         if (_titleTimer >= 0.5)
         {
             _timer?.Print(100);
-            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 6 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}, G voxels, I GI{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? " - GI" : "")}";
+            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 7 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}, G voxels, I GI{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? " - GI" : "")}";
             _titleTimer = 0;
             _titleFrames = 0;
         }
@@ -245,6 +263,7 @@ internal sealed class DemoWindow
         if (_shotPath != null && _frame >= (ulong)_shotFrames)
         {
             Console.WriteLine($"{_shotClock.Elapsed.TotalMilliseconds / Math.Max(_shotFrames - 10, 1):0.00} ms a frame over the last {_shotFrames - 10}");
+            Console.WriteLine(_scene.Status);
             _demo.Renderer.WaitForRenderThread();
             _device.WaitForIdle();
             SaveShot(_shotPath);
