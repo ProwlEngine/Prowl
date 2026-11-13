@@ -98,8 +98,10 @@ void Graphite_StandardFragment()
     Graphite_DebugInputs(p.baseColor, p.baseMetalness);
 #endif
 
+    Graphite_LightIterator lights = Graphite_BeginLights(vRelativePos);
+    Graphite_ShadowLights(lights, vRelativePos, i.geometryNormal);
     PBR_Closure c = PBR_Prepare(p, vRelativePos, i.viewDir, i.geometryNormal, mapVariance);
-    vec3 direct = PBR_ShadeLights(c);
+    vec3 direct = PBR_ShadeLights(c, lights);
     Graphite_ProbeSet probes = PBR_FindProbes(c);
     PBR_Indirect indirect = PBR_GatherIndirect(c, vLightmapUV, probes);
     vec3 ambient = Graphite_AmbientBRDF(c, indirect);

@@ -174,6 +174,23 @@ bool Graphite_NextLight(inout Graphite_LightIterator it, out Graphite_LightSampl
     return true;
 }
 
+// Each hit's shadow, found by Graphite_ShadowLights before a surface is shaded so the lookups and the shading never hold
+// their registers at once
+float graphite_HitShadows[GRAPHITE_MAX_HITS];
+
+void Graphite_ShadowLights(Graphite_LightIterator it, vec3 relativePos, vec3 geomNormal)
+{
+    Graphite_LightSample L;
+    while (Graphite_NextLight(it, L))
+    {
+        vec3 Lc = normalize(L.position - relativePos);
+        float shadow = 1.0;
+        if (L.type != GRAPHITE_LIGHT_SPOT || dot(normalize(Graphite_LightDirection(L)), -Lc) > Graphite_LightSpotCos(L).x)
+            shadow = Graphite_LocalLightShadow(L, relativePos, graphite_ShadowNormal(geomNormal, Lc));
+        graphite_HitShadows[it.next - 1u] = shadow;
+    }
+}
+
 // Where and how a point is lit, each specular lobe with its own normal and GGX alpha. A model defines GRAPHITE_LIGHT_COAT
 // to have the coat lobe lit and GRAPHITE_LIGHT_BACK to have the light reaching its back, else neither is computed.
 struct Graphite_LightFrame
@@ -397,8 +414,8 @@ vec3 graphite_ShadowNormal(vec3 geomNormal, vec3 L)
 #endif
 }
 
-// What a local light gives a frame. backLit keeps lights behind the surface.
-bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, bool backLit, out Graphite_LightContribution c)
+// What a local light gives a frame. backLit keeps lights behind the surface. lookUp finds its shadow here, else it is knownShadow.
+bool graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, bool backLit, bool lookUp, float knownShadow, out Graphite_LightContribution c)
 {
     vec3 toLight = L.position - f.position;
     float dist2 = dot(toLight, toLight);
@@ -448,7 +465,7 @@ bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
 
         // The shadow before the rest of the light, so its working values and the light's are never held together, and a
         // light wholly shadowed here does no more
-        shadow = Graphite_LocalLightShadow(L, f.position, graphite_ShadowNormal(f.geomNormal, Lc));
+        shadow = lookUp ? Graphite_LocalLightShadow(L, f.position, graphite_ShadowNormal(f.geomNormal, Lc)) : knownShadow;
         if (shadow <= 0.0)
             return false;
 
@@ -561,6 +578,17 @@ bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
 
     c.radiance *= Graphite_LightRadiance(L) * shadow;
     return true;
+}
+
+bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, bool backLit, out Graphite_LightContribution c)
+{
+    return graphite_ContributeLocal(L, f, backLit, true, 1.0, c);
+}
+
+// The same with the shadow Graphite_ShadowLights found for the light the iterator last gave
+bool Graphite_ContributeLocal(Graphite_LightIterator it, Graphite_LightSample L, Graphite_LightFrame f, bool backLit, out Graphite_LightContribution c)
+{
+    return graphite_ContributeLocal(L, f, backLit, false, graphite_HitShadows[it.next - 1u], c);
 }
 
 // A shadowed directional light's shadow map alone

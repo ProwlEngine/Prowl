@@ -550,6 +550,32 @@ vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i);
 vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i) { return PBR_EvaluateAmbient(c, i); }
 #endif
 
+// Every directional light and the local lights of it, their shadows from Graphite_ShadowLights, through Graphite_BRDF
+vec3 PBR_ShadeLights(PBR_Closure c, Graphite_LightIterator it)
+{
+    Graphite_LightFrame f = PBR_LightFrame(c);
+    vec3 total = vec3(0.0);
+    Graphite_LightContribution l;
+    for (uint i = 0u; i < Graphite_DirectionalCount(); i++)
+    {
+        if (Graphite_ContributeDirectional(Graphite_GetDirectional(i), i, f, l))
+            total += Graphite_BRDF(c, l);
+    }
+
+#ifdef PBR_WRAP
+    bool wraps = true;
+#else
+    bool wraps = false;
+#endif
+    Graphite_LightSample L;
+    while (Graphite_NextLight(it, L))
+    {
+        if (Graphite_ContributeLocal(it, L, f, wraps, l))
+            total += Graphite_BRDF(c, l);
+    }
+    return total;
+}
+
 // Every directional and local light through Graphite_BRDF
 vec3 PBR_ShadeLights(PBR_Closure c)
 {
