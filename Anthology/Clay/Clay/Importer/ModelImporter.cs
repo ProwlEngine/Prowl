@@ -1,10 +1,10 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Clay.Formats;
 using Prowl.Clay.Formats.Fbx;
 using Prowl.Clay.Formats.Gltf;
 using Prowl.Clay.Formats.Wavefront;
-using Prowl.Clay.Internal.Intermediate;
 using Prowl.Clay.PostProcess;
 
 namespace Prowl.Clay.Importer;
@@ -38,9 +38,8 @@ public static class ModelImporter
     }
 
     /// <summary>
-    /// Loads a model from a stream. The caller must supply a <paramref name="formatHint"/>
-    /// (<c>"gltf"</c>, <c>"glb"</c>, <c>"obj"</c>, <c>"fbx"</c>, or <c>"vrm"</c>) and, if external
-    /// resources are referenced, an <paramref name="resolver"/>.
+    /// Loads a model from a stream. The caller must supply a <paramref name="formatHint"/> and, if external
+    /// resources are referenced, a <paramref name="resolver"/>.
     /// </summary>
     public static Model Load(
         Stream stream,
@@ -95,6 +94,7 @@ public static class ModelImporter
             "gltf" or "glb" or "vrm" => new GltfFormat(),
             "obj" => new ObjFormat(),
             "fbx" => new FbxFormat(),
+            "bvh" => new BvhFormat(),
             _ => throw new ImportException($"Unsupported model format '{format}'.", sourcePath, format),
         };
 
