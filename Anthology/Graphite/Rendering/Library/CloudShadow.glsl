@@ -33,19 +33,19 @@ float graphite_CloudShadowCascade(int c, vec3 rel, out float reach)
     Graphite_CloudShadowRecord r = graphite_CloudShadow;
     vec4 cascade = r.cascades[c];
     vec2 wind = c == 0 ? r.windA.xy : c == 1 ? r.windA.zw : c == 2 ? r.windB.xy : r.windB.zw;
-    float resolution = r.params.x;
+    float texels = r.params.x;
     vec3 toSun = r.toSun[c].xyz;
     rel -= vec3(wind.x, 0.0, wind.y);
-    rel += toSun * (4.0 * cascade.w / resolution * max(toSun.y, 0.0));
+    rel += toSun * (4.0 * cascade.w / texels * max(toSun.y, 0.0));
     vec2 local = vec2(dot(rel, r.right[c].xyz) / cascade.w, dot(rel, r.up[c].xyz) / r.heights[c]);
     float along = dot(rel, toSun);
     reach = max(max(abs(local.x), abs(local.y)), abs(along) / min(6.0 * cascade.w, 80000.0)) / 0.98;
     if (reach >= 1.0)
         return 0.0;
     // Every read is held half a texel inside the cascade's own tile, so filtering never takes in its neighbour's
-    vec2 tileMin = vec2(float(c) * 0.25 + 0.125 / resolution, 0.5 / resolution), tileMax = vec2(float(c + 1) * 0.25 - 0.125 / resolution, 1.0 - 0.5 / resolution);
+    vec2 tileMin = vec2(float(c) * 0.25 + 0.125 / texels, 0.5 / texels), tileMax = vec2(float(c + 1) * 0.25 - 0.125 / texels, 1.0 - 0.5 / texels);
     vec2 uv = vec2((local.x * 0.5 + 0.5 + float(c)) * 0.25, local.y * 0.5 + 0.5);
-    vec2 spread = vec2(0.25, 1.0) / resolution;
+    vec2 spread = vec2(0.25, 1.0) / texels;
     float depth = 0.0;
     for (int k = 0; k < 4; k++)
     {
