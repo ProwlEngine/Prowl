@@ -6,15 +6,15 @@ using Prowl.Graphite.ShaderDef;
 namespace Prowl.Graphite.Rendering;
 
 /// <summary>
-/// Fills the commands the GPU cull owns in every view culled this frame: counts each command's instances, sums the
-/// counts into where each command's instances start, then writes them, see Graphite/Internal/Cull.glsl. After the
-/// upload and before the views.
+/// Fills the commands the GPU cull owns in every view culled this frame, one dispatch a view that culls, counts each
+/// command's instances and writes them where its record starts them, see Graphite/Internal/Cull.glsl. After the upload
+/// and before the views.
 /// </summary>
 internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry) : IDisposable
 {
     private static readonly PropertyID s_objects = "Cull_Objects", s_shapes = "Cull_Shapes", s_bounds = "Cull_Bounds",
         s_transforms = "Cull_Transforms", s_chunks = "Cull_Chunks", s_view = "Cull_View", s_maps = "Cull_Maps", s_commands = "Cull_Commands",
-        s_records = "Cull_Records", s_instances = "Cull_Instances", s_cursors = "Cull_Cursors", s_state = "Cull_State", s_results = "Cull_Results";
+        s_records = "Cull_Records", s_instances = "Cull_Instances", s_state = "Cull_State";
 
     private const uint MaxGroups = 65535;
 
@@ -52,11 +52,9 @@ internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry
                 Read(world.Transforms.Buffer);
                 Read(camera.CullView.Buffer);
                 Read(camera.CullMaps.Buffer);
+                Read(camera.Records.Buffer);
                 Write(camera.Commands.Buffer);
-                Write(camera.Records.Buffer);
                 Write(camera.Instances.Buffer);
-                Write(camera.CullCursors.Buffer);
-                Write(camera.CullResults.Buffer);
                 if (camera.CullState != null)
                     Write(camera.CullState);
             }
@@ -80,24 +78,11 @@ internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry
             _properties.SetBuffer(s_commands, camera.Commands.Buffer);
             _properties.SetBuffer(s_records, camera.Records.Buffer);
             _properties.SetBuffer(s_instances, camera.Instances.Buffer);
-            _properties.SetBuffer(s_cursors, camera.CullCursors.Buffer);
-            _properties.SetBuffer(s_results, camera.CullResults.Buffer);
-            _properties.SetBuffer(s_state, camera.CullState ?? camera.CullCursors.Buffer);
+            // A view keeping no LOD state never touches the binding, which still needs a buffer it may write
+            _properties.SetBuffer(s_state, camera.CullState ?? camera.Instances.Buffer);
             cmd.SetProperties(_properties);
-
-            uint groups = Math.Min((camera.CullObjects + 63) / 64, MaxGroups);
-            Dispatch(cmd, 0, groups);
-            cmd.ComputeBarrier();
-            Dispatch(cmd, 1, 1);
-            cmd.ComputeBarrier();
-            Dispatch(cmd, 2, groups);
+            cmd.Dispatch(Math.Clamp((camera.CullObjects + 63) / 64, 1, MaxGroups), 1, 1);
         }
-    }
-
-    private static void Dispatch(CommandBuffer cmd, uint mode, uint groups)
-    {
-        cmd.SetPushConstants(mode);
-        cmd.Dispatch(Math.Max(groups, 1), 1, 1);
     }
 
     public void Dispose() => program.Dispose();

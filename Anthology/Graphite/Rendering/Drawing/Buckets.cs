@@ -586,8 +586,8 @@ internal readonly record struct GpuCullView(CullFrustum Frustum, uint CullingMas
 
 /// <summary>
 /// The commands of a list the GPU cull fills: one for each bucket of the pass in order, then, when the view fades, a fade
-/// command for each that can fade, in the same order, their counts and instances left for the GPU to write, with at most
-/// Words instances.
+/// command for each that can fade, in the same order, their counts and instances left for the GPU to write. Each
+/// command's record starts its instances within the segment's Words, with room for every renderable of its bucket.
 /// </summary>
 internal sealed class GpuSegment
 {
@@ -810,7 +810,6 @@ internal sealed class BucketSet
     private Shape?[] _shapeOf = [];
     private readonly Dictionary<uint[], Shape> _shapes = new(new WordsComparer());
     private readonly RangeAllocator _shapeSpace = new(1u << 28);
-    private long[] _gpuWords = new long[3];
     private int[] _chunkStamp = [];
     private int[] _chunkStart = [];
     private bool[] _chunkVisible = new bool[256];
@@ -866,7 +865,6 @@ internal sealed class BucketSet
         }
         if (GpuCulling)
         {
-            Array.Resize(ref _gpuWords, _passes.Count);
             for (int index = 0; index < _world.Capacity; index++)
             {
                 ReleaseShape(index);
@@ -1023,7 +1021,6 @@ internal sealed class BucketSet
         segment.Pass = pass;
         segment.FirstCommand = list.CommandCount;
         segment.Fades = pass < 2 && view.Lod.FadeSeconds > 0 && view.Lod.State != null;
-        segment.Words = (uint)Math.Min(_gpuWords[pass] * (segment.Fades ? 2 : 1), uint.MaxValue);
         segment.View = view;
         // A fading list's map has a second half, the fade command of each bucket that has one
         segment.MapLength = segment.Fades ? _gpuIds * 2 : _gpuIds;
@@ -1032,11 +1029,15 @@ internal sealed class BucketSet
         Array.Fill(segment.Map, uint.MaxValue, 0, segment.MapLength);
 
         // Every bucket's command, then the fade commands after them, each run in program order so neighbours of one
-        // program share a call. Interleaved, a fade command between every two would split every call in two.
+        // program share a call. Interleaved, a fade command between every two would split every call in two. A command's
+        // instances start where the ones before it end, each given room for all its bucket's renderables, so the GPU
+        // needs no pass to count them first.
+        int words = 0;
         foreach (Bucket bucket in _ordered[pass])
         {
             segment.Map[bucket.GpuId] = (uint)(list.CommandCount - segment.FirstCommand);
-            Emit(list, bucket, bucket.Program, 0, 0);
+            Emit(list, bucket, bucket.Program, words, 0);
+            words += bucket.Count;
         }
         if (segment.Fades)
         {
@@ -1046,9 +1047,11 @@ internal sealed class BucketSet
                     continue;
                 segment.Map[bucket.GpuId] |= 1u << 31;
                 segment.Map[_gpuIds + bucket.GpuId] = (uint)(list.CommandCount - segment.FirstCommand);
-                Emit(list, bucket, (ushort)bucket.FadeProgram, 0, 0);
+                Emit(list, bucket, (ushort)bucket.FadeProgram, words, 0);
+                words += bucket.Count;
             }
         }
+        segment.Words = (uint)words;
         segment.CommandCount = list.CommandCount - segment.FirstCommand;
     }
 
@@ -1657,7 +1660,6 @@ internal sealed class BucketSet
     {
         public required uint[] Words;
         public required RangeAllocation Range;
-        public required int[] MostEntries;
         public int Users;
     }
 
@@ -1685,19 +1687,17 @@ internal sealed class BucketSet
         if (_world.Deformed[index] != null || _world.Deforming.Contains(index) || transparent || index >= _ranges.Length || _ranges[index] is not { } ranges)
             return;
 
-        uint[] words = ShapeWords(index, ranges, out int[] most);
+        uint[] words = ShapeWords(index, ranges);
         if (!_shapes.TryGetValue(words, out Shape? shape))
         {
             if (!_shapeSpace.TryAllocate((uint)words.Length, 1, out RangeAllocation range))
                 return;
-            shape = new Shape { Words = words, Range = range, MostEntries = most };
+            shape = new Shape { Words = words, Range = range };
             _shapes[words] = shape;
             for (int w = 0; w < words.Length; w++)
                 _world.CullShapes.Edit(range.Offset + (uint)w)[0] = words[w];
         }
         shape.Users++;
-        for (int pass = 0; pass < shape.MostEntries.Length; pass++)
-            _gpuWords[pass] += shape.MostEntries[pass];
         _shapeOf[index] = shape;
         _onGpu[index] = true;
         _world.SetCullShape(index, shape.Range.Offset);
@@ -1712,15 +1712,13 @@ internal sealed class BucketSet
         if (index >= _shapeOf.Length || _shapeOf[index] is not { } shape)
             return;
         _shapeOf[index] = null;
-        for (int pass = 0; pass < shape.MostEntries.Length; pass++)
-            _gpuWords[pass] -= shape.MostEntries[pass];
         if (--shape.Users > 0)
             return;
         _shapes.Remove(shape.Words);
         _shapeSpace.Free(shape.Range);
     }
 
-    private uint[] ShapeWords(int index, MemberRange[] ranges, out int[] most)
+    private uint[] ShapeWords(int index, MemberRange[] ranges)
     {
         int levels = _world.LevelCount(index), passes = _passes.Count;
         LodSet? lods = levels > 1 ? _world.Lods[index] : null;
@@ -1740,14 +1738,12 @@ internal sealed class BucketSet
         int runs = words.Count;
         for (int i = 0; i < passes * (LodSet.MaxLevels + 1); i++)
             words.Add(0);
-        most = new int[passes];
         bool tested = _world.Deformed[index] == null && _world.BoundsOverride[index] == null;
         ReadOnlySpan<Membership> members = CollectionsMarshal.AsSpan(_members[index]);
         int entries = 0;
         foreach (MemberRange range in ranges)
         {
             words[runs + range.Pass * (LodSet.MaxLevels + 1) + range.Level] = (uint)entries << 16 | (uint)range.Count;
-            most[range.Pass] = Math.Max(most[range.Pass], range.Count);
             for (int m = range.Start; m < range.Start + range.Count; m++)
             {
                 Bucket bucket = members[m].Bucket;

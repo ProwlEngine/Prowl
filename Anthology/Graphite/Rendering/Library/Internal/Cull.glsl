@@ -1,11 +1,12 @@
 // The GPU cull of one view, for renderables the buckets gave a shape, see Prowl.Graphite.Rendering.GpuCullPass. A thread
 // a renderable tests it as BucketSet.CullObjects does and picks its level as BucketSet.Level does, then for each list of
-// the view adds an instance to the command of every bucket its level draws. Mode 0 culls, keeps the view's LOD state,
-// saves what it chose and counts each command's instances, mode 1 sums the counts into where each command's instances
-// start, mode 2 writes the instances of what mode 0 chose.
+// the view adds an instance to the command of every bucket its level draws, in one dispatch: every command's instances
+// start where its record says, with room for every renderable of its bucket, so a thread claims the next of them by
+// adding one to the command's count.
 Compute
 {
     #extension GL_KHR_shader_subgroup_ballot : require
+    #extension GL_KHR_shader_subgroup_vote : require
 
     layout(local_size_x = 64) in;
 
@@ -13,12 +14,12 @@ Compute
     {
         uint pass;
         uint commandBase;      // the list's first GPU command in the view's commands
-        uint commandCount;
-        uint instanceBase;     // where the list's GPU instances start in the view's instances
-        uint mapBase;          // where the list's bucket to command map starts
+        uint pad0;
+        uint pad1;
+        uint mapBase;         // where the list's bucket to command map starts
         uint fades;            // whether the list draws cross fades
         uint fadeMap;          // where the map's half of fade commands starts, after the bucket's own commands
-        uint pad1;
+        uint pad2;
     };
 
     layout(set = 0, binding = 0, std430) readonly buffer Cull_Objects { uvec4 objects[]; };
@@ -42,12 +43,9 @@ Compute
     } view;
     layout(set = 0, binding = 7, std430) readonly buffer Cull_Maps { uint maps[]; };
     layout(set = 0, binding = 8, std430) buffer Cull_Commands { uint commands[]; };
-    layout(set = 0, binding = 9, std430) buffer Cull_Records { uint records[]; };
+    layout(set = 0, binding = 9, std430) readonly buffer Cull_Records { uint records[]; };
     layout(set = 0, binding = 10, std430) buffer Cull_Instances { uint instances[]; };
-    layout(set = 0, binding = 11, std430) buffer Cull_Cursors { uint cursors[]; };
     layout(set = 0, binding = 12, std430) buffer Cull_State { uvec4 states[]; };
-    layout(set = 0, binding = 13, std430) buffer Cull_Results { uint results[]; };
-    layout(push_constant) uniform Push { uint mode; } push;
 
     const uint CommandWords = 5u, RecordWords = 5u, ChunkWords = 24u, Runs = 10u, LevelsPerPass = 8u;
     const uint StaticFlag = 1u, StaticOnly = 1u, None = 0xFFu;
@@ -99,22 +97,20 @@ Compute
         return Box(center, extents);
     }
 
-    // Adds one to a command's count in mode 0, or claims the next of its instances in mode 2, one atomic for every
-    // invocation of the subgroup on the same command
+    // Claims the next of a command's instances by adding to its count, one atomic for the whole subgroup when every
+    // invocation of it adds to the same command, as runs of one mesh do
     uint Add(uint command)
     {
-        while (true)
+        uint at = command * CommandWords + 1u;
+        if (subgroupAllEqual(command))
         {
-            if (subgroupBroadcastFirst(command) == command)
-            {
-                uvec4 ballot = subgroupBallot(true);
-                uint first = 0u, count = subgroupBallotBitCount(ballot);
-                if (subgroupElect())
-                    first = push.mode == 0u ? atomicAdd(commands[command * CommandWords + 1u], count) : atomicAdd(cursors[command], count);
-                return subgroupBroadcastFirst(first) + subgroupBallotExclusiveBitCount(ballot);
-            }
+            uvec4 ballot = subgroupBallot(true);
+            uint first = 0u, count = subgroupBallotBitCount(ballot);
+            if (subgroupElect())
+                first = atomicAdd(commands[at], count);
+            return subgroupBroadcastFirst(first) + subgroupBallotExclusiveBitCount(ballot);
         }
-        return 0u;
+        return atomicAdd(commands[at], 1u);
     }
 
     uint Placed(uint shape, uint level) { return (shapes[shape + 9u] >> (level * 4u)) & 0xFu; }
@@ -139,25 +135,8 @@ Compute
             if (outgoing && !faded)
                 continue;
             uint command = list.commandBase + (faded ? maps[list.mapBase + list.fadeMap + bucket] : mapped & 0x7FFFFFFFu);
-            uint slot = Add(command);
-            if (push.mode == 2u)
-                instances[slot] = index | (faded ? fade << 24 | (outgoing ? 0x80000000u : 0u) : 0u);
-        }
-    }
-
-    void Scan()
-    {
-        for (uint l = 0u; l < view.counts.y; l++)
-        {
-            CullList list = view.lists[l];
-            uint at = list.instanceBase;
-            for (uint c = 0u; c < list.commandCount; c++)
-            {
-                uint command = list.commandBase + c;
-                records[command * RecordWords + 4u] = at;
-                cursors[command] = at;
-                at += commands[command * CommandWords + 1u];
-            }
+            uint slot = records[command * RecordWords + 4u] + Add(command);
+            instances[slot] = index | (faded ? fade << 24 | (outgoing ? 0x80000000u : 0u) : 0u);
         }
     }
 
@@ -275,22 +254,9 @@ Compute
     void main()
     {
         uint index = gl_GlobalInvocationID.x;
-        if (push.mode == 1u)
-        {
-            if (index == 0u)
-                Scan();
-            return;
-        }
         if (index >= view.counts.x)
             return;
-        uint result;
-        if (push.mode == 0u)
-        {
-            result = Cull(index);
-            results[index] = result;
-        }
-        else
-            result = results[index];
+        uint result = Cull(index);
         if (result != 0u)
             EmitLists(index, objects[index].x - 1u, result & 0xFFu, int((result >> 8) & 0xFFu) - 1, (result >> 16) & 0xFFu);
     }
