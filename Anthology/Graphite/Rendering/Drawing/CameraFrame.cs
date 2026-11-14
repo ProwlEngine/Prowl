@@ -210,8 +210,8 @@ internal sealed class CameraFrame : IDisposable
     public readonly ViewShadows Shadows = new();
     public readonly GpuArray Cascades;
 
-    /// <summary>What the GPU cull reads of the view, its lists' bucket to command maps, where it counts each command's instances, and what it chose for each renderable.</summary>
-    public readonly GpuArray CullView, CullMaps, CullCursors, CullResults;
+    /// <summary>What the GPU cull reads of the view, and its lists' bucket to command maps.</summary>
+    public readonly GpuArray CullView, CullMaps;
 
     /// <summary>The LOD levels the GPU cull kept for the view's renderables, 16 bytes each, for views that keep state.</summary>
     public DeviceBuffer? CullState;
@@ -382,8 +382,6 @@ internal sealed class CameraFrame : IDisposable
         Cascades = _tables.Array("Cascades");
         CullView = _tables.Array("CullView");
         CullMaps = _tables.Array("CullMaps");
-        CullCursors = _tables.Array("CullCursors");
-        CullResults = _tables.Array("CullResults");
         _cullState = new PersistentBuffer(RenderResourceID.Intern($"Graphite.Camera{viewId}.CullState"), BufferUsage.StructuredBufferReadWrite);
         _device = device;
     }
@@ -504,8 +502,6 @@ internal sealed class CameraFrame : IDisposable
         Buffers.Add(Cascades.Persistent);
         Buffers.Add(CullView.Persistent);
         Buffers.Add(CullMaps.Persistent);
-        Buffers.Add(CullCursors.Persistent);
-        Buffers.Add(CullResults.Persistent);
         if (_cullState.Buffer != null)
             Buffers.Add(_cullState);
         foreach (SpatialView? view in Spatial)
@@ -585,17 +581,22 @@ internal sealed class CameraFrame : IDisposable
         if (_instances.Length < instances)
             Array.Resize(ref _instances, instances * 2);
 
+        // The GPU cull writes each segment's instances after every list's own, each of its commands' where the segment gave it room
         int commandBase = 0, instanceBase = 0;
+        uint gpuBase = (uint)instances;
         for (int l = 0; l < Lists.Count; l++)
         {
             DrawList list = Lists[l];
             CommandBases[l] = commandBase;
+            int gpuFirst = list.Gpu?.FirstCommand ?? int.MaxValue, gpuEnd = list.Gpu is { } gpu ? gpu.FirstCommand + gpu.CommandCount : 0;
             for (int i = 0; i < list.CommandCount; i++)
             {
                 IndirectDrawIndexedArguments command = list.Commands[i];
                 DrawRecord record = list.Records[i];
                 command.FirstInstance += (uint)commandBase;
-                if ((record.Flags & DrawRecord.SharedObject) == 0)
+                if (i >= gpuFirst && i < gpuEnd)
+                    record.FirstInstance += gpuBase;
+                else if ((record.Flags & DrawRecord.SharedObject) == 0)
                     record.FirstInstance += (uint)instanceBase;
                 _commands[commandBase + i] = command;
                 _records[commandBase + i] = record;
@@ -603,22 +604,19 @@ internal sealed class CameraFrame : IDisposable
             Array.Copy(list.Instances, 0, _instances, instanceBase, list.InstanceCount);
             commandBase += list.CommandCount;
             instanceBase += list.InstanceCount;
+            gpuBase += list.Gpu?.Words ?? 0;
         }
-
-        // The GPU cull writes each segment's instances after every list's own
-        uint gpuWords = 0;
-        foreach (DrawList list in Lists)
-            gpuWords += list.Gpu?.Words ?? 0;
+        uint gpuWords = gpuBase - (uint)instances;
 
         Commands.Write<IndirectDrawIndexedArguments>(uploader, _commands.AsSpan(0, commands));
         Records.Write<DrawRecord>(uploader, _records.AsSpan(0, commands));
         Instances.Write<uint>(uploader, _instances.AsSpan(0, instances), ((uint)instances + gpuWords) * 4);
         ViewBlocks.Write<ViewBlock>(uploader, blocks);
-        PrepareCull(uploader, commands, (uint)instances);
+        PrepareCull(uploader);
     }
 
     // The view as the GPU cull reads it, see Graphite/Internal/Cull.glsl
-    private void PrepareCull(Uploader uploader, int commands, uint instances)
+    private void PrepareCull(Uploader uploader)
     {
         GpuCulls = false;
         int lists = 0, maps = 0;
@@ -667,24 +665,20 @@ internal sealed class CameraFrame : IDisposable
         if (_maps.Length < Math.Max(maps, 1))
             _maps = new uint[Math.Max(maps, Math.Max(_maps.Length * 2, 64))];
         int slot = 0, mapBase = 0;
-        uint gpuBase = instances;
         for (int l = 0; l < Lists.Count; l++)
         {
             if (Lists[l].Gpu is not { } segment || slot == MaxCullLists)
                 continue;
             int at = 184 + slot * 8;
-            (_cullWords[at], _cullWords[at + 1], _cullWords[at + 2], _cullWords[at + 3]) = ((uint)segment.Pass, (uint)(CommandBases[l] + segment.FirstCommand), (uint)segment.CommandCount, gpuBase);
+            (_cullWords[at], _cullWords[at + 1]) = ((uint)segment.Pass, (uint)(CommandBases[l] + segment.FirstCommand));
             (_cullWords[at + 4], _cullWords[at + 5], _cullWords[at + 6]) = ((uint)mapBase, segment.Fades ? 1u : 0, segment.Fades ? (uint)(segment.MapLength / 2) : 0);
             Array.Copy(segment.Map, 0, _maps, mapBase, segment.MapLength);
             mapBase += segment.MapLength;
-            gpuBase += segment.Words;
             slot++;
         }
 
         CullView.Write<uint>(uploader, _cullWords);
         CullMaps.Write<uint>(uploader, _maps.AsSpan(0, Math.Max(maps, 1)));
-        CullCursors.Reserve((uint)Math.Max(commands, 1) * 4);
-        CullResults.Reserve(Math.Max(objects, 1) * 4);
         CullState = keeps ? _cullState.Resolve(_device, _frame.Store, System.Numerics.BitOperations.RoundUpToPowerOf2(Math.Max(objects, 64)) * 16) : null;
     }
 
@@ -703,7 +697,7 @@ internal sealed class CameraFrame : IDisposable
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
         Shadows.Dispose();
-        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades, CullView, CullMaps, CullCursors, CullResults })
+        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades, CullView, CullMaps })
             array.Release();
         _cullState.Release(_frame.Store);
         foreach (SpatialView? view in Spatial)
