@@ -203,17 +203,49 @@ internal sealed class UvFlattener
     /// Run LSCM with the LinABF-computed angles. Picks an initial PCA-like projection, locks the
     /// two extremes along the dominant axis, and solves a least-squares conformal system.
     /// </summary>
-    public void SolveConformalLayout(double tolerance, double iterationBudget)
+    /// <param name="pins">
+    /// Vertices to hold at given UVs, keyed by their index in the region's mesh. With two or more, they replace the
+    /// two vertices the solve would lock by itself, and the layout comes out in the pins' own scale and place.
+    /// </param>
+    public void SolveConformalLayout(double tolerance, double iterationBudget, IReadOnlyDictionary<int, Double2>? pins = null)
     {
-        _uv = new double[2 * _workMesh.Vertices.Count];
-        _conformalRhs = new double[2 * _workMesh.Vertices.Count - 4];
+        int vertexCount = _workMesh.Vertices.Count;
+        _uv = new double[2 * vertexCount];
 
         var rowBuffer = new ConformalRowBuffer();
         var assembler = _assembler;
         assembler.Clear();
 
         int[] lockedVertex = { -1, -1 };
-        ComputeInitialProjection(_uv, lockedVertex, rowBuffer);
+        ComputeInitialProjection(_uv, lockedVertex);
+
+        bool[] locked = new bool[vertexCount];
+        int pinned = 0;
+        if (pins != null)
+        {
+            foreach (var pin in pins)
+            {
+                if (!_vertexBackMap.TryGetValue(pin.Key, out int work) || locked[work]) continue;
+                locked[work] = true;
+                _uv[2 * work + 0] = pin.Value.X;
+                _uv[2 * work + 1] = pin.Value.Y;
+                ++pinned;
+            }
+        }
+        if (pinned < 2)
+        {
+            System.Array.Clear(locked);
+            ComputeInitialProjection(_uv, lockedVertex);
+            locked[lockedVertex[0]] = locked[lockedVertex[1]] = true;
+        }
+
+        int[] slot = new int[vertexCount];
+        int freeCount = 0;
+        for (int v = 0; v < vertexCount; ++v) slot[v] = locked[v] ? -1 : freeCount++;
+        rowBuffer.Locked = locked;
+        rowBuffer.Slot = slot;
+        _conformalRhs = new double[2 * freeCount];
+        if (freeCount == 0) return;
 
         for (int faceI = 0; faceI < _workMesh.Triangles.Count; ++faceI)
         {
@@ -268,7 +300,7 @@ internal sealed class UvFlattener
         var guess = new List<double>(_conformalMatrix.ColumnCount);
         for (int vertexI = 0; vertexI < _workMesh.Vertices.Count; ++vertexI)
         {
-            if (vertexI != lockedVertex[0] && vertexI != lockedVertex[1])
+            if (!locked[vertexI])
             {
                 guess.Add(_uv[2 * vertexI + 0]);
                 guess.Add(_uv[2 * vertexI + 1]);
@@ -282,7 +314,7 @@ internal sealed class UvFlattener
         int read = 0;
         for (int vertexI = 0; vertexI < _workMesh.Vertices.Count; ++vertexI)
         {
-            if (vertexI != lockedVertex[0] && vertexI != lockedVertex[1])
+            if (!locked[vertexI])
             {
                 _uv[2 * vertexI + 0] = x[read++];
                 _uv[2 * vertexI + 1] = x[read++];
@@ -321,7 +353,7 @@ internal sealed class UvFlattener
     }
 
     /// <summary>Project geometry along its two longest extents; lock the extreme U vertices.</summary>
-    private void ComputeInitialProjection(double[] uv, int[] lockedVertex, ConformalRowBuffer rowBuffer)
+    private void ComputeInitialProjection(double[] uv, int[] lockedVertex)
     {
         Double3 vMin = new(1e32, 1e32, 1e32), vMax = new(-1e32, -1e32, -1e32);
         for (int v = 0; v < _workMesh.Vertices.Count; ++v)
@@ -369,13 +401,6 @@ internal sealed class UvFlattener
         }
 
         if (lockedVertex[0] > lockedVertex[1]) (lockedVertex[0], lockedVertex[1]) = (lockedVertex[1], lockedVertex[0]);
-
-        rowBuffer.LockVertex0 = lockedVertex[0];
-        rowBuffer.LockVertex1 = lockedVertex[1];
-        rowBuffer.LockVar0 = 2 * lockedVertex[0];
-        rowBuffer.LockVar1 = 2 * lockedVertex[0] + 1;
-        rowBuffer.LockVar2 = 2 * lockedVertex[1];
-        rowBuffer.LockVar3 = 2 * lockedVertex[1] + 1;
     }
 
     private static void SwapByExtent(ref double a, ref double b, ref Double3 b1, ref Double3 b2)
@@ -388,41 +413,36 @@ internal sealed class UvFlattener
     }
 
     /// <summary>
-    /// Add a single (index, value) term to the row. Locked vars go into a separate bucket;
-    /// otherwise the index is collapsed past any locked slots before being recorded.
+    /// Add a single (index, value) term to the row. Vars of a locked vertex go into a separate bucket;
+    /// otherwise the index is collapsed past the locked vertices before being recorded.
     /// </summary>
     private static void PushScalarCoefficient(ConformalRowBuffer buf, int index, double value, double currentVarValue)
     {
-        if (index == buf.LockVar0 || index == buf.LockVar1 || index == buf.LockVar2 || index == buf.LockVar3)
+        int vertex = index / 2;
+        if (buf.Locked[vertex])
         {
-            buf.Locked.Add((index, value));
+            buf.LockedTerms.Add((index, value));
             buf.LockedValues.Add((index, currentVarValue));
         }
         else
         {
-            if (index > buf.LockVar3) index -= 4;
-            else if (index > buf.LockVar2) index -= 3;
-            else if (index > buf.LockVar1) index -= 2;
-            else if (index > buf.LockVar0) index -= 1;
-            buf.Free.Add((index, value));
+            buf.Free.Add((2 * buf.Slot[vertex] + index % 2, value));
         }
     }
 
     /// <summary>Two-component variant: pushes both (2v, 2v+1) at once.</summary>
     private static void PushVertexCoefficient(ConformalRowBuffer buf, int vertexIndex, double[] values, int valueOffset, double[] currentVars, int currentVarOffset)
     {
-        if (vertexIndex == buf.LockVertex0 || vertexIndex == buf.LockVertex1)
+        if (buf.Locked[vertexIndex])
         {
-            buf.Locked.Add((2 * vertexIndex + 0, values[valueOffset + 0]));
-            buf.Locked.Add((2 * vertexIndex + 1, values[valueOffset + 1]));
+            buf.LockedTerms.Add((2 * vertexIndex + 0, values[valueOffset + 0]));
+            buf.LockedTerms.Add((2 * vertexIndex + 1, values[valueOffset + 1]));
             buf.LockedValues.Add((2 * vertexIndex + 0, currentVars[currentVarOffset + 0]));
             buf.LockedValues.Add((2 * vertexIndex + 1, currentVars[currentVarOffset + 1]));
         }
         else
         {
-            int idx = vertexIndex;
-            if (idx > buf.LockVertex1) idx -= 2;
-            else if (idx > buf.LockVertex0) idx -= 1;
+            int idx = buf.Slot[vertexIndex];
             buf.Free.Add((2 * idx + 0, values[valueOffset + 0]));
             buf.Free.Add((2 * idx + 1, values[valueOffset + 1]));
         }
@@ -443,15 +463,15 @@ internal sealed class UvFlattener
 
         // Locked contributions move to the right-hand side.
         double s = 0.0;
-        for (int i = 0; i < buf.Locked.Count; ++i)
-            s += buf.Locked[i].Value * buf.LockedValues[i].Value;
+        for (int i = 0; i < buf.LockedTerms.Count; ++i)
+            s += buf.LockedTerms[i].Value * buf.LockedValues[i].Value;
 
         s *= w2;
         for (int i = 0; i < buf.Free.Count; ++i)
             _conformalRhs[buf.Free[i].Index] -= s * buf.Free[i].Value;
 
         buf.Free.Clear();
-        buf.Locked.Clear();
+        buf.LockedTerms.Clear();
         buf.LockedValues.Clear();
     }
 
@@ -476,8 +496,12 @@ internal sealed class UvFlattener
 internal sealed class ConformalRowBuffer
 {
     public List<(int Index, double Value)> Free = new(6);
-    public List<(int Index, double Value)> Locked = new(6);
+    public List<(int Index, double Value)> LockedTerms = new(6);
     public List<(int Index, double Value)> LockedValues = new(6);
+
+    /// <summary>Which vertices are held in place, and for the others their place among the free ones.</summary>
+    public bool[] Locked = System.Array.Empty<bool>();
+    public int[] Slot = System.Array.Empty<int>();
 
     public int LockVertex0, LockVertex1;
     public int LockVar0, LockVar1, LockVar2, LockVar3;

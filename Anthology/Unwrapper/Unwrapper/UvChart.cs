@@ -21,6 +21,22 @@ internal sealed class UvChart
     public MeshRegion? Region;
     public Double2[] UVs;
 
+    /// <summary>A chart over UVs that already exist, three per triangle, for packing alone.</summary>
+    public UvChart(Double2[] uvs)
+    {
+        UVs = uvs;
+        foreach (Double2 uv in uvs)
+        {
+            if (uv.X < UvMin.X) UvMin.X = uv.X;
+            if (uv.Y < UvMin.Y) UvMin.Y = uv.Y;
+            if (uv.X > UvMax.X) UvMax.X = uv.X;
+            if (uv.Y > UvMax.Y) UvMax.Y = uv.Y;
+        }
+        Origin3D = new Double3(UvMin.X, UvMin.Y, 0);
+        UvArea = ComputeUvArea();
+        SurfaceArea = UvArea;
+    }
+
     /// <summary>Build a fresh chart over <paramref name="region"/>; pre-sums geometric area.</summary>
     public UvChart(MeshRegion region)
     {
@@ -36,7 +52,7 @@ internal sealed class UvChart
     private double ComputeUvArea()
     {
         double area = 0.0;
-        int faceCount = Region!.Triangles.Length;
+        int faceCount = UVs.Length / 3;
         for (int f = 0; f < faceCount; ++f)
         {
             Double2 e1 = UVs[3 * f + 1] - UVs[3 * f + 0];
