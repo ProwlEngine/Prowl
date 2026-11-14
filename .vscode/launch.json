@@ -65,6 +65,26 @@
             "stopAtEntry": false
         },
         {
+            "name": "NetworkingShowcase (Debug, host)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: NetworkingShowcase Debug",
+            "program": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase/bin/Debug/net10.0/NetworkingShowcase.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase",
+            "stopAtEntry": false
+        },
+        {
+            "name": "NetworkingShowcase (Debug, client)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: NetworkingShowcase Debug",
+            "program": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase/bin/Debug/net10.0/NetworkingShowcase.dll",
+            "args": ["--join", "127.0.0.1:7777"],
+            "cwd": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase",
+            "stopAtEntry": false
+        },
+        {
             "name": "PhysicsShowcase (Debug)",
             "type": "coreclr",
             "request": "launch",

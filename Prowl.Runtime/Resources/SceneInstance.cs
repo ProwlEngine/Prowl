@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Prowl.Echo;
 using Prowl.PaperUI;
 using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Tasks;
 using Prowl.Runtime.UI;
@@ -323,6 +324,9 @@ public class SceneInstance : EngineObject, ISerializable
         }
     }
 
+    /// <summary>Asked before a queued additive load adds its content to a world. A reason refuses the load, which then fails with it.</summary>
+    internal static Func<SceneInstance, Scene, SceneContent, string?>? RefuseAdditive;
+
     /// <summary>Fires when a section finished activating, inside its world.</summary>
     public static event Action<SceneLoadedArgs>? Loaded;
 
@@ -442,7 +446,14 @@ public class SceneInstance : EngineObject, ISerializable
         else if (load.Kind == SceneLoadKind.Load)
             section = load.Target!.ReplaceContent(content, load.Scene.Name, load.Scene);
         else
+        {
+            if (RefuseAdditive?.Invoke(load.Target!, load.Scene, content) is { } reason)
+            {
+                content.DisposeObjects();
+                throw new SceneLoadException(reason);
+            }
             section = load.Target!.AddContent(content, load.Scene.Name, load.Scene);
+        }
 
         if (load.Options.UnloadUnusedAssets) AssetDatabase.UnloadUnused();
         else AssetDatabase.Walk();
@@ -839,6 +850,7 @@ public class SceneInstance : EngineObject, ISerializable
     /// </summary>
     internal void OnHotReload()
     {
+        SceneEvents.Reset();
         ClearTypeIndices();
         _identifiers.Clear();
         _sectionHits.Clear();
@@ -1117,11 +1129,13 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>
     /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
     /// and for anything under one: a child written out without its parent would load back as a stray root.
+    /// While writing a network snapshot, also false for anything <see cref="NetworkMode.Never"/>.
     /// </summary>
     private static bool IsSaveable(GameObject obj)
     {
         for (GameObject? go = obj; go.IsValid(); go = go.Parent)
-            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0)
+            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0
+                || !NetworkSerialization.Include(go))
                 return false;
         return true;
     }
@@ -1485,6 +1499,12 @@ public class SceneInstance : EngineObject, ISerializable
         section.RootsList.Add(root);
     }
 
+    /// <summary>Fires when a root moves into another section of its world, for systems that mirror sections.</summary>
+    internal static event Action<GameObject, SceneSection>? RootMoved;
+
+    internal static void RaiseRootMoved(GameObject root, SceneSection section)
+        => Raise(RootMoved, section.Instance, handler => handler(root, section), nameof(RootMoved));
+
     internal static void LeaveSection(GameObject root)
     {
         root._section?.RootsList.Remove(root);
@@ -1565,6 +1585,7 @@ public class SceneInstance : EngineObject, ISerializable
     // The whole tree joins, with OnAddedToScene, before any of it enables.
     private void AddObject(GameObject obj)
     {
+        SceneEvents.Invalidate();
         using SceneScope active = Enter(this);
         List<Component> enabling = [];
         JoinTree(obj, enabling);
@@ -1599,6 +1620,7 @@ public class SceneInstance : EngineObject, ISerializable
 
     private void RemoveObject(GameObject obj)
     {
+        SceneEvents.Invalidate();
         using SceneScope active = Enter(this);
         // Create a copy to avoid modification during enumeration
         List<GameObject> children = [.. obj.Children];

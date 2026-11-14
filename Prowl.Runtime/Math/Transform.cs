@@ -239,7 +239,7 @@ public class Transform : ISerializationCallbackReceiver
     public uint Version
     {
         get => _version;
-        set { AssertOwner(); _version = value; ChangeListener?.TransformChanged(); WakeDependents(); }
+        set { AssertOwner(); _version = value; WakeDependents(); }
     }
 
     public Transform Root => Parent == null ? this : Parent.Root;
@@ -256,13 +256,9 @@ public class Transform : ISerializationCallbackReceiver
     [SerializeIgnore]
     uint _version = 1;
 
-    // Told whenever Version changes, so the physics world can sync just the bodies that were edited.
-    [SerializeIgnore] internal ITransformChangeListener ChangeListener;
-
     private void Changed()
     {
         _version++;
-        ChangeListener?.TransformChanged();
         WakeDependents();
     }
 
@@ -730,9 +726,4 @@ public class Transform : ISerializationCallbackReceiver
     public AABB InverseTransformAABB(AABB worldBounds) => worldBounds.TransformBy(WorldToLocalMatrix);
 
     #endregion
-}
-
-internal interface ITransformChangeListener
-{
-    void TransformChanged();
 }

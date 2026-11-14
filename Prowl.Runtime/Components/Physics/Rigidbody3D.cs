@@ -35,7 +35,7 @@ public enum RigidbodyInterpolation
 
 [AddComponentMenu("Physics/Rigidbody")]
 [ComponentIcon("\uf1b2")] // Cube
-public sealed class Rigidbody3D : Component, ITransformChangeListener
+public sealed class Rigidbody3D : Component
 {
     public class RigidBodyUserData
     {
@@ -91,12 +91,12 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
     internal bool SyncQueued;
     internal PhysicsWorld SyncWorld;
 
-    // Set while the physics write back moves the Transform, so that move is not mistaken for an edit.
-    private bool _writingPose;
-
     // Transform.Version last pushed into the physics body, so SyncTransformToBody only pushes when
     // the user actually edited the Transform (not when the physics readback wrote it).
     private uint _lastSyncedTransformVersion;
+
+    /// <summary>Whether something other than the physics write back moved the Transform since the last sync.</summary>
+    internal bool TransformEdited => GameObject.IsValid() && Transform.Version != _lastSyncedTransformVersion;
 
     /// <summary>
     /// How the Transform is filled in between fixed steps. Turn this on for anything the player
@@ -561,16 +561,8 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
             rotation = Quaternion.Slerp(_previousRotation, _currentRotation, t);
         }
 
-        _writingPose = true;
-        try
-        {
-            Transform.Position = position;
-            Transform.Rotation = rotation;
-        }
-        finally
-        {
-            _writingPose = false;
-        }
+        Transform.Position = position;
+        Transform.Rotation = rotation;
 
         // Remember the version we just wrote so the transform->body sync doesn't treat this
         // physics-driven change as a user edit and push it straight back.
@@ -822,11 +814,6 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
         position = OriginOf(_body.Position, _body.Orientation);
         rotation = _body.Orientation.ToProwl();
         return true;
-    }
-
-    void ITransformChangeListener.TransformChanged()
-    {
-        if (!_writingPose) QueueSync();
     }
 
     /// <summary>Asks the physics world to push this body's Transform and layer into it before the next step.</summary>

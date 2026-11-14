@@ -1,0 +1,604 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+
+using Prowl.Echo;
+using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
+using Prowl.Courier;
+
+namespace Prowl.Runtime.Networking;
+
+// Networked objects: which exist, who controls them, spawning and despawning.
+internal sealed partial class NetworkSystem
+{
+    internal const int NoOwner = -1;
+    internal uint _nextGeneration;
+
+    internal uint NextGeneration() => checked(++_nextGeneration);
+
+    internal uint NextNetId() => checked(++NextNetIdValue);
+
+    /// <summary>The GameObject or Component with this identifier in the replicated scene, or null.</summary>
+    internal EngineObject? FindByIdentifier(Guid id)
+    {
+        if (id == Guid.Empty || ReplicatedWorld.IsNotValid())
+        {
+            return null;
+        }
+
+        if (Spawning != null && Spawning.TryGetValue(id, out EngineObject? spawning))
+        {
+            return spawning;
+        }
+
+        if (Index.TryGetValue(id, out EngineObject? found) && IsLive(found, id))
+        {
+            return found;
+        }
+
+        if (IndexFrame == Frame)
+        {
+            return null;
+        }
+
+        IndexFrame = Frame;
+        Index.Clear();
+        foreach (GameObject go in ReplicatedWorld!.Objects)
+        {
+            IndexObject(go);
+        }
+
+        return Index.TryGetValue(id, out found) && IsLive(found, id) ? found : null;
+    }
+
+    internal void IndexObject(GameObject go)
+    {
+        Index[go.Identifier] = go;
+        foreach (Component component in go.GetComponents<Component>())
+        {
+            Index[component.Identifier] = component;
+        }
+    }
+
+    internal void IndexTree(GameObject root)
+    {
+        IndexObject(root);
+        foreach (GameObject child in root.GetChildrenDeep())
+        {
+            IndexObject(child);
+        }
+    }
+
+    internal bool IsLive(EngineObject obj, Guid id) => obj switch
+    {
+        GameObject go => !go.IsDisposed && go.Identifier == id && go.Scene == ReplicatedWorld,
+        Component c => !c.IsDisposed && c.Identifier == id && c.GameObject.IsValid() &&
+                       c.GameObject.Scene == ReplicatedWorld,
+        _ => false
+    };
+
+    /// <summary>The networked object <paramref name="go" /> belongs to, if any.</summary>
+    internal NetworkObject? FindEntry(GameObject go)
+    {
+        GameObject? root = NetworkAccessor.RootOf(go);
+        return !ReferenceEquals(root, null) && Entries.TryGetValue(root.Identifier, out NetworkObject? entry) &&
+               entry.GameObject == root
+            ? entry
+            : null;
+    }
+
+    internal int OwnerOf(GameObject go) => FindEntry(go)?.Owner ?? NoOwner;
+
+    internal uint GenerationOf(GameObject go) => FindEntry(go)?.Generation ?? 0;
+
+    internal uint NetIdOf(GameObject go) => FindEntry(go)?.NetId ?? 0;
+
+    internal bool IsNetworked(GameObject go) => IsActive && FindEntry(go) is { TearingDown: false };
+
+    internal bool IsProxy(GameObject go) => IsActive && !HasControl(go);
+
+    /// <summary>True if this peer drives <paramref name="go" />: it owns it, or it is the host and nobody does.</summary>
+    internal bool HasControl(GameObject go)
+    {
+        if (!IsActive)
+        {
+            return true;
+        }
+
+        int owner = OwnerOf(go);
+        return owner == NoOwner ? IsHost : owner == Session!.LocalPeer!.Id;
+    }
+
+    internal bool HasControl(Component component, SyncFlags flags) =>
+        NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
+        ((flags & SyncFlags.FromHost) != 0 ? !IsActive || IsHost : HasControl(component.GameObject));
+
+    internal NetPeer? GetOwner(GameObject go)
+    {
+        if (!IsActive || FindEntry(go) is { TearingDown: true })
+        {
+            return null;
+        }
+
+        int owner = OwnerOf(go);
+        return owner != NoOwner && Session!.TryGetPeer(owner, out NetPeer? peer) ? peer : null;
+    }
+
+    // --- Spawning ---------------------------------------------------------------------------------
+
+    /// <summary>
+    ///     Makes <paramref name="go" /> a networked object and, in a session, creates it on every client. Everything
+    ///     is checked before anything changes. Spawning one that already is networked (a scene-placed one, say)
+    ///     hands it to <paramref name="owner" /> instead.
+    /// </summary>
+    internal void Spawn(GameObject go, NetPeer? owner, NetworkOrphaned orphaned)
+    {
+        if (!Enum.IsDefined(orphaned))
+        {
+            throw new ArgumentOutOfRangeException(nameof(orphaned));
+        }
+
+        if (IsActive)
+        {
+            if (!IsHost)
+            {
+                throw new InvalidOperationException("Only the host can spawn networked objects.");
+            }
+
+            ValidateOwner(owner);
+
+            if (FindEntry(go) is { TearingDown: true })
+            {
+                throw new InvalidOperationException("An object being despawned cannot be spawned again.");
+            }
+
+            if (go.Scene != ReplicatedWorld)
+            {
+                throw new InvalidOperationException(
+                    $"'{go.Name}' has to be in the networked world, SceneInstance.Main, before it can be spawned.");
+            }
+
+            if (NetworkAccessor.IsExcludedFromNetwork(go))
+            {
+                throw new InvalidOperationException(
+                    $"'{go.Name}' is under an object that is NetworkMode.Never, so it can't be networked.");
+            }
+
+            // Asked of the parent, since this object may be marked NetworkMode.Object already.
+            if (go.Parent.IsValid() && go.Parent!.Network.Root is { } outer)
+            {
+                throw new InvalidOperationException(
+                    $"'{go.Name}' is inside the networked object '{outer.Name}' already.");
+            }
+
+            if (FindEntry(go) is null && HiddenFromItsCopies(go, owner?.Id ?? NoOwner))
+            {
+                throw new InvalidOperationException(
+                    $"'{go.Name}' is on clients already as part of the scene, so it can't be spawned hidden from any of them. " +
+                    "Spawn a new object instead, or make it NetworkMode.Object in the scene.");
+            }
+
+            if (go.Section is { } section)
+            {
+                EnsureAnnounced(section);
+            }
+        }
+
+        go.Network.Mode = NetworkMode.Object;
+        go.Network.Orphaned = orphaned;
+        if (!IsActive)
+        {
+            return;
+        }
+
+        using FrameStatScope stats = FrameStats.Network.Scope();
+        if (Entries.TryGetValue(go.Identifier, out NetworkObject? existing) && existing.GameObject == go)
+        {
+            existing.ChangeOwner(owner?.Id ?? NoOwner);
+            return;
+        }
+
+        bool heldAsContent = Configuration.InterestMode != InterestMode.None && HeldAsContent(go);
+        NetworkObject entry =
+            new(this, go) { Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId() };
+        Entries.Add(entry);
+        IndexTree(go);
+        InitVisibility(entry, heldAsContent);
+
+        List<NetPeer> observers = new();
+        foreach (NetPeer peer in Session!.Peers)
+        {
+            if (!peer.IsLocal && Sees(entry, peer))
+            {
+                observers.Add(peer);
+            }
+        }
+
+        SendSpawn(entry, observers, false);
+        entry.UpdatePhysics();
+        entry.NotifySpawn();
+    }
+
+    /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
+    internal void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output,
+        uint generation = 0, uint netId = 0, bool replace = false)
+    {
+        using FrameStatScope stats = FrameStats.Network.Scope();
+        EchoObject echo;
+        NetworkSerialization.WritingSnapshot = true;
+        try
+        {
+            // References out of the tree go by identifier and land on the client's own objects.
+            echo = Serializer.Serialize(typeof(GameObject), go,
+                new SerializationContext
+                {
+                    ExternalReferences =
+                        new NetworkSerialization.SnapshotReferences(SceneReferenceResolver.ForTree(go))
+                });
+        }
+        finally
+        {
+            NetworkSerialization.WritingSnapshot = false;
+        }
+
+        new SpawnMessage(go.Identifier, go.Parent.IsValid() ? go.Parent!.Identifier : Guid.Empty, SectionSlot(go),
+            owner, orphaned, generation, netId == 0 ? NextNetId() : netId, Compress(echo), replace, Tick).Write(output);
+
+        List<GameObject> tree = [go, .. go.GetChildrenDeep()];
+        Sync.WriteSyncState(output, tree);
+    }
+
+    internal void OnSpawn(NetPeer sender, ref NetReader reader, Delivery delivery)
+    {
+        if (IsHost || ReferenceEquals(ReplicatedWorld, null))
+        {
+            return;
+        }
+
+        NetSession? session = Session;
+        SceneInstance scene = ReplicatedWorld;
+        SpawnMessage message = SpawnMessage.Read(ref reader);
+        Guid id = message.Identifier;
+        Guid parentId = message.ParentId;
+        int owner = message.OwnerId;
+        NetworkOrphaned orphaned = message.Orphaned;
+        uint generation = message.Generation, netId = message.NetId;
+        EchoObject echo = Decompress(message.Snapshot);
+
+        SerializationContext context = SceneReferenceResolver.ContextForLinking(scene);
+        GameObject? go = GameObject.DeserializePreservingIdentifiers(echo, context);
+        if (go.IsNotValid())
+        {
+            throw new InvalidDataException("The host sent a networked object that could not be read.");
+        }
+
+        bool attached = false, adopted = false;
+        List<(Component Component, SyncMember Sync)>? applied = null;
+        try
+        {
+            if (Session != session || ReplicatedWorld != scene)
+            {
+                return;
+            }
+
+            if (go!.Identifier != id)
+            {
+                throw new InvalidDataException("A spawned object's identifier doesn't match its message.");
+            }
+
+            if (message.Replace)
+            {
+                ReplaceCopy(id);
+                if (Session != session || ReplicatedWorld != scene)
+                {
+                    return;
+                }
+            }
+
+            // An object the scene snapshot brought stays the same instance, so references to it keep working.
+            if (!Entries.Contains(id) && FindByIdentifier(id) is GameObject existing)
+            {
+                existing.Network.Mode = NetworkMode.Object;
+                existing.Network.ApplyFlags(go.Network.Flags);
+                existing.Network.ApplyOwnerTransfer(go.Network.OwnerTransfer);
+                go.Dispose();
+                go = existing;
+                adopted = true;
+            }
+
+            // Resolve initial Sync references within the new tree before enabling its components.
+            Spawning = new Dictionary<Guid, EngineObject>();
+            try
+            {
+                foreach (GameObject part in (List<GameObject>)[go, .. go.GetChildrenDeep()])
+                {
+                    Spawning[part.Identifier] = part;
+                    foreach (Component component in part.GetComponents<Component>())
+                    {
+                        Spawning[component.Identifier] = component;
+                    }
+                }
+
+                applied = message.Replace ? [] : null;
+                Sync.ApplySyncState(sender, ref reader, null, true, true, accepted: applied);
+            }
+            finally
+            {
+                Spawning = null;
+            }
+
+            if (Session != session || ReplicatedWorld != scene)
+            {
+                return;
+            }
+
+            NetworkObject entry = new(this, go) { Owner = owner, Generation = generation, NetId = netId };
+            go.Network.ApplyOrphaned(orphaned);
+            Entries.Add(entry);
+            if (applied != null)
+            {
+                Snapshots.Received(sender, applied, message.Tick);
+                entry.TransformSync.ReceivedAt(message.Tick);
+            }
+            entry.UpdatePhysics();
+            if (FindByIdentifier(parentId) is GameObject parent)
+            {
+                if (go.Parent != parent)
+                {
+                    go.SetParent(parent, false);
+                }
+            }
+            else if (!adopted)
+            {
+                scene.Add(go, message.SectionSlot == 0 ? null : SectionOf(message.SectionSlot - 1));
+            }
+
+            attached = true;
+            if (Session != session || ReplicatedWorld != scene)
+            {
+                return;
+            }
+
+            IndexTree(go);
+            FillLinks(go);
+            if (!adopted)
+            {
+                CollectLinks(echo, context);
+            }
+
+            entry.NotifySpawn();
+        }
+        finally
+        {
+            // Scene/parent ownership starts only after successful attachment. Failed metadata,
+            // Sync state, or attachment must release components and any resources they own.
+            if (!attached)
+            {
+                if (Entries.TryGetValue(go!.Identifier, out NetworkObject? pending) && pending.GameObject == go)
+                {
+                    Entries.Remove(go.Identifier);
+                }
+
+                if (!adopted)
+                {
+                    go.Dispose();
+                }
+            }
+        }
+    }
+
+    /// <summary>Removes the copy of an object the host is sending again, even one still being destroyed.</summary>
+    private void ReplaceCopy(Guid id)
+    {
+        if (Entries.Remove(id, out NetworkObject? stale))
+        {
+            stale.NotifyDespawn(NetworkDespawnReason.OutOfInterest);
+        }
+
+        if (FindByIdentifier(id) is GameObject copy)
+        {
+            copy.Dispose();
+        }
+    }
+
+    internal void BeforeObjectDisposed(GameObject go)
+    {
+        if (Entries.TryGetValue(go.Identifier, out NetworkObject? entry) && entry.GameObject == go)
+        {
+            entry.NotifyDespawn(IsUnloading(go) || (IsClient && _applyingSections)
+                ? NetworkDespawnReason.SectionUnloaded
+                : NetworkDespawnReason.Destroyed);
+        }
+    }
+
+    /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>
+    internal void OnGameObjectDisposed(GameObject go)
+    {
+        if (VisibilityOverrides.Count > 0)
+        {
+            VisibilityOverrides.Remove(go);
+        }
+
+        ForgetSentContent(go);
+        ForgetLinksFrom(go);
+
+        if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)
+        {
+            return;
+        }
+
+        using FrameStatScope stats = FrameStats.Network.Scope();
+        Entries.Remove(go.Identifier);
+        Restricted.Remove(entry);
+        ForgetInRange(entry);
+
+        // A section being unloaded, or a world being torn down, goes away on clients as a whole.
+        if (!IsHost || !IsActive || go.Scene != ReplicatedWorld || ReplicatedWorld!.State != SceneState.Running ||
+            IsUnloading(go))
+        {
+            return;
+        }
+
+        using NetWriter message = new(32);
+        new DespawnMessage(go.Identifier).Write(message);
+        SendToObservers(entry, EngineMessage.Despawn, message.WrittenSpan);
+    }
+
+    internal void OnDespawn(NetPeer sender, ref NetReader reader, Delivery delivery)
+    {
+        if (IsHost)
+        {
+            return;
+        }
+
+        DespawnMessage message = DespawnMessage.Read(ref reader);
+        if (Entries.Remove(message.Identifier, out NetworkObject? entry) && entry.GameObject.IsValid())
+        {
+            ForgetLinksFrom(entry.GameObject);
+            entry.NotifyDespawn(message.Reason);
+            entry.GameObject.Destroy();
+        }
+    }
+
+    // --- Ownership --------------------------------------------------------------------------------
+
+    internal void SetOwner(GameObject go, NetPeer? owner)
+    {
+        if (!IsActive)
+        {
+            return;
+        }
+
+        if (!IsHost)
+        {
+            throw new InvalidOperationException("Only the host can change who owns a networked object.");
+        }
+
+        ValidateOwner(owner);
+
+        if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go ||
+            entry.TearingDown)
+        {
+            throw new InvalidOperationException($"'{go.Name}' is not a spawned networked object.");
+        }
+
+        using FrameStatScope stats = FrameStats.Network.Scope();
+        entry.ChangeOwner(owner?.Id ?? NoOwner);
+    }
+
+    internal void ValidateOwner(NetPeer? owner)
+    {
+        if (owner != null && (!Session!.TryGetPeer(owner.Id, out NetPeer? current) || !ReferenceEquals(current, owner)))
+        {
+            throw new ArgumentException("The owner must be a peer from the current session.", nameof(owner));
+        }
+    }
+
+    internal void SetOrphaned(GameObject go, NetworkOrphaned orphaned)
+    {
+        if (!IsActive || FindEntry(go) is not { TearingDown: false } entry || entry.GameObject != go)
+        {
+            return;
+        }
+
+        if (!IsHost)
+        {
+            throw new InvalidOperationException("Only the host can change a spawned object's orphaned policy.");
+        }
+
+        using NetWriter message = new();
+        new OrphanedMessage(go.Identifier, entry.Generation, orphaned).Write(message);
+        SendToObservers(entry, EngineMessage.Orphaned, message.WrittenSpan);
+    }
+
+
+    internal void OnOrphaned(NetPeer sender, ref NetReader reader, Delivery delivery)
+    {
+        if (IsHost || !sender.IsHost)
+        {
+            return;
+        }
+
+        OrphanedMessage message = OrphanedMessage.Read(ref reader);
+        Guid id = message.Identifier;
+        uint generation = message.Generation;
+        NetworkOrphaned orphaned = message.Orphaned;
+        if (!reader.IsAtEnd || delivery != Delivery.Reliable)
+        {
+            throw new InvalidDataException("Invalid orphaned policy message.");
+        }
+
+        if (Entries.TryGetValue(id, out NetworkObject? entry) && entry.Generation == generation)
+        {
+            entry.GameObject.Network.ApplyOrphaned(orphaned);
+        }
+    }
+
+    internal void OnOwner(NetPeer sender, ref NetReader reader, Delivery delivery)
+    {
+        if (IsHost)
+        {
+            return;
+        }
+
+        OwnerMessage message = OwnerMessage.Read(ref reader);
+        Guid id = message.Identifier;
+        int owner = message.OwnerId;
+        uint generation = message.Generation;
+        if (Entries.TryGetValue(id, out NetworkObject? entry))
+        {
+            Float3 velocity = entry.TransferVelocity ?? entry.SampledVelocity();
+            entry.ApplyOwner(owner, generation, velocity);
+            entry.NotifyOwnership();
+        }
+    }
+
+    internal void OnPeerLeft(NetPeer peer, SessionEndReason reason)
+    {
+        NetSession? session = Session;
+        LoadingPeers.Remove(peer.Id);
+        Snapshots.RemovePeer(peer.Id);
+        ForgetPeerVisibility(peer.Id);
+        DispatchNetworkListener(e => e.OnPeerDisconnected(peer, reason));
+        if (Session != session)
+        {
+            return;
+        }
+
+        List<NetworkObject> orphans = new();
+        foreach (NetworkObject entry in Entries.Values)
+        {
+            if (entry.Owner == peer.Id)
+            {
+                orphans.Add(entry);
+            }
+        }
+
+        foreach (NetworkObject entry in orphans)
+        {
+            if (Session != session || !IsActive)
+            {
+                break;
+            }
+
+            if (FindEntry(entry.GameObject) != entry)
+            {
+                continue;
+            }
+
+            if (entry.Orphaned == NetworkOrphaned.Destroy && entry.GameObject.IsValid())
+            {
+                entry.GameObject.Destroy();
+            }
+            else
+            {
+                entry.ChangeOwner(NoOwner);
+            }
+        }
+    }
+}

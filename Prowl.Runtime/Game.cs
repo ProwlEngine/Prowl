@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 using Echo.Logging;
 
@@ -35,6 +36,7 @@ public abstract class Game
     private PaperRenderer _paperRenderer;
     private Paper _paper;
     private int frameCounter;
+    private bool consoleTitleAvailable = true;
 
     public Paper PaperInstance => _paper;
 
@@ -136,10 +138,18 @@ public abstract class Game
 
                 EndUpdate();
 
-                if (Debug.LogToConsole && (frameCounter++ % 60 == 0))
+                if (Debug.LogToConsole && consoleTitleAvailable && (frameCounter++ % 60 == 0))
                 {
                     double fps = delta > 0 ? 1.0 / delta : 0; // real (unscaled) frame rate
-                    Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
+                    try
+                    {
+                        Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
+                    }
+                    catch (IOException)
+                    {
+                        // No console to title, e.g. a process started without a window and its output redirected.
+                        consoleTitleAvailable = false;
+                    }
                 }
 
             }
@@ -237,6 +247,7 @@ public abstract class Game
             Closing();
 
             XR.Stop();
+            Networking.Networking.Shutdown();
 
             // Before anything shuts down, so work blocked on the main thread runs while it still can and
             // worker loops watching the session token stop. Workers asking for the main thread from here
@@ -340,6 +351,7 @@ public abstract class Game
         {
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
+            Networking.Networking.Shutdown();
             Tasks.MainThreadContext.Stop();
             SceneInstance.Shutdown(everyWorld: true);
             AssetDatabase.Shutdown();
@@ -382,6 +394,9 @@ public abstract class Game
         // Assets that finished loading in the background join at the start of the frame, all at once.
         AssetDatabase.Pump();
 
+        // Network messages too, so this frame simulates on what arrived. Nothing without a session.
+        Networking.Networking.Receive();
+
         // Pausing play mode has to stop the sound as well as the simulation, or the music carries on
         // over a frozen game. Only in the editor: pausing there is a debugging tool that freezes
         // everything, while a shipped game pausing itself is a design decision, and that one reaches
@@ -403,6 +418,9 @@ public abstract class Game
         }
 
         OnUpdate();
+
+        // Send what this frame produced.
+        Networking.Networking.Flush();
     }
 
     /// <summary>Whether presented worlds draw to the window. A host that draws them itself, like the editor, turns it off.</summary>

@@ -890,6 +890,12 @@ public class DesktopBuildPipeline : BuildPipeline
         };
         references.AddRange(gameAssemblies.Select(a => new AssemblyRef(a.Name, a.DllPath)));
 
+        // Prowl.Courier builds from source until it is on NuGet (see Prowl.Runtime.csproj), so it isn't among the
+        // runtime's PackageReferences yet and has to be handed over as a file. Once packaged, it arrives that way.
+        string courierPath = Path.Combine(engineDir, "Prowl.Courier.dll");
+        if (File.Exists(courierPath) && !GetRuntimePackageReferences().Any(p => p.Name == "Prowl.Courier"))
+            references.Add(new AssemblyRef("Prowl.Courier", courierPath));
+
         // Everything the engine reaches through reflection (serialized types, components, volume settings)
         // is rooted whole.
         if (desktopProfile.PublishAot)
