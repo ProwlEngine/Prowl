@@ -104,12 +104,11 @@ Each frame, `HandleInteractions()`:
    `OnDragging` after crossing the threshold) report the **entire accumulated
    delta since the press**, not just the current frame's motion, so consumers
    applying `Delta` incrementally don't "lose" the first 5 pixels. Release fires
-   `OnDragEnd` (if it was dragging), then `OnClick` (if released over the same
-   element without having dragged), then always `OnRelease`. Right-click fires
-   `OnRightClick` directly on press (not gated by release) and separately clears
-   focus if the target isn't already focused. Double-click fires `OnDoubleClick`
-   using its own timing state in the input layer, independent of and in addition
-   to the normal click phases. `OnHeld` fires every frame while pressed.
+   `OnDragEnd` (if it was dragging), then `OnClick` or `OnRightClick` (if
+   released over the same element without having dragged), then always `OnRelease`.
+   Double-click fires `OnDoubleClick` using its own timing state in the input layer,
+   independent of and in addition to the normal click phases. `OnHeld` fires every
+   frame while pressed.
 7. **Keyboard**: Tab navigation is processed first (unless `SkipKeyboardNavigation`)
    — it scans every focusable, visible element with `TabIndex >= 0`, sorts by
    `TabIndex`, and wraps around. Otherwise, `OnKeyPressed` fires for each

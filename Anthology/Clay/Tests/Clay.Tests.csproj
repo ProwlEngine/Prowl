@@ -4,9 +4,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
     <RootNamespace>Prowl.Clay.Tests</RootNamespace>
-    <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
-  </PropertyGroup>
+    </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.3" />

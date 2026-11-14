@@ -4,8 +4,7 @@
         <TargetFramework>$(ProwlSampleTargetFramework)</TargetFramework>
         <OutputType>Exe</OutputType>
         <ImplicitUsings>disable</ImplicitUsings>
-        <IsPackable>false</IsPackable>
-        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+            <GenerateDocumentationFile>false</GenerateDocumentationFile>
         <Optimize>true</Optimize>
         <ServerGarbageCollection>false</ServerGarbageCollection>
         <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>

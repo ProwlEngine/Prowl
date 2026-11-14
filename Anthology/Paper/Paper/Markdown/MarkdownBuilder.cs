@@ -20,23 +20,23 @@ public sealed class MarkdownBuilder
 {
     private readonly MarkdownDocument _document = new();
     // Per block, the string it is drawn from: rich text for prose or the body of a code block.
-    private readonly List<string> _blockText = new();
+    private readonly List<string?> _blockText = new();
     // Per block, the source of a paragraph that is only an image. Kept apart from the text so a
     // paragraph whose image does not resolve still falls back to its alt text.
-    private readonly List<string> _imageSource = new();
+    private readonly List<string?> _imageSource = new();
     private readonly StringBuilder _scratch = new();
     private readonly Action<ClickEvent> _linkClick;
     private readonly Action<ElementEvent> _linkHover;
 
     private string _source = string.Empty;
     private bool _parsed;
-    private Paper _paper;
+    private Paper? _paper;
 
     private FontFile _regular;
-    private FontFile _bold;
-    private FontFile _italic;
-    private FontFile _boldItalic;
-    private FontFile _mono;
+    private FontFile? _bold;
+    private FontFile? _italic;
+    private FontFile? _boldItalic;
+    private FontFile? _mono;
     private float _fontSize = 16f;
     private float _spacing = 8f;
     private Color _text = new(1f, 1f, 1f, 1f);
@@ -44,8 +44,8 @@ public sealed class MarkdownBuilder
     private Color _link = new(0f, 0.48f, 1f, 1f);
     private Color _codeBackground = new(0.16f, 0.16f, 0.16f, 1f);
     private Color _rule = new(0.63f, 0.63f, 0.63f, 1f);
-    private Action<string> _onLink;
-    private Func<string, object> _images;
+    private Action<string>? _onLink;
+    private Func<string?, object?>? _images;
 
     public MarkdownBuilder(FontFile font)
     {
@@ -68,7 +68,7 @@ public sealed class MarkdownBuilder
     }
 
     /// <summary>Faces for styled text. A missing face falls back to the regular font.</summary>
-    public MarkdownBuilder Fonts(FontFile bold = null, FontFile italic = null, FontFile boldItalic = null, FontFile mono = null)
+    public MarkdownBuilder Fonts(FontFile? bold = null, FontFile? italic = null, FontFile? boldItalic = null, FontFile? mono = null)
     {
         _bold = bold;
         _italic = italic;
@@ -116,7 +116,7 @@ public sealed class MarkdownBuilder
     /// natural size, no wider than the document. One without a texture, or in the middle of
     /// text, shows its alt text instead.
     /// </summary>
-    public MarkdownBuilder Images(Func<string, object> resolver)
+    public MarkdownBuilder Images(Func<string?, object?> resolver)
     {
         _images = resolver;
         return this;
@@ -326,7 +326,7 @@ public sealed class MarkdownBuilder
         if (only < 0) return false;
 
         _imageSource[index] ??= _document.TextOf(_document.GetInline(only).Href);
-        object texture = _images(_imageSource[index]);
+        object? texture = _images(_imageSource[index]);
         if (texture == null) return false;
 
         var size = paper.Renderer.GetTextureSize(texture);
@@ -375,7 +375,7 @@ public sealed class MarkdownBuilder
 
     private void OnParagraphClicked(ClickEvent e)
     {
-        string href = LinkUnder(e);
+        string? href = LinkUnder(e);
         if (href != null) _onLink?.Invoke(href);
     }
 
@@ -386,7 +386,7 @@ public sealed class MarkdownBuilder
         e.Source.Data.Cursor = LinkUnder(e) != null ? PaperCursor.Pointer : PaperCursor.Inherit;
     }
 
-    private string LinkUnder(ElementEvent e)
+    private string? LinkUnder(ElementEvent e)
     {
         var paper = _paper;
         if (paper == null) return null;

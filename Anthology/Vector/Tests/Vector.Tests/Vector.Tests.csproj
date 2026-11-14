@@ -4,7 +4,6 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
     <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
     <RootNamespace>Prowl.Vector.Tests</RootNamespace>
   </PropertyGroup>
 

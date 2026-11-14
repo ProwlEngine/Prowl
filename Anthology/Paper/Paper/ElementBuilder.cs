@@ -1,16 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.PaperUI.Utilities;
-using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI
@@ -723,14 +720,16 @@ namespace Prowl.PaperUI
         public ElementBuilder OnPostLayout<T>(T capturedValue, Action<T, ElementHandle, Rect> handler) =>
             OnPostLayout((ElementHandle element, Rect rect) => handler(capturedValue, element, rect));
 
-        /// <summary>Sets a callback that runs when the element is pressed.</summary>
+        /// <summary>Sets a callback that runs when the element is pressed. Both the left and right mouse button
+        /// trigger this event.</summary>
         public ElementBuilder OnPress(Action<ClickEvent> handler)
         {
             _handle.Data.OnPress += handler;
             return this;
         }
 
-        /// <summary>Sets a callback that runs when the element is pressed, with a captured value.</summary>
+        /// <summary>Sets a callback that runs when the element is pressed, with a captured value. Both the left and
+        /// right mouse button trigger this event.</summary>
         public ElementBuilder OnPress<T>(T capturedValue, Action<T, ClickEvent> handler) =>
             OnPress((e) => handler(capturedValue, e));
 
@@ -789,14 +788,16 @@ namespace Prowl.PaperUI
         public ElementBuilder OnDragEnd<T>(T capturedValue, Action<T, DragEvent> handler) =>
             OnDragEnd((e) => handler(capturedValue, e));
 
-        /// <summary>Sets a callback that runs when the mouse button is released after clicking this element.</summary>
+        /// <summary>Sets a callback that runs when the mouse button is released after clicking this element. Both the
+        /// left and right mouse button trigger this event.</summary>
         public ElementBuilder OnRelease(Action<ClickEvent> handler)
         {
             _handle.Data.OnRelease += handler;
             return this;
         }
 
-        /// <summary>Sets a callback that runs when the mouse button is released after clicking this element, with a captured value.</summary>
+        /// <summary>Sets a callback that runs when the mouse button is released after clicking this element, with a
+        /// captured value. Both the left and right mouse button trigger this event.</summary>
         public ElementBuilder OnRelease<T>(T capturedValue, Action<T, ClickEvent> handler) =>
             OnRelease((e) => handler(capturedValue, e));
 
@@ -2105,6 +2106,9 @@ namespace Prowl.PaperUI
             // Handle mouse clicks for cursor positioning and Shift+Click range selection
             OnPress((ClickEvent e) =>
             {
+                if (e.Button != PaperMouseBtn.Left)
+                    return;
+
                 var currentState = LoadTextInputState(value, isMultiLine);
                 var clickPos = e.RelativePosition.X - TextInputArea.Min.X + currentState.ScrollOffsetX;
                 var clickPosY = isMultiLine ? e.RelativePosition.Y - TextInputArea.Min.Y + currentState.ScrollOffsetY : 0;

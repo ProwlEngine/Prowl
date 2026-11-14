@@ -585,8 +585,9 @@ internal readonly struct CullFrustum
 internal readonly record struct GpuCullView(CullFrustum Frustum, uint CullingMask, CasterFilter Filter, RenderableFlags Hidden, LodView Lod);
 
 /// <summary>
-/// The commands of a list the GPU cull fills: one for each bucket of the pass in order, then a fade command after each
-/// that can fade when the view fades, its counts and instances left for the GPU to write, with at most Words instances.
+/// The commands of a list the GPU cull fills: one for each bucket of the pass in order, then, when the view fades, a fade
+/// command for each that can fade, in the same order, their counts and instances left for the GPU to write, with at most
+/// Words instances.
 /// </summary>
 internal sealed class GpuSegment
 {
@@ -594,7 +595,10 @@ internal sealed class GpuSegment
     public int FirstCommand;
     public int CommandCount;
 
-    /// <summary>A bucket's command in the segment by its GPU id, the top bit set when its fade command follows, all ones for none.</summary>
+    /// <summary>
+    /// A bucket's command in the segment by its GPU id, the top bit set when it has a fade command, all ones for none. A
+    /// fading segment's map is twice as long: the second half holds each bucket's fade command, at its GPU id past the first.
+    /// </summary>
     public uint[] Map = [];
     public int MapLength;
     public bool Fades;
@@ -1010,8 +1014,8 @@ internal sealed class BucketSet
             AppendTransparent(frustum, list, pass, provided?.Sorted);
     }
 
-    // A command for every bucket of the pass with no instances, and a fade command after those that can fade when the
-    // view fades, which the GPU cull fills
+    // A command for every bucket of the pass with no instances, then a fade command for each that can fade when the view
+    // fades, which the GPU cull fills
     private void AppendGpu(int pass, DrawList list, in GpuCullView view)
     {
         Order(pass);
@@ -1021,20 +1025,29 @@ internal sealed class BucketSet
         segment.Fades = pass < 2 && view.Lod.FadeSeconds > 0 && view.Lod.State != null;
         segment.Words = (uint)Math.Min(_gpuWords[pass] * (segment.Fades ? 2 : 1), uint.MaxValue);
         segment.View = view;
-        segment.MapLength = _gpuIds;
-        if (segment.Map.Length < _gpuIds)
-            segment.Map = new uint[Math.Max(_gpuIds, segment.Map.Length * 2)];
-        Array.Fill(segment.Map, uint.MaxValue, 0, _gpuIds);
+        // A fading list's map has a second half, the fade command of each bucket that has one
+        segment.MapLength = segment.Fades ? _gpuIds * 2 : _gpuIds;
+        if (segment.Map.Length < segment.MapLength)
+            segment.Map = new uint[Math.Max(segment.MapLength, segment.Map.Length * 2)];
+        Array.Fill(segment.Map, uint.MaxValue, 0, segment.MapLength);
+
+        // Every bucket's command, then the fade commands after them, each run in program order so neighbours of one
+        // program share a call. Interleaved, a fade command between every two would split every call in two.
         foreach (Bucket bucket in _ordered[pass])
         {
-            uint command = (uint)(list.CommandCount - segment.FirstCommand);
+            segment.Map[bucket.GpuId] = (uint)(list.CommandCount - segment.FirstCommand);
             Emit(list, bucket, bucket.Program, 0, 0);
-            if (segment.Fades && FadeProgram(bucket) >= 0)
+        }
+        if (segment.Fades)
+        {
+            foreach (Bucket bucket in _ordered[pass])
             {
+                if (FadeProgram(bucket) < 0)
+                    continue;
+                segment.Map[bucket.GpuId] |= 1u << 31;
+                segment.Map[_gpuIds + bucket.GpuId] = (uint)(list.CommandCount - segment.FirstCommand);
                 Emit(list, bucket, (ushort)bucket.FadeProgram, 0, 0);
-                command |= 1u << 31;
             }
-            segment.Map[bucket.GpuId] = command;
         }
         segment.CommandCount = list.CommandCount - segment.FirstCommand;
     }

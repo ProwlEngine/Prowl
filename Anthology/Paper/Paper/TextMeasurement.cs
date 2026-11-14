@@ -17,8 +17,6 @@ namespace Prowl.PaperUI
 
         internal static Float2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
         {
-            //if (element.ProcessedText) return Vector2.zero;
-
             if (string.IsNullOrWhiteSpace(element.Paragraph)) return Float2.Zero;
 
             // Per-frame memo: this runs several times per frame (stretch resolution) plus once at
@@ -114,13 +112,13 @@ namespace Prowl.PaperUI
                 if (cachedLayout != null && cachedKey.Equals(ptKey))
                 {
                     element._textLayout = cachedLayout;
-                    return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, true);
+                    return Memo(ref element, cachedLayout.Size * invScale, availableWidth, true);
                 }
 
                 element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
-                gui.SetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, element._textLayout);
-                gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, ptKey);
-                return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, true);
+                gui.SetElementStorageById(element.ID, Paper.PlainTextLayoutKey, element._textLayout);
+                gui.SetElementStorageById(element.ID, Paper.PlainTextKeyKey, ptKey);
+                return Memo(ref element, element._textLayout.Size * invScale, availableWidth, true);
             }
 
             string text = element.Paragraph;
@@ -137,13 +135,13 @@ namespace Prowl.PaperUI
                 if (cachedLayout != null && cachedKey.Equals(trKey))
                 {
                     element._textLayout = cachedLayout;
-                    return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, false);
+                    return Memo(ref element, cachedLayout.Size * invScale, availableWidth, false);
                 }
 
                 var measure = settings;
                 measure.WrapMode = TextWrapMode.NoWrap;
                 measure.MaxWidth = 0f;
-                float LogicalW(string s) => canvas.MeasureText(s, measure).X * invScale;
+                float LogicalW(string s) => canvas.MeasureText(s, measure).X;
 
                 if (LogicalW(text) > availableWidth)
                 {
@@ -161,14 +159,14 @@ namespace Prowl.PaperUI
                 }
 
                 element._textLayout = canvas.CreateLayout(text, settings);
-                gui.SetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, element._textLayout);
-                gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, trKey);
-                return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
+                gui.SetElementStorageById(element.ID, Paper.TruncTextLayoutKey, element._textLayout);
+                gui.SetElementStorageById(element.ID, Paper.TruncTextKeyKey, trKey);
+                return Memo(ref element, element._textLayout.Size * invScale, availableWidth, false);
             }
 
             element._textLayout = canvas.CreateLayout(text, settings);
 
-            return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
+            return Memo(ref element, element._textLayout.Size * invScale, availableWidth, false);
         }
 
         private static Scribe.TextAlignment ToScribeAlignment(TextAlignment a)
