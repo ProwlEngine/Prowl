@@ -1,13 +1,11 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Globalization;
-
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
 
-namespace Prowl.Clay.Formats;
+namespace Prowl.Clay.Formats.Bvh;
 
 /// <summary>
 /// Biovision BVH motion capture format.
@@ -17,15 +15,25 @@ namespace Prowl.Clay.Formats;
 /// </remarks>
 internal sealed class BvhFormat : IModelFormat
 {
+
     private enum BvhChannelName
     {
-        Xposition,
-        Yposition,
-        Zposition,
-        Zrotation,
-        Yrotation,
-        Xrotation
+        PositionX,
+        PositionY,
+        PositionZ,
+        RotationX,
+        RotationY,
+        RotationZ,
     }
+    private static readonly Dictionary<string, BvhChannelName> _channelNameToEnum = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Xposition", BvhChannelName.PositionX },
+        { "Yposition", BvhChannelName.PositionY },
+        { "Zposition", BvhChannelName.PositionZ },
+        { "Xrotation", BvhChannelName.RotationX },
+        { "Yrotation", BvhChannelName.RotationY },
+        { "Zrotation", BvhChannelName.RotationZ },
+    };
 
     private sealed class Joint(IntermediateNode node)
     {
@@ -48,7 +56,7 @@ internal sealed class BvhFormat : IModelFormat
     }
 
 
-    /// <summary>Format token this importer handles (e.g. <c>"gltf"</c>).</summary>
+    /// <summary>The format token this importer handles.</summary>
     public string Token => "bvh";
 
     /// <summary>True when this importer can handle the supplied format token.</summary>
@@ -60,55 +68,66 @@ internal sealed class BvhFormat : IModelFormat
     /// </summary>
     public IntermediateScene Read(Stream stream, ImportContext context)
     {
-        using var reader = new StreamReader(stream, System.Text.Encoding.ASCII, leaveOpen: true);
+        using var reader = new BvhStreamReader(stream);
         List<Joint> joints = [];
         int rangeCount;
 
         // HIERARCHY
-        string line = ExpectLine(reader);
-        ExpectToken("HIERARCHY", line.Trim());
+        string line = reader.ExpectLine();
+        reader.ExpectToken("HIERARCHY", line.Trim());
 
         // One or more skeletons.
         while (true)
         {
             // ROOT <name of skeleton>
-            line = ExpectLine(reader);
+            line = reader.ExpectLine();
             var rootParts = new Range[2];
-            rangeCount = Split(line, rootParts);
+            rangeCount = reader.Split(line, rootParts);
             if (string.Equals(line[rootParts[0]], "MOTION", StringComparison.OrdinalIgnoreCase))
                 break;
-            ExpectToken("ROOT", line[rootParts[0]]);
+            reader.ExpectToken("ROOT", line[rootParts[0]]);
             if (rangeCount == 1)
-                throw new FormatException($"Expected name after 'ROOT'.");
+                throw new InvalidDataException($"Expected name after 'ROOT' (line {reader.Line}).");
 
             // Recursively parse the skeletal structure.
             ParseJoint(reader, joints, name: line[rootParts[1]]);
         }
+        if (joints.Count == 0)
+            throw new InvalidDataException($"At least one joint must be defined (line {reader.Line}).");
 
         // Frames: 7840
-        line = ExpectLine(reader);
+        line = reader.ExpectLine();
         var framesParts = new Range[3];
-        rangeCount = Split(line, framesParts);
-        ExpectToken("Frames:", line[framesParts[0]]);
+        rangeCount = reader.Split(line, framesParts);
+        reader.ExpectToken("Frames:", line[framesParts[0]]);
         if (rangeCount != 2)
-            throw new FormatException($"Expected one value after 'Frames:'.");
-        int frameCount = Parse<int>(line[framesParts[1]]);
+            throw new InvalidDataException($"Expected one value after 'Frames:' (line {reader.Line}).");
+        int frameCount = reader.ParseInt(line[framesParts[1]]);
         if (frameCount < 0)
-            context.Log.Warning($"The number of animation frames is negative. Ignoring.", nameof(BvhFormat));
+            throw new InvalidDataException("The number of animation frames cannot be negative (line {reader.Line}).");
+
+        // Preallocate binding lists instead of resizing them multiple times.
+        foreach (Joint joint in joints)
+        {
+            joint.PositionBinding.Times.EnsureCapacity(frameCount);
+            joint.PositionBinding.Values.EnsureCapacity(frameCount * 3);
+            joint.RotationBinding.Times.EnsureCapacity(frameCount);
+            joint.RotationBinding.Values.EnsureCapacity(frameCount * 4);
+        }
 
         // Frame Time: 0.033333
-        line = ExpectLine(reader);
+        line = reader.ExpectLine();
         var ftParts = new Range[4];
-        rangeCount = Split(line, ftParts);
-        ExpectToken("Frame", line[ftParts[0]]);
+        rangeCount = reader.Split(line, ftParts);
+        reader.ExpectToken("Frame", line[ftParts[0]]);
         if (rangeCount != 3)
-            throw new FormatException($"Expected one value after 'Frame Time:'.");
-        ExpectToken("Time:", line[ftParts[1]]);
-        float timePerFrame = Parse<float>(line[ftParts[2]]);
+            throw new InvalidDataException($"Expected one value after 'Frame Time:' (line {reader.Line}).");
+        reader.ExpectToken("Time:", line[ftParts[1]]);
+        float timePerFrame = reader.ParseFloat(line[ftParts[2]]);
         if (timePerFrame <= 0)
-            throw new FormatException($"The reported frame time cannot be negative ({timePerFrame}).");
+            throw new InvalidDataException($"The reported frame time ({timePerFrame}) cannot be zero or negative (line {reader.Line}).");
 
-        // The next sections consists of a line per frame.
+        // The next section consists of a line per frame.
         int frame = 0;
         int totalChannelCount = joints.Sum(m => m.Channels.Count);
         var channelParts = new Range[totalChannelCount + 1];
@@ -118,12 +137,9 @@ internal sealed class BvhFormat : IModelFormat
             string? dataLine = reader.ReadLine();
             if (dataLine is null)
                 break;
-            // Skip blank lines.
-            if (string.IsNullOrWhiteSpace(dataLine))
-                continue;
-            rangeCount = Split(dataLine, channelParts);
+            rangeCount = reader.Split(dataLine, channelParts);
             if (rangeCount != totalChannelCount)
-                throw new FormatException($"Expected {totalChannelCount} values per MOTION line.");
+                throw new InvalidDataException($"Expected {totalChannelCount} values per MOTION line (line {reader.Line}).");
 
             int valueIndex = 0;
             for (int jointIndex = 0; jointIndex < joints.Count; jointIndex++)
@@ -136,31 +152,31 @@ internal sealed class BvhFormat : IModelFormat
                 Quaternion rotation = Quaternion.Identity;
                 for (int channelIndex = 0; channelIndex < joint.Channels.Count; channelIndex++, valueIndex++)
                 {
-                    float channelValue = Parse<float>(dataLine[channelParts[valueIndex]]);
+                    float channelValue = reader.ParseFloat(dataLine.AsSpan()[channelParts[valueIndex]]);
                     switch (joint.Channels[channelIndex])
                     {
-                        case BvhChannelName.Xposition:
+                        case BvhChannelName.PositionX:
                             translation.X = channelValue;
                             hasTranslation = true;
                             break;
-                        case BvhChannelName.Yposition:
+                        case BvhChannelName.PositionY:
                             translation.Y = channelValue;
                             hasTranslation = true;
                             break;
-                        case BvhChannelName.Zposition:
+                        case BvhChannelName.PositionZ:
                             translation.Z = channelValue;
                             hasTranslation = true;
                             break;
 
-                        case BvhChannelName.Xrotation:
+                        case BvhChannelName.RotationX:
                             rotation = rotation * Quaternion.AxisAngle(Float3.UnitX, channelValue * Maths.Deg2Rad);
                             hasRotation = true;
                             break;
-                        case BvhChannelName.Yrotation:
+                        case BvhChannelName.RotationY:
                             rotation = rotation * Quaternion.AxisAngle(Float3.UnitY, channelValue * Maths.Deg2Rad);
                             hasRotation = true;
                             break;
-                        case BvhChannelName.Zrotation:
+                        case BvhChannelName.RotationZ:
                             rotation = rotation * Quaternion.AxisAngle(Float3.UnitZ, channelValue * Maths.Deg2Rad);
                             hasRotation = true;
                             break;
@@ -188,8 +204,10 @@ internal sealed class BvhFormat : IModelFormat
             // Increment the frame count.
             frame++;
         }
-        if (frame != frameCount)
+        if (frameCount >= 0 && frame != frameCount)
             context.Log.Warning($"The frame count in the file ({frameCount}) doesn't match the number of frames that were read ({frame}). The file might be truncated.", nameof(BvhFormat));
+        else if (frame == 0)
+            context.Log.Warning("Zero animation frames were found in the file. Only the hierarchy will be imported.", nameof(BvhFormat));
 
         // Add every non-empty binding to an animation.
         var animation = new IntermediateAnimation { Name = "Animation" };
@@ -202,7 +220,9 @@ internal sealed class BvhFormat : IModelFormat
         }
 
         // Return a scene.
-        var result = new IntermediateScene { Animations = { animation } };
+        var result = new IntermediateScene();
+        if (animation.Bindings.Count > 0)
+            result.Animations.Add(animation);
         result.Nodes.AddRange(joints.Select(j => j.Node));
         return result;
     }
@@ -214,8 +234,11 @@ internal sealed class BvhFormat : IModelFormat
     /// <param name="joints">A global list of joints that this method should add to.</param>
     /// <param name="name">The joint name.</param>
     /// <param name="parent">The parent joint, or null if this is a root.</param>
-    private static void ParseJoint(StreamReader reader, List<Joint> joints, string name, Joint? parent = null)
+    /// <param name="depth">The number of ancestors.</param>
+    private static void ParseJoint(BvhStreamReader reader, List<Joint> joints, string name, Joint? parent = null, int depth = 0)
     {
+        if (depth >= 1024)  // Don't overflow the stack.
+            throw new InvalidDataException($"Joint hierarchy too deep (line {reader.Line}).");
         var joint = new Joint(new IntermediateNode
         {
             Parent = parent?.Node,
@@ -226,35 +249,37 @@ internal sealed class BvhFormat : IModelFormat
         joints.Add(joint);  // Do this before parsing children.
 
         // {
-        string line = ExpectLine(reader);
-        ExpectToken("{", line.Trim());
+        string line = reader.ExpectLine();
+        reader.ExpectToken("{", line.Trim());
 
         // OFFSET <X> <Y> <Z>
-        line = ExpectLine(reader);
+        line = reader.ExpectLine();
         var offsetParts = new Range[5];
-        int rangeCount = Split(line, offsetParts);
+        int rangeCount = reader.Split(line, offsetParts);
         if (rangeCount != 4)
-            throw new FormatException($"Expected three values after OFFSET.");
-        ExpectToken("OFFSET", line[offsetParts[0]]);
-        float x = Parse<float>(line[offsetParts[1]]);
-        float y = Parse<float>(line[offsetParts[2]]);
-        float z = Parse<float>(line[offsetParts[3]]);
+            throw new InvalidDataException($"Expected three values after OFFSET (line {reader.Line}).");
+        reader.ExpectToken("OFFSET", line[offsetParts[0]]);
+        float x = reader.ParseFloat(line[offsetParts[1]]);
+        float y = reader.ParseFloat(line[offsetParts[2]]);
+        float z = reader.ParseFloat(line[offsetParts[3]]);
         joint.Node.LocalPosition = new Float3(x, y, z);
 
         // CHANNELS 6 Xposition Yposition Zposition Zrotation Yrotation Xrotation
-        line = ExpectLine(reader);
+        line = reader.ExpectLine();
         var channelsParts = new Range[9];
-        rangeCount = Split(line, channelsParts);
+        rangeCount = reader.Split(line, channelsParts);
         if (rangeCount < 2 || rangeCount > 8)
-            throw new FormatException($"Expected 1-7 values after CHANNELS.");
-        ExpectToken("CHANNELS", line[channelsParts[0]]);
-        int channelCount = Parse<int>(line[channelsParts[1]]);
+            throw new InvalidDataException($"Expected 1-7 values after CHANNELS (line {reader.Line}).");
+        reader.ExpectToken("CHANNELS", line[channelsParts[0]]);
+        int channelCount = reader.ParseInt(line[channelsParts[1]]);
         if (channelCount != rangeCount - 2)
-            throw new FormatException($"Incorrect channel count after CHANNELS.");
+            throw new InvalidDataException($"Incorrect channel count after CHANNELS (line {reader.Line}).");
         for (int i = 0; i < channelCount; i ++)
         {
-            if (!Enum.TryParse(line[channelsParts[2 + i]], ignoreCase: false, out BvhChannelName channelName))
-                throw new FormatException($"Couldn't parse '{line[channelsParts[2 + i]]}' as a valid channel name.");
+            if (!_channelNameToEnum.TryGetValue(line[channelsParts[2 + i]], out BvhChannelName channelName))
+                throw new InvalidDataException($"Couldn't parse '{line[channelsParts[2 + i]]}' as a valid channel name (line {reader.Line}).");
+            if (joint.Channels.Contains(channelName))
+                throw new InvalidDataException($"Duplicate channel '{line[channelsParts[2 + i]]}' (line {reader.Line}).");
             joint.Channels.Add(channelName);
         }
 
@@ -263,30 +288,36 @@ internal sealed class BvhFormat : IModelFormat
         {
 
             // JOINT LeftLeg | End Site
-            line = ExpectLine(reader);
+            line = reader.ExpectLine();
             var jointParts = new Range[2];
-            rangeCount = Split(line, jointParts);
+            rangeCount = reader.Split(line, jointParts);
             if (string.Equals(line[jointParts[0]], "JOINT", StringComparison.OrdinalIgnoreCase))
             {
                 if (rangeCount < 2)
-                    throw new FormatException($"Expected joint name after JOINT.");
+                    throw new InvalidDataException($"Expected joint name after 'JOINT' (line {reader.Line}).");
+                if (joint.HasEndSite)
+                    throw new InvalidDataException($"Unexpected 'JOINT' after 'End Site' (line {reader.Line}).");
 
                 // Recursively parse the skeletal structure.
-                ParseJoint(reader, joints, name: line[jointParts[1]], parent: joint);
+                ParseJoint(reader, joints, name: line[jointParts[1]], parent: joint, depth: depth + 1);
                 hasChildren = true;
             }
             else if (rangeCount >= 2 &&
                 string.Equals(line[jointParts[0]], "End", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(line[jointParts[1]], "Site", StringComparison.OrdinalIgnoreCase))
             {
-                if (hasChildren)
-                    throw new FormatException($"Unexpected 'End Site' after 'JOINT'.");
+                if (hasChildren || joint.HasEndSite)
+                    throw new InvalidDataException($"Unexpected 'End Site' (line {reader.Line}).");
                 ParseEndSite(reader, joint);
             }
             else if (string.Equals(line[jointParts[0]], "}", StringComparison.OrdinalIgnoreCase))
+            {
+                if (rangeCount > 1)
+                    throw new InvalidDataException($"Unexpected token after 'JOINT' (line {reader.Line}).");
                 break;
+            }
             else
-                throw new FormatException($"Expected JOINT or 'End Site' but was '{line[jointParts[0]]}'.");
+                throw new InvalidDataException($"Expected 'JOINT <Name>' or 'End Site' but was '{line}' (line {reader.Line}).");
 
         } while (true);
     }
@@ -297,61 +328,28 @@ internal sealed class BvhFormat : IModelFormat
     /// </summary>
     /// <param name="reader">The stream reader.</param>
     /// <param name="joint">The parent joint.</param>
-    private static void ParseEndSite(StreamReader reader, Joint joint)
+    private static void ParseEndSite(BvhStreamReader reader, Joint joint)
     {
         var parts = new Range[5];   // Maximum number of parts is 4 + 1 to detect overflow.
 
         // {
-        string line = ExpectLine(reader);
-        ExpectToken("{", line.Trim());
+        string line = reader.ExpectLine();
+        reader.ExpectToken("{", line.Trim());
 
         // OFFSET <X> <Y> <Z>
-        line = ExpectLine(reader);
-        int rangeCount = Split(line, parts);
+        line = reader.ExpectLine();
+        int rangeCount = reader.Split(line, parts);
         if (rangeCount != 4)
-            throw new FormatException($"Expected three values after OFFSET.");
-        ExpectToken("OFFSET", line[parts[0]]);
-        float x = Parse<float>(line[parts[1]]);
-        float y = Parse<float>(line[parts[2]]);
-        float z = Parse<float>(line[parts[3]]);
+            throw new InvalidDataException($"Expected three values after OFFSET (line {reader.Line}).");
+        reader.ExpectToken("OFFSET", line[parts[0]]);
+        float x = reader.ParseFloat(line[parts[1]]);
+        float y = reader.ParseFloat(line[parts[2]]);
+        float z = reader.ParseFloat(line[parts[3]]);
         joint.HasEndSite = true;
         joint.EndSite = new Float3(x, y, z);
 
         // }
-        line = ExpectLine(reader);
-        ExpectToken("}", line.Trim());
-    }
-
-
-    /// <summary>Reads a non-empty line from the stream reader (throws if it's empty).</summary>
-    private static string ExpectLine(StreamReader reader)
-    {
-        do
-        {
-            string? line = reader.ReadLine() ?? throw new FormatException("Unexpected EOF while parsing.");
-            if (!string.IsNullOrWhiteSpace(line))
-                return line;
-        } while (true);
-    }
-
-    /// <summary>Compares two string and throws an error if they are different.</summary>
-    private static void ExpectToken(string expected, string token)
-    {
-        if (!string.Equals(token, expected, StringComparison.OrdinalIgnoreCase))
-            throw new FormatException($"Expected '{expected}'.");
-    }
-
-    /// <summary>Splits a line of text using BVH parsing rules.</summary>
-    private static int Split(ReadOnlySpan<char> source, Span<Range> destination)
-    {
-        return MemoryExtensions.SplitAny(source, destination, " \t", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    }
-
-    /// <summary>Parses a string using BVH parsing rules (throws if parsing fails).</summary>
-    private static T Parse<T>(string text) where T : IParsable<T>
-    {
-        if (!T.TryParse(text, CultureInfo.InvariantCulture, out T? value))
-            throw new FormatException($"Couldn't parse '{text}' as a {typeof(T)}.");
-        return value;
+        line = reader.ExpectLine();
+        reader.ExpectToken("}", line.Trim());
     }
 }
