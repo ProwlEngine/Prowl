@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
@@ -133,11 +134,8 @@ public class ProjectPanel : DockPanel
     private bool IsListView => _thumbnailSize < ListThreshold;
     private ViewMode CurrentViewMode => _isTreeView ? ViewMode.Tree : (IsListView ? ViewMode.List : ViewMode.Grid);
 
-    private void SetViewMode(ViewMode mode)
+    private void ApplyViewMode(ViewMode mode)
     {
-        if (_isTreeView && mode != ViewMode.Tree && Selection.GetActiveAs<ContentItem>() is { } selected)
-            _currentFolder = FolderForItem(selected);
-
         switch (mode)
         {
             case ViewMode.Grid:
@@ -152,6 +150,36 @@ public class ProjectPanel : DockPanel
                 _isTreeView = true;
                 break;
         }
+    }
+
+    private void SetViewMode(ViewMode mode)
+    {
+        if (mode == CurrentViewMode) return;
+
+        if (_isTreeView && mode != ViewMode.Tree && Selection.GetActiveAs<ContentItem>() is { } selected)
+            _currentFolder = FolderForItem(selected);
+
+        ApplyViewMode(mode);
+
+        if (!Application.IsPlaying)
+            EditorApplication.Instance?.SaveDockLayout();
+    }
+
+    public override bool SerializeState(JsonObject state)
+    {
+        state["viewMode"] = CurrentViewMode.ToString();
+        state["thumbnailSize"] = (double)_thumbnailSize;
+        return true;
+    }
+
+    public override void RestoreState(JsonObject state)
+    {
+        if (state["thumbnailSize"] is JsonValue sizeVal && sizeVal.TryGetValue(out double size))
+            _thumbnailSize = Math.Clamp((float)size, MinThumbSize, MaxThumbSize);
+
+        if (state["viewMode"] is JsonValue modeVal && modeVal.TryGetValue(out string? modeStr)
+            && Enum.TryParse<ViewMode>(modeStr, ignoreCase: true, out ViewMode mode))
+            ApplyViewMode(mode);
     }
 
     private static string ViewModeLabel(ViewMode mode) => mode switch
