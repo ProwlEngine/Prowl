@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 using Echo.Logging;
 
@@ -35,6 +36,7 @@ public abstract class Game
     private PaperRenderer _paperRenderer;
     private Paper _paper;
     private int frameCounter;
+    private bool consoleTitleAvailable = true;
 
     public Paper PaperInstance => _paper;
 
@@ -136,10 +138,18 @@ public abstract class Game
 
                 EndUpdate();
 
-                if (Debug.LogToConsole && (frameCounter++ % 60 == 0))
+                if (Debug.LogToConsole && consoleTitleAvailable && (frameCounter++ % 60 == 0))
                 {
                     double fps = delta > 0 ? 1.0 / delta : 0; // real (unscaled) frame rate
-                    Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
+                    try
+                    {
+                        Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
+                    }
+                    catch (IOException)
+                    {
+                        // No console to title, e.g. a process started without a window and its output redirected.
+                        consoleTitleAvailable = false;
+                    }
                 }
 
             }
