@@ -285,6 +285,8 @@ public sealed class Renderer : IDisposable
 
     public GraphicsDevice Device { get; }
 
+    internal IShaderCompiler? Compiler => _compiler;
+
     public RendererTextures Textures { get; }
 
     /// <summary>The GPU resources the frames, views and effects share.</summary>
