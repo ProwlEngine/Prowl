@@ -85,10 +85,12 @@ public sealed class Bvh<T>
         _items = new T[n];
         _bounds = new AABB[n];
         _order = new int[n];
+        _centers = new Float3[n];
         for (int i = 0; i < n; i++)
         {
             _items[i] = items[i];
             _bounds[i] = bounds(items[i]);
+            _centers[i] = _bounds[i].Center;
             _order[i] = i;
         }
 
@@ -96,9 +98,26 @@ public sealed class Bvh<T>
         _nodeCount = 0;
         if (n > 0)
             Build(0, n);
+
+        // Only the build reads these
+        _centers = Array.Empty<Float3>();
+        _binCount = null;
+        _binBox = null;
+        _binUsed = null;
+        _leftCount = null;
+        _leftArea = null;
+        _rightArea = null;
     }
 
     #region Build
+
+    // Centres of the item bounds, and the bins of the surface area split, kept across the build's nodes so none of it
+    // is worked out or allocated again for every node
+    private Float3[] _centers;
+    private int[]? _binCount, _leftCount;
+    private AABB[]? _binBox;
+    private bool[]? _binUsed;
+    private float[]? _leftArea, _rightArea;
 
     private int Build(int start, int count)
     {
@@ -141,11 +160,11 @@ public sealed class Bvh<T>
 
     private int LargestCentroidAxis(int start, int count, out float min, out float extent)
     {
-        Float3 cmin = _bounds[_order[start]].Center;
+        Float3 cmin = _centers[_order[start]];
         Float3 cmax = cmin;
         for (int k = 1; k < count; k++)
         {
-            Float3 c = _bounds[_order[start + k]].Center;
+            Float3 c = _centers[_order[start + k]];
             cmin = Maths.Min(cmin, c);
             cmax = Maths.Max(cmax, c);
         }
@@ -160,7 +179,7 @@ public sealed class Bvh<T>
     {
         int axis = LargestCentroidAxis(start, count, out _, out float extent);
         if (extent < 1e-12f) return start + count / 2;
-        SortRange(start, count, axis);
+        SelectMedian(start, count, axis);
         return start + count / 2;
     }
 
@@ -170,15 +189,28 @@ public sealed class Bvh<T>
         if (extent < 1e-12f) return start + count / 2;
 
         int bins = _settings.Quality == BvhBuildQuality.High ? Math.Max(_settings.SahBinCount, 16) : _settings.SahBinCount;
-        var binCount = new int[bins];
-        var binBox = new AABB[bins];
-        var binUsed = new bool[bins];
+        if (_binCount == null || _binCount.Length != bins)
+        {
+            _binCount = new int[bins];
+            _binBox = new AABB[bins];
+            _binUsed = new bool[bins];
+            _leftCount = new int[bins];
+            _leftArea = new float[bins];
+            _rightArea = new float[bins];
+        }
+        int[] binCount = _binCount, leftCount = _leftCount!;
+        AABB[] binBox = _binBox!;
+        bool[] binUsed = _binUsed!;
+        float[] leftArea = _leftArea!, rightArea = _rightArea!;
+        Array.Clear(binCount, 0, bins);
+        Array.Clear(binUsed, 0, bins);
 
         float scale = bins / extent;
         for (int k = 0; k < count; k++)
         {
-            AABB b = _bounds[_order[start + k]];
-            int bi = (int)((b.Center[axis] - min) * scale);
+            int item = _order[start + k];
+            AABB b = _bounds[item];
+            int bi = (int)((_centers[item][axis] - min) * scale);
             if (bi < 0) bi = 0; else if (bi >= bins) bi = bins - 1;
 
             binBox[bi] = binUsed[bi] ? binBox[bi].Encapsulating(b) : b;
@@ -187,10 +219,6 @@ public sealed class Bvh<T>
         }
 
         // Sweep from the left and right to score every split plane between bins.
-        var leftCount = new int[bins];
-        var leftArea = new float[bins];
-        var rightArea = new float[bins];
-
         AABB acc = default; bool accUsed = false; int accCount = 0;
         for (int i = 0; i < bins; i++)
         {
@@ -220,7 +248,7 @@ public sealed class Bvh<T>
 
         if (bestBin < 0)
         {
-            SortRange(start, count, axis);
+            SelectMedian(start, count, axis);
             return start + count / 2;
         }
 
@@ -228,7 +256,7 @@ public sealed class Bvh<T>
         int lo = start, hi = start + count - 1;
         while (lo <= hi)
         {
-            int bi = (int)((_bounds[_order[lo]].Center[axis] - min) * scale);
+            int bi = (int)((_centers[_order[lo]][axis] - min) * scale);
             if (bi < 0) bi = 0; else if (bi >= bins) bi = bins - 1;
             if (bi <= bestBin) lo++;
             else { (_order[lo], _order[hi]) = (_order[hi], _order[lo]); hi--; }
@@ -236,17 +264,28 @@ public sealed class Bvh<T>
         return lo;
     }
 
-    private void SortRange(int start, int count, int axis)
+    // Puts the items of the lower half of the range, by centre along the axis, before those of the upper half.
+    // Neither half is sorted, which is all a split needs and takes time in step with the range, not more.
+    private void SelectMedian(int start, int count, int axis)
     {
-        Array.Sort(_order, start, count, new AxisComparer(_bounds, axis));
-    }
-
-    private sealed class AxisComparer : IComparer<int>
-    {
-        private readonly AABB[] _bounds;
-        private readonly int _axis;
-        public AxisComparer(AABB[] bounds, int axis) { _bounds = bounds; _axis = axis; }
-        public int Compare(int x, int y) => _bounds[x].Center[_axis].CompareTo(_bounds[y].Center[_axis]);
+        int lo = start, hi = start + count - 1, target = start + count / 2;
+        while (lo < hi)
+        {
+            float pivot = _centers[_order[lo + (hi - lo) / 2]][axis];
+            int i = lo, j = hi;
+            while (i <= j)
+            {
+                while (_centers[_order[i]][axis] < pivot) i++;
+                while (_centers[_order[j]][axis] > pivot) j--;
+                if (i > j) break;
+                (_order[i], _order[j]) = (_order[j], _order[i]);
+                i++;
+                j--;
+            }
+            if (target <= j) hi = j;
+            else if (target >= i) lo = i;
+            else break;
+        }
     }
 
     #endregion
