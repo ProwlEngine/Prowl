@@ -16,7 +16,7 @@ internal static class ExtrudeOp
     /// </summary>
     internal static void ExtrudeFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToExtrude, float distance, ExtrudeMode mode = ExtrudeMode.AlongNormals)
     {
-        var faces = facesToExtrude.Where(mesh.Faces.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList();
+        var faces = facesToExtrude.Where(mesh.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList();
         if (faces.Count == 0) return;
 
         if (mode != ExtrudeMode.PerFace)
@@ -112,8 +112,8 @@ internal static class ExtrudeOp
         }
 
         foreach (var edge in oldEdges)
-            if (edge.Loop == null && mesh.Edges.Contains(edge)) mesh.RemoveEdge(edge);
+            if (edge.Loop == null && mesh.Contains(edge)) mesh.RemoveEdge(edge);
         foreach (var vertex in oldVertices)
-            if (vertex.Edge == null && mesh.Vertices.Contains(vertex)) mesh.RemoveVertex(vertex);
+            if (vertex.Edge == null && mesh.Contains(vertex)) mesh.RemoveVertex(vertex);
     }
 }

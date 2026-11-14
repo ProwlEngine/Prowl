@@ -39,26 +39,33 @@ public partial class GeometryData
     /// <summary>Records a change that adding and removing elements does not, such as moving vertices.</summary>
     public void MarkChanged() => Version++;
 
+    private static bool ReadFlag(Element element, string name) =>
+        element.TryGetAttribute(name, out var value) && value is IntAttributeValue i && i.Data.Length > 0 && i.Data[0] != 0;
+
     private static bool ReadFlag(Dictionary<string, AttributeValue> attributes, string name) =>
         attributes.TryGetValue(name, out var value) && value is IntAttributeValue i && i.Data.Length > 0 && i.Data[0] != 0;
 
-    private static void WriteFlag(Dictionary<string, AttributeValue> attributes, string name, bool value) =>
-        attributes[name] = new IntAttributeValue(value ? 1 : 0);
+    // A flag that is off holds no value at all, which reads as off and keeps large meshes free of values that say nothing
+    private static void WriteFlag(Element element, string name, bool value)
+    {
+        if (value) element.SetAttribute(name, new IntAttributeValue(1));
+        else element.ClearAttribute(name);
+    }
 
     public partial class Edge
     {
         /// <summary>A hidden edge joins the faces either side into one face. It is never drawn or picked.</summary>
         public bool IsHidden
         {
-            get => ReadFlag(Attributes, HiddenAttribute);
-            set => WriteFlag(Attributes, HiddenAttribute, value);
+            get => ReadFlag(this, HiddenAttribute);
+            set => WriteFlag(this, HiddenAttribute, value);
         }
 
         /// <summary>A soft edge is shaded smoothly across, and drawn lightly.</summary>
         public bool IsSoft
         {
-            get => ReadFlag(Attributes, SoftAttribute);
-            set => WriteFlag(Attributes, SoftAttribute, value);
+            get => ReadFlag(this, SoftAttribute);
+            set => WriteFlag(this, SoftAttribute, value);
         }
 
         /// <summary>Whether the edge is drawn and can be picked: not hidden, and not only on hidden faces.</summary>
@@ -107,15 +114,15 @@ public partial class GeometryData
         /// <summary>Index of the face's material, zero when it has none.</summary>
         public int Material
         {
-            get => Attributes.TryGetValue(MaterialAttribute, out var value) && value is IntAttributeValue i && i.Data.Length > 0 ? i.Data[0] : 0;
-            set => Attributes[MaterialAttribute] = new IntAttributeValue(value);
+            get => TryGetAttribute(MaterialAttribute, out var value) && value is IntAttributeValue i && i.Data.Length > 0 ? i.Data[0] : 0;
+            set => SetAttribute(MaterialAttribute, new IntAttributeValue(value));
         }
 
         /// <summary>A hidden face stays in the mesh but is not drawn or picked, to get at what is behind it.</summary>
         public bool IsHidden
         {
-            get => ReadFlag(Attributes, HiddenAttribute);
-            set => WriteFlag(Attributes, HiddenAttribute, value);
+            get => ReadFlag(this, HiddenAttribute);
+            set => WriteFlag(this, HiddenAttribute, value);
         }
 
         /// <summary>How the texture is laid on the face, or null for the material's default projection.</summary>
@@ -193,10 +200,7 @@ public partial class GeometryData
     /// <summary>Removes every element, keeping the attribute definitions.</summary>
     public void Clear()
     {
-        Vertices.Clear();
-        Edges.Clear();
-        Loops.Clear();
-        Faces.Clear();
+        DetachAll(keepAttributes: false);
         Version++;
     }
 
@@ -379,7 +383,7 @@ public partial class GeometryData
         var result = new HashSet<Vertex>();
         foreach (Vertex v in vertices.ToList())
         {
-            if (!Vertices.Contains(v)) continue;
+            if (!Contains(v)) continue;
             Vertex kept = v;
             foreach (Vertex other in Vertices)
             {
@@ -390,7 +394,7 @@ public partial class GeometryData
             }
             result.Add(kept);
         }
-        result.RemoveWhere(v => !Vertices.Contains(v));
+        result.RemoveWhere(v => !Contains(v));
         return result.ToList();
     }
 
@@ -603,9 +607,9 @@ public partial class GeometryData
             if (!f.IsPlanar(2e-4f)) return $"non planar face at {verts[0].Point}";
             if (f.Area() < 5e-7f) return $"zero area face at {verts[0].Point}";
             foreach (Edge e in f.NeighborEdges())
-                if (!Edges.Contains(e)) return "face uses an edge that is no longer in the mesh";
+                if (!Contains(e)) return "face uses an edge that is no longer in the mesh";
             foreach (Vertex v in verts)
-                if (!Vertices.Contains(v)) return "face uses a vertex that is no longer in the mesh";
+                if (!Contains(v)) return "face uses a vertex that is no longer in the mesh";
         }
 
         foreach (Edge e in Edges)
@@ -664,89 +668,145 @@ public partial class GeometryData
     /// <summary>Puts the mesh back the way it was when the snapshot was taken. The elements are new objects.</summary>
     public void Restore(GeometrySnapshot snapshot)
     {
-        Vertices.Clear();
-        Edges.Clear();
-        Loops.Clear();
-        Faces.Clear();
-        ReplaceDefinitions(VertexAttributes, snapshot.VertexDefinitions);
-        ReplaceDefinitions(EdgeAttributes, snapshot.EdgeDefinitions);
-        ReplaceDefinitions(LoopAttributes, snapshot.LoopDefinitions);
-        ReplaceDefinitions(FaceAttributes, snapshot.FaceDefinitions);
+        DetachAll(keepAttributes: false);
+        (List<AttributeDefinition> List, AttributeDefinition[] Saved)[] definitions =
+        [
+            (VertexAttributes, snapshot.Definitions[VertexKind]), (EdgeAttributes, snapshot.Definitions[EdgeKind]),
+            (LoopAttributes, snapshot.Definitions[LoopKind]), (FaceAttributes, snapshot.Definitions[FaceKind]),
+        ];
+        for (int kind = 0; kind < 4; kind++)
+        {
+            definitions[kind].List.Clear();
+            definitions[kind].List.AddRange(definitions[kind].Saved);
+            _stores[kind].Reset();
+            foreach (AttributeDefinition definition in definitions[kind].Saved)
+                _stores[kind].Column(definition.Name).Definition = definition;
+        }
 
         var verts = new Vertex[snapshot.Points.Length];
         for (int i = 0; i < verts.Length; i++)
         {
-            verts[i] = new Vertex(snapshot.Points[i]) { Attributes = AttributeTransfer.Copy(snapshot.VertexData[i]) };
-            Vertices.Add(verts[i]);
+            verts[i] = new Vertex(snapshot.Points[i]);
+            Attach(Vertices, verts[i]);
         }
-        foreach (var (a, b, attributes) in snapshot.EdgeData)
-            AddEdge(verts[a], verts[b]).Attributes = AttributeTransfer.Copy(attributes);
-        foreach (var (indices, attributes, loops) in snapshot.FaceData)
+        // The saved edges are all different and the faces name theirs, so nothing has to be searched for
+        var edges = new Edge[snapshot.EdgeVerts.Length / 2];
+        for (int i = 0; i < edges.Length; i++)
+            edges[i] = NewEdge(verts[snapshot.EdgeVerts[i * 2]], verts[snapshot.EdgeVerts[i * 2 + 1]]);
+
+        // Elements are made in the order they were saved in, so a saved value's place is its element's place in the list.
+        // A face that cannot be made again would break that, so where each face and corner ended up is kept.
+        var faceSlots = new int[snapshot.FaceSizes.Length];
+        var cornerSlots = new int[snapshot.FaceVerts.Length];
+        int at = 0;
+        for (int f = 0; f < faceSlots.Length; f++)
         {
-            Face? face = AddFace(indices.Select(i => verts[i]).ToArray(), fillAttributes: false);
-            if (face == null) continue;
-            face.Attributes = AttributeTransfer.Copy(attributes);
-            var loop = face.Loop!;
-            for (int i = 0; i < loops.Length; i++)
+            int size = snapshot.FaceSizes[f];
+            var corners = new Vertex[size];
+            var sides = new Edge[size];
+            for (int k = 0; k < size; k++)
             {
-                loop.Attributes = AttributeTransfer.Copy(loops[i]);
-                loop = loop.Next!;
+                corners[k] = verts[snapshot.FaceVerts[at + k]];
+                sides[k] = edges[snapshot.FaceEdges[at + k]];
             }
+            int firstLoop = Loops.Count;
+            Face? face = size < 3 ? null : BuildFace(corners, sides);
+            faceSlots[f] = face?.Slot ?? -1;
+            for (int k = 0; k < size; k++) cornerSlots[at + k] = face == null ? -1 : firstLoop + k;
+            at += size;
         }
+
+        PutColumns(VertexKind, snapshot.Columns[VertexKind], null);
+        PutColumns(EdgeKind, snapshot.Columns[EdgeKind], null);
+        PutColumns(LoopKind, snapshot.Columns[LoopKind], cornerSlots);
+        PutColumns(FaceKind, snapshot.Columns[FaceKind], faceSlots);
         Version++;
     }
 
-    private static void ReplaceDefinitions(List<AttributeDefinition> target, AttributeDefinition[] source)
+    private void PutColumns(int kind, (string Name, AttributeValue?[] Values)[] saved, int[]? slots)
     {
-        target.Clear();
-        target.AddRange(source);
+        foreach ((string name, AttributeValue?[] values) in saved)
+        {
+            AttributeColumn column = _stores[kind].Column(name);
+            var copy = new AttributeValue?[values.Length];
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (values[i] is not { } value) continue;
+                int slot = slots == null ? i : slots[i];
+                if (slot >= 0 && slot < copy.Length) copy[slot] = AttributeValue.Copy(value);
+            }
+            column.Values = copy;
+        }
     }
 
     #endregion
 }
 
-/// <summary>A copy of a <see cref="GeometryData"/> at a moment, for undo.</summary>
+/// <summary>
+/// A copy of a <see cref="GeometryData"/> at a moment, for undo. It holds the mesh as flat arrays: points, edge ends,
+/// face corners, and each attribute as one array of values, so taking one costs in step with what the mesh holds.
+/// </summary>
 public sealed class GeometrySnapshot
 {
-    internal GeometryData.AttributeDefinition[] VertexDefinitions = [], EdgeDefinitions = [], LoopDefinitions = [], FaceDefinitions = [];
+    internal GeometryData.AttributeDefinition[][] Definitions = [[], [], [], []];
     internal Float3[] Points = [];
-    internal Dictionary<string, GeometryData.AttributeValue>[] VertexData = [];
-    internal (int A, int B, Dictionary<string, GeometryData.AttributeValue> Attributes)[] EdgeData = [];
-    internal (int[] Indices, Dictionary<string, GeometryData.AttributeValue> Attributes, Dictionary<string, GeometryData.AttributeValue>[] Loops)[] FaceData = [];
+    internal int[] EdgeVerts = [];
+    internal int[] FaceSizes = [];
+    internal int[] FaceVerts = [];
+
+    /// <summary>The edge leaving each face corner, beside <see cref="FaceVerts"/>.</summary>
+    internal int[] FaceEdges = [];
+
+    /// <summary>The attribute values by element kind. Loop values are in the order the faces list their corners.</summary>
+    internal (string Name, GeometryData.AttributeValue?[] Values)[][] Columns = [[], [], [], []];
 
     /// <summary>How many vertices the mesh had.</summary>
     public int VertexCount => Points.Length;
 
     /// <summary>How many faces the mesh had.</summary>
-    public int FaceCount => FaceData.Length;
+    public int FaceCount => FaceSizes.Length;
 
     internal static GeometrySnapshot From(GeometryData data)
     {
-        var index = new Dictionary<GeometryData.Vertex, int>(data.Vertices.Count);
-        for (int i = 0; i < data.Vertices.Count; i++) index[data.Vertices[i]] = i;
-
-        return new GeometrySnapshot
+        var snapshot = new GeometrySnapshot
         {
-            VertexDefinitions = data.VertexAttributes.ToArray(),
-            EdgeDefinitions = data.EdgeAttributes.ToArray(),
-            LoopDefinitions = data.LoopAttributes.ToArray(),
-            FaceDefinitions = data.FaceAttributes.ToArray(),
-            Points = data.Vertices.Select(v => v.Point).ToArray(),
-            VertexData = data.Vertices.Select(v => AttributeTransfer.Copy(v.Attributes)).ToArray(),
-            EdgeData = data.Edges.Select(e => (index[e.Vert1], index[e.Vert2], AttributeTransfer.Copy(e.Attributes))).ToArray(),
-            FaceData = data.Faces.Select(f =>
-            {
-                var indices = new List<int>();
-                var loops = new List<Dictionary<string, GeometryData.AttributeValue>>();
-                var loop = f.Loop!;
-                do
-                {
-                    indices.Add(index[loop.Vert]);
-                    loops.Add(AttributeTransfer.Copy(loop.Attributes));
-                    loop = loop.Next!;
-                } while (loop != f.Loop);
-                return (indices.ToArray(), AttributeTransfer.Copy(f.Attributes), loops.ToArray());
-            }).ToArray(),
+            Definitions = [data.VertexAttributes.ToArray(), data.EdgeAttributes.ToArray(), data.LoopAttributes.ToArray(), data.FaceAttributes.ToArray()],
+            Points = new Float3[data.Vertices.Count],
+            EdgeVerts = new int[data.Edges.Count * 2],
+            FaceSizes = new int[data.Faces.Count],
+            FaceVerts = new int[data.Loops.Count],
+            FaceEdges = new int[data.Loops.Count],
         };
+        for (int i = 0; i < data.Vertices.Count; i++) snapshot.Points[i] = data.Vertices[i].Point;
+        for (int i = 0; i < data.Edges.Count; i++)
+        {
+            snapshot.EdgeVerts[i * 2] = data.Edges[i].Vert1.Slot;
+            snapshot.EdgeVerts[i * 2 + 1] = data.Edges[i].Vert2.Slot;
+        }
+
+        var cornerSlots = new int[data.Loops.Count];
+        int at = 0;
+        for (int f = 0; f < data.Faces.Count; f++)
+        {
+            GeometryData.Face face = data.Faces[f];
+            GeometryData.Loop loop = face.Loop!;
+            int size = 0;
+            do
+            {
+                snapshot.FaceVerts[at] = loop.Vert.Slot;
+                snapshot.FaceEdges[at] = loop.Edge.Slot;
+                cornerSlots[at++] = loop.Slot;
+                size++;
+                loop = loop.Next!;
+            } while (loop != face.Loop);
+            snapshot.FaceSizes[f] = size;
+        }
+
+        snapshot.Columns =
+        [
+            data.CopyColumns(GeometryData.VertexKind, data.Vertices.Count, null), data.CopyColumns(GeometryData.EdgeKind, data.Edges.Count, null),
+            data.CopyColumns(GeometryData.LoopKind, at, cornerSlots), data.CopyColumns(GeometryData.FaceKind, data.Faces.Count, null),
+        ];
+        return snapshot;
     }
 }

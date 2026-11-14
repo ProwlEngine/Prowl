@@ -656,10 +656,10 @@ internal static class SimplifyOp
             return Math.Max(error, 0);
         }
 
-        private bool IntsDiffer(Dictionary<string, GeometryData.AttributeValue> a, Dictionary<string, GeometryData.AttributeValue> b, string name)
+        private bool IntsDiffer(GeometryData.Element a, GeometryData.Element b, string name)
         {
-            a.TryGetValue(name, out var va);
-            b.TryGetValue(name, out var vb);
+            a.TryGetAttribute(name, out var va);
+            b.TryGetAttribute(name, out var vb);
             return !(va is GeometryData.IntAttributeValue ia && vb is GeometryData.IntAttributeValue ib && ia.Data.AsSpan().SequenceEqual(ib.Data));
         }
 
@@ -674,9 +674,9 @@ internal static class SimplifyOp
             {
                 string name = _intAttributes[i];
                 bool differs = _intOnLoop[i]
-                    ? IntsDiffer(_wedgeLoops[candidate.FromA].Attributes, candidate.LoopA!.Attributes, name)
-                      || (candidate.FromB >= 0 && IntsDiffer(_wedgeLoops[candidate.FromB].Attributes, candidate.LoopB!.Attributes, name))
-                    : IntsDiffer(_vertices[u].Attributes, _vertices[v].Attributes, name);
+                    ? IntsDiffer(_wedgeLoops[candidate.FromA], candidate.LoopA!, name)
+                      || (candidate.FromB >= 0 && IntsDiffer(_wedgeLoops[candidate.FromB], candidate.LoopB!, name))
+                    : IntsDiffer(_vertices[u], _vertices[v], name);
                 if (differs) penalty += _intWeights[i];
             }
             return penalty;
@@ -1212,7 +1212,7 @@ internal static class SimplifyOp
             foreach (var e in _mesh.Edges)
             {
                 if (e.Loop == null) wireEdges.Add(e);
-                else edgeData[PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2])] = (e.Id, e.Attributes);
+                else edgeData[PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2])] = (e.Id, e.Attributes.ToDictionary());
             }
 
             // Pinned vertices never collapse, so faceless and wire vertices are all still here
@@ -1224,14 +1224,12 @@ internal static class SimplifyOp
                 for (int k = 0; k < 3; k++) keep[_triangles[t * 3 + k]] = true;
             }
 
-            _mesh.Faces.Clear();
-            _mesh.Edges.Clear();
-            _mesh.Loops.Clear();
-            _mesh.Vertices.Clear();
+            // Everything leaves the mesh carrying its attributes, and what is kept goes back in with them
+            _mesh.DetachAll(keepAttributes: true);
             for (int v = 0; v < _vertices.Length; v++)
             {
                 _vertices[v].Edge = null;
-                if (keep[v]) _mesh.Vertices.Add(_vertices[v]);
+                if (keep[v]) _mesh.AddVertex(_vertices[v]);
             }
 
             // The first corner to use a source loop takes its dictionary, the rest take copies
@@ -1274,6 +1272,8 @@ internal static class SimplifyOp
                 if (_mesh.EdgeAttributes.Count > 0) e.Attributes = CopyAttributes(data.Attributes);
             }
         }
+
+        private static Dictionary<string, GeometryData.AttributeValue> CopyAttributes(GeometryData.AttributeView source) => AttributeTransfer.Copy(source);
 
         private static Dictionary<string, GeometryData.AttributeValue> CopyAttributes(Dictionary<string, GeometryData.AttributeValue> source)
         {

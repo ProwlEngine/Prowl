@@ -34,11 +34,12 @@ public partial class GeometryData
     /// <summary>
     /// A vertex corresponds to a position in space. Many primitives (edges, faces) can share a vertex.
     /// </summary>
-    public partial class Vertex
+    public partial class Vertex : Element
     {
+        internal override int Kind => VertexKind;
+
         public int Id; // User-defined ID
         public Float3 Point; // Position in space
-        public Dictionary<string, AttributeValue> Attributes = new Dictionary<string, AttributeValue>();
         public Edge? Edge; // One of the edges using this vertex, navigate others using edge.Next()
 
         public Vertex(Float3 point)
@@ -87,10 +88,11 @@ public partial class GeometryData
     /// <summary>
     /// An edge links two vertices together and may be part of one or more faces.
     /// </summary>
-    public partial class Edge
+    public partial class Edge : Element
     {
+        internal override int Kind => EdgeKind;
+
         public int Id;
-        public Dictionary<string, AttributeValue> Attributes = new Dictionary<string, AttributeValue>();
         public Vertex Vert1;
         public Vertex Vert2;
         public Edge? Next1; // Next edge around vert1
@@ -161,9 +163,10 @@ public partial class GeometryData
     /// A loop represents a face corner and is a node in both the face's edge loop and the edge's radial loop.
     /// This is where per-corner attributes like UVs are typically stored.
     /// </summary>
-    public class Loop
+    public class Loop : Element
     {
-        public Dictionary<string, AttributeValue> Attributes = new Dictionary<string, AttributeValue>();
+        internal override int Kind => LoopKind;
+
         public Vertex Vert;
         public Edge Edge;
         public Face Face;
@@ -183,10 +186,11 @@ public partial class GeometryData
     /// <summary>
     /// A face is a polygon with any number of vertices, represented as a loop of edges.
     /// </summary>
-    public partial class Face
+    public partial class Face : Element
     {
+        internal override int Kind => FaceKind;
+
         public int Id;
-        public Dictionary<string, AttributeValue> Attributes = new Dictionary<string, AttributeValue>();
         public int VertCount; // Cached for convenience
         public Loop? Loop; // Navigate using loop.Next
 
@@ -298,8 +302,7 @@ public partial class GeometryData
     /// </summary>
     public Vertex AddVertex(Vertex vert)
     {
-        EnsureVertexAttributes(vert);
-        Vertices.Add(vert);
+        Attach(Vertices, vert);
         Version++;
         return vert;
     }
@@ -314,12 +317,14 @@ public partial class GeometryData
     {
         Debug.Assert(vert1 != vert2);
 
-        var edge = FindEdge(vert1, vert2);
-        if (edge != null) return edge;
+        return FindEdge(vert1, vert2) ?? NewEdge(vert1, vert2);
+    }
 
-        edge = new Edge(vert1, vert2);
-        EnsureEdgeAttributes(edge);
-        Edges.Add(edge);
+    // Adds an edge without looking for one already there
+    private Edge NewEdge(Vertex vert1, Vertex vert2)
+    {
+        var edge = new Edge(vert1, vert2);
+        Attach(Edges, edge);
         Version++;
 
         // Insert in vert1's edge list
@@ -374,16 +379,19 @@ public partial class GeometryData
         {
             fEdges[iPrev] = AddEdge(fVerts[iPrev], fVerts[i]);
         }
+        return BuildFace(fVerts, fEdges);
+    }
 
+    // Makes a face from its corners and the edge leaving each corner, which must already be in the mesh
+    private Face BuildFace(Vertex[] fVerts, Edge[] fEdges)
+    {
         var f = new Face();
-        if (fillAttributes) EnsureFaceAttributes(f);
-        Faces.Add(f);
+        Attach(Faces, f);
 
         for (int i = 0; i < fVerts.Length; i++)
         {
             var loop = new Loop(fVerts[i], fEdges[i], f);
-            if (fillAttributes) EnsureLoopAttributes(loop);
-            Loops.Add(loop);
+            Attach(Loops, loop);
 
             // Insert loop into face's loop list
             if (f.Loop == null)
@@ -451,7 +459,7 @@ public partial class GeometryData
     {
         while (v.Edge != null)
             RemoveEdge(v.Edge);
-        Vertices.Remove(v);
+        Detach(Vertices, v);
         Version++;
     }
 
@@ -473,7 +481,7 @@ public partial class GeometryData
         if (e.Prev2 != null) e.Prev2.SetNext(e.Vert2, e.Next2);
         if (e.Next2 != null) e.Next2.SetPrev(e.Vert2, e.Prev2);
 
-        Edges.Remove(e);
+        Detach(Edges, e);
         Version++;
     }
 
@@ -498,7 +506,7 @@ public partial class GeometryData
             if (l.Edge.Loop == l) l.Edge.Loop = l.RadialNext;
         }
 
-        Loops.Remove(l);
+        Detach(Loops, l);
     }
 
     /// <summary>
@@ -518,7 +526,7 @@ public partial class GeometryData
                 RemoveLoop(currentL);
             } while (nextL != f.Loop && nextL != null);
         }
-        Faces.Remove(f);
+        Detach(Faces, f);
         Version++;
     }
 
@@ -561,11 +569,104 @@ public partial class GeometryData
                 fval.Data.CopyTo(data, 0);
                 return new FloatAttributeValue { Data = data };
             }
+            if (value is WeightsAttributeValue wval)
+                return new WeightsAttributeValue((int[])wval.Groups.Clone(), (float[])wval.Weights.Clone());
             throw new InvalidOperationException("Unknown attribute value type");
         }
 
         public IntAttributeValue? AsInt() => this as IntAttributeValue;
         public FloatAttributeValue? AsFloat() => this as FloatAttributeValue;
+    }
+
+    /// <summary>
+    /// A short list of weights, each for a group named by an index, as skin weights are: how much each bone moves a
+    /// vertex. Groups that are not listed weigh nothing. The indices point into a list of names the owner keeps, so
+    /// renaming or reordering groups does not touch the values.
+    /// </summary>
+    public class WeightsAttributeValue : AttributeValue
+    {
+        public int[] Groups = Array.Empty<int>();
+        public float[] Weights = Array.Empty<float>();
+
+        public WeightsAttributeValue() { }
+
+        public WeightsAttributeValue(int[] groups, float[] weights)
+        {
+            if (groups.Length != weights.Length) throw new ArgumentException("A weight is needed for every group.");
+            Groups = groups;
+            Weights = weights;
+        }
+
+        /// <summary>The weight of a group, zero when the group is not listed.</summary>
+        public float this[int group]
+        {
+            get
+            {
+                for (int i = 0; i < Groups.Length; i++)
+                    if (Groups[i] == group) return Weights[i];
+                return 0;
+            }
+        }
+
+        /// <summary>The same weights with one group set. A weight at or under the smallest kept takes the group off the list.</summary>
+        public WeightsAttributeValue With(int group, float weight)
+        {
+            var groups = new List<int>(Groups.Length + 1);
+            var weights = new List<float>(Groups.Length + 1);
+            for (int i = 0; i < Groups.Length; i++)
+            {
+                if (Groups[i] == group) continue;
+                groups.Add(Groups[i]);
+                weights.Add(Weights[i]);
+            }
+            if (weight > Smallest)
+            {
+                groups.Add(group);
+                weights.Add(weight);
+            }
+            return new WeightsAttributeValue(groups.ToArray(), weights.ToArray());
+        }
+
+        /// <summary>The same weights scaled so they add up to one. Unchanged when they add up to nothing.</summary>
+        public WeightsAttributeValue Normalized()
+        {
+            float sum = 0;
+            foreach (float weight in Weights) sum += weight;
+            if (sum <= Smallest) return this;
+            var weights = new float[Weights.Length];
+            for (int i = 0; i < weights.Length; i++) weights[i] = Weights[i] / sum;
+            return new WeightsAttributeValue((int[])Groups.Clone(), weights);
+        }
+
+        /// <summary>
+        /// Several lists mixed, each by its share. The weight of a group is the sum of its weights times their
+        /// shares, and groups left with next to nothing are dropped.
+        /// </summary>
+        public static WeightsAttributeValue Blend(ReadOnlySpan<WeightsAttributeValue> values, ReadOnlySpan<float> shares)
+        {
+            var sums = new Dictionary<int, float>();
+            for (int v = 0; v < values.Length; v++)
+            {
+                WeightsAttributeValue value = values[v];
+                for (int i = 0; i < value.Groups.Length; i++)
+                {
+                    sums.TryGetValue(value.Groups[i], out float sum);
+                    sums[value.Groups[i]] = sum + value.Weights[i] * shares[v];
+                }
+            }
+            var groups = new List<int>(sums.Count);
+            var weights = new List<float>(sums.Count);
+            foreach (var pair in sums)
+            {
+                if (pair.Value <= Smallest) continue;
+                groups.Add(pair.Key);
+                weights.Add(pair.Value);
+            }
+            return new WeightsAttributeValue(groups.ToArray(), weights.ToArray());
+        }
+
+        /// <summary>Weights at or under this are dropped from a list.</summary>
+        public const float Smallest = 1e-4f;
     }
 
     public class IntAttributeValue : AttributeValue
@@ -629,92 +730,28 @@ public partial class GeometryData
     #region Attribute Management
 
     public bool HasVertexAttribute(string name) => VertexAttributes.Any(a => a.Name == name);
+
+    /// <summary>Declares a vertex attribute. Every vertex reads its default until it is given a value. Returns the one already declared under the name, if any.</summary>
     public AttributeDefinition AddVertexAttribute(string name, AttributeBaseType baseType, int dimensions)
-    {
-        var existing = VertexAttributes.FirstOrDefault(a => a.Name == name);
-        if (existing != null) return existing;
-
-        var attrib = new AttributeDefinition(name, baseType, dimensions);
-        VertexAttributes.Add(attrib);
-        foreach (var v in Vertices)
-            v.Attributes[attrib.Name] = AttributeValue.Copy(attrib.DefaultValue);
-        return attrib;
-    }
-
-    private void EnsureVertexAttributes(Vertex v)
-    {
-        foreach (var attr in VertexAttributes)
-        {
-            if (!v.Attributes.ContainsKey(attr.Name) || !attr.Type.CheckValue(v.Attributes[attr.Name]))
-                v.Attributes[attr.Name] = AttributeValue.Copy(attr.DefaultValue);
-        }
-    }
+        => Declare(VertexKind, VertexAttributes, name, baseType, dimensions);
 
     public bool HasEdgeAttribute(string name) => EdgeAttributes.Any(a => a.Name == name);
+
+    /// <inheritdoc cref="AddVertexAttribute"/>
     public AttributeDefinition AddEdgeAttribute(string name, AttributeBaseType baseType, int dimensions)
-    {
-        var existing = EdgeAttributes.FirstOrDefault(a => a.Name == name);
-        if (existing != null) return existing;
-
-        var attrib = new AttributeDefinition(name, baseType, dimensions);
-        EdgeAttributes.Add(attrib);
-        foreach (var e in Edges)
-            e.Attributes[attrib.Name] = AttributeValue.Copy(attrib.DefaultValue);
-        return attrib;
-    }
-
-    private void EnsureEdgeAttributes(Edge e)
-    {
-        foreach (var attr in EdgeAttributes)
-        {
-            if (!e.Attributes.ContainsKey(attr.Name) || !attr.Type.CheckValue(e.Attributes[attr.Name]))
-                e.Attributes[attr.Name] = AttributeValue.Copy(attr.DefaultValue);
-        }
-    }
+        => Declare(EdgeKind, EdgeAttributes, name, baseType, dimensions);
 
     public bool HasLoopAttribute(string name) => LoopAttributes.Any(a => a.Name == name);
+
+    /// <inheritdoc cref="AddVertexAttribute"/>
     public AttributeDefinition AddLoopAttribute(string name, AttributeBaseType baseType, int dimensions)
-    {
-        var existing = LoopAttributes.FirstOrDefault(a => a.Name == name);
-        if (existing != null) return existing;
-
-        var attrib = new AttributeDefinition(name, baseType, dimensions);
-        LoopAttributes.Add(attrib);
-        foreach (var l in Loops)
-            l.Attributes[attrib.Name] = AttributeValue.Copy(attrib.DefaultValue);
-        return attrib;
-    }
-
-    private void EnsureLoopAttributes(Loop l)
-    {
-        foreach (var attr in LoopAttributes)
-        {
-            if (!l.Attributes.ContainsKey(attr.Name) || !attr.Type.CheckValue(l.Attributes[attr.Name]))
-                l.Attributes[attr.Name] = AttributeValue.Copy(attr.DefaultValue);
-        }
-    }
+        => Declare(LoopKind, LoopAttributes, name, baseType, dimensions);
 
     public bool HasFaceAttribute(string name) => FaceAttributes.Any(a => a.Name == name);
+
+    /// <inheritdoc cref="AddVertexAttribute"/>
     public AttributeDefinition AddFaceAttribute(string name, AttributeBaseType baseType, int dimensions)
-    {
-        var existing = FaceAttributes.FirstOrDefault(a => a.Name == name);
-        if (existing != null) return existing;
-
-        var attrib = new AttributeDefinition(name, baseType, dimensions);
-        FaceAttributes.Add(attrib);
-        foreach (var f in Faces)
-            f.Attributes[attrib.Name] = AttributeValue.Copy(attrib.DefaultValue);
-        return attrib;
-    }
-
-    private void EnsureFaceAttributes(Face f)
-    {
-        foreach (var attr in FaceAttributes)
-        {
-            if (!f.Attributes.ContainsKey(attr.Name) || !attr.Type.CheckValue(f.Attributes[attr.Name]))
-                f.Attributes[attr.Name] = AttributeValue.Copy(attr.DefaultValue);
-        }
-    }
+        => Declare(FaceKind, FaceAttributes, name, baseType, dimensions);
 
     #endregion
 

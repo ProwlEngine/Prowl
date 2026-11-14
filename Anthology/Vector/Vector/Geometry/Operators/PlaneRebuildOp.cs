@@ -94,7 +94,7 @@ internal static class PlaneRebuildOp
 
         foreach (Edge e in graph)
         {
-            if (e.Loop != null || !hadFaces.Contains(e) || !mesh.Edges.Contains(e)) continue;
+            if (e.Loop != null || !hadFaces.Contains(e) || !mesh.Contains(e)) continue;
             if (IsNewEdge(e.Vert1.Point, e.Vert2.Point, newSegments)) continue;
             mesh.RemoveEdge(e);
         }

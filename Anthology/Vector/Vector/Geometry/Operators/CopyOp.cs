@@ -42,7 +42,7 @@ internal static class CopyOp
 
         List<Vertex> copies = map.Values.ToList();
         RebuildAround(mesh, copies);
-        return copies.Where(v => mesh.Vertices.Contains(v)).ToList();
+        return copies.Where(v => mesh.Contains(v)).ToList();
     }
 
     /// <summary>A mirrored copy of faces and edges across a plane. The copies are wound to face the same way as the originals.</summary>

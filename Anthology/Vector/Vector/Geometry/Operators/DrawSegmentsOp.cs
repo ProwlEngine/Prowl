@@ -56,7 +56,7 @@ internal static class DrawSegmentsOp
         // A line that closes a loop in the air makes a plane with the lines it joins
         foreach (Edge edge in newEdges.ToList())
         {
-            if (!mesh.Edges.Contains(edge)) continue;
+            if (!mesh.Contains(edge)) continue;
             Float3 direction = Float3.Normalize(edge.Vert2.Point - edge.Vert1.Point);
             foreach (Vertex end in new[] { edge.Vert1, edge.Vert2 })
             {
@@ -76,7 +76,7 @@ internal static class DrawSegmentsOp
             var inPlane = drawn.Where(s => MathF.Abs(Float3.Dot(s.A - plane.Origin, plane.Normal)) <= Eps
                                         && MathF.Abs(Float3.Dot(s.B - plane.Origin, plane.Normal)) <= Eps).ToList();
             if (inPlane.Count == 0) continue;
-            PlaneRebuildOp.Run(mesh, plane.Normal, plane.Origin, seeds.Where(v => mesh.Vertices.Contains(v)), inPlane, material);
+            PlaneRebuildOp.Run(mesh, plane.Normal, plane.Origin, seeds.Where(v => mesh.Contains(v)), inPlane, material);
         }
 
         mesh.RemoveUnused();

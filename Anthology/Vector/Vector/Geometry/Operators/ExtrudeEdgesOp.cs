@@ -30,7 +30,7 @@ internal static class ExtrudeEdgesOp
 
         foreach (Edge e in edges.ToList())
         {
-            if (e.IsHidden || !mesh.Edges.Contains(e)) continue;
+            if (e.IsHidden || !mesh.Contains(e)) continue;
             Vertex a = e.Vert1, b = e.Vert2;
             Vertex ac = Copy(a), bc = Copy(b);
             mesh.AddEdge(ac, bc, false);
@@ -53,6 +53,6 @@ internal static class ExtrudeEdgesOp
 
         List<Vertex> copies = map.Values.ToList();
         RebuildAround(mesh, copies);
-        return copies.Where(mesh.Vertices.Contains).ToList();
+        return copies.Where(mesh.Contains).ToList();
     }
 }

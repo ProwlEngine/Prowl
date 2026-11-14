@@ -82,7 +82,7 @@ internal static class IntersectFacesOp
         }
 
         foreach (PlaneKey plane in planes)
-            PlaneRebuildOp.Run(mesh, plane.Normal, plane.Origin, seeds.Where(v => mesh.Vertices.Contains(v)), [], 0);
+            PlaneRebuildOp.Run(mesh, plane.Normal, plane.Origin, seeds.Where(v => mesh.Contains(v)), [], 0);
 
         mesh.RemoveUnused();
         mesh.MarkChanged();

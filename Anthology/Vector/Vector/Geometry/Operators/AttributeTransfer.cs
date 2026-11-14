@@ -150,6 +150,10 @@ internal sealed class FaceSnapshot
                 for (int k = 0; k < data.Length; k++) data[k] = fa.Data[k] * x + fb.Data[k] * y + fc.Data[k] * z;
                 result[definition.Name] = new GeometryData.FloatAttributeValue { Data = data };
             }
+            else if (va is GeometryData.WeightsAttributeValue wa && vb is GeometryData.WeightsAttributeValue wb && vc is GeometryData.WeightsAttributeValue wc)
+            {
+                result[definition.Name] = GeometryData.WeightsAttributeValue.Blend([wa, wb, wc], [x, y, z]);
+            }
             else if (Loops[dominant].TryGetValue(definition.Name, out var nearestValue))
             {
                 result[definition.Name] = GeometryData.AttributeValue.Copy(nearestValue);
@@ -183,7 +187,27 @@ internal static class AttributeTransfer
         foreach (var pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
     }
 
-    /// <summary>Interpolates every attribute two maps share. Float attributes blend, integer attributes take whichever side is nearer.</summary>
+    /// <summary>A separate copy of what an element carries, values included.</summary>
+    public static AttributeMap Copy(GeometryData.AttributeView source)
+    {
+        var copy = new AttributeMap();
+        foreach (var pair in source) copy[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+        return copy;
+    }
+
+    /// <summary>Gives an element copies of what another carries, over what it had under the same names.</summary>
+    public static void Apply(GeometryData.AttributeView source, GeometryData.AttributeView target)
+    {
+        foreach (var pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+    }
+
+    /// <summary>Gives an element copies of the values in a map, over what it had under the same names.</summary>
+    public static void Apply(AttributeMap source, GeometryData.AttributeView target)
+    {
+        foreach (var pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+    }
+
+    /// <summary>Interpolates every attribute two maps share. Float attributes and weight lists blend, integer attributes take whichever side is nearer.</summary>
     public static AttributeMap Lerp(AttributeMap a, AttributeMap b, float t)
     {
         var result = new AttributeMap();
@@ -195,6 +219,10 @@ internal static class AttributeTransfer
                 var data = new float[fa.Data.Length];
                 for (int i = 0; i < data.Length; i++) data[i] = fa.Data[i] + (fb.Data[i] - fa.Data[i]) * t;
                 result[pair.Key] = new GeometryData.FloatAttributeValue { Data = data };
+            }
+            else if (pair.Value is GeometryData.WeightsAttributeValue wa && other is GeometryData.WeightsAttributeValue wb)
+            {
+                result[pair.Key] = GeometryData.WeightsAttributeValue.Blend([wa, wb], [1 - t, t]);
             }
             else
             {

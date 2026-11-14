@@ -162,7 +162,7 @@ internal static class BevelOp
         {
             if (_before != null) _mesh.Restore(_before);
             for (int i = _mesh.Vertices.Count - 1; i >= _count; i--)
-                if (_mesh.Vertices[i].Edge == null) _mesh.Vertices.RemoveAt(i);
+                if (_mesh.Vertices[i].Edge == null) _mesh.RemoveVertex(_mesh.Vertices[i]);
             _mesh.MarkChanged();
         }
 
@@ -212,7 +212,7 @@ internal static class BevelOp
         var selected = new HashSet<Edge>();
         foreach (Edge e in edges)
         {
-            if (!mesh.Edges.Contains(e) || e.IsHidden) continue;
+            if (!mesh.Contains(e) || e.IsHidden) continue;
             List<Face> faces = e.NeighborFaces();
             if (faces.Count != 2) throw new InvalidOperationException("Bevel works on edges between two faces, select edges that are not on an open border");
             if (faces[0] == faces[1]) throw new InvalidOperationException("An edge with the same face on both sides cannot be beveled");
@@ -318,7 +318,7 @@ internal static class BevelOp
         guard.Begin();
         foreach (Face face in rewritten.Keys) mesh.RemoveFace(face);
         foreach (Edge e in incident)
-            if (mesh.Edges.Contains(e)) mesh.RemoveEdge(e);
+            if (mesh.Contains(e)) mesh.RemoveEdge(e);
 
         foreach ((Face face, List<Vertex> loop) in rewritten)
         {
@@ -387,7 +387,7 @@ internal static class BevelOp
                 foreach (Vertex tb in Terminals(datas, b))
                 {
                     if (ta == tb) continue;
-                    Edge? piece = mesh.Vertices.Contains(ta) && mesh.Vertices.Contains(tb) ? mesh.FindEdge(ta, tb) : null;
+                    Edge? piece = mesh.Contains(ta) && mesh.Contains(tb) ? mesh.FindEdge(ta, tb) : null;
                     if (piece == null || selected.Any(s => s.Vert1 == a && s.Vert2 == b || s.Vert1 == b && s.Vert2 == a)) continue;
                     AttributeTransfer.Apply(attributes, piece.Attributes);
                 }
@@ -395,7 +395,7 @@ internal static class BevelOp
 
         WeldNew(mesh, firstNew);
         foreach (Face f in created.ToList())
-            if (mesh.Faces.Contains(f) && !f.IsPlanar(5e-5f)) EditingCommon.Fold(mesh, f);
+            if (mesh.Contains(f) && !f.IsPlanar(5e-5f)) EditingCommon.Fold(mesh, f);
 
         mesh.RemoveUnused();
         mesh.MarkChanged();
@@ -869,7 +869,7 @@ internal static class BevelOp
     {
         if (width <= 1e-6f) throw new InvalidOperationException("The bevel width must be above zero");
         int firstNew = mesh.Vertices.Count;
-        var targets = vertices.Where(mesh.Vertices.Contains).Where(v => v.NeighborEdges().Any(e => e.Loop != null)).ToList();
+        var targets = vertices.Where(mesh.Contains).Where(v => v.NeighborEdges().Any(e => e.Loop != null)).ToList();
         if (targets.Count == 0) throw new InvalidOperationException("No vertices to bevel");
 
         var fans = targets.ToDictionary(v => v, BuildFan);
@@ -929,7 +929,7 @@ internal static class BevelOp
         guard.Begin();
         foreach (Face face in rewritten.Keys) mesh.RemoveFace(face);
         foreach (Edge e in incident)
-            if (mesh.Edges.Contains(e)) mesh.RemoveEdge(e);
+            if (mesh.Contains(e)) mesh.RemoveEdge(e);
 
         var created = new List<Face>();
         foreach ((Face face, List<Vertex> loop) in rewritten)
@@ -960,7 +960,7 @@ internal static class BevelOp
 
         WeldNew(mesh, firstNew);
         foreach (Face f in created.ToList())
-            if (mesh.Faces.Contains(f) && !f.IsPlanar(5e-5f)) EditingCommon.Fold(mesh, f);
+            if (mesh.Contains(f) && !f.IsPlanar(5e-5f)) EditingCommon.Fold(mesh, f);
 
         mesh.RemoveUnused();
         mesh.MarkChanged();

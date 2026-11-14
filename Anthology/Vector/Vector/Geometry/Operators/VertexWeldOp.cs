@@ -138,7 +138,7 @@ internal static class VertexWeldOp
         }
 
         foreach (var v in removed)
-            if (mesh.Vertices.Contains(v)) mesh.RemoveVertex(v);
+            if (mesh.Contains(v)) mesh.RemoveVertex(v);
 
         return mapping.Count;
     }

@@ -18,7 +18,7 @@ internal static class DeleteOp
     /// <summary>Deletes faces, along with the rest of any face they were joined to by hidden edges. Their edges stay.</summary>
     internal static void DeleteFaces(GeometryData mesh, IEnumerable<Face> faces)
     {
-        var all = faces.Where(f => mesh.Faces.Contains(f)).SelectMany(f => f.LogicalFace()).ToHashSet();
+        var all = faces.Where(f => mesh.Contains(f)).SelectMany(f => f.LogicalFace()).ToHashSet();
         foreach (Face f in all) mesh.RemoveFace(f);
         mesh.RemoveUnused();
         mesh.MarkChanged();
@@ -33,7 +33,7 @@ internal static class DeleteOp
         var ends = new List<Vertex>();
         foreach (Edge e in edges.ToList())
         {
-            if (!mesh.Edges.Contains(e) || e.IsHidden) continue;
+            if (!mesh.Contains(e) || e.IsHidden) continue;
             Vertex a = e.Vert1, b = e.Vert2;
             ends.Add(a);
             ends.Add(b);
@@ -43,7 +43,7 @@ internal static class DeleteOp
             {
                 Float3 normal = Float3.Normalize(faces[0].Normal());
                 PlaneRebuildOp.Run(mesh, normal, a.Point, [a, b], [], 0, new HashSet<Edge> { e });
-                if (mesh.Edges.Contains(e)) RemoveWithLogical(mesh, e);
+                if (mesh.Contains(e)) RemoveWithLogical(mesh, e);
             }
             else
             {
@@ -52,7 +52,7 @@ internal static class DeleteOp
         }
 
         foreach (Vertex v in ends.Distinct())
-            if (mesh.Vertices.Contains(v)) mesh.DissolveVertex(v);
+            if (mesh.Contains(v)) mesh.DissolveVertex(v);
 
         mesh.RemoveUnused();
         mesh.MarkChanged();
@@ -70,10 +70,10 @@ internal static class DeleteOp
     {
         foreach (Vertex v in vertices.ToList())
         {
-            if (!mesh.Vertices.Contains(v) || mesh.DissolveVertex(v)) continue;
+            if (!mesh.Contains(v) || mesh.DissolveVertex(v)) continue;
             foreach (Edge e in v.NeighborEdges())
                 foreach (Face f in e.NeighborFaces().SelectMany(f => f.LogicalFace()).Distinct().ToList())
-                    if (mesh.Faces.Contains(f)) mesh.RemoveFace(f);
+                    if (mesh.Contains(f)) mesh.RemoveFace(f);
             mesh.RemoveVertex(v);
         }
         mesh.RemoveUnused();

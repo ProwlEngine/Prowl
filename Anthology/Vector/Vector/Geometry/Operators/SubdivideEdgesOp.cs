@@ -23,7 +23,7 @@ internal static class SubdivideEdgesOp
 
         foreach (Edge edge in edges.ToList())
         {
-            if (!mesh.Edges.Contains(edge)) continue;
+            if (!mesh.Contains(edge)) continue;
             Vertex start = edge.Vert1, end = edge.Vert2;
             Float3 a = start.Point, b = end.Point;
             Edge current = edge;

@@ -84,10 +84,10 @@ internal static class PushPullOp
         }
 
         foreach (Edge e in regionEdges)
-            if (e.Loop == null && mesh.Edges.Contains(e)) mesh.RemoveEdge(e);
+            if (e.Loop == null && mesh.Contains(e)) mesh.RemoveEdge(e);
 
         foreach ((Vertex v, int count) in softEnds)
-            if (count == 2 && moved.TryGetValue(v, out Vertex? lifted) && mesh.Vertices.Contains(v) && mesh.Vertices.Contains(lifted) && mesh.FindEdge(v, lifted) is Edge post)
+            if (count == 2 && moved.TryGetValue(v, out Vertex? lifted) && mesh.Contains(v) && mesh.Contains(lifted) && mesh.FindEdge(v, lifted) is Edge post)
                 post.IsSoft = true;
 
         List<Vertex> capVerts = mesh.MergeCoincident(moved.Values);
@@ -98,7 +98,7 @@ internal static class PushPullOp
         var wallPlanes = new List<(PlaneKey Plane, List<Vertex> Seeds, List<(Vertex, Vertex)> Dissolve)>();
         foreach ((Vertex a, Vertex b, _) in walls)
         {
-            if (!mesh.Vertices.Contains(a) || !mesh.Vertices.Contains(b)) continue;
+            if (!mesh.Contains(a) || !mesh.Contains(b)) continue;
             Float3 wallNormal = Float3.Cross(b.Point - a.Point, offset);
             if (Float3.Length(wallNormal) < 1e-9f) continue;
             wallNormal = Float3.Normalize(wallNormal);
@@ -116,13 +116,13 @@ internal static class PushPullOp
 
         foreach ((PlaneKey plane, List<Vertex> seeds, List<(Vertex, Vertex)> pairs) in wallPlanes)
         {
-            var dissolve = pairs.Select(p => mesh.Vertices.Contains(p.Item1) && mesh.Vertices.Contains(p.Item2) ? mesh.FindEdge(p.Item1, p.Item2) : null)
+            var dissolve = pairs.Select(p => mesh.Contains(p.Item1) && mesh.Contains(p.Item2) ? mesh.FindEdge(p.Item1, p.Item2) : null)
                 .OfType<Edge>().ToHashSet();
-            PlaneRebuildOp.Run(mesh, plane.Normal, plane.Origin, seeds.Where(v => mesh.Vertices.Contains(v)), [], 0, dissolve);
+            PlaneRebuildOp.Run(mesh, plane.Normal, plane.Origin, seeds.Where(v => mesh.Contains(v)), [], 0, dissolve);
         }
 
         foreach (Vertex v in walls.SelectMany(w => new[] { w.A, w.B }).Concat(capVerts).Distinct().ToList())
-            if (mesh.Vertices.Contains(v)) mesh.DissolveVertex(v);
+            if (mesh.Contains(v)) mesh.DissolveVertex(v);
 
         mesh.RemoveUnused();
         mesh.MarkChanged();

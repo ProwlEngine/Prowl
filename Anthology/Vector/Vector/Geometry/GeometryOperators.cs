@@ -638,7 +638,7 @@ public static class GeometryOperators
         if (relative && (offset <= 0.0f || offset >= 1.0f))
             throw new ArgumentException("Offset must be between 0.0 and 1.0 when it is relative", nameof(offset));
 
-        var targets = verticesToBevel.Where(v => mesh.Vertices.Contains(v) && v.NeighborFaces().Count > 0).Distinct().ToList();
+        var targets = verticesToBevel.Where(v => mesh.Contains(v) && v.NeighborFaces().Count > 0).Distinct().ToList();
         return targets.Count == 0 ? 0 : BevelOp.Vertices(mesh, targets, offset, relative);
     }
 
@@ -680,6 +680,167 @@ public static class GeometryOperators
     public static SimplifyResult Simplify(GeometryData mesh, SimplifyOptions options)
     {
         return SimplifyOp.Simplify(mesh, options);
+    }
+
+    /// <summary>
+    /// Merges each connected patch of the faces into one face along the patch's outline. The new face carries the
+    /// attributes of a face of its patch, its corners keep their loop attributes, and edges and vertices left
+    /// inside are removed. A patch whose outline is not one simple loop, such as a ring, is left as it is.
+    /// </summary>
+    /// <returns>The faces that came of it.</returns>
+    public static List<GeometryData.Face> DissolveFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
+    {
+        return DissolveOp.Faces(mesh, faces);
+    }
+
+    /// <summary>
+    /// Removes edges by joining the two faces either side of each into one, then removes the vertices at their
+    /// ends that are left joining only two edges. Edges without exactly two faces are left alone.
+    /// </summary>
+    /// <returns>How many edges were dissolved.</returns>
+    public static int DissolveEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
+    {
+        return DissolveOp.Edges(mesh, edges);
+    }
+
+    /// <summary>
+    /// Removes vertices and keeps the surface closed: a vertex joining two edges leaves one edge, and a vertex
+    /// inside the surface leaves one face where the faces around it were. Vertices on a border with more than
+    /// two edges are left alone.
+    /// </summary>
+    /// <returns>How many vertices were dissolved.</returns>
+    public static int DissolveVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices)
+    {
+        return DissolveOp.Vertices(mesh, vertices);
+    }
+
+    #endregion
+
+    #region Loop Operators
+
+    /// <summary>
+    /// The edges that run on from an edge end to end, as a modeller's edge loop: through a vertex where four edges
+    /// meet it takes the edge across, and along a border it follows the border. In order, the edge given included.
+    /// </summary>
+    public static List<GeometryData.Edge> EdgeLoop(GeometryData.Edge edge)
+    {
+        return LoopOp.EdgeLoop(edge);
+    }
+
+    /// <summary>
+    /// The edges facing an edge across four sided faces, one after another, as a modeller's edge ring. In order, the
+    /// edge given included. It stops at a face that does not have four sides.
+    /// </summary>
+    public static List<GeometryData.Edge> EdgeRing(GeometryData.Edge edge)
+    {
+        return LoopOp.EdgeRing(edge, out _).Select(r => r.Edge).ToList();
+    }
+
+    /// <summary>
+    /// Cuts new edge loops across the ring of an edge. Every edge of the ring gets the given number of new vertices,
+    /// evenly spaced, and the faces between are split through them. The slide moves the cuts along the ring's edges,
+    /// from -1 to 1 for the whole gap either way. Vertex and loop attributes are interpolated.
+    /// </summary>
+    /// <returns>The new edges, the cuts.</returns>
+    public static List<GeometryData.Edge> LoopCut(GeometryData mesh, GeometryData.Edge edge, int cuts = 1, float slide = 0f)
+    {
+        return LoopOp.Cut(mesh, edge, cuts, slide);
+    }
+
+    /// <summary>
+    /// Slides the vertices of connected edges along the edges that leave them sideways. At 1 they reach the next
+    /// vertices on the left of the direction the edges run in, at -1 the next on the right.
+    /// </summary>
+    /// <returns>How many vertices moved.</returns>
+    public static int SlideEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, float factor)
+    {
+        return LoopOp.Slide(mesh, edges, factor);
+    }
+
+    /// <summary>
+    /// Joins two runs of edges with a strip of four sided faces. The edges must fall into exactly two chains or
+    /// rings with the same number of vertices. Throws <see cref="InvalidOperationException"/> when they do not.
+    /// </summary>
+    /// <returns>The new faces.</returns>
+    public static List<GeometryData.Face> BridgeEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
+    {
+        return TopologyOp.Bridge(mesh, edges);
+    }
+
+    /// <summary>
+    /// Moves vertices towards the middle of the vertices they share an edge with. A vertex on a border only follows
+    /// its border neighbours, so it stays on the border.
+    /// </summary>
+    /// <param name="factor">How far each pass moves a vertex, from 0 to 1 for all the way.</param>
+    /// <returns>How many vertices moved.</returns>
+    public static int SmoothVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices, float factor = 0.5f, int iterations = 1)
+    {
+        return TopologyOp.Smooth(mesh, vertices, factor, iterations);
+    }
+
+    /// <summary>
+    /// A copy of the mesh with its mirror image across a plane through the origin. Vertices within the merge
+    /// distance of the plane are shared by both halves and put on it. The mesh given is not changed.
+    /// </summary>
+    /// <param name="axis">The axis the plane is across: 0, 1 or 2 for X, Y or Z.</param>
+    public static GeometryData MirrorCopy(GeometryData mesh, int axis = 0, float mergeDistance = 0.001f)
+    {
+        return TopologyOp.Mirror(mesh, axis, mergeDistance);
+    }
+
+    /// <summary>
+    /// Catmull Clark subdivision as a new mesh: each level turns every face into one four sided face per corner and
+    /// smooths the surface. Borders and edges flagged sharp keep their line. Attributes are carried over, with
+    /// float loop attributes such as texture coordinates interpolated across each face. The mesh given is not changed.
+    /// </summary>
+    public static GeometryData SubdivideSmooth(GeometryData mesh, int levels = 1)
+    {
+        GeometryData result = mesh;
+        for (int i = 0; i < levels; i++) result = TopologyOp.CatmullClark(result);
+        return result;
+    }
+
+    /// <summary>
+    /// Cuts faces along a plane. An edge of the faces that crosses the plane is split where it crosses, and a face
+    /// with two such points is split between them. The test, when given, says which crossing points count, so a cut
+    /// can be kept to a part of the plane. Faces the cut enters but does not cross are left whole.
+    /// </summary>
+    /// <returns>The new edges across the faces.</returns>
+    public static List<GeometryData.Edge> KnifeCut(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Float3 planePoint, Float3 planeNormal, Func<Float3, bool>? within = null)
+    {
+        return CutOp.Knife(mesh, faces, planePoint, planeNormal, within);
+    }
+
+    /// <summary>
+    /// Pulls a surface apart along edges: every vertex on them is copied for each group of faces the edges separate
+    /// around it. Where a run of edges ends inside the surface the end stays joined, which opens a slit.
+    /// </summary>
+    /// <returns>The new vertices.</returns>
+    public static List<GeometryData.Vertex> SplitEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
+    {
+        return CutOp.SplitEdges(mesh, edges);
+    }
+
+    /// <summary>
+    /// Fills a closed ring of edges with a grid of four sided faces. The ring needs an even number of edges. Throws
+    /// <see cref="InvalidOperationException"/> when the edges are not one such ring.
+    /// </summary>
+    /// <param name="span">How many faces run along the first side of the grid. The rest of the ring gives the other way.</param>
+    /// <param name="offset">Turns the ring, moving where the grid's first corner is.</param>
+    /// <returns>The new faces.</returns>
+    public static List<GeometryData.Face> GridFill(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, int span = 1, int offset = 0)
+    {
+        return CutOp.GridFill(mesh, edges, span, offset);
+    }
+
+    /// <summary>
+    /// Evens out the spacing of vertices without changing the shape: each moves towards the middle of its
+    /// neighbours, but only along the surface.
+    /// </summary>
+    /// <returns>How many vertices moved.</returns>
+    public static int RelaxVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices, float factor = 0.5f, int iterations = 1)
+    {
+        return CutOp.Relax(mesh, vertices, factor, iterations);
     }
 
     #endregion

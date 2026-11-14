@@ -188,7 +188,7 @@ internal static class FollowMeOp
 
         mesh.MergeCoincident(rings.SelectMany(r => r).SelectMany(l => l).Distinct().ToList());
         foreach (Vertex v in loops.SelectMany(l => l).Distinct().ToList())
-            if (mesh.Vertices.Contains(v) && v.Edge == null) mesh.RemoveVertex(v);        mesh.RemoveUnused();
+            if (mesh.Contains(v) && v.Edge == null) mesh.RemoveVertex(v);        mesh.RemoveUnused();
         mesh.MarkChanged();
         return made;
     }

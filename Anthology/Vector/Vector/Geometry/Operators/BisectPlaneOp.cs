@@ -53,7 +53,7 @@ internal static class BisectPlaneOp
         while (queue.Count > 0)
         {
             var face = queue.Dequeue();
-            if (!mesh.Faces.Contains(face)) continue;
+            if (!mesh.Contains(face)) continue;
 
             var pair = FindCut(face, side, plane);
             if (pair == null) continue;

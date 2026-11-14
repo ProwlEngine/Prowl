@@ -32,7 +32,7 @@ internal static class InsetOp
     /// </summary>
     internal static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, float thickness, InsetMode mode = InsetMode.Shared, InsetMeasure measure = InsetMeasure.Fraction)
     {
-        var faces = facesToInset.Where(mesh.Faces.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList();
+        var faces = facesToInset.Where(mesh.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList();
         if (faces.Count == 0) return;
 
         thickness = measure == InsetMeasure.Fraction ? Maths.Max(0f, Maths.Min(1f, thickness)) : Maths.Max(0f, thickness);
@@ -112,9 +112,9 @@ internal static class InsetOp
         }
 
         foreach (var edge in oldEdges)
-            if (edge.Loop == null && mesh.Edges.Contains(edge)) mesh.RemoveEdge(edge);
+            if (edge.Loop == null && mesh.Contains(edge)) mesh.RemoveEdge(edge);
         foreach (var vertex in oldVertices)
-            if (vertex.Edge == null && mesh.Vertices.Contains(vertex)) mesh.RemoveVertex(vertex);
+            if (vertex.Edge == null && mesh.Contains(vertex)) mesh.RemoveVertex(vertex);
     }
 
     private static Float3 Miter(Float3 n1, Float3 n2, float distance) =>

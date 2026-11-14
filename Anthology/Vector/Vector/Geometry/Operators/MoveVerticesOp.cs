@@ -74,7 +74,7 @@ internal static class MoveVerticesOp
 
         foreach (Edge e in edges)
         {
-            if (!mesh.Edges.Contains(e)) continue;
+            if (!mesh.Contains(e)) continue;
             Vertex a = Find(e.Vert1), b = Find(e.Vert2);
             if (a != b) groups[a] = b;
         }
@@ -98,7 +98,7 @@ internal static class MoveVerticesOp
     /// </summary>
     internal static int WeldByDistance(GeometryData mesh, IReadOnlyCollection<Vertex>? scope, float distance)
     {
-        List<Vertex> verts = (scope ?? mesh.Vertices).Where(v => mesh.Vertices.Contains(v)).ToList();
+        List<Vertex> verts = (scope ?? mesh.Vertices).Where(v => mesh.Contains(v)).ToList();
         if (verts.Count < 2 || distance <= 0f) return 0;
 
         var parent = Enumerable.Range(0, verts.Count).ToArray();

@@ -35,7 +35,7 @@ internal static class SoftenOp
         int count = 0;
         foreach (Edge e in edges)
         {
-            if (!mesh.Edges.Contains(e) || e.IsHidden) continue;
+            if (!mesh.Contains(e) || e.IsHidden) continue;
             if (e.DihedralCosine() is not float cosine || cosine > 0.99999f) continue;
             bool soft = cosine > limit;
             if (e.IsSoft != soft) count++;
@@ -48,7 +48,7 @@ internal static class SoftenOp
     internal static void SetSoft(GeometryData mesh, IEnumerable<Edge> edges, bool soft)
     {
         foreach (Edge e in edges)
-            if (mesh.Edges.Contains(e)) e.IsSoft = soft;
+            if (mesh.Contains(e)) e.IsSoft = soft;
         mesh.MarkChanged();
     }
 }
