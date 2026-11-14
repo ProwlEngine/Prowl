@@ -17,7 +17,7 @@ Compute
         uint instanceBase;     // where the list's GPU instances start in the view's instances
         uint mapBase;          // where the list's bucket to command map starts
         uint fades;            // whether the list draws cross fades
-        uint pad0;
+        uint fadeMap;          // where the map's half of fade commands starts, after the bucket's own commands
         uint pad1;
     };
 
@@ -138,7 +138,7 @@ Compute
             bool faded = fading && (mapped & 0x80000000u) != 0u;
             if (outgoing && !faded)
                 continue;
-            uint command = list.commandBase + (mapped & 0x7FFFFFFFu) + (faded ? 1u : 0u);
+            uint command = list.commandBase + (faded ? maps[list.mapBase + list.fadeMap + bucket] : mapped & 0x7FFFFFFFu);
             uint slot = Add(command);
             if (push.mode == 2u)
                 instances[slot] = index | (faded ? fade << 24 | (outgoing ? 0x80000000u : 0u) : 0u);
