@@ -103,4 +103,35 @@ public sealed class GpuCullTests
         Assert.Contains(cpu[0], p => p.X > 0.5f && p.Y < 0.5f);
         Assert.NotEqual(cpu[0], cpu[3]);
     }
+
+    // Draws a frame of meshes of one material, each a bucket of its own, culled on the GPU, and returns its stats
+    private static FrameStats Buckets(int meshes, float fadeSeconds)
+    {
+        using RendererHarness harness = new(gpuCulling: true);
+        Material material = harness.Renderer.CreateMaterial(harness.Renderer.Standard.Unlit);
+        material.SetColor("base_color", new Float4(1, 1, 1, 1));
+        harness.World.Lod.FadeSeconds = fadeSeconds;
+        for (int i = 0; i < meshes; i++)
+        {
+            harness.World.Add(new RenderableDesc
+            {
+                Mesh = Quad(harness, new Float4(1, 1, 1, 1), -i * 0.001f),
+                Transform = Double4x4.CreateTranslation(new Double3(i % 8 - 3.5, i / 8 - 3.5, 10)) * Double4x4.CreateScale(0.4),
+            }, [material]);
+        }
+        harness.Frame(new FrameDesc { Views = new[] { harness.View() }, Time = new FrameTime { Time = 0 } });
+        return harness.Renderer.LastFrameStats;
+    }
+
+    [Fact]
+    public void AFadingGpuCull_DrawsBucketsOfOneProgramInOneCall_HoweverManyBucketsThereAre()
+    {
+        FrameStats few = Buckets(8, fadeSeconds: 1), many = Buckets(64, fadeSeconds: 1), steady = Buckets(64, fadeSeconds: 0);
+
+        // The view fades, so each bucket has a fade command beside its own, which the GPU cull fills
+        Assert.True(many.DrawCommands > steady.DrawCommands, $"fading drew {many.DrawCommands} commands, steady {steady.DrawCommands}");
+
+        // Each bucket's fade command must not sit between it and the next bucket of its program, or every bucket is a call
+        Assert.Equal(few.DrawCalls, many.DrawCalls);
+    }
 }

@@ -674,7 +674,7 @@ internal sealed class CameraFrame : IDisposable
                 continue;
             int at = 184 + slot * 8;
             (_cullWords[at], _cullWords[at + 1], _cullWords[at + 2], _cullWords[at + 3]) = ((uint)segment.Pass, (uint)(CommandBases[l] + segment.FirstCommand), (uint)segment.CommandCount, gpuBase);
-            (_cullWords[at + 4], _cullWords[at + 5]) = ((uint)mapBase, segment.Fades ? 1u : 0);
+            (_cullWords[at + 4], _cullWords[at + 5], _cullWords[at + 6]) = ((uint)mapBase, segment.Fades ? 1u : 0, segment.Fades ? (uint)(segment.MapLength / 2) : 0);
             Array.Copy(segment.Map, 0, _maps, mapBase, segment.MapLength);
             mapBase += segment.MapLength;
             gpuBase += segment.Words;
