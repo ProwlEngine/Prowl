@@ -72,17 +72,17 @@ full past of that library.
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/mic-code">
-                    <img src="https://avatars.githubusercontent.com/u/26720201?v=4" width="100;" alt="mic-code"/>
-                    <br />
-                    <sub><b>Michael Yuen</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/dimmerly">
                     <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
                     <br />
                     <sub><b>Dimmer</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/mic-code">
+                    <img src="https://avatars.githubusercontent.com/u/26720201?v=4" width="100;" alt="mic-code"/>
+                    <br />
+                    <sub><b>Michael Yuen</b></sub>
                 </a>
             </td>
             <td align="center">
