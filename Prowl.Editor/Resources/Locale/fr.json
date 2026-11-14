@@ -417,6 +417,7 @@
   "project.show_extensions": "Afficher les extensions",
   "project.grid_view": "Vue en grille",
   "project.list_view": "Vue liste / tableau",
+  "project.tree_view": "Vue en arborescence",
   "project.sort_by": "Trier par",
   "project.filter": "Filtre",
   "project.show_hidden": "Afficher les fichiers caches",

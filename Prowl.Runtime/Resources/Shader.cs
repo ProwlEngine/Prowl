@@ -109,22 +109,35 @@ public sealed class Shader : Asset, ISerializable
     private static readonly System.Text.RegularExpressions.Regex s_include = new(@"^[ \t]*#include[ \t]+""([^""]+)""[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
-    /// Inlines the includes of a source that are neither Graphite's nor Prowl's library, each once, through
-    /// <paramref name="resolve"/>. Library includes stay for the compiler. An include it cannot find stays as written.
+    /// Inlines the includes of a source that are neither Graphite's nor Prowl's library through <paramref name="resolve"/>.
+    /// A file pasted more than once goes inside a guard named after its text, so every stage the compiler builds keeps one
+    /// copy of it, whichever blocks name it and however it is spelled. Library includes stay for the compiler. An include it
+    /// cannot find stays as written.
     /// </summary>
     public static string ExpandIncludes(string source, Func<string, string?> resolve)
     {
-        HashSet<string> seen = new(StringComparer.Ordinal);
-        string Expand(string text, int depth) => s_include.Replace(text, match =>
+        Dictionary<string, string?> read = new(StringComparer.Ordinal);
+        Dictionary<string, int> pastes = new(StringComparer.Ordinal);
+        HashSet<string> open = new(StringComparer.Ordinal);
+        // The first walk counts each file's pastes and the second writes them
+        string Expand(string text, int depth, bool write) => s_include.Replace(text, match =>
         {
             string name = match.Groups[1].Value;
             if (name.StartsWith("Graphite/", StringComparison.Ordinal) || name.StartsWith(BuiltInShaders.Prefix, StringComparison.Ordinal) || depth > 16)
                 return match.Value;
-            if (!seen.Add(name)) return "";
-            string? included = resolve(name);
-            return included == null ? match.Value : Expand(included, depth + 1);
+            if (!read.TryGetValue(name, out string? included)) read[name] = included = resolve(name);
+            if (included == null) return match.Value;
+            // Hashed the same every run, as the expanded source keys the compiled variant caches
+            string guard = "PROWL_INCLUDED_" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(included)), 0, 8);
+            if (!open.Add(guard)) return "";
+            if (!write) pastes[guard] = pastes.GetValueOrDefault(guard) + 1;
+            string body = Expand(included, depth + 1, write);
+            open.Remove(guard);
+            // A file pasted once needs no guard, so it can hold a whole section, and its shader's source stays as before
+            return !write || pastes[guard] == 1 ? body : $"#ifndef {guard}\n#define {guard}\n{body}\n#endif";
         });
-        return Expand(source, 0);
+        Expand(source, 0, false);
+        return Expand(source, 0, true);
     }
 
     /// <summary>The source file of a shader by the name it declares, for includes relative to it.</summary>

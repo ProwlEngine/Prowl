@@ -417,6 +417,7 @@
   "project.show_extensions": "Показать расширения",
   "project.grid_view": "Сетка",
   "project.list_view": "Список / Таблица",
+  "project.tree_view": "Дерево",
   "project.sort_by": "Сортировать по",
   "project.filter": "Фильтр",
   "project.show_hidden": "Показать скрытые файлы",

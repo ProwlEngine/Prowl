@@ -417,6 +417,7 @@
   "project.show_extensions": "Mostrar extensiones",
   "project.grid_view": "Vista de cuadricula",
   "project.list_view": "Vista de lista / tabla",
+  "project.tree_view": "Vista de arbol",
   "project.sort_by": "Ordenar por",
   "project.filter": "Filtro",
   "project.show_hidden": "Mostrar archivos ocultos",

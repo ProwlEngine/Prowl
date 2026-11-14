@@ -267,17 +267,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/dimmerly">
-                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
-                    <br />
-                    <sub><b>Dimmer</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/Acissathar">
                     <img src="https://avatars.githubusercontent.com/u/10227954?v=4" width="100;" alt="Acissathar"/>
                     <br />
                     <sub><b>Will</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/dimmerly">
+                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
+                    <br />
+                    <sub><b>Dimmer</b></sub>
                 </a>
             </td>
 		</tr>
@@ -327,17 +327,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 		</tr>
 		<tr>
             <td align="center">
-                <a href="https://github.com/10xJosh">
-                    <img src="https://avatars.githubusercontent.com/u/55113224?v=4" width="100;" alt="10xJosh"/>
-                    <br />
-                    <sub><b>Josh Davis</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/ZeppelinGames">
                     <img src="https://avatars.githubusercontent.com/u/31507417?v=4" width="100;" alt="ZeppelinGames"/>
                     <br />
                     <sub><b>Mark Saba</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/10xJosh">
+                    <img src="https://avatars.githubusercontent.com/u/55113224?v=4" width="100;" alt="10xJosh"/>
+                    <br />
+                    <sub><b>Josh Davis</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -419,6 +419,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <img src="https://avatars.githubusercontent.com/u/5410231?v=4" width="100;" alt="JothamR"/>
                     <br />
                     <sub><b>Jotham</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Ywingpilot2">
+                    <img src="https://avatars.githubusercontent.com/u/136618828?v=4" width="100;" alt="Ywingpilot2"/>
+                    <br />
+                    <sub><b>Y wingpilot2</b></sub>
                 </a>
             </td>
             <td align="center">

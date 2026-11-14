@@ -9,5 +9,6 @@
     <ProwlLocalAnthology Condition="'$(ProwlLocalAnthology)' != 'true'">false</ProwlLocalAnthology>
     <AnthologyDir>$(MSBuildThisFileDirectory)..\Anthology\</AnthologyDir>
     <ProwlPackageVersion>3.9.3</ProwlPackageVersion>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 </Project>

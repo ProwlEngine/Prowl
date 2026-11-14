@@ -355,7 +355,12 @@ public class TerrainEditor : CustomEditor
             i =>
             {
                 DetailPrototype p = data.DetailPrototypes[i];
-                return p.RenderMode == DetailRenderMode.Mesh ? p.Mesh.AssetID : p.Texture.AssetID;
+                if (p.RenderMode == DetailRenderMode.Mesh)
+                {
+                    return p.Mesh.IsValid() ? p.Mesh.AssetID : Guid.Empty;
+                }
+
+                return p.Texture.IsValid() ? p.Texture.AssetID : Guid.Empty;
             });
 
         if (ActiveDetailIndex >= 0 && ActiveDetailIndex < data.DetailPrototypes.Count)
