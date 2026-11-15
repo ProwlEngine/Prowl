@@ -1076,45 +1076,56 @@ public static class GameObjectInspector
         Color borderColor = isMissing ? EditorTheme.Red300 : EditorTheme.Purple300;
         Color textColor = isMissing ? EditorTheme.Red300 : EditorTheme.Purple400;
 
+        const float BannerPadding = 4f;
+        float bannerRounding = Origami.Current.Metrics.ContainerRounding;
+
         // Entire prefab section in a purple-tinted container
         using (paper.Column("gi_prefab_section")
             .Height(UnitValue.Auto)
             .BackgroundColor(barColor)
             .BorderColor(borderColor).BorderWidth(1)
-            .Rounded(Origami.Current.Metrics.ContainerRounding).Margin(0, 4, 0, 4)
-            .Padding(4, 4, 4, 4)
+            .Rounded(bannerRounding).Margin(4) // Paper takes left, right, top, bottom: the old (0, 4, 0, 4) hugged the left edge
+            .Padding(BannerPadding, BannerPadding, BannerPadding, BannerPadding)
             .Enter())
         {
+            // As tall as the row. No width: the button then measures its own text, so a translated label
+            // fits and the name beside it is what gives way. Its corners are the banner's less the padding,
+            // so the two curves run parallel.
+            void BannerButton(string id, string text, Action onClick) =>
+                Origami.Button(paper, id, text, onClick).Small().Height(24)
+                    .Rounding(MathF.Max(0f, bannerRounding - BannerPadding)).Show();
+
             // Top row: label + buttons
             using (paper.Row("gi_prefab_bar")
                 .Height(24).Gap(4)
                 .Enter())
             {
                 paper.Box("gi_prefab_icon")
-                    .Width(UnitValue.Stretch()).Height(24)
+                    .Width(UnitValue.Stretch()).Height(24).PaddingLeft(4) // off the banner's curved edge
                     .Text($"{EditorIcons.Cubes}  {label}", font)
                     .TextColor(textColor)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
+                    .TextTruncate(); // a long name ends in an ellipsis before the buttons, not under them
 
                 if (isMissing)
                 {
                     // The asset is gone, so there is nothing to select, revert to or apply against.
                     // Unpacking is the only way out, and it was previously offered nowhere.
-                    Origami.Button(paper, "gi_prefab_unpack", Loc.Get("inspector.unpack_prefab"),
-                        () => { if (root.IsValid()) PrefabUtility.UnpackPrefabInstance(root); }).Width(80).Show();
+                    BannerButton("gi_prefab_unpack", Loc.Get("inspector.unpack_prefab"),
+                        () => { if (root.IsValid()) PrefabUtility.UnpackPrefabInstance(root); });
                 }
                 else
                 {
-                    Origami.Button(paper, "gi_prefab_select", Loc.Get("inspector.select"), () => { Selection.Ping(go.PrefabAssetId); }).Width(55).Show();
+                    BannerButton("gi_prefab_select", Loc.Get("inspector.select"), () => { Selection.Ping(go.PrefabAssetId); });
 
                     if (isRoot && hasOverrides)
                     {
-                        Origami.Button(paper, "gi_prefab_revert", Loc.Get("inspector.revert"), () => { if (root.IsValid()) PrefabUtility.RevertOverrides(root); }).Width(55).Show();
+                        BannerButton("gi_prefab_revert", Loc.Get("inspector.revert"), () => { if (root.IsValid()) PrefabUtility.RevertOverrides(root); });
 
                         // A generated prefab (a model) is rebuilt from its source file on every
                         // import, so there is nothing to apply to.
                         if (canApply)
-                            Origami.Button(paper, "gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root.IsValid()) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
+                            BannerButton("gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root.IsValid()) PrefabUtility.ApplyOverrides(root); });
                     }
 
                     // Only where the list can be acted on. A model is rebuilt from its source file on
@@ -1528,3 +1539,4 @@ public static class GameObjectInspector
         return result;
     }
 }
+
