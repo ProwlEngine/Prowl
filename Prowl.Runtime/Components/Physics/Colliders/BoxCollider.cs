@@ -34,23 +34,15 @@ public sealed class BoxCollider : Collider
     [Button("Fit To Bounds")]
     public void FitToBounds()
     {
-        var min = new Float3(float.MaxValue, float.MaxValue, float.MaxValue);
-        var max = new Float3(float.MinValue, float.MinValue, float.MinValue);
-        bool found = false;
+        AABB? bounds = null;
 
         void Encapsulate(Transform owner, Mesh? mesh)
         {
             if (mesh.IsNotValid() || mesh.VertexCount == 0) return;
-            Float3 lo = mesh.bounds.Min, hi = mesh.bounds.Max;
-            for (int i = 0; i < 8; i++)
-            {
-                var corner = new Float3((i & 1) != 0 ? hi.X : lo.X, (i & 2) != 0 ? hi.Y : lo.Y, (i & 4) != 0 ? hi.Z : lo.Z);
-                // The box's own mesh is already in its space; a child's comes through the world
-                Float3 local = owner == Transform ? corner : Transform.InverseTransformPoint(owner.TransformPoint(corner));
-                min = Maths.Min(min, local);
-                max = Maths.Max(max, local);
-            }
-            found = true;
+            // The box's own mesh is already in its space; a child's comes through in one go, so it is boxed only once
+            AABB local = owner == Transform ? mesh.bounds : mesh.bounds.TransformBy(Transform.WorldToLocalMatrix * owner.LocalToWorldMatrix);
+            if (bounds is AABB merged) { merged.Encapsulate(local); bounds = merged; }
+            else bounds = local;
         }
 
         foreach (MeshRenderer renderer in GetComponentsInChildren<MeshRenderer>())
@@ -58,15 +50,15 @@ public sealed class BoxCollider : Collider
         foreach (SkinnedMeshRenderer renderer in GetComponentsInChildren<SkinnedMeshRenderer>())
             Encapsulate(renderer.Transform, renderer.SharedMesh);
 
-        if (!found)
+        if (bounds is not AABB box)
         {
             Debug.LogWarning($"BoxCollider on '{GameObject.Name}' has no mesh on it or its children to fit to.");
             return;
         }
 
         Rotation = Float3.Zero;
-        Center = (min + max) * 0.5f;
-        Size = max - min;
+        Center = (box.Min + box.Max) * 0.5f;
+        Size = box.Max - box.Min;
     }
 
     public override RigidBodyShape[] CreateShapes() => [new BoxShape(Maths.Max(size.X, 0.01f), Maths.Max(size.Y, 0.01f), Maths.Max(size.Z, 0.01f))];
