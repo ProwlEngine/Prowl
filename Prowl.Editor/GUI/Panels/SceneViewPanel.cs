@@ -1183,8 +1183,9 @@ public class SceneViewPanel : DockPanel
 
     private static Float3 SnapMovedAxes(Float3 p, Float3 movement, float step)
     {
-        // Relative to the coordinates' size: a drag far from the origin leaves float noise on the axes it did not move.
-        float Moved = 1e-5f * (1f + MathF.Max(MathF.Max(MathF.Abs(p.X), MathF.Abs(p.Y)), MathF.Abs(p.Z)));
+        // About 16 float ulps of the coordinates' size: a drag far from the origin leaves float noise on the axes
+        // it did not move, but a real move bigger than that still snaps.
+        float Moved = 2e-6f * (1f +MathF.Max(MathF.Max(MathF.Abs(p.X), MathF.Abs(p.Y)), MathF.Abs(p.Z)));
         return new Float3(
             MathF.Abs(movement.X) > Moved ? MathF.Round(p.X / step) * step : p.X,
             MathF.Abs(movement.Y) > Moved ? MathF.Round(p.Y / step) * step : p.Y,

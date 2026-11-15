@@ -236,6 +236,10 @@ public class GizmoPickingTests : EditorTestHarness
         Float3 far = new(300.3f, 0f, 200.2f);
         Float3 farOffset = SceneViewPanel.SnapToGrid(far, (far + axis * 1.3f) - far, 1f, space) - far;
         Assert.True(Float3.Distance(axis * Float3.Dot(farOffset, axis), farOffset) < 1e-2f, $"Left the axis: {farOffset}");
+
+        // A small real move far out still snaps rather than reading as noise.
+        Float3 distant = new(10000f, 0f, 0f);
+        AssertNear(new Float3(10000.046875f, 0f, 0f), SceneViewPanel.SnapToGrid(distant, new Float3(0.04f, 0f, 0f), 1f / 64f, Quaternion.Identity));
     }
 
     [Fact]
