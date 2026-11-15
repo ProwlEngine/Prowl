@@ -403,6 +403,15 @@ public static class GeometryOperators
     }
 
     /// <summary>
+    /// Copies part of a mesh into a new mesh: the vertices, edges and faces given, with the edges and corners of
+    /// those faces and the ends of those edges, and all their attributes. The mesh itself is left as it was.
+    /// </summary>
+    public static GeometryData Extract(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices, IEnumerable<GeometryData.Edge> edges, IEnumerable<GeometryData.Face> faces)
+    {
+        return ExtractOp.Extract(mesh, vertices, edges, faces);
+    }
+
+    /// <summary>
     /// Split an edge at a given interpolation factor, creating a new vertex.
     /// </summary>
     /// <param name="mesh">The mesh containing the edge.</param>

@@ -401,4 +401,34 @@ public class GeometryOperatorReviewTests
         AssertTagsPresent(a);
         AssertUvLinear(a);
     }
+
+    [Fact]
+    public void Extract_CopiesFacesWithAttributesAndLeavesTheMesh()
+    {
+        GeometryData mesh = Cube();
+        foreach (Face f in mesh.Faces) FixUv(f);
+        Face top = mesh.Faces[0];
+        top.Loop.Edge.SetAttribute("Seam", new GeometryData.IntAttributeValue(1));
+
+        GeometryData part = GeometryOperators.Extract(mesh, [], [], [top]);
+
+        Assert.Equal(6, mesh.Faces.Count);
+        Assert.Equal(8, mesh.Vertices.Count);
+        Assert.Single(part.Faces);
+        Assert.Equal(4, part.Vertices.Count);
+        Assert.Equal(4, part.Edges.Count);
+        Assert.Single(part.Edges, e => e.TryGetAttribute("Seam", out _));
+        AssertTagsPresent(part);
+        AssertUvLinear(part);
+    }
+
+    [Fact]
+    public void Extract_TakesLooseEdgesAndVertices()
+    {
+        GeometryData mesh = Cube();
+        GeometryData part = GeometryOperators.Extract(mesh, [mesh.Vertices[7]], [mesh.Edges[0]], []);
+        Assert.Empty(part.Faces);
+        Assert.Single(part.Edges);
+        Assert.Equal(mesh.Edges[0].Vert1 == mesh.Vertices[7] || mesh.Edges[0].Vert2 == mesh.Vertices[7] ? 2 : 3, part.Vertices.Count);
+    }
 }
