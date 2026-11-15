@@ -300,7 +300,10 @@ public abstract class PhysicsConstraint : Component
     /// The always-on part: a dot where the joint acts, nothing more.
     /// </summary>
     protected void DrawJointMarker(Float3 worldAnchor)
-        => Debug.DrawWireSphere(worldAnchor, GizmoScale * 0.14f, AnchorColor, 8);
+    {
+        Debug.DrawWireSphere(worldAnchor, GizmoScale * 0.14f, AnchorColor, 8);
+        Debug.GizmoHitboxSphere(worldAnchor, GizmoScale * 0.14f);
+    }
 
     /// <summary>
     /// Both ends of a joint that genuinely has two anchors. The dashes between them are the pair's

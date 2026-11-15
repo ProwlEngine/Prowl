@@ -554,7 +554,18 @@ public static class Debug
     public static void DrawWireCylinder(Float3 center, Quaternion rotation, float radius, float height, Color color, int segments = 16) => s_gizmoBuilder.DrawWireCylinder(center, rotation, radius, height, color, segments);
     public static void DrawArrow(Float3 start, Float3 direction, Color color) => s_gizmoBuilder.DrawArrow(start, direction, color);
 
+    /// <inheritdoc cref="GizmoBuilder.DrawIcon"/>
     public static void DrawIcon(Texture2D icon, Float3 center, float scale, Color color) => s_gizmoBuilder.DrawIcon(icon, center, scale, color);
+
+    /// <summary>
+    /// Lines drawn until the scope is disposed can be clicked in the scene view to select the component drawing
+    /// them. Meant for outlines that always show, such as a volume's bounds, so the volume selects from its edges
+    /// without taking clicks meant for what is inside it.
+    /// </summary>
+    public static GizmoBuilder.HitboxLineScope GizmoHitboxLines() => s_gizmoBuilder.HitboxLines();
+
+    /// <summary>A sphere that can be clicked in the scene view to select the component drawing it.</summary>
+    public static void GizmoHitboxSphere(Float3 center, float radius) => s_gizmoBuilder.HitboxSphere(center, radius);
 
     /// <summary>
     /// A line broken into dashes, so it reads as a relationship between two things rather than as an
@@ -777,6 +788,67 @@ public class GizmoBuilder
 
     private Stack<Float4x4> _matrix4X4s = new();
 
+    // ---- hitboxes ------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Whether gizmo draws record what they can be clicked by. Only the editor's scene view picks gizmos, so it
+    /// turns this on around its own gizmo pass and a game drawing gizmos pays nothing for it.
+    /// </summary>
+    internal static bool RecordHitboxes { get; set; }
+
+    /// <summary>The component whose gizmos are being drawn, which every hitbox recorded meanwhile selects.</summary>
+    internal static Component? CurrentOwner { get; private set; }
+
+    private List<GizmoHitbox> _hitboxes = [];
+    private List<GizmoHitbox> _publishedHitboxes = [];
+    private int _lineHitboxDepth;
+
+    /// <summary>
+    /// The hitboxes of the last full frame of gizmos. Picking runs before the frame's gizmos are drawn, so it reads
+    /// these, which <see cref="Clear"/> publishes from the frame that just finished.
+    /// </summary>
+    internal IReadOnlyList<GizmoHitbox> Hitboxes => _publishedHitboxes;
+
+    /// <summary>Makes <paramref name="owner"/> the component the hitboxes recorded until disposal belong to.</summary>
+    internal static OwnerScope Owner(Component? owner)
+    {
+        Component? previous = CurrentOwner;
+        CurrentOwner = owner;
+        return new OwnerScope(previous);
+    }
+
+    internal readonly struct OwnerScope(Component? previous) : IDisposable
+    {
+        public void Dispose() => CurrentOwner = previous;
+    }
+
+    /// <summary>Lines drawn until disposal can be clicked to select the component drawing them.</summary>
+    public HitboxLineScope HitboxLines()
+    {
+        _lineHitboxDepth++;
+        return new HitboxLineScope(this);
+    }
+
+    public readonly struct HitboxLineScope : IDisposable
+    {
+        private readonly GizmoBuilder? _builder;
+        internal HitboxLineScope(GizmoBuilder builder) => _builder = builder;
+        public void Dispose() { if (_builder != null && _builder._lineHitboxDepth > 0) _builder._lineHitboxDepth--; }
+    }
+
+    /// <summary>A sphere that can be clicked to select the component drawing it.</summary>
+    public void HitboxSphere(Float3 center, float radius)
+    {
+        if (_matrix4X4s.Count > 0) center = Float4x4.TransformPoint(center, _matrix4X4s.Peek());
+        AddHitbox(GizmoHitboxKind.Sphere, center, center, radius);
+    }
+
+    private void AddHitbox(GizmoHitboxKind kind, Float3 a, Float3 b, float radius)
+    {
+        if (!RecordHitboxes || CurrentOwner is not { } owner || owner.GameObject is not { } go) return;
+        _hitboxes.Add(new GizmoHitbox(go, kind, a, b, radius));
+    }
+
 
     public void Clear()
     {
@@ -789,6 +861,10 @@ public class GizmoBuilder
         _icons.Clear();
 
         _matrix4X4s.Clear();
+
+        (_publishedHitboxes, _hitboxes) = (_hitboxes, _publishedHitboxes);
+        _hitboxes.Clear();
+        _lineHitboxDepth = 0;
     }
 
     private void AddLine(Float3 a, Float3 b, Color color)
@@ -799,6 +875,8 @@ public class GizmoBuilder
             a = Float4x4.TransformPoint(a, m);
             b = Float4x4.TransformPoint(b, m);
         }
+
+        if (_lineHitboxDepth > 0) AddHitbox(GizmoHitboxKind.Segment, a, b, 0f);
 
         int index = _wireData.Vertices.Count;
         _wireData.Vertices.Add(a);
@@ -1247,7 +1325,12 @@ public class GizmoBuilder
         DrawWireCone(start + direction - axis * head, axis * head, head * 0.4f, color, 4);
     }
 
-    public void DrawIcon(Texture2D icon, Float3 center, float scale, Color color) => _icons.Add(new IconDrawCall { Texture = icon, Center = center, Scale = scale, Color = color });
+    /// <summary>A camera facing icon <paramref name="scale"/> world units across. It can be clicked to select the component drawing it.</summary>
+    public void DrawIcon(Texture2D icon, Float3 center, float scale, Color color)
+    {
+        _icons.Add(new IconDrawCall { Texture = icon, Center = center, Scale = scale, Color = color });
+        AddHitbox(GizmoHitboxKind.Icon, center, center, scale * 0.5f);
+    }
 
     private static Material? s_lineMaterial;
     private static Prowl.Graphite.Rendering.Material? s_hiddenLines;
@@ -1331,3 +1414,17 @@ public class GizmoBuilder
         return _icons;
     }
 }
+
+/// <summary>The shape a <see cref="GizmoHitbox"/> is clicked by.</summary>
+public enum GizmoHitboxKind
+{
+    /// <summary>A camera facing icon, <see cref="GizmoHitbox.Radius"/> being half its width. Drawn over the scene, so it wins over geometry.</summary>
+    Icon,
+    /// <summary>A sphere around <see cref="GizmoHitbox.A"/>.</summary>
+    Sphere,
+    /// <summary>A line from <see cref="GizmoHitbox.A"/> to <see cref="GizmoHitbox.B"/>, clicked within a few pixels.</summary>
+    Segment,
+}
+
+/// <summary>A world space shape a gizmo can be clicked by, which selects <see cref="Owner"/>.</summary>
+public readonly record struct GizmoHitbox(GameObject Owner, GizmoHitboxKind Kind, Float3 A, Float3 B, float Radius);
