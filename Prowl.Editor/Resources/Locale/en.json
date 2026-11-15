@@ -31,6 +31,10 @@
 
   "scene.show_grid": "Show Grid",
   "scene.show_gizmos": "Show Gizmos",
+  "scene.gizmos": "Gizmo Types",
+  "scene.gizmos.none_hidden": "Every component type shows its gizmos",
+  "scene.gizmos.hidden_count": "{{count}} types hidden. Show all",
+  "scene.gizmos.none": "No component draws gizmos",
   "scene.post_processing": "Post Processing",
   "scene.debug_view": "Debug View",
   "scene.debug_view.lit": "Lit",
@@ -63,7 +67,9 @@
   "scene.tool_universal": "Universal",
   "scene.pivot_center": "Pivot: Center",
   "scene.orientation_local": "Orientation: Local",
-  "scene.snap_enabled": "Snap",
+  "scene.orientation_global": "Orientation: Global",
+  "scene.rotation_snap": "Rotation Snap (Ctrl snaps while held)",
+  "scene.grid_snap": "Grid Snap (Ctrl snaps while held)",
   "scene.settings": "View Settings",
 
   "game.resolution": "Resolution",

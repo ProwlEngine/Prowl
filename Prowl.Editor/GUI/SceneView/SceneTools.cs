@@ -47,7 +47,8 @@ public static class SceneTools
     private static TransformTool _current = TransformTool.Translate;
     private static PivotMode _pivot = PivotMode.Center;
     private static PivotOrientation _orientation = PivotOrientation.Local;
-    private static bool _snapEnabled;
+    private static bool _gridSnap;
+    private static bool _rotationSnap;
 
     /// <summary>Fires whenever any tool state changes, so panels can rebuild cached gizmo state.</summary>
     public static event Action? Changed;
@@ -70,18 +71,68 @@ public static class SceneTools
         set => Set(ref _orientation, value);
     }
 
-    /// <summary>Sticky snapping. Holding Ctrl snaps regardless; this makes it the default.</summary>
-    public static bool SnapEnabled
+    /// <summary>Sticky snapping of moves to <see cref="MoveSnap"/>, and of scaling to <see cref="ScaleSnap"/>. Holding Ctrl snaps regardless.</summary>
+    public static bool GridSnap
     {
-        get => _snapEnabled;
-        set => Set(ref _snapEnabled, value);
+        get => _gridSnap;
+        set => Set(ref _gridSnap, value);
     }
 
-    /// <summary>Grid increment for translation, in world units.</summary>
-    public static float MoveSnap { get; set; } = 1f;
+    /// <summary>Sticky snapping of rotation to <see cref="RotateSnap"/>. Holding Ctrl snaps regardless.</summary>
+    public static bool RotationSnap
+    {
+        get => _rotationSnap;
+        set => Set(ref _rotationSnap, value);
+    }
 
-    /// <summary>Increment for rotation, in degrees.</summary>
-    public static float RotateSnap { get; set; } = 15f;
+    // Drops float noise, so a size that is meant to be 1 is exactly 1 and shows without trailing decimals.
+    // Six places keeps every power of two down to 1/64 exact.
+    private static float Clean(float value) => (float)Math.Round(value, 6);
+
+    /// <summary>Smallest and largest grid size, in world units.</summary>
+    public const float MinMoveSnap = 1f / 64f, MaxMoveSnap = 128f;
+
+    private static float _moveSnap = 1f;
+
+    /// <summary>Grid increment for translation, in world units, kept within <see cref="MinMoveSnap"/> and <see cref="MaxMoveSnap"/>.</summary>
+    public static float MoveSnap
+    {
+        get => _moveSnap;
+        set => _moveSnap = float.IsFinite(value) ? Math.Clamp(Clean(value), MinMoveSnap, MaxMoveSnap) : _moveSnap;
+    }
+
+    /// <summary>Doubles (<paramref name="direction"/> above zero) or halves the grid size, so it stays on powers of two.</summary>
+    public static void StepMoveSnap(int direction)
+        => MoveSnap = direction > 0 ? MoveSnap * 2f : direction < 0 ? MoveSnap / 2f : MoveSnap;
+
+    /// <summary>Smallest and largest rotation increment, in degrees.</summary>
+    public const float MinRotateSnap = 0.25f, MaxRotateSnap = 180f;
+
+    /// <summary>The rotation increments the stepper moves between, in degrees.</summary>
+    public static readonly float[] RotateSnapSteps = [0.25f, 0.5f, 1f, 5f, 15f, 30f, 45f, 90f, 180f];
+
+    private static float _rotateSnap = 15f;
+
+    /// <summary>
+    /// Increment for rotation, in degrees, kept within <see cref="MinRotateSnap"/> and <see cref="MaxRotateSnap"/>.
+    /// The rotate gizmo draws a tick for every increment around its ring while snapping, so a tiny step would
+    /// draw tens of thousands of them every frame.
+    /// </summary>
+    public static float RotateSnap
+    {
+        get => _rotateSnap;
+        set => _rotateSnap = float.IsFinite(value) ? Math.Clamp(Clean(value), MinRotateSnap, MaxRotateSnap) : _rotateSnap;
+    }
+
+    /// <summary>Moves the rotation increment to the next of <see cref="RotateSnapSteps"/> up or down from the nearest one.</summary>
+    public static void StepRotateSnap(int direction)
+    {
+        int nearest = 0;
+        for (int i = 1; i < RotateSnapSteps.Length; i++)
+            if (MathF.Abs(RotateSnapSteps[i] - RotateSnap) < MathF.Abs(RotateSnapSteps[nearest] - RotateSnap))
+                nearest = i;
+        RotateSnap = RotateSnapSteps[Math.Clamp(nearest + Math.Sign(direction), 0, RotateSnapSteps.Length - 1)];
+    }
 
     /// <summary>Increment for the scale factor while snapping.</summary>
     public static float ScaleSnap { get; set; } = 0.1f;

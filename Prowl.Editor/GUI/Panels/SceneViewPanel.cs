@@ -6,6 +6,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.Core.Diagnostics;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Prefabs;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.Gizmo;
@@ -33,6 +34,7 @@ public class SceneViewPanel : DockPanel
     public override string Icon => EditorIcons.Shapes;
 
     private const string TransformControl = "sceneview_transform";
+    private const string FreeMoveControl = "sceneview_freemove";
     private const string PickControl = "sceneview_pick";
     private const string ViewCubeControl = "sceneview_viewcube";
 
@@ -112,9 +114,129 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    // Grid / gizmo visibility live in the leaf's tab-bar header (right side)
-    public override float HeaderWidth => 28f;
+    // The scene view toolbar lives in the leaf's tab-bar header (right side): handle orientation, gizmos,
+    // rotation and grid snapping, then the view settings.
+    public override float HeaderWidth => 356f;
     public override void OnHeaderContent(Paper paper, float width, float height)
+    {
+        Scribe.FontFile? font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        using (paper.Row("sv_hdr").Width(width).Height(height).Gap(6).Enter())
+        {
+            paper.Box("sv_hdr_spacer").Width(UnitValue.StretchOne);
+
+            using (HeaderGroup(paper, "sv_hdr_orient_grp"))
+            {
+                bool global = SceneTools.Orientation == PivotOrientation.Global;
+                HeaderToggle(paper, font, "sv_hdr_orient", global ? EditorIcons.Globe : EditorIcons.Cube,
+                    Loc.Get(global ? "scene.orientation_global" : "scene.orientation_local"), global,
+                    () => SceneTools.Orientation = global ? PivotOrientation.Local : PivotOrientation.Global);
+            }
+
+            using (HeaderGroup(paper, "sv_hdr_gizmo_grp"))
+            {
+                ElementHandle trigger = paper.CurrentParent;
+                HeaderToggle(paper, font, "sv_hdr_gizmos", EditorIcons.CompassDrafting, Loc.Get("scene.show_gizmos"), ShowGizmos,
+                    () => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; });
+                paper.Box("sv_hdr_gizmo_menu").Width(12).Height(ToggleSize).Rounded(EditorTheme.Roundness)
+                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                    .Text(EditorIcons.CaretDown, font).TextColor(EditorTheme.Ink300).FontSize(10f).Alignment(TextAlignment.MiddleCenter)
+                    .Tooltip(Loc.Get("scene.gizmos"))
+                    .IsNotFocusable()
+                    .OnClick(_ => s_gizmoListOpen = !s_gizmoListOpen);
+
+                if (s_gizmoListOpen)
+                {
+                    if (paper.IsKeyPressed(PaperKey.Escape))
+                        s_gizmoListOpen = false;
+                    else
+                    {
+                        MenuTreePopup.Backdrop(paper, "sv_gizmo_list", () => s_gizmoListOpen = false);
+                        GizmoTypesPopover.Draw(paper, "sv_gizmo_list", trigger);
+                    }
+                }
+            }
+
+            using (HeaderGroup(paper, "sv_hdr_rot_grp"))
+            {
+                HeaderToggle(paper, font, "sv_hdr_rot_snap", EditorIcons.ArrowsRotate, Loc.Get("scene.rotation_snap"), SceneTools.RotationSnap,
+                    () => SceneTools.RotationSnap = !SceneTools.RotationSnap);
+                HeaderField(paper, "sv_hdr_rot", () =>
+                    Origami.NumericField<float>(paper, "sv_hdr_rot_field", SceneTools.RotateSnap, v => SceneTools.RotateSnap = v)
+                        .Min(SceneTools.MinRotateSnap).Max(SceneTools.MaxRotateSnap).Format("0.##").Suffix("°").Show());
+                HeaderStepper(paper, font, "sv_hdr_rot_step", SceneTools.StepRotateSnap);
+            }
+
+            using (HeaderGroup(paper, "sv_hdr_grid_grp"))
+            {
+                HeaderToggle(paper, font, "sv_hdr_grid_snap", EditorIcons.TableCells, Loc.Get("scene.grid_snap"), SceneTools.GridSnap,
+                    () => SceneTools.GridSnap = !SceneTools.GridSnap);
+                HeaderField(paper, "sv_hdr_grid", () =>
+                    Origami.NumericField<float>(paper, "sv_hdr_grid_field", SceneTools.MoveSnap, v => SceneTools.MoveSnap = v)
+                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format("0.######").Show());
+                HeaderStepper(paper, font, "sv_hdr_grid_step", SceneTools.StepMoveSnap);
+            }
+
+            DrawSettingsButton(paper);
+        }
+    }
+
+    // Open state of the gizmo type list. Static: one list for every Scene view, as the choices are shared.
+    private static bool s_gizmoListOpen;
+
+    private const float ToggleSize = 22f;
+
+    // A pill holding a toggle and the controls that go with it.
+    private static IDisposable HeaderGroup(Paper paper, string id)
+        => paper.Row(id).Width(UnitValue.Auto).Height(ToggleSize + 4).Gap(2).Padding(2, 2, 2, 2)
+            .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .Rounded(EditorTheme.Roundness + 2)
+            .BackgroundColor(EditorTheme.Neutral200)
+            .Enter();
+
+    // A square icon toggle, filled with the accent while its setting is on. Drawn as a plain box rather than a
+    // button so the glyph sits dead centre and nothing animates or takes focus when it is clicked.
+    private static void HeaderToggle(Paper paper, Scribe.FontFile font, string id, string glyph, string tooltip, bool on, Action onClick)
+    {
+        paper.Box(id).Size(ToggleSize, ToggleSize).Rounded(EditorTheme.Roundness)
+            .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .BackgroundColor(on ? EditorTheme.Accent : Color.Transparent)
+            .Hovered.BackgroundColor(on ? EditorTheme.AccentBright : EditorTheme.Hover).End()
+            .Text(glyph, font).TextColor(on ? Color.White : EditorTheme.Ink300)
+            .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
+            .Tooltip(tooltip)
+            .IsNotFocusable()
+            .OnClick(_ => onClick());
+    }
+
+    // Up and down arrows stacked beside a value field. They step through the field's preset values rather than
+    // adding a fixed amount, so the grid doubles and halves.
+    private static void HeaderStepper(Paper paper, Scribe.FontFile font, string id, Action<int> step)
+    {
+        using (paper.Column(id).Width(12).Height(ToggleSize).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+        {
+            StepperArrow(paper, font, $"{id}_up", EditorIcons.CaretUp, () => step(1));
+            StepperArrow(paper, font, $"{id}_down", EditorIcons.CaretDown, () => step(-1));
+        }
+    }
+
+    private static void StepperArrow(Paper paper, Scribe.FontFile font, string id, string glyph, Action onClick)
+        => paper.Box(id).Width(12).Height(ToggleSize / 2f).Rounded(2)
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Text(glyph, font).TextColor(EditorTheme.Ink300).FontSize(9f).Alignment(TextAlignment.MiddleCenter)
+            .IsNotFocusable()
+            .OnClick(_ => onClick());
+
+    // A compact value field beside a toggle.
+    private static void HeaderField(Paper paper, string id, Action drawField)
+    {
+        using (paper.Row(id).Width(60).Height(ToggleSize).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+            drawField();
+    }
+
+    private void DrawSettingsButton(Paper paper)
     {
         EditorGUI.HeaderIconButton(paper, "sv_hdr_settings", EditorIcons.Gear, Loc.Get("scene.settings"), () =>
             Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
@@ -123,9 +245,6 @@ public class SceneViewPanel : DockPanel
                 b.Toggle(Loc.Get("scene.show_grid"),
                     () => { if (_editorCamera != null) _editorCamera.ShowGrid = !_editorCamera.ShowGrid; },
                     () => _editorCamera?.ShowGrid ?? true);
-                b.Toggle(Loc.Get("scene.show_gizmos"),
-                    () => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; },
-                    () => _editorCamera?.ShowGizmos ?? true);
                 b.Toggle(Loc.Get("scene.post_processing"),
                     () => { if (_editorCamera != null) _editorCamera.PostProcessing = !_editorCamera.PostProcessing; },
                     () => _editorCamera?.PostProcessing ?? true);
@@ -159,12 +278,6 @@ public class SceneViewPanel : DockPanel
                 b.Toggle(Loc.Get("scene.pivot_center"),
                     () => SceneTools.Pivot = SceneTools.Pivot == PivotMode.Center ? PivotMode.Pivot : PivotMode.Center,
                     () => SceneTools.Pivot == PivotMode.Center);
-                b.Toggle(Loc.Get("scene.orientation_local"),
-                    () => SceneTools.Orientation = SceneTools.Orientation == PivotOrientation.Local ? PivotOrientation.Global : PivotOrientation.Local,
-                    () => SceneTools.Orientation == PivotOrientation.Local);
-                b.Toggle(Loc.Get("scene.snap_enabled"),
-                    () => SceneTools.SnapEnabled = !SceneTools.SnapEnabled,
-                    () => SceneTools.SnapEnabled);
             }));
     }
 
@@ -537,22 +650,20 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    private const float IconPickRadius = 12f;
+    // How close, in pixels, the cursor must come to a gizmo line, and the least size a small or distant gizmo
+    // shape counts as, so one a few pixels across can still be clicked.
+    private const float GizmoLinePickPixels = 6f;
+    private const float GizmoMinPickPixels = 8f;
 
-    private static bool TryGetGizmoIconPosition(GameObject go, out Float3 position)
-    {
-        position = default;
-        if (go.HideFlags.HasFlag(HideFlags.NoGizmos)) return false;
-
-        if (go.GetComponent<Light>() is { } light && light.EnabledInHierarchy) { position = go.Transform.Position; return true; }
-        if (go.GetComponent<Camera>() is { } cam && cam.EnabledInHierarchy) { position = go.Transform.Position; return true; }
-        if (go.GetComponent<ReflectionProbe>() is { } probe && probe.EnabledInHierarchy) { position = probe.CapturePosition; return true; }
-        return false;
-    }
-
-    internal static GameObject? PickObjectAt(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    internal static GameObject? PickObjectAt(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize, bool pickGizmos = true)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
+
+        // Icons draw over everything, geometry and UI included, so one under the cursor wins outright.
+        GizmoPick gizmo = pickGizmos && camera.ShowGizmos
+            ? PickGizmo(scene.Gizmos.Hitboxes, camera.Camera, screenPos, panelSize)
+            : default;
+        if (gizmo.IsIcon) return gizmo.Owner;
 
         GameObject? bestHit = null;
         float bestDist = float.MaxValue;
@@ -565,18 +676,14 @@ public class SceneViewPanel : DockPanel
             if (meshRenderer.IsValid() && meshRenderer.EnabledInHierarchy && meshRenderer.Raycast(ray, out float dist))
             {
                 if (dist < bestDist) { bestDist = dist; bestHit = go; }
-                continue;
             }
+        }
 
-            if (camera.ShowGizmos && TryGetGizmoIconPosition(go, out Float3 iconPos))
-            {
-                Float3 screen = camera.Camera.WorldToScreenPoint(iconPos, panelSize);
-                if (screen.Z > 0 && screen.Z < bestDist && Float2.Distance(new Float2(screen.X, screen.Y), screenPos) <= IconPickRadius)
-                {
-                    bestDist = screen.Z;
-                    bestHit = go;
-                }
-            }
+        // Other gizmos are lines and markers in the scene, so they compete with geometry on depth.
+        if (gizmo.Owner.IsValid() && gizmo.Distance < bestDist)
+        {
+            bestHit = gizmo.Owner;
+            bestDist = gizmo.Distance;
         }
 
         // UI elements aren't visible to MeshRenderer raycasts but should still be selectable from the
@@ -596,6 +703,93 @@ public class SceneViewPanel : DockPanel
         }
 
         return bestHit;
+    }
+
+    /// <summary>The gizmo under the cursor: the object it selects, how far it is from the camera, and whether it is an icon.</summary>
+    internal readonly record struct GizmoPick(GameObject? Owner, float Distance, bool IsIcon);
+
+    /// <summary>
+    /// Tests the cursor against the hitboxes the last gizmo pass recorded. Everything is tested on screen, so a
+    /// line is clicked within a few pixels however far away it is. Icons win over every other shape, then the
+    /// nearest hit wins.
+    /// </summary>
+    internal static GizmoPick PickGizmo(IReadOnlyList<GizmoHitbox> hitboxes, Camera camera, Float2 screenPos, Float2 panelSize)
+    {
+        GizmoPick best = default;
+        float bestDist = float.MaxValue;
+        Float3 eye = camera.Transform.Position;
+        Float3 right = camera.Transform.Right;
+
+        foreach (GizmoHitbox hitbox in hitboxes)
+        {
+            GameObject owner = hitbox.Owner;
+            if (owner.IsNotValid() || !owner.EnabledInHierarchy || owner.HideFlags.HasFlag(HideFlags.Hide)) continue;
+            if (owner.Section is { HiddenInSceneView: true }) continue;
+
+            bool isIcon = hitbox.Kind == GizmoHitboxKind.Icon;
+            if (best.IsIcon && !isIcon) continue;
+
+            float dist;
+            if (hitbox.Kind == GizmoHitboxKind.Segment)
+            {
+                Float3 a = camera.WorldToScreenPoint(hitbox.A, panelSize);
+                Float3 b = camera.WorldToScreenPoint(hitbox.B, panelSize);
+                if (a.Z <= 0f || b.Z <= 0f) continue;
+
+                Float2 sa = new(a.X, a.Y), sb = new(b.X, b.Y);
+                Float2 ab = sb - sa;
+                float lengthSq = Float2.Dot(ab, ab);
+                float u = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(screenPos - sa, ab) / lengthSq, 0f, 1f) : 0f;
+                if (Float2.Distance(sa + ab * u, screenPos) > GizmoLinePickPixels) continue;
+                dist = Float3.Distance(eye, hitbox.A + (hitbox.B - hitbox.A) * u);
+            }
+            else
+            {
+                Float3 center = camera.WorldToScreenPoint(hitbox.A, panelSize);
+                if (center.Z <= 0f) continue;
+
+                // The shape's size on screen, measured along the camera's right axis so it matches a camera facing icon.
+                Float3 edge = camera.WorldToScreenPoint(hitbox.A + right * hitbox.Radius, panelSize);
+                float pixels = MathF.Max(Float2.Distance(new Float2(edge.X, edge.Y), new Float2(center.X, center.Y)), GizmoMinPickPixels);
+                Float2 offset = screenPos - new Float2(center.X, center.Y);
+
+                // An icon is a square on screen, a sphere a circle.
+                bool inside = isIcon
+                    ? MathF.Abs(offset.X) <= pixels && MathF.Abs(offset.Y) <= pixels
+                    : Float2.Dot(offset, offset) <= pixels * pixels;
+                if (!inside) continue;
+                dist = Float3.Distance(eye, hitbox.A);
+            }
+
+            if ((isIcon && !best.IsIcon) || dist < bestDist)
+            {
+                best = new GizmoPick(owner, dist, isIcon);
+                bestDist = dist;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// What a click on <paramref name="go"/> selects. The first click takes the outermost prefab instance it is part
+    /// of, so a prefab moves as one piece. Clicking it again while that is selected drills in to the next nested
+    /// instance, and finally to the object itself. A Ctrl click (<paramref name="toggling"/>) takes the selected
+    /// level instead, so it deselects what a plain click picked rather than adding the part under it.
+    /// </summary>
+    internal static GameObject SelectionTarget(GameObject go, bool toggling = false)
+    {
+        // Innermost first: the object itself, then every prefab instance root above it.
+        var chain = new List<GameObject> { go };
+        for (GameObject? ancestor = go.Parent; ancestor.IsValid(); ancestor = ancestor.Parent)
+            if (ancestor.IsPrefabInstance && PrefabUtility.GetPrefabInstanceRoot(ancestor) == ancestor)
+                chain.Add(ancestor);
+
+        // The level just inside the deepest selected one, or the outermost when none is selected.
+        for (int i = 0; i < chain.Count; i++)
+            if (Selection.IsSelected(chain[i]))
+                return toggling ? chain[i] : chain[Math.Max(i - 1, 0)];
+        return chain[^1];
     }
 
     /// <summary>
@@ -697,17 +891,18 @@ public class SceneViewPanel : DockPanel
 
     private void PickObject(SceneInstance scene, Float2 screenPos, Float2 panelSize)
     {
-        GameObject? bestHit = PickObjectAt(scene, _editorCamera!, screenPos, panelSize);
+        GameObject? picked = PickObjectAt(scene, _editorCamera!, screenPos, panelSize);
 
-        if (bestHit.IsValid())
+        if (picked.IsValid())
         {
+            GameObject target = SelectionTarget(picked, toggling: Input.IsCtrlPressed);
             if (Input.IsCtrlPressed)
-                Selection.ToggleSelection(bestHit);
+                Selection.ToggleSelection(target);
             else
-                Selection.Select(bestHit);
+                Selection.Select(target);
 
             // Ping so the Hierarchy scrolls to and briefly highlights the clicked GO.
-            Selection.Ping(bestHit.Identifier);
+            Selection.Ping(target.Identifier);
         }
         else if (!Input.IsCtrlPressed && !Input.IsShiftPressed)
         {
@@ -733,6 +928,11 @@ public class SceneViewPanel : DockPanel
         state["navAlwaysShow"] = NavMeshDebugDisplay.AlwaysShow;
         state["navShowDetail"] = NavMeshDebugDisplay.ShowDetail;
         state["navShowVertices"] = NavMeshDebugDisplay.ShowVertices;
+        state["orientation"] = SceneTools.Orientation.ToString();
+        state["gridSnap"] = SceneTools.GridSnap;
+        state["gridSize"] = SceneTools.MoveSnap;
+        state["rotationSnap"] = SceneTools.RotationSnap;
+        state["rotationStep"] = SceneTools.RotateSnap;
         return true;
     }
 
@@ -757,6 +957,13 @@ public class SceneViewPanel : DockPanel
         NavMeshDebugDisplay.AlwaysShow = state["navAlwaysShow"]?.GetValue<bool>() ?? false;
         NavMeshDebugDisplay.ShowDetail = state["navShowDetail"]?.GetValue<bool>() ?? false;
         NavMeshDebugDisplay.ShowVertices = state["navShowVertices"]?.GetValue<bool>() ?? false;
+
+        // Tool settings are editor wide; whichever Scene view restores last wins, as they all saved the same values.
+        if (Enum.TryParse(state["orientation"]?.GetValue<string>(), out PivotOrientation orientation)) SceneTools.Orientation = orientation;
+        if (state["gridSnap"]?.GetValue<bool>() is bool gridSnap) SceneTools.GridSnap = gridSnap;
+        if (state["gridSize"]?.GetValue<float>() is float gridSize && gridSize > 0f) SceneTools.MoveSnap = gridSize;
+        if (state["rotationSnap"]?.GetValue<bool>() is bool rotationSnap) SceneTools.RotationSnap = rotationSnap;
+        if (state["rotationStep"]?.GetValue<float>() is float rotationStep && rotationStep > 0f) SceneTools.RotateSnap = rotationStep;
     }
 
     private bool? _pendingGrid;
@@ -911,8 +1118,120 @@ public class SceneViewPanel : DockPanel
         _editorCamera?.ReleaseFlight();
     }
 
+    // The kind of transform the current drag turned out to be, or null before it has moved.
+    private TransformTool? _dragKind;
+
+    // Holding Ctrl inverts a snap toggle: it snaps while the toggle is off and frees the drag while it is on.
+    private bool GridSnapping => SceneTools.GridSnap != _handles.Ctrl;
+    private bool RotationSnapping => SceneTools.RotationSnap != _handles.Ctrl;
+
+    // The gizmo has one snapping switch for every kind of drag, so pick the toggle that matches the drag.
+    // Before a universal-gizmo drag shows its kind, either toggle snaps.
+    private bool StickySnap() => (_dragKind ?? SceneTools.Transform) switch
+    {
+        TransformTool.Rotate => RotationSnapping,
+        TransformTool.Universal => GridSnapping || RotationSnapping,
+        _ => GridSnapping,
+    };
+
+    // Grid snapping of moves is absolute: the handle's pivot lands on grid points along the axes the drag moves,
+    // rather than moving in whole steps from wherever it started. Kept as where the pivot started, how far the
+    // drag has moved it, and how far the cursor has dragged it before snapping.
+    private Float3 _moveStart;
+    private Float3 _moveApplied;
+    private Float3 _moveRaw;
+    private bool _moveSnapped;
+
+    /// <summary>
+    /// Where a move of <paramref name="movement"/> from <paramref name="start"/> lands with grid snapping: every
+    /// axis the move changed rounds to the nearest multiple of <paramref name="step"/>, and the axes it left alone
+    /// stay put. The grid is the handle's own (<paramref name="space"/>), so a local handle on a rotated object
+    /// snaps along its own axes; a handle turned only by right angles snaps to the world grid.
+    /// </summary>
+    internal static Float3 SnapToGrid(Float3 start, Float3 movement, float step, Quaternion space)
+    {
+        if (step <= 0f) return start + movement;
+        if (IsAxisAligned(space)) return SnapMovedAxes(start + movement, movement, step);
+
+        Quaternion inverse = Quaternion.Inverse(space);
+        Float3 localStart = inverse * start;
+        Float3 localMove = inverse * movement;
+        Float3 snapped = SnapMovedAxes(localStart + localMove, localMove, step);
+        return start + space * (snapped - localStart);
+    }
+
+    private static Float3 SnapMovedAxes(Float3 p, Float3 movement, float step)
+    {
+        const float Moved = 1e-5f;
+        return new Float3(
+            MathF.Abs(movement.X) > Moved ? MathF.Round(p.X / step) * step : p.X,
+            MathF.Abs(movement.Y) > Moved ? MathF.Round(p.Y / step) * step : p.Y,
+            MathF.Abs(movement.Z) > Moved ? MathF.Round(p.Z / step) * step : p.Z);
+    }
+
+    // Every axis of the rotation lies along a world axis, so its grid is the world's.
+    private static bool IsAxisAligned(Quaternion rotation)
+        => IsAligned(rotation * Float3.UnitX) && IsAligned(rotation * Float3.UnitY) && IsAligned(rotation * Float3.UnitZ);
+
+    private static bool IsAligned(Float3 axis)
+        => MathF.Abs(axis.X - MathF.Round(axis.X)) < 1e-4f
+        && MathF.Abs(axis.Y - MathF.Round(axis.Y)) < 1e-4f
+        && MathF.Abs(axis.Z - MathF.Round(axis.Z)) < 1e-4f;
+
+    // Size of the free move dot at the handle's centre, and how far around it a press grabs it, in pixels.
+    private const float FreeMoveDotPixels = 9f;
+    private const float FreeMoveGrabPixels = 8f;
+
+    // The view plane a free move drags across, fixed for the drag where it began.
+    private Float3 _freeMoveOrigin, _freeMoveNormal, _freeMoveStartHit;
+
+    /// <summary>
+    /// The small solid dot at the move handle's centre, which drags the selection across the camera's view
+    /// plane. Returns the drag as a gizmo result while it is held, so it moves, snaps and records undo exactly as
+    /// the axis handles do.
+    /// </summary>
+    private GizmoResult? UpdateFreeMove(ControlID id, Float3 position, Float3 cameraForward)
+    {
+        // Registered after the gizmo, so the dot wins when the two are equally near the cursor.
+        _handles.AddControl(id, position, FreeMoveGrabPixels);
+        _handles.RequestCursor(id, PaperCursor.ResizeAll);
+
+        if (_handles.TryBeginDrag(id))
+        {
+            _freeMoveOrigin = position;
+            _freeMoveNormal = cameraForward;
+            if (!RayPlane(_handles.MouseRay, _freeMoveOrigin, _freeMoveNormal, out _freeMoveStartHit))
+                _freeMoveStartHit = position;
+        }
+
+        bool active = _handles.IsActive(id);
+        _handles.Draw.Dot(position, active ? new Color32(255, 214, 80, 255) : new Color32(240, 240, 240, 235),
+            active ? FreeMoveDotPixels + 2f : FreeMoveDotPixels, HandleCap.Circle);
+
+        if (!_handles.IsHot(id) || !RayPlane(_handles.MouseRay, _freeMoveOrigin, _freeMoveNormal, out Float3 hit))
+            return null;
+
+        _dragKind = TransformTool.Translate;
+        Float3 total = hit - _freeMoveStartHit;
+        return new GizmoResult { TranslationDelta = total - _moveRaw, TotalTranslation = total };
+    }
+
+    private static bool RayPlane(Ray ray, Float3 origin, Float3 normal, out Float3 hit)
+    {
+        hit = default;
+        float facing = Float3.Dot(ray.Direction, normal);
+        if (MathF.Abs(facing) < 1e-6f) return false;
+        float t = Float3.Dot(origin - ray.Origin, normal) / facing;
+        if (t < 0f) return false;
+        hit = ray.Origin + ray.Direction * t;
+        return true;
+    }
+
     private void EndGizmoDrag()
     {
+        _dragKind = null;
+        _moveApplied = _moveRaw = Float3.Zero;
+        _moveSnapped = false;
         _wasGizmoActive = false;
         _gizmoTargets = null;
         _gizmoSelection = null;
@@ -922,7 +1241,7 @@ public class SceneViewPanel : DockPanel
     {
         using FrameStatScope stats = EditorFrameStats.Gizmos.Scope();
         _gizmoActive = false;
-        if (_wasGizmoActive && !_handles.IsHot(_handles.GetControlID(TransformControl)))
+        if (_wasGizmoActive && !_handles.IsHot(_handles.GetControlID(TransformControl)) && !_handles.IsHot(_handles.GetControlID(FreeMoveControl)))
         {
             EndGizmoDrag();
         }
@@ -976,12 +1295,18 @@ public class SceneViewPanel : DockPanel
 
         _transformGizmo.UpdateCamera(_handles.Viewport, cam.ViewMatrix, cam.ProjectionMatrix,
             camGo.Transform.Up, camGo.Transform.Forward, camGo.Transform.Right, camGo.Transform.Position);
-        _transformGizmo.SetTransform(center, rotation, scale);
+        // While a move snaps, the gizmo follows the cursor's unsnapped drag rather than the snapped object. The
+        // gizmo works out the drag from where its handle is, so placing it on the snapped point would feed the
+        // snap back into the drag, and a free move would wander off the plane it started on.
+        Float3 handlePosition = _wasGizmoActive && _moveSnapped ? _moveStart + _moveRaw : center;
+        _transformGizmo.SetTransform(handlePosition, rotation, scale);
 
         ControlID control = _handles.GetControlID(TransformControl);
 
-        // Ctrl always snaps; SceneTools.SnapEnabled makes it sticky.
-        _transformGizmo.Snapping = SceneTools.SnapEnabled || _handles.Ctrl;
+        // The toolbar toggles snap their own kind of drag, and Ctrl inverts them. Moves snap to the grid here
+        // rather than in the gizmo, so the gizmo hands over the raw drag for them.
+        Quaternion handleSpace = SceneTools.Orientation == PivotOrientation.Local ? rotation : Quaternion.Identity;
+        _transformGizmo.Snapping = StickySnap() && (_dragKind ?? SceneTools.Transform) != TransformTool.Translate;
         _transformGizmo.SnapDistance = SceneTools.MoveSnap;
         _transformGizmo.SnapAngle = SceneTools.RotateSnap;
         _transformGizmo.SnapScale = SceneTools.ScaleSnap;
@@ -992,6 +1317,20 @@ public class SceneViewPanel : DockPanel
         _transformGizmo.IsMouseUp = _handles.PrimaryUp;
 
         GizmoResult? result = _transformGizmo.Update(_handles.MouseRay, _handles.MousePosition, _handles.Blocked);
+
+        // Remember what kind of drag this is from its first result, so the next frames snap by the right
+        // toggle. The gizmo recomputes a drag from where it started every frame, so the frame before is fixed up.
+        // The free move dot drags in the view plane, and reports like one of the gizmo's own handles.
+        ControlID freeMove = _handles.GetControlID(FreeMoveControl);
+        if (SceneTools.Transform == TransformTool.Translate && !SceneTools.SuppressTransformGizmo)
+            result = UpdateFreeMove(freeMove, handlePosition, camGo.Transform.Forward) ?? result;
+
+        if (result is { } kind && _dragKind == null && _handles.IsHot(control))
+        {
+            if (kind.RotationDelta.HasValue) _dragKind = TransformTool.Rotate;
+            else if (kind.ScaleDelta.HasValue) _dragKind = TransformTool.Scale;
+            else if (kind.TranslationDelta.HasValue) _dragKind = TransformTool.Translate;
+        }
 
         // IsOver is fresh from the Update above. Guarded on Blocked because the gizmo only clears its
         // hover inside the un-blocked branch, so a blocked frame would leave IsOver latched on.
@@ -1006,16 +1345,20 @@ public class SceneViewPanel : DockPanel
         // The drag spans every frame the control is hot. Keyed off control ownership rather than whether the
         // gizmo produced a delta this frame - a sub-gizmo returns no result at degenerate view
         // angles, which would otherwise split one drag into two undo steps.
-        bool dragging = _handles.IsHot(control);
+        bool dragging = _handles.IsHot(control) || _handles.IsHot(freeMove);
         if (dragging && !_wasGizmoActive)
         {
             _gizmoHasMoved = false;
             _gizmoSelection = [.. selectedObjects];
             _gizmoTargets = [.. GameObjectClipboard.FilterToRoots(_gizmoSelection)];
+            _moveStart = center;
+            _moveApplied = _moveRaw = Float3.Zero;
+            _moveSnapped = false;
         }
         _wasGizmoActive = dragging;
 
         _handles.TryEndDrag(control);
+        _handles.TryEndDrag(freeMove);
 
         if (result.HasValue && dragging && _gizmoTargets is { } targets)
         {
@@ -1058,8 +1401,17 @@ public class SceneViewPanel : DockPanel
 
             if (r.TranslationDelta is { } delta)
             {
+                // Absolute grid snapping places the pivot from the drag's total, then moves by whatever that
+                // changes since the last frame.
+                Float3 step = delta;
+                _moveRaw = r.TotalTranslation ?? _moveRaw + delta;
+                _moveSnapped = GridSnapping;
+                if (_moveSnapped)
+                    step = SnapToGrid(_moveStart, _moveRaw, SceneTools.MoveSnap, handleSpace) - _moveStart - _moveApplied;
+                _moveApplied += step;
+
                 foreach (GameObject go in targets)
-                    if (go.IsValid()) go.Transform.Position += delta;
+                    if (go.IsValid()) go.Transform.Position += step;
             }
 
             // Apply rotation
@@ -1078,7 +1430,7 @@ public class SceneViewPanel : DockPanel
             }
         }
 
-        if (!_handles.IsHot(control) && _wasGizmoActive)
+        if (!dragging && _wasGizmoActive)
             EndGizmoDrag();
     }
 
