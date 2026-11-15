@@ -169,7 +169,7 @@ public class DirectoryBuildPropsTests : EditorTestHarness
         File.WriteAllText(Path.Combine(src, $"{packageId}.csproj"), $$"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>net11.0</TargetFramework>
                 <PackageId>{{packageId}}</PackageId>
                 <Version>1.0.0</Version>
                 <Nullable>enable</Nullable>

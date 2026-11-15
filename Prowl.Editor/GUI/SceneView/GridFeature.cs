@@ -1,10 +1,12 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Prowl.Graphite;
 using Prowl.Graphite.Rendering;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -78,35 +80,40 @@ internal sealed class GridFeature : RenderFeature
         }
         """;
 
-    private static GridFeature? s_feature;
     private static Renderer? s_renderer;
     private static readonly List<RenderFeature> s_list = [];
+    private static readonly List<RenderFeature> s_sceneList = [];
 
-    /// <summary>The grid as the extra features of a camera render, made for the current renderer.</summary>
-    public static IReadOnlyList<RenderFeature>? List
+    /// <summary>The grid as the extra features of a camera render, made for the current renderer. One line a unit.</summary>
+    public static IReadOnlyList<RenderFeature>? List => Lists() ? s_list : null;
+
+    /// <summary>The Scene view's grid, one line per grid snap step, so what snaps lines up with what is drawn.</summary>
+    public static IReadOnlyList<RenderFeature>? SceneList => Lists() ? s_sceneList : null;
+
+    private static bool Lists()
     {
-        get
+        if (Graphics.Renderer == null) return false;
+        if (s_renderer != Graphics.Renderer)
         {
-            if (Graphics.Renderer == null) return null;
-            if (s_feature == null || s_renderer != Graphics.Renderer)
-            {
-                s_renderer = Graphics.Renderer;
-                s_feature = new GridFeature(s_renderer);
-                s_list.Clear();
-                s_list.Add(s_feature);
-            }
-            return s_list;
+            s_renderer = Graphics.Renderer;
+            s_list.Clear();
+            s_list.Add(new GridFeature(s_renderer, static () => 1f));
+            s_sceneList.Clear();
+            s_sceneList.Add(new GridFeature(s_renderer, static () => SceneTools.MoveSnap));
         }
+        return true;
     }
 
     private readonly FullscreenProgram _program;
     private readonly PropertySet _properties = new();
     private readonly Sampler _point;
+    private readonly Func<float> _cellSize;
 
-    private GridFeature(Renderer renderer) : base(RenderSlot.Overlay, runsOn: ViewKinds.All)
+    private GridFeature(Renderer renderer, Func<float> cellSize) : base(RenderSlot.Overlay, runsOn: ViewKinds.All)
     {
         _program = renderer.CreateFullscreenProgram(Fragment, "Editor Grid");
         _point = Graphics.GetSampler(SamplerDescription.Point);
+        _cellSize = cellSize;
     }
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -119,8 +126,10 @@ internal sealed class GridFeature : RenderFeature
     {
         _properties.SetTexture("_CameraDepthTexture", context.Depth!, _point);
         _properties.SetFloat4("_GridColor", new Prowl.Vector.Float4(0.8f, 0.8f, 0.8f, 0.65f));
-        _properties.SetFloat("_PrimaryGridSize", 1f);
-        _properties.SetFloat("_SecondaryGridSize", 0.25f);
+        // The shader takes lines per unit: a line every cell, and a fainter one every four cells.
+        float cell = _cellSize() is float c && float.IsFinite(c) && c > 1e-4f ? c : 1f;
+        _properties.SetFloat("_PrimaryGridSize", 1f / cell);
+        _properties.SetFloat("_SecondaryGridSize", 0.25f / cell);
         _properties.SetFloat("_LineWidth", 0.02f);
         _properties.SetFloat("_Falloff", 1.5f);
         _properties.SetFloat("_MaxDist", 500f);

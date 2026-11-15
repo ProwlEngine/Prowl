@@ -910,7 +910,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
         var spec = new MSBuildProjectSpec
         {
-            TargetFramework = "net10.0",
+            TargetFramework = "net11.0",
             RuntimeIdentifiers = desktopProfile.Target.RuntimeIdentifiers,
             Properties = properties,
             References = references,

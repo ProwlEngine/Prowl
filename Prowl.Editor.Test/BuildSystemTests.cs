@@ -1361,7 +1361,7 @@ public class BuildSystemTests : IDisposable
 
     private static XDocument Render(MSBuildProjectSpec spec) => XDocument.Parse(spec.ToXml());
 
-    private static MSBuildProjectSpec Minimal() => new() { TargetFramework = "net10.0" };
+    private static MSBuildProjectSpec Minimal() => new() { TargetFramework = "net11.0" };
 
     // Whatever else changes, the output has to remain a valid project file.
     [Fact]
@@ -1371,7 +1371,7 @@ public class BuildSystemTests : IDisposable
 
         Assert.Equal("Project", doc.Root!.Name.LocalName);
         Assert.Equal("Microsoft.NET.Sdk", doc.Root.Attribute("Sdk")!.Value);
-        Assert.Equal("net10.0", doc.Descendants("TargetFramework").Single().Value);
+        Assert.Equal("net11.0", doc.Descendants("TargetFramework").Single().Value);
     }
 
     // MSBuild reads %xx as an escape, so a project under "100%Done" resolves to a path that does not exist.
@@ -1603,7 +1603,7 @@ public class BuildSystemTests : IDisposable
                     Ran.Add("process");
                     var spec = new MSBuildProjectSpec
                     {
-                        TargetFramework = "net10.0-handheld",
+                        TargetFramework = "net11.0-handheld",
                         RuntimeIdentifiers = HandheldTarget.RuntimeIdentifiers,
                         Properties = new Dictionary<string, string>
                         {
@@ -1677,7 +1677,7 @@ public class BuildSystemTests : IDisposable
         Assert.Equal("cartridge", await File.ReadAllTextAsync(Path.Combine(_root, "cartridge.manifest")));
         string csproj = await File.ReadAllTextAsync(Path.Combine(_root, "Game.csproj"));
         Assert.Contains("<RuntimeIdentifiers>handheld-arm64;handheld-arm</RuntimeIdentifiers>", csproj);
-        Assert.Contains("net10.0-handheld", csproj);
+        Assert.Contains("net11.0-handheld", csproj);
 
         // And it did not disturb the platforms that shipped with the engine.
         Assert.True(registry.TryGet("windows-x64", out _));

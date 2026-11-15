@@ -245,6 +245,7 @@ public sealed class TriggerVolume : Component
 
     public override void DrawGizmos()
     {
+        using GizmoBuilder.HitboxLineScope hitbox = Debug.GizmoHitboxLines();
         Color color = _current.Count > 0 || _currentCharacters.Count > 0 ? new Color(1f, 0.85f, 0f, 1f) : new Color(0f, 1f, 0.4f, 1f);
         Float3 worldCenter = WorldCenter;
         Quaternion orientation = WorldRotation;
