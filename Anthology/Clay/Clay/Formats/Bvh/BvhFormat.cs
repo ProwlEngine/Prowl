@@ -233,7 +233,11 @@ internal sealed class BvhFormat : IModelFormat
         // Return a scene.
         var result = new IntermediateScene()
         {
-            SourceCoordinateSystem = CoordinateSystem.RightHandedYUp
+            // BVH is specified to have a right-handed Y-up coordinate system.
+            SourceCoordinateSystem = CoordinateSystem.RightHandedYUp,
+
+            // Units are *not* specified, but centimeters are most common, so default to that.
+            SourceUnitToMeters = 0.01f,
         };
         if (animation.Bindings.Count > 0)
             result.Animations.Add(animation);

@@ -38,7 +38,7 @@ public sealed class BvhAnimationTests
                 Assert.Equal(2, spine.Index);
                 Assert.Equal("Upper Spine", spine.Name);
                 Assert.Same(model.Nodes[1], spine.Parent);
-                Assert.Equal(new Float3(0, 20, 0), spine.LocalPosition);
+                Assert.Equal(new Float3(0, 0.19999999f, 0), spine.LocalPosition);
                 Assert.Empty(spine.Children);
                 Assert.Equal(Quaternion.Identity, spine.LocalRotation);
                 Assert.Equal(new Float3(0, 15, 0), spine.Metadata["EndSite"]);
@@ -62,12 +62,12 @@ public sealed class BvhAnimationTests
             keyFrame =>
             {
                 Assert.Equal(0, keyFrame.Time);
-                Assert.Equal(ConvertTranslation(new Float3(0, 90, 0)), keyFrame.Value3);
+                Assert.Equal(ConvertTranslation(new Float3(0, 0.9f, 0)), keyFrame.Value3);
             },
             keyFrame =>
             {
                 Assert.Equal(0.033333f, keyFrame.Time);
-                Assert.Equal(ConvertTranslation(new Float3(0.5f, 90.5f, 0)), keyFrame.Value3);
+                Assert.Equal(ConvertTranslation(new Float3(0.005f, 0.905f, 0)), keyFrame.Value3);
             });
 
 
@@ -131,7 +131,7 @@ public sealed class BvhAnimationTests
                 Assert.Equal(2, spine.Index);
                 Assert.Equal("Spine", spine.Name);
                 Assert.Same(model.Nodes[1], spine.Parent);
-                Assert.Equal(ConvertTranslation(new Float3(0, 20, 0)), spine.LocalPosition);
+                Assert.Equal(ConvertTranslation(new Float3(0, 0.19999999f, 0)), spine.LocalPosition);
                 Assert.Empty(spine.Children);
                 Assert.Equal(Quaternion.Identity, spine.LocalRotation);
             },
@@ -140,9 +140,22 @@ public sealed class BvhAnimationTests
                 Assert.Equal(3, ball.Index);
                 Assert.Equal("Prop_Ball", ball.Name);
                 Assert.Equal(model.Nodes[0], ball.Parent);
-                Assert.Equal(ConvertTranslation(new Float3(50, 0, 0)), ball.LocalPosition);
+                Assert.Equal(ConvertTranslation(new Float3(0.5f, 0, 0)), ball.LocalPosition);
                 Assert.Equal(Quaternion.Identity, ball.LocalRotation);
             });
+    }
+
+    [Fact]
+    public void BvhFormat_AcceptsScientificNotation()
+    {
+        // This file contains "5-e1", which should be parsed correctly.
+        Model model = ModelImporter.Load(TestModels.Bvh("scientific.bvh"), cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False(model.Log.HasAnyWarnings);
+
+        // Animate hips position
+        AnimationClip animation = Assert.Single(model.AnimationClips);
+        AnimationBinding hipsPosition = Assert.Single(animation.Bindings, b => b.NodeIndex == 1 && b.Property == AnimatedProperty.Position);
+        Assert.Equal(ConvertTranslation(new Float3(0.005f, 0.9f, 0)), hipsPosition.Curve[0].Value3);
     }
 
     [Fact]

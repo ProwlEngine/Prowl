@@ -1,0 +1,20 @@
+HIERARCHY
+ROOT Hips
+{
+  OFFSET 0.000000 0.000000 0.000000
+  CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation
+  JOINT Upper Spine
+  {
+    OFFSET 0.000000 20.000000 0.000000
+    CHANNELS 3 Zrotation Xrotation Yrotation
+    End Site
+    {
+      OFFSET 0.000000 15.000000 0.000000
+    }
+  }
+}
+MOTION
+Frames: 2
+Frame Time: 0.033333
+5e-1 90.00 0.0 0.0 0.0 0.0 12.0 5.0 -2.0
+0.50 90.50 0.0 5.0 0.0 0.0 14.0 6.0 -1.0
