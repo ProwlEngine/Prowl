@@ -142,9 +142,9 @@ public static class ExternalAssetDrop
     /// <summary>Hand each asset to the scene view's drop handler for its type, as an internal drag would.</summary>
     private static void SpawnInScene(EditorAssetBackend db, IEnumerable<string> paths, SceneDropContext ctx)
     {
-        // The scene may have changed while the import ran.
-        ctx.Scene = EditorSceneManager.EditedWorld;
-        if (Runtime.EngineObjectExtensions.IsNotValid(ctx.Scene)) return;
+        // The drop point and target were resolved in the scene dropped onto. If another scene is being edited by
+        // now (play mode, a scene switch), they mean nothing there: skip the spawn, the files are still imported.
+        if (!ReferenceEquals(ctx.Scene, EditorSceneManager.EditedWorld) || Runtime.EngineObjectExtensions.IsNotValid(ctx.Scene)) return;
 
         var guids = new List<Guid>();
         var rels = new List<string>();
