@@ -146,13 +146,20 @@ public static class ExternalAssetDrop
         ctx.Scene = EditorSceneManager.EditedWorld;
         if (Runtime.EngineObjectExtensions.IsNotValid(ctx.Scene)) return;
 
+        var guids = new List<Guid>();
+        var rels = new List<string>();
+        Type? firstType = null;
         foreach (string path in paths)
         {
             AssetEntry? entry = db.GetEntry(path);
             if (entry == null) continue;
-            ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(entry.MainAssetType);
-            handler?.Handle(new AssetDragPayload(entry.Guid, Path.GetFileNameWithoutExtension(path), path, entry.MainAssetType), ctx);
+            firstType ??= entry.MainAssetType;
+            guids.Add(entry.Guid);
+            rels.Add(path);
         }
+        if (guids.Count == 0) return;
+
+        SceneDrop.Drop(new AssetDragPayload(guids[0], Path.GetFileNameWithoutExtension(rels[0]), firstType, [.. guids], [.. rels]), ctx);
     }
 
     /// <summary>Ping and toast once the watcher has imported the copied batch.</summary>

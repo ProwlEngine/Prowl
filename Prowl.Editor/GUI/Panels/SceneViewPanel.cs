@@ -649,7 +649,7 @@ public class SceneViewPanel : DockPanel
                 ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(assetDrop.AssetType);
                 if (handler != null)
                 {
-                    handler.Handle(assetDrop, new SceneDropContext
+                    SceneDrop.Drop(assetDrop, new SceneDropContext
                     {
                         Scene = scene,
                         Camera = _editorCamera!,
@@ -1069,15 +1069,17 @@ public class SceneViewPanel : DockPanel
         editor?.DrawSceneGizmos(scene);
         DrawSelectionGizmos();
 
-        // Faint outline of the drag preview's extent.
-        if (_dropGhost.IsValid() && TryGetWorldBounds(_dropGhost, out Float3 min, out Float3 max))
-            Debug.DrawWireCube((min + max) * 0.5f, (max - min) * 0.5f, new Vector.Color(1f, 1f, 1f, 0.25f));
+        // Faint outline of each drag preview's extent.
+        foreach ((GameObject ghost, _) in _dropGhosts)
+            if (ghost.IsValid() && TryGetWorldBounds(ghost, out Float3 min, out Float3 max))
+                Debug.DrawWireCube((min + max) * 0.5f, (max - min) * 0.5f, new Vector.Color(1f, 1f, 1f, 0.25f));
     }
 
-    // Drag preview: a hidden, unsaved, render-only copy of what the drop would spawn, following the cursor.
-    // _dropGhostGuid/_dropGhostScene are remembered even when no ghost could be built, so it isn't retried every frame.
-    private GameObject? _dropGhost;
-    private Guid _dropGhostGuid;
+    // Drag preview: hidden, unsaved, render-only copies of what the drop would spawn, following the cursor, each
+    // at its offset from the drop point. _dropGhostPayload/_dropGhostScene are remembered even when no ghost could
+    // be built, so it isn't retried every frame.
+    private readonly List<(GameObject Ghost, Float3 Offset)> _dropGhosts = [];
+    private AssetDragPayload? _dropGhostPayload;
     private SceneInstance? _dropGhostScene;
     private bool _dropGhostTouched;
     private static readonly List<SceneViewPanel> s_ghostOwners = [];
@@ -1086,20 +1088,26 @@ public class SceneViewPanel : DockPanel
     private void UpdateDropPreview(SceneInstance scene, AssetDragPayload payload, Float3 dropPos)
     {
         _dropGhostTouched = true;
-        if (payload.AssetGuid != _dropGhostGuid || !ReferenceEquals(scene, _dropGhostScene))
+        if (!ReferenceEquals(payload, _dropGhostPayload) || !ReferenceEquals(scene, _dropGhostScene))
         {
             ClearDropPreview();
-            _dropGhostGuid = payload.AssetGuid;
+            _dropGhostPayload = payload;
             _dropGhostScene = scene;
-            // Not in a playing world: the copy would join the running game.
-            _dropGhost = scene.IsPlaying ? null : BuildDropGhost(payload.AssetGuid);
-            if (_dropGhost.IsValid())
+            // Not in a playing world: the copies would join the running game.
+            if (!scene.IsPlaying)
             {
-                scene.Add(_dropGhost);
-                s_ghostOwners.Add(this);
+                foreach ((AssetDragPayload item, Float3 pos) in SceneDrop.Layout(payload, Float3.Zero))
+                {
+                    GameObject? ghost = BuildDropGhost(item.AssetGuid);
+                    if (ghost.IsNotValid()) continue;
+                    scene.Add(ghost);
+                    _dropGhosts.Add((ghost, pos));
+                }
+                if (_dropGhosts.Count > 0) s_ghostOwners.Add(this);
             }
         }
-        if (_dropGhost.IsValid()) _dropGhost.Transform.Position = dropPos;
+        foreach ((GameObject ghost, Float3 offset) in _dropGhosts)
+            if (ghost.IsValid()) ghost.Transform.Position = dropPos + offset;
     }
 
     /// <summary>
@@ -1151,9 +1159,10 @@ public class SceneViewPanel : DockPanel
 
     private void ClearDropPreview()
     {
-        if (_dropGhost.IsValid()) _dropGhost.Destroy();
-        _dropGhost = null;
-        _dropGhostGuid = Guid.Empty;
+        foreach ((GameObject ghost, _) in _dropGhosts)
+            if (ghost.IsValid()) ghost.Destroy();
+        _dropGhosts.Clear();
+        _dropGhostPayload = null;
         _dropGhostScene = null;
         s_ghostOwners.Remove(this);
     }
