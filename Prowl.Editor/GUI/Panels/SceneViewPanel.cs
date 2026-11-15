@@ -1015,6 +1015,15 @@ public class SceneViewPanel : DockPanel
     /// </summary>
     internal static Float3 GetDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
+        Float3 p = RaycastDropPosition(scene, camera, screenPos, panelSize);
+        // Same toggle and Ctrl inversion as the move gizmo. Y stays on the surface hit so the drop doesn't sink into it.
+        float step = SceneTools.MoveSnap;
+        if (SceneTools.GridSnap == Input.IsCtrlPressed || step <= 0f) return p;
+        return new Float3(MathF.Round(p.X / step) * step, p.Y, MathF.Round(p.Z / step) * step);
+    }
+
+    private static Float3 RaycastDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
 
         // Try raycasting against scene objects first
