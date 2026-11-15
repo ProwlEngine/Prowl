@@ -1105,7 +1105,8 @@ public static class GameObjectInspector
                     .Text($"{EditorIcons.Cubes}  {label}", font)
                     .TextColor(textColor)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
-                    .TextTruncate(); // a long name ends in an ellipsis before the buttons, not under them
+                    .TextTruncate() // a long name ends in an ellipsis before the buttons, not under them
+                    .Tooltip(isMissing ? label : prefabName); // the whole name, for when it is cut short
 
                 if (isMissing)
                 {
