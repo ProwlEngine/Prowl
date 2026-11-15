@@ -594,7 +594,7 @@ public class SceneViewPanel : DockPanel
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
             {
                 var dragPayload = (AssetDragPayload)DragDrop.Payload!;
-                ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(dragPayload.AssetType);
+                ISceneDropHandler? handler = SceneDrop.FindHandler(dragPayload);
 
                 if (handler != null)
                 {
@@ -646,18 +646,9 @@ public class SceneViewPanel : DockPanel
                     return;
                 }
 
-                ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(assetDrop.AssetType);
-                if (handler != null)
-                {
-                    SceneDrop.Drop(assetDrop, new SceneDropContext
-                    {
-                        Scene = scene,
-                        Camera = _editorCamera!,
-                        MouseLocal = mouseLocal,
-                        PanelSize = panelSize,
-                    });
+                var dropContext = new SceneDropContext { Scene = scene, Camera = _editorCamera!, MouseLocal = mouseLocal, PanelSize = panelSize };
+                if (SceneDrop.Drop(assetDrop, dropContext))
                     DragDrop.EndDrag();
-                }
             }
 
             // Floating transform-tools panel (top-left)

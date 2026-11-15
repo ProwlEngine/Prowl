@@ -70,55 +70,77 @@ public interface ISceneDropHandler
 /// </summary>
 public static class SceneDrop
 {
-    public static bool IsSpawnable(Asset? asset) => asset is Mesh or PrefabAsset or Sprite;
+    public static bool IsSpawnable(Type? type)
+        => type != null && (typeof(Mesh).IsAssignableFrom(type) || typeof(PrefabAsset).IsAssignableFrom(type) || typeof(Sprite).IsAssignableFrom(type));
 
-    /// <summary>Drop every asset in <paramref name="payload"/>.</summary>
-    public static void Drop(AssetDragPayload payload, SceneDropContext context)
+    // The last payload's assets that have a handler, spawners first with their grid offset (null for the rest), so a
+    // drag's preview and its drop measure the assets once.
+    private static AssetDragPayload? s_planKey;
+    private static List<(AssetDragPayload Item, ISceneDropHandler Handler, Float3? Offset)> s_plan = [];
+
+    /// <summary>Drop every asset in <paramref name="payload"/>. False when no asset in it has a handler.</summary>
+    public static bool Drop(AssetDragPayload payload, SceneDropContext context)
     {
         SceneDropContext ctx = context.Freeze();
-        (List<AssetDragPayload> spawn, List<AssetDragPayload> other) = Split(payload);
-        foreach (AssetDragPayload item in other)
-            EditorRegistries.FindSceneDropHandler(item.AssetType)?.Handle(item, ctx);
-        foreach ((AssetDragPayload item, Float3 pos) in Layout(spawn, ctx.DropPosition))
-            EditorRegistries.FindSceneDropHandler(item.AssetType)?.Handle(item, ctx.At(pos));
+        Float3 drop = ctx.DropPosition;
+        // One non-spawning item per handler: each would hit the same target, so a second material would just replace the first.
+        var used = new HashSet<ISceneDropHandler>();
+        List<(AssetDragPayload Item, ISceneDropHandler Handler, Float3? Offset)> plan = Plan(payload);
+        foreach ((AssetDragPayload item, ISceneDropHandler handler, Float3? offset) in plan)
+        {
+            if (offset is { } o) handler.Handle(item, ctx.At(drop + o));
+            else if (used.Add(handler)) handler.Handle(item, ctx);
+        }
+        return plan.Count > 0;
     }
+
+    /// <summary>The handler a drop of <paramref name="payload"/> uses, spawning first, for the drop hint; null when none applies.</summary>
+    public static ISceneDropHandler? FindHandler(AssetDragPayload payload)
+        => Plan(payload) is [var first, ..] ? first.Handler : null;
 
     /// <summary>The objects a drop of <paramref name="payload"/> at <paramref name="drop"/> spawns, each with its root position.</summary>
     public static List<(AssetDragPayload Item, Float3 Position)> Layout(AssetDragPayload payload, Float3 drop)
-        => Layout(Split(payload).Spawn, drop);
-
-    private static (List<AssetDragPayload> Spawn, List<AssetDragPayload> Other) Split(AssetDragPayload payload)
     {
-        var spawn = new List<AssetDragPayload>();
-        var other = new List<AssetDragPayload>();
-        if (!payload.IsMulti)
-        {
-            (IsSpawnable(Runtime.AssetDatabase.Get(payload.AssetGuid)) ? spawn : other).Add(payload);
-            return (spawn, other);
-        }
+        var result = new List<(AssetDragPayload, Float3)>();
+        foreach ((AssetDragPayload item, _, Float3? offset) in Plan(payload))
+            if (offset is { } o) result.Add((item, drop + o));
+        return result;
+    }
+
+    private static List<(AssetDragPayload Item, ISceneDropHandler Handler, Float3? Offset)> Plan(AssetDragPayload payload)
+    {
+        if (ReferenceEquals(payload, s_planKey)) return s_plan;
+        var spawn = new List<(AssetDragPayload, ISceneDropHandler)>();
+        var other = new List<(AssetDragPayload, ISceneDropHandler, Float3?)>();
         for (int i = 0; i < payload.AssetGuids.Length; i++)
         {
-            Asset? asset = Runtime.AssetDatabase.Get(payload.AssetGuids[i]);
+            Guid guid = payload.AssetGuids[i];
             string path = payload.AssetPaths[i];
-            var item = new AssetDragPayload(payload.AssetGuids[i], System.IO.Path.GetFileNameWithoutExtension(path), path, asset.IsValid() ? asset.GetType() : null);
-            (IsSpawnable(asset) ? spawn : other).Add(item);
+            // Typed from the asset index rather than by loading each asset.
+            Type? type = i == 0 ? payload.AssetType : EditorAssetBackend.Instance?.GetEntry(guid)?.MainAssetType;
+            if (EditorRegistries.FindSceneDropHandler(type) is not { } handler) continue;
+            AssetDragPayload item = payload.IsMulti ? new AssetDragPayload(guid, System.IO.Path.GetFileNameWithoutExtension(path), path, type) : payload;
+            if (IsSpawnable(type)) spawn.Add((item, handler));
+            else other.Add((item, handler, null));
         }
-        return (spawn, other);
+        s_planKey = payload;
+        s_plan = [.. Offsets(spawn), .. other];
+        return s_plan;
     }
 
     // One cell per object, sized by the largest footprint so neighbours never overlap; each footprint (not its
     // pivot) is centred in its cell. A single object goes at the drop point.
-    private static List<(AssetDragPayload, Float3)> Layout(List<AssetDragPayload> items, Float3 drop)
+    private static List<(AssetDragPayload, ISceneDropHandler, Float3?)> Offsets(List<(AssetDragPayload Item, ISceneDropHandler Handler)> items)
     {
-        var result = new List<(AssetDragPayload, Float3)>(items.Count);
-        if (items.Count == 1) result.Add((items[0], drop));
+        var result = new List<(AssetDragPayload, ISceneDropHandler, Float3?)>(items.Count);
+        if (items.Count == 1) result.Add((items[0].Item, items[0].Handler, Float3.Zero));
         if (items.Count <= 1) return result;
 
         var centers = new Float3[items.Count];
         float cell = 0f;
         for (int i = 0; i < items.Count; i++)
         {
-            if (!TryGetLocalBounds(items[i].AssetGuid, out Float3 min, out Float3 max)) continue;
+            if (!TryGetLocalBounds(items[i].Item.AssetGuid, out Float3 min, out Float3 max)) continue;
             centers[i] = (min + max) * 0.5f;
             cell = MathF.Max(cell, MathF.Max(max.X - min.X, max.Z - min.Z));
         }
@@ -130,7 +152,7 @@ public static class SceneDrop
         {
             float x = (i % cols - (cols - 1) * 0.5f) * pitch - centers[i].X;
             float z = (i / cols - (rows - 1) * 0.5f) * pitch - centers[i].Z;
-            result.Add((items[i], drop + new Float3(x, 0f, z)));
+            result.Add((items[i].Item, items[i].Handler, new Float3(x, 0f, z)));
         }
         return result;
     }
@@ -148,7 +170,9 @@ public static class SceneDrop
                 GameObject? go = GameObject.InstantiateDetached(prefab);
                 if (go.IsNotValid()) return false;
                 go.Transform.Position = Float3.Zero;
-                return SceneViewPanel.TryGetWorldBounds(go, out min, out max);
+                bool ok = SceneViewPanel.TryGetWorldBounds(go, out min, out max);
+                go.Destroy();
+                return ok;
             default:
                 return false;
         }
@@ -193,8 +217,7 @@ internal class MeshDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        Float3 dropPos = context.DropPosition;
-        HierarchyPanel.SpawnAssetInScene(payload, null, dropPos);
+        HierarchyPanel.SpawnAssetInScene(payload, null, context.DropPosition);
     }
 }
 
@@ -204,8 +227,7 @@ internal class PrefabDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        Float3 dropPos = context.DropPosition;
-        HierarchyPanel.SpawnAssetInScene(payload, null, dropPos);
+        HierarchyPanel.SpawnAssetInScene(payload, null, context.DropPosition);
     }
 }
 
@@ -215,7 +237,6 @@ internal class SpriteDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        Float3 dropPos = context.DropPosition;
-        HierarchyPanel.SpawnAssetInScene(payload, null, dropPos);
+        HierarchyPanel.SpawnAssetInScene(payload, null, context.DropPosition);
     }
 }
