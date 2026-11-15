@@ -995,6 +995,9 @@ public static class GameObjectInspector
             if (method.GetParameters().Length > 0) continue; // Only parameterless methods
 
             string label = btnAttr.Label ?? PropertyGridUtils.NicifyName(method.Name);
+            // The same room around it as the PropertyGrid gives its buttons
+            using var margin = paper.Row($"{id}_row_{btnIdx}").Height(UnitValue.Auto)
+                .PaddingLeft(6).PaddingTop(6).PaddingBottom(6).Enter();
             Origami.Button(paper, $"{id}_{btnIdx++}", label, () =>
             {
                 if (comp.IsNotValid()) return;
