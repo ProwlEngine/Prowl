@@ -839,7 +839,17 @@ public class GizmoBuilder
     /// <summary>A sphere that can be clicked to select the component drawing it.</summary>
     public void HitboxSphere(Float3 center, float radius)
     {
-        if (_matrix4X4s.Count > 0) center = Float4x4.TransformPoint(center, _matrix4X4s.Peek());
+        if (_matrix4X4s.Count > 0)
+        {
+            // The radius scales with the matrix's largest axis, so the hitbox covers the sphere drawn with it.
+            Float4x4 m = _matrix4X4s.Peek();
+            Float3 c = Float4x4.TransformPoint(center, m);
+            radius = MathF.Max(MathF.Max(
+                Float3.Distance(c, Float4x4.TransformPoint(center + new Float3(radius, 0, 0), m)),
+                Float3.Distance(c, Float4x4.TransformPoint(center + new Float3(0, radius, 0), m))),
+                Float3.Distance(c, Float4x4.TransformPoint(center + new Float3(0, 0, radius), m)));
+            center = c;
+        }
         AddHitbox(GizmoHitboxKind.Sphere, center, center, radius);
     }
 

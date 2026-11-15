@@ -91,7 +91,7 @@ public class GizmoPickingTests : EditorTestHarness
         Assert.Equal(1, probe.Draws);
         Assert.Equal(1, probe.SelectedDraws);
 
-        GizmoFilter.SetEnabled(typeof(HitboxProbe), false);
+        GizmoFilter.SetDisabled([GizmoFilter.Key(typeof(HitboxProbe))]);
         DrawFrame(scene);
         Assert.Equal(1, probe.Draws);
         Assert.Equal(1, probe.SelectedDraws);

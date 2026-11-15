@@ -119,7 +119,9 @@ public static class GizmoTypesPopover
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .IsNotInteractable();
 
-            Origami.Checkbox(paper, $"{id}_check", on, v => GizmoPreferences.SetEnabled(type.Type, v)).Show();
+            // Stops the checkbox's click bubbling to the row, which would toggle the type straight back.
+            using (paper.Box($"{id}_check_wrap").Width(UnitValue.Auto).Height(UnitValue.Auto).StopEventPropagation().Enter())
+                Origami.Checkbox(paper, $"{id}_check", on, v => GizmoPreferences.SetEnabled(type.Type, v)).Show();
         }
     }
 }

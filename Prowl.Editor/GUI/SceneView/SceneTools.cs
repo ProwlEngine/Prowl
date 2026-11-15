@@ -71,14 +71,14 @@ public static class SceneTools
         set => Set(ref _orientation, value);
     }
 
-    /// <summary>Sticky snapping of moves to <see cref="MoveSnap"/>, and of scaling to <see cref="ScaleSnap"/>. Holding Ctrl snaps regardless.</summary>
+    /// <summary>Sticky snapping of moves to <see cref="MoveSnap"/>, and of scaling to <see cref="ScaleSnap"/>. Holding Ctrl inverts it.</summary>
     public static bool GridSnap
     {
         get => _gridSnap;
         set => Set(ref _gridSnap, value);
     }
 
-    /// <summary>Sticky snapping of rotation to <see cref="RotateSnap"/>. Holding Ctrl snaps regardless.</summary>
+    /// <summary>Sticky snapping of rotation to <see cref="RotateSnap"/>. Holding Ctrl inverts it.</summary>
     public static bool RotationSnap
     {
         get => _rotationSnap;

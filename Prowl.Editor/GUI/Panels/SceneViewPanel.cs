@@ -122,6 +122,9 @@ public class SceneViewPanel : DockPanel
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
+        if (Time.FrameCount > _headerFrame + 1) _gizmoListOpen = false;
+        _headerFrame = Time.FrameCount;
+
         using (paper.Row("sv_hdr").Width(width).Height(height).Gap(6).Enter())
         {
             paper.Box("sv_hdr_spacer").Width(UnitValue.StretchOne);
@@ -145,15 +148,15 @@ public class SceneViewPanel : DockPanel
                     .Text(EditorIcons.CaretDown, font).TextColor(EditorTheme.Ink300).FontSize(10f).Alignment(TextAlignment.MiddleCenter)
                     .Tooltip(Loc.Get("scene.gizmos"))
                     .IsNotFocusable()
-                    .OnClick(_ => s_gizmoListOpen = !s_gizmoListOpen);
+                    .OnClick(_ => _gizmoListOpen = !_gizmoListOpen);
 
-                if (s_gizmoListOpen)
+                if (_gizmoListOpen)
                 {
                     if (paper.IsKeyPressed(PaperKey.Escape))
-                        s_gizmoListOpen = false;
+                        _gizmoListOpen = false;
                     else
                     {
-                        MenuTreePopup.Backdrop(paper, "sv_gizmo_list", () => s_gizmoListOpen = false);
+                        MenuTreePopup.Backdrop(paper, "sv_gizmo_list", () => _gizmoListOpen = false);
                         GizmoTypesPopover.Draw(paper, "sv_gizmo_list", trigger);
                     }
                 }
@@ -183,8 +186,9 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    // Open state of the gizmo type list. Static: one list for every Scene view, as the choices are shared.
-    private static bool s_gizmoListOpen;
+    // Open state of this view's gizmo type list, and the frame its header last drew, to close the list when the tab is hidden.
+    private bool _gizmoListOpen;
+    private long _headerFrame;
 
     private const float ToggleSize = 22f;
 
@@ -719,6 +723,7 @@ public class SceneViewPanel : DockPanel
         float bestDist = float.MaxValue;
         Float3 eye = camera.Transform.Position;
         Float3 right = camera.Transform.Right;
+        Float3 forward = camera.Transform.Forward;
 
         foreach (GizmoHitbox hitbox in hitboxes)
         {
@@ -732,8 +737,16 @@ public class SceneViewPanel : DockPanel
             float dist;
             if (hitbox.Kind == GizmoHitboxKind.Segment)
             {
-                Float3 a = camera.WorldToScreenPoint(hitbox.A, panelSize);
-                Float3 b = camera.WorldToScreenPoint(hitbox.B, panelSize);
+                // Clip to the near plane, so an edge running past the camera stays clickable where it is visible.
+                Float3 wa = hitbox.A, wb = hitbox.B;
+                float near = MathF.Max(camera.NearClipPlane, 1e-4f);
+                float da = Float3.Dot(wa - eye, forward), db = Float3.Dot(wb - eye, forward);
+                if (da < near && db < near) continue;
+                if (da < near) wa = wb + (wa - wb) * ((db - near) / (db - da));
+                else if (db < near) wb = wa + (wb - wa) * ((da - near) / (da - db));
+
+                Float3 a = camera.WorldToScreenPoint(wa, panelSize);
+                Float3 b = camera.WorldToScreenPoint(wb, panelSize);
                 if (a.Z <= 0f || b.Z <= 0f) continue;
 
                 Float2 sa = new(a.X, a.Y), sb = new(b.X, b.Y);
@@ -741,7 +754,7 @@ public class SceneViewPanel : DockPanel
                 float lengthSq = Float2.Dot(ab, ab);
                 float u = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(screenPos - sa, ab) / lengthSq, 0f, 1f) : 0f;
                 if (Float2.Distance(sa + ab * u, screenPos) > GizmoLinePickPixels) continue;
-                dist = Float3.Distance(eye, hitbox.A + (hitbox.B - hitbox.A) * u);
+                dist = Float3.Distance(eye, wa + (wb - wa) * u);
             }
             else
             {
@@ -850,6 +863,8 @@ public class SceneViewPanel : DockPanel
         bool additive = _handles.Shift || _handles.Ctrl;
         if (!additive) Selection.Clear();
 
+        // Children of one prefab resolve to the same root, which must be added or toggled once.
+        var targets = new HashSet<GameObject>();
         foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
@@ -860,8 +875,13 @@ public class SceneViewPanel : DockPanel
             if (screen.Value.X < minX || screen.Value.X > maxX) continue;
             if (screen.Value.Y < minY || screen.Value.Y > maxY) continue;
 
-            if (_handles.Ctrl) Selection.ToggleSelection(go);
-            else Selection.AddToSelection(go);
+            targets.Add(SelectionTarget(go, toggling: _handles.Ctrl));
+        }
+
+        foreach (GameObject target in targets)
+        {
+            if (_handles.Ctrl) Selection.ToggleSelection(target);
+            else Selection.AddToSelection(target);
         }
     }
 
@@ -1162,7 +1182,8 @@ public class SceneViewPanel : DockPanel
 
     private static Float3 SnapMovedAxes(Float3 p, Float3 movement, float step)
     {
-        const float Moved = 1e-5f;
+        // Relative to the coordinates' size: a drag far from the origin leaves float noise on the axes it did not move.
+        float Moved = 1e-5f * (1f + MathF.Max(MathF.Max(MathF.Abs(p.X), MathF.Abs(p.Y)), MathF.Abs(p.Z)));
         return new Float3(
             MathF.Abs(movement.X) > Moved ? MathF.Round(p.X / step) * step : p.X,
             MathF.Abs(movement.Y) > Moved ? MathF.Round(p.Y / step) * step : p.Y,
@@ -1192,8 +1213,9 @@ public class SceneViewPanel : DockPanel
     /// </summary>
     private GizmoResult? UpdateFreeMove(ControlID id, Float3 position, Float3 cameraForward)
     {
-        // Registered after the gizmo, so the dot wins when the two are equally near the cursor.
-        _handles.AddControl(id, position, FreeMoveGrabPixels);
+        // Registered after the gizmo at zero distance, as the gizmo reports its hover, so the dot wins anywhere in its grab radius.
+        bool overDot = _handles.DistanceToPoint(position, FreeMoveGrabPixels) < float.MaxValue;
+        _handles.AddControl(id, overDot ? 0f : float.MaxValue, _handles.DepthOf(position));
         _handles.RequestCursor(id, PaperCursor.ResizeAll);
 
         if (_handles.TryBeginDrag(id))
@@ -1318,6 +1340,14 @@ public class SceneViewPanel : DockPanel
 
         GizmoResult? result = _transformGizmo.Update(_handles.MouseRay, _handles.MousePosition, _handles.Blocked);
 
+        // IsOver is fresh from the Update above. Guarded on Blocked because the gizmo only clears its
+        // hover inside the un-blocked branch, so a blocked frame would leave IsOver latched on.
+        // Origami exposes only a bool, not a per-axis screen distance, so a hover registers at zero
+        // and the gizmo's own depth decides overlaps against handles stacked on top of it.
+        bool gizmoHovered = _transformGizmo.IsOver && !_handles.Blocked;
+        _handles.AddControl(control, gizmoHovered ? 0f : float.MaxValue, _handles.DepthOf(center));
+        _handles.RequestCursor(control, PaperCursor.ResizeAll);
+
         // Remember what kind of drag this is from its first result, so the next frames snap by the right
         // toggle. The gizmo recomputes a drag from where it started every frame, so the frame before is fixed up.
         // The free move dot drags in the view plane, and reports like one of the gizmo's own handles.
@@ -1331,14 +1361,6 @@ public class SceneViewPanel : DockPanel
             else if (kind.ScaleDelta.HasValue) _dragKind = TransformTool.Scale;
             else if (kind.TranslationDelta.HasValue) _dragKind = TransformTool.Translate;
         }
-
-        // IsOver is fresh from the Update above. Guarded on Blocked because the gizmo only clears its
-        // hover inside the un-blocked branch, so a blocked frame would leave IsOver latched on.
-        // Origami exposes only a bool, not a per-axis screen distance, so a hover registers at zero
-        // and the gizmo's own depth decides overlaps against handles stacked on top of it.
-        bool gizmoHovered = _transformGizmo.IsOver && !_handles.Blocked;
-        _handles.AddControl(control, gizmoHovered ? 0f : float.MaxValue, _handles.DepthOf(center));
-        _handles.RequestCursor(control, PaperCursor.ResizeAll);
 
         // Gizmo drawing happens in the viewport's DrawForeground callback (needs canvas)
 

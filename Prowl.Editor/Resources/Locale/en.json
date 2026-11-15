@@ -68,8 +68,8 @@
   "scene.pivot_center": "Pivot: Center",
   "scene.orientation_local": "Orientation: Local",
   "scene.orientation_global": "Orientation: Global",
-  "scene.rotation_snap": "Rotation Snap (Ctrl snaps while held)",
-  "scene.grid_snap": "Grid Snap (Ctrl snaps while held)",
+  "scene.rotation_snap": "Rotation Snap",
+  "scene.grid_snap": "Grid Snap",
   "scene.settings": "View Settings",
 
   "game.resolution": "Resolution",
