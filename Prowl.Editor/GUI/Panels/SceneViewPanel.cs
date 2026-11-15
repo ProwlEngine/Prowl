@@ -608,6 +608,12 @@ public class SceneViewPanel : DockPanel
                         .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
+
+                UpdateDropPreview(scene, dragPayload, GetDropPosition(scene, _editorCamera!, mouseLocal, panelSize));
+            }
+            else
+            {
+                ClearDropPreview();
             }
 
             // An OS file drop over the viewport: remember where, so the files spawn here once imported.
@@ -1053,6 +1059,94 @@ public class SceneViewPanel : DockPanel
         if (!ShowGizmos) return;
         editor?.DrawSceneGizmos(scene);
         DrawSelectionGizmos();
+
+        // Faint outline of the drag preview's extent.
+        if (_dropGhost.IsValid() && TryGetWorldBounds(_dropGhost, out Float3 min, out Float3 max))
+            Debug.DrawWireCube((min + max) * 0.5f, (max - min) * 0.5f, new Vector.Color(1f, 1f, 1f, 0.25f));
+    }
+
+    // Drag preview: a hidden, unsaved, render-only copy of what the drop would spawn, following the cursor.
+    // _dropGhostGuid/_dropGhostScene are remembered even when no ghost could be built, so it isn't retried every frame.
+    private GameObject? _dropGhost;
+    private Guid _dropGhostGuid;
+    private SceneInstance? _dropGhostScene;
+    private bool _dropGhostTouched;
+    private static readonly List<SceneViewPanel> s_ghostOwners = [];
+    private static Material? s_meshGhostMaterial;
+
+    private void UpdateDropPreview(SceneInstance scene, AssetDragPayload payload, Float3 dropPos)
+    {
+        _dropGhostTouched = true;
+        if (payload.AssetGuid != _dropGhostGuid || !ReferenceEquals(scene, _dropGhostScene))
+        {
+            ClearDropPreview();
+            _dropGhostGuid = payload.AssetGuid;
+            _dropGhostScene = scene;
+            // Not in a playing world: the copy would join the running game.
+            _dropGhost = scene.IsPlaying ? null : BuildDropGhost(payload.AssetGuid);
+            if (_dropGhost.IsValid())
+            {
+                scene.Add(_dropGhost);
+                s_ghostOwners.Add(this);
+            }
+        }
+        if (_dropGhost.IsValid()) _dropGhost.Transform.Position = dropPos;
+    }
+
+    /// <summary>
+    /// Once per editor frame: drop the preview of any view that didn't draw a drag hover since the last sweep
+    /// (hidden behind another dock tab, say), so its copy can't linger in the scene.
+    /// </summary>
+    internal static void SweepDropGhosts()
+    {
+        for (int i = s_ghostOwners.Count - 1; i >= 0; i--)
+        {
+            SceneViewPanel owner = s_ghostOwners[i];
+            if (owner._dropGhostTouched) owner._dropGhostTouched = false;
+            else owner.ClearDropPreview();
+        }
+    }
+
+    private static GameObject? BuildDropGhost(Guid guid)
+    {
+        GameObject? ghost = Runtime.AssetDatabase.Get(guid) switch
+        {
+            PrefabAsset prefab when prefab.IsValid() => GameObject.InstantiateDetached(prefab),
+            Mesh mesh when mesh.IsValid() => MeshGhost(mesh),
+            _ => null,
+        };
+        if (ghost.IsValid()) HideGhost(ghost);
+        return ghost;
+
+        static GameObject MeshGhost(Mesh mesh)
+        {
+            var go = new GameObject(mesh.Name);
+            MeshRenderer r = go.AddComponent<MeshRenderer>();
+            r.Mesh = mesh;
+            if (s_meshGhostMaterial.IsNotValid()) s_meshGhostMaterial = new Material(Shader.LoadDefault(DefaultShader.Lit));
+            r.Material = s_meshGhostMaterial;
+            return go;
+        }
+
+        // Per object, not just the root: picking and drop raycasts test each object's own flags. Everything but
+        // renderers is disabled before the copy enters the scene, so lights, colliders, audio and [ExecuteAlways]
+        // scripts never wake up.
+        static void HideGhost(GameObject go)
+        {
+            go.HideFlags |= HideFlags.Hide | HideFlags.HideAndDontSave | HideFlags.NotEditable | HideFlags.NoGizmos;
+            foreach (Component c in go.GetComponents<Component>())
+                if (c is not IMaterialRenderer) c.Enabled = false;
+            foreach (GameObject child in go.Children) HideGhost(child);
+        }
+    }
+
+    private void ClearDropPreview()
+    {
+        if (_dropGhost.IsValid()) _dropGhost.Destroy();
+        _dropGhost = null;
+        _dropGhostGuid = Guid.Empty;
+        _dropGhostScene = null;
+        s_ghostOwners.Remove(this);
     }
 
     private void DrawSelectionGizmos()
@@ -1148,6 +1242,7 @@ public class SceneViewPanel : DockPanel
     {
         if (_wasGizmoActive) EndGizmoDrag();
         _editorCamera?.ReleaseFlight();
+        ClearDropPreview();
     }
 
     // The kind of transform the current drag turned out to be, or null before it has moved.

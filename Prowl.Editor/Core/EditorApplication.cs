@@ -684,6 +684,7 @@ public class EditorApplication : Game
 
         using (EditorFrameStats.Assets.Scope())
             ExternalAssetDrop.ProcessPending();
+        GUI.Panels.SceneViewPanel.SweepDropGhosts();
         using (FrameStats.Editor.Scope())
             CliServer.Update();
 
