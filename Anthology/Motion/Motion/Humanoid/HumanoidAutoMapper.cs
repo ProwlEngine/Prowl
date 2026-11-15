@@ -111,18 +111,22 @@ public static class HumanoidAutoMapper
         RunPass(useClean: true, requireUnderHips: false);
         RunPass(useClean: false, requireUnderHips: false);
 
-        bool hasAll = description.HasAllRequiredBones;
-        bool hierarchy = IsHierarchyValid(skeleton, description);
-        IReadOnlyList<HumanBodyBone> unmapped = ComputeUnmappedFrontier(description);
-        bool tPose = IsRestPoseTPose(skeleton, description);
+        return Check(skeleton, description);
+    }
+
+    /// <summary>Judges a mapping made by hand the way <see cref="Map"/> judges its own: required bones, hierarchy, rest pose.</summary>
+    public static HumanoidMapResult Check(Skeleton skeleton, HumanDescription description)
+    {
+        ArgumentNullException.ThrowIfNull(skeleton);
+        ArgumentNullException.ThrowIfNull(description);
 
         return new HumanoidMapResult
         {
             Description = description,
-            HasAllRequiredBones = hasAll,
-            HierarchyValid = hierarchy,
-            UnmappedBones = unmapped,
-            IsRestPoseTPose = tPose,
+            HasAllRequiredBones = description.HasAllRequiredBones,
+            HierarchyValid = IsHierarchyValid(skeleton, description),
+            UnmappedBones = ComputeUnmappedFrontier(description),
+            IsRestPoseTPose = IsRestPoseTPose(skeleton, description),
         };
     }
 
