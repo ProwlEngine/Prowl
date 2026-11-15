@@ -1769,6 +1769,7 @@ public class EditorApplication : Game
         AnimationNodeRegistry.Reset();
         EditorRegistries.Reinitialize();
         Inspector.GameObjectInspector.ClearAddComponentCache();
+        GizmoTypes.ClearCache();
         MenuRegistry.Clear();
         RegisterMenus();
     }
@@ -2316,6 +2317,9 @@ public class EditorApplication : Game
         // laid out at the screen/RT size and disagree with the world-space UI it's drawn around.
         bool prevWorldSpace = GameCanvas.EditorWorldSpaceOverride;
         GameCanvas.EditorWorldSpaceOverride = true;
+        // The scene view picks gizmos, so this pass records what each one can be clicked by.
+        bool prevRecord = GizmoBuilder.RecordHitboxes;
+        GizmoBuilder.RecordHitboxes = true;
         try
         {
             using FrameStatScope gizmoStats = EditorFrameStats.Gizmos.Scope();
@@ -2334,13 +2338,18 @@ public class EditorApplication : Game
                 {
                     if (go.Section is { HiddenInSceneView: true }) continue;
                     foreach (Component comp in go.GetComponents())
+                    {
+                        if (!GizmoFilter.IsEnabled(comp.GetType())) continue;
+                        using GizmoBuilder.OwnerScope owner = GizmoBuilder.Owner(comp);
                         comp.DrawGizmosSelected();
+                    }
                 }
             }
         }
         finally
         {
             GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
+            GizmoBuilder.RecordHitboxes = prevRecord;
         }
     }
 

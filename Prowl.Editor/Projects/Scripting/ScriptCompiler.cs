@@ -466,7 +466,7 @@ public static class ScriptCompiler
         var sb = new StringBuilder();
         sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
         sb.AppendLine("  <PropertyGroup>");
-        sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
+        sb.AppendLine("    <TargetFramework>net11.0</TargetFramework>");
         // EnableDefaultItems=false stops MSBuild from auto-globbing DLLs sitting next to the
         // project; every reference is added explicitly below.
         sb.AppendLine("    <EnableDefaultItems>false</EnableDefaultItems>");

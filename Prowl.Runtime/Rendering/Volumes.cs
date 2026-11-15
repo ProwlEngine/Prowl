@@ -353,6 +353,7 @@ public sealed class Volume : Component
     public override void DrawGizmos()
     {
         if (IsGlobal) return;
+        using GizmoBuilder.HitboxLineScope hitbox = Debug.GizmoHitboxLines();
         DrawBox(Maths.Abs(Size) * 0.5f, 0f, new Color(0.35f, 0.85f, 0.45f, 1f));
     }
 
