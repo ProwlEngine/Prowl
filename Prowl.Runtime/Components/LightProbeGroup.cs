@@ -31,7 +31,11 @@ public class LightProbeGroup : Component
     {
         Float4x4 m = Transform.LocalToWorldMatrix;
         foreach (Float3 p in ProbePositions)
-            Debug.DrawWireSphere(Float4x4.TransformPoint(p, m), 0.1f, new Color(1f, 0.82f, 0.2f, 0.7f), 6);
+        {
+            Float3 world = Float4x4.TransformPoint(p, m);
+            Debug.DrawWireSphere(world, 0.1f, new Color(1f, 0.82f, 0.2f, 0.7f), 6);
+            Debug.GizmoHitboxSphere(world, 0.1f);
+        }
     }
 
     public override void DrawGizmosSelected()

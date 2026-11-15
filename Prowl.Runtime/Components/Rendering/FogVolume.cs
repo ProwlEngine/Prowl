@@ -61,6 +61,7 @@ public sealed class FogVolume : Component
 
     public override void DrawGizmos()
     {
+        using GizmoBuilder.HitboxLineScope hitbox = Debug.GizmoHitboxLines();
         var color = new Color(0.4f, 0.7f, 1f, 1f);
 
         switch (Shape)

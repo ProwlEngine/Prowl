@@ -261,7 +261,7 @@ public class EditorCamera
             FallbackTarget = _renderTarget,
             DisplayGizmos = ShowGizmos,
             Kind = Prowl.Graphite.Rendering.ViewKind.SceneView,
-            Features = ShowGrid ? GridFeature.List : null,
+            Features = ShowGrid ? GridFeature.SceneList : null,
             Keywords = DebugViews.Keywords(DebugView),
         });
 

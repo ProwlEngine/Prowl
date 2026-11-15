@@ -200,6 +200,7 @@ public sealed class WindZone : Component
 
     public override void DrawGizmos()
     {
+        using GizmoBuilder.HitboxLineScope hitbox = Debug.GizmoHitboxLines();
         var color = new Color(0.45f, 0.85f, 1f, 1f);
         Float3 center = Transform.Position;
         Debug.DrawWireSphere(center, Radius, color);

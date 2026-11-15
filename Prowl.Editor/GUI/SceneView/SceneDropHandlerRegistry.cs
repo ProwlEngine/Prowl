@@ -54,7 +54,7 @@ internal class MaterialDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop on object to assign material";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        GameObject? hitGO = SceneViewPanel.PickObjectAt(context.Scene, context.Camera, context.MouseLocal, context.PanelSize);
+        GameObject? hitGO = SceneViewPanel.PickObjectAt(context.Scene, context.Camera, context.MouseLocal, context.PanelSize, pickGizmos: false);
         if (hitGO.IsNotValid()) return;
         var mat = Runtime.AssetDatabase.Get(payload.AssetGuid) as Material;
         if (mat.IsNotValid()) return;
