@@ -863,7 +863,8 @@ public class SceneViewPanel : DockPanel
         bool additive = _handles.Shift || _handles.Ctrl;
         if (!additive) Selection.Clear();
 
-        // Children of one prefab resolve to the same root, which must be added or toggled once.
+        // Children of one prefab resolve to the same root, which must be added or toggled once. The selected
+        // level or else the outermost root: a box never drills in the way a repeated click does.
         var targets = new HashSet<GameObject>();
         foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
@@ -875,7 +876,7 @@ public class SceneViewPanel : DockPanel
             if (screen.Value.X < minX || screen.Value.X > maxX) continue;
             if (screen.Value.Y < minY || screen.Value.Y > maxY) continue;
 
-            targets.Add(SelectionTarget(go, toggling: _handles.Ctrl));
+            targets.Add(SelectionTarget(go, toggling: true));
         }
 
         foreach (GameObject target in targets)
