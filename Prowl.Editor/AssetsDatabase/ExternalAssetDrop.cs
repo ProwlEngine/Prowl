@@ -167,13 +167,15 @@ public static class ExternalAssetDrop
         for (int i = _reveals.Count - 1; i >= 0; i--)
         {
             Reveal r = _reveals[i];
-            if (!ReferenceEquals(r.Db, EditorAssetBackend.Instance) || DateTime.UtcNow >= r.Deadline)
+            bool live = ReferenceEquals(r.Db, EditorAssetBackend.Instance);
+            // New entries start with NeedsReimport set; the importer clears it whether the import succeeds or fails.
+            // Checked before the deadline, so an import that itself outlasted the deadline still places the drop.
+            bool done = live && r.Copied.TrueForAll(p => r.Db.GetEntry(p) is { NeedsReimport: false });
+            if (!done)
             {
-                _reveals.RemoveAt(i);
+                if (!live || DateTime.UtcNow >= r.Deadline) _reveals.RemoveAt(i);
                 continue;
             }
-            // New entries start with NeedsReimport set; the importer clears it whether the import succeeds or fails.
-            if (!r.Copied.TrueForAll(p => r.Db.GetEntry(p) is { NeedsReimport: false })) continue;
             _reveals.RemoveAt(i);
 
             // Ping only when the user is already viewing the destination - pinging navigates,
