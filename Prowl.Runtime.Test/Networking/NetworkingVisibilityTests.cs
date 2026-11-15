@@ -408,6 +408,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
         float tickRate = Networking.Networking.TickRate;
+        float fixedDelta = Time.FixedDeltaTime;
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -431,6 +432,7 @@ public partial class NetworkingTests
             Pump(() => second.Health == 6, host);
 
             Networking.Networking.TickRate = 1000;
+            Time.FixedDeltaTime = 0.001f;
             uint pruned = (Networking.Networking.System!.Tick / 64 + 1) * 64;
             Pump(() => Networking.Networking.System?.Tick > pruned, host);
             using NetWriter byId = new();
@@ -446,6 +448,7 @@ public partial class NetworkingTests
         finally
         {
             Networking.Networking.TickRate = tickRate;
+            Time.FixedDeltaTime = fixedDelta;
             Networking.Networking.Shutdown();
         }
     }

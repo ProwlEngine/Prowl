@@ -39,10 +39,12 @@ internal enum SceneCallbacks
     CharacterStay = 1 << 14,
     CharacterExit = 1 << 15,
 
+    NetworkTick = 1 << 16,
+
     AnyCollision = CollisionBegin | CollisionStay | CollisionEnd,
 
     /// <summary>Everything the per-frame loops dispatch. A component with none of these is never registered.</summary>
-    AnyFrame = Start | Update | LateUpdate | FixedUpdate | RenderCollect | DrawGizmos | OnGui,
+    AnyFrame = Start | Update | LateUpdate | FixedUpdate | RenderCollect | DrawGizmos | OnGui | NetworkTick,
 
     /// <summary>
     /// Set once this instance's set has been worked out. The unresolved state is deliberately the default
@@ -97,6 +99,7 @@ internal sealed class SceneDispatcher
         if (Overrides(type, nameof(Component.OnCharacterEnter))) callbacks |= SceneCallbacks.CharacterEnter;
         if (Overrides(type, nameof(Component.OnCharacterStay))) callbacks |= SceneCallbacks.CharacterStay;
         if (Overrides(type, nameof(Component.OnCharacterExit))) callbacks |= SceneCallbacks.CharacterExit;
+        if (typeof(Networking.INetworkTick).IsAssignableFrom(type)) callbacks |= SceneCallbacks.NetworkTick;
 
         return callbacks;
     }
@@ -135,6 +138,7 @@ internal sealed class SceneDispatcher
     private readonly Channel _update = new(SceneCallbacks.Update);
     private readonly Channel _lateUpdate = new(SceneCallbacks.LateUpdate);
     private readonly Channel _fixedUpdate = new(SceneCallbacks.FixedUpdate);
+    private readonly Channel _networkTick = new(SceneCallbacks.NetworkTick);
     private readonly Channel _drawGizmos = new(SceneCallbacks.DrawGizmos);
     private readonly Channel _onGui = new(SceneCallbacks.OnGui);
 
@@ -215,7 +219,7 @@ internal sealed class SceneDispatcher
         _sequence = 0;
         CollisionListeners = 0;
 
-        _start.Clear(); _update.Clear(); _lateUpdate.Clear(); _fixedUpdate.Clear();
+        _start.Clear(); _update.Clear(); _lateUpdate.Clear(); _fixedUpdate.Clear(); _networkTick.Clear();
         _drawGizmos.Clear(); _onGui.Clear();
     }
 
@@ -225,6 +229,7 @@ internal sealed class SceneDispatcher
         if ((callbacks & SceneCallbacks.Update) != 0) _update.Dirty = true;
         if ((callbacks & SceneCallbacks.LateUpdate) != 0) _lateUpdate.Dirty = true;
         if ((callbacks & SceneCallbacks.FixedUpdate) != 0) _fixedUpdate.Dirty = true;
+        if ((callbacks & SceneCallbacks.NetworkTick) != 0) _networkTick.Dirty = true;
         if ((callbacks & SceneCallbacks.DrawGizmos) != 0) _drawGizmos.Dirty = true;
         if ((callbacks & SceneCallbacks.OnGui) != 0) _onGui.Dirty = true;
     }
@@ -365,6 +370,19 @@ internal sealed class SceneDispatcher
 
             try { c.InternalFixedUpdate(); }
             catch (Exception ex) { Report(c, nameof(Component.FixedUpdate), ex); }
+        }
+    }
+
+    public void RunNetworkTick(uint tick)
+    {
+        int count = _networkTick.Snapshot(this, out Component[] items);
+        for (int i = 0; i < count; i++)
+        {
+            Component c = items[i];
+            if (c.IsDisposed || !c.EnabledInHierarchy) continue;
+
+            try { ((Networking.INetworkTick)c).OnNetworkTick(tick); }
+            catch (Exception ex) { Report(c, nameof(Networking.INetworkTick.OnNetworkTick), ex); }
         }
     }
 

@@ -260,6 +260,7 @@ public class SceneInstance : EngineObject, ISerializable
         t_ticking = true;
         try
         {
+            Networking.Networking.System?.OnWorldFrame(this);
             if (Paused && !_stepRequested)
             {
                 Clock.Hold();
@@ -274,9 +275,11 @@ public class SceneInstance : EngineObject, ISerializable
             {
                 Clock.Advance(unscaledDelta);
                 int steps = Clock.TakeFixedSteps();
-                if (IsPlaying)
-                    for (int i = 0; i < steps; i++)
-                        FixedUpdate();
+                for (int i = 0; i < steps; i++)
+                {
+                    if (IsPlaying) FixedUpdate();
+                    Networking.Networking.System?.OnFixedStep(this);
+                }
                 Update();
             }
             finally { Application.IsGameplayExecuting = wasExecuting; }
@@ -1818,6 +1821,17 @@ public class SceneInstance : EngineObject, ISerializable
             catch (Exception ex) { Debug.LogErrorOnce("Physics.StepThrew", $"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
         }
 
+        Flush();
+    }
+
+    /// <summary>Runs <see cref="Networking.INetworkTick.OnNetworkTick"/> on every enabled component that has it, while playing.</summary>
+    internal void RunNetworkTick(uint tick)
+    {
+        if (IsDisposed || !IsPlaying) return;
+        using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
+        using SceneScope active = Enter(this);
+        _dispatcher.RunStart();
+        _dispatcher.RunNetworkTick(tick);
         Flush();
     }
 

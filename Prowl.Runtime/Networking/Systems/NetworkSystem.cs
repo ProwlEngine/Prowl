@@ -30,7 +30,6 @@ internal sealed partial class NetworkSystem : IDisposable
     internal double LastTransformTime;
     internal NetworkJoinState LocalJoinState;
     internal uint NextNetIdValue;
-    internal double NextTick;
     internal double ReadyDeadline;
     internal SceneInstance? ReplicatedWorld;
     internal ulong SceneGeneration;
@@ -98,7 +97,7 @@ internal sealed partial class NetworkSystem : IDisposable
 
     internal void Attach(NetSession session)
     {
-        NextTick = Now;
+        _wallStepAt = Now;
         LocalJoinState = session.IsHost ? NetworkJoinState.Loading : NetworkJoinState.Connecting;
         ReadyDeadline = Now + Configuration.SceneLoadTimeoutSeconds;
         SceneInstance.Loaded += OnWorldLoaded;
@@ -131,6 +130,7 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.SectionAdd, OnSectionAdd);
         RegisterEngineMessage(session, EngineMessage.SectionRemove, OnSectionRemove);
         RegisterEngineMessage(session, EngineMessage.SectionMove, OnSectionMove);
+        RegisterEngineMessage(session, EngineMessage.Time, OnTime);
 
         RegisterEngineMessage(session, EngineMessage.StaticRpcToHost, Rpcs.OnStaticRpcToHost);
         RegisterEngineMessage(session, EngineMessage.StaticRpcFromHost, Rpcs.OnStaticRpcFromHost);
@@ -180,10 +180,10 @@ internal sealed partial class NetworkSystem : IDisposable
     internal void Flush()
     {
         SendSectionRemovals();
-        if (IsActive && (IsHost || IsReady) && Now >= NextTick)
+        StepWallClock();
+        if (IsActive && (IsHost || IsReady) && _tickDue)
         {
-            double interval = 1.0 / Math.Max(Networking.TickRate, 1f);
-            NextTick = Math.Max(NextTick + interval, Now);
+            _tickDue = false;
             UpdateInterest();
             if (IsActive)
             {
@@ -191,6 +191,8 @@ internal sealed partial class NetworkSystem : IDisposable
                 Snapshots.Send();
             }
         }
+
+        SendTime();
 
         // Acknowledged every frame, not every tick, so the sender learns as soon as it can.
         if (IsActive)

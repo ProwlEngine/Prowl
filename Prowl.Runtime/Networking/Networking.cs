@@ -31,11 +31,23 @@ public static partial class Networking
     public static bool IsHost => Session?.IsHost == true;
     public static bool IsClient => Session is { IsHost: false };
 
-    /// <summary>Sync and transform ticks per second. RPCs flush every frame.</summary>
+    /// <summary>Sync and transform ticks per second, rounded to a whole number of fixed steps. RPCs flush every frame.</summary>
     public static float TickRate { get; set; } = 30;
 
     /// <summary>How far behind proxies display buffered transforms to smooth jitter.</summary>
     public static TimeSpan InterpolationDelay { get; set; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    ///     The network tick this peer last completed, one every <see cref="TickInterval" /> of the networked world's fixed
+    ///     steps. A client follows the host's count, so a tick names the same moment on every peer, give or take latency.
+    /// </summary>
+    public static uint Tick => System?.NetworkTick ?? 0;
+
+    /// <summary>The host's simulation time in seconds since the session began. A client reads its estimate of it.</summary>
+    public static double ServerTime => System?.ServerTime ?? 0;
+
+    /// <summary>Seconds per network tick: <see cref="TickRate" /> rounded to a whole number of fixed steps.</summary>
+    public static double TickInterval => NetworkSystem.TickInterval;
 
     public static NetworkJoinState JoinState => System?.JoinState ?? NetworkJoinState.Disconnected;
 

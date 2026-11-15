@@ -849,7 +849,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>Ticks to wait for an acknowledgement before sending owed state again: a round trip, and a little.</summary>
     private static uint ResendTicks(NetPeer peer)
     {
-        double interval = 1.0 / Math.Max(Networking.TickRate, 1f);
+        double interval = Networking.TickInterval;
         double roundTrip = peer.Connection?.RoundTripTime.TotalSeconds ?? 0;
         return (uint)Math.Max(2, Math.Ceiling((roundTrip * 1.25 + interval) / interval));
     }

@@ -84,7 +84,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         else if (Time.TimeSinceStartup >= _nextSample)
         {
             // No faster than the network sends; a sample in between would never be seen.
-            _nextSample = Time.TimeSinceStartup + Math.Max(SendInterval, 1.0 / Math.Max(1, Networking.TickRate));
+            _nextSample = Time.TimeSinceStartup + Math.Max(SendInterval, Networking.TickInterval);
             CaptureState();
         }
     }

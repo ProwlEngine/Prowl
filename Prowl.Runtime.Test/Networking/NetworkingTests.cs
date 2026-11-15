@@ -88,7 +88,7 @@ public sealed class FakePeer : IDisposable
         SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11, StaticRpcToHost = SceneSnapshot + 12, StaticRpcFromHost = SceneSnapshot + 13,
         Orphaned = SceneSnapshot + 14, OwnershipRequest = SceneSnapshot + 15, OwnershipState = SceneSnapshot + 16,
         OwnerTransfer = SceneSnapshot + 17, NetworkFlags = SceneSnapshot + 18, SnapshotAck = SceneSnapshot + 19,
-        SectionAdd = SceneSnapshot + 20, SectionRemove = SceneSnapshot + 21, SectionMove = SceneSnapshot + 22;
+        SectionAdd = SceneSnapshot + 20, SectionRemove = SceneSnapshot + 21, SectionMove = SceneSnapshot + 22, Time = SceneSnapshot + 23;
 
     private FakePeer(NetSession session)
     {
@@ -108,7 +108,13 @@ public sealed class FakePeer : IDisposable
                 if (AutoAck && captured == Snapshot) Acknowledge(sender, WireReceived[^1].Data);
             });
         }
+
+        session.OnRaw(Time, (NetPeer sender, ref NetReader reader, Delivery delivery, byte channel) =>
+            TimesReceived.Add(reader.ReadBytes(reader.Remaining).ToArray()));
     }
+
+    /// <summary>The Time messages received, apart from the rest so they don't crowd them.</summary>
+    public List<byte[]> TimesReceived { get; } = new();
 
     public bool AutoReady { get; set; } = true;
 

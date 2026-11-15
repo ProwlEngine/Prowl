@@ -27,5 +27,6 @@ internal enum EngineMessage : ushort
     SnapshotAck,
     SectionAdd,
     SectionRemove,
-    SectionMove
+    SectionMove,
+    Time
 }

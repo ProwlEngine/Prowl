@@ -24,6 +24,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
         float tickRate = Networking.Networking.TickRate;
+        float fixedDelta = Time.FixedDeltaTime;
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -42,11 +43,13 @@ public partial class NetworkingTests
             host.Send(FakePeer.Despawn, w => w.WriteGuid(crate.Identifier), client);
             Pump(() => here.IsDisposed, host);
             Networking.Networking.TickRate = 1000;
+            Time.FixedDeltaTime = 0.001f;
             Pump(() => received.Count == 0, host);
         }
         finally
         {
             Networking.Networking.TickRate = tickRate;
+            Time.FixedDeltaTime = fixedDelta;
             Networking.Networking.Shutdown();
         }
     }
