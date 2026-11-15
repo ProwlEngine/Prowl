@@ -158,6 +158,18 @@ public class GizmoPickingTests : EditorTestHarness
     }
 
     [Fact]
+    public void LineRunningBehindTheCameraIsClickableWhereVisible()
+    {
+        using SceneInstance scene = MakeScene();
+        Camera cam = MakeCamera(scene);
+        var volume = new GameObject("Volume");
+
+        // Starts behind the camera at z = -10 and ends in front of it.
+        GizmoHitbox line = new(volume, GizmoHitboxKind.Segment, new Float3(-1, -1, -15), new Float3(1, -1, 0), 0f);
+        Assert.Same(volume, SceneViewPanel.PickGizmo([line], cam, ScreenOf(cam, new Float3(0.5f, -1, -3.75f)), Screen).Owner);
+    }
+
+    [Fact]
     public void HiddenOrDisabledOwnersCannotBeClicked()
     {
         using SceneInstance scene = MakeScene();
@@ -219,6 +231,11 @@ public class GizmoPickingTests : EditorTestHarness
 
         Float3 offset = snapped - start;
         AssertNear(axis * Float3.Dot(offset, axis), offset);
+
+        // Far from the origin the drag carries float noise off its axis, which must not snap those axes sideways.
+        Float3 far = new(300.3f, 0f, 200.2f);
+        Float3 farOffset = SceneViewPanel.SnapToGrid(far, (far + axis * 1.3f) - far, 1f, space) - far;
+        Assert.True(Float3.Distance(axis * Float3.Dot(farOffset, axis), farOffset) < 1e-2f, $"Left the axis: {farOffset}");
     }
 
     [Fact]
