@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -493,6 +493,7 @@ public class TranslationSubGizmo : ISubGizmo
     public struct TranslationState
     {
         public Float3 StartPoint, LastPoint, CurrentDelta;
+        public Float3 Origin, Normal;
     }
 
     private readonly TranslationParams _params;
@@ -545,6 +546,10 @@ public class TranslationSubGizmo : ISubGizmo
         _state.StartPoint = pickResult.SubGizmoPoint;
         _state.LastPoint = pickResult.SubGizmoPoint;
         _state.CurrentDelta = Float3.Zero;
+        _state.Normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
+        _state.Origin = _params.TransformKind == TransformKind.Axis
+            ? _gizmo.Translation
+            : GizmoUtils.PlaneGlobalOrigin(_gizmo, _params.Direction);
 
         t = pickResult.T;
         return pickResult.Picked;
@@ -556,13 +561,12 @@ public class TranslationSubGizmo : ISubGizmo
         Float3 newPoint;
         if (_params.TransformKind == TransformKind.Axis)
         {
-            newPoint = GizmoUtils.PointOnAxis(_gizmo, ray, _params.Direction);
+            var (_, t) = GizmoUtils.RayToRay(ray.Origin, ray.Direction, _state.Origin, _state.Normal);
+            newPoint = _state.Origin + _state.Normal * t;
         }
         else
         {
-            var normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
-            var origin = GizmoUtils.PlaneGlobalOrigin(_gizmo, _params.Direction);
-            newPoint = GizmoUtils.PointOnPlane(normal, origin, ray);
+            newPoint = GizmoUtils.PointOnPlane(_state.Normal, _state.Origin, ray);
         }
 
         var newDelta = newPoint - _state.StartPoint;
