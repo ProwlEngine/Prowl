@@ -592,16 +592,26 @@ public class HierarchyPanel : DockPanel
                     MenuItemAttribute.BuildContextMenu(b, "GameObject");
                 }));
         }
-
-        if (header.Open is { } open && EditorSceneManager.CanEditScenes)
-            BuildSceneHeaderMenu(paper, open);
     }
 
-    private static void BuildSceneHeaderMenu(Paper paper, OpenScene open)
+    private static Action<ContextBuilder> BuildSceneHeaderContextMenu(SceneHeader sceneHeader) => builder =>
     {
-        Origami.RightClickMenu(paper, "hier_scene_ctx", builder =>
+        string title = sceneHeader.Open?.Name ?? (sceneHeader.Section is { IsPersistent: true } ? Loc.Get("hierarchy.persistent") : sceneHeader.Section?.Name ?? "");
+        builder.Title(title, iconDraw: EditorIcons.Shapes_I);
+
+        if (sceneHeader.Section != null)
         {
-            builder.Title(open.Name, iconDraw: EditorIcons.Shapes_I);
+            builder.Submenu(Loc.Get("hierarchy.create"), (b) =>
+            {
+                MenuContext.SetSection(sceneHeader.Section);
+                BuildCreateMenuFor(b, parent: null);
+            }, EditorIcons.Plus);
+        }
+
+        if (sceneHeader.Open is { } open && EditorSceneManager.CanEditScenes)
+        {
+            if (sceneHeader.Section != null)
+                builder.Separator();
             if (open.IsLoaded && !open.IsActive)
                 builder.Item(Loc.Get("hierarchy.set_active_scene"), () => Guarded(() => EditorSceneManager.SetActive(open)));
             if (open.IsLoaded)
@@ -628,8 +638,8 @@ public class HierarchyPanel : DockPanel
                 open.IsHiddenInSceneView = !open.IsHiddenInSceneView;
                 EditorSceneManager.RememberSetup();
             });
-        });
-    }
+        }
+    };
 
     // A refusal from a menu, like unloading the last loaded scene, is told rather than thrown into the frame.
     private static void Guarded(Action action)
@@ -869,11 +879,7 @@ public class HierarchyPanel : DockPanel
         {
             // Build the scene header context menu.
             // Note: the selection might contain other items, which -- consistent with Unity -- we ignore.
-            return builder =>
-            {
-                builder.Title(sceneHeader.Section.Name, iconDraw: EditorIcons.Shapes_I);
-                builder.Submenu(Loc.Get("hierarchy.create"), (b) => { BuildCreateMenuFor(b, parent: null); }, EditorIcons.Plus);
-            };
+            return BuildSceneHeaderContextMenu(sceneHeader);
         }
         else if (clickedItem is GameObject gameObject)
         {
