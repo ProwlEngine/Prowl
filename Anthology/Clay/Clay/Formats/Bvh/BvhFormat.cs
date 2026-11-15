@@ -15,7 +15,7 @@ namespace Prowl.Clay.Formats.Bvh;
 /// </remarks>
 internal sealed class BvhFormat : IModelFormat
 {
-
+    // BVH files have three or six animation channels.
     private enum BvhChannelName
     {
         PositionX,
@@ -25,6 +25,7 @@ internal sealed class BvhFormat : IModelFormat
         RotationY,
         RotationZ,
     }
+
     private static readonly Dictionary<string, BvhChannelName> _channelNameToEnum = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Xposition", BvhChannelName.PositionX },
@@ -40,7 +41,6 @@ internal sealed class BvhFormat : IModelFormat
         public IntermediateNode Node { get; } = node;
         public List<BvhChannelName> Channels { get; } = [];
         public bool HasEndSite { get; set; }
-        public Float3 EndSite { get; set; }
         public IntermediateAnimationBinding PositionBinding { get; } = new IntermediateAnimationBinding
         {
             TargetNode = node,
@@ -361,7 +361,7 @@ internal sealed class BvhFormat : IModelFormat
         float y = reader.ParseFloat(line[parts[2]]);
         float z = reader.ParseFloat(line[parts[3]]);
         joint.HasEndSite = true;
-        joint.EndSite = new Float3(x, y, z);
+        joint.Node.Metadata.Add("EndSite", new Float3(x, y, z));
 
         // }
         line = reader.ExpectLine();

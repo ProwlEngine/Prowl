@@ -41,6 +41,7 @@ public sealed class BvhAnimationTests
                 Assert.Equal(new Float3(0, 20, 0), spine.LocalPosition);
                 Assert.Empty(spine.Children);
                 Assert.Equal(Quaternion.Identity, spine.LocalRotation);
+                Assert.Equal(new Float3(0, 15, 0), spine.Metadata["EndSite"]);
             });
 
         // Check the animation clip is as expected.
