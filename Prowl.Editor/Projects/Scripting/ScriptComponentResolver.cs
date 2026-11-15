@@ -2,54 +2,387 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
-
+using System.Linq;
+using System.Threading;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Prowl.Editor.GUI;
-using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Projects.Scripting;
 
 /// <summary>
-/// Maps a dragged script asset (a <c>.cs</c> file) to the component <see cref="Type"/> it defines.
-/// Scripts are not runtime assets (the importer only triggers recompilation), so the type is resolved
-/// by matching the file name against a <see cref="Component"/> type of the same name in the loaded
-/// assemblies - the same file-name-equals-class-name convention the script pipeline already relies on.
+/// Resolves `.cs` script assets (and <see cref="AssetDragPayload"/> instances) to compiled
+/// <see cref="Component"/> types that can be added to a <see cref="GameObject"/>.
 /// </summary>
 public static class ScriptComponentResolver
 {
-    /// <summary>Resolve the component type a dragged asset represents, or null if it isn't a single
-    /// script file that maps to a concrete <see cref="Component"/>.</summary>
-    public static Type? ResolveComponentType(AssetDragPayload? payload)
+    private readonly record struct DeclaredTypeName(string FullName, string SimpleName, bool HasBaseList);
+
+    private readonly record struct ParsedFileCacheEntry(long LastWriteTicksUtc, long FileLength, DeclaredTypeName[] DeclaredTypes);
+
+    private sealed record ComponentTypeIndex(
+        int Version,
+        Dictionary<string, Type> ByFullName,
+        Dictionary<string, List<Type>> BySimpleNameExact,
+        Dictionary<string, List<Type>> BySimpleNameIgnoreCase);
+
+    private static int s_typeVersion = 1;
+    private static ComponentTypeIndex? s_typeIndex;
+    private static readonly object s_typeIndexLock = new();
+    private static readonly ConcurrentDictionary<string, ParsedFileCacheEntry> s_parsedFileCache = new(StringComparer.OrdinalIgnoreCase);
+
+    static ScriptComponentResolver()
     {
-        if (payload == null || payload.IsMulti) return null;
-        return ResolveComponentType(payload.AssetName);
+        AppDomain.CurrentDomain.AssemblyLoad += (_, _) => Interlocked.Increment(ref s_typeVersion);
+        ScriptAssemblyManager.CompileFinished += _ => Interlocked.Increment(ref s_typeVersion);
     }
 
-    /// <summary>Resolve the component type for a script file name/path (must end in <c>.cs</c>).</summary>
-    public static Type? ResolveComponentType(string? fileNameOrPath)
+    /// <summary>
+    /// Returns true if <paramref name="assetPath"/> has a `.cs` file extension.
+    /// </summary>
+    public static bool IsScriptAsset(string? assetPath)
     {
-        if (string.IsNullOrEmpty(fileNameOrPath)) return null;
-        if (!fileNameOrPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) return null;
+        if (string.IsNullOrWhiteSpace(assetPath))
+            return false;
 
-        string typeName = Path.GetFileNameWithoutExtension(fileNameOrPath);
-        if (string.IsNullOrEmpty(typeName)) return null;
+        return string.Equals(Path.GetExtension(assetPath), ".cs", StringComparison.OrdinalIgnoreCase);
+    }
 
-        foreach (Type type in EditorUtils.GetAllTypes())
+    /// <summary>
+    /// Returns true if <paramref name="payload"/> contains at least one `.cs` script asset path.
+    /// </summary>
+    public static bool IsScriptAsset(AssetDragPayload? payload)
+    {
+        if (payload == null)
+            return false;
+
+        return payload.AssetPaths.Any(IsScriptAsset);
+    }
+
+    /// <summary>
+    /// Resolves a single `.cs` script asset path to its concrete <see cref="Component"/> type,
+    /// or null if the path is not a script, fails to compile, or does not uniquely identify a component.
+    /// </summary>
+    public static Type? ResolveComponentType(string? assetPath)
+    {
+        IReadOnlyList<Type> types = ResolveComponentTypes(assetPath);
+        if (types.Count == 1)
+            return types[0];
+
+        if (types.Count > 1 && assetPath != null)
         {
-            if (type.Name != typeName) continue;
-            if (type.IsAbstract) continue;
-            if (!typeof(Component).IsAssignableFrom(type)) continue;
-            if (type == typeof(Component)) continue;
-
-            // Offering a type nothing can construct would put a drop target on screen that does
-            // nothing when it is used.
-            if (type.ContainsGenericParameters) continue;
-            if (type.GetConstructor(Type.EmptyTypes) == null) continue;
-
-            return type;
+            string stem = Path.GetFileNameWithoutExtension(assetPath);
+            List<Type> stemMatches = types.Where(t => string.Equals(t.Name, stem, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (stemMatches.Count == 1)
+                return stemMatches[0];
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Resolves all concrete <see cref="Component"/> types associated with a `.cs` script asset path.
+    /// When the `.cs` file exists on disk, its declared classes are parsed so scripts whose filename
+    /// differs from the class name (or that live in namespaces) still resolve cleanly.
+    /// </summary>
+    public static IReadOnlyList<Type> ResolveComponentTypes(string? assetPath)
+    {
+        if (!IsScriptAsset(assetPath))
+            return Array.Empty<Type>();
+
+        ComponentTypeIndex index = GetTypeIndex();
+
+        string? fullPath = ResolveDiskPath(assetPath!);
+        if (fullPath != null)
+        {
+            DeclaredTypeName[] declaredTypes = GetDeclaredTypes(fullPath);
+            if (declaredTypes.Length == 0)
+                return Array.Empty<Type>();
+
+            var resolved = new List<Type>(declaredTypes.Length);
+            var seen = new HashSet<Type>();
+            foreach (DeclaredTypeName decl in declaredTypes)
+            {
+                if (index.ByFullName.TryGetValue(decl.FullName, out Type? type) && seen.Add(type))
+                    resolved.Add(type);
+            }
+
+            if (resolved.Count == 0)
+            {
+                foreach (DeclaredTypeName decl in declaredTypes)
+                {
+                    if (!decl.HasBaseList)
+                        continue;
+
+                    if (index.BySimpleNameExact.TryGetValue(decl.SimpleName, out List<Type>? simpleMatches) && simpleMatches.Count == 1)
+                    {
+                        if (seen.Add(simpleMatches[0]))
+                            resolved.Add(simpleMatches[0]);
+                    }
+                }
+            }
+
+            return resolved;
+        }
+
+        // Fallback for virtual/in-memory script paths with no corresponding file on disk.
+        string typeName = Path.GetFileNameWithoutExtension(assetPath!);
+        if (string.IsNullOrWhiteSpace(typeName))
+            return Array.Empty<Type>();
+
+        if (index.BySimpleNameExact.TryGetValue(typeName, out List<Type>? exact) && exact.Count == 1)
+            return exact;
+
+        if (index.BySimpleNameIgnoreCase.TryGetValue(typeName, out List<Type>? ignoreCase) && ignoreCase.Count == 1)
+            return ignoreCase;
+
+        return Array.Empty<Type>();
+    }
+
+    /// <summary>
+    /// Resolves an <see cref="AssetDragPayload"/> when it carries exactly one concrete <see cref="Component"/> type.
+    /// </summary>
+    public static Type? ResolveComponentType(AssetDragPayload? payload)
+    {
+        IReadOnlyList<Type> types = ResolveComponentTypes(payload);
+        return types.Count == 1 ? types[0] : null;
+    }
+
+    /// <summary>
+    /// Resolves all distinct concrete <see cref="Component"/> types across the `.cs` script paths
+    /// carried by <paramref name="payload"/>, preserving selection order.
+    /// </summary>
+    public static IReadOnlyList<Type> ResolveComponentTypes(AssetDragPayload? payload)
+    {
+        if (payload == null || payload.AssetPaths.Length == 0)
+            return Array.Empty<Type>();
+
+        var result = new List<Type>();
+        var seen = new HashSet<Type>();
+
+        foreach (string path in payload.AssetPaths)
+        {
+            foreach (Type type in ResolveComponentTypes(path))
+            {
+                if (seen.Add(type))
+                    result.Add(type);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns true if <paramref name="type"/> is a concrete <see cref="Component"/> type that can be constructed.
+    /// </summary>
+    public static bool CanConstructComponent(Type? type)
+        => type != null
+        && typeof(Component).IsAssignableFrom(type)
+        && !type.IsAbstract
+        && !type.ContainsGenericParameters
+        && type != typeof(Component)
+        && type != typeof(MissingComponent)
+        && type.GetConstructor(Type.EmptyTypes) != null;
+
+    /// <summary>
+    /// Returns true if <paramref name="type"/> is a constructible <see cref="Component"/> that can be added to
+    /// <paramref name="target"/> (respecting <see cref="DisallowMultipleComponentAttribute"/>).
+    /// </summary>
+    public static bool CanAddComponent(GameObject target, Type? type)
+    {
+        if (target.IsNotValid() || !CanConstructComponent(type))
+            return false;
+
+        for (Type? marked = type; marked != null && marked != typeof(Component); marked = marked.BaseType)
+        {
+            if (marked.IsDefined(typeof(DisallowMultipleComponentAttribute), false)
+                && target.GetComponent(marked).IsValid())
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves only the component types in <paramref name="payload"/> that can be added to <paramref name="target"/>.
+    /// </summary>
+    public static IReadOnlyList<Type> ResolveAddableComponentTypes(AssetDragPayload? payload, GameObject target)
+        => ResolveAddableComponentTypes(payload, [target]);
+
+    /// <summary>
+    /// Resolves the component types in <paramref name="payload"/> that can be added to at least one GameObject in <paramref name="targets"/>.
+    /// </summary>
+    public static IReadOnlyList<Type> ResolveAddableComponentTypes(AssetDragPayload? payload, IReadOnlyList<GameObject> targets)
+    {
+        IReadOnlyList<Type> resolved = ResolveComponentTypes(payload);
+        if (resolved.Count == 0 || targets.Count == 0)
+            return Array.Empty<Type>();
+
+        return resolved.Where(type => targets.Any(go => CanAddComponent(go, type))).ToList();
+    }
+
+    private static ComponentTypeIndex GetTypeIndex()
+    {
+        int currentVersion = Volatile.Read(ref s_typeVersion);
+        ComponentTypeIndex? cached = s_typeIndex;
+        if (cached != null && cached.Version == currentVersion)
+            return cached;
+
+        lock (s_typeIndexLock)
+        {
+            currentVersion = Volatile.Read(ref s_typeVersion);
+            cached = s_typeIndex;
+            if (cached != null && cached.Version == currentVersion)
+                return cached;
+
+            var byFullName = new Dictionary<string, Type>(StringComparer.Ordinal);
+            var bySimpleExact = new Dictionary<string, List<Type>>(StringComparer.Ordinal);
+            var bySimpleIgnoreCase = new Dictionary<string, List<Type>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (Type type in ScriptAssemblyManager.GetAllTypes())
+            {
+                if (!CanConstructComponent(type))
+                    continue;
+
+                if (type.FullName != null)
+                    byFullName.TryAdd(type.FullName, type);
+
+                AddEntry(bySimpleExact, type.Name, type);
+                AddEntry(bySimpleIgnoreCase, type.Name, type);
+            }
+
+            cached = new ComponentTypeIndex(currentVersion, byFullName, bySimpleExact, bySimpleIgnoreCase);
+            s_typeIndex = cached;
+            return cached;
+        }
+    }
+
+    private static void AddEntry(Dictionary<string, List<Type>> map, string key, Type value)
+    {
+        if (!map.TryGetValue(key, out List<Type>? list))
+        {
+            list = [];
+            map[key] = list;
+        }
+        list.Add(value);
+    }
+
+    private static string? ResolveDiskPath(string assetPath)
+    {
+        string trimmed = assetPath.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+            return null;
+
+        if (Path.IsPathRooted(trimmed))
+            return File.Exists(trimmed) ? Path.GetFullPath(trimmed) : null;
+
+        Project? project = Project.Current;
+        if (project == null)
+            return null;
+
+        string relative = trimmed.Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .TrimStart(Path.DirectorySeparatorChar);
+
+        if (!string.IsNullOrEmpty(project.AssetsPath))
+        {
+            string candidate = Path.Combine(project.AssetsPath, relative);
+            if (File.Exists(candidate))
+                return Path.GetFullPath(candidate);
+        }
+
+        if (!string.IsNullOrEmpty(project.RootPath))
+        {
+            string candidate = Path.Combine(project.RootPath, relative);
+            if (File.Exists(candidate))
+                return Path.GetFullPath(candidate);
+        }
+
+        return null;
+    }
+
+    private static DeclaredTypeName[] GetDeclaredTypes(string fullPath)
+    {
+        try
+        {
+            var info = new FileInfo(fullPath);
+            if (!info.Exists)
+                return Array.Empty<DeclaredTypeName>();
+
+            long ticks = info.LastWriteTimeUtc.Ticks;
+            long length = info.Length;
+            if (s_parsedFileCache.TryGetValue(fullPath, out ParsedFileCacheEntry cached)
+                && cached.LastWriteTicksUtc == ticks
+                && cached.FileLength == length)
+            {
+                return cached.DeclaredTypes;
+            }
+
+            string source = File.ReadAllText(fullPath);
+            SyntaxTree tree = CSharpSyntaxTree.ParseText(
+                source,
+                CSharpParseOptions.Default.WithPreprocessorSymbols(ScriptCompiler.EditorDefines));
+
+            var names = new List<DeclaredTypeName>();
+            var seenFullNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ClassDeclarationSyntax decl in tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                if (decl.TypeParameterList is { Parameters.Count: > 0 })
+                    continue;
+                if (decl.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword) || m.IsKind(SyntaxKind.AbstractKeyword)))
+                    continue;
+
+                string clrName = BuildClrFullName(decl);
+                if (seenFullNames.Add(clrName))
+                {
+                    bool hasBaseList = decl.BaseList is { Types.Count: > 0 };
+                    names.Add(new DeclaredTypeName(clrName, decl.Identifier.ValueText, hasBaseList));
+                }
+            }
+
+            DeclaredTypeName[] result = names.ToArray();
+            s_parsedFileCache[fullPath] = new ParsedFileCacheEntry(ticks, length, result);
+            return result;
+        }
+        catch (IOException)
+        {
+            return Array.Empty<DeclaredTypeName>();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Array.Empty<DeclaredTypeName>();
+        }
+    }
+
+    private static string BuildClrFullName(TypeDeclarationSyntax declaration)
+    {
+        var typeChain = new List<string>();
+        var namespaceChain = new List<string>();
+
+        for (SyntaxNode? node = declaration; node != null; node = node.Parent)
+        {
+            if (node is TypeDeclarationSyntax typeDecl)
+            {
+                typeChain.Add(typeDecl.Identifier.ValueText);
+            }
+            else if (node is BaseNamespaceDeclarationSyntax nsDecl)
+            {
+                namespaceChain.Add(nsDecl.Name.ToString());
+            }
+        }
+
+        typeChain.Reverse();
+        namespaceChain.Reverse();
+
+        string nestedTypeName = string.Join("+", typeChain);
+        if (namespaceChain.Count == 0)
+            return nestedTypeName;
+
+        return $"{string.Join(".", namespaceChain)}.{nestedTypeName}";
     }
 }
