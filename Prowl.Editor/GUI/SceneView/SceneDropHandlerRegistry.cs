@@ -24,6 +24,27 @@ public struct SceneDropContext
     public EditorCamera Camera;
     public Float2 MouseLocal;
     public Float2 PanelSize;
+
+    // Set by Freeze: the drop was resolved earlier and the camera may have moved since.
+    private bool _frozen;
+    private Float3 _frozenPosition;
+    private GameObject? _frozenTarget;
+
+    /// <summary>Where a spawned object goes: the surface under the cursor, grid-snapped.</summary>
+    public readonly Float3 DropPosition => _frozen ? _frozenPosition : SceneViewPanel.GetDropPosition(Scene, Camera, MouseLocal, PanelSize);
+
+    /// <summary>The object under the cursor, gizmos ignored.</summary>
+    public readonly GameObject? PickTarget() => _frozen ? _frozenTarget : SceneViewPanel.PickObjectAt(Scene, Camera, MouseLocal, PanelSize, pickGizmos: false);
+
+    /// <summary>Resolve the drop now, for a drop handled later (after an import), so later camera moves don't shift it.</summary>
+    public readonly SceneDropContext Freeze()
+    {
+        SceneDropContext c = this;
+        c._frozenPosition = DropPosition;
+        c._frozenTarget = PickTarget();
+        c._frozen = true;
+        return c;
+    }
 }
 
 /// <summary> Interface for handling asset drops in the scene view. Implementations are discovered via SceneDropHandlerAttribute. </summary>
@@ -54,7 +75,7 @@ internal class MaterialDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop on object to assign material";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        GameObject? hitGO = SceneViewPanel.PickObjectAt(context.Scene, context.Camera, context.MouseLocal, context.PanelSize, pickGizmos: false);
+        GameObject? hitGO = context.PickTarget();
         if (hitGO.IsNotValid()) return;
         var mat = Runtime.AssetDatabase.Get(payload.AssetGuid) as Material;
         if (mat.IsNotValid()) return;
@@ -71,7 +92,7 @@ internal class MeshDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        Float3 dropPos = SceneViewPanel.GetDropPosition(context.Scene, context.Camera, context.MouseLocal, context.PanelSize);
+        Float3 dropPos = context.DropPosition;
         HierarchyPanel.SpawnAssetInScene(payload, null, dropPos);
     }
 }
@@ -82,7 +103,7 @@ internal class PrefabDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        Float3 dropPos = SceneViewPanel.GetDropPosition(context.Scene, context.Camera, context.MouseLocal, context.PanelSize);
+        Float3 dropPos = context.DropPosition;
         HierarchyPanel.SpawnAssetInScene(payload, null, dropPos);
     }
 }
@@ -93,7 +114,7 @@ internal class SpriteDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        Float3 dropPos = SceneViewPanel.GetDropPosition(context.Scene, context.Camera, context.MouseLocal, context.PanelSize);
+        Float3 dropPos = context.DropPosition;
         HierarchyPanel.SpawnAssetInScene(payload, null, dropPos);
     }
 }

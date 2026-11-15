@@ -585,6 +585,11 @@ public class SceneViewPanel : DockPanel
                     SetGizmoMode(TransformTool.Universal);
             }
 
+            // Paper-space pointer to viewport-local via the cached viewport rect. CurrentParent here is an
+            // enclosing container (toolbar row etc.), so subtracting its origin put drops off to the side.
+            Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
+            var panelSize = new Float2(width, height);
+
             // Accept asset drops via registry-discovered handlers
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
             {
@@ -603,6 +608,18 @@ public class SceneViewPanel : DockPanel
                         .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
+            }
+
+            // An OS file drop over the viewport: remember where, so the files spawn here once imported.
+            if (isHovered && ExternalAssetDrop.IsResolvingDropTarget)
+            {
+                ExternalAssetDrop.SceneTarget = new SceneDropContext
+                {
+                    Scene = scene,
+                    Camera = _editorCamera!,
+                    MouseLocal = mouseLocal,
+                    PanelSize = panelSize,
+                };
             }
 
             if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
@@ -626,18 +643,12 @@ public class SceneViewPanel : DockPanel
                 ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(assetDrop.AssetType);
                 if (handler != null)
                 {
-                    // Convert Paper-space pointer to viewport-local using the cached viewport
-                    // rect. CurrentParent here is an enclosing container (toolbar row etc.),
-                    // so subtracting its origin put the drop off to the side of the camera.
-                    Float2 mouseLocal = paper.PointerPos - new Float2(
-                        (float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
-
                     handler.Handle(assetDrop, new SceneDropContext
                     {
                         Scene = scene,
                         Camera = _editorCamera!,
                         MouseLocal = mouseLocal,
-                        PanelSize = new Float2(width, height),
+                        PanelSize = panelSize,
                     });
                     DragDrop.EndDrag();
                 }

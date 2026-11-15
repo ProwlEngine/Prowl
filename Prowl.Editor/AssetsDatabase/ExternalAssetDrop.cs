@@ -9,6 +9,7 @@ using System.IO;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
@@ -43,6 +44,9 @@ public static class ExternalAssetDrop
     /// <summary> Enqueues file paths from an external drop for deferred processing. </summary>
     public static void Enqueue(string[] paths) => _pending.Enqueue(paths);
 
+    /// <summary> Set by the scene view while a drop resolves over it; the dropped assets spawn there. </summary>
+    internal static SceneDropContext? SceneTarget;
+
     /// <summary> Processes one batch of dropped files per frame, resolving the hover target folder and copying files into the project. </summary>
     public static void ProcessPending()
     {
@@ -64,16 +68,19 @@ public static class ExternalAssetDrop
             if (!_pending.TryDequeue(out _resolving)) return;
             _resolveFrames = 0;
             ProjectPanel.Instance?.ClearDropHover();
+            SceneTarget = null;
         }
         if (++_resolveFrames < 3) return;
 
         string[] paths = _resolving;
         _resolving = null;
-        try { HandleDrop(paths, ProjectPanel.Instance?.ExternalDropHoverFolder); }
+        SceneDropContext? sceneTarget = SceneTarget?.Freeze();
+        SceneTarget = null;
+        try { HandleDrop(paths, ProjectPanel.Instance?.ExternalDropHoverFolder, sceneTarget); }
         catch (Exception ex) { Runtime.Debug.LogError($"Failed to process dropped files: {ex.Message}"); }
     }
 
-    private static void HandleDrop(string[] paths, string? targetFolder)
+    private static void HandleDrop(string[] paths, string? targetFolder, SceneDropContext? sceneTarget)
     {
         EditorAssetBackend db = EditorAssetBackend.Instance!;
         string assetsPath = Project.Current!.AssetsPath;
@@ -96,10 +103,13 @@ public static class ExternalAssetDrop
             catch (Exception ex) { Runtime.Debug.LogError($"Failed to create folder '{dir}': {ex.Message}"); }
         }
 
-        // In-project sources aren't copied - only revealed.
+        // In-project sources aren't copied - spawned right away on a scene drop, otherwise revealed.
+        if (sceneTarget is { } ctx)
+            SpawnInScene(db, plan.AlreadyInProject, ctx);
+
         if (plan.Files.Count == 0)
         {
-            if (plan.AlreadyInProject.Count > 0)
+            if (sceneTarget == null && plan.AlreadyInProject.Count > 0)
             {
                 Guid existing = db.PathToGuid(plan.AlreadyInProject[0]);
                 if (existing != Guid.Empty) Selection.Ping(existing);
@@ -126,21 +136,49 @@ public static class ExternalAssetDrop
         // No import here. The watcher registers the whole batch before importing any of it
         // (so a model finds its sibling textures), and importing now would import twice.
         _forceProcessUntil = DateTime.UtcNow + TimeSpan.FromSeconds(5);
-        RegisterReveal(db, destRel, copied);
+        RegisterReveal(db, destRel, copied, sceneTarget);
+    }
+
+    /// <summary>Hand each asset to the scene view's drop handler for its type, as an internal drag would.</summary>
+    private static void SpawnInScene(EditorAssetBackend db, IEnumerable<string> paths, SceneDropContext ctx)
+    {
+        // The scene may have changed while the import ran.
+        ctx.Scene = EditorSceneManager.EditedWorld;
+        if (Runtime.EngineObjectExtensions.IsNotValid(ctx.Scene)) return;
+
+        foreach (string path in paths)
+        {
+            AssetEntry? entry = db.GetEntry(path);
+            if (entry == null) continue;
+            ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(entry.MainAssetType);
+            handler?.Handle(new AssetDragPayload(entry.Guid, Path.GetFileNameWithoutExtension(path), path, entry.MainAssetType), ctx);
+        }
     }
 
     /// <summary>Ping and toast once the watcher has imported the copied batch.</summary>
-    private static void RegisterReveal(EditorAssetBackend db, string destRel, List<string> copied)
+    private static void RegisterReveal(EditorAssetBackend db, string destRel, List<string> copied, SceneDropContext? sceneTarget)
     {
         var awaiting = new HashSet<string>(copied, StringComparer.OrdinalIgnoreCase);
+        bool revealed = false;
         Action<string[]>? onImported = null;
         onImported = imported =>
         {
-            string? first = Array.Find(imported, awaiting.Contains);
-            if (first == null) return;
+            string[] arrived = Array.FindAll(imported, awaiting.Contains);
+            if (arrived.Length == 0) return;
 
-            db.OnAssetsImported -= onImported;
-            _reveals.RemoveAll(r => r.Handler == onImported);
+            // The watcher may import a large drop over several batches; stay subscribed until all of it is in.
+            awaiting.ExceptWith(arrived);
+            if (awaiting.Count == 0)
+            {
+                db.OnAssetsImported -= onImported;
+                _reveals.RemoveAll(r => r.Handler == onImported);
+            }
+            if (sceneTarget is { } ctx)
+                SpawnInScene(db, arrived, ctx);
+
+            if (revealed) return;
+            revealed = true;
+            string first = arrived[0];
             // Ping only when the user is already viewing the destination - pinging navigates,
             // and a drop targeted at another folder shouldn't yank them there.
             Guid guid = db.PathToGuid(first);
