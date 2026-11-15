@@ -219,10 +219,25 @@ internal sealed class BvhFormat : IModelFormat
                 animation.Bindings.Add(joint.RotationBinding);
         }
 
+        // Build a root node to match FBX and GLTF.
+        var root = new IntermediateNode { Name = "<RootNode>" };
+        foreach (Joint joint in joints)
+        {
+            if (joint.Node.Parent is null)
+            {
+                joint.Node.Parent = root;
+                root.Children.Add(joint.Node);
+            }
+        }
+
         // Return a scene.
-        var result = new IntermediateScene();
+        var result = new IntermediateScene()
+        {
+            SourceCoordinateSystem = CoordinateSystem.RightHandedYUp
+        };
         if (animation.Bindings.Count > 0)
             result.Animations.Add(animation);
+        result.Nodes.Add(root);
         result.Nodes.AddRange(joints.Select(j => j.Node));
         return result;
     }

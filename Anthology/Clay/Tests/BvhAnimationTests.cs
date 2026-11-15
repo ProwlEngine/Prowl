@@ -19,19 +19,25 @@ public sealed class BvhAnimationTests
 
         // Check the nodes are as expected.
         Assert.Collection(model.Nodes,
+            root =>
+            {
+                Assert.Equal(0, root.Index);
+                Assert.Equal("<RootNode>", root.Name);
+                Assert.Null(root.Parent);
+            },
             hips =>
             {
-                Assert.Equal(0, hips.Index);
+                Assert.Equal(1, hips.Index);
                 Assert.Equal("Hips", hips.Name);
-                Assert.Null(hips.Parent);
+                Assert.Equal(model.Nodes[0], hips.Parent);
                 Assert.Equal(new Float3(0, 0, 0), hips.LocalPosition);
                 Assert.Equal(Quaternion.Identity, hips.LocalRotation);
             },
             spine =>
             {
-                Assert.Equal(1, spine.Index);
+                Assert.Equal(2, spine.Index);
                 Assert.Equal("Upper Spine", spine.Name);
-                Assert.Same(model.Nodes[0], spine.Parent);
+                Assert.Same(model.Nodes[1], spine.Parent);
                 Assert.Equal(new Float3(0, 20, 0), spine.LocalPosition);
                 Assert.Empty(spine.Children);
                 Assert.Equal(Quaternion.Identity, spine.LocalRotation);
@@ -45,8 +51,8 @@ public sealed class BvhAnimationTests
         Assert.Equal(0.033333f, animation.Duration);
 
         // Animate hips position
-        var hipsPosition = Assert.Single(animation.Bindings, b => b.NodeIndex == 0 && b.Property == AnimatedProperty.Position);
-        Assert.Equal(0, hipsPosition.NodeIndex);
+        var hipsPosition = Assert.Single(animation.Bindings, b => b.NodeIndex == 1 && b.Property == AnimatedProperty.Position);
+        Assert.Equal(1, hipsPosition.NodeIndex);
         Assert.Equal(AnimatedProperty.Position, hipsPosition.Property);
         Assert.Equal(0, hipsPosition.SubIndex);
         Assert.Equal(3, hipsPosition.Curve.Dimension);
@@ -66,8 +72,8 @@ public sealed class BvhAnimationTests
 
 
         // Animate hips rotation
-        var hipsRotation = Assert.Single(animation.Bindings, b => b.NodeIndex == 0 && b.Property == AnimatedProperty.Rotation);
-        Assert.Equal(0, hipsRotation.NodeIndex);
+        var hipsRotation = Assert.Single(animation.Bindings, b => b.NodeIndex == 1 && b.Property == AnimatedProperty.Rotation);
+        Assert.Equal(1, hipsRotation.NodeIndex);
         Assert.Equal(AnimatedProperty.Rotation, hipsRotation.Property);
         Assert.Equal(0, hipsRotation.SubIndex);
         Assert.Equal(4, hipsRotation.Curve.Dimension);
@@ -80,8 +86,8 @@ public sealed class BvhAnimationTests
                 Quaternion.AxisAngle(Float3.UnitY, 0 * Maths.Deg2Rad)), keyFrame.Value4));
 
         // Animate spine rotation
-        var spineRotation = Assert.Single(animation.Bindings, b => b.NodeIndex == 1 && b.Property == AnimatedProperty.Rotation);
-        Assert.Equal(1, spineRotation.NodeIndex);
+        var spineRotation = Assert.Single(animation.Bindings, b => b.NodeIndex == 2 && b.Property == AnimatedProperty.Rotation);
+        Assert.Equal(2, spineRotation.NodeIndex);
         Assert.Equal(AnimatedProperty.Rotation, spineRotation.Property);
         Assert.Equal(0, spineRotation.SubIndex);
         Assert.Equal(4, spineRotation.Curve.Dimension);
@@ -98,9 +104,44 @@ public sealed class BvhAnimationTests
     }
 
     [Fact]
-    public void BvhFormat_MultipleHierarchiesAreNotSupported()
+    public void BvhFormat_LoadsMultipleHierarchies()
     {
-        Assert.Throws<ImportException>(() => ModelImporter.Load(TestModels.Bvh("two_roots.bvh"), cancellationToken: TestContext.Current.CancellationToken));
+        Model model = ModelImporter.Load(TestModels.Bvh("two_roots.bvh"), cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False(model.Log.HasAnyWarnings);
+
+        // Check the nodes are as expected.
+        Assert.Collection(model.Nodes,
+            root =>
+            {
+                Assert.Equal(0, root.Index);
+                Assert.Equal("<RootNode>", root.Name);
+                Assert.Null(root.Parent);
+            },
+            hips =>
+            {
+                Assert.Equal(1, hips.Index);
+                Assert.Equal("CharacterA_Hips", hips.Name);
+                Assert.Equal(model.Nodes[0], hips.Parent);
+                Assert.Equal(ConvertTranslation(new Float3(0, 0, 0)), hips.LocalPosition);
+                Assert.Equal(Quaternion.Identity, hips.LocalRotation);
+            },
+            spine =>
+            {
+                Assert.Equal(2, spine.Index);
+                Assert.Equal("Spine", spine.Name);
+                Assert.Same(model.Nodes[1], spine.Parent);
+                Assert.Equal(ConvertTranslation(new Float3(0, 20, 0)), spine.LocalPosition);
+                Assert.Empty(spine.Children);
+                Assert.Equal(Quaternion.Identity, spine.LocalRotation);
+            },
+            ball =>
+            {
+                Assert.Equal(3, ball.Index);
+                Assert.Equal("Prop_Ball", ball.Name);
+                Assert.Equal(model.Nodes[0], ball.Parent);
+                Assert.Equal(ConvertTranslation(new Float3(50, 0, 0)), ball.LocalPosition);
+                Assert.Equal(Quaternion.Identity, ball.LocalRotation);
+            });
     }
 
     [Fact]
