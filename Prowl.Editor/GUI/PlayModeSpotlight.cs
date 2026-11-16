@@ -15,7 +15,7 @@ using Color = System.Drawing.Color;
 namespace Prowl.Editor.GUI;
 
 /// <summary>
-/// While the game runs, slightly dims the editor around the Game view and gives it a glowing ring,
+/// While the game runs, slightly dims the editor around the Game view and gives it an accent ring,
 /// so play mode is obvious without washing the whole editor in colour. Nothing here takes input.
 /// </summary>
 public static class PlayModeSpotlight
@@ -61,8 +61,7 @@ public static class PlayModeSpotlight
         Color ringC = Core.EditorApplication.IsPlayPaused ? EditorTheme.Amber400 : EditorTheme.Accent;
         paper.Box("pms_ring").PositionType(PositionType.SelfDirected).Position(hx, hy).Size(hw, hh)
             .Rounded(Origami.Current.Metrics.ContainerRounding).IsNotInteractable()
-            .BorderColor(Color.FromArgb((int)(230 * appear), ringC)).BorderWidth(2)
-            .Glow(0, 0, 22, 2, Color.FromArgb((int)(110 * appear), ringC));
+            .BorderColor(Color.FromArgb((int)(230 * appear), ringC)).BorderWidth(2);
     }
 
     private static void Dim(Paper paper, string id, float x, float y, float w, float h, Color c)
