@@ -180,6 +180,17 @@ internal static class NetworkPopover
                 TransformOption(paper, font, go, NetworkFlags.NoInterpolation, Loc.Get("network.flags.no_interpolation"));
                 if (go.Network.Active && !Networking.IsHost)
                     Note(paper, font, "gi_net_sync_tf_readonly", Loc.Get("network.flags.host_only"), EditorTheme.Ink400);
+
+                Spacer(paper, "gi_net_gap3");
+                Heading(paper, font, "gi_net_interval", Loc.Get("network.send_interval"), Loc.Get("network.send_interval.desc"));
+                if (go.Network.Active && !Networking.IsHost)
+                    Note(paper, font, "gi_net_interval_value", go.Network.SendInterval.ToString(), EditorTheme.Ink500);
+                else
+                    Origami.NumericField<int>(paper, "gi_net_interval_v", go.Network.SendInterval, v =>
+                    {
+                        Undo.RecordObject(go, "Change Send Interval");
+                        go.Network.SendInterval = Math.Clamp(v, 1, 255);
+                    }).Min(1).Max(255).Show();
             }
         }
     }

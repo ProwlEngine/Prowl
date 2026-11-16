@@ -12,6 +12,7 @@ public sealed class NetworkAccessor
 {
     private readonly GameObject _object;
     private NetworkFlags _flags;
+    private int _sendInterval = 1;
     private NetworkMode _mode = NetworkMode.Snapshot;
     private NetworkOrphaned _orphaned = NetworkOrphaned.Destroy;
     private OwnerTransfer _ownerTransfer = OwnerTransfer.Fixed;
@@ -101,6 +102,30 @@ public sealed class NetworkAccessor
 
             Networking.System?.SetNetworkFlags(_object, value);
             _flags = value;
+        }
+    }
+
+    /// <summary>
+    ///     How many ticks apart the object's moving transform and changed [Sync] values go out, from 1 (every tick)
+    ///     to 255. Only the host may change this after spawning.
+    /// </summary>
+    public int SendInterval
+    {
+        get => _sendInterval;
+        set
+        {
+            if (value < 1 || value > MaxSendInterval)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            if (value == _sendInterval)
+            {
+                return;
+            }
+
+            Networking.System?.SetSendInterval(_object, value);
+            _sendInterval = value;
         }
     }
 
@@ -243,7 +268,10 @@ public sealed class NetworkAccessor
     }
 
     internal bool SyncsTransform(NetworkFlags exclusion) => (Flags & exclusion) == 0;
+    internal const int MaxSendInterval = byte.MaxValue;
+
     internal void ApplyFlags(NetworkFlags value) => _flags = value;
+    internal void ApplySendInterval(int value) => _sendInterval = value;
     internal void ApplyOwnerTransfer(OwnerTransfer value) => _ownerTransfer = value;
     internal void ApplyOrphaned(NetworkOrphaned value) => _orphaned = value;
 
@@ -251,6 +279,8 @@ public sealed class NetworkAccessor
         (value & ~(NetworkFlags.NoTransformSync | NetworkFlags.NoInterpolation)) == 0;
 
     internal static NetworkMode ModeOf(GameObject go) => go._network?.Mode ?? NetworkMode.Snapshot;
+
+    internal static int SendIntervalOf(GameObject go) => go._network?.SendInterval ?? 1;
 
     internal static bool IsExcludedFromNetwork(GameObject go)
     {

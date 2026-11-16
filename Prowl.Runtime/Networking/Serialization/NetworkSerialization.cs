@@ -160,7 +160,7 @@ internal static class NetworkSerialization
     {
         NetworkAccessor? network = go._network;
         if (network == null || (network.Mode == NetworkMode.Snapshot && network.OwnerTransfer == OwnerTransfer.Fixed &&
-                                network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None &&
+                                network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None && network.SendInterval == 1 &&
                                 network.Visibility == NetworkVisibility.Default && network.CullDistance == 0 &&
                                 network.Groups.IsEmpty))
         {
@@ -175,6 +175,11 @@ internal static class NetworkSerialization
         if (network.Visibility != NetworkVisibility.Default)
         {
             settings.Add("Visibility", new EchoObject((byte)network.Visibility));
+        }
+
+        if (network.SendInterval != 1)
+        {
+            settings.Add("SendInterval", new EchoObject((byte)network.SendInterval));
         }
 
         if (network.CullDistance != 0)
@@ -203,6 +208,7 @@ internal static class NetworkSerialization
             existing.OwnerTransfer = OwnerTransfer.Fixed;
             existing.Orphaned = NetworkOrphaned.Destroy;
             existing.Flags = NetworkFlags.None;
+            existing.SendInterval = 1;
             existing.Visibility = NetworkVisibility.Default;
             existing.CullDistance = 0;
             existing.Groups = NetworkGroups.None;
@@ -214,6 +220,7 @@ internal static class NetworkSerialization
         network.OwnerTransfer = (OwnerTransfer)(settings["OwnerTransfer"]?.ByteValue ?? (byte)OwnerTransfer.Fixed);
         network.Orphaned = (NetworkOrphaned)(settings["Orphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
         network.Flags = (NetworkFlags)(settings["Flags"]?.ByteValue ?? (byte)NetworkFlags.None);
+        network.SendInterval = Math.Max(1, (int)(settings["SendInterval"]?.ByteValue ?? 1));
         network.Visibility = (NetworkVisibility)(settings["Visibility"]?.ByteValue ?? (byte)NetworkVisibility.Default);
         float cullDistance = settings["CullDistance"]?.FloatValue ?? 0;
         network.CullDistance = float.IsFinite(cullDistance) && cullDistance > 0 ? cullDistance : 0;

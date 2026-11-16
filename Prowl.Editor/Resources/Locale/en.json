@@ -316,6 +316,8 @@
   "network.flags.no_scale_sync": "No Scale Sync",
   "network.flags.no_interpolation": "No Interpolation",
   "network.flags.host_only": "Only the host can change network flags after spawning.",
+  "network.send_interval": "Send Interval (ticks)",
+  "network.send_interval.desc": "How many ticks apart its moving transform and changed [Sync] values go out. 1 sends every tick.",
   "network.sync_transform.desc": "Whoever controls it sends its position, rotation and scale to everyone else.",
   "network.live": "Live",
   "network.not_spawned": "Not networked yet. The host spawns it with NetworkSpawn.",

@@ -224,4 +224,42 @@ internal sealed partial class NetworkSystem
         // Old samples must not restore values from a previously enabled channel.
         entry.TransformSync.Reset();
     }
+
+    internal void SetSendInterval(GameObject go, int interval)
+    {
+        if (!IsActive || FindEntry(go) is not { TearingDown: false } entry)
+        {
+            return;
+        }
+
+        MainThreadContext.AssertMainThread();
+        if (!IsHost)
+        {
+            throw new InvalidOperationException("Only the host can change a spawned object's send interval.");
+        }
+
+        using NetWriter message = new();
+        new SendIntervalMessage(go.Identifier, entry.Generation, (byte)interval).Write(message);
+        SendToObservers(entry, EngineMessage.SendInterval, message.WrittenSpan);
+    }
+
+    internal void OnSendInterval(NetPeer sender, ref NetReader reader, Delivery delivery)
+    {
+        if (IsHost || !sender.IsHost)
+        {
+            return;
+        }
+
+        SendIntervalMessage message = SendIntervalMessage.Read(ref reader);
+        if (message.Interval == 0 || !reader.IsAtEnd || delivery != Delivery.Reliable)
+        {
+            throw new InvalidDataException("Invalid send interval message.");
+        }
+
+        if (FindByIdentifier(message.Identifier) is GameObject go && FindEntry(go) is { TearingDown: false } entry &&
+            entry.Generation == message.Generation)
+        {
+            go.Network.ApplySendInterval(message.Interval);
+        }
+    }
 }

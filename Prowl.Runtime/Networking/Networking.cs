@@ -4,6 +4,8 @@
 using System;
 
 using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
 using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
@@ -86,6 +88,30 @@ public static partial class Networking
             Shutdown();
             throw;
         }
+    }
+
+    /// <summary>
+    ///     Host: builds <paramref name="prefab" /> into SceneInstance.Main at a pose and spawns it. Clients build it from
+    ///     their own copy of the prefab, so only [Sync] values, the root's transform and its network settings carry
+    ///     over; other fields changed on the host don't. Without a session it is only instantiated.
+    /// </summary>
+    public static GameObject Spawn(PrefabAsset prefab, Float3 position, Quaternion rotation, NetPeer? owner = null,
+        NetworkOrphaned? orphaned = null)
+    {
+        ArgumentNullException.ThrowIfNull(prefab);
+        if (System is { } system)
+        {
+            return system.SpawnPrefab(prefab, position, rotation, owner, orphaned);
+        }
+
+        GameObject? go = GameObject.Instantiate(prefab, SceneInstance.Main, position, rotation);
+        if (go.IsNotValid())
+        {
+            throw new ArgumentException($"'{prefab.Name}' could not be instantiated.", nameof(prefab));
+        }
+
+        go!.Network.Spawn(owner, orphaned);
+        return go;
     }
 
     /// <summary>Joins a host and loads its scene in place of the local scene.</summary>

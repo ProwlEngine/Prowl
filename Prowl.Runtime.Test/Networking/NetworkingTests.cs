@@ -88,12 +88,13 @@ public sealed class FakePeer : IDisposable
         SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11, StaticRpcToHost = SceneSnapshot + 12, StaticRpcFromHost = SceneSnapshot + 13,
         Orphaned = SceneSnapshot + 14, OwnershipRequest = SceneSnapshot + 15, OwnershipState = SceneSnapshot + 16,
         OwnerTransfer = SceneSnapshot + 17, NetworkFlags = SceneSnapshot + 18, SnapshotAck = SceneSnapshot + 19,
-        SectionAdd = SceneSnapshot + 20, SectionRemove = SceneSnapshot + 21, SectionMove = SceneSnapshot + 22, Time = SceneSnapshot + 23;
+        SectionAdd = SceneSnapshot + 20, SectionRemove = SceneSnapshot + 21, SectionMove = SceneSnapshot + 22, Time = SceneSnapshot + 23,
+        SendInterval = SceneSnapshot + 24;
 
     private FakePeer(NetSession session)
     {
         Session = session;
-        for (ushort id = SceneSnapshot; id <= SectionMove; id++)
+        foreach (ushort id in Enumerable.Range(SceneSnapshot, SectionMove - SceneSnapshot + 1).Select(i => (ushort)i).Append(SendInterval))
         {
             ushort captured = id;
             session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery, byte channel) =>

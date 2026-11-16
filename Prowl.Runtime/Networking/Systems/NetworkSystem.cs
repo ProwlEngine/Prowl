@@ -139,6 +139,7 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.OwnershipState, OnOwnershipState);
         RegisterEngineMessage(session, EngineMessage.OwnerTransfer, OnOwnerTransfer);
         RegisterEngineMessage(session, EngineMessage.NetworkFlags, OnNetworkFlags);
+        RegisterEngineMessage(session, EngineMessage.SendInterval, OnSendInterval);
         if (session.IsHost)
         {
             SceneInstance world = SceneInstance.Main;

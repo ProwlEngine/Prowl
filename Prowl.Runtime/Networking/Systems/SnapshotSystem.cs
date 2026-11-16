@@ -439,6 +439,13 @@ internal sealed class SnapshotSystem : IDisposable
         return state;
     }
 
+    /// <summary>Whether <paramref name="tick" /> is one the object sends on, spread across ticks by its NetId.</summary>
+    private static bool SendsOn(NetworkObject? entry, uint tick)
+    {
+        int interval = entry == null ? 1 : NetworkAccessor.SendIntervalOf(entry.GameObject);
+        return interval <= 1 || (tick + entry!.NetId) % (uint)interval == 0;
+    }
+
     private static bool InTree(GameObject go, GameObject root) => go == root || go.IsChildOf(root);
 
     private uint Epoch => (uint)_scene.SceneGeneration;
@@ -545,8 +552,14 @@ internal sealed class SnapshotSystem : IDisposable
         foreach (NetworkObject entry in _scene.Entries.Values)
         {
             GameObject go = entry.GameObject;
-            if (!go.IsValid() || !go.Network.HasTransformSync || !_scene.HasControl(go) ||
-                entry.TransformSync.Capture(go, now, _scene.LastTransformTime) is not { } update)
+            if (!go.IsValid() || !SendsOn(entry, tick) || !go.Network.HasTransformSync || !_scene.HasControl(go))
+            {
+                continue;
+            }
+
+            double previous = NetworkAccessor.SendIntervalOf(go) > 1 ? entry.LastCaptureTime : _scene.LastTransformTime;
+            entry.LastCaptureTime = now;
+            if (entry.TransformSync.Capture(go, now, previous) is not { } update)
             {
                 continue;
             }
@@ -635,7 +648,7 @@ internal sealed class SnapshotSystem : IDisposable
                 _scratchKeys.Add(key);
             }
             else if ((pending.Changed > pending.LastSent || tick - pending.LastSent >= resend) &&
-                     !AddValue(state, key, component, sync))
+                     SendsOn(_scene.FindEntry(component.GameObject), tick) && !AddValue(state, key, component, sync))
             {
                 _scratchKeys.Add(key);
             }

@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Prowl.Vector;
@@ -16,6 +17,7 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     internal readonly NetworkSystem System = scene;
     public readonly TransformSync TransformSync = new();
     public uint Generation;
+    public double LastCaptureTime;
     public bool HasLocalAuthority;
 
     /// <summary>Host: the clients that do not have this object, or null when they all do.</summary>
@@ -23,6 +25,10 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
 
     /// <summary>The host-assigned number messages use for this object in place of its identifier.</summary>
     public uint NetId;
+
+    /// <summary>The prefab it was spawned from and its tree's identifiers then, or empty for one sent whole.</summary>
+    public Guid PrefabId;
+    public Guid[]? PrefabIdentifiers;
 
     public int NotifiedOwnerId = NoOwner;
     public int Owner = NoOwner;

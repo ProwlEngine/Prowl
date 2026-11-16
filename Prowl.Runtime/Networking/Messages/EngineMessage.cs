@@ -28,5 +28,6 @@ internal enum EngineMessage : ushort
     SectionAdd,
     SectionRemove,
     SectionMove,
-    Time
+    Time,
+    SendInterval
 }
