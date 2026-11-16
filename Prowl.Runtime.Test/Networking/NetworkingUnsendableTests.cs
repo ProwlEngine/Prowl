@@ -42,7 +42,7 @@ public partial class NetworkingTests
         GameObject crate = CreateGameObject("Crate");
         ShapeHolderTestComponent holder = crate.AddComponent<ShapeHolderTestComponent>();
         scene.Add(crate);
-        crate.Network.Spawn();
+        crate.Network.SpawnSerialized();
         Pump(() => alice.Has(FakePeer.Spawn), alice);
         return (scene, holder);
     }

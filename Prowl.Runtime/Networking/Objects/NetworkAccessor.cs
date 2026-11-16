@@ -213,7 +213,7 @@ public sealed class NetworkAccessor
     internal bool IsExcluded => IsExcludedFromNetwork(_object);
 
     /// <summary>Host: spawns the tree for all peers, or assigns ownership if already spawned.</summary>
-    public void Spawn(NetPeer? owner = null, NetworkOrphaned? orphaned = null)
+    public void SpawnSerialized(NetPeer? owner = null, NetworkOrphaned? orphaned = null)
     {
         NetworkOrphaned policy = orphaned ?? Orphaned;
         if (!Enum.IsDefined(policy))

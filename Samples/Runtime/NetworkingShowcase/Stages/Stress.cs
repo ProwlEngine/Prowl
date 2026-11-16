@@ -31,7 +31,7 @@ public class Swarm : Component
             drone.AddComponent<Drone>().Seed = Random.Shared.NextSingle() * 1000f;
             drone.Network.Mode = NetworkMode.Object;
             drone.MoveTo(GameObject.Scene!);
-            drone.Network.Spawn();
+            drone.Network.SpawnSerialized();
         }
     }
 

@@ -22,7 +22,7 @@ public partial class NetworkingTests
             Pump(() => alice.IsReady, alice);
             GameObject crate = CreateGameObject("Crate");
             scene.Add(crate);
-            crate.Network.Spawn();
+            crate.Network.SpawnSerialized();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             NetTestComponent late = crate.AddComponent<NetTestComponent>();

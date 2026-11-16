@@ -635,7 +635,7 @@ public partial class NetworkingTests : RuntimeTestBase
             GameObject ship = CreateGameObject("Ship");
             NetTestComponent component = ship.AddComponent<NetTestComponent>();
             scene.Add(ship);
-            ship.Network.Spawn(aliceHere);
+            ship.Network.SpawnSerialized(aliceHere);
 
             Assert.Equal(NetworkMode.Object, ship.Network.Mode);
             Assert.Same(aliceHere, ship.Network.Owner);
@@ -700,7 +700,7 @@ public partial class NetworkingTests : RuntimeTestBase
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
-            crate.Network.Spawn();
+            crate.Network.SpawnSerialized();
             Assert.False(crate.IsProxy);
             Assert.Null(crate.Network.Owner);
 
@@ -746,7 +746,7 @@ public partial class NetworkingTests : RuntimeTestBase
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
 
-            ship.Network.Spawn(aliceHere, NetworkOrphaned.ClearOwner);
+            ship.Network.SpawnSerialized(aliceHere, NetworkOrphaned.ClearOwner);
 
             Assert.Same(aliceHere, ship.Network.Owner);
             Assert.Equal(NetworkOrphaned.ClearOwner, ship.Network.Orphaned);
@@ -773,9 +773,9 @@ public partial class NetworkingTests : RuntimeTestBase
             GameObject child = CreateGameObject("Child");
             child.SetParent(parent);
             scene.Add(parent);
-            parent.Network.Spawn();
+            parent.Network.SpawnSerialized();
 
-            Assert.Throws<InvalidOperationException>(() => child.Network.Spawn(orphaned: NetworkOrphaned.ClearOwner));
+            Assert.Throws<InvalidOperationException>(() => child.Network.SpawnSerialized(orphaned: NetworkOrphaned.ClearOwner));
             Assert.Equal(NetworkMode.Snapshot, child.Network.Mode);
             Assert.Equal(NetworkOrphaned.Destroy, child.Network.Orphaned);
             Assert.Same(parent, child.Network.Root);
@@ -801,7 +801,7 @@ public partial class NetworkingTests : RuntimeTestBase
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
-            crate.Network.Spawn();
+            crate.Network.SpawnSerialized();
 
             alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(component.Identifier); w.WriteUInt32(NetTestComponent.ExplodeId); });
             alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(component.Identifier); w.WriteUInt32(NetTestComponent.AskHostId); w.WriteVarInt32(3); });
@@ -834,7 +834,7 @@ public partial class NetworkingTests : RuntimeTestBase
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
-            crate.Network.Spawn(Networking.Networking.Session!.Peers.Single(p => p.Name == "bob"));
+            crate.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "bob"));
             alice.Send(FakePeer.RpcToHost, w =>
             {
                 w.WriteGuid(component.Identifier);
@@ -973,7 +973,7 @@ public partial class NetworkingTests : RuntimeTestBase
             GameObject ship = CreateGameObject("Ship");
             scene.Add(ship);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            ship.Network.Spawn(owner);
+            ship.Network.SpawnSerialized(owner);
             Pump(() => alice.Has(FakePeer.Spawn), alice);
             NetReader spawn = new(alice.Last(FakePeer.Spawn));
             spawn.ReadGuid(); spawn.ReadGuid(); spawn.ReadVarUInt32(); spawn.ReadVarUInt32(); spawn.ReadByte();
@@ -1134,7 +1134,7 @@ public partial class NetworkingTests : RuntimeTestBase
         NetTestComponent component = go.AddComponent<NetTestComponent>();
         component.Health = 5;
         component.Shout("alone");
-        go.Network.Spawn();
+        go.Network.SpawnSerialized();
 
         Assert.Equal(5, component.Health);
         Assert.Equal("alone", component.Shouts.Single().Text);
@@ -1172,7 +1172,7 @@ public partial class NetworkingTests : RuntimeTestBase
             Pump(() => Networking.Networking.IsActive, host);
             GameObject go = CreateGameObject();
             SceneInstance.Main.Add(go);
-            Assert.Throws<InvalidOperationException>(() => go.Network.Spawn());
+            Assert.Throws<InvalidOperationException>(() => go.Network.SpawnSerialized());
         }
         finally
         {

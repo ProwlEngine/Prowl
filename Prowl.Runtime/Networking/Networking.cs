@@ -101,7 +101,7 @@ public static partial class Networking
         ArgumentNullException.ThrowIfNull(prefab);
         if (System is { } system)
         {
-            return system.SpawnPrefab(prefab, position, rotation, owner, orphaned);
+            return system.Spawn(prefab, position, rotation, owner, orphaned);
         }
 
         GameObject? go = GameObject.Instantiate(prefab, SceneInstance.Main, position, rotation);
@@ -110,7 +110,7 @@ public static partial class Networking
             throw new ArgumentException($"'{prefab.Name}' could not be instantiated.", nameof(prefab));
         }
 
-        go!.Network.Spawn(owner, orphaned);
+        go!.Network.SpawnSerialized(owner, orphaned);
         return go;
     }
 

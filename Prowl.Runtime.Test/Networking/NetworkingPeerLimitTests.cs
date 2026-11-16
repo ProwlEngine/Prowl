@@ -67,7 +67,7 @@ public partial class NetworkingTests
             Pump(() => small.IsReady && wide.IsReady, small, wide);
             GameObject big = CreateGameObject(Incompressible(8000));
             scene.Add(big);
-            big.Network.Spawn();
+            big.Network.SpawnSerialized();
             Pump(() => wide.Has(FakePeer.Spawn) && small.Session.State == SessionState.Ended, small, wide);
             Assert.Equal(SessionEndReason.Kicked, reason);
             Assert.Equal(SessionState.Active, wide.Session.State);
@@ -90,7 +90,7 @@ public partial class NetworkingTests
             {
                 GameObject go = CreateGameObject($"Object {i}");
                 scene.Add(go);
-                go.Network.Spawn();
+                go.Network.SpawnSerialized();
                 return go;
             }).ToArray();
             Pump(() => TransformIds(small).Count == objects.Length, small);

@@ -40,7 +40,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
-            spawned.Network.Spawn();
+            spawned.Network.SpawnSerialized();
             root.Network.Flags = NetworkFlags.NoScaleSync;
             child.Network.Flags = NetworkFlags.NoPositionSync | NetworkFlags.NoInterpolation;
             Pump(() => client.Received.Count(m => m.Id == FakePeer.NetworkFlags) == 2, client);

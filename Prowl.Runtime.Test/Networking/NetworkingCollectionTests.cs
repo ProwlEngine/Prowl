@@ -303,7 +303,7 @@ public partial class NetworkingTests
             GameObject crate = CreateGameObject("Crate");
             NetCollectionTestComponent component = crate.AddComponent<NetCollectionTestComponent>();
             scene.Add(crate);
-            crate.Network.Spawn();
+            crate.Network.SpawnSerialized();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             // An earlier joiner has what the spawn carried; a later one will get the whole state mid-change.
@@ -393,7 +393,7 @@ public partial class NetworkingTests
             GameObject ship = CreateGameObject("Ship");
             NetCollectionTestComponent component = ship.AddComponent<NetCollectionTestComponent>();
             scene.Add(ship);
-            ship.Network.Spawn(aliceHere);
+            ship.Network.SpawnSerialized(aliceHere);
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             // Hers, so the host's changes go nowhere and tell nobody.

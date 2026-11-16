@@ -54,7 +54,7 @@ public partial class NetworkingTests
             GameObject slow = CreateGameObject("Slow"), fast = CreateGameObject("Fast");
             slow.Network.SendInterval = 3;
             scene.Add(slow); scene.Add(fast);
-            slow.Network.Spawn(); fast.Network.Spawn();
+            slow.Network.SpawnSerialized(); fast.Network.SpawnSerialized();
             uint slowId = NetworkTestScene.Current.NetIdOf(slow), fastId = NetworkTestScene.Current.NetIdOf(fast);
 
             float x = 0;
@@ -87,7 +87,7 @@ public partial class NetworkingTests
             crate.Network.SendInterval = 4;
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
-            crate.Network.Spawn();
+            crate.Network.SpawnSerialized();
 
             Pump(() =>
             {
@@ -116,7 +116,7 @@ public partial class NetworkingTests
             GameObject crate = CreateGameObject("Crate");
             crate.Network.SendInterval = 5;
             scene.Add(crate);
-            crate.Network.Spawn();
+            crate.Network.SpawnSerialized();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
             Assert.Contains("SendInterval", SpawnJson(alice, crate));
 

@@ -121,7 +121,7 @@ public partial class NetworkingTests
         GameObject crate = CreateGameObject("Crate");
         NetTestComponent component = crate.AddComponent<NetTestComponent>();
         scene.Add(crate);
-        crate.Network.Spawn(owner);
+        crate.Network.SpawnSerialized(owner);
         Pump(() => peers.All(p => p.Has(FakePeer.Spawn)), peers);
         return (scene, crate, component);
     }
@@ -378,7 +378,7 @@ public partial class NetworkingTests
             Pump(() => alice.IsReady, alice);
             GameObject crate = CreateGameObject("Crate");
             scene.Add(crate);
-            crate.Network.Spawn();
+            crate.Network.SpawnSerialized();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             // Added after the spawn, so alice never gets it and rejects its values, as a client does.

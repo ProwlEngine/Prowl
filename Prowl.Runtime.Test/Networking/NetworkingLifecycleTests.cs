@@ -131,7 +131,7 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Host(new LocalTransport(new(), "host"));
-            root.Network.Spawn();
+            root.Network.SpawnSerialized();
             Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
             Assert.Null(Networking.Networking.Session);
         }
@@ -205,7 +205,7 @@ public partial class NetworkingTests
             child.SetParent(root);
             NetworkLifecycleListener listener = child.AddComponent<NetworkLifecycleListener>();
             scene.Add(root);
-            root.Network.Spawn();
+            root.Network.SpawnSerialized();
             Assert.Equal(new[] { "spawn", "authority gained" }, listener.Events);
             Assert.NotNull(child.AddComponent<NetTestComponent>());
             root.Destroy(); EngineObject.ProcessDestroyed();

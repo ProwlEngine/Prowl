@@ -233,7 +233,7 @@ internal sealed partial class NetworkSystem
     ///     Builds <paramref name="prefab" /> into the networked world at a pose and spawns it. Clients build their copy
     ///     from the same prefab, so only its GUID, identifiers, root state and [Sync] values travel.
     /// </summary>
-    internal GameObject SpawnPrefab(PrefabAsset prefab, Float3 position, Quaternion rotation, NetPeer? owner,
+    internal GameObject Spawn(PrefabAsset prefab, Float3 position, Quaternion rotation, NetPeer? owner,
         NetworkOrphaned? orphaned)
     {
         if (IsActive)

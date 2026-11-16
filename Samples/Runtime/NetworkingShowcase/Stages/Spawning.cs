@@ -47,7 +47,7 @@ public class Hangar : Component
         crate.AddComponent<Crate>().Home = at;
         crate.Network.Mode = NetworkMode.Object;
         crate.MoveTo(GameObject.Scene!);
-        crate.Network.Spawn(owner);
+        crate.Network.SpawnSerialized(owner);
     }
 }
 

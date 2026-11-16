@@ -85,7 +85,7 @@ public partial class NetworkingTests
             {
                 GameObject go = CreateGameObject($"Object {i}");
                 scene.Add(go);
-                go.Network.Spawn();
+                go.Network.SpawnSerialized();
                 return go;
             }).ToArray();
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
