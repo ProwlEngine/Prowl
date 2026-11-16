@@ -585,11 +585,16 @@ public class SceneViewPanel : DockPanel
                     SetGizmoMode(TransformTool.Universal);
             }
 
+            // Paper-space pointer to viewport-local via the cached viewport rect. CurrentParent here is an
+            // enclosing container (toolbar row etc.), so subtracting its origin put drops off to the side.
+            Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
+            var panelSize = new Float2(width, height);
+
             // Accept asset drops via registry-discovered handlers
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
             {
                 var dragPayload = (AssetDragPayload)DragDrop.Payload!;
-                ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(dragPayload.AssetType);
+                ISceneDropHandler? handler = SceneDrop.FindHandler(dragPayload);
 
                 if (handler != null)
                 {
@@ -603,6 +608,24 @@ public class SceneViewPanel : DockPanel
                         .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
+
+                UpdateDropPreview(scene, dragPayload, GetDropPosition(scene, _editorCamera!, mouseLocal, panelSize));
+            }
+            else
+            {
+                ClearDropPreview();
+            }
+
+            // An OS file drop over the viewport: remember where, so the files spawn here once imported.
+            if (isHovered && ExternalAssetDrop.IsResolvingDropTarget)
+            {
+                ExternalAssetDrop.SceneTarget = new SceneDropContext
+                {
+                    Scene = scene,
+                    Camera = _editorCamera!,
+                    MouseLocal = mouseLocal,
+                    PanelSize = panelSize,
+                };
             }
 
             if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
@@ -623,24 +646,9 @@ public class SceneViewPanel : DockPanel
                     return;
                 }
 
-                ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(assetDrop.AssetType);
-                if (handler != null)
-                {
-                    // Convert Paper-space pointer to viewport-local using the cached viewport
-                    // rect. CurrentParent here is an enclosing container (toolbar row etc.),
-                    // so subtracting its origin put the drop off to the side of the camera.
-                    Float2 mouseLocal = paper.PointerPos - new Float2(
-                        (float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
-
-                    handler.Handle(assetDrop, new SceneDropContext
-                    {
-                        Scene = scene,
-                        Camera = _editorCamera!,
-                        MouseLocal = mouseLocal,
-                        PanelSize = new Float2(width, height),
-                    });
+                var dropContext = new SceneDropContext { Scene = scene, Camera = _editorCamera!, MouseLocal = mouseLocal, PanelSize = panelSize };
+                if (SceneDrop.Drop(assetDrop, dropContext))
                     DragDrop.EndDrag();
-                }
             }
 
             // Floating transform-tools panel (top-left)
@@ -998,6 +1006,15 @@ public class SceneViewPanel : DockPanel
     /// </summary>
     internal static Float3 GetDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
+        Float3 p = RaycastDropPosition(scene, camera, screenPos, panelSize);
+        // Same toggle and Ctrl inversion as the move gizmo. Y stays on the surface hit so the drop doesn't sink into it.
+        float step = SceneTools.MoveSnap;
+        if (SceneTools.GridSnap == Input.IsCtrlPressed || step <= 0f) return p;
+        return new Float3(MathF.Round(p.X / step) * step, p.Y, MathF.Round(p.Z / step) * step);
+    }
+
+    private static Float3 RaycastDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
 
         // Try raycasting against scene objects first
@@ -1042,6 +1059,103 @@ public class SceneViewPanel : DockPanel
         if (!ShowGizmos) return;
         editor?.DrawSceneGizmos(scene);
         DrawSelectionGizmos();
+
+        // Faint outline of each drag preview's extent.
+        foreach ((GameObject ghost, _) in _dropGhosts)
+            if (ghost.IsValid() && TryGetWorldBounds(ghost, out Float3 min, out Float3 max))
+                Debug.DrawWireCube((min + max) * 0.5f, (max - min) * 0.5f, new Vector.Color(1f, 1f, 1f, 0.25f));
+    }
+
+    // Drag preview: hidden, unsaved, render-only copies of what the drop would spawn, following the cursor, each
+    // at its offset from the drop point. _dropGhostPayload/_dropGhostScene are remembered even when no ghost could
+    // be built, so it isn't retried every frame.
+    private readonly List<(GameObject Ghost, Float3 Offset)> _dropGhosts = [];
+    private AssetDragPayload? _dropGhostPayload;
+    private SceneInstance? _dropGhostScene;
+    private bool _dropGhostTouched;
+    private static readonly List<SceneViewPanel> s_ghostOwners = [];
+    private static Material? s_meshGhostMaterial;
+
+    private void UpdateDropPreview(SceneInstance scene, AssetDragPayload payload, Float3 dropPos)
+    {
+        _dropGhostTouched = true;
+        if (!ReferenceEquals(payload, _dropGhostPayload) || !ReferenceEquals(scene, _dropGhostScene))
+        {
+            ClearDropPreview();
+            _dropGhostPayload = payload;
+            _dropGhostScene = scene;
+            // Not in a playing world: the copies would join the running game.
+            if (!scene.IsPlaying)
+            {
+                foreach ((AssetDragPayload item, Float3 pos) in SceneDrop.Layout(payload, Float3.Zero))
+                {
+                    GameObject? ghost = BuildDropGhost(item.AssetGuid);
+                    if (ghost.IsNotValid()) continue;
+                    scene.Add(ghost);
+                    _dropGhosts.Add((ghost, pos));
+                }
+                if (_dropGhosts.Count > 0) s_ghostOwners.Add(this);
+            }
+        }
+        foreach ((GameObject ghost, Float3 offset) in _dropGhosts)
+            if (ghost.IsValid()) ghost.Transform.Position = dropPos + offset;
+    }
+
+    /// <summary>
+    /// Once per editor frame: drop the preview of any view that didn't draw a drag hover since the last sweep
+    /// (hidden behind another dock tab, say), so its copy can't linger in the scene.
+    /// </summary>
+    internal static void SweepDropGhosts()
+    {
+        for (int i = s_ghostOwners.Count - 1; i >= 0; i--)
+        {
+            SceneViewPanel owner = s_ghostOwners[i];
+            if (owner._dropGhostTouched) owner._dropGhostTouched = false;
+            else owner.ClearDropPreview();
+        }
+    }
+
+    private static GameObject? BuildDropGhost(Guid guid)
+    {
+        GameObject? ghost = Runtime.AssetDatabase.Get(guid) switch
+        {
+            PrefabAsset prefab when prefab.IsValid() => GameObject.InstantiateDetached(prefab),
+            Mesh mesh when mesh.IsValid() => MeshGhost(mesh),
+            _ => null,
+        };
+        if (ghost.IsValid()) HideGhost(ghost);
+        return ghost;
+
+        static GameObject MeshGhost(Mesh mesh)
+        {
+            var go = new GameObject(mesh.Name);
+            MeshRenderer r = go.AddComponent<MeshRenderer>();
+            r.Mesh = mesh;
+            if (s_meshGhostMaterial.IsNotValid()) s_meshGhostMaterial = new Material(Shader.LoadDefault(DefaultShader.Lit));
+            r.Material = s_meshGhostMaterial;
+            return go;
+        }
+
+        // Per object, not just the root: picking and drop raycasts test each object's own flags. Everything but
+        // renderers is disabled before the copy enters the scene, so lights, colliders, audio and [ExecuteAlways]
+        // scripts never wake up.
+        static void HideGhost(GameObject go)
+        {
+            go.HideFlags |= HideFlags.Hide | HideFlags.HideAndDontSave | HideFlags.NotEditable | HideFlags.NoGizmos;
+            foreach (Component c in go.GetComponents<Component>())
+                if (c is not IMaterialRenderer) c.Enabled = false;
+            foreach (GameObject child in go.Children) HideGhost(child);
+        }
+    }
+
+    private void ClearDropPreview()
+    {
+        foreach ((GameObject ghost, _) in _dropGhosts)
+            if (ghost.IsValid()) ghost.Destroy();
+        _dropGhosts.Clear();
+        _dropGhostPayload = null;
+        _dropGhostScene = null;
+        s_ghostOwners.Remove(this);
     }
 
     private void DrawSelectionGizmos()
@@ -1137,6 +1251,7 @@ public class SceneViewPanel : DockPanel
     {
         if (_wasGizmoActive) EndGizmoDrag();
         _editorCamera?.ReleaseFlight();
+        ClearDropPreview();
     }
 
     // The kind of transform the current drag turned out to be, or null before it has moved.

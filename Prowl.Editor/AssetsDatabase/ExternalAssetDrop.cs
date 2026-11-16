@@ -5,10 +5,12 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
@@ -26,7 +28,10 @@ public static class ExternalAssetDrop
     private static DateTime _forceProcessUntil = DateTime.MinValue;
     private static string[]? _resolving;
     private static int _resolveFrames;
-    private static readonly List<(EditorAssetBackend Db, Action<string[]> Handler, DateTime Deadline)> _reveals = [];
+    private static readonly List<Reveal> _reveals = [];
+
+    // A copied batch waiting on the watcher, with the in-project files dropped alongside it, so the whole drop is placed at once.
+    private sealed record Reveal(EditorAssetBackend Db, string DestRel, List<string> Copied, List<string> InProject, SceneDropContext? Scene, DateTime Deadline);
 
     /// <summary>
     /// True briefly after a drop, so the import pump runs even when ReimportOnFocusOnly
@@ -43,10 +48,13 @@ public static class ExternalAssetDrop
     /// <summary> Enqueues file paths from an external drop for deferred processing. </summary>
     public static void Enqueue(string[] paths) => _pending.Enqueue(paths);
 
+    /// <summary> Set by the scene view while a drop resolves over it; the dropped assets spawn there. </summary>
+    internal static SceneDropContext? SceneTarget;
+
     /// <summary> Processes one batch of dropped files per frame, resolving the hover target folder and copying files into the project. </summary>
     public static void ProcessPending()
     {
-        SweepReveals();
+        UpdateReveals();
 
         if (_resolving == null && _pending.IsEmpty) return;
 
@@ -64,16 +72,19 @@ public static class ExternalAssetDrop
             if (!_pending.TryDequeue(out _resolving)) return;
             _resolveFrames = 0;
             ProjectPanel.Instance?.ClearDropHover();
+            SceneTarget = null;
         }
         if (++_resolveFrames < 3) return;
 
         string[] paths = _resolving;
         _resolving = null;
-        try { HandleDrop(paths, ProjectPanel.Instance?.ExternalDropHoverFolder); }
+        SceneDropContext? sceneTarget = SceneTarget?.Freeze();
+        SceneTarget = null;
+        try { HandleDrop(paths, ProjectPanel.Instance?.ExternalDropHoverFolder, sceneTarget); }
         catch (Exception ex) { Runtime.Debug.LogError($"Failed to process dropped files: {ex.Message}"); }
     }
 
-    private static void HandleDrop(string[] paths, string? targetFolder)
+    private static void HandleDrop(string[] paths, string? targetFolder, SceneDropContext? sceneTarget)
     {
         EditorAssetBackend db = EditorAssetBackend.Instance!;
         string assetsPath = Project.Current!.AssetsPath;
@@ -96,17 +107,6 @@ public static class ExternalAssetDrop
             catch (Exception ex) { Runtime.Debug.LogError($"Failed to create folder '{dir}': {ex.Message}"); }
         }
 
-        // In-project sources aren't copied - only revealed.
-        if (plan.Files.Count == 0)
-        {
-            if (plan.AlreadyInProject.Count > 0)
-            {
-                Guid existing = db.PathToGuid(plan.AlreadyInProject[0]);
-                if (existing != Guid.Empty) Selection.Ping(existing);
-            }
-            return;
-        }
-
         var copied = new List<string>();
         foreach ((string srcAbs, string destAbs, string rel) in plan.Files)
         {
@@ -121,50 +121,71 @@ public static class ExternalAssetDrop
             }
         }
 
-        if (copied.Count == 0) return;
+        // In-project sources aren't copied. They're placed with the copied files once those import, so one drop is one grid.
+        if (copied.Count == 0)
+        {
+            Place(db, plan.AlreadyInProject, sceneTarget, ping: true);
+            return;
+        }
 
         // No import here. The watcher registers the whole batch before importing any of it
         // (so a model finds its sibling textures), and importing now would import twice.
         _forceProcessUntil = DateTime.UtcNow + TimeSpan.FromSeconds(5);
-        RegisterReveal(db, destRel, copied);
+        _reveals.Add(new Reveal(db, destRel, copied, plan.AlreadyInProject, sceneTarget, DateTime.UtcNow + TimeSpan.FromMinutes(2)));
     }
 
-    /// <summary>Ping and toast once the watcher has imported the copied batch.</summary>
-    private static void RegisterReveal(EditorAssetBackend db, string destRel, List<string> copied)
+    /// <summary>Spawn <paramref name="paths"/> on a scene drop; when that spawns nothing (or there's no scene target), ping the first if <paramref name="ping"/>.</summary>
+    private static void Place(EditorAssetBackend db, List<string> paths, SceneDropContext? sceneTarget, bool ping)
     {
-        var awaiting = new HashSet<string>(copied, StringComparer.OrdinalIgnoreCase);
-        Action<string[]>? onImported = null;
-        onImported = imported =>
-        {
-            string? first = Array.Find(imported, awaiting.Contains);
-            if (first == null) return;
-
-            db.OnAssetsImported -= onImported;
-            _reveals.RemoveAll(r => r.Handler == onImported);
-            // Ping only when the user is already viewing the destination - pinging navigates,
-            // and a drop targeted at another folder shouldn't yank them there.
-            Guid guid = db.PathToGuid(first);
-            if (guid != Guid.Empty && string.Equals(ProjectPanel.Instance?.CurrentFolder ?? "", destRel, StringComparison.OrdinalIgnoreCase))
-                Selection.Ping(guid);
-            Toasts.Show(
-                Loc.Get("toast.drop_imported"),
-                Loc.Get("toast.drop_imported_msg", new { count = copied.Count, folder = string.IsNullOrEmpty(destRel) ? "Assets" : destRel }),
-                ToastType.Success);
-        };
-        db.OnAssetsImported += onImported;
-        _reveals.Add((db, onImported, DateTime.UtcNow + TimeSpan.FromMinutes(2)));
+        if (paths.Count == 0) return;
+        if (sceneTarget is { } ctx && SpawnInScene(db, paths, ctx)) return;
+        if (!ping) return;
+        Guid guid = db.PathToGuid(paths[0]);
+        if (guid != Guid.Empty) Selection.Ping(guid);
     }
 
-    /// <summary>Detach reveals whose backend was replaced (its event will never fire again)
-    /// or whose files never imported before the deadline.</summary>
-    private static void SweepReveals()
+    /// <summary>Hand the assets to the scene view's drop handlers, as an internal drag would. False when nothing was handled.</summary>
+    private static bool SpawnInScene(EditorAssetBackend db, IEnumerable<string> paths, SceneDropContext ctx)
+    {
+        // The drop point and target were resolved in the scene dropped onto. If another scene is being edited by
+        // now (play mode, a scene switch), they mean nothing there: skip the spawn, the files are still imported.
+        if (!ReferenceEquals(ctx.Scene, EditorSceneManager.EditedWorld) || Runtime.EngineObjectExtensions.IsNotValid(ctx.Scene)) return false;
+
+        List<AssetEntry> entries = [.. paths.Select(p => db.GetEntry(p)).OfType<AssetEntry>()];
+        if (entries.Count == 0) return false;
+        AssetEntry first = entries[0];
+        return SceneDrop.Drop(new AssetDragPayload(first.Guid, Path.GetFileNameWithoutExtension(first.Path), first.MainAssetType,
+            [.. entries.Select(e => e.Guid)], [.. entries.Select(e => e.Path)]), ctx);
+    }
+
+    /// <summary>
+    /// Once every copied file is imported (or failed to), place the whole drop and toast. Drops a reveal whose backend
+    /// was replaced or whose files never all showed up before the deadline.
+    /// </summary>
+    private static void UpdateReveals()
     {
         for (int i = _reveals.Count - 1; i >= 0; i--)
         {
-            (EditorAssetBackend? db, Action<string[]>? handler, DateTime deadline) = _reveals[i];
-            if (ReferenceEquals(db, EditorAssetBackend.Instance) && DateTime.UtcNow < deadline) continue;
-            db.OnAssetsImported -= handler;
+            Reveal r = _reveals[i];
+            bool live = ReferenceEquals(r.Db, EditorAssetBackend.Instance);
+            // New entries start with NeedsReimport set; the importer clears it whether the import succeeds or fails.
+            // Checked before the deadline, so an import that itself outlasted the deadline still places the drop.
+            bool done = live && r.Copied.TrueForAll(p => r.Db.GetEntry(p) is { NeedsReimport: false });
+            if (!done)
+            {
+                if (!live || DateTime.UtcNow >= r.Deadline) _reveals.RemoveAt(i);
+                continue;
+            }
             _reveals.RemoveAt(i);
+
+            // Ping only when the user is already viewing the destination - pinging navigates,
+            // and a drop targeted at another folder shouldn't yank them there.
+            bool viewingDest = string.Equals(ProjectPanel.Instance?.CurrentFolder ?? "", r.DestRel, StringComparison.OrdinalIgnoreCase);
+            Place(r.Db, [.. r.Copied, .. r.InProject], r.Scene, viewingDest);
+            Toasts.Show(
+                Loc.Get("toast.drop_imported"),
+                Loc.Get("toast.drop_imported_msg", new { count = r.Copied.Count, folder = string.IsNullOrEmpty(r.DestRel) ? "Assets" : r.DestRel }),
+                ToastType.Success);
         }
     }
 
