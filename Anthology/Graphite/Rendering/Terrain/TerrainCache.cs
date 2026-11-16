@@ -42,6 +42,8 @@ internal sealed class TerrainCache : IDisposable
     private readonly InternalCompute _program;
     private readonly PropertySet _properties = new();
     private readonly Sampler _point, _linear;
+    private readonly Dictionary<SamplerDescription, Sampler> _layerSamplers = new();
+    private readonly ResourceFactory _factory;
 
     public TerrainCache(Renderer renderer, int levels, int size, double texel, int slots)
     {
@@ -57,6 +59,7 @@ internal sealed class TerrainCache : IDisposable
                 _levels[slot][i] = new Level();
         }
         ResourceFactory factory = renderer.Device.ResourceFactory;
+        _factory = factory;
         Albedo = factory.CreateTexture(TextureDescription.Texture2D((uint)size, (uint)size, 1, (uint)(levels * slots), PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Storage | TextureUsage.Sampled));
         Surface = factory.CreateTexture(TextureDescription.Texture2D((uint)size, (uint)size, 1, (uint)(levels * slots), PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Storage | TextureUsage.Sampled));
         Data = factory.CreateTexture(TextureDescription.Texture2D((uint)levels, (uint)slots, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
@@ -67,6 +70,9 @@ internal sealed class TerrainCache : IDisposable
         _linear = factory.CreateSampler(SamplerDescription.Linear);
         Current = new Frame(levels, slots);
     }
+
+    /// <summary>How the fills sample the layer textures, null for linear. Kept by description, made on the render thread.</summary>
+    public SamplerDescription? LayerSampler { get; set; }
 
     public int LevelCount { get; }
     public int Size { get; }
@@ -221,8 +227,9 @@ internal sealed class TerrainCache : IDisposable
         _properties.SetFloat4("_TerrainSpacing", new Float4((float)header.Spacing, layers?.Count ?? 0, 0, 0));
         if (layers != null)
         {
-            _properties.SetTexture("_TerrainAlbedo", layers.Albedo, _linear);
-            _properties.SetTexture("_TerrainSurface", layers.Surface, _linear);
+            Sampler sampler = LayerSamplerFor(LayerSampler);
+            _properties.SetTexture("_TerrainAlbedo", layers.Albedo, sampler);
+            _properties.SetTexture("_TerrainSurface", layers.Surface, sampler);
             _properties.SetTexture("_TerrainLayerData", layers.Data, _point);
         }
         cmd.SetComputeShader(_program.Program);
@@ -240,11 +247,22 @@ internal sealed class TerrainCache : IDisposable
         }
     }
 
+    private Sampler LayerSamplerFor(SamplerDescription? description)
+    {
+        if (description is not { } d)
+            return _linear;
+        if (!_layerSamplers.TryGetValue(d, out Sampler? sampler))
+            _layerSamplers[d] = sampler = _factory.CreateSampler(d);
+        return sampler;
+    }
+
     public void Dispose()
     {
         _program.Dispose();
         _point.Dispose();
         _linear.Dispose();
+        foreach (Sampler sampler in _layerSamplers.Values)
+            sampler.Dispose();
         Albedo.Dispose();
         Surface.Dispose();
         Data.Dispose();

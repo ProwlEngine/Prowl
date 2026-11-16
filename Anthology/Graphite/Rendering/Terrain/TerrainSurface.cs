@@ -127,6 +127,24 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     }
 
     /// <summary>
+    /// How the layer textures are sampled, both drawn directly and baked into the cache. Null for the default, anisotropic
+    /// when drawn and linear when baked. A point magnifying sampler keeps pixel art layers crisp.
+    /// </summary>
+    public SamplerDescription? LayerSampler
+    {
+        get => _layerSampler;
+        set
+        {
+            _layerSampler = value;
+            if (_cache != null)
+                _cache.LayerSampler = value;
+            Bind(_material);
+        }
+    }
+
+    private SamplerDescription? _layerSampler;
+
+    /// <summary>
     /// Whether the material cache is used once there are layers: levels of <see cref="CacheSize"/> texels a side, the
     /// finest <see cref="CacheTexel"/> metres a texel. Off, every pixel blends the layers itself.
     /// </summary>
@@ -220,7 +238,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         bool cached = UseCache && _layers != null;
         if (cached && _cache == null)
         {
-            _cache = new TerrainCache(_owner, CacheLevels, CacheSize, CacheTexel, _slotViews.Length);
+            _cache = new TerrainCache(_owner, CacheLevels, CacheSize, CacheTexel, _slotViews.Length) { LayerSampler = _layerSampler };
             Bind(_material);
             _world?.FrameFeatures.Add(_cacheFeature);
         }
@@ -539,8 +557,8 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         material.SetTexture("_TerrainControl", _pool.Control);
         if (_layers != null)
         {
-            material.SetTexture("_TerrainAlbedo", _layers.Albedo, SamplerDescription.Aniso4x);
-            material.SetTexture("_TerrainSurface", _layers.Surface, SamplerDescription.Aniso4x);
+            material.SetTexture("_TerrainAlbedo", _layers.Albedo, _layerSampler ?? SamplerDescription.Aniso4x);
+            material.SetTexture("_TerrainSurface", _layers.Surface, _layerSampler ?? SamplerDescription.Aniso4x);
             material.SetTexture("_TerrainLayerData", _layers.Data, SamplerDescription.Point);
         }
         if (_cache != null)
