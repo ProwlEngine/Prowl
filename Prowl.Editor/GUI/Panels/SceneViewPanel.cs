@@ -860,7 +860,7 @@ public class SceneViewPanel : DockPanel
 
     /// <summary>
     /// Select everything whose screen-projected bounds centre falls inside the marquee. Shift adds to
-    /// the selection, Ctrl toggles, plain replaces.
+    /// the selection, Ctrl removes from it, plain replaces.
     /// </summary>
     private void ApplyMarquee(SceneInstance scene, Float2 panelSize)
     {
@@ -889,7 +889,7 @@ public class SceneViewPanel : DockPanel
 
         foreach (GameObject target in targets)
         {
-            if (_handles.Ctrl) Selection.ToggleSelection(target);
+            if (_handles.Ctrl) Selection.RemoveFromSelection(target);
             else Selection.AddToSelection(target);
         }
     }
@@ -924,8 +924,10 @@ public class SceneViewPanel : DockPanel
 
         if (picked.IsValid())
         {
-            GameObject target = SelectionTarget(picked, toggling: Input.IsCtrlPressed);
-            if (Input.IsCtrlPressed)
+            // Shift and Ctrl both add or remove the clicked object, as in Unity
+            bool toggling = Input.IsCtrlPressed || Input.IsShiftPressed;
+            GameObject target = SelectionTarget(picked, toggling);
+            if (toggling)
                 Selection.ToggleSelection(target);
             else
                 Selection.Select(target);
