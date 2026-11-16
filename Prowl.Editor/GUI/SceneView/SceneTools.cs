@@ -110,9 +110,10 @@ public static class SceneTools
     {
         if (value > 0f && value < 1f)
         {
-            float inverse = 1f / value;
-            int denominator = (int)MathF.Round(inverse);
-            if (denominator >= 2 && System.Numerics.BitOperations.IsPow2(denominator) && MathF.Abs(inverse - denominator) < 1e-3f)
+            // Exact, so a nearby size such as 0.4999 keeps showing what it really snaps to. One over a power of
+            // two is exact in a float, and MoveSnap's rounding to six places leaves every step down to 1/64 exact.
+            int denominator = (int)MathF.Round(1f / value);
+            if (denominator >= 2 && System.Numerics.BitOperations.IsPow2(denominator) && value == 1f / denominator)
                 return $"'1/{denominator}'";
         }
         return "0.######";

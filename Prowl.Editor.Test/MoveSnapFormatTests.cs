@@ -16,6 +16,8 @@ public class MoveSnapFormatTests
     [InlineData(128f, "128")]
     [InlineData(0.3f, "0.3")]
     [InlineData(0.75f, "0.75")]
+    [InlineData(0.4999f, "0.4999")]
+    [InlineData(0.0626f, "0.0626")]
     public void GridSizeShowsAsFractionOnlyForHalvingSteps(float value, string expected)
     {
         Assert.Equal(expected, value.ToString(SceneTools.MoveSnapFormat(value), CultureInfo.InvariantCulture));
