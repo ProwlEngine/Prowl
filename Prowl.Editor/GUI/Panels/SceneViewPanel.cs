@@ -179,7 +179,7 @@ public class SceneViewPanel : DockPanel
                     () => SceneTools.GridSnap = !SceneTools.GridSnap);
                 HeaderField(paper, font, "sv_hdr_grid", MoveSnapLabels, () =>
                     Origami.NumericField<float>(paper, "sv_hdr_grid_field", SceneTools.MoveSnap, v => SceneTools.MoveSnap = v)
-                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format(SceneTools.MoveSnapFormat(SceneTools.MoveSnap)).Show());
+                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format(SceneTools.CurrentMoveSnapFormat).Show());
                 HeaderStepper(paper, font, "sv_hdr_grid_step", SceneTools.StepMoveSnap);
             }
 

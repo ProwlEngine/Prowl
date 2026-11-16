@@ -118,6 +118,23 @@ public static class SceneTools
         return "0.######";
     }
 
+    /// <summary><see cref="MoveSnapFormat"/> for the current <see cref="MoveSnap"/>, worked out again only when the size changes.</summary>
+    public static string CurrentMoveSnapFormat
+    {
+        get
+        {
+            // NaN never equals a size, so the first read always fills it.
+            if (s_formatSnap != _moveSnap)
+            {
+                s_formatSnap = _moveSnap;
+                s_format = MoveSnapFormat(_moveSnap);
+            }
+            return s_format;
+        }
+    }
+    private static float s_formatSnap = float.NaN;
+    private static string s_format = "";
+
     /// <summary>Doubles (<paramref name="direction"/> above zero) or halves the grid size, so it stays on powers of two.</summary>
     public static void StepMoveSnap(int direction)
         => MoveSnap = direction > 0 ? MoveSnap * 2f : direction < 0 ? MoveSnap / 2f : MoveSnap;
