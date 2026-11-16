@@ -681,9 +681,11 @@ public class HierarchyPanel : DockPanel
 
     private void DrawToolbar(Paper paper, Scribe.FontFile font, float width)
     {
+        // Clicks in the toolbar are not background clicks, so they keep the selection
         using (paper.Row("hier_toolbar")
             .Height(ToolbarHeight)
             .Margin(4, 4, 4, 0)
+            .StopEventPropagation()
             .Enter())
         {
             using (paper.Row("hier_search_wrap")
