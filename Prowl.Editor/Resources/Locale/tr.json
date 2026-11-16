@@ -50,6 +50,7 @@
   "scene.camera_near": "Yakin kirpma",
   "scene.camera_far": "Uzak kirpma",
   "scene.camera_speed": "Ucus hizi",
+  "scene.camera_smoothing": "Ucus yumusatma",
   "scene.camera_reset": "Sifirla",
   "scene.tool_handles": "Tutamaclar",
   "scene.tool_move": "Tasi",

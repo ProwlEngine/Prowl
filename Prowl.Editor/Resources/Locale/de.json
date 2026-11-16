@@ -50,6 +50,7 @@
   "scene.camera_near": "Nahe Schnittebene",
   "scene.camera_far": "Ferne Schnittebene",
   "scene.camera_speed": "Fluggeschwindigkeit",
+  "scene.camera_smoothing": "Flugglaettung",
   "scene.camera_reset": "Zuruecksetzen",
   "scene.tool_handles": "Werkzeuggriffe",
   "scene.tool_move": "Verschieben",

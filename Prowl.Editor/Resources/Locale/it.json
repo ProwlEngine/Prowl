@@ -50,6 +50,7 @@
   "scene.camera_near": "Piano vicino",
   "scene.camera_far": "Piano lontano",
   "scene.camera_speed": "Velocita di volo",
+  "scene.camera_smoothing": "Fluidita di volo",
   "scene.camera_reset": "Ripristina",
   "scene.tool_handles": "Maniglie",
   "scene.tool_move": "Sposta",
