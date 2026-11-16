@@ -533,7 +533,7 @@ public class EditorCamera
     {
         if (_moveTarget is not { } target) return;
 
-        _position = SmoothDamp(_position, target, ref _moveVelocity, _moveSmoothing, dt);
+        _position = Maths.SmoothDamp(_position, target, ref _moveVelocity, _moveSmoothing, float.PositiveInfinity, dt);
 
         if (Float3.LengthSquared(_position - target) < 1e-6f)
         {
@@ -548,18 +548,6 @@ public class EditorCamera
     {
         _moveTarget = null;
         _moveVelocity = Float3.Zero;
-    }
-
-    /// <summary>Implicit integration of a critically damped spring; a zero smooth time jumps straight to the target.</summary>
-    private static Float3 SmoothDamp(Float3 current, Float3 target, ref Float3 velocity, float smoothTime, float dt)
-    {
-        if (smoothTime <= 0f) return target;
-        if (dt <= 0f) return current;
-
-        float omega = MathF.Tau / smoothTime;
-        float denom = 1f + omega * dt;
-        velocity = (velocity - (omega * omega) * dt * (current - target)) / (denom * denom);
-        return current + velocity * dt;
     }
 
     /// <summary>Releases a mid-gesture flight whose owning panel closed before RMB went up; without this
