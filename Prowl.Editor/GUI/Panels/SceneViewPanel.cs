@@ -166,9 +166,10 @@ public class SceneViewPanel : DockPanel
             {
                 HeaderToggle(paper, font, "sv_hdr_rot_snap", EditorIcons.ArrowsRotate, Loc.Get("scene.rotation_snap"), SceneTools.RotationSnap,
                     () => SceneTools.RotationSnap = !SceneTools.RotationSnap);
-                HeaderField(paper, "sv_hdr_rot", () =>
+                // "45°" does not parse, but the field selects all on focus, so typing replaces the whole value.
+                HeaderField(paper, font, "sv_hdr_rot", RotateSnapLabels, () =>
                     Origami.NumericField<float>(paper, "sv_hdr_rot_field", SceneTools.RotateSnap, v => SceneTools.RotateSnap = v)
-                        .Min(SceneTools.MinRotateSnap).Max(SceneTools.MaxRotateSnap).Format("0.##").Suffix("°").Show());
+                        .Min(SceneTools.MinRotateSnap).Max(SceneTools.MaxRotateSnap).Format(SceneTools.RotateSnapFormat).Show());
                 HeaderStepper(paper, font, "sv_hdr_rot_step", SceneTools.StepRotateSnap);
             }
 
@@ -176,9 +177,9 @@ public class SceneViewPanel : DockPanel
             {
                 HeaderToggle(paper, font, "sv_hdr_grid_snap", EditorIcons.TableCells, Loc.Get("scene.grid_snap"), SceneTools.GridSnap,
                     () => SceneTools.GridSnap = !SceneTools.GridSnap);
-                HeaderField(paper, "sv_hdr_grid", () =>
+                HeaderField(paper, font, "sv_hdr_grid", MoveSnapLabels, () =>
                     Origami.NumericField<float>(paper, "sv_hdr_grid_field", SceneTools.MoveSnap, v => SceneTools.MoveSnap = v)
-                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format("0.######").Show());
+                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format(SceneTools.MoveSnapFormat(SceneTools.MoveSnap)).Show());
                 HeaderStepper(paper, font, "sv_hdr_grid_step", SceneTools.StepMoveSnap);
             }
 
@@ -229,14 +230,37 @@ public class SceneViewPanel : DockPanel
     private static void StepperArrow(Paper paper, Scribe.FontFile font, string id, string glyph, Action onClick)
         => paper.Box(id).Width(12).Height(ToggleSize / 2f).Rounded(2)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Cursor(PaperCursor.Pointer)
             .Text(glyph, font).TextColor(EditorTheme.Ink300).FontSize(9f).Alignment(TextAlignment.MiddleCenter)
             .IsNotFocusable()
             .OnClick(_ => onClick());
 
-    // A compact value field beside a toggle.
-    private static void HeaderField(Paper paper, string id, Action drawField)
+    // Every value the steppers move between, as the fields show them.
+    private static readonly string[] RotateSnapLabels =
+        [.. SceneTools.RotateSnapSteps.Select(v => v.ToString(SceneTools.RotateSnapFormat))];
+    private static readonly string[] MoveSnapLabels =
+        [.. Enumerable.Range(0, 14).Select(i => SceneTools.MinMoveSnap * MathF.Pow(2, i))
+            .Where(v => v <= SceneTools.MaxMoveSnap).Select(v => v.ToString(SceneTools.MoveSnapFormat(v)))];
+
+    // Widths already measured, keyed by field and font size.
+    private static readonly Dictionary<(string, float), float> s_headerFieldWidths = [];
+
+    // A compact value field beside a toggle, wide enough for the widest of its stepper values, so the width stays put
+    // and the stepper beside it does not shift while clicking through. Measured against the numeric field's own
+    // layout: monospace text inside a 1px border, 8 before the text and a 6 end pad after it, plus a couple of
+    // pixels so the caret does not scroll the text.
+    private static void HeaderField(Paper paper, Scribe.FontFile font, string id, string[] labels, Action drawField)
     {
-        using (paper.Row(id).Width(60).Height(ToggleSize).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+        float fontSize = Origami.Current.Metrics.FontSize;
+        if (!s_headerFieldWidths.TryGetValue((id, fontSize), out float width))
+        {
+            Scribe.FontFile mono = Origami.Current.Mono ?? font;
+            float text = labels.Max(l => (float)paper.MeasureText(l, fontSize, mono).X);
+            width = MathF.Ceiling(1f + 8f + text + 6f + 1f + 2f);
+            s_headerFieldWidths[(id, fontSize)] = width;
+        }
+
+        using (paper.Row(id).Width(width).Height(ToggleSize).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             drawField();
     }
 

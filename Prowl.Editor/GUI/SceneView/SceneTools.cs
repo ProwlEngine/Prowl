@@ -101,12 +101,35 @@ public static class SceneTools
         set => _moveSnap = float.IsFinite(value) ? Math.Clamp(Clean(value), MinMoveSnap, MaxMoveSnap) : _moveSnap;
     }
 
+    /// <summary>
+    /// Number format that shows a grid size below 1 as a fraction (1/16 rather than 0.0625) when it is one over a
+    /// power of two, which every halving step is. Anything else shows as a plain decimal.
+    /// </summary>
+    /// <remarks>The fraction is a quoted literal, which a custom numeric format prints as is; typing it back in parses as division.</remarks>
+    public static string MoveSnapFormat(float value)
+    {
+        if (value > 0f && value < 1f)
+        {
+            float inverse = 1f / value;
+            int denominator = (int)MathF.Round(inverse);
+            if (denominator >= 2 && System.Numerics.BitOperations.IsPow2(denominator) && MathF.Abs(inverse - denominator) < 1e-3f)
+                return $"'1/{denominator}'";
+        }
+        return "0.######";
+    }
+
     /// <summary>Doubles (<paramref name="direction"/> above zero) or halves the grid size, so it stays on powers of two.</summary>
     public static void StepMoveSnap(int direction)
         => MoveSnap = direction > 0 ? MoveSnap * 2f : direction < 0 ? MoveSnap / 2f : MoveSnap;
 
     /// <summary>Smallest and largest rotation increment, in degrees.</summary>
     public const float MinRotateSnap = 0.25f, MaxRotateSnap = 180f;
+
+    /// <summary>
+    /// Number format for the rotation increment. The degree sign is a literal in the format rather than a field
+    /// suffix, which Origami pads far from the border.
+    /// </summary>
+    public const string RotateSnapFormat = "0.##°";
 
     /// <summary>The rotation increments the stepper moves between, in degrees.</summary>
     public static readonly float[] RotateSnapSteps = [0.25f, 0.5f, 1f, 5f, 15f, 30f, 45f, 90f, 180f];
