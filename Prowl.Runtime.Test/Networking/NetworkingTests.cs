@@ -257,9 +257,12 @@ public sealed class FakePeer : IDisposable
     public List<(ushort Id, byte Channel)> Channels { get; } = new();
 
     public static FakePeer Join(LocalNetwork network, string name, NetSessionOptions? options = null) =>
-        new(NetSession.Join(new LocalTransport(network, name), "host", name, options: options));
+        new(NetSession.Join(new LocalTransport(network, name), "host", name, options: options ?? SchemaOptions));
 
-    public static FakePeer Host(LocalNetwork network) => new(NetSession.Host(new LocalTransport(network, "host"), "FakeHost"));
+    public static FakePeer Host(LocalNetwork network) => new(NetSession.Host(new LocalTransport(network, "host"), "FakeHost", SchemaOptions));
+
+    /// <summary>Options with the app version the engine sends, so a bare session can join or host it.</summary>
+    public static NetSessionOptions SchemaOptions => new() { AppVersion = NetworkSchema.AppVersion(0) };
 
     private static byte[] ReadEnginePayload(ushort id, ref NetReader reader)
     {

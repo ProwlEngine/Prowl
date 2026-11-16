@@ -69,18 +69,17 @@ public static partial class Networking
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
+        NetSessionOptions session = WithSchema(options);
         PrepareTransport(transport);
         try
         {
             if (s_transport is not ThreadedTransport worker)
             {
-                return AttachSession(
-                    NetSession.Host(transport, name, options ?? s_configuration.CreateSessionOptions()));
+                return AttachSession(NetSession.Host(transport, name, session));
             }
 
             worker.Listen();
-            return AttachSession(NetSession.CreateHost(worker, name,
-                options ?? s_configuration.CreateSessionOptions()));
+            return AttachSession(NetSession.CreateHost(worker, name, session));
         }
         catch
         {
@@ -96,18 +95,25 @@ public static partial class Networking
         BeginSession();
         NetworkSystem.ValidateSceneMessageLimit(options);
         using FrameStatScope stats = FrameStats.Network.Scope();
+        NetSessionOptions session = WithSchema(options);
         PrepareTransport(transport);
         try
         {
             return AttachSession(s_transport is not ThreadedTransport worker
-                ? NetSession.Join(transport, address, name, token, options ?? s_configuration.CreateSessionOptions())
-                : NetSession.CreateClient(worker.Connect(address), name, token,
-                    options ?? s_configuration.CreateSessionOptions()));
+                ? NetSession.Join(transport, address, name, token, session)
+                : NetSession.CreateClient(worker.Connect(address), name, token, session));
         }
         catch
         {
             Shutdown();
             throw;
         }
+    }
+
+    private static NetSessionOptions WithSchema(NetSessionOptions? options)
+    {
+        NetSessionOptions session = options ?? s_configuration.CreateSessionOptions();
+        session.AppVersion = NetworkSchema.AppVersion(session.AppVersion);
+        return session;
     }
 }

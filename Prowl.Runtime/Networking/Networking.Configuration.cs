@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Security.Cryptography;
 
 using Prowl.Courier;
 using Prowl.Courier.Transports.Kcp;
@@ -18,6 +19,15 @@ public static partial class Networking
     public static NetworkConfiguration Configuration => s_configuration.ValidatedCopy();
 
     internal static NetworkConfiguration TransformConfiguration => System?.Configuration ?? s_configuration;
+
+    /// <summary>
+    ///     A P-256 key the host signs encrypted handshakes with, so clients holding its public key as
+    ///     <see cref="NetworkConfiguration.TrustedHostKey" /> know it is genuine. Keep it out of client builds.
+    /// </summary>
+    public static ECDsa? HostSigningKey { get; set; }
+
+    /// <summary>A secret of at least 16 bytes, kept across host restarts, so encrypted clients of a previous run learn it ended.</summary>
+    public static byte[]? HostResetKey { get; set; }
 
     /// <summary>Applies replication timing now; transport and session options apply to subsequent sessions.</summary>
     public static void Configure(NetworkConfiguration configuration)
@@ -38,7 +48,15 @@ public static partial class Networking
                 hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString());
         }
 
-        return new KcpTransport(s_configuration.CreateKcpOptions());
+        KcpTransportOptions options = s_configuration.CreateKcpOptions();
+        if (hosting && options.Encryption is { } encryption)
+        {
+            encryption.TrustedHostKey = null;
+            encryption.SigningKey = HostSigningKey;
+            encryption.ResetKey = HostResetKey;
+        }
+
+        return new KcpTransport(options);
     }
 
     /// <summary>Hosts using the project's transport and session defaults.</summary>

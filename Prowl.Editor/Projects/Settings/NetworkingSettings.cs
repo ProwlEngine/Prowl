@@ -54,6 +54,14 @@ public sealed class NetworkingSettings : ProjectSettingsBase
             Number(paper, "connect", "Connect Timeout (s)", Configuration.ConnectTimeoutSeconds, v => Configuration.ConnectTimeoutSeconds = v, 0.1f, 300);
             Number(paper, "timeout", "Connection Timeout (s)", Configuration.TimeoutSeconds, v => Configuration.TimeoutSeconds = v, 0.1f, 300);
             Number(paper, "ping", "Ping Interval (s)", Configuration.PingIntervalSeconds, v => Configuration.PingIntervalSeconds = v, 0.05f, 60);
+            Integer(paper, "sendrate", "Max Send Rate (bytes/s, 0 = no limit)", Configuration.MaxSendRate, v => Configuration.MaxSendRate = v, 0, int.MaxValue);
+            Toggle(paper, "encryption", "Encryption", Configuration.Encryption, v => Configuration.Encryption = v);
+            if (Configuration.Encryption)
+            {
+                EditorGUI.SettingsTextField(paper, "netsettings_trustedkey", "Trusted Host Key (base64)", Configuration.TrustedHostKey,
+                    v => { Configuration.TrustedHostKey = v; Changed(); });
+                Origami.Label(paper, "netsettings_encryption_note", "Hosts sign with Networking.HostSigningKey, set from code. Never ship that private key to clients.").Show();
+            }
         }
 
         Header(paper, "session", "Session");

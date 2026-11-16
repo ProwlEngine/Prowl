@@ -69,6 +69,9 @@ public class MultiplayerPlayTests : EditorTestHarness
         KcpTransportOptions options = Networking.Configuration.CreateKcpOptions();
         options.Port = 0;
         Transport transport = new KcpTransport(options);
+        // The live build first, as the editor lists it, so earlier tests' builds stay out of the schema.
+        Func<IEnumerable<Assembly>> assemblies = RuntimeUtils.AssemblySource;
+        RuntimeUtils.AssemblySource = () => assemblies().Prepend(scripts);
         Networking.Host(transport, "Host");
         int port = Networking.LocalPort;
 
@@ -113,6 +116,7 @@ public class MultiplayerPlayTests : EditorTestHarness
         finally
         {
             Networking.Shutdown();
+            RuntimeUtils.AssemblySource = assemblies;
             if (!instance.HasExited)
                 instance.Kill();
             beaconObject?.Dispose();

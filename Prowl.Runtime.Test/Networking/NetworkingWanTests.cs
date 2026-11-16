@@ -36,7 +36,7 @@ public sealed class NetworkingWanTests : RuntimeTestBase
             for (int round = 0; round < rounds; round++)
             {
                 using Transport transport = Stack(round + 100);
-                using NetSession session = NetSession.Join(transport, $"127.0.0.1:{Networking.Networking.LocalPort}", "client");
+                using NetSession session = NetSession.Join(transport, $"127.0.0.1:{Networking.Networking.LocalPort}", "client", options: FakePeer.SchemaOptions);
                 void Pump() { Networking.Networking.Receive(); session.Update(); Networking.Networking.Flush(); }
                 Until(() => session.State == SessionState.Active && server.Peers.Count == 2, Pump);
                 ordered.Clear();

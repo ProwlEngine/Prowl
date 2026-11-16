@@ -18,7 +18,7 @@ public partial class NetworkingTests
         MakeCurrent(CreateScene());
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer small = FakePeer.Join(network, "small", new NetSessionOptions { MaxMessageSize = 64 });
+        using FakePeer small = FakePeer.Join(network, "small", FakePeer.SchemaOptions with { MaxMessageSize = 64 });
         SessionEndReason? reason = null;
         small.Session.Ended += (r, _) => reason = r;
         try
@@ -39,7 +39,7 @@ public partial class NetworkingTests
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer small = FakePeer.Join(network, "small", new NetSessionOptions { MaxMessageSize = 256 });
+        using FakePeer small = FakePeer.Join(network, "small", FakePeer.SchemaOptions with { MaxMessageSize = 256 });
         SessionEndReason? reason = null;
         small.Session.Ended += (r, _) => reason = r;
         try
@@ -58,7 +58,7 @@ public partial class NetworkingTests
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer small = FakePeer.Join(network, "small", new NetSessionOptions { MaxMessageSize = 4096 });
+        using FakePeer small = FakePeer.Join(network, "small", FakePeer.SchemaOptions with { MaxMessageSize = 4096 });
         using FakePeer wide = FakePeer.Join(network, "wide");
         SessionEndReason? reason = null;
         small.Session.Ended += (r, _) => reason = r;
@@ -82,7 +82,7 @@ public partial class NetworkingTests
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer small = FakePeer.Join(network, "small", new NetSessionOptions { MaxMessageSize = 2048 });
+        using FakePeer small = FakePeer.Join(network, "small", FakePeer.SchemaOptions with { MaxMessageSize = 2048 });
         try
         {
             Pump(() => small.IsReady, small);
@@ -111,7 +111,7 @@ public partial class NetworkingTests
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer small = FakePeer.Join(network, "small", new NetSessionOptions { MaxMessageSize = 4096 });
+        using FakePeer small = FakePeer.Join(network, "small", FakePeer.SchemaOptions with { MaxMessageSize = 4096 });
         using FakePeer alice = FakePeer.Join(network, "alice");
         SessionEndReason? reason = null;
         small.Session.Ended += (r, _) => reason = r;

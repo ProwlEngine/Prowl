@@ -79,8 +79,31 @@ public static partial class Networking
                 ? $"[Network] Session ended: {reason}."
                 : $"[Network] Session ended: {reason}: {message}");
         };
+        if (session.IsHost)
+        {
+            session.JoinRequested += OnJoinRequested;
+        }
+
         System.Attach(session);
         return session;
+    }
+
+    /// <summary>
+    ///     Host: a client asks to join, having passed the version and capacity checks. Call Accept or Reject on it now
+    ///     or later. With no handler, every client is let in.
+    /// </summary>
+    public static event Action<PendingJoin>? JoinRequested;
+
+    private static void OnJoinRequested(PendingJoin pending)
+    {
+        if (JoinRequested == null)
+        {
+            pending.Accept();
+        }
+        else
+        {
+            JoinRequested(pending);
+        }
     }
 
     /// <summary>Leaves the session, or ends it for everyone when hosting. Safe to call repeatedly.</summary>

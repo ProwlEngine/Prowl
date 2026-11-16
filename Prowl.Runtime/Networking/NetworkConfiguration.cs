@@ -8,10 +8,20 @@ namespace Prowl.Runtime.Networking;
 /// <summary>Serializable project defaults. Explicit transports and session options can override these per session.</summary>
 public sealed class NetworkConfiguration
 {
+    /// <summary>The game's version. Sessions mix in a hash of every networked member, so builds that differ there can't join either.</summary>
     public uint AppVersion;
     public bool BatchMessages = true;
     public bool CongestionControl;
     public float ConnectTimeoutSeconds = 5;
+
+    /// <summary>Encrypts and authenticates KCP traffic. Hosts and clients must agree.</summary>
+    public bool Encryption;
+
+    /// <summary>
+    ///     Base64 public key of the host's <see cref="Networking.HostSigningKey" />. When set, encrypted clients refuse
+    ///     a host that can't prove it holds that key.
+    /// </summary>
+    public string TrustedHostKey = "";
     public NetworkExecution Execution = NetworkExecution.Auto;
     public int FastResend = 2;
     public float InterpolationMilliseconds = 100;
@@ -40,6 +50,9 @@ public sealed class NetworkConfiguration
     public int MaxMessageSize = 16 * 1024 * 1024;
     public int MaxPeers = 64;
     public int MaxRetransmits = 40;
+
+    /// <summary>Most bytes per second each KCP connection sends, or 0 for no limit.</summary>
+    public int MaxSendRate;
 
     /// <summary>Maximum decompressed Echo bytes in one scene snapshot or spawned object.</summary>
     public int MaxSnapshotDecompressedBytes = 64 * 1024 * 1024;
@@ -121,6 +134,8 @@ public sealed class NetworkConfiguration
         copy.PingIntervalSeconds = Limit(copy.PingIntervalSeconds, 0.05f, 60, 1);
         // Keep the conservative default IP packet size; custom transports may use smaller payloads.
         copy.Mtu = Math.Clamp(copy.Mtu, 1200, 65507);
+        copy.MaxSendRate = copy.MaxSendRate <= 0 ? 0 : Math.Max(copy.MaxSendRate, copy.Mtu);
+        copy.TrustedHostKey ??= "";
         copy.UpdateIntervalMilliseconds = Math.Clamp(copy.UpdateIntervalMilliseconds, 10, 5000);
         copy.FastResend = Math.Clamp(copy.FastResend, 0, 255);
         copy.SendWindow = Math.Clamp(copy.SendWindow, 1, 65535);
@@ -184,6 +199,15 @@ public sealed class NetworkConfiguration
             ConnectTimeout = TimeSpan.FromSeconds(c.ConnectTimeoutSeconds),
             Timeout = TimeSpan.FromSeconds(c.TimeoutSeconds),
             PingInterval = TimeSpan.FromSeconds(c.PingIntervalSeconds),
+            MaxSendRate = c.MaxSendRate,
+            Encryption = c.Encryption
+                ? new KcpEncryption
+                {
+                    TrustedHostKey = string.IsNullOrWhiteSpace(c.TrustedHostKey)
+                        ? null
+                        : Convert.FromBase64String(c.TrustedHostKey)
+                }
+                : null,
             Reliability =
                 new KcpReliabilityOptions
                 {

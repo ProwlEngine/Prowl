@@ -31,6 +31,27 @@ public class NetworkConfigurationTests : RuntimeTestBase
         Assert.Equal(0.0001f, normalized.TransformScaleThreshold);
     }
 
+    [Fact]
+    public void SendRateAndEncryptionReachTheKcpTransport()
+    {
+        using System.Security.Cryptography.ECDsa key =
+            System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        byte[] publicKey = key.ExportSubjectPublicKeyInfo();
+        KcpTransportOptions options = new NetworkConfiguration
+        {
+            MaxSendRate = 50_000,
+            Encryption = true,
+            TrustedHostKey = Convert.ToBase64String(publicKey)
+        }.CreateKcpOptions();
+        Assert.Equal(50_000, options.MaxSendRate);
+        Assert.Equal(publicKey, options.Encryption!.TrustedHostKey);
+
+        Assert.Null(new NetworkConfiguration().CreateKcpOptions().Encryption);
+        Assert.Null(new NetworkConfiguration { Encryption = true }.CreateKcpOptions().Encryption!.TrustedHostKey);
+        Assert.Equal(0, new NetworkConfiguration { MaxSendRate = -5 }.ValidatedCopy().MaxSendRate);
+        Assert.Equal(1200, new NetworkConfiguration { MaxSendRate = 100 }.ValidatedCopy().MaxSendRate);
+    }
+
     [Theory]
     [InlineData(NetworkExecution.Auto, false)]
     [InlineData(NetworkExecution.Inline, false)]
@@ -147,7 +168,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
             NetSession session = Networking.Networking.Host();
             Assert.IsType<LocalTransport>(session.Transport);
             Assert.Equal(3, session.Options.MaxPeers);
-            Assert.Equal(17u, session.Options.AppVersion);
+            Assert.Equal(NetworkSchema.AppVersion(17), session.Options.AppVersion);
             Assert.Equal(20, Networking.Networking.TickRate);
             Assert.Equal(75, Networking.Networking.InterpolationDelay.TotalMilliseconds);
             NetworkConfiguration changed = Networking.Networking.Configuration;
@@ -165,7 +186,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
         var config = new NetworkConfiguration { Port = 0, ProtocolId = 1234, AppVersion = 12,
             BatchMessages = false, Execution = NetworkExecution.Inline };
         using var transport = new KcpTransport(config.CreateKcpOptions());
-        using NetSession host = NetSession.Host(transport, options: config.CreateSessionOptions());
+        using NetSession host = NetSession.Host(transport, options: config.CreateSessionOptions() with { AppVersion = NetworkSchema.AppVersion(12) });
         config.Port = transport.LocalPort;
         try
         {
@@ -179,7 +200,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
                 Thread.Sleep(1);
             }
             Assert.True(Networking.Networking.IsActive);
-            Assert.Equal(12u, client.Options.AppVersion);
+            Assert.Equal(NetworkSchema.AppVersion(12), client.Options.AppVersion);
             Assert.NotEqual(transport.LocalPort, ((KcpTransport)client.Transport).LocalPort);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
@@ -198,7 +219,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
             var config = new NetworkConfiguration { Port = 0, BatchMessages = batching, Execution = threaded ? NetworkExecution.DedicatedThread : NetworkExecution.Inline };
             Networking.Networking.Configure(config);
             using Transport transport = Networking.Networking.CreateTransport(true);
-            using NetSession host = NetSession.Host(transport);
+            using NetSession host = NetSession.Host(transport, options: FakePeer.SchemaOptions);
             config.Port = transport.LocalPort;
             Networking.Networking.Configure(config);
             NetSession client = Networking.Networking.Join("127.0.0.1", "client");
