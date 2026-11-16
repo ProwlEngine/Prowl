@@ -28,9 +28,11 @@ namespace Prowl.Editor.Inspector;
 public static class GameObjectInspector
 {
     public static void Draw(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
-        => Draw(paper, font, go, null);
+        => Draw(paper, font, go, null, null);
 
-    public static void Draw(Paper paper, Prowl.Scribe.FontFile font, GameObject go, Rect? viewportRect)
+    /// <param name="viewportRect">The visible bounds a component drop is hit-tested against.</param>
+    /// <param name="layout">The calling panel's own layout state; pass the same instance every frame.</param>
+    public static void Draw(Paper paper, Prowl.Scribe.FontFile font, GameObject go, Rect? viewportRect, ComponentLayout? layout)
     {
         // Prefab header bar (if this GO is a prefab instance)
         if (go.IsPrefabInstance)
@@ -48,7 +50,7 @@ public static class GameObjectInspector
         }
 
         EditorGUI.Divider(paper, "gi_sep_transform", 6f);
-        DrawComponents(paper, font, go, viewportRect);
+        DrawComponents(paper, font, go, viewportRect, layout ?? s_sharedLayout);
 
         // Prefab instances included: a component added to an instance belongs to that instance and
         // is carried across refreshes. What a prefab instance cannot do is restructure the source.
@@ -807,9 +809,19 @@ public static class GameObjectInspector
     // its component(s). Both resolve to a slot between the visible components, measured against the
     // previous frame's layout (an immediate-mode UI only knows rects after layout has run).
 
-    private static Guid s_layoutGameObject;
-    private static Rect s_layoutArea;
-    private static Rect[] s_layoutRects = [];
+    /// <summary>
+    /// Where the component sections landed last frame. Each Inspector panel owns one, so several
+    /// panels (or a panel drawn in several places) never overwrite each other's slot targeting.
+    /// </summary>
+    public sealed class ComponentLayout
+    {
+        internal Guid GameObject;
+        internal Rect Area;
+        internal Rect[] Rects = [];
+    }
+
+    // Used by callers that do not supply their own layout (the 3-argument Draw).
+    private static readonly ComponentLayout s_sharedLayout = new();
 
     /// <summary>What releasing the current drag over the component list would do.</summary>
     /// <param name="Moving">Reorder: the dragged component.</param>
@@ -820,7 +832,7 @@ public static class GameObjectInspector
     private readonly record struct ComponentDrop(
         Component? Moving, AssetDragPayload? Asset, int Slot, int InsertIndex, bool IsNoOp);
 
-    private static void DrawComponents(Paper paper, Prowl.Scribe.FontFile font, GameObject go, Rect? viewportRect)
+    private static void DrawComponents(Paper paper, Prowl.Scribe.FontFile font, GameObject go, Rect? viewportRect, ComponentLayout layout)
     {
         List<Component> components = go.GetComponents<Component>().ToList();
 
@@ -834,8 +846,8 @@ public static class GameObjectInspector
             visible.Add(i);
         }
 
-        Rect hitBounds = viewportRect is { Size.X: > 0, Size.Y: > 0 } vp ? vp : s_layoutArea;
-        bool hasDrop = TryGetComponentDrop(go, components, visible, hitBounds, paper.PointerPos, out ComponentDrop drop);
+        Rect hitBounds = viewportRect is { Size.X: > 0, Size.Y: > 0 } vp ? vp : layout.Area;
+        bool hasDrop = TryGetComponentDrop(go, layout, components, visible, hitBounds, paper.PointerPos, out ComponentDrop drop);
         bool showIndicator = hasDrop && DragDrop.IsDragging && !drop.IsNoOp;
         Component? dragged = DragDrop.IsDragging ? (DragDrop.Payload as ComponentDragPayload)?.Component : null;
 
@@ -845,12 +857,12 @@ public static class GameObjectInspector
             .Height(UnitValue.Auto)
             .OnPostLayout((handle, rect) =>
             {
-                s_layoutGameObject = go.Identifier;
-                s_layoutArea = rect;
-                if (s_layoutRects.Length != visible.Count)
-                    s_layoutRects = new Rect[visible.Count];
+                layout.GameObject = go.Identifier;
+                layout.Area = rect;
+                if (layout.Rects.Length != visible.Count)
+                    layout.Rects = new Rect[visible.Count];
                 if (showIndicator)
-                    paper.DrawForeground(ref handle, (canvas, r) => DrawInsertionIndicator(canvas, r, s_layoutRects, drop.Slot));
+                    paper.DrawForeground(ref handle, (canvas, r) => DrawInsertionIndicator(canvas, r, layout.Rects, drop.Slot));
             });
 
         using (area.Enter())
@@ -863,7 +875,7 @@ public static class GameObjectInspector
                 ElementBuilder wrap = paper.Column($"gi_comp_{comp.Identifier}_wrap")
                     .Width(UnitValue.Stretch())
                     .Height(UnitValue.Auto)
-                    .OnPostLayout((_, rect) => { if (slot < s_layoutRects.Length) s_layoutRects[slot] = rect; });
+                    .OnPostLayout((_, rect) => { if (slot < layout.Rects.Length) layout.Rects[slot] = rect; });
                 if (ReferenceEquals(comp, dragged))
                     wrap.Opacity(0.55f);
 
@@ -950,7 +962,7 @@ public static class GameObjectInspector
             PrefabUtility.RecordComponentOverrides(go, comp);
     }
 
-    private static bool TryGetComponentDrop(GameObject go, List<Component> components, List<int> visible,
+    private static bool TryGetComponentDrop(GameObject go, ComponentLayout layout, List<Component> components, List<int> visible,
         Rect bounds, Float2 pointer, out ComponentDrop drop)
     {
         drop = default;
@@ -967,7 +979,7 @@ public static class GameObjectInspector
         else
             return false;
 
-        int slot = FindSlot(go, visible.Count, pointer.Y);
+        int slot = FindSlot(go, layout, visible.Count, pointer.Y);
         int insertIndex = slot < visible.Count ? visible[slot] : components.Count;
 
         bool isNoOp = false;
@@ -983,15 +995,15 @@ public static class GameObjectInspector
     }
 
     /// <summary>The slot before the first visible component whose midline is below the pointer.</summary>
-    private static int FindSlot(GameObject go, int visibleCount, float pointerY)
+    private static int FindSlot(GameObject go, ComponentLayout layout, int visibleCount, float pointerY)
     {
         // Last frame's rects belong to another object, or the list changed since: append.
-        if (s_layoutGameObject != go.Identifier || s_layoutRects.Length != visibleCount)
+        if (layout.GameObject != go.Identifier || layout.Rects.Length != visibleCount)
             return visibleCount;
 
         for (int i = 0; i < visibleCount; i++)
         {
-            Rect r = s_layoutRects[i];
+            Rect r = layout.Rects[i];
             if (pointerY < (r.Min.Y + r.Max.Y) * 0.5) return i;
         }
         return visibleCount;

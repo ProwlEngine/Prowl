@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -23,7 +24,7 @@ public static class ScriptComponentResolver
 {
     private readonly record struct DeclaredTypeName(string FullName, string SimpleName, bool HasBaseList);
 
-    private readonly record struct ParsedFileCacheEntry(long LastWriteTicksUtc, long FileLength, DeclaredTypeName[] DeclaredTypes);
+    private readonly record struct ParsedFileCacheEntry(byte[] ContentHash, DeclaredTypeName[] DeclaredTypes);
 
     private sealed record ComponentTypeIndex(
         int Version,
@@ -34,7 +35,7 @@ public static class ScriptComponentResolver
     private static int s_typeVersion = 1;
     private static ComponentTypeIndex? s_typeIndex;
     private static readonly object s_typeIndexLock = new();
-    private static readonly ConcurrentDictionary<string, ParsedFileCacheEntry> s_parsedFileCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, ParsedFileCacheEntry> s_parsedFileCache = new(StringComparer.Ordinal);
 
     static ScriptComponentResolver()
     {
@@ -272,58 +273,73 @@ public static class ScriptComponentResolver
         list.Add(value);
     }
 
+    /// <summary>
+    /// Maps a script asset path to a file inside the current project. Rooted and relative paths alike must
+    /// end up under the project's assets or root directory, so a crafted path such as `..\..\secret.cs`
+    /// can never make the editor read and parse a file from outside the project.
+    /// </summary>
     private static string? ResolveDiskPath(string assetPath)
     {
         string trimmed = assetPath.Trim();
-        if (string.IsNullOrEmpty(trimmed))
+        if (trimmed.Length == 0)
             return null;
-
-        if (Path.IsPathRooted(trimmed))
-            return File.Exists(trimmed) ? Path.GetFullPath(trimmed) : null;
 
         Project? project = Project.Current;
         if (project == null)
             return null;
 
+        string[] roots = new[] { project.AssetsPath, project.RootPath }
+            .Where(root => !string.IsNullOrEmpty(root))
+            .Select(Path.GetFullPath)
+            .ToArray();
+
+        if (Path.IsPathRooted(trimmed))
+        {
+            string full = Path.GetFullPath(trimmed);
+            return roots.Any(root => IsInside(root, full)) && File.Exists(full) ? full : null;
+        }
+
         string relative = trimmed.Replace('/', Path.DirectorySeparatorChar)
             .Replace('\\', Path.DirectorySeparatorChar)
             .TrimStart(Path.DirectorySeparatorChar);
 
-        if (!string.IsNullOrEmpty(project.AssetsPath))
+        foreach (string root in roots)
         {
-            string candidate = Path.Combine(project.AssetsPath, relative);
-            if (File.Exists(candidate))
-                return Path.GetFullPath(candidate);
-        }
-
-        if (!string.IsNullOrEmpty(project.RootPath))
-        {
-            string candidate = Path.Combine(project.RootPath, relative);
-            if (File.Exists(candidate))
-                return Path.GetFullPath(candidate);
+            string candidate = Path.GetFullPath(Path.Combine(root, relative));
+            if (IsInside(root, candidate) && File.Exists(candidate))
+                return candidate;
         }
 
         return null;
+    }
+
+    /// <summary>True when <paramref name="fullPath"/> is <paramref name="root"/> or lies beneath it.</summary>
+    private static bool IsInside(string root, string fullPath)
+    {
+        // GetRelativePath compares the way the OS does, and yields a rooted path across drives.
+        string relative = Path.GetRelativePath(root, fullPath);
+        return relative != ".."
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            && !Path.IsPathRooted(relative);
     }
 
     private static DeclaredTypeName[] GetDeclaredTypes(string fullPath)
     {
         try
         {
-            var info = new FileInfo(fullPath);
-            if (!info.Exists)
-                return Array.Empty<DeclaredTypeName>();
-
-            long ticks = info.LastWriteTimeUtc.Ticks;
-            long length = info.Length;
+            // The file is read on every call so the cache is keyed on content, not on timestamps, which are
+            // too coarse to catch rapid same-length edits. Scripts are small and this runs on drop only.
+            byte[] bytes = File.ReadAllBytes(fullPath);
+            byte[] hash = SHA256.HashData(bytes);
             if (s_parsedFileCache.TryGetValue(fullPath, out ParsedFileCacheEntry cached)
-                && cached.LastWriteTicksUtc == ticks
-                && cached.FileLength == length)
+                && cached.ContentHash.AsSpan().SequenceEqual(hash))
             {
                 return cached.DeclaredTypes;
             }
 
-            string source = File.ReadAllText(fullPath);
+            string source;
+            using (var reader = new StreamReader(new MemoryStream(bytes), detectEncodingFromByteOrderMarks: true))
+                source = reader.ReadToEnd();
             SyntaxTree tree = CSharpSyntaxTree.ParseText(
                 source,
                 CSharpParseOptions.Default.WithPreprocessorSymbols(ScriptCompiler.EditorDefines));
@@ -346,7 +362,7 @@ public static class ScriptComponentResolver
             }
 
             DeclaredTypeName[] result = names.ToArray();
-            s_parsedFileCache[fullPath] = new ParsedFileCacheEntry(ticks, length, result);
+            s_parsedFileCache[fullPath] = new ParsedFileCacheEntry(hash, result);
             return result;
         }
         catch (IOException)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,6 +11,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -33,6 +34,7 @@ public class InspectorPanel : DockPanel
     public override string Icon => EditorIcons.Sliders;
     private bool _subscribed;
     private Rect _viewportRect;
+    private readonly GameObjectInspector.ComponentLayout _componentLayout = new();
 
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
@@ -266,7 +268,7 @@ public class InspectorPanel : DockPanel
                 if (gos.Count > 1)
                     GameObjectInspector.DrawMulti(paper, font, gos);
                 else
-                    GameObjectInspector.Draw(paper, font, gameObject, _viewportRect);
+                    GameObjectInspector.Draw(paper, font, gameObject, _viewportRect, _componentLayout);
             }
             else
             {
@@ -336,7 +338,7 @@ public class InspectorPanel : DockPanel
     {
         if (!DragDrop.IsDragging && !DragDrop.IsDropFrame) return;
         if (DragDrop.Payload is not AssetDragPayload payload) return;
-        if (!Prowl.Editor.Projects.Scripting.ScriptComponentResolver.IsScriptAsset(payload)) return;
+        if (!ScriptComponentResolver.IsScriptAsset(payload)) return;
         if (Selection.ActiveObject is not GameObject) return;
 
         var gos = Selection.GetSelected<GameObject>().Where(g => g.IsValid()).ToList();
@@ -374,7 +376,7 @@ public class InspectorPanel : DockPanel
             // Complete the drop: resolve and add valid components once on release.
             if (paper.IsParentHovered && !DragDrop.IsDragging)
             {
-                IReadOnlyList<Type> componentTypes = Prowl.Editor.Projects.Scripting.ScriptComponentResolver.ResolveAddableComponentTypes(payload, gos);
+                IReadOnlyList<Type> componentTypes = ScriptComponentResolver.ResolveAddableComponentTypes(payload, gos);
                 if (componentTypes.Count > 0)
                     GameObjectInspector.AddComponentsWithUndo(gos, componentTypes);
                 DragDrop.EndDrag();
