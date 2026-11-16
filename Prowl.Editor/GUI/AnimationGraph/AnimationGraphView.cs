@@ -897,7 +897,7 @@ internal sealed class AnimationGraphProbe : IGraphProbe
         _candidates.Clear();
         _names.Clear();
 
-        Guid assetGuid = _graph.IsValid() ? _graph!.AssetID : Guid.Empty;
+        Guid assetGuid = _graph.IsValid() ? _graph.AssetID : Guid.Empty;
         if (!Application.IsPlaying || assetGuid == Guid.Empty)
         {
             _animator = null;
@@ -907,14 +907,14 @@ internal sealed class AnimationGraphProbe : IGraphProbe
         SceneInstance? scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
-        foreach (Animator animator in scene!.Animation.Animators)
-            if (animator.Graph.AssetID == assetGuid && animator.GraphInstance != null)
+        foreach (Animator animator in scene.Animation.Animators)
+            if (animator.Graph.IsValid() && animator.Graph.AssetID == assetGuid && animator.GraphInstance != null)
             {
                 _candidates.Add(animator);
                 _names.Add(animator.GameObject.Name);
             }
 
-        if (_animator.IsValid() && _candidates.Contains(_animator!)) return;
+        if (_animator.IsValid() && _candidates.Contains(_animator)) return;
         _animator = _candidates.Count > 0 ? _candidates[0] : null;
     }
 
