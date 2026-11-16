@@ -901,14 +901,14 @@ public class EditorApplication : Game
             .Width(UnitValue.Auto).Height(clH)
             .Margin(UnitValue.StretchOne, UnitValue.Pixels(pad), UnitValue.StretchOne, UnitValue.StretchOne).Gap(6).Enter())
         {
-            // FPS chip: [glowing dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
+            // FPS chip: [status dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
             // Auto width with a 120px floor lets the count grow into the spacer without moving anything.
             using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(120)).Height(clH).Rounded(Origami.Current.Metrics.ContainerRounding)
                 .Padding(rectPadX, rectPadX, 0, 0).BackdropBlur(blur)
                 .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
                 paper.Box("hs_fps_dot").Width(dot).Height(dot).Margin(0, 7, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(dot / 2f)
-                    .BackgroundColor(dotColor).Glow(0, 0, 8, 0, dotColor).IsNotInteractable();
+                    .BackgroundColor(dotColor).IsNotInteractable();
                 paper.Box("hs_fps_num").Width(UnitValue.Auto).Height(clH).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Text(fpsNum, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleLeft);
