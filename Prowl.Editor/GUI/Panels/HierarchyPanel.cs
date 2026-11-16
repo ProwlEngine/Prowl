@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
@@ -695,9 +696,28 @@ public class HierarchyPanel : DockPanel
             using (paper.Box("hier_search_mode_w").Width(UnitValue.Auto).Height(UnitValue.Auto)
                 .Margin(4, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .Tooltip(_flatSearch ? "Search results: flat list" : "Search results: hierarchy").Enter())
-                Origami.IconButton(paper, "hier_search_mode", _flatSearch ? EditorIcons.List_I : EditorIcons.Sitemap_I, () => _flatSearch = !_flatSearch)
+                Origami.IconButton(paper, "hier_search_mode", _flatSearch ? EditorIcons.List_I : EditorIcons.Sitemap_I, ToggleFlatSearch)
                     .Small().Width(24).Height(24).Ghost().Show();
         }
+    }
+
+    private void ToggleFlatSearch()
+    {
+        _flatSearch = !_flatSearch;
+        if (!Application.IsPlaying)
+            EditorApplication.Instance?.SaveDockLayout();
+    }
+
+    public override bool SerializeState(JsonObject state)
+    {
+        state["flatSearch"] = _flatSearch;
+        return true;
+    }
+
+    public override void RestoreState(JsonObject state)
+    {
+        if (state["flatSearch"] is JsonValue flatVal && flatVal.TryGetValue(out bool flat))
+            _flatSearch = flat;
     }
 
     // "t:Light" matches objects with a component whose type, or a base type's, contains "Light"; anything else matches names
