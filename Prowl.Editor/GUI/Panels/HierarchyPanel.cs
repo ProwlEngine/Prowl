@@ -31,6 +31,7 @@ public class HierarchyPanel : DockPanel
     public override string Icon => EditorIcons.Sitemap;
 
     private string _searchText = "";
+    private bool _flatSearch = true;
     private Paper? _paper;
     // Rename state is managed by RenameOverlay
 
@@ -491,7 +492,7 @@ public class HierarchyPanel : DockPanel
             List<GameObject> roots = header.Section != null ? GetDisplayRoots(header.Section.Roots) : [];
             TreeNode node = header.Node;
             node.Id = HeaderId(header.Open is { } open ? SceneKey(open) : SectionKey(section));
-            node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) ? true : null;
+            node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) || !string.IsNullOrEmpty(_searchText) ? true : null;
             node.UserData = header;
             node.Label = HeaderName(header);
             node.Depth = 0;
@@ -690,57 +691,122 @@ public class HierarchyPanel : DockPanel
                 .Enter())
                 Origami.SearchField(paper, "hier_search", _searchText, v => _searchText = v)
                     .Width(UnitValue.StretchOne).Height(25).Show();
+
+            using (paper.Box("hier_search_mode_w").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                .Margin(4, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .Tooltip(_flatSearch ? "Search results: flat list" : "Search results: hierarchy").Enter())
+                Origami.IconButton(paper, "hier_search_mode", _flatSearch ? EditorIcons.List_I : EditorIcons.Sitemap_I, () => _flatSearch = !_flatSearch)
+                    .Small().Width(24).Height(24).Ghost().Show();
         }
     }
 
-    private void BuildNodeList(GameObject go, int depth, List<TreeNode> nodes)
+    // "t:Light" matches objects with a component whose type, or a base type's, contains "Light"; anything else matches names
+    private bool MatchesSearch(GameObject go)
+    {
+        if (!_searchText.StartsWith("t:", StringComparison.OrdinalIgnoreCase))
+            return EditorUtils.MatchesSearch(go.Name, _searchText);
+
+        string type = _searchText[2..].Trim();
+        if (type.Length == 0)
+            return true;
+        foreach (Component component in go.GetComponents<Component>())
+        {
+            for (Type? t = component.GetType(); t != null && t != typeof(Component); t = t.BaseType)
+            {
+                if (t.Name.Contains(type, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // Adds the rows for go and its children. Returns whether any row was added for its subtree.
+    private bool BuildNodeList(GameObject go, int depth, List<TreeNode> nodes)
     {
         if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
-            return;
+            return false;
 
-        if (!EditorUtils.MatchesSearch(go.Name, _searchText)
-            && !go.GetChildrenDeep().Any(c => EditorUtils.MatchesSearch(c.Name, _searchText)))
-            return;
+        bool searching = !string.IsNullOrEmpty(_searchText);
 
-        TreeNode node = _nodeCache.GetValue(go, static g => new TreeNode { UserData = g });
-        node.Id = NodeId(go);
-        string goId = node.Id;
-        bool hasVisibleChildren = go.Children.Count > 0
-            && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
-
-        // Determine drop indicator for this node
-        TreeDropPosition? dropInd = null;
-        if (DragDrop.IsDragging && _dragHoverTargetId == goId)
+        // A flat search lists every match at the depth of the roots, without the objects around it
+        if (searching && _flatSearch)
         {
-            if (_dragHoverNormalizedY < 0.25f) dropInd = TreeDropPosition.Above;
-            else if (_dragHoverNormalizedY > 0.75f) dropInd = IsTargetExpanded(go, goId) ? TreeDropPosition.IntoFirst : TreeDropPosition.Below;
-            else dropInd = TreeDropPosition.Into;
+            bool any = MatchesSearch(go);
+            if (any)
+            {
+                TreeNode match = AddNode(go, depth, nodes);
+                match.HasChildren = false;
+                SetDropIndicator(go, match);
+            }
+            foreach (GameObject child in go.Children)
+                any |= BuildNodeList(child, depth, nodes);
+            return any;
         }
 
+        // Children are built first so one pass over the scene tells whether anything below matched.
+        // The tree widget handles skipping collapsed children internally.
+        int index = nodes.Count;
+        TreeNode node = AddNode(go, depth, nodes);
+        bool matchBelow = false;
+        foreach (GameObject child in go.Children)
+            matchBelow |= BuildNodeList(child, depth + 1, nodes);
+
+        if (searching)
+        {
+            // A tree search keeps the parents of every match, opened so all the matches show.
+            // With nothing below matching, this node is the last row added, so removing it is cheap.
+            if (!matchBelow && !MatchesSearch(go))
+            {
+                nodes.RemoveAt(index);
+                return false;
+            }
+            node.HasChildren = matchBelow;
+            if (matchBelow)
+                node.OverrideExpanded = true;
+        }
+
+        SetDropIndicator(go, node);
+        return true;
+    }
+
+    private TreeNode AddNode(GameObject go, int depth, List<TreeNode> nodes)
+    {
+        TreeNode node = _nodeCache.GetValue(go, static g => new TreeNode { UserData = g });
+        node.Id = NodeId(go);
         node.Label = go.Name;
-        node.HasChildren = hasVisibleChildren;
+        node.HasChildren = go.Children.Count > 0
+            && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
         node.Depth = depth;
         node.TrailingIcon = go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash;
         node.TrailingIconColor = go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300;
-        node.DropIndicator = dropInd;
 
         // Force expand parents of pinged nodes
-        node.OverrideExpanded = _forceExpandedIds.Contains(goId) ? true : null;
+        node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) ? true : null;
 
         nodes.Add(node);
+        return node;
+    }
 
-        // Recurse children (the tree widget handles skipping collapsed children internally)
-        foreach (GameObject child in go.Children)
-            BuildNodeList(child, depth + 1, nodes);
+    // Set once the row's children and expand state are final, since dropping below an open row puts the object first inside it
+    private void SetDropIndicator(GameObject go, TreeNode node)
+    {
+        node.DropIndicator = null;
+        if (!DragDrop.IsDragging || _dragHoverTargetId != node.Id)
+            return;
+        if (_dragHoverNormalizedY < 0.25f) node.DropIndicator = TreeDropPosition.Above;
+        else if (_dragHoverNormalizedY > 0.75f) node.DropIndicator = IsTargetExpanded(go, node.Id) ? TreeDropPosition.IntoFirst : TreeDropPosition.Below;
+        else node.DropIndicator = TreeDropPosition.Into;
     }
 
     // ================================================================
     //  Drag & Drop for reparenting/reordering
     // ================================================================
 
-    // True when the target node is expanded and actually has children (its first-child slot is visible).
+    // True when the target's row shows children under it (its first-child slot is visible).
+    // Reads the row as drawn, so flat search rows and rows forced open by search or a ping are right.
     private bool IsTargetExpanded(GameObject target, string targetId)
-        => target.Children.Count > 0 && _expandState.TryGetValue(targetId, out bool e) && e;
+        => _nodeCache.TryGetValue(target, out TreeNode? node) && node.HasChildren
+            && (node.OverrideExpanded ?? (_expandState.TryGetValue(targetId, out bool e) ? e : node.DefaultExpanded));
 
     private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
     {
