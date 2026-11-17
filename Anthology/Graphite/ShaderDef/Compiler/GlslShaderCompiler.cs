@@ -50,6 +50,11 @@ public sealed class GlslCompilerOptions
     public bool Optimize = true;
 
     /// <summary>
+    /// The SPIR-V version emitted. 1.5 needs a Vulkan 1.2 device, Vulkan 1.1 devices take 1.3.
+    /// </summary>
+    public SpirVVersion TargetVersion = SpirVVersion.V1_5;
+
+    /// <summary>
     /// Macros defined for every stage of every shader.
     /// </summary>
     public Dictionary<string, string> Defines = [];
@@ -372,7 +377,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     private string CacheKey(ShaderPass pass, ReadOnlySpan<Keyword> combo)
     {
         StringBuilder text = new(pass.Source.Length + 256);
-        text.Append(CacheSalt).Append('|').Append(_options.Optimize).Append('|').Append(FileName(pass)).Append('|').Append(pass.SourceLine).Append('|').Append(Pragmas(pass).Includes);
+        text.Append(CacheSalt).Append('|').Append(_options.Optimize).Append('|').Append(_options.TargetVersion).Append('|').Append(FileName(pass)).Append('|').Append(pass.SourceLine).Append('|').Append(Pragmas(pass).Includes);
         Dictionary<string, string> defines = Defines(pass, combo);
         List<string> names = [.. defines.Keys];
         names.Sort(StringComparer.Ordinal);
@@ -443,7 +448,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
                 GlslStage.Fragment => ShaderStage.Fragment,
                 _ => ShaderStage.Compute,
             };
-            return GlslCompiler.CompileToBytes(source, kind, SpirVVersion.V1_5, defines, _options.Optimize, includes: Include);
+            return GlslCompiler.CompileToBytes(source, kind, _options.TargetVersion, defines, _options.Optimize, includes: Include);
         }
         catch (GlslParseException e)
         {
