@@ -370,7 +370,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     private static readonly System.Text.RegularExpressions.Regex s_resourceSet = new(@"#\s*pragma\s+resource_set\s+(\d+)");
 
     // Bump when the compile settings below change in a way the key does not show
-    private const string CacheSalt = "graphite-prism-3";
+    private const string CacheSalt = "graphite-prism-5";
 
     private const uint CacheMagic = 0x47505643;
 

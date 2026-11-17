@@ -59,7 +59,11 @@ internal static class SpirvReflector
     private sealed class Module
     {
         public uint Model;
+        public uint Version;
         public uint[] Interface = [];
+
+        /// <summary>The variables the entry point reaches. Before SPIR-V 1.4 the interface lists only inputs and outputs, so every global stands in.</summary>
+        public IEnumerable<uint> Globals => Version >= 0x00010400 ? Interface : Variables.Keys;
         public uint[] LocalSize = [1, 1, 1];
         public uint[]? LocalSizeIds;
         public readonly Dictionary<uint, (int Op, uint[] Operands)> Types = [];
@@ -99,7 +103,7 @@ internal static class SpirvReflector
             stageDescriptions[s] = new ShaderStageDescription(flag, spirv, "main");
             Module module = Parse(spirv);
 
-            foreach (uint id in module.Interface)
+            foreach (uint id in module.Globals)
             {
                 if (!module.Variables.TryGetValue(id, out var variable))
                     continue;
@@ -169,7 +173,7 @@ internal static class SpirvReflector
         if (w[0] != 0x07230203)
             throw new ShaderCompileException("error: the compiler produced invalid SPIR-V");
 
-        Module m = new();
+        Module m = new() { Version = w[1] };
         for (int i = 5; i < w.Length;)
         {
             int count = (int)(w[i] >> 16);
