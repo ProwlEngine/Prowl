@@ -331,7 +331,8 @@ public sealed class ThreadedTransport : Transport
         }
 
         _worker = new Thread(WorkerLoop) { IsBackground = true, Name = "Courier worker" };
-        _worker.Start();
+        // Without the caller's execution context, so the worker does not keep the caller's AsyncLocal values alive.
+        _worker.UnsafeStart();
     }
 
     /// <summary>Hands a command to the worker and waits until it has run.</summary>
