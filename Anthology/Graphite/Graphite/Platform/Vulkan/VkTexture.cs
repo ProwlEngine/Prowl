@@ -26,6 +26,11 @@ internal unsafe partial class VkTexture : Texture
 
     public bool IsSwapchainTexture => _isSwapchainTexture;
 
+    private int _awaitingFirstUse;
+
+    /// <summary>True once for a swapchain image never used yet, whose contents start undefined.</summary>
+    public bool TakeFirstUse() => System.Threading.Interlocked.Exchange(ref _awaitingFirstUse, 0) == 1;
+
     public VkTextureView DefaultView
     {
         get
@@ -120,8 +125,7 @@ internal unsafe partial class VkTexture : Texture
         _optimalImage = existingImage;
         _actualImageArrayLayers = arrayLayers;
         _isSwapchainTexture = true;
-
-        InitializeLayout();
+        _awaitingFirstUse = 1;
     }
 
     // Wraps an image owned elsewhere that rests in one layout between Graphite's uses, left untouched here.

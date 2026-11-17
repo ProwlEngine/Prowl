@@ -220,7 +220,7 @@ internal static unsafe class VkBarriers
         foreach (TextureBarrier barrier in textures)
         {
             VkTexture texture = Util.AssertSubtype<Texture, VkTexture>(barrier.Texture);
-            ImageLayout oldLayout = BarrierLayout(texture, barrier.Before, barrier.FromUndefined);
+            ImageLayout oldLayout = BarrierLayout(texture, barrier.Before, barrier.FromUndefined || texture.TakeFirstUse());
             ImageLayout newLayout = Layout(texture, barrier.After);
             if (!NeedsBarrier(oldLayout, newLayout))
                 continue;
