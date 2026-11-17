@@ -9866,7 +9866,7 @@ public sealed partial class Lowerer
             var chain = BuildAccess(id);
             var a = AccessOf(chain);
             RejectWriteOnlyRead(a.Root, a.MemberIdx);
-            return FromStored(WithChainPrecision(Load(a.Type, a.Pointer, a.Layout), chain), member.Type);
+            return FromStored(WithChainPrecision(Load(a.Type, a.Pointer, a.Layout, exactType: a.TypeId), chain), member.Type);
         }
         if (Builtins.ContainsKey(id.Name)) { var (t, v) = BuiltinVar(id.Name); return IsForcedBuiltin(id.Name) ? LoadForcedBuiltin(t, v) : NoneLoad(Load(t, v), v); }
         // gl_Position and the other gl_PerVertex members are readable, through their access chain.
