@@ -130,14 +130,14 @@ float Graphite_LinearDepth(float deviceDepth)
 }
 
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
-layout(location = 26) flat in uint graphite_ObjectIndex;
+layout(location = 25, component = 0) flat in uint graphite_ObjectIndex;
 
 uint Graphite_ObjectIndex() { return graphite_ObjectIndex; }
 Graphite_ObjectData Graphite_Object() { return graphite_Objects[graphite_ObjectIndex]; }
 #endif
 
 #if defined(GRAPHITE_FRAGMENT) && defined(GRAPHITE_LOD_FADE)
-layout(location = 28) flat in uint graphite_LodFade;
+layout(location = 25, component = 2) flat in uint graphite_LodFade;
 
 // A cross fading level's prepass keeps the pixels of its half of a 4 x 4 ordered dither: the incoming level those under
 // its fade, the outgoing level the rest. The dither turns each frame while the view jitters, so TAA blends the two.

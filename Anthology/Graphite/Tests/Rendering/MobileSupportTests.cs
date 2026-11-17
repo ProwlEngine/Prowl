@@ -47,7 +47,7 @@ public sealed class MobileSupportTests
         string? unsupported = Renderer.Unsupported(true, true, new GraphicsDeviceLimits { MaxVertexOutputComponents = 128, MaxFragmentInputComponents = 64, PerStage = Adreno.PerStage, PerStageWithTables = Adreno.PerStageWithTables, MaxBoundDescriptorSets = 7 });
 
         Assert.NotNull(unsupported);
-        Assert.Contains("location 27", unsupported);
+        Assert.Contains("location 25", unsupported);
     }
 
     [Fact]

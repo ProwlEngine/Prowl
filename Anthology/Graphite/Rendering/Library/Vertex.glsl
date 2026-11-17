@@ -7,12 +7,12 @@
 
 layout(set = 2, binding = 3, std430) readonly buffer Graphite_Vertices { uint graphite_Words[]; };
 
-layout(location = 24) out vec4 graphite_MotionCurrent;
-layout(location = 25) out vec4 graphite_MotionPrevious;
-layout(location = 26) flat out uint graphite_ObjectIndex;
-layout(location = 27) flat out uint graphite_MaterialSlot;
+layout(location = 23) out vec4 graphite_MotionCurrent;
+layout(location = 24) out vec4 graphite_MotionPrevious;
+layout(location = 25, component = 0) flat out uint graphite_ObjectIndex;
+layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;
 #ifdef GRAPHITE_LOD_FADE
-layout(location = 28) flat out uint graphite_LodFade;
+layout(location = 25, component = 2) flat out uint graphite_LodFade;
 #endif
 
 invariant gl_Position;

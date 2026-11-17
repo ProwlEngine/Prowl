@@ -14,8 +14,8 @@ layout(location = 1) out vec2 graphite_GBufferMotion;
 layout(location = 2) out float graphite_Reactive;
 layout(location = 3) out vec2 graphite_GBufferNormal;
 layout(location = 4) out vec4 graphite_GBufferMaterial;
-layout(location = 24) in vec4 graphite_MotionCurrent;
-layout(location = 25) in vec4 graphite_MotionPrevious;
+layout(location = 23) in vec4 graphite_MotionCurrent;
+layout(location = 24) in vec4 graphite_MotionPrevious;
 #endif
 
 #ifdef GRAPHITE_FRAGMENT

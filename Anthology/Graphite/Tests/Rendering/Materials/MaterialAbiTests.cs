@@ -39,7 +39,7 @@ public sealed class MaterialAbiTests : IDisposable
                 Vertex
                 {
                     layout(push_constant) uniform Push { uint slot; } push;
-                    layout(location = 27) flat out uint graphite_MaterialSlot;
+                    layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;
 
                     void main()
                     {
@@ -310,7 +310,7 @@ public sealed class MaterialAbiTests : IDisposable
     public void VertexStages_ReadingMaterialsWithoutWritingTheSlot_FailToCompile()
     {
         string source = Source
-            .Replace("layout(location = 27) flat out uint graphite_MaterialSlot;", "uniform float _Scale;")
+            .Replace("layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;", "uniform float _Scale;")
             .Replace("graphite_MaterialSlot = push.slot;", "float s = _Scale + float(push.slot);")
             .Replace("gl_Position = vec4(x, y, 0.0, 1.0);", "gl_Position = vec4(x, y, 0.0, s);");
         ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
@@ -321,7 +321,7 @@ public sealed class MaterialAbiTests : IDisposable
     public void FragmentStages_ReadingMaterials_NeedAVertexStageWritingTheSlot()
     {
         string source = Source
-            .Replace("layout(location = 27) flat out uint graphite_MaterialSlot;", "")
+            .Replace("layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;", "")
             .Replace("graphite_MaterialSlot = push.slot;", "float unused = float(push.slot);");
         ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
         Assert.Contains("graphite_MaterialSlot", error.Message);

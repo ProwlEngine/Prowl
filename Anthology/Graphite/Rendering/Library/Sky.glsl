@@ -9,8 +9,8 @@
 #include "Graphite/Core.glsl"
 
 #ifdef GRAPHITE_VERTEX
-layout(location = 25) out vec2 graphite_SkyClip;
-layout(location = 27) flat out uint graphite_MaterialSlot;
+layout(location = 24) out vec2 graphite_SkyClip;
+layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;
 
 void graphite_ShaderMain();
 
@@ -27,7 +27,7 @@ void main()
 #endif
 
 #ifdef GRAPHITE_FRAGMENT
-layout(location = 25) in vec2 graphite_SkyClip;
+layout(location = 24) in vec2 graphite_SkyClip;
 
 // Vertical field of view the sky takes for orthographic views
 #define GRAPHITE_SKY_ORTHO_FOV 1.0471975512

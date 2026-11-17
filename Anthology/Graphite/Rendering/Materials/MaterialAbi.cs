@@ -72,11 +72,14 @@ internal static class GraphiteBindings
     public const int DrawRecords = 2;
     public const int Vertices = 3;
 
-    /// <summary>The flat varying carrying the material slot from the vertex to the fragment stage.</summary>
-    public const uint MaterialSlotLocation = 27;
+    /// <summary>
+    /// The location of the flat varyings carrying the object index, material slot and LOD fade from the vertex to the
+    /// fragment stage, as components 0, 1 and 2. The highest location the library uses, so 112 component stages fit it.
+    /// </summary>
+    public const uint MaterialSlotLocation = 25;
 
-    /// <summary>The flat varying carrying the object index from the vertex to the fragment stage.</summary>
-    public const uint ObjectIndexLocation = 26;
+    /// <summary>The component of <see cref="MaterialSlotLocation"/> holding the material slot.</summary>
+    public const uint MaterialSlotComponent = 1;
 
     public const string MaterialsName = "Graphite_Materials";
     public const string InstancesName = "Graphite_Instances";
@@ -253,7 +256,7 @@ internal static class MaterialLayout
             declarations.Add(($"Graphite_Global_{sampler}", $"#define Graphite_Global_{sampler}(o) {sampler}({table}[graphite_GlobalWords[o]], Graphite_Samplers[graphite_GlobalWords[(o) + 1u]])"));
         }
 
-        return new MaterialAbi(declarations, ("graphite_MaterialSlot", $"layout(location = {GraphiteBindings.MaterialSlotLocation}) flat in uint graphite_MaterialSlot;"), properties, GraphiteBindings.UserSet);
+        return new MaterialAbi(declarations, ("graphite_MaterialSlot", $"layout(location = {GraphiteBindings.MaterialSlotLocation}, component = {GraphiteBindings.MaterialSlotComponent}) flat in uint graphite_MaterialSlot;"), properties, GraphiteBindings.UserSet);
     }
 
     /// <summary>Declares a pass's globals, giving each one's word offset as the specialization constant its reads go through.</summary>
