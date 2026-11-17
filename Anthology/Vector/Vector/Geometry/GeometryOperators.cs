@@ -788,13 +788,14 @@ public static class GeometryOperators
     }
 
     /// <summary>
-    /// A copy of the mesh with its mirror image across a plane through the origin. Vertices within the merge
-    /// distance of the plane are shared by both halves and put on it. The mesh given is not changed.
+    /// A copy of the mesh with its mirror image across a plane. Vertices within the merge distance of the plane
+    /// are shared by both halves and put on it. The mesh given is not changed.
     /// </summary>
     /// <param name="axis">The axis the plane is across: 0, 1 or 2 for X, Y or Z.</param>
-    public static GeometryData MirrorCopy(GeometryData mesh, int axis = 0, float mergeDistance = 0.001f)
+    /// <param name="offset">Where along the axis the plane stands, 0 for through the origin.</param>
+    public static GeometryData MirrorCopy(GeometryData mesh, int axis = 0, float mergeDistance = 0.001f, float offset = 0f)
     {
-        return TopologyOp.Mirror(mesh, axis, mergeDistance);
+        return TopologyOp.Mirror(mesh, axis, mergeDistance, offset);
     }
 
     /// <summary>
@@ -818,6 +819,23 @@ public static class GeometryOperators
     public static List<GeometryData.Edge> KnifeCut(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Float3 planePoint, Float3 planeNormal, Func<Float3, bool>? within = null)
     {
         return CutOp.Knife(mesh, faces, planePoint, planeNormal, within);
+    }
+
+    /// <summary>
+    /// Cuts a mesh along a path of straight stretches, one between each point and the next. A stretch lies in a
+    /// plane, and cuts every edge it crosses and runs through every vertex it meets. A point may sit on a vertex, on
+    /// an edge, inside a face or off the mesh. A face is split wherever the path crosses it from outline to outline,
+    /// also through points inside it and when it is crossed more than once. Where the path starts or stops inside a
+    /// face, that end is left as edges lying on the face, which stays whole.
+    /// </summary>
+    /// <param name="planes">The plane of each stretch, one fewer than there are points.</param>
+    /// <param name="along">How far along a stretch a point of its plane is, 0 at its start and 1 at its end. Null when the point is not part of the cut, as when it is past an end or out of sight.</param>
+    /// <param name="cuts">Which faces may be cut, all when null.</param>
+    /// <returns>The edges along the cut.</returns>
+    public static List<GeometryData.Edge> KnifePath(GeometryData mesh, IReadOnlyList<KnifePoint> points, IReadOnlyList<(Float3 Point, Float3 Normal)> planes,
+        Func<int, Float3, float?> along, Func<GeometryData.Face, bool>? cuts = null)
+    {
+        return KnifeOp.Cut(mesh, points, planes, along, cuts);
     }
 
     /// <summary>

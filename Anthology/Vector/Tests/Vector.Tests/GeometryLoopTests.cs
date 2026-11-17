@@ -278,4 +278,18 @@ public class GeometryLoopTests
         }
         Assert.Equal(4, smoothed.Loops.Count(l => l.Attributes[GeometryData.UvAttribute].AsFloat()!.Data is [0.5f, 0.5f]));
     }
+
+    [Fact]
+    public void MirrorCopy_AcrossAnOffsetPlane_MeetsThereAndReachesAsFarBeyond()
+    {
+        GeometryData mesh = new();
+        mesh.AddFace(mesh.AddVertex(1, 0, 0), mesh.AddVertex(3, 0, 0), mesh.AddVertex(3, 1, 0), mesh.AddVertex(1, 1, 0));
+
+        GeometryData mirrored = GeometryOperators.MirrorCopy(mesh, 0, 0.001f, 1f);
+
+        Assert.Equal(6, mirrored.Vertices.Count);
+        Assert.Equal(2, mirrored.Faces.Count);
+        Assert.Equal(-1f, mirrored.Vertices.Min(v => v.Point.X), 4);
+        Assert.Equal(3f, mirrored.Vertices.Max(v => v.Point.X), 4);
+    }
 }

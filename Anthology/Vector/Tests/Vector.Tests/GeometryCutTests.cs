@@ -171,4 +171,130 @@ public class GeometryCutTests
         Assert.Equal(8f, full, 3);
         Assert.True(none < half && half < full);
     }
+
+    // Cuts a flat mesh in the XY plane along a path, the way a view straight down on it would
+    private static System.Collections.Generic.List<GeometryData.Edge> Knife(GeometryData mesh, params KnifePoint[] points)
+    {
+        var planes = new System.Collections.Generic.List<(Float3, Float3)>();
+        for (int i = 1; i < points.Length; i++)
+            planes.Add((points[i - 1].Point, Float3.Cross(points[i].Point - points[i - 1].Point, new Float3(0, 0, 1))));
+        return GeometryOperators.KnifePath(mesh, points, planes, (stretch, p) =>
+        {
+            Float3 a = points[stretch].Point, run = points[stretch + 1].Point - a;
+            float at = Float3.Dot(p - a, run) / Float3.Dot(run, run);
+            return at < -0.001f || at > 1.001f ? null : at;
+        });
+    }
+
+    private static KnifePoint Off(float x, float y) => new() { Point = new Float3(x, y, 0) };
+
+    private static KnifePoint OnVertex(GeometryData mesh, float x, float y)
+        => new() { Point = new Float3(x, y, 0), Vertex = mesh.Vertices.First(v => v.Point == new Float3(x, y, 0)) };
+
+    private static KnifePoint OnEdge(GeometryData.Edge edge, float x, float y) => new() { Point = new Float3(x, y, 0), Edge = edge };
+
+    private static KnifePoint InFace(GeometryData.Face face, float x, float y) => new() { Point = new Float3(x, y, 0), Face = face };
+
+    [Fact]
+    public void KnifePath_AcrossASheet_SplitsEveryFaceItCrosses()
+    {
+        GeometryData mesh = Grid(3, 1);
+        var cuts = Knife(mesh, Off(-1, 0.25f), Off(4, 0.25f));
+        Assert.Equal(3, cuts.Count);
+        Assert.Equal(6, mesh.Faces.Count);
+        Assert.Equal(12, mesh.Vertices.Count);
+        Assert.Equal(3f, mesh.SurfaceArea(), 4);
+    }
+
+    [Fact]
+    public void KnifePath_FromCornerToCorner_SplitsTheFace()
+    {
+        GeometryData mesh = Grid(1, 1);
+        var cuts = Knife(mesh, OnVertex(mesh, 0, 0), OnVertex(mesh, 1, 1));
+        Assert.Single(cuts);
+        Assert.Equal(4, mesh.Vertices.Count);
+        Assert.Equal(new[] { 3, 3 }, mesh.Faces.Select(f => f.VertCount).ToArray());
+    }
+
+    [Fact]
+    public void KnifePath_FromCornerToAPointOnAnEdge_SplitsTheFace()
+    {
+        GeometryData mesh = Grid(1, 1);
+        var cuts = Knife(mesh, OnVertex(mesh, 0, 0), OnEdge(EdgeAt(mesh, new Float3(1, 0, 0), new Float3(1, 1, 0)), 1, 0.5f));
+        Assert.Single(cuts);
+        Assert.Equal(5, mesh.Vertices.Count);
+        Assert.Equal(new[] { 3, 4 }, mesh.Faces.Select(f => f.VertCount).OrderBy(c => c).ToArray());
+        Assert.Equal(1f, mesh.SurfaceArea(), 4);
+    }
+
+    [Fact]
+    public void KnifePath_ThroughAVertexOnItsWay_CutsTheFacesEitherSide()
+    {
+        GeometryData mesh = Grid(2, 2);
+        var cuts = Knife(mesh, Off(-1, -1), Off(3, 3));
+        Assert.Equal(2, cuts.Count);
+        Assert.Equal(9, mesh.Vertices.Count);
+        Assert.Equal(6, mesh.Faces.Count);
+        Assert.Equal(4f, mesh.SurfaceArea(), 4);
+    }
+
+    [Fact]
+    public void KnifePath_ThatBendsInsideAFace_SplitsItAlongTheBend()
+    {
+        GeometryData mesh = Grid(1, 1);
+        var cuts = Knife(mesh,
+            OnEdge(EdgeAt(mesh, new Float3(0, 0, 0), new Float3(1, 0, 0)), 0.5f, 0),
+            InFace(mesh.Faces[0], 0.5f, 0.5f),
+            OnEdge(EdgeAt(mesh, new Float3(1, 0, 0), new Float3(1, 1, 0)), 1, 0.5f));
+        Assert.Equal(2, cuts.Count);
+        Assert.Equal(7, mesh.Vertices.Count);
+        Assert.Equal(new[] { 4, 6 }, mesh.Faces.Select(f => f.VertCount).OrderBy(c => c).ToArray());
+        Assert.Equal(1f, mesh.SurfaceArea(), 4);
+        Assert.All(mesh.Edges, e => Assert.NotEmpty(e.NeighborFaces()));
+    }
+
+    [Fact]
+    public void KnifePath_ThatStopsInsideAFace_LeavesAnEdgeLyingOnIt()
+    {
+        GeometryData mesh = Grid(1, 1);
+        var cuts = Knife(mesh, Off(-1, 0.5f), InFace(mesh.Faces[0], 0.5f, 0.5f));
+        Assert.Single(cuts);
+        Assert.Empty(cuts[0].NeighborFaces());
+        Assert.Single(mesh.Faces);
+        Assert.Equal(5, mesh.Faces[0].VertCount);
+        Assert.Equal(6, mesh.Vertices.Count);
+    }
+
+    [Fact]
+    public void KnifePath_AcrossAFaceThatIsNotConvex_CutsOnlyWhereItIsInside()
+    {
+        // A U: the cut crosses both arms and the gap between them
+        GeometryData mesh = new();
+        mesh.AddFace(mesh.AddVertex(0, 0, 0), mesh.AddVertex(3, 0, 0), mesh.AddVertex(3, 2, 0), mesh.AddVertex(2, 2, 0),
+            mesh.AddVertex(2, 1, 0), mesh.AddVertex(1, 1, 0), mesh.AddVertex(1, 2, 0), mesh.AddVertex(0, 2, 0));
+        float area = mesh.SurfaceArea();
+        var cuts = Knife(mesh, Off(-1, 1.5f), Off(4, 1.5f));
+        Assert.Equal(2, cuts.Count);
+        Assert.Equal(3, mesh.Faces.Count);
+        Assert.Equal(area, mesh.SurfaceArea(), 4);
+    }
+
+    [Fact]
+    public void KnifePath_KeepsTextureCoordinatesAcrossABend()
+    {
+        GeometryData mesh = Grid(1, 1);
+        mesh.AddLoopAttribute("uv", GeometryData.AttributeBaseType.Float, 2);
+        foreach (GeometryData.Loop loop in mesh.Loops)
+            loop.SetAttribute("uv", new GeometryData.FloatAttributeValue { Data = [loop.Vert.Point.X, loop.Vert.Point.Y] });
+        Knife(mesh,
+            OnEdge(EdgeAt(mesh, new Float3(0, 0, 0), new Float3(1, 0, 0)), 0.5f, 0),
+            InFace(mesh.Faces[0], 0.5f, 0.5f),
+            OnEdge(EdgeAt(mesh, new Float3(1, 0, 0), new Float3(1, 1, 0)), 1, 0.5f));
+        Assert.All(mesh.Loops, loop =>
+        {
+            float[] uv = ((GeometryData.FloatAttributeValue)loop.Attributes["uv"]).Data;
+            Assert.Equal(loop.Vert.Point.X, uv[0], 4);
+            Assert.Equal(loop.Vert.Point.Y, uv[1], 4);
+        });
+    }
 }

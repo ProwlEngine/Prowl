@@ -206,6 +206,13 @@ public partial class GeometryData
             _byName.Clear();
         }
 
+        public bool Remove(string name)
+        {
+            if (!_byName.Remove(name, out AttributeColumn? column)) return false;
+            Columns.Remove(column);
+            return true;
+        }
+
         public bool TryGet(string name, int slot, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out AttributeValue value)
         {
             if (_byName.TryGetValue(name, out AttributeColumn? column)) return TryGet(column, slot, out value);
@@ -304,6 +311,24 @@ public partial class GeometryData
 
     /// <inheritdoc cref="VertexAttributeNames"/>
     public List<string> FaceAttributeNames() => ColumnNames(FaceKind, Faces.Count);
+
+    /// <summary>Takes an attribute away from every vertex: its declaration, when it has one, and every value. True when there was anything to take.</summary>
+    public bool RemoveVertexAttribute(string name) => Remove(VertexKind, VertexAttributes, name);
+
+    /// <inheritdoc cref="RemoveVertexAttribute"/>
+    public bool RemoveEdgeAttribute(string name) => Remove(EdgeKind, EdgeAttributes, name);
+
+    /// <inheritdoc cref="RemoveVertexAttribute"/>
+    public bool RemoveLoopAttribute(string name) => Remove(LoopKind, LoopAttributes, name);
+
+    /// <inheritdoc cref="RemoveVertexAttribute"/>
+    public bool RemoveFaceAttribute(string name) => Remove(FaceKind, FaceAttributes, name);
+
+    private bool Remove(int kind, List<AttributeDefinition> definitions, string name)
+    {
+        bool declared = definitions.RemoveAll(d => d.Name == name) > 0;
+        return _stores[kind].Remove(name) || declared;
+    }
 
     private List<string> ColumnNames(int kind, int count)
     {

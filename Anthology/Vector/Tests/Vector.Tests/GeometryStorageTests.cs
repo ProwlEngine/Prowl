@@ -24,6 +24,24 @@ public class GeometryStorageTests
     }
 
     [Fact]
+    public void RemoveLoopAttribute_TakesTheDeclarationAndEveryValue()
+    {
+        GeometryData mesh = Cube();
+        mesh.AddLoopAttribute("uv", GeometryData.AttributeBaseType.Float, 2);
+        mesh.Loops[0].SetAttribute("uv", new GeometryData.FloatAttributeValue { Data = [1, 2] });
+        mesh.Loops[1].SetAttribute("pin", new GeometryData.IntAttributeValue(1));
+
+        Assert.True(mesh.RemoveLoopAttribute("uv"));
+        Assert.True(mesh.RemoveLoopAttribute("pin"));
+        Assert.False(mesh.RemoveLoopAttribute("uv"));
+
+        Assert.False(mesh.HasLoopAttribute("uv"));
+        Assert.All(mesh.Loops, loop => Assert.False(loop.TryGetAttribute("uv", out _)));
+        Assert.All(mesh.Loops, loop => Assert.False(loop.TryGetAttribute("pin", out _)));
+        Assert.DoesNotContain("uv", mesh.LoopAttributeNames());
+    }
+
+    [Fact]
     public void Elements_KnowTheirPlace_AndTheMeshKnowsThem()
     {
         GeometryData cube = Cube();

@@ -132,11 +132,11 @@ internal static class TopologyOp
     }
 
     /// <summary>
-    /// A copy of the mesh with its mirror image across a plane through the origin, the axis being 0, 1 or 2 for X, Y
-    /// or Z. Vertices within the merge distance of the plane are shared by both halves and put on it, and the mirrored
+    /// A copy of the mesh with its mirror image across a plane, the axis being 0, 1 or 2 for X, Y or Z and the offset
+    /// where along it the plane stands. Vertices within the merge distance of the plane are shared by both halves and put on it, and the mirrored
     /// faces are turned so they face outwards. Attributes are copied to the mirrored side.
     /// </summary>
-    internal static GeometryData Mirror(GeometryData source, int axis, float mergeDistance)
+    internal static GeometryData Mirror(GeometryData source, int axis, float mergeDistance, float offset = 0f)
     {
         var result = new GeometryData();
         CopyDefinitions(source, result);
@@ -149,8 +149,8 @@ internal static class TopologyOp
             Vertex vertex = source.Vertices[i];
             index[vertex] = i;
             Float3 point = vertex.Point;
-            bool onPlane = Math.Abs(point[axis]) <= mergeDistance;
-            if (onPlane) point[axis] = 0;
+            bool onPlane = Math.Abs(point[axis] - offset) <= mergeDistance;
+            if (onPlane) point[axis] = offset;
             original[i] = result.AddVertex(point);
             original[i].Attributes = AttributeTransfer.Copy(vertex.Attributes);
             if (onPlane)
@@ -158,7 +158,7 @@ internal static class TopologyOp
                 mirrored[i] = original[i];
                 continue;
             }
-            point[axis] = -point[axis];
+            point[axis] = 2 * offset - point[axis];
             mirrored[i] = result.AddVertex(point);
             mirrored[i].Attributes = AttributeTransfer.Copy(vertex.Attributes);
         }
