@@ -84,7 +84,7 @@ public class JsonFileProvider : ILocalizationProvider
             _watcher.Created += OnFileChanged;
             _watcher.Changed += OnFileChanged;
             _watcher.Renamed += OnFileRenamed;
-            _watcher.EnableRaisingEvents = true;
+            WithoutExecutionContext.Run(() => _watcher.EnableRaisingEvents = true);
         }
         else
         {
