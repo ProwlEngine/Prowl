@@ -1,6 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Globalization;
+using System.Threading;
+
 using Prowl.Runtime.Resources;
 
 using Xunit;
@@ -45,6 +48,33 @@ public class HeadlessRunTests
         }
         finally
         {
+            Application.IsPlaying = false;
+        }
+    }
+
+    // The engine's worker threads start without the main thread's execution context, so they never see a
+    // culture set on that thread alone.
+    [Fact]
+    public void RunHeadless_GivesThreadsStartedWithoutItsContextTheInvariantCulture()
+    {
+        CultureInfo? before = CultureInfo.DefaultThreadCurrentCulture;
+        CultureInfo? beforeUI = CultureInfo.DefaultThreadCurrentUICulture;
+        CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("de-DE");
+        try
+        {
+            new FlagProbeGame(() => { }).RunHeadless(new HeadlessRunOptions { MaxFrames = 1, TargetFrameRate = 0 });
+
+            CultureInfo? seen = null;
+            var worker = new Thread(() => seen = CultureInfo.CurrentCulture);
+            worker.UnsafeStart();
+            worker.Join();
+
+            Assert.Equal(CultureInfo.InvariantCulture, seen);
+        }
+        finally
+        {
+            CultureInfo.DefaultThreadCurrentCulture = before;
+            CultureInfo.DefaultThreadCurrentUICulture = beforeUI;
             Application.IsPlaying = false;
         }
     }

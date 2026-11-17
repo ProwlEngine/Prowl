@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 using Echo.Logging;
 
@@ -53,13 +54,21 @@ public abstract class Game
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, vsync: false);
     } 
 
+    // Invariant culture ensures consistent float parsing (dot decimal separator)
+    // across all locales. Without this, embedded .mat/.shader files with "0.5"
+    // break on cultures that use comma separators. The defaults cover threads that
+    // start without this thread's execution context, like the compile and physics workers.
+    private static void UseInvariantCulture()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+        CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+    }
+
     public void Run(string title, int width, int height)
     {
-        // Invariant culture ensures consistent float parsing (dot decimal separator)
-        // across all locales. Without this, embedded .mat/.shader files with "0.5"
-        // break on cultures that use comma separators.
-        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
-        System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
+        UseInvariantCulture();
 
         // A bare standalone game is always "playing" so gameplay (component lifecycle, FixedUpdate,
         // physics stepping) runs. The editor overrides this back to false in its own Initialize and
@@ -273,8 +282,7 @@ public abstract class Game
     {
         options ??= new HeadlessRunOptions();
 
-        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
-        System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
+        UseInvariantCulture();
 
         Application.IsPlaying = true;
         Application.IsHeadless = true;
