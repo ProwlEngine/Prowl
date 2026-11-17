@@ -501,8 +501,42 @@ internal sealed partial class NetworkSystem
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         SceneInstance world = ReplicatedWorld!;
-        SendPerPeer(EngineMessage.SceneSnapshot, peers, peer => HiddenRoots(peer), message => WriteSnapshot(world, message),
-            session);
+        NetworkObject[] prefabs = [.. Entries.Values.Where(e => e.GameObject.IsValid() && PrefabSpawnOf(e.GameObject) != null)];
+        if (!SendPerPeer(EngineMessage.SceneSnapshot, peers, peer => WithPrefabRoots(HiddenRoots(peer), prefabs),
+                message => WriteSnapshot(world, message), session))
+        {
+            return;
+        }
+
+        foreach (NetworkObject entry in prefabs)
+        {
+            NetPeer[] seeing = [.. peers.Where(p => Sees(entry, p))];
+            if (Session != session)
+            {
+                return;
+            }
+
+            if (seeing.Length > 0 && entry.GameObject.IsValid())
+            {
+                SendSpawn(entry, seeing, true);
+            }
+        }
+    }
+
+    private static HashSet<GameObject>? WithPrefabRoots(HashSet<GameObject>? hidden, NetworkObject[] prefabs)
+    {
+        if (prefabs.Length == 0)
+        {
+            return hidden;
+        }
+
+        HashSet<GameObject> roots = hidden ?? new HashSet<GameObject>(ReferenceEqualityComparer.Instance);
+        foreach (NetworkObject entry in prefabs)
+        {
+            roots.Add(entry.GameObject);
+        }
+
+        return roots;
     }
 
     /// <summary>
