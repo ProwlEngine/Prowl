@@ -114,8 +114,8 @@ internal unsafe partial class VkGraphicsDevice
 
             if (_debugUtilsEnabled)
             {
-                Vk.TryGetInstanceExtension(Instance, out DebugUtils);
-                if (debug)
+                _debugUtilsEnabled = Vk.TryGetInstanceExtension(Instance, out DebugUtils);
+                if (_debugUtilsEnabled && debug)
                     EnableDebugCallback();
             }
         }
