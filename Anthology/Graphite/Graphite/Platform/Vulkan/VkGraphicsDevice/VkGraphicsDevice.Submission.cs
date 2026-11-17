@@ -98,6 +98,9 @@ internal unsafe partial class VkGraphicsDevice
 
     private void CreateTimelineSemaphore()
     {
+        if (!_timelineSupported)
+            return;
+
         SemaphoreTypeCreateInfo typeCI = new(sType: StructureType.SemaphoreTypeCreateInfo)
         {
             SemaphoreType = SemaphoreType.Timeline,
@@ -109,6 +112,9 @@ internal unsafe partial class VkGraphicsDevice
 
     internal ulong GetCompletedSerial()
     {
+        if (!_timelineSupported)
+            return RetireSerialFences();
+
         Vk.GetSemaphoreCounterValue(Device, _timelineSemaphore, out ulong value).CheckResult();
         return value;
     }
@@ -141,6 +147,9 @@ internal unsafe partial class VkGraphicsDevice
 
     private Result WaitForSerialCore(ulong serial, ulong nanosecondTimeout)
     {
+        if (!_timelineSupported)
+            return WaitForSerialFence(serial, nanosecondTimeout);
+
         VkSemaphore timeline = _timelineSemaphore;
         SemaphoreWaitInfo waitInfo = new(sType: StructureType.SemaphoreWaitInfo)
         {
@@ -149,6 +158,74 @@ internal unsafe partial class VkGraphicsDevice
             PValues = &serial,
         };
         return Vk.WaitSemaphores(Device, in waitInfo, nanosecondTimeout);
+    }
+
+    private readonly object _serialFenceLock = new();
+    private readonly Queue<(ulong Serial, Fence Fence)> _serialFences = new();
+    private readonly Stack<Fence> _freeSerialFences = new();
+    private ulong _fenceCompletedSerial;
+
+    private Fence RentSerialFence()
+    {
+        lock (_serialFenceLock)
+        {
+            if (_freeSerialFences.TryPop(out Fence free))
+                return free;
+        }
+
+        FenceCreateInfo fenceCI = new(sType: StructureType.FenceCreateInfo);
+        Vk.CreateFence(Device, in fenceCI, null, out Fence fence).CheckResult();
+        return fence;
+    }
+
+    /// <summary>Stands in for the timeline value where timeline semaphores are missing: the serial of the newest signalled submission fence.</summary>
+    private ulong RetireSerialFences()
+    {
+        lock (_serialFenceLock)
+        {
+            while (_serialFences.TryPeek(out (ulong Serial, Fence Fence) entry) && Vk.GetFenceStatus(Device, entry.Fence) == Result.Success)
+            {
+                _serialFences.Dequeue();
+                Fence fence = entry.Fence;
+                Vk.ResetFences(Device, 1, &fence).CheckResult();
+                _freeSerialFences.Push(fence);
+                _fenceCompletedSerial = entry.Serial;
+            }
+            return _fenceCompletedSerial;
+        }
+    }
+
+    // Holds the lock across the wait so the fence is not reset and reused under the waiter.
+    private Result WaitForSerialFence(ulong serial, ulong nanosecondTimeout)
+    {
+        lock (_serialFenceLock)
+        {
+            foreach ((ulong Serial, Fence Fence) entry in _serialFences)
+            {
+                if (entry.Serial < serial)
+                    continue;
+
+                Fence fence = entry.Fence;
+                Result result = Vk.WaitForFences(Device, 1, &fence, true, nanosecondTimeout);
+                if (result == Result.Success)
+                    RetireSerialFences();
+                return result;
+            }
+            return Result.Success;
+        }
+    }
+
+    private void DestroySerialFences()
+    {
+        lock (_serialFenceLock)
+        {
+            foreach ((ulong _, Fence fence) in _serialFences)
+                Vk.DestroyFence(Device, fence, null);
+            foreach (Fence fence in _freeSerialFences)
+                Vk.DestroyFence(Device, fence, null);
+            _serialFences.Clear();
+            _freeSerialFences.Clear();
+        }
     }
 
     private ulong Submit(System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer> handles, System.ReadOnlySpan<VkCommandBuffer> tracked, VkGpuSubmission? submission = null)
@@ -186,8 +263,23 @@ internal unsafe partial class VkGraphicsDevice
                     PSignalSemaphores = &timeline,
                 };
 
+                Fence fence = default;
+                if (!_timelineSupported)
+                {
+                    si.PNext = null;
+                    si.SignalSemaphoreCount = 0;
+                    si.PSignalSemaphores = null;
+                    fence = RentSerialFence();
+                }
+
                 _graphicsQueueSubmitCount++;
-                Vk.QueueSubmit(GraphicsQueue, 1, &si, default).CheckResult();
+                Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
+
+                if (!_timelineSupported)
+                {
+                    lock (_serialFenceLock)
+                        _serialFences.Enqueue((serial, fence));
+                }
             }
 
             FlushValidationErrors();

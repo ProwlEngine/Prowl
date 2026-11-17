@@ -51,6 +51,9 @@ public class BackendInfoVulkan
     /// </summary>
     public object GraphicsQueueLock => _gd.GraphicsQueueLock;
 
+    /// <summary>The VkPhysicalDevice API version, packed as VK_MAKE_API_VERSION.</summary>
+    public uint DeviceApiVersion => _gd.PhysicalDeviceApiVersion;
+
     /// <summary>Driver name. Can be null.</summary>
     public string DriverName => _gd.DriverName;
 

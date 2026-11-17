@@ -32,12 +32,15 @@ internal unsafe partial class VkGraphicsDevice
     private PhysicalDeviceVulkan11Features _enabledVulkan11Features;
     private PhysicalDeviceVulkan12Features _enabledVulkan12Features;
     private PhysicalDeviceVulkan12Properties _vulkan12Properties;
+    private bool _timelineSupported;
     private uint _timestampValidBits;
     private string _deviceName;
     private string _vendorName;
     private GraphicsApiVersion _apiVersion;
 
     public override string DeviceName => _deviceName;
+
+    internal uint PhysicalDeviceApiVersion => _physicalDeviceProperties.ApiVersion;
 
     public override string VendorName => _vendorName;
 

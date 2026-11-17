@@ -145,7 +145,7 @@ internal unsafe partial class VkGraphicsDevice
         foreach (PhysicalDevice candidate in physicalDevices)
         {
             Vk.GetPhysicalDeviceProperties(candidate, out PhysicalDeviceProperties candidateProps);
-            if (candidateProps.ApiVersion < new Version32(1, 2, 0))
+            if (candidateProps.ApiVersion < new Version32(1, 1, 0))
                 continue;
 
             int score = candidateProps.DeviceType switch
@@ -178,10 +178,10 @@ internal unsafe partial class VkGraphicsDevice
         }
 
         uint deviceApiVersion = _physicalDeviceProperties.ApiVersion;
-        if (deviceApiVersion < new Version32(1, 2, 0))
+        if (deviceApiVersion < new Version32(1, 1, 0))
         {
             throw new RenderException(
-                $"Vulkan 1.2 is required, but '{_deviceName}' only supports {deviceApiVersion >> 22}.{(deviceApiVersion >> 12) & 0x3FF}.");
+                $"Vulkan 1.1 is required, but '{_deviceName}' only supports {deviceApiVersion >> 22}.{(deviceApiVersion >> 12) & 0x3FF}.");
         }
 
         _vendorName = "id:" + _physicalDeviceProperties.VendorID.ToString("x8");
@@ -241,6 +241,9 @@ internal unsafe partial class VkGraphicsDevice
 
         HashSet<string> requiredInstanceExtensions = new(options.DeviceExtensions ?? Array.Empty<string>());
 
+        bool core12 = _physicalDeviceProperties.ApiVersion >= new Version32(1, 2, 0);
+        HashSet<string> promotedExtensions = [];
+
         bool pipelineStatistics = false;
         IntPtr[] activeExtensions = new IntPtr[props.Length];
         uint activeExtensionCount = 0;
@@ -274,6 +277,12 @@ internal unsafe partial class VkGraphicsDevice
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
                 }
+                else if (!core12 && extensionName is VK_EXT_descriptor_indexing or VK_KHR_timeline_semaphore or VK_KHR_driver_properties)
+                {
+                    activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
+                    requiredInstanceExtensions.Remove(extensionName);
+                    promotedExtensions.Add(extensionName);
+                }
                 else if (requiredInstanceExtensions.Remove(extensionName))
                 {
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
@@ -290,10 +299,17 @@ internal unsafe partial class VkGraphicsDevice
 
         PhysicalDeviceVulkan11Features supported11 = new(sType: StructureType.PhysicalDeviceVulkan11Features);
         PhysicalDeviceVulkan12Features supported12 = new(sType: StructureType.PhysicalDeviceVulkan12Features, pNext: &supported11);
-        PhysicalDeviceFeatures2 supportedFeatures = new(sType: StructureType.PhysicalDeviceFeatures2, pNext: &supported12);
-        Vk.GetPhysicalDeviceFeatures2(PhysicalDevice, &supportedFeatures);
-        if (!supported12.TimelineSemaphore)
-            throw new RenderException($"The Vulkan device '{_deviceName}' does not support timeline semaphores.");
+        if (core12)
+        {
+            PhysicalDeviceFeatures2 supportedFeatures = new(sType: StructureType.PhysicalDeviceFeatures2, pNext: &supported12);
+            Vk.GetPhysicalDeviceFeatures2(PhysicalDevice, &supportedFeatures);
+        }
+        else
+        {
+            QueryPromotedFeatures(promotedExtensions, ref supported11, ref supported12);
+        }
+
+        _timelineSupported = supported12.TimelineSemaphore;
         if (!supported11.ShaderDrawParameters)
             throw new RenderException($"The Vulkan device '{_deviceName}' does not support shaderDrawParameters, which shaders need for gl_BaseInstance.");
 
@@ -309,7 +325,7 @@ internal unsafe partial class VkGraphicsDevice
 
         PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features)
         {
-            TimelineSemaphore = true,
+            TimelineSemaphore = _timelineSupported,
             DrawIndirectCount = supported12.DrawIndirectCount,
             SamplerFilterMinmax = supported12.SamplerFilterMinmax,
             ShaderOutputViewportIndex = supported12.ShaderOutputViewportIndex,
@@ -328,11 +344,45 @@ internal unsafe partial class VkGraphicsDevice
             Multiview = supported11.Multiview,
         };
 
+        PhysicalDeviceShaderDrawParametersFeatures drawParametersFeatures = new(sType: StructureType.PhysicalDeviceShaderDrawParametersFeatures) { ShaderDrawParameters = true };
+        PhysicalDeviceMultiviewFeatures multiviewFeatures = new(sType: StructureType.PhysicalDeviceMultiviewFeatures, pNext: &drawParametersFeatures) { Multiview = vulkan11Features.Multiview };
+        PhysicalDeviceDescriptorIndexingFeatures indexingFeatures = new(sType: StructureType.PhysicalDeviceDescriptorIndexingFeatures)
+        {
+            RuntimeDescriptorArray = vulkan12Features.RuntimeDescriptorArray,
+            DescriptorBindingPartiallyBound = vulkan12Features.DescriptorBindingPartiallyBound,
+            DescriptorBindingSampledImageUpdateAfterBind = vulkan12Features.DescriptorBindingSampledImageUpdateAfterBind,
+            DescriptorBindingStorageImageUpdateAfterBind = vulkan12Features.DescriptorBindingStorageImageUpdateAfterBind,
+            DescriptorBindingStorageBufferUpdateAfterBind = vulkan12Features.DescriptorBindingStorageBufferUpdateAfterBind,
+            DescriptorBindingUpdateUnusedWhilePending = vulkan12Features.DescriptorBindingUpdateUnusedWhilePending,
+            ShaderSampledImageArrayNonUniformIndexing = vulkan12Features.ShaderSampledImageArrayNonUniformIndexing,
+            ShaderStorageBufferArrayNonUniformIndexing = vulkan12Features.ShaderStorageBufferArrayNonUniformIndexing,
+        };
+        PhysicalDeviceTimelineSemaphoreFeatures timelineFeatures = new(sType: StructureType.PhysicalDeviceTimelineSemaphoreFeatures) { TimelineSemaphore = _timelineSupported };
+
+        void* featureChain = &vulkan11Features;
+        if (!core12)
+        {
+            featureChain = &multiviewFeatures;
+            if (promotedExtensions.Contains(VK_EXT_descriptor_indexing))
+            {
+                indexingFeatures.PNext = featureChain;
+                featureChain = &indexingFeatures;
+            }
+            if (_timelineSupported)
+            {
+                timelineFeatures.PNext = featureChain;
+                featureChain = &timelineFeatures;
+            }
+        }
+
         PhysicalDevicePipelineExecutablePropertiesFeaturesKHR statisticsFeatures = new(sType: StructureType.PhysicalDevicePipelineExecutablePropertiesFeaturesKhr) { PipelineExecutableInfo = true };
         if (pipelineStatistics)
-            vulkan12Features.PNext = &statisticsFeatures;
+        {
+            statisticsFeatures.PNext = featureChain;
+            featureChain = &statisticsFeatures;
+        }
 
-        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan11Features);
+        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: featureChain);
         deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
         deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
 
@@ -367,15 +417,106 @@ internal unsafe partial class VkGraphicsDevice
         if (pipelineStatistics && Vk.TryGetDeviceExtension(Instance, Device, out KhrPipelineExecutableProperties statistics))
             PipelineStatistics = statistics;
 
-        PhysicalDeviceVulkan12Properties driverProps = new(sType: StructureType.PhysicalDeviceVulkan12Properties);
-        PhysicalDeviceProperties2 deviceProps = new(sType: StructureType.PhysicalDeviceProperties2, pNext: &driverProps);
-        Vk.GetPhysicalDeviceProperties2(PhysicalDevice, &deviceProps);
-        _vulkan12Properties = driverProps with { PNext = null };
+        if (core12)
+        {
+            PhysicalDeviceVulkan12Properties driverProps = new(sType: StructureType.PhysicalDeviceVulkan12Properties);
+            PhysicalDeviceProperties2 deviceProps = new(sType: StructureType.PhysicalDeviceProperties2, pNext: &driverProps);
+            Vk.GetPhysicalDeviceProperties2(PhysicalDevice, &deviceProps);
+            _vulkan12Properties = driverProps with { PNext = null };
+            SetDriverInfo(driverProps.ConformanceVersion, driverProps.DriverName, driverProps.DriverInfo);
+        }
+        else
+        {
+            QueryPromotedProperties(promotedExtensions);
+        }
+    }
 
-        ConformanceVersion conforming = driverProps.ConformanceVersion;
+    private const string VK_EXT_descriptor_indexing = "VK_EXT_descriptor_indexing";
+    private const string VK_KHR_timeline_semaphore = "VK_KHR_timeline_semaphore";
+    private const string VK_KHR_driver_properties = "VK_KHR_driver_properties";
+
+    private void SetDriverInfo(ConformanceVersion conforming, byte* driverName, byte* driverInfo)
+    {
         _apiVersion = new GraphicsApiVersion(conforming.Major, conforming.Minor, conforming.Subminor, conforming.Patch);
-        DriverName = Marshal.PtrToStringUTF8((nint)driverProps.DriverName) ?? string.Empty;
-        DriverInfo = Marshal.PtrToStringUTF8((nint)driverProps.DriverInfo) ?? string.Empty;
+        DriverName = Marshal.PtrToStringUTF8((nint)driverName) ?? string.Empty;
+        DriverInfo = Marshal.PtrToStringUTF8((nint)driverInfo) ?? string.Empty;
+    }
+
+    /// <summary>Reads the Vulkan 1.1 and 1.2 features of a 1.1 device from their core 1.1 and extension structs.</summary>
+    private void QueryPromotedFeatures(HashSet<string> extensions, ref PhysicalDeviceVulkan11Features supported11, ref PhysicalDeviceVulkan12Features supported12)
+    {
+        PhysicalDeviceShaderDrawParametersFeatures drawParameters = new(sType: StructureType.PhysicalDeviceShaderDrawParametersFeatures);
+        PhysicalDeviceMultiviewFeatures multiview = new(sType: StructureType.PhysicalDeviceMultiviewFeatures, pNext: &drawParameters);
+        PhysicalDeviceDescriptorIndexingFeatures indexing = new(sType: StructureType.PhysicalDeviceDescriptorIndexingFeatures);
+        PhysicalDeviceTimelineSemaphoreFeatures timeline = new(sType: StructureType.PhysicalDeviceTimelineSemaphoreFeatures);
+
+        void* chain = &multiview;
+        if (extensions.Contains(VK_EXT_descriptor_indexing))
+        {
+            indexing.PNext = chain;
+            chain = &indexing;
+        }
+        if (extensions.Contains(VK_KHR_timeline_semaphore))
+        {
+            timeline.PNext = chain;
+            chain = &timeline;
+        }
+
+        PhysicalDeviceFeatures2 features = new(sType: StructureType.PhysicalDeviceFeatures2, pNext: chain);
+        Vk.GetPhysicalDeviceFeatures2(PhysicalDevice, &features);
+
+        supported11.ShaderDrawParameters = drawParameters.ShaderDrawParameters;
+        supported11.Multiview = multiview.Multiview;
+        supported12.TimelineSemaphore = timeline.TimelineSemaphore;
+        supported12.RuntimeDescriptorArray = indexing.RuntimeDescriptorArray;
+        supported12.DescriptorBindingPartiallyBound = indexing.DescriptorBindingPartiallyBound;
+        supported12.DescriptorBindingUpdateUnusedWhilePending = indexing.DescriptorBindingUpdateUnusedWhilePending;
+        supported12.DescriptorBindingSampledImageUpdateAfterBind = indexing.DescriptorBindingSampledImageUpdateAfterBind;
+        supported12.DescriptorBindingStorageImageUpdateAfterBind = indexing.DescriptorBindingStorageImageUpdateAfterBind;
+        supported12.DescriptorBindingStorageBufferUpdateAfterBind = indexing.DescriptorBindingStorageBufferUpdateAfterBind;
+        supported12.ShaderSampledImageArrayNonUniformIndexing = indexing.ShaderSampledImageArrayNonUniformIndexing;
+        supported12.ShaderStorageBufferArrayNonUniformIndexing = indexing.ShaderStorageBufferArrayNonUniformIndexing;
+    }
+
+    /// <summary>Reads the descriptor table limits and driver details of a 1.1 device from their extension structs.</summary>
+    private void QueryPromotedProperties(HashSet<string> extensions)
+    {
+        PhysicalDeviceDescriptorIndexingProperties indexing = new(sType: StructureType.PhysicalDeviceDescriptorIndexingProperties);
+        PhysicalDeviceDriverProperties driver = new(sType: StructureType.PhysicalDeviceDriverProperties);
+
+        void* chain = null;
+        if (extensions.Contains(VK_EXT_descriptor_indexing))
+        {
+            indexing.PNext = chain;
+            chain = &indexing;
+        }
+        if (extensions.Contains(VK_KHR_driver_properties))
+        {
+            driver.PNext = chain;
+            chain = &driver;
+        }
+
+        PhysicalDeviceProperties2 properties = new(sType: StructureType.PhysicalDeviceProperties2, pNext: chain);
+        Vk.GetPhysicalDeviceProperties2(PhysicalDevice, &properties);
+
+        _vulkan12Properties = new PhysicalDeviceVulkan12Properties
+        {
+            MaxPerStageDescriptorUpdateAfterBindSamplers = indexing.MaxPerStageDescriptorUpdateAfterBindSamplers,
+            MaxPerStageDescriptorUpdateAfterBindUniformBuffers = indexing.MaxPerStageDescriptorUpdateAfterBindUniformBuffers,
+            MaxPerStageDescriptorUpdateAfterBindStorageBuffers = indexing.MaxPerStageDescriptorUpdateAfterBindStorageBuffers,
+            MaxPerStageDescriptorUpdateAfterBindSampledImages = indexing.MaxPerStageDescriptorUpdateAfterBindSampledImages,
+            MaxPerStageDescriptorUpdateAfterBindStorageImages = indexing.MaxPerStageDescriptorUpdateAfterBindStorageImages,
+            MaxPerStageUpdateAfterBindResources = indexing.MaxPerStageUpdateAfterBindResources,
+            MaxDescriptorSetUpdateAfterBindSamplers = indexing.MaxDescriptorSetUpdateAfterBindSamplers,
+            MaxDescriptorSetUpdateAfterBindUniformBuffers = indexing.MaxDescriptorSetUpdateAfterBindUniformBuffers,
+            MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic = indexing.MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic,
+            MaxDescriptorSetUpdateAfterBindStorageBuffers = indexing.MaxDescriptorSetUpdateAfterBindStorageBuffers,
+            MaxDescriptorSetUpdateAfterBindSampledImages = indexing.MaxDescriptorSetUpdateAfterBindSampledImages,
+            MaxDescriptorSetUpdateAfterBindStorageImages = indexing.MaxDescriptorSetUpdateAfterBindStorageImages,
+        };
+
+        if (extensions.Contains(VK_KHR_driver_properties))
+            SetDriverInfo(driver.ConformanceVersion, driver.DriverName, driver.DriverInfo);
     }
 
     private void GetQueueFamilyIndices(SurfaceKHR surface)

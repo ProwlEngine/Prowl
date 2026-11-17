@@ -228,6 +228,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         Vk.DeviceWaitIdle(Device).CheckResult();
 
+        DestroySerialFences();
         Vk.DestroySemaphore(Device, _timelineSemaphore, null);
         Vk.DestroyDevice(Device, null);
         Vk.DestroyInstance(Instance, null);
