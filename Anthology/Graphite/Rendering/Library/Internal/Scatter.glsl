@@ -11,7 +11,13 @@ Compute
     void main()
     {
         uvec4 item = items[push.firstItem + gl_WorkGroupID.x];
-        for (uint word = gl_LocalInvocationID.x; word < item.z; word += 64u)
+        // Counted, as Adreno 610 faults on a loop counting from the invocation id. 64 chunks cover MaxItemWords
+        for (uint chunk = 0u; chunk < 64u; chunk++)
+        {
+            uint word = gl_LocalInvocationID.x + chunk * 64u;
+            if (word >= item.z)
+                break;
             destination[item.x + word] = source[item.y + word];
+        }
     }
 }
