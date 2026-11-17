@@ -13,29 +13,37 @@ public class CompileQueueTests
 {
     // The compile threads never exit, so whatever one copied from the thread that started it would never be freed.
     [Fact]
-    public void CompileThreadsDoNotKeepTheAsyncLocalsOfTheThreadThatStartedThem()
+    public void CompileThreadsRunWithoutTheExecutionContextOfTheThreadThatStartedThem()
     {
-        AsyncLocal<object?> local = new();
-        WeakReference held = HoldInAsyncLocal(local);
+        AsyncLocal<object?> local = new() { Value = new object() };
 
-        // Each job is running before the next is queued, so no thread is idle and the queue starts every thread
-        // it has not started yet from here.
+        ExecutionContext? none = null;
+        Thread bare = new(() => none = ExecutionContext.Capture());
+        bare.UnsafeStart();
+        bare.Join();
+
+        // Each job is running before the next is queued, so no thread is idle: every compile thread ends up
+        // holding one job and reports its context, whether it started here or in an earlier test.
         using ManualResetEventSlim release = new();
         List<Task> jobs = [];
+        int inherited = 0;
         for (int i = 0; i < CompileQueue.ThreadCount; i++)
         {
             ManualResetEventSlim started = new();
-            jobs.Add(CompileQueue.Enqueue(() => { started.Set(); release.Wait(); }, CompilePriority.Fallback).Done);
+            jobs.Add(CompileQueue.Enqueue(() =>
+            {
+                if (!ReferenceEquals(ExecutionContext.Capture(), none))
+                    Interlocked.Increment(ref inherited);
+                started.Set();
+                release.Wait();
+            }, CompilePriority.Fallback).Done);
             Assert.True(started.Wait(TimeSpan.FromSeconds(30)), "a queued job never started");
         }
         release.Set();
         Task.WaitAll(jobs.ToArray());
 
         local.Value = null;
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-        Assert.False(held.IsAlive, "a compile thread kept an object its starter held in an AsyncLocal");
+        Assert.Equal(0, inherited);
     }
 
     private sealed class GatedCompiler : IShaderCompiler
