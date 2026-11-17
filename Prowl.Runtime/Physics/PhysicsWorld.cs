@@ -756,8 +756,8 @@ public class PhysicsWorld
         SpeculativeRelaxationFactor = settings.SpeculativeRelaxationFactor;
     }
 
-    // Jitter starts its worker threads on first use and never stops them. Started here without the caller's
-    // execution context, so they do not keep the scene active at that moment alive.
+    // Jitter starts its worker threads on first use and never stops them. Started without the caller's execution
+    // context, so they do not keep the scene active at that moment alive.
     private static void StartWorkers()
     {
         if (ExecutionContext.IsFlowSuppressed())
@@ -775,7 +775,6 @@ public class PhysicsWorld
     /// </summary>
     public PhysicsWorld()
     {
-        StartWorkers();
         World = new World();
 
         World.DynamicTree.Filter = World.DefaultDynamicTreeFilter;
@@ -943,6 +942,8 @@ public class PhysicsWorld
     /// </summary>
     public void Update()
     {
+        if (UseMultithreading) StartWorkers();
+
         // Configure world settings
         World.AllowDeactivation = AllowSleep;
 
