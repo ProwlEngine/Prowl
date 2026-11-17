@@ -19,6 +19,8 @@ internal unsafe partial class VkGraphicsDevice
     {
         HashSet<string> availableInstanceLayers = [.. Vk.EnumerateInstanceLayers((LayerProperties*)0)];
         HashSet<string> availableInstanceExtensions = [.. Vk.EnumerateInstanceExtensionProperties((byte*)0)];
+        if (debug && availableInstanceLayers.Contains(CommonStrings.KhronosValidationLayerName))
+            availableInstanceExtensions.UnionWith(Vk.EnumerateInstanceExtensionProperties((byte*)CommonStrings.KhronosValidationLayerNameUtf8));
 
         InstanceCreateInfo instanceCI = new(sType: StructureType.InstanceCreateInfo);
         ApplicationInfo applicationInfo = new(sType: StructureType.ApplicationInfo)
