@@ -1708,6 +1708,7 @@ public class SceneInstance : EngineObject, ISerializable
             if (!g.IsDisposed) Guarded(g, "Dispose", g.Dispose);
 
         _physics.Clear();
+        _physics.Detach();
         // Waits out in flight queries.
         _navigation.Clear();
         _animation.Clear();

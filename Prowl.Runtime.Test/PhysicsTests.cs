@@ -2232,6 +2232,38 @@ public class PhysicsTests : RuntimeTestBase
         body.SetActive(true);
         Assert.Equal(Jitter2.Dynamics.MotionType.Kinematic, body.MotionType);
     }
+
+    // Jitter keeps the last world it stepped on worker threads in static task pools, until another world's step
+    // overwrites them, so a destroyed scene must not stay reachable from its Jitter world.
+    [Fact]
+    public void ADestroyedScene_IsNotKeptAliveByItsSteppedPhysicsWorld()
+    {
+        WeakReference scene = StepAndDestroyAScene();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        Assert.False(scene.IsAlive, "the destroyed scene is still reachable");
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private WeakReference StepAndDestroyAScene()
+    {
+        SceneInstance scene = new(SceneMode.Game);
+        scene.Activate();
+        for (int i = 0; i < 700; i++)
+        {
+            GameObject go = new("Body");
+            go.Transform.Position = new Float3(i * 3, 0, 0);
+            go.AddComponent<BoxCollider>();
+            go.AddComponent<Rigidbody3D>();
+            scene.Add(go);
+        }
+        Tick(scene, 5);
+        scene.Deactivate();
+        scene.Dispose();
+        return new WeakReference(scene);
+    }
+
     // A drive that follows a turning body re-aims its motor every step, so the axis changes on the live constraint.
     [Fact]
     public void LinearMotor_AxisChangedWhileLive_DrivesAlongTheNewAxis()

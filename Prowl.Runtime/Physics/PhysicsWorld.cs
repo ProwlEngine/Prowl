@@ -937,6 +937,15 @@ public class PhysicsWorld
         _compositeBroadPhaseFilter.AddFilter(_layerFilter);
     }
 
+    // Jitter keeps the last world it stepped on its workers in static task pools, and the world's step events
+    // lead back here and on to the scene. Unhooked, a destroyed scene's world leads nowhere.
+    internal void Detach()
+    {
+        World.PreStep -= OnPreStep;
+        World.PostStep -= OnPostStep;
+        World.PreSubStep -= OnPreSubStep;
+    }
+
     /// <summary>
     /// Performs a single simulation time step of length <see cref="Time.FixedDeltaTime"/>.
     /// </summary>
