@@ -756,11 +756,26 @@ public class PhysicsWorld
         SpeculativeRelaxationFactor = settings.SpeculativeRelaxationFactor;
     }
 
+    // Jitter starts its worker threads on first use and never stops them. Started here without the caller's
+    // execution context, so they do not keep the scene active at that moment alive.
+    private static void StartWorkers()
+    {
+        if (ExecutionContext.IsFlowSuppressed())
+        {
+            _ = Jitter2.Parallelization.ThreadPool.Instance;
+            return;
+        }
+
+        using (ExecutionContext.SuppressFlow())
+            _ = Jitter2.Parallelization.ThreadPool.Instance;
+    }
+
     /// <summary>
     /// Initializes a new empty <see cref="PhysicsWorld"/> with the project <see cref="Defaults"/>.
     /// </summary>
     public PhysicsWorld()
     {
+        StartWorkers();
         World = new World();
 
         World.DynamicTree.Filter = World.DefaultDynamicTreeFilter;

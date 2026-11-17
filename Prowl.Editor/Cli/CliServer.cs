@@ -171,7 +171,8 @@ public static class CliServer
         s_server = server;
 
         EnsureLockFile(server);
-        _ = Task.Run(() => AcceptLoopAsync(server));
+        // Queued without the caller's execution context, so the loop does not keep the scene active here alive.
+        ThreadPool.UnsafeQueueUserWorkItem(static s => _ = AcceptLoopAsync(s), server, preferLocal: false);
     }
 
     public static void Stop()

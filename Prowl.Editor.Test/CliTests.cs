@@ -168,6 +168,35 @@ public class CliTests : EditorTestHarness
         }
     }
 
+    // The accept loop runs until the server stops, so whatever it copied from the thread that started the server,
+    // the active scene included, would stay alive that long.
+    [Fact]
+    public void TheAcceptLoopDoesNotKeepTheAsyncLocalsOfTheThreadThatStartedTheServer()
+    {
+        AsyncLocal<object?> local = new();
+        WeakReference held = HoldInAsyncLocal(local);
+        CliServer.Start(Project.RootPath, Project.LibraryPath);
+        local.Value = null;
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        do
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+        }
+        while (held.IsAlive && clock.Elapsed < TimeSpan.FromSeconds(2));
+        Assert.False(held.IsAlive, "the accept loop kept an object its starter held in an AsyncLocal");
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static WeakReference HoldInAsyncLocal(AsyncLocal<object?> local)
+    {
+        object value = new byte[1 << 20];
+        local.Value = value;
+        return new WeakReference(value);
+    }
+
     [Fact]
     public async Task UnauthenticatedRequestsAreRefusedBeforeTheBodyIsRead()
     {
