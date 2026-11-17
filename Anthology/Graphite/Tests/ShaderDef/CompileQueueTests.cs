@@ -38,6 +38,46 @@ public class CompileQueueTests
         Assert.False(held.IsAlive, "a compile thread kept an object its starter held in an AsyncLocal");
     }
 
+    private sealed class GatedCompiler : IShaderCompiler
+    {
+        public readonly ManualResetEventSlim Gate = new();
+        public int SessionVersion => 0;
+
+        public IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass) => [];
+
+        public ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
+        {
+            Gate.Wait();
+            return new ShaderDescription();
+        }
+
+        public ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend) => throw new NotSupportedException();
+    }
+
+    // A queued variant waits behind every compile ahead of it, so whatever it copied from the thread that asked
+    // for it would stay alive until the queue got to it.
+    [Fact]
+    public void AQueuedVariantDoesNotKeepTheAsyncLocalsOfTheThreadThatAskedForIt()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(false));
+        GatedCompiler compiler = new();
+        ShaderPass pass = new() { State = new PassState(), Source = "a" };
+        pass.Bind(device, "Test", 0, [], [], compiler);
+        PassVariants variants = pass.Variants(compiler, GraphicsBackend.Vulkan);
+
+        AsyncLocal<object?> local = new();
+        WeakReference held = HoldInAsyncLocal(local);
+        Assert.Equal(VariantState.Pending, variants.Request(0, CompilePolicy.Async, out _, out _));
+        local.Value = null;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        bool alive = held.IsAlive;
+        compiler.Gate.Set();
+        variants.WaitPending();
+        Assert.False(alive, "a variant still compiling kept an object its requester held in an AsyncLocal");
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference HoldInAsyncLocal(AsyncLocal<object?> local)
     {
