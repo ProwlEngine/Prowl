@@ -313,7 +313,9 @@ public class SceneViewPanel : DockPanel
             Origami.Slider(paper, "sv_cam_speed_v", cam.MoveSpeed, cam.SetMoveSpeed, 0.5f, 100f).Format("F1").Show());
 
         CameraRow(paper, font, "sv_cam_smoothing", Loc.Get("scene.camera_smoothing"), () =>
-            Origami.Slider(paper, "sv_cam_smoothing_v", cam.MoveSmoothing, v => cam.MoveSmoothing = v, 0f, EditorCamera.MaxMoveSmoothing).Step(0.005f).Format("F3").Show());
+            // Shown in milliseconds so the steps read as whole numbers; stored in seconds.
+            Origami.Slider(paper, "sv_cam_smoothing_v", cam.MoveSmoothing * 1000f, v => cam.MoveSmoothing = v / 1000f,
+                0f, EditorCamera.MaxMoveSmoothing * 1000f).Step(5f).Format("0 ms").Show());
 
         Origami.Button(paper, "sv_cam_reset", Loc.Get("scene.camera_reset"), cam.ResetLens).FullWidth().Height(22).Show();
     }

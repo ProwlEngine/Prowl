@@ -176,7 +176,7 @@ public class EditorCamera
         set => SetOrthographicSize(value);
     }
 
-    public const float DefaultMoveSmoothing = 0.075f;
+    public const float DefaultMoveSmoothing = 0.08f;
     public const float MaxMoveSmoothing = 0.25f;
 
     /// <summary>Approximate seconds the camera takes to catch up with WASD flight (the smooth time of
