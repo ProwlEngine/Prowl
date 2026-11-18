@@ -63,6 +63,12 @@ internal sealed class SnapshotSystem : IDisposable
 
     // Values changed since the last tick, with their flags, owed to peers once at the next.
     private readonly Dictionary<SyncKey, SyncFlags> _changed = new();
+
+    // Values written this tick that read the same for every peer.
+    private readonly Dictionary<SyncKey, WrittenOnce> _written = new();
+
+    // What each object's network membership was found to be this tick.
+    private readonly Dictionary<GameObject, (bool Excluded, NetworkObject? Entry)> _objectInfo = new(ReferenceEqualityComparer.Instance);
     private readonly List<(uint NetId, uint Generation)> _scratchPositions = new();
     private readonly List<NetPeer> _sendTargets = new();
     private readonly Stack<SentSnapshot> _sentPool = new();
@@ -446,6 +452,20 @@ internal sealed class SnapshotSystem : IDisposable
     private int ControllerOf(Component component, SyncFlags flags) =>
         (flags & SyncFlags.FromOwner) == 0 ? NetPeer.HostId : ControllerOf(component.GameObject);
 
+    private static int ControllerOf(NetworkObject? entry) =>
+        entry == null || entry.Owner == NoOwner ? NetPeer.HostId : entry.Owner;
+
+    /// <summary>Whether an object is left out of the network, and the networked object it belongs to, found once a tick.</summary>
+    private (bool Excluded, NetworkObject? Entry) InfoOf(GameObject go)
+    {
+        if (!_objectInfo.TryGetValue(go, out (bool Excluded, NetworkObject? Entry) info))
+        {
+            _objectInfo[go] = info = (NetworkAccessor.IsExcludedFromNetwork(go), _scene.FindEntry(go));
+        }
+
+        return info;
+    }
+
     private int ControllerOf(GameObject go)
     {
         int owner = _scene.OwnerOf(go);
@@ -527,6 +547,8 @@ internal sealed class SnapshotSystem : IDisposable
     internal void Send()
     {
         FanOutChanges();
+        _written.Clear();
+        _objectInfo.Clear();
         uint tick = ++_scene.Tick;
         double now = _scene.Now;
         CaptureTransforms(tick, now);
@@ -731,18 +753,26 @@ internal sealed class SnapshotSystem : IDisposable
 
         _scratchKeys.Clear();
         using NetworkSerialization.WritingFor receiver = new(_scene.IsHost ? peer : null, null, null);
+        bool restricted = _scene.Restricted.Count > 0;
         foreach ((SyncKey key, Pending pending) in state.Values)
         {
             Component component = key.Component;
-            if (component.IsDisposed || state.Missing.Contains(component) ||
-                NetworkAccessor.IsExcludedFromNetwork(component.GameObject) || !_scene.Sees(component.GameObject, peer) ||
-                NetworkMembers.Of(component).Sync(key.Slot) is not { } sync ||
-                (_scene.IsHost ? ControllerOf(component, sync.Flags) == peer.Id : !_scene.HasControl(component, sync.Flags)))
+            if (component.IsDisposed || state.Missing.Contains(component))
+            {
+                _scratchKeys.Add(key);
+                continue;
+            }
+
+            (bool excluded, NetworkObject? entry) = InfoOf(component.GameObject);
+            if (excluded || (restricted && !Sees(entry, peer)) || NetworkMembers.Of(component).Sync(key.Slot) is not { } sync ||
+                (_scene.IsHost
+                    ? ((sync.Flags & SyncFlags.FromOwner) == 0 ? NetPeer.HostId : ControllerOf(entry)) == peer.Id
+                    : !_scene.HasControl(component, sync.Flags)))
             {
                 _scratchKeys.Add(key);
             }
             else if ((pending.Changed > pending.LastSent || tick - pending.LastSent >= resend) &&
-                     SendsOn(_scene.FindEntry(component.GameObject), tick) && !AddValue(state, key, component, sync))
+                     SendsOn(entry, tick) && !AddValue(state, key, component, sync, entry))
             {
                 _scratchKeys.Add(key);
             }
@@ -799,17 +829,45 @@ internal sealed class SnapshotSystem : IDisposable
                                                   _scene.Entries.TryGetNet(entry.NetId, out NetworkObject? current) &&
                                                   current == entry;
 
-    private bool AddValue(PeerState state, SyncKey key, Component component, SyncMember sync)
+    private bool AddValue(PeerState state, SyncKey key, Component component, SyncMember sync, NetworkObject? entry)
     {
-        _valueWriter.Reset();
-        if (!_scene.Sync.TryWrite(component, sync, _valueWriter))
+        ReadOnlySpan<byte> value;
+        uint generation;
+        if (_written.TryGetValue(key, out WrittenOnce once))
         {
-            return false;
-        }
+            if (once.Bytes == null)
+            {
+                return false;
+            }
 
-        if (_scene.IsHost)
+            value = once.Bytes;
+            generation = once.Generation;
+            if (_scene.IsHost)
+            {
+                Remember(state, key, [], []);
+            }
+        }
+        else
         {
-            Remember(state, key, NetworkSerialization.MaskedRoots, NetworkSerialization.LinkedRoots);
+            _valueWriter.Reset();
+            if (!_scene.Sync.TryWrite(component, sync, _valueWriter))
+            {
+                _written[key] = new WrittenOnce(null, 0);
+                return false;
+            }
+
+            value = _valueWriter.WrittenSpan;
+            generation = entry?.Generation ?? 0;
+            if (_scene.IsHost)
+            {
+                Remember(state, key, NetworkSerialization.MaskedRoots, NetworkSerialization.LinkedRoots);
+            }
+
+            // Bytes naming no networked object are the same for every peer, so they are written once a tick.
+            if (NetworkSerialization.MaskedRoots.Count == 0 && NetworkSerialization.LinkedRoots.Count == 0)
+            {
+                _written[key] = new WrittenOnce(value.ToArray(), generation);
+            }
         }
 
         if (!state.ComponentIds.TryGetValue(component, out uint id))
@@ -821,8 +879,7 @@ internal sealed class SnapshotSystem : IDisposable
         // Named by its guid too, until the receiver is known to have that.
         bool define = !state.DefinedComponents.Contains(component);
         int offset = _itemBytes.Length;
-        new SnapshotValue(id, define ? component.Identifier : null, key.Slot,
-            _scene.GenerationOf(component.GameObject), _valueWriter.WrittenSpan).Write(_itemBytes);
+        new SnapshotValue(id, define ? component.Identifier : null, key.Slot, generation, value).Write(_itemBytes);
         _items.Add(new Item(false, 0, 0, offset, _itemBytes.Length - offset, null, key, define ? component : null));
         return true;
     }
@@ -1588,6 +1645,9 @@ internal sealed class SnapshotSystem : IDisposable
     // --- State ------------------------------------------------------------------------------------
 
     private readonly record struct SyncKey(Component Component, uint Slot);
+
+    /// <summary>A value as written this tick for every peer, or null bytes when it could not be written.</summary>
+    private readonly record struct WrittenOnce(byte[]? Bytes, uint Generation);
 
     /// <summary>A value owed to a peer: the tick it last changed, and the tick it last went out.</summary>
     private readonly record struct Pending(uint Changed, uint LastSent);
