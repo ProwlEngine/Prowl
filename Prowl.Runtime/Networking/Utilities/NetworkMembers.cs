@@ -341,6 +341,14 @@ internal sealed class NetworkMembers
             }
         }
 
+        if (typeof(INetworkSerialize).IsAssignableFrom(type))
+        {
+            NetworkSerializeMember custom = new(type.GetCustomAttribute<NetworkSerializeAttribute>()?.Flags ?? SyncFlags.None);
+            members ??= new NetworkMembers();
+            members._syncs[custom.Slot] = custom;
+            members.Syncs.Add(custom);
+        }
+
         return members ?? s_none;
     }
 }

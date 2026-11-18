@@ -158,6 +158,32 @@ public static partial class Networking
     public static void RegisterFactory(string name, NetworkFactory build, Action<GameObject>? destroy = null) =>
         NetworkFactories.Register(name, build, destroy);
 
+    /// <summary>
+    ///     Sends an <see cref="INetworkSerialize" /> component's state at the next tick, as Mirror's SetDirty. Only the
+    ///     peer that writes it may; anywhere else the change is dropped with a warning.
+    /// </summary>
+    public static void SetDirty(Component component)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        if (component is not INetworkSerialize)
+        {
+            throw new ArgumentException($"{component.GetType().Name} doesn't implement INetworkSerialize.", nameof(component));
+        }
+
+        if (!IsActive || NetworkMembers.Of(component).Sync(NetworkSerializeMember.CustomSlot) is not { } member)
+        {
+            return;
+        }
+
+        if (!System!.HasControl(component, member.Flags))
+        {
+            System.Sync.WarnSyncOnce(component, member, "was marked dirty on a peer that doesn't write it");
+            return;
+        }
+
+        System.Sync.MarkSyncDirty(component, member.Slot);
+    }
+
     /// <summary>This peer's player object, or null. Set by the host with <see cref="AddPlayer" />.</summary>
     public static GameObject? LocalPlayer => System?.LocalPlayer;
 

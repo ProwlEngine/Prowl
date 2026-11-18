@@ -60,6 +60,11 @@ internal static class NetworkSchema
         Justification = "Player builds preserve script assemblies and their generated network descriptor fields.")]
     internal static IEnumerable<string> Describe(Type type)
     {
+        if (type is { IsClass: true, IsAbstract: false } && typeof(INetworkSerialize).IsAssignableFrom(type))
+        {
+            yield return $"{type} serialize {type.GetCustomAttribute<NetworkSerializeAttribute>()?.Flags ?? SyncFlags.None}";
+        }
+
         foreach (FieldInfo field in type.GetFields(DescriptorFields))
         {
             bool sync = typeof(SyncMember).IsAssignableFrom(field.FieldType);
