@@ -158,6 +158,35 @@ public static partial class Networking
     public static void RegisterFactory(string name, NetworkFactory build, Action<GameObject>? destroy = null) =>
         NetworkFactories.Register(name, build, destroy);
 
+    /// <summary>
+    ///     Host: takes a spawned object out of the network, as Mirror's UnSpawn does. Clients despawn it, and this peer
+    ///     keeps it, to pool or spawn again later; one built from a prefab or factory spawns again the same way.
+    /// </summary>
+    public static void Despawn(GameObject go)
+    {
+        ArgumentNullException.ThrowIfNull(go);
+        System?.Despawn(go);
+    }
+
+    /// <summary>
+    ///     Builds this peer's instances of <paramref name="prefab" /> with <paramref name="spawn" /> and takes them back
+    ///     with <paramref name="unspawn" /> when they leave the network, instead of instantiating and destroying them, so
+    ///     they can be pooled. The tree <paramref name="spawn" /> returns must be the prefab's, in no scene yet.
+    /// </summary>
+    public static void RegisterPrefab(PrefabAsset prefab, Func<PrefabAsset, GameObject>? spawn = null,
+        Action<GameObject>? unspawn = null)
+    {
+        ArgumentNullException.ThrowIfNull(prefab);
+        NetworkPrefabHandlers.Register(prefab.AssetID, spawn, unspawn);
+    }
+
+    /// <summary>Removes the handlers registered for <paramref name="prefab" />. False if there were none.</summary>
+    public static bool UnregisterPrefab(PrefabAsset prefab)
+    {
+        ArgumentNullException.ThrowIfNull(prefab);
+        return NetworkPrefabHandlers.Unregister(prefab.AssetID);
+    }
+
     /// <summary>Removes the factory registered as <paramref name="name" />. False if there was none.</summary>
     public static bool UnregisterFactory(string name) => NetworkFactories.Unregister(name);
 

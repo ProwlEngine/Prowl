@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Networking;
@@ -13,6 +14,36 @@ public readonly record struct NetworkSpawn(string Factory, Float3 Position, Quat
 
 /// <summary>Builds a networked object in code, the same tree on every peer. Returns a new object in no scene yet.</summary>
 public delegate GameObject NetworkFactory(in NetworkSpawn spawn);
+
+/// <summary>Client side handlers that build and take back instances of one prefab, so they can be pooled.</summary>
+internal static class NetworkPrefabHandlers
+{
+    private static readonly Dictionary<Guid, (Func<PrefabAsset, GameObject>? Spawn, Action<GameObject>? Unspawn)> s_handlers = new();
+
+    internal static void Register(Guid prefab, Func<PrefabAsset, GameObject>? spawn, Action<GameObject>? unspawn)
+    {
+        lock (s_handlers)
+        {
+            s_handlers[prefab] = (spawn, unspawn);
+        }
+    }
+
+    internal static bool Unregister(Guid prefab)
+    {
+        lock (s_handlers)
+        {
+            return s_handlers.Remove(prefab);
+        }
+    }
+
+    internal static (Func<PrefabAsset, GameObject>? Spawn, Action<GameObject>? Unspawn) For(Guid prefab)
+    {
+        lock (s_handlers)
+        {
+            return s_handlers.GetValueOrDefault(prefab);
+        }
+    }
+}
 
 internal static class NetworkFactories
 {

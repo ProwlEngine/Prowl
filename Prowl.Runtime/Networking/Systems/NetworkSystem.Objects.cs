@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
@@ -96,6 +97,11 @@ internal sealed partial class NetworkSystem
     /// </summary>
     internal void Spawn(GameObject go, NetPeer? owner, NetworkOrphaned orphaned, SpawnTemplate? template = null)
     {
+        if (template == null && _despawnedTemplates.TryGetValue(go, out SpawnTemplate? remembered))
+        {
+            template = remembered;
+        }
+
         if (!Enum.IsDefined(orphaned))
         {
             throw new ArgumentOutOfRangeException(nameof(orphaned));
@@ -350,10 +356,18 @@ internal sealed partial class NetworkSystem
         {
             source = $"prefab {spawn.Prefab}";
             PrefabAsset? prefab = AssetDatabase.Load<PrefabAsset>(spawn.Prefab);
-            if (prefab.IsNotValid() || prefab!.GameObjectData == null ||
-                GameObject.InstantiateDetached(prefab) is not { } built)
+            if (prefab.IsNotValid() || prefab!.GameObjectData == null)
             {
                 throw new InvalidDataException($"The host spawned the {source}, which this build does not have.");
+            }
+
+            GameObject? built = NetworkPrefabHandlers.For(spawn.Prefab).Spawn is { } handler
+                ? handler(prefab)
+                : GameObject.InstantiateDetached(prefab);
+            if (built.IsNotValid() || built!.Scene.IsValid())
+            {
+                throw new InvalidOperationException(
+                    $"Building the {source} gave no object, or one already in a scene; networking adds it.");
             }
 
             go = built;
@@ -619,6 +633,57 @@ internal sealed partial class NetworkSystem
         SendToObservers(entry, EngineMessage.Despawn, message.WrittenSpan);
     }
 
+    // What despawned objects were built from, so spawning one again sends it the same way.
+    private readonly ConditionalWeakTable<GameObject, SpawnTemplate> _despawnedTemplates = new();
+
+    /// <summary>Host: takes a spawned object out of the network everywhere, leaving this peer's object as it is.</summary>
+    internal void Despawn(GameObject go)
+    {
+        if (!IsActive)
+        {
+            return;
+        }
+
+        if (!IsHost)
+        {
+            throw new InvalidOperationException("Only the host can despawn networked objects.");
+        }
+
+        if (FindEntry(go) is not { TearingDown: false } entry || entry.GameObject != go)
+        {
+            throw new InvalidOperationException($"'{go.Name}' is not a spawned networked object.");
+        }
+
+        using FrameStatScope stats = FrameStats.Network.Scope();
+        if (entry.Template != null)
+        {
+            _despawnedTemplates.AddOrUpdate(go, entry.Template);
+        }
+
+        NetSession session = Session!;
+        entry.NotifyDespawn();
+        if (Session != session || FindEntry(go) != entry)
+        {
+            return;
+        }
+
+        using NetWriter message = new(32);
+        new DespawnMessage(go.Identifier).Write(message);
+        SendToObservers(entry, EngineMessage.Despawn, message.WrittenSpan);
+        foreach (NetPeer peer in session.Peers)
+        {
+            if (!peer.IsLocal)
+            {
+                Snapshots.Withdraw(peer, go);
+            }
+        }
+
+        Entries.Remove(go.Identifier);
+        Restricted.Remove(entry);
+        ForgetInRange(entry);
+        VisibilityOverrides.Remove(go);
+    }
+
     internal void OnDespawn(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         if (IsHost)
@@ -635,6 +700,11 @@ internal sealed partial class NetworkSystem
                 destroy != null && entry.GameObject.IsValid())
             {
                 destroy(entry.GameObject);
+            }
+            else if (entry.Template is { Factory: null } template &&
+                     NetworkPrefabHandlers.For(template.Prefab).Unspawn is { } unspawn && entry.GameObject.IsValid())
+            {
+                unspawn(entry.GameObject);
             }
             else if (entry.GameObject.IsValid())
             {
