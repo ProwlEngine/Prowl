@@ -230,6 +230,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         }
         if (!string.IsNullOrEmpty(_suffixText)) tb.Suffix(_suffixText!);
         if (_stepper) tb.TrailingContent(DrawStepper);
+        if (_onCommit != null) tb.OnEditEnd(EndTypedEdit);
 
         if (_error != null) tb.Error(_error);
         if (_helperText != null) tb.HelperText(_helperText);
@@ -441,6 +442,16 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         if (_max is T max && parsed > max) parsed = max;
 
         _setter(parsed);
+        // Typing applies as it goes; the commit waits for the edit to end
+        if (_onCommit != null) _paper.SetRootStorage(TypedKey, true);
+    }
+
+    private string TypedKey => $"{_id}_typed";
+
+    private void EndTypedEdit()
+    {
+        if (!_paper.GetRootStorage<bool>(TypedKey)) return;
+        _paper.SetRootStorage(TypedKey, false);
         _onCommit?.Invoke();
     }
 }

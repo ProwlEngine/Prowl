@@ -66,6 +66,7 @@ public sealed class TextFieldBuilder
     // Behaviour
     private bool _submitOnEnter;
     private bool _commitOnEnter;
+    private Action? _onEditEnd;
     private bool _autoFocus;
 
     // Filtering
@@ -128,6 +129,8 @@ public sealed class TextFieldBuilder
     /// that is costly or undoable to apply.
     /// </summary>
     public TextFieldBuilder CommitOnEnter(bool commit = true) { _commitOnEnter = commit; return this; }
+    /// <summary>Runs when the field loses focus, which Enter also causes in a single-line field.</summary>
+    public TextFieldBuilder OnEditEnd(Action onEditEnd) { _onEditEnd = onEditEnd; return this; }
 
     // ── Modes ──────────────────────────────────────────────────────────
 
@@ -206,6 +209,9 @@ public sealed class TextFieldBuilder
         _prefixDragSquare = square;
         return this;
     }
+
+    /// <summary>Make the <see cref="Prefix"/> label a horizontal drag handle; <paramref name="onDelta"/> gets the pixel delta X each frame.</summary>
+    public TextFieldBuilder PrefixDrag(Action<float> onDelta) => PrefixDrag(onDelta, null, null, true);
 
     /// <summary>Left/right padding around the <see cref="Prefix"/> label (default 10/4). Use tight values for vector axis tags.</summary>
     public TextFieldBuilder PrefixPad(float left, float right) { _prefixPadL = left; _prefixPadR = right; return this; }
@@ -320,8 +326,17 @@ public sealed class TextFieldBuilder
                 .Focused.BorderColor(focusBorder).Glow(0, 0, 10, 1, glowColor).End()
                 .Rounded(_theme.Metrics.Rounding)
                 .TabIndex(0);
-            if (_commitOnEnter)
-                rowBuilder.OnFocusChange(e => { if (!e.IsFocused) TextFieldCommits.Commit(e.Source.Data.ID); });
+            if (_commitOnEnter || _onEditEnd != null)
+            {
+                bool commit = _commitOnEnter;
+                Action? onEditEnd = _onEditEnd;
+                rowBuilder.OnFocusChange(e =>
+                {
+                    if (e.IsFocused) return;
+                    if (commit) TextFieldCommits.Commit(e.Source.Data.ID);
+                    onEditEnd?.Invoke();
+                });
+            }
 
             using (rowBuilder.Enter())
             {
