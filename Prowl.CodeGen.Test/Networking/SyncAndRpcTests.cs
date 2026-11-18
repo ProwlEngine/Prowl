@@ -213,6 +213,11 @@ public class SyncAndRpcTests
     }
 
     [Fact]
+    public void ANetworkCollectionCannotGoToTheOwnerAlone() =>
+        Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Bag : Component { [Sync(SyncFlags.ToOwner)] public NetList<int> Items { get; } = new(); }").Errors,
+            e => e.Id == "PROWLNET007");
+
+    [Fact]
     public void AnArrayOfAnUnsendableTypeIsReported() =>
         Assert.NotEmpty(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Board : Component { [Sync] public System.IO.Stream[] Streams { get; set; } }").Errors);
 

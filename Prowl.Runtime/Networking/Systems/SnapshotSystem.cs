@@ -131,6 +131,16 @@ internal sealed class SnapshotSystem : IDisposable
             state.Poses.Clear();
             state.Baselines.Clear();
             state.SentPositions.Clear();
+            if (_scene.IsHost)
+            {
+                foreach (NetworkObject entry in _scene.Entries.Values)
+                {
+                    if (entry.Owner == peer.Id && entry.GameObject.IsValid())
+                    {
+                        OweOwnerValues(state, peer, entry.GameObject);
+                    }
+                }
+            }
             state.Rejecting.Clear();
             state.Missing.Clear();
             state.Named.Clear();
@@ -166,6 +176,11 @@ internal sealed class SnapshotSystem : IDisposable
                 state.Missing.Remove(component);
                 state.Rejecting.Remove(component);
             }
+        }
+
+        if (_scene.IsHost)
+        {
+            OweOwnerValues(state, peer, root);
         }
     }
 
@@ -421,11 +436,13 @@ internal sealed class SnapshotSystem : IDisposable
             }
 
             int controller = ControllerOf(component, flags);
-            NetworkObject? entry = _scene.Restricted.Count == 0 ? null : _scene.FindEntry(component.GameObject);
+            bool toOwner = (flags & SyncFlags.ToOwner) != 0;
+            NetworkObject? entry = _scene.Restricted.Count == 0 && !toOwner ? null : _scene.FindEntry(component.GameObject);
             foreach (NetPeer peer in targets)
             {
                 PeerState state = State(peer);
-                if (peer.Id == controller || state.Missing.Contains(component) || !Sees(entry, peer))
+                if (peer.Id == controller || state.Missing.Contains(component) || !Sees(entry, peer) ||
+                    (toOwner && !OwnedBy(entry, peer)))
                 {
                     continue;
                 }
@@ -441,6 +458,35 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>Whose changes to a value count: the object's controller for FromOwner ones, else the host's.</summary>
     private int ControllerOf(Component component, SyncFlags flags) =>
         (flags & SyncFlags.FromOwner) == 0 ? NetPeer.HostId : ControllerOf(component.GameObject);
+
+    private static bool OwnedBy(NetworkObject? entry, NetPeer peer) => entry != null && entry.Owner == peer.Id;
+
+    /// <summary>
+    ///     Owes <paramref name="peer" /> the owner only values of what it owns in <paramref name="root" />'s tree,
+    ///     which shared writes leave out.
+    /// </summary>
+    private void OweOwnerValues(PeerState state, NetPeer peer, GameObject root)
+    {
+        uint tick = _scene.Tick + 1;
+        foreach (GameObject go in TreeOf(root))
+        {
+            if (!OwnedBy(_scene.FindEntry(go), peer))
+            {
+                continue;
+            }
+
+            foreach (Component component in go.GetComponents<Component>())
+            {
+                foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
+                {
+                    if ((sync.Flags & SyncFlags.ToOwner) != 0 && ControllerOf(component, sync.Flags) != peer.Id)
+                    {
+                        Owe(state, new SyncKey(component, sync.Slot), tick);
+                    }
+                }
+            }
+        }
+    }
 
     private static int ControllerOf(NetworkObject? entry) =>
         entry == null || entry.Owner == NoOwner ? NetPeer.HostId : entry.Owner;
@@ -477,7 +523,8 @@ internal sealed class SnapshotSystem : IDisposable
             Component component = key.Component;
             if (!component.IsDisposed && !state.Missing.Contains(component) &&
                 !NetworkAccessor.IsExcludedFromNetwork(component.GameObject) && _scene.Sees(component.GameObject, peer) &&
-                NetworkMembers.Of(component).Sync(key.Slot) is { } sync && ControllerOf(component, sync.Flags) != peer.Id)
+                NetworkMembers.Of(component).Sync(key.Slot) is { } sync && ControllerOf(component, sync.Flags) != peer.Id &&
+                ((sync.Flags & SyncFlags.ToOwner) == 0 || OwnedBy(_scene.FindEntry(component.GameObject), peer)))
             {
                 owed.Add((component, key.Slot));
             }
@@ -778,6 +825,7 @@ internal sealed class SnapshotSystem : IDisposable
 
             (bool excluded, NetworkObject? entry) = InfoOf(component.GameObject);
             if (excluded || (restricted && !Sees(entry, peer)) || NetworkMembers.Of(component).Sync(key.Slot) is not { } sync ||
+                ((sync.Flags & SyncFlags.ToOwner) != 0 && _scene.IsHost && !OwnedBy(entry, peer)) ||
                 (_scene.IsHost
                     ? ((sync.Flags & SyncFlags.FromOwner) == 0 ? NetPeer.HostId : ControllerOf(entry)) == peer.Id
                     : !_scene.HasControl(component, sync.Flags)))
@@ -1620,6 +1668,12 @@ internal sealed class SnapshotSystem : IDisposable
                 foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
                 {
                     if (!includeAll && (sync.IsCollection || !_scene.HasControl(component, sync.Flags)))
+                    {
+                        continue;
+                    }
+
+                    // Everyone gets the host's handoff; the new owner is owed these once it has it.
+                    if (includeAll && (sync.Flags & SyncFlags.ToOwner) != 0)
                     {
                         continue;
                     }

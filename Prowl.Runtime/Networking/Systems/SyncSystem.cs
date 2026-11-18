@@ -269,7 +269,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             {
                 foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
                 {
-                    if (WriteValue(values, component, sync.Slot, false))
+                    // Written for several peers at once, so values only an owner gets go to it separately.
+                    if ((sync.Flags & SyncFlags.ToOwner) == 0 && WriteValue(values, component, sync.Slot, false))
                     {
                         count++;
                     }

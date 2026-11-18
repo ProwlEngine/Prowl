@@ -365,6 +365,15 @@ internal sealed partial class NetworkCodeGen
             uint flags = sync.ConstructorArguments
                 .Concat(sync.NamedArguments.Where(a => a.Key == "Flags").Select(a => a.Value))
                 .Select(a => Convert.ToUInt32(a.Value)).LastOrDefault();
+
+            // SyncFlags.ToOwner: a collection's changes go to everyone that has the object.
+            if (collection && (flags & 2u) != 0)
+            {
+                context.Report(s_collectionShape, location, name,
+                    "is a network collection, which can't take SyncFlags.ToOwner. Only plain values go to the owner alone");
+                return null;
+            }
+
             context.ClaimId(property.ContainingType, false, name, location);
             return new SyncInfo(name, OneLine(node.Type), NetworkId(name), flags,
                 node.Initializer == null ? null : OneLine(node.Initializer.Value),
