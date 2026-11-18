@@ -328,7 +328,8 @@ public class SyncAndRpcTests
             SceneInstance.Main = _scene;
             LocalNetwork network = new();
             Net.Host(new LocalTransport(network, "host"));
-            Client = NetSession.Join(new LocalTransport(network, "client"), "host", "client");
+            Client = NetSession.Join(new LocalTransport(network, "client"), "host", "client",
+                options: new NetSessionOptions { AppVersion = NetworkSchema.AppVersion(0) });
             Client.OnRaw(SceneSnapshot, (NetPeer _, ref NetReader r, Delivery _, byte _) =>
             {
                 r.ReadByte();
