@@ -757,7 +757,7 @@ internal sealed class DatePickerModal : IModal
                     h = isPM ? (h == 12 ? 12 : h + 12) : (h == 12 ? 0 : h);
                 _value = new System.DateTime(_value.Year, _value.Month, _value.Day, h, minute, 0);
                 _setter(_value);
-            }).Min(_use24Hour ? 0 : 1).Max(_use24Hour ? 23 : 12).Width(50).Show();
+            }).Min(_use24Hour ? 0 : 1).Max(_use24Hour ? 23 : 12).Width(50).DragHandle(false).Show();
 
             paper.Box($"{_id}_colon").Width(10).Height(m.RowHeight)
                 .Text(":", font).TextColor(ink.C400)
@@ -770,7 +770,7 @@ internal sealed class DatePickerModal : IModal
                 int mi = Math.Clamp(v, 0, 59);
                 _value = new System.DateTime(_value.Year, _value.Month, _value.Day, _value.Hour, mi, 0);
                 _setter(_value);
-            }).Min(0).Max(59).Width(50).Show();
+            }).Min(0).Max(59).Width(50).DragHandle(false).Show();
 
             // AM/PM toggle
             if (!_use24Hour)

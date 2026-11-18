@@ -65,6 +65,8 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private bool _dragLabel;
     private int _dragDecimalPlaces;
     private bool _prefixCompact;
+    private bool _dragHandle = true; // type-tag scrub handle shown when no other prefix is set
+    private int _dragHandleDecimals = 2;
     private Action? _onCommit;
 
     internal NumericFieldBuilder(Paper paper, string id, T value, Action<T> setter, OrigamiTheme theme)
@@ -166,14 +168,18 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     }
 
     /// <summary>
-    /// Show a type tag before the value that scrubs it when dragged: <c>f</c> in
+    /// Configure the type tag shown before the value that scrubs it when dragged: <c>f</c> in
     /// <see cref="OrigamiTheme.FloatTag"/> for floating-point fields, <c>i</c> in
     /// <see cref="OrigamiTheme.IntTag"/> for integer ones. Shift drags faster, Ctrl slower.
+    /// On by default; pass <c>false</c> to hide it. Ignored when <see cref="Prefix"/> or
+    /// <see cref="DraggableLabel"/> sets a label.
     /// </summary>
-    public NumericFieldBuilder<T> DragHandle(int dragDecimalPlaces = 2)
-        => s_isFloatingPoint
-            ? DraggableLabel("f", _theme.FloatTag, dragDecimalPlaces)
-            : DraggableLabel("i", _theme.IntTag, dragDecimalPlaces);
+    public NumericFieldBuilder<T> DragHandle(bool enabled = true, int dragDecimalPlaces = 2)
+    {
+        _dragHandle = enabled;
+        _dragHandleDecimals = dragDecimalPlaces;
+        return this;
+    }
 
     /// <summary>
     /// Called once a change is final: after a typed or stepper edit, and when a scrub is released
@@ -222,6 +228,8 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             tb.LeadingIcon(_leadingIconGlyph!);
         if (!string.IsNullOrEmpty(_trailingIconGlyph))
             tb.TrailingIcon(_trailingIconGlyph!, _trailingIconClick);
+        if (string.IsNullOrEmpty(_prefixText) && _dragHandle)
+            DraggableLabel(s_isFloatingPoint ? "f" : "i", s_isFloatingPoint ? _theme.FloatTag : _theme.IntTag, _dragHandleDecimals);
         if (!string.IsNullOrEmpty(_prefixText))
         {
             tb.Prefix(_prefixText!, _prefixColor ?? _theme.Ink.C400);
