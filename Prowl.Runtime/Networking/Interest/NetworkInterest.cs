@@ -19,6 +19,22 @@ public sealed class NetworkInterest
 
     internal NetworkInterest(NetworkSystem system) => _system = system;
 
+    /// <summary>
+    ///     A rule of the game's own, as Mirror's interest managers give: true or false decides whether a client gets an
+    ///     object, null leaves it to the built in rules. It runs after ownership, per client overrides and the object's
+    ///     <see cref="NetworkVisibility" />, and before groups and distance. Setting it checks every client again; call
+    ///     <see cref="Refresh()" /> when what it depends on changes.
+    /// </summary>
+    public Func<GameObject, NetPeer, bool?>? Rule
+    {
+        get => _system.InterestRule;
+        set
+        {
+            _system.InterestRule = value;
+            Refresh();
+        }
+    }
+
     /// <summary>The client's viewpoints and options. One that left gets a detached copy that changes nothing.</summary>
     public PeerInterest For(NetPeer peer)
     {

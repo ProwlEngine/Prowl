@@ -17,6 +17,9 @@ internal sealed partial class NetworkSystem
     internal readonly Dictionary<GameObject, Dictionary<int, bool>> VisibilityOverrides = new(ReferenceEqualityComparer.Instance);
     private readonly List<NetPeer> _entering = new(), _leaving = new();
 
+    /// <summary>The game's own interest rule, set through <see cref="NetworkInterest.Rule" />.</summary>
+    internal Func<GameObject, NetPeer, bool?>? InterestRule;
+
     // Objects written as scene content, which clients may hold.
     private readonly HashSet<GameObject> _sentAsContent = new(ReferenceEqualityComparer.Instance);
     private bool _warnedHiddenOwner;
@@ -53,6 +56,11 @@ internal sealed partial class NetworkSystem
                 return true;
             case NetworkVisibility.OwnerOnly or NetworkVisibility.Manual:
                 return false;
+        }
+
+        if (InterestRule?.Invoke(go, peer) is { } custom)
+        {
+            return custom;
         }
 
         _interests.TryGetValue(peer.Id, out PeerInterest? interest);
