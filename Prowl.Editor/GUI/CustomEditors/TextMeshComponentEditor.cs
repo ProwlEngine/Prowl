@@ -42,7 +42,7 @@ public class TextMeshComponentEditor : CustomEditor
         paper.Box($"{id}_sp0.1").Height(6);
 
         EditorGUI.Row(paper, $"{id}_size", "Font Size", () =>
-            Origami.NumericField<int>(paper, $"{id}_size_v", text.Size, v => Edit(text, "Change Font Size", () => text.Size = v)).Show());
+            Origami.NumericField<int>(paper, $"{id}_size_v", text.Size, v => Edit(text, "Change Font Size", () => text.Size = v)).DragHandle().Show());
 
         paper.Box($"{id}_sp0.15").Height(6);
 
@@ -66,12 +66,12 @@ public class TextMeshComponentEditor : CustomEditor
         Origami.Header(paper, $"{id}_h_world", "World Settings").Show();
 
         EditorGUI.Row(paper, $"{id}_ppu", "Pixels Per Unit", () =>
-            Origami.NumericField<float>(paper, $"{id}_ppu_v", text.PixelsPerUnit, v => Edit(text, "Change Pixels Per Unit", () => text.PixelsPerUnit = v)).Show());
+            Origami.NumericField<float>(paper, $"{id}_ppu_v", text.PixelsPerUnit, v => Edit(text, "Change Pixels Per Unit", () => text.PixelsPerUnit = v)).DragHandle().Show());
 
         paper.Box($"{id}_sp1.1").Height(6);
 
         EditorGUI.Row(paper, $"{id}_mw", "Max Width", () =>
-            Origami.NumericField<float>(paper, $"{id}_mw_v", text.MaxWidth, v => Edit(text, "Change Max Width", () => text.MaxWidth = v)).Show());
+            Origami.NumericField<float>(paper, $"{id}_mw_v", text.MaxWidth, v => Edit(text, "Change Max Width", () => text.MaxWidth = v)).DragHandle().Show());
 
         paper.Box($"{id}_sp2").Height(6);
 

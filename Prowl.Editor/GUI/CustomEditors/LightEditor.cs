@@ -81,7 +81,7 @@ public class LightEditor : CustomEditor
         Row(paper, $"{id}_int", "Intensity", UnitHelp(unit), () =>
         {
             Origami.NumericField<float>(paper, $"{id}_int_v", light.FromStored(unit, light.Intensity),
-                v => Edit(light, () => light.Intensity = MathF.Max(0f, light.ToStored(unit, v))))
+                v => Edit(light, () => light.Intensity = MathF.Max(0f, light.ToStored(unit, v)))).DragHandle()
                 .Format("0.###").Show();
             string[] names = new string[units.Count];
             for (int i = 0; i < names.Length; i++) names[i] = UnitName(units[i]);
@@ -226,7 +226,7 @@ public class LightEditor : CustomEditor
         {
             if (light.OverrideRange)
             {
-                Origami.NumericField<float>(paper, $"{id}_reach_v", light.Range, v => Edit(light, () => light.Range = MathF.Max(0.01f, v)))
+                Origami.NumericField<float>(paper, $"{id}_reach_v", light.Range, v => Edit(light, () => light.Range = MathF.Max(0.01f, v))).DragHandle()
                     .Format("0.##").Suffix("m").Show();
                 Origami.Button(paper, $"{id}_reach_auto", "Auto", () => Edit(light, () => light.OverrideRange = false))
                     .Small().Width(56).Tooltip("Work the reach out from the intensity again").Show();

@@ -41,7 +41,7 @@ public class TextComponentEditor : CustomEditor
         paper.Box($"{id}_sp0.1").Height(6);
 
         EditorGUI.Row(paper, $"{id}_size", "Font Size", () =>
-            Origami.NumericField<int>(paper, $"{id}_size_v", text.Size, v => Edit(text, "Change Font Size", () => text.Size = v)).Show());
+            Origami.NumericField<int>(paper, $"{id}_size_v", text.Size, v => Edit(text, "Change Font Size", () => text.Size = v)).DragHandle().Show());
 
         paper.Box($"{id}_sp0.15").Height(6);
 

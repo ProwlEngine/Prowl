@@ -219,7 +219,7 @@ public class UIImageEditor : CustomEditor
             {
                 using (paper.Box($"{id}_n").Width(UnitValue.Stretch()).Enter())
                     Origami.NumericField<float>(paper, $"{id}_n_v", img.PixelsPerUnitMultiplier,
-                        v => Edit(img, "Change Pixels Per Unit Multiplier", () => img.PixelsPerUnitMultiplier = MathF.Max(0.0001f, v))).Min(0.0001f).Show();
+                        v => Edit(img, "Change Pixels Per Unit Multiplier", () => img.PixelsPerUnitMultiplier = MathF.Max(0.0001f, v))).DragHandle().Min(0.0001f).Show();
 
                 Origami.IconButton(paper, $"{id}_r", EditorIcons.ArrowsRotate, () => Edit(img, "Reset Pixels Per Unit Multiplier", () => img.PixelsPerUnitMultiplier = 1f))
                     .Width(EditorTheme.RowHeight).Height(EditorTheme.RowHeight)

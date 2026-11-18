@@ -307,7 +307,7 @@ public class TerrainEditor : CustomEditor
                 v => { sl.NormalMap = v as Texture2D; MarkDataDirty(); }, 0);
             EditorGUI.Row(paper, $"{id}_til", "Tiling", () =>
                 Origami.NumericField<float>(paper, $"{id}_til_v", sl.Tiling,
-                    v => { sl.Tiling = MathF.Max(0.01f, v); MarkDataDirty(); }).Min(0.01f).Show());
+                    v => { sl.Tiling = MathF.Max(0.01f, v); MarkDataDirty(); }).DragHandle().Min(0.01f).Show());
             EditorGUI.Row(paper, $"{id}_rgh", "Roughness", () =>
                 Origami.Slider(paper, $"{id}_rgh_v", sl.Roughness, v => { sl.Roughness = v; MarkDataDirty(); }, 0f, 1f).Format("F2").Show());
             EditorGUI.Row(paper, $"{id}_met", "Metallic", () =>
@@ -461,7 +461,7 @@ public class TerrainEditor : CustomEditor
         EditorGUI.Row(paper, $"{id}_tsz", "Brush Size", () =>
             Origami.Slider(paper, $"{id}_tsz_v", TreeBrushSize, v => TreeBrushSize = v, 1f, 100f).Format("F0").Show());
         EditorGUI.Row(paper, $"{id}_tps", "Trees Per Stroke", () =>
-            Origami.NumericField<int>(paper, $"{id}_tps_v", TreesPerStroke, v => TreesPerStroke = Math.Max(1, v)).Min(1).Show());
+            Origami.NumericField<int>(paper, $"{id}_tps_v", TreesPerStroke, v => TreesPerStroke = Math.Max(1, v)).DragHandle().Min(1).Show());
 
         HintPill(paper, $"{id}_hint", font, "Click to place, Shift+click to erase");
     }
@@ -476,9 +476,9 @@ public class TerrainEditor : CustomEditor
 
         EditorGUI.SectionHeader(paper, $"{id}_dh", "Dimensions");
         EditorGUI.Row(paper, $"{id}_size", "Terrain Size", () =>
-            Origami.NumericField<float>(paper, $"{id}_size_v", data.Size, v => { data.Size = MathF.Max(1f, v); MarkDataDirty(); }).Min(1f).Show());
+            Origami.NumericField<float>(paper, $"{id}_size_v", data.Size, v => { data.Size = MathF.Max(1f, v); MarkDataDirty(); }).DragHandle().Min(1f).Show());
         EditorGUI.Row(paper, $"{id}_height", "Terrain Height", () =>
-            Origami.NumericField<float>(paper, $"{id}_height_v", data.Height, v => { data.Height = MathF.Max(0.1f, v); MarkDataDirty(); }).Min(0.1f).Show());
+            Origami.NumericField<float>(paper, $"{id}_height_v", data.Height, v => { data.Height = MathF.Max(0.1f, v); MarkDataDirty(); }).DragHandle().Min(0.1f).Show());
         EditorGUI.Row(paper, $"{id}_interp", "Interpolation", () =>
             Origami.EnumDropdown(paper, $"{id}_interp_v", data.Interpolation,
                 v => { data.Interpolation = v; MarkDataDirty(); terrain.InvalidateDetailCache(); }).Show());
@@ -536,7 +536,7 @@ public class TerrainEditor : CustomEditor
         EditorGUI.SectionHeader(paper, $"{id}_lh", "Level of Detail");
         EditorGUI.Row(paper, $"{id}_lod", "Max LOD Levels", () =>
             Origami.NumericField<int>(paper, $"{id}_lod_v", terrain.MaxLODLevel,
-                v => { Undo.RecordObject(terrain, "Max LOD Levels"); terrain.MaxLODLevel = Math.Clamp(v, 1, 8); }).Min(1).Max(8).Show());
+                v => { Undo.RecordObject(terrain, "Max LOD Levels"); terrain.MaxLODLevel = Math.Clamp(v, 1, 8); }).DragHandle().Min(1).Max(8).Show());
         EditorGUI.Row(paper, $"{id}_lodq", "LOD Quality", () =>
             Origami.Slider(paper, $"{id}_lodq_v", terrain.LODQuality,
                 v => { Undo.RecordObject(terrain, "LOD Quality"); terrain.LODQuality = MathF.Max(0.1f, v); }, 0.1f, 5f).Format("F1").Show());

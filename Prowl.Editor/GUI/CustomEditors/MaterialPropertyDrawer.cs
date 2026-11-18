@@ -158,7 +158,7 @@ public static class MaterialPropertyDrawer
                     {
                         material.RenderQueue = Math.Max(0, v);
                         onChanged?.Invoke();
-                    }).Show()));
+                    }).DragHandle().Show()));
             EditorGUI.Row(paper, $"{id}_shadows", "Cast Shadows", () =>
                 Origami.Checkbox(paper, $"{id}_shadows_v", material.CastShadows, v =>
                 {
@@ -229,7 +229,7 @@ public static class MaterialPropertyDrawer
                 {
                     material.SetTextureRotation(name, v * (MathF.PI / 180f));
                     onChanged?.Invoke();
-                }).Show()));
+                }).DragHandle().Show()));
 
         bool scalar = IsScalarMap(material.Shader!, name);
         bool samplingSet = material.IsOverridden(name + "_UVSet") || (scalar && material.IsOverridden(name + "_Channel"));
@@ -369,9 +369,9 @@ public static class MaterialPropertyDrawer
         }
 
         if (isInt)
-            EditorGUI.Row(paper, id, label, () => Origami.NumericField<int>(paper, $"{id}_v", material.GetInt(name), v => Set(v)).Show());
+            EditorGUI.Row(paper, id, label, () => Origami.NumericField<int>(paper, $"{id}_v", material.GetInt(name), v => Set(v)).DragHandle().Show());
         else
-            EditorGUI.Row(paper, id, label, () => Origami.NumericField<float>(paper, $"{id}_v", material.GetFloat(name), Set).Show());
+            EditorGUI.Row(paper, id, label, () => Origami.NumericField<float>(paper, $"{id}_v", material.GetFloat(name), Set).DragHandle().Show());
     }
 
     // ============================================================
