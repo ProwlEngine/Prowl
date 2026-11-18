@@ -81,8 +81,8 @@ public class LightEditor : CustomEditor
         Row(paper, $"{id}_int", "Intensity", UnitHelp(unit), () =>
         {
             Origami.NumericField<float>(paper, $"{id}_int_v", light.FromStored(unit, light.Intensity),
-                v => Edit(light, () => light.Intensity = MathF.Max(0f, light.ToStored(unit, v)))).DragHandle()
-                .Format("0.###").Show();
+                v => Edit(light, () => light.Intensity = MathF.Max(0f, light.ToStored(unit, v))))
+                .Format("0.###").DragHandle().Show();
             string[] names = new string[units.Count];
             for (int i = 0; i < names.Length; i++) names[i] = UnitName(units[i]);
             int selected = 0;
