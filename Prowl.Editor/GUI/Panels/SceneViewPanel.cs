@@ -589,6 +589,9 @@ public class SceneViewPanel : DockPanel
                     SetGizmoMode(TransformTool.Scale);
                 else if (ShortcutManager.IsPressed("Scene/ToolUniversal"))
                     SetGizmoMode(TransformTool.Universal);
+
+                if (ShortcutManager.IsPressed("Scene/ToggleMaximize"))
+                    EditorApplication.Instance?.Maximizer.RequestToggle(this);
             }
 
             // Paper-space pointer to viewport-local via the cached viewport rect. CurrentParent here is an
