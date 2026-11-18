@@ -1298,7 +1298,7 @@ internal sealed partial class NetworkSystem
         {
             if (body.Key.IsValid())
             {
-                body.Key.MotionType = body.Value;
+                body.Key.StoredMotionType = body.Value;
                 switched.Add(body.Key);
             }
         }
@@ -1311,7 +1311,7 @@ internal sealed partial class NetworkSystem
         {
             foreach (Rigidbody3D body in switched)
             {
-                body.MotionType = MotionType.Kinematic;
+                body.StoredMotionType = MotionType.Kinematic;
             }
         }
     }

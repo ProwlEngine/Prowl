@@ -117,6 +117,12 @@ public sealed class Rigidbody3D : Component
     /// How this body participates in the simulation: <see cref="MotionType.Dynamic"/>,
     /// <see cref="MotionType.Kinematic"/>, or <see cref="MotionType.Static"/>.
     /// </summary>
+    /// <summary>Sets the stored motion type alone, leaving the live body as it is, for writing a body as it was authored.</summary>
+    internal MotionType StoredMotionType
+    {
+        set => motionType = value;
+    }
+
     public MotionType MotionType
     {
         get => motionType;
