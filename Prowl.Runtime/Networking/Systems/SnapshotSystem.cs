@@ -539,7 +539,8 @@ internal sealed class SnapshotSystem : IDisposable
         FanOutChanges();
         _written.Clear();
         _objectInfo.Clear();
-        uint tick = ++_scene.Tick;
+        // The network tick the game sees, and never the same twice, so receivers can order what each peer sends.
+        uint tick = _scene.Tick = Math.Max(_scene.Tick + 1, _scene.NetworkTick);
         double now = _scene.Now;
         CaptureTransforms(tick, now);
         _sendTargets.Clear();
