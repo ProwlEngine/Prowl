@@ -2356,23 +2356,19 @@ public class EditorApplication : Game
 
     private static DockNode CreateDefaultLayout()
     {
-        // Blender/Unreal-style: a big viewport column on the left, a thin outliner/properties column
-        // on the right.
-        return DockNode.Split(SplitDirection.Horizontal, 0.8f,
-            // Left column: Scene view on top, a Project | Console strip along the bottom.
-            DockNode.Split(SplitDirection.Vertical, 0.7f,
-                DockNode.Leaf(new SceneViewPanel(), new GameViewPanel()),
-                // Bottom strip: Project (65%) | Console (35%, smaller).
-                DockNode.Split(SplitDirection.Horizontal, 0.65f,
-                    DockNode.Leaf(new ProjectPanel()),
-                    DockNode.Leaf(new ConsolePanel())
-                )
+        // Unity-style: Inspector down the right, Hierarchy beside the viewport, Project and Console tabbed along the bottom.
+        return DockNode.Split(SplitDirection.Horizontal, 0.78f,
+            DockNode.Split(SplitDirection.Vertical, 0.65f,
+                // Top: Hierarchy (20%) | Scene and Game tabs.
+                DockNode.Split(SplitDirection.Horizontal, 0.2f,
+                    DockNode.Leaf(new HierarchyPanel()),
+                    DockNode.Leaf(new SceneViewPanel(), new GameViewPanel())
+                ),
+                // Bottom: Project and Console tabs.
+                DockNode.Leaf(new ProjectPanel(), new ConsolePanel())
             ),
-            // Right column: Hierarchy (top 30%) | Inspector (bottom 70%).
-            DockNode.Split(SplitDirection.Vertical, 0.3f,
-                DockNode.Leaf(new HierarchyPanel()),
-                DockNode.Leaf(new InspectorPanel())
-            )
+            // Right column: Inspector, full height.
+            DockNode.Leaf(new InspectorPanel())
         );
     }
 }
