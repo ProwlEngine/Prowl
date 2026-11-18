@@ -2,6 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
@@ -345,8 +349,110 @@ internal static class NetSerializers
                 });
         }
 
+        if (t == typeof(byte[]))
+        {
+            return Pair<T, byte[]>(static (w, v) => WriteCount(w, v), static (ref r) =>
+                ReadCount(ref r) is { } length ? r.ReadBytes(length).ToArray() : null!);
+        }
+
+        if (t.IsSZArray)
+        {
+            return Sequence<T>(nameof(ArraySerializers), t.GetElementType()!);
+        }
+
+        if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>))
+        {
+            return Sequence<T>(nameof(ListSerializers), t.GetGenericArguments()[0]);
+        }
+
         return (null, null);
     }
+
+    [UnconditionalSuppressMessage("AOT", "IL3050",
+        Justification = "Script and engine element types are preserved; a value type element gets its instantiation at first use.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2060",
+        Justification = "The helpers are rooted here and only take element types the game already sends.")]
+    private static (NetSerializer<T>.Writer?, NetSerializer<T>.Reader?) Sequence<T>(string helper, Type element) =>
+        ((NetSerializer<T>.Writer?, NetSerializer<T>.Reader?))typeof(NetSerializers)
+            .GetMethod(helper, BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(element).Invoke(null, null)!;
+
+    // A count goes as count + 1, so 0 can stand for null.
+    private static void WriteCount(NetWriter w, int? count) => w.WriteVarUInt32(count is { } n ? (uint)n + 1 : 0);
+
+    private static void WriteCount(NetWriter w, byte[]? bytes)
+    {
+        WriteCount(w, bytes?.Length);
+        if (bytes != null)
+        {
+            w.WriteBytes(bytes);
+        }
+    }
+
+    private static int? ReadCount(ref NetReader r)
+    {
+        uint encoded = r.ReadVarUInt32();
+        if (encoded == 0)
+        {
+            return null;
+        }
+
+        // Every element takes at least a byte, so a longer count can only be malformed.
+        if (encoded - 1 > (uint)r.Remaining)
+        {
+            throw new InvalidDataException($"A sequence of {encoded - 1} items is longer than its message.");
+        }
+
+        return (int)(encoded - 1);
+    }
+
+    private static (NetSerializer<TElement[]>.Writer, NetSerializer<TElement[]>.Reader) ArraySerializers<TElement>() =>
+        (static (w, v) =>
+        {
+            WriteCount(w, v?.Length);
+            foreach (TElement item in v ?? [])
+            {
+                NetSerializer<TElement>.Write(w, item);
+            }
+        }, static (ref NetReader r) =>
+        {
+            if (ReadCount(ref r) is not { } count)
+            {
+                return null!;
+            }
+
+            TElement[] items = new TElement[count];
+            for (int i = 0; i < count; i++)
+            {
+                items[i] = NetSerializer<TElement>.Read(ref r);
+            }
+
+            return items;
+        });
+
+    private static (NetSerializer<List<TElement>>.Writer, NetSerializer<List<TElement>>.Reader) ListSerializers<TElement>() =>
+        (static (w, v) =>
+        {
+            WriteCount(w, v?.Count);
+            foreach (TElement item in v ?? [])
+            {
+                NetSerializer<TElement>.Write(w, item);
+            }
+        }, static (ref NetReader r) =>
+        {
+            if (ReadCount(ref r) is not { } count)
+            {
+                return null!;
+            }
+
+            List<TElement> items = new(count);
+            for (int i = 0; i < count; i++)
+            {
+                items.Add(NetSerializer<TElement>.Read(ref r));
+            }
+
+            return items;
+        });
 
     internal static void WriteFloat3(NetWriter w, Float3 v)
     {

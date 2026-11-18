@@ -1247,7 +1247,7 @@ public partial class NetworkingTests : RuntimeTestBase
         Assert.Equal(NetworkMode.Object, NetSerializer<NetworkMode>.Read(ref reader));
         Assert.Equal("hi", NetSerializer<string>.Read(ref reader));
         Assert.Equal(-5, NetSerializer<long>.Read(ref reader));
-        Assert.False(NetSerializer<List<int>>.IsSupported);
-        Assert.Throws<NotSupportedException>(() => NetSerializer<List<int>>.Write(writer, new List<int>()));
+        Assert.False(NetSerializer<Dictionary<int, int>>.IsSupported);
+        Assert.Throws<NotSupportedException>(() => NetSerializer<Dictionary<int, int>>.Write(writer, new Dictionary<int, int>()));
     }
 }

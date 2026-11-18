@@ -32,16 +32,16 @@ public class DiagnosticTests
     [InlineData("public class A { [Prowl.Runtime.Networking.Sync] public int X { get; set; } }", "PROWLNET003")]
     // Values
     [InlineData(
-        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public void F(int[] x) { } }",
+        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public void F(int[,] x) { } }",
         "PROWLNET005")]
     [InlineData(
-        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public System.Collections.Generic.List<int> X { get; set; } }",
+        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public System.Collections.Generic.Dictionary<int, int> X { get; set; } }",
         "PROWLNET005")]
     [InlineData(
-        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public Prowl.Runtime.Networking.NetList<int[]> X { get; } = new(); }",
+        "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public Prowl.Runtime.Networking.NetList<int[,]> X { get; } = new(); }",
         "PROWLNET005")]
     [InlineData(
-        "public struct S { public int[] A; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public S X { get; set; } }",
+        "public struct S { public int[,] A; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public S X { get; set; } }",
         "PROWLNET005")]
     [InlineData(
         "public class C { public C(int x) { } public int A; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public void F(C c) { } }",

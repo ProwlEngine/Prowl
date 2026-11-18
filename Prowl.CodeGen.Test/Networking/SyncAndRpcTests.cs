@@ -193,6 +193,30 @@ public class SyncAndRpcTests
             e => e.Id == "PROWLNET011");
 
     [Fact]
+    public void ArraysListsAndBytesOfSendableTypesAreSendable()
+    {
+        var build = Scripts.Build("""
+            using System.Collections.Generic;
+            using Prowl.Runtime;
+            using Prowl.Runtime.Networking;
+
+            public struct Point { public int X, Y; }
+
+            public class Board : Component
+            {
+                [Sync] public int[] Scores { get; set; }
+                [Sync] public List<Point> Path { get; set; }
+                [Rpc.Host(RpcFlags.AnyCaller)] public void Pick(List<string> names, byte[] data, Point[] points) { }
+            }
+            """);
+        Assert.Empty(build.Errors);
+    }
+
+    [Fact]
+    public void AnArrayOfAnUnsendableTypeIsReported() =>
+        Assert.NotEmpty(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Board : Component { [Sync] public System.IO.Stream[] Streams { get; set; } }").Errors);
+
+    [Fact]
     public void RpcsNamedThroughAGlobalUsingStaticAreNetworked()
     {
         Type bell = Scripts.Compile("global using static Prowl.Runtime.Networking.Rpc;",

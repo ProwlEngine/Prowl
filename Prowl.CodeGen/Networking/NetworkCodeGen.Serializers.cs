@@ -73,6 +73,19 @@ internal sealed partial class NetworkCodeGen
             string name = type.ToDisplayString();
             Problem unsupported = new("",
                 $"is a {name}, which isn't a type the network can send (see NetSerializer<T>)");
+
+            // Arrays and lists go item by item, so they send whatever their items do.
+            if (type is IArrayTypeSymbol array)
+            {
+                return array.Rank != 1 ? unsupported : ElementProblem(name, array.ElementType);
+            }
+
+            if (type is INamedTypeSymbol { IsGenericType: true } list &&
+                list.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.List<T>")
+            {
+                return ElementProblem(name, list.TypeArguments[0]);
+            }
+
             if (type is not INamedTypeSymbol named || named.TypeKind is not (TypeKind.Struct or TypeKind.Class
                                                        or TypeKind.Interface)
                                                    || named.IsStatic || named.IsRefLikeType)
@@ -134,6 +147,11 @@ internal sealed partial class NetworkCodeGen
 
             return null;
         }
+
+        private Problem? ElementProblem(string name, ITypeSymbol element) =>
+            ProblemWith(element) is { } problem
+                ? new Problem("", $"is a {name}, and {problem.Describe("its item")}")
+                : null;
 
         /// <summary>Plans a serializer for a struct or concrete class, member by member; or says why it can't have one.</summary>
         private Problem? Shape(INamedTypeSymbol type)
