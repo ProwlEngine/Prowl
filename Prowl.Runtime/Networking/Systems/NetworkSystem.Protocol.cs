@@ -39,6 +39,7 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
+            NetworkStatistics.CountReceived(kind, peer, reader.Remaining);
             try
             {
                 if (!CanReceiveEngineMessage(peer, kind))
@@ -148,6 +149,7 @@ internal sealed partial class NetworkSystem
 
         channel = EngineChannel(channel, delivery);
         Session!.SendRaw(peer, (ushort)kind, payload, delivery, channel: channel);
+        NetworkStatistics.CountSent(kind, peer, payload.Length);
         if (NetworkDiagnostics.Enabled)
         {
             (string? Context, string? Name) description = NetworkDiagnostics.DescribePayload(this, kind, payload, peer, true);
@@ -192,6 +194,14 @@ internal sealed partial class NetworkSystem
 
         channel = EngineChannel(channel, delivery);
         Session!.BroadcastRaw((ushort)kind, payload, delivery, except, channel: channel);
+        foreach (NetPeer peer in Session.Peers)
+        {
+            if (!peer.IsLocal && peer != except)
+            {
+                NetworkStatistics.CountSent(kind, peer, payload.Length);
+            }
+        }
+
         if (!NetworkDiagnostics.Enabled)
         {
             return;
