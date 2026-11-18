@@ -149,7 +149,9 @@ public static class CompileQueue
     private static void Start()
     {
         s_threads++;
-        new Thread(Work) { IsBackground = true, Name = $"Shader compile {s_threads}" }.Start();
+        // Without the caller's execution context: the thread never exits, so it would keep the caller's AsyncLocal
+        // values alive for the life of the process.
+        new Thread(Work) { IsBackground = true, Name = $"Shader compile {s_threads}" }.UnsafeStart();
     }
 
     private static void Work()

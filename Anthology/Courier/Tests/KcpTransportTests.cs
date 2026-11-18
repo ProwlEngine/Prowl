@@ -314,6 +314,24 @@ public class KcpTransportTests
         }
     }
 
+    // The IO threads run until the transport is disposed, so whatever they copied from the thread that opened
+    // the socket would stay alive that long.
+    [Fact]
+    public void IoThreadsDoNotKeepTheAsyncLocalsOfTheThreadThatStartedThem()
+    {
+        AsyncLocal<object?> local = new();
+        WeakReference held = TestData.HoldInAsyncLocal(local);
+        KcpTransportOptions options = FastOptions();
+        options.UseIoThreads = true;
+        using KcpTransport host = new(options);
+        host.Listen();
+        local.Value = null;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        Assert.False(held.IsAlive, "an IO thread kept an object its starter held in an AsyncLocal");
+    }
+
     [Fact]
     public void IoThreadsReadTheSocketWhileTheGameThreadIsBusy()
     {

@@ -49,8 +49,9 @@ internal sealed class KcpIoThreads : IDisposable
         socket.Blocking = true;
         _receiver = new Thread(ReceiveLoop) { IsBackground = true, Name = "Courier KCP receive" };
         _sender = new Thread(SendLoop) { IsBackground = true, Name = "Courier KCP send" };
-        _receiver.Start();
-        _sender.Start();
+        // Without the caller's execution context, so the threads do not keep the caller's AsyncLocal values alive.
+        _receiver.UnsafeStart();
+        _sender.UnsafeStart();
     }
 
     /// <summary>Set whenever a datagram is queued, if given.</summary>
