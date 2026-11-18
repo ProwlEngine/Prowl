@@ -36,7 +36,10 @@ public static partial class Networking
     /// <summary>Sync and transform ticks per second, rounded to a whole number of fixed steps. RPCs flush every frame.</summary>
     public static float TickRate { get; set; } = 30;
 
-    /// <summary>How far behind proxies display buffered transforms to smooth jitter.</summary>
+    /// <summary>
+    ///     The least delay proxies show buffered transforms at. The buffer grows past it with the send interval and
+    ///     the measured jitter.
+    /// </summary>
     public static TimeSpan InterpolationDelay { get; set; } = TimeSpan.FromMilliseconds(100);
 
     /// <summary>

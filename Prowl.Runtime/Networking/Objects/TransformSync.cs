@@ -236,8 +236,8 @@ internal sealed class TransformSync
             return;
         }
 
-        double spacing = (NetworkAccessor.SendIntervalOf(go) - 1) * Networking.TickInterval;
-        double renderTime = _timeline.RenderTime(now, Networking.InterpolationDelay.TotalSeconds + spacing);
+        double sendInterval = NetworkAccessor.SendIntervalOf(go) * Networking.TickInterval;
+        double renderTime = _timeline.RenderTime(now, sendInterval, Networking.InterpolationDelay.TotalSeconds);
 
         // Drop samples nothing will blend from again: everything before the last one at or before renderTime.
         int keepFrom = 0;

@@ -24,6 +24,8 @@ public sealed class NetworkConfiguration
     public string TrustedHostKey = "";
     public NetworkExecution Execution = NetworkExecution.Auto;
     public int FastResend = 2;
+
+    /// <summary>The least interpolation delay. The buffer grows past it with the send interval and the measured jitter.</summary>
     public float InterpolationMilliseconds = 100;
 
     /// <summary>Whether clients receive only the objects near their viewpoints.</summary>
