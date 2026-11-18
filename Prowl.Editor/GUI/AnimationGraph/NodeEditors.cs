@@ -129,7 +129,7 @@ internal sealed class WeightedInputsNodeEditor : AnimationNodeEditor
         }
 
         string what = Node.Id == AnimationNodeIds.PickNumber ? "Set Value" : "Set Weight";
-        Origami.NumericField<float>(paper, id, input.Value, v => editing.Edit(what, () => input.Value = v, false)).DragHandle()
+        Origami.NumericField<float>(paper, id, input.Value, v => editing.Edit(what, () => input.Value = v, false))
             .Width(UnitValue.Stretch()).Height(20).Show();
     }
 }

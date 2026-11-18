@@ -218,7 +218,7 @@ public class NavigationSettings : ProjectSettingsBase
     {
         using (paper.Box(id).Width(width).Height(22).Enter())
         {
-            Origami.NumericField<float>(paper, $"{id}_nf", value, setter).DragHandle().OnCommit(Changed).Show();
+            Origami.NumericField<float>(paper, $"{id}_nf", value, setter).OnCommit(Changed).Show();
         }
     }
 
@@ -290,7 +290,7 @@ public class NavigationSettings : ProjectSettingsBase
                             {
                                 if (costLocked) return;
                                 AreaCosts[idx] = MathF.Max(1f, v);
-                            }).DragHandle().OnCommit(Changed).Show();
+                            }).OnCommit(Changed).Show();
                     }
                 }
 

@@ -132,12 +132,12 @@ public sealed class DesktopBuildProfileDrawer : IBuildProfileDrawer
 
         EditorGUI.SettingsRow(paper, "bld_width", "Width", () =>
             Origami.NumericField<int>(paper, "bld_width_v", desktop.WindowWidth,
-                v => { Record(desktop, "Change Window Width"); desktop.WindowWidth = Math.Max(320, v); }).DragHandle()
+                v => { Record(desktop, "Change Window Width"); desktop.WindowWidth = Math.Max(320, v); })
                 .OnCommit(EditorRegistries.SaveSettings).Min(320).Show(), separator: false);
 
         EditorGUI.SettingsRow(paper, "bld_height", "Height", () =>
             Origami.NumericField<int>(paper, "bld_height_v", desktop.WindowHeight,
-                v => { Record(desktop, "Change Window Height"); desktop.WindowHeight = Math.Max(240, v); }).DragHandle()
+                v => { Record(desktop, "Change Window Height"); desktop.WindowHeight = Math.Max(240, v); })
                 .OnCommit(EditorRegistries.SaveSettings).Min(240).Show(), separator: false);
     }
 

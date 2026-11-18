@@ -39,7 +39,7 @@ public class IntPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<int>(paper, $"{id}_v", (int)(value ?? 0), v => onChange(v)).DragHandle()
+            Origami.NumericField<int>(paper, $"{id}_v", (int)(value ?? 0), v => onChange(v))
                 .Show());
     }
 }
@@ -50,7 +50,7 @@ public class FloatPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<float>(paper, $"{id}_v", (float)(value ?? 0f), v => onChange(v)).DragHandle()
+            Origami.NumericField<float>(paper, $"{id}_v", (float)(value ?? 0f), v => onChange(v))
                 .Show());
     }
 }
@@ -61,7 +61,7 @@ public class DoublePropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<double>(paper, $"{id}_v", (double)(value ?? 0.0), v => onChange(v)).DragHandle()
+            Origami.NumericField<double>(paper, $"{id}_v", (double)(value ?? 0.0), v => onChange(v))
                 .Show());
     }
 }
@@ -83,7 +83,7 @@ public class BytePropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<byte>(paper, $"{id}_v", (byte)(value ?? (byte)0), v => onChange(v)).DragHandle()
+            Origami.NumericField<byte>(paper, $"{id}_v", (byte)(value ?? (byte)0), v => onChange(v))
                 .Min((byte)0).Max((byte)255)
                 .Show());
     }
@@ -95,7 +95,7 @@ public class SBytePropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<sbyte>(paper, $"{id}_v", (sbyte)(value ?? (sbyte)0), v => onChange(v)).DragHandle()
+            Origami.NumericField<sbyte>(paper, $"{id}_v", (sbyte)(value ?? (sbyte)0), v => onChange(v))
                 .Min(sbyte.MinValue).Max(sbyte.MaxValue)
                 .Show());
     }
@@ -107,7 +107,7 @@ public class ShortPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<short>(paper, $"{id}_v", (short)(value ?? (short)0), v => onChange(v)).DragHandle()
+            Origami.NumericField<short>(paper, $"{id}_v", (short)(value ?? (short)0), v => onChange(v))
                 .Min(short.MinValue).Max(short.MaxValue)
                 .Show());
     }
@@ -119,7 +119,7 @@ public class UShortPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<ushort>(paper, $"{id}_v", (ushort)(value ?? (ushort)0), v => onChange(v)).DragHandle()
+            Origami.NumericField<ushort>(paper, $"{id}_v", (ushort)(value ?? (ushort)0), v => onChange(v))
                 .Min(ushort.MinValue).Max(ushort.MaxValue)
                 .Show());
     }
@@ -131,7 +131,7 @@ public class LongPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<long>(paper, $"{id}_v", (long)(value ?? 0L), v => onChange(v)).DragHandle()
+            Origami.NumericField<long>(paper, $"{id}_v", (long)(value ?? 0L), v => onChange(v))
                 .Show());
     }
 }
@@ -142,7 +142,7 @@ public class ULongPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<ulong>(paper, $"{id}_v", (ulong)(value ?? 0UL), v => onChange(v)).DragHandle()
+            Origami.NumericField<ulong>(paper, $"{id}_v", (ulong)(value ?? 0UL), v => onChange(v))
                 .Show());
     }
 }
@@ -153,7 +153,7 @@ public class UIntPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<uint>(paper, $"{id}_v", (uint)(value ?? 0u), v => onChange(v)).DragHandle()
+            Origami.NumericField<uint>(paper, $"{id}_v", (uint)(value ?? 0u), v => onChange(v))
                 .Show());
     }
 }

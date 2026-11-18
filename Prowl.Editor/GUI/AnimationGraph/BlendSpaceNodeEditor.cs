@@ -50,7 +50,7 @@ internal sealed class BlendSpaceNodeEditor : AnimationNodeEditor
         if (TwoD)
             Origami.Float2Field(paper, id, input.Position, v => editing.Edit("Move Blend Sample", () => input.Position = v, false)).Show();
         else
-            Origami.NumericField<float>(paper, id, input.Value, v => editing.Edit("Set Blend Threshold", () => input.Value = v, false)).DragHandle()
+            Origami.NumericField<float>(paper, id, input.Value, v => editing.Edit("Set Blend Threshold", () => input.Value = v, false))
                 .Width(UnitValue.Stretch()).Height(Origami.Current.Metrics.RowHeight).Show();
     }
 

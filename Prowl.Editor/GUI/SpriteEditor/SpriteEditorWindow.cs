@@ -960,7 +960,7 @@ public class SpriteEditorWindow : DockPanel
 
         EditorGUI.Row(paper, "se_ppu", "Pixels Per Unit", () =>
             Origami.NumericField<float>(paper, "se_ppu_v", _settings.PixelsPerUnit,
-                v => Mutate("Edit Pixels Per Unit", () => _settings.PixelsPerUnit = MathF.Max(0.0001f, v))).DragHandle().Min(0.0001f).Show());
+                v => Mutate("Edit Pixels Per Unit", () => _settings.PixelsPerUnit = MathF.Max(0.0001f, v))).Min(0.0001f).Show());
 
         EditorGUI.Row(paper, "se_tight", "Tight Mesh", () =>
             Origami.Checkbox(paper, "se_tight_v", _settings.GenerateTightMesh,
@@ -970,11 +970,11 @@ public class SpriteEditorWindow : DockPanel
         {
             EditorGUI.Row(paper, "se_detail", "Detail", () =>
                 Origami.NumericField<float>(paper, "se_detail_v", _settings.TightMeshDetail,
-                    v => Mutate("Edit Tight Mesh Detail", () => _settings.TightMeshDetail = MathF.Max(0.1f, v))).DragHandle().Min(0.1f).Show());
+                    v => Mutate("Edit Tight Mesh Detail", () => _settings.TightMeshDetail = MathF.Max(0.1f, v))).Min(0.1f).Show());
 
             EditorGUI.Row(paper, "se_alpha", "Alpha Threshold", () =>
                 Origami.NumericField<int>(paper, "se_alpha_v", _settings.TightMeshAlphaThreshold,
-                    v => Mutate("Edit Alpha Threshold", () => _settings.TightMeshAlphaThreshold = (byte)Math.Clamp(v, 0, 255))).DragHandle().Min(0).Show());
+                    v => Mutate("Edit Alpha Threshold", () => _settings.TightMeshAlphaThreshold = (byte)Math.Clamp(v, 0, 255))).Min(0).Show());
         }
     }
 

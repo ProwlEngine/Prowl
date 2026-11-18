@@ -46,7 +46,7 @@ public class TimeSettings : ProjectSettingsBase
             {
                 FixedTimestep = MathF.Max(0.0001f, v);
                 Apply();
-            }).DragHandle().OnCommit(EditorRegistries.SaveSettings).Min(0.0001f).Show());
+            }).OnCommit(EditorRegistries.SaveSettings).Min(0.0001f).Show());
 
         Origami.Label(paper, "time_fixed_info",
             $"  {(int)(1f / FixedTimestep + 0.5f)} Hz ({FixedTimestep * 1000f:F2} ms)").Show();

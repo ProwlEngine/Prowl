@@ -63,7 +63,7 @@ public class AssetSettings : ProjectSettingsBase
             Origami.NumericField<int>(paper, "assets_budget_v", MemoryBudgetMB, v =>
             {
                 MemoryBudgetMB = Math.Max(0, v);
-            }).DragHandle().OnCommit(EditorRegistries.SaveSettings).Min(0).Show());
+            }).OnCommit(EditorRegistries.SaveSettings).Min(0).Show());
 
         Origami.Header(paper, "assets_h_sdf", $"{EditorIcons.Cubes}  Mesh Signed Distance Fields").Underline().Show();
 
@@ -72,12 +72,12 @@ public class AssetSettings : ProjectSettingsBase
         if (GenerateMeshSDFs)
         {
             EditorGUI.Row(paper, "assets_sdf_voxel", "Voxel Size", () =>
-                Origami.NumericField<float>(paper, "assets_sdf_voxel_v", SDFVoxelSize, v => SDFVoxelSize = MathF.Max(0.001f, v)).DragHandle()
+                Origami.NumericField<float>(paper, "assets_sdf_voxel_v", SDFVoxelSize, v => SDFVoxelSize = MathF.Max(0.001f, v))
                     .Min(0.001f).Show());
 
             EditorGUI.Row(paper, "assets_sdf_max", "Max Resolution", () =>
                 Origami.NumericField<int>(paper, "assets_sdf_max_v", SDFMaxResolution,
-                    v => SDFMaxResolution = Math.Clamp(v, SDFGenerator.MinResolution, 256)).DragHandle()
+                    v => SDFMaxResolution = Math.Clamp(v, SDFGenerator.MinResolution, 256))
                     .Min(SDFGenerator.MinResolution).Max(256).Show());
         }
 

@@ -83,11 +83,11 @@ public class RenderTextureAssetEditor : AssetImporterEditor
 
         EditorGUI.Row(paper, $"{id}_w", "Width", () =>
             Origami.NumericField<int>(paper, $"{id}_w_v", edits.Width,
-                v => { Record("Width"); edits.Width = Math.Max(1, v); }).DragHandle().Show());
+                v => { Record("Width"); edits.Width = Math.Max(1, v); }).Show());
 
         EditorGUI.Row(paper, $"{id}_h", "Height", () =>
             Origami.NumericField<int>(paper, $"{id}_h_v", edits.Height,
-                v => { Record("Height"); edits.Height = Math.Max(1, v); }).DragHandle().Show());
+                v => { Record("Height"); edits.Height = Math.Max(1, v); }).Show());
 
         Origami.Checkbox(paper, $"{id}_depth", edits.HasDepth,
             v => { Record("Depth Attachment"); edits.HasDepth = v; })

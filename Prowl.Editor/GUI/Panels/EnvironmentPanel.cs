@@ -179,15 +179,15 @@ public class EnvironmentPanel : DockPanel
             EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
                 Origami.ColorField(paper, $"{id}_color_v", fog.Color, v => { fog.Color = v; Apply(); }).Show());
             EditorGUI.SettingsRow(paper, $"{id}_int", Loc.Get("env.intensity") + " (nits)", () =>
-                Origami.NumericField<float>(paper, $"{id}_int_v", fog.Intensity, v => { fog.Intensity = MathF.Max(0f, v); Apply(); }).DragHandle().Show());
+                Origami.NumericField<float>(paper, $"{id}_int_v", fog.Intensity, v => { fog.Intensity = MathF.Max(0f, v); Apply(); }).Show());
         }
 
         if (fog.Mode == FogMode.Linear)
         {
             EditorGUI.SettingsRow(paper, $"{id}_start", Loc.Get("env.start_distance"), () =>
-                Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start, v => { fog.Start = v; Apply(); }).DragHandle().Show());
+                Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start, v => { fog.Start = v; Apply(); }).Show());
             EditorGUI.SettingsRow(paper, $"{id}_end", Loc.Get("env.end_distance"), () =>
-                Origami.NumericField<float>(paper, $"{id}_end_v", fog.End, v => { fog.End = v; Apply(); }).DragHandle().Show());
+                Origami.NumericField<float>(paper, $"{id}_end_v", fog.End, v => { fog.End = v; Apply(); }).Show());
         }
         else
         {
@@ -211,11 +211,11 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
             Origami.Slider(paper, $"{id}_density_v", clouds.Density, v => { Record(); clouds.Density = v; }, 0f, 4f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_altitude", Loc.Get("env.altitude"), () =>
-            Origami.NumericField<float>(paper, $"{id}_altitude_v", clouds.Altitude, v => { Record(); clouds.Altitude = v; }).DragHandle().Show());
+            Origami.NumericField<float>(paper, $"{id}_altitude_v", clouds.Altitude, v => { Record(); clouds.Altitude = v; }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_thickness", Loc.Get("env.thickness"), () =>
-            Origami.NumericField<float>(paper, $"{id}_thickness_v", clouds.Thickness, v => { Record(); clouds.Thickness = MathF.Max(1f, v); }).DragHandle().Show());
+            Origami.NumericField<float>(paper, $"{id}_thickness_v", clouds.Thickness, v => { Record(); clouds.Thickness = MathF.Max(1f, v); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_wind", Loc.Get("env.wind_speed"), () =>
-            Origami.NumericField<float>(paper, $"{id}_wind_v", clouds.WindSpeed, v => { Record(); clouds.WindSpeed = v; }).DragHandle().Show());
+            Origami.NumericField<float>(paper, $"{id}_wind_v", clouds.WindSpeed, v => { Record(); clouds.WindSpeed = v; }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_winddir", Loc.Get("env.wind_direction"), () =>
             Origami.Slider(paper, $"{id}_winddir_v", clouds.WindDirection, v => { Record(); clouds.WindDirection = v; }, 0f, 360f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_sun", Loc.Get("env.sun_brightness"), () =>
@@ -241,7 +241,7 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
             Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Apply(); }, 0f, 0.2f).Format("F4").Show());
         EditorGUI.SettingsRow(paper, $"{id}_base", Loc.Get("env.base_height"), () =>
-            Origami.NumericField<float>(paper, $"{id}_base_v", fog.BaseHeight, v => { fog.BaseHeight = v; Apply(); }).DragHandle().Show());
+            Origami.NumericField<float>(paper, $"{id}_base_v", fog.BaseHeight, v => { fog.BaseHeight = v; Apply(); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_falloff", Loc.Get("env.height_falloff"), () =>
             Origami.Slider(paper, $"{id}_falloff_v", fog.HeightFalloff, v => { fog.HeightFalloff = v; Apply(); }, 0f, 1f).Format("F3").Show());
         EditorGUI.SettingsRow(paper, $"{id}_albedo", Loc.Get("env.albedo"), () =>
@@ -251,7 +251,7 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SettingsRow(paper, $"{id}_ambient", Loc.Get("env.ambient_scale"), () =>
             Origami.Slider(paper, $"{id}_ambient_v", fog.AmbientScale, v => { fog.AmbientScale = v; Apply(); }, 0f, 4f).Show());
         EditorGUI.SettingsRow(paper, $"{id}_distance", Loc.Get("env.distance"), () =>
-            Origami.NumericField<float>(paper, $"{id}_distance_v", fog.Distance, v => { fog.Distance = MathF.Max(1f, v); Apply(); }).DragHandle().Show());
+            Origami.NumericField<float>(paper, $"{id}_distance_v", fog.Distance, v => { fog.Distance = MathF.Max(1f, v); Apply(); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_slices", Loc.Get("env.slices"), () =>
             Origami.NumericField<int>(paper, $"{id}_slices_v", fog.Slices, v => { fog.Slices = Math.Clamp(v, 16, 256); Apply(); }).Show());
         EditorGUI.SettingsRow(paper, $"{id}_temporal", Loc.Get("env.temporal_blend"), () =>
@@ -273,7 +273,7 @@ public class EnvironmentPanel : DockPanel
                 Origami.Slider(paper, $"{id}_int_v", ambient.Intensity, v => { ambient.Intensity = v; Apply(); }, 0f, 4f).Show());
         else
             EditorGUI.SettingsRow(paper, $"{id}_int", Loc.Get("env.intensity") + " (nits)", () =>
-                Origami.NumericField<float>(paper, $"{id}_int_v", ambient.Intensity, v => { ambient.Intensity = MathF.Max(0f, v); Apply(); }).DragHandle().Show());
+                Origami.NumericField<float>(paper, $"{id}_int_v", ambient.Intensity, v => { ambient.Intensity = MathF.Max(0f, v); Apply(); }).Show());
 
         switch (ambient.Mode)
         {
