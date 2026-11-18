@@ -581,11 +581,15 @@ internal sealed partial class NetworkSystem
     ///     A header for each section, and the objects of all of them in one tree, so a link from one section into
     ///     another still holds on the client. With <paramref name="linkOutside" /> a link to an object outside these
     ///     sections goes by identifier, for the client to resolve in its own world.
+    ///     A section made from a scene asset goes by that asset instead, which the client loads itself: only its
+    ///     settings, the asset objects the client must leave out, and the trees added since travel. As with Mirror,
+    ///     changes to plain asset objects don't.
     /// </summary>
     internal EchoObject WriteSections(IEnumerable<SceneSection> sections, bool linkOutside = false)
     {
         EchoObject headers = EchoObject.NewList();
         List<SceneContent> contents = [];
+        List<(EchoObject Header, List<GameObject> Roots)> additions = [];
         foreach (SceneSection section in sections)
         {
             Scene? source = section.Source;
@@ -597,6 +601,22 @@ internal sealed partial class NetworkSystem
             headers.ListAdd(header);
             List<GameObject> objects = SectionObjects(section);
             NoteSentObjects(objects);
+            if (AssetIdentifiers(source) is { } fromAsset)
+            {
+                HashSet<Guid> sent = [.. objects.Select(o => o.Identifier)];
+                EchoObject removed = EchoObject.NewList();
+                foreach (Guid id in fromAsset.Where(id => !sent.Contains(id)))
+                {
+                    removed.ListAdd(new EchoObject(id.ToString()));
+                }
+
+                header.Add("FromSource", new EchoObject(true));
+                header.Add("Removed", removed);
+                additions.Add((header, [.. objects.Where(o => !fromAsset.Contains(o.Identifier) &&
+                    (o.Parent.IsNotValid() || fromAsset.Contains(o.Parent!.Identifier)))]));
+                objects = [];
+            }
+
             contents.Add(new SceneContent
             {
                 Objects = [.. objects],
@@ -614,6 +634,10 @@ internal sealed partial class NetworkSystem
                 ? new() { ExternalReferences = new NetworkSerialization.SnapshotReferences(SceneReferenceResolver.ForTrees(contents.SelectMany(c => c.Roots))) }
                 : SnapshotContext();
             AsSetUp(() => tree = Serializer.Serialize(typeof(SceneContent[]), contents.ToArray(), context));
+            foreach ((EchoObject header, List<GameObject> roots) in additions)
+            {
+                header.Add("Added", WriteAdded(roots));
+            }
         }
         finally
         {
@@ -624,6 +648,113 @@ internal sealed partial class NetworkSystem
         root.Add("Sections", headers);
         root.Add("Contents", tree);
         return root;
+    }
+
+    /// <summary>Trees added to an asset section since it loaded, each with the asset object it hangs under, if any.</summary>
+    private EchoObject WriteAdded(List<GameObject> roots)
+    {
+        EchoObject added = EchoObject.NewList();
+        foreach (GameObject root in roots)
+        {
+            EchoObject entry = EchoObject.NewCompound(2);
+            entry.Add("Parent", new EchoObject(root.Parent.IsValid() ? root.Parent!.Identifier.ToString() : string.Empty));
+            SerializationContext context = new()
+            {
+                ExternalReferences = new NetworkSerialization.SnapshotReferences(SceneReferenceResolver.ForTree(root))
+            };
+            EchoObject tree = null!;
+            AsSetUp(() => tree = Serializer.Serialize(typeof(GameObject), root, context));
+            entry.Add("Tree", tree);
+            added.ListAdd(entry);
+        }
+
+        return added;
+    }
+
+    /// <summary>The identifiers of every object stored in <paramref name="source" />, or null when it has none.</summary>
+    private HashSet<Guid>? AssetIdentifiers(Scene? source)
+    {
+        if (source.IsNotValid() || source!.Data == null)
+        {
+            return null;
+        }
+
+        if (!_assetIdentifiers.TryGetValue(source, out HashSet<Guid>? identifiers))
+        {
+            SceneContent content = source.ReadContent();
+            identifiers = [.. content.Objects.Where(o => o.IsValid()).Select(o => o.Identifier)];
+            content.DisposeObjects();
+            _assetIdentifiers[source] = identifiers;
+        }
+
+        return identifiers;
+    }
+
+    /// <summary>
+    ///     A client's copy of a section the host sent by its asset: built from this peer's own copy of the asset, without
+    ///     the objects the host left out, with the trees it added, and with the host's settings.
+    /// </summary>
+    private SceneContent BuildFromAsset(EchoObject header, string name, Scene? source, SceneContent settings,
+        SceneInstance? linkTo)
+    {
+        if (source.IsNotValid() || source!.Data == null)
+        {
+            throw new InvalidDataException($"The host's section '{name}' comes from a scene this build does not have.");
+        }
+
+        SceneContent content = source.ReadContent();
+        try
+        {
+            Dictionary<Guid, EngineObject> map = content.IdentifierMap();
+            foreach (EchoObject removed in header["Removed"]?.List ?? [])
+            {
+                if (Guid.TryParse(removed.StringValue, out Guid id) && map.TryGetValue(id, out EngineObject? found) &&
+                    found is GameObject go)
+                {
+                    go.Dispose();
+                }
+            }
+
+            content.Resync();
+            foreach (EchoObject added in header["Added"]?.List ?? [])
+            {
+                EchoObject tree = added["Tree"] ?? throw new InvalidDataException($"The host sent an empty tree for '{name}'.");
+                SerializationContext context = ReadContext(linkTo);
+                GameObject? go = GameObject.DeserializePreservingIdentifiers(tree, context);
+                if (go.IsNotValid())
+                {
+                    throw new InvalidDataException($"The host sent a tree for '{name}' that could not be read.");
+                }
+
+                CollectLinks(tree, context);
+                if (Guid.TryParse(added["Parent"]?.StringValue, out Guid parentId))
+                {
+                    if (!content.IdentifierMap().TryGetValue(parentId, out EngineObject? parent) || parent is not GameObject under)
+                    {
+                        go!.Dispose();
+                        throw new InvalidDataException($"The host added a tree to '{name}' under an object it doesn't hold.");
+                    }
+
+                    go!.SetParent(under, false);
+                }
+                else
+                {
+                    content.Objects = [.. content.Objects, go!];
+                }
+
+                content.Resync();
+            }
+
+            content.Environment = settings.Environment;
+            content.Lighting = settings.Lighting;
+            content.LightmapBake = settings.LightmapBake;
+            return content;
+        }
+        catch
+        {
+            content.DisposeObjects();
+            throw;
+        }
     }
 
     /// <summary>The objects of a section clients receive: everything saved that is not under a NetworkMode.Never object or a hidden root.</summary>
@@ -660,9 +791,7 @@ internal sealed partial class NetworkSystem
     /// <exception cref="InvalidDataException">The sections can't be read.</exception>
     internal List<SectionData> ReadSections(EchoObject root, SceneInstance? linkTo = null)
     {
-        SerializationContext context = linkTo.IsValid()
-            ? new() { ExternalReferences = new NetworkSerialization.SnapshotReferences(new SceneReferenceResolver { ResolveIn = linkTo }) }
-            : SnapshotContext();
+        SerializationContext context = ReadContext(linkTo);
         SceneContent?[]? contents = null;
         try
         {
@@ -697,7 +826,16 @@ internal sealed partial class NetworkSystem
                 Scene? source = Guid.TryParse(header["Source"]?.StringValue, out Guid sourceId)
                     ? AssetDatabase.Get(sourceId) as Scene
                     : null;
-                sections.Add(new SectionData((uint)number, header["Name"]?.StringValue ?? string.Empty, active, source, content));
+                string name = header["Name"]?.StringValue ?? string.Empty;
+                if (header["FromSource"]?.BoolValue == true)
+                {
+                    SceneContent settings = content;
+                    content = BuildFromAsset(header, name, source, settings, linkTo);
+                    contents[i] = content;
+                    settings.DisposeObjects();
+                }
+
+                sections.Add(new SectionData((uint)number, name, active, source, content));
             }
 
             return sections;
@@ -1122,6 +1260,13 @@ internal sealed partial class NetworkSystem
             }
         }
     }
+
+    private SerializationContext ReadContext(SceneInstance? linkTo) => linkTo.IsValid()
+        ? new() { ExternalReferences = new NetworkSerialization.SnapshotReferences(new SceneReferenceResolver { ResolveIn = linkTo }) }
+        : SnapshotContext();
+
+    // The objects stored in each scene asset a section came from, read once a session.
+    private readonly Dictionary<Scene, HashSet<Guid>> _assetIdentifiers = new(ReferenceEqualityComparer.Instance);
 
     // Writing, a reference to a NetworkMode.Never object becomes an empty link; reading, that link becomes null.
     internal SerializationContext SnapshotContext() =>
