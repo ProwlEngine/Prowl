@@ -107,6 +107,33 @@ public class NetworkAnimatorTests
         Assert.Equal(7.5f, replacement.GetFloat("Speed"));
     }
 
+    [Fact]
+    public void AProxyAppliesReceivedStateOnceAndAllocatesNothingBetweenUpdates()
+    {
+        var source = Create();
+        var replica = Create();
+        using var sourceRoot = source.Root;
+        using var replicaRoot = replica.Root;
+        source.Animator.SetFloat("Speed", 4.5f);
+        source.Network.CaptureState();
+        Copy(source.Network, replica.Network, initial: true);
+        replica.Network.OnNetworkSpawn();
+        replica.Network.ApplyState();
+        Assert.Equal(4.5f, replica.Animator.GetFloat("Speed"));
+
+        replica.Network.ApplyState();
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++) replica.Network.ApplyState();
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(allocated < 1000, $"1000 applies allocated {allocated} bytes");
+
+        source.Animator.SetFloat("Speed", 9f);
+        source.Network.CaptureState();
+        Copy(source.Network, replica.Network, initial: false);
+        replica.Network.ApplyState();
+        Assert.Equal(9f, replica.Animator.GetFloat("Speed"));
+    }
+
     private static void Copy(NetworkAnimator source, NetworkAnimator replica, bool initial)
     {
         foreach (SyncMember member in NetworkMembers.Of(source).Syncs)

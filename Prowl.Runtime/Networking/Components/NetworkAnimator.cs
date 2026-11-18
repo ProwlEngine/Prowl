@@ -34,6 +34,11 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     private float _speed = 1f;
     private bool _applying;
 
+    // What a proxy last applied, so unchanged state isn't written into the animator again every frame.
+    private AnimatorParameters _appliedParameters;
+    private float _appliedSpeed = float.NaN;
+    private readonly List<int> _triggerScratch = new();
+
     private static readonly SyncMember<NetworkAnimator, AnimatorParameters> s_parameters =
         new(1, "Parameters", SyncFlags.FromOwner, static c => c._parameters, static (c, v) => c._parameters = v);
     private static readonly SyncMember<NetworkAnimator, AnimatorTriggers> s_triggers =
@@ -64,6 +69,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         animator.ParameterWritten += ParameterWritten;
         animator.TriggerWritten += TriggerWritten;
         _nextSample = 0;
+        ForgetApplied();
     }
 
     private void Unbind()
@@ -139,12 +145,27 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         finally { _applying = false; }
     }
 
+    private void ForgetApplied()
+    {
+        _appliedParameters = default;
+        _appliedSpeed = float.NaN;
+    }
+
     private void ApplyParameters()
     {
-        _bound!.Speed = _speed;
-        List<GraphParameterRecord> parameters = _bound.Graph!.Parameters;
-        for (int index = 0; index < Math.Min(_parameters.Count, parameters.Count); index++)
-            _parameters[index].Apply(_bound, parameters[index].Name);
+        if (_appliedSpeed != _speed)
+        {
+            _bound!.Speed = _appliedSpeed = _speed;
+        }
+
+        List<GraphParameterRecord> parameters = _bound!.Graph!.Parameters;
+        if (!_parameters.SameValues(_appliedParameters))
+        {
+            for (int index = 0; index < Math.Min(_parameters.Count, parameters.Count); index++)
+                _parameters[index].Apply(_bound, parameters[index].Name);
+            _appliedParameters = _parameters;
+        }
+
         for (int index = 0; index < _triggers.Count; index++)
         {
             uint revision = _triggers[index];
@@ -156,7 +177,10 @@ public sealed class NetworkAnimator : Component, INetworkEvents
             }
         }
         // A graph may consume a trigger during evaluation. Keep successive events for successive evaluations.
-        foreach (int index in new List<int>(_pendingTriggers.Keys))
+        if (_pendingTriggers.Count == 0) return;
+        _triggerScratch.Clear();
+        _triggerScratch.AddRange(_pendingTriggers.Keys);
+        foreach (int index in _triggerScratch)
         {
             uint count = _pendingTriggers[index];
             if (count == 0) continue;
@@ -169,7 +193,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     private void ParameterWritten(string name, ParameterValue value)
     {
         if (_applying || IsProxy || value.Type != AnimationValueType.Bool || _bound.IsNotValid() || _bound!.Graph.IsNotValid()) return;
-        if (!_bound.Graph!.Parameters.Exists(p => p.Name == name && p.Trigger)) return;
+        if (!IsTrigger(_bound.Graph!.Parameters, name)) return;
         bool previous = _triggerLevels.GetValueOrDefault(name);
         _triggerLevels[name] = value.Bool;
         if (value.Bool && !previous) TriggerWritten(name);
@@ -178,15 +202,30 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     private void TriggerWritten(string name)
     {
         if (_applying || IsProxy || _bound.IsNotValid() || _bound!.Graph.IsNotValid()) return;
-        int index = _bound.Graph!.Parameters.FindIndex(p => p.Name == name);
+        int index = IndexOf(_bound.Graph!.Parameters, name);
         if (index < 0) return;
         s_triggers.Set(this, ref _triggers, _triggers.Fired(index));
+    }
+
+    private static bool IsTrigger(List<GraphParameterRecord> parameters, string name)
+    {
+        foreach (GraphParameterRecord parameter in parameters)
+            if (parameter.Trigger && parameter.Name == name) return true;
+        return false;
+    }
+
+    private static int IndexOf(List<GraphParameterRecord> parameters, string name)
+    {
+        for (int index = 0; index < parameters.Count; index++)
+            if (parameters[index].Name == name) return index;
+        return -1;
     }
 
     public void OnNetworkSpawn() => ResetTriggerBaseline();
     public void OnNetworkAuthorityGained()
     {
         ResetTriggerBaseline();
+        ForgetApplied();
         if (_parameters.Count > 0) ApplyState();
     }
     public void OnNetworkAuthorityLost() => ResetTriggerBaseline();

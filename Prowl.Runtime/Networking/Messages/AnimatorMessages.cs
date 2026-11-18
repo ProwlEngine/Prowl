@@ -113,6 +113,9 @@ internal readonly struct AnimatorParameters(AnimatorParameterValue[] values) : I
 
     internal int Count => _values?.Length ?? 0;
 
+    /// <summary>True when both are the same received or captured values, without comparing them one by one.</summary>
+    internal bool SameValues(AnimatorParameters other) => ReferenceEquals(_values, other._values);
+
     internal AnimatorParameterValue this[int index] => index < Count ? _values![index] : default;
 
     /// <summary>A copy to change, at least <paramref name="length" /> long.</summary>
