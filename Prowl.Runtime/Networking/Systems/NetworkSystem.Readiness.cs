@@ -15,6 +15,8 @@ namespace Prowl.Runtime.Networking;
 internal sealed partial class NetworkSystem
 {
     /// <summary>Current connection, admission, scene loading, or gameplay readiness stage.</summary>
+    private readonly List<(int Peer, NetworkJoinState Stage)> _timedOut = new();
+
     internal NetworkJoinState JoinState
     {
         get
@@ -318,17 +320,26 @@ internal sealed partial class NetworkSystem
         }
 
         NetSession session = Session!;
-        foreach ((int id, PeerReadiness state) in LoadingPeers.ToArray())
+        double now = Now;
+        _timedOut.Clear();
+        foreach ((int id, PeerReadiness state) in LoadingPeers)
+        {
+            if (state.Stage != NetworkJoinState.Ready && now >= state.Deadline)
+            {
+                _timedOut.Add((id, state.Stage));
+            }
+        }
+
+        foreach ((int id, NetworkJoinState stage) in _timedOut)
         {
             if (Session != session)
             {
                 break;
             }
 
-            if (state.Stage != NetworkJoinState.Ready && Now >= state.Deadline &&
-                session.TryGetPeer(id, out NetPeer? peer))
+            if (session.TryGetPeer(id, out NetPeer? peer))
             {
-                session.Kick(peer!, $"Scene readiness timed out during {state.Stage}.");
+                session.Kick(peer!, $"Scene readiness timed out during {stage}.");
             }
         }
     }

@@ -150,16 +150,23 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             new RpcRecipientMessage(recipients).Write(envelope);
             scene.SendEngine(session.HostPeer!, EngineMessage.RpcToHost, envelope.WrittenSpan, delivery,
                 rpc.Channel);
-            NetworkDiagnostics.TraceMember("RPC", "Send", session.HostPeer, component, id, true, $"{mode}, {delivery}",
-                writer.WrittenSpan);
+            if (NetworkDiagnostics.Enabled)
+            {
+                NetworkDiagnostics.TraceMember("RPC", "Send", session.HostPeer, component, id, true, $"{mode}, {delivery}",
+                    writer.WrittenSpan);
+            }
+
             return mode == RpcMode.Broadcast && localIncluded;
         }
 
         using NetWriter message = new(writer.Length + 8);
         new RpcCallerMessage(session.LocalPeer!.Id).Write(message);
         message.WriteBytes(envelope.WrittenSpan);
-        NetworkDiagnostics.TraceMember("RPC", "Send", null, component, id, true, $"{mode}, {delivery}",
-            writer.WrittenSpan);
+        if (NetworkDiagnostics.Enabled)
+        {
+            NetworkDiagnostics.TraceMember("RPC", "Send", null, component, id, true, $"{mode}, {delivery}",
+                writer.WrittenSpan);
+        }
 
         // The arguments end the message.
         int arguments = message.Length - (writer.Length - (sites?.Start ?? 0));
@@ -224,8 +231,11 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return;
         }
 
-        NetworkDiagnostics.TraceMember("RPC", "Receive", sender, component, method, true, $"{mode}, {delivery}",
-            arguments);
+        if (NetworkDiagnostics.Enabled)
+        {
+            NetworkDiagnostics.TraceMember("RPC", "Receive", sender, component, method, true, $"{mode}, {delivery}",
+                arguments);
+        }
 
         // Validate on the host even when only another owner will execute the call.
         NetReader validation = new(arguments);
