@@ -353,9 +353,16 @@ public sealed class TextFieldBuilder
                     {
                         // Padded rather than margined so the whole tag (not just its glyph) takes the
                         // drag. Laid out the same when read-only so the field never reflows.
-                        pfx.Padding(_prefixPadL, _prefixPadR, 0, 0).Margin(0, 2, 0, 0) // gap before the value
+                        pfx.Margin(0, 2, 0, 0) // gap before the value
                            .FontSize(_theme.Metrics.FontSize);
-                        if (_prefixDragSquare) pfx.MinWidth(fieldH);
+                        // A square handle centres its tag, so it pads evenly; the side pads would
+                        // push the glyph off-centre.
+                        if (_prefixDragSquare)
+                        {
+                            float pad = MathF.Min(_prefixPadL, _prefixPadR);
+                            pfx.MinWidth(fieldH).Padding(pad, pad, 0, 0);
+                        }
+                        else pfx.Padding(_prefixPadL, _prefixPadR, 0, 0);
                         if (_readOnly) pfx.IsNotInteractable();
                         else
                         {
