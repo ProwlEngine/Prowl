@@ -100,11 +100,19 @@ public sealed class StaticRpcMember
             return null;
         }
 
-        string assemblyName = typeName[(comma + 2)..].Split(',')[0];
+        ReadOnlySpan<char> assemblyName = typeName.AsSpan(comma + 2);
+        int end = assemblyName.IndexOf(',');
+        if (end >= 0)
+        {
+            assemblyName = assemblyName[..end];
+        }
 
+        // Matched against FullName, which "Name, Version=..." keeps cached, so a lookup allocates nothing per assembly.
         foreach (Assembly assembly in RuntimeUtils.AssemblySource())
         {
-            if (string.Equals(assembly.GetName().Name, assemblyName, StringComparison.Ordinal))
+            string? fullName = assembly.FullName;
+            if (fullName != null && fullName.Length > assemblyName.Length && fullName[assemblyName.Length] == ',' &&
+                fullName.AsSpan(0, assemblyName.Length).SequenceEqual(assemblyName))
             {
                 return assembly.GetType(typeName[..comma], false);
             }

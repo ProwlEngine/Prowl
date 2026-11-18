@@ -97,7 +97,7 @@ internal sealed partial class NetworkCodeGen
             Changed = true;
             StringBuilder prologue = new();
             prologue.Append(rpc.Static
-                ? $"if ({rpc.Descriptor}.Begin(out {WriterType} __rpc_w)) {{ using (__rpc_w) {{ "
+                ? $"if ({rpc.Descriptor}.Begin(out {WriterType} __rpc_w)) {{ "
                 : $"if ({rpc.Descriptor}.Begin(this, out {WriterType} __rpc_w)) {{ ");
             prologue.Append("using (global::Prowl.Runtime.Diagnostics.FrameStats.Network.Scope()) { ");
             foreach (ParameterSyntax parameter in node.ParameterList.Parameters)
@@ -107,7 +107,7 @@ internal sealed partial class NetworkCodeGen
             }
 
             prologue.Append(rpc.Static
-                ? $"if (!{rpc.Descriptor}.Send(__rpc_w)) return; }} }} }} "
+                ? $"if (!{rpc.Descriptor}.Send(__rpc_w)) return; }} }} "
                 : $"if (!{rpc.Descriptor}.Send(this, __rpc_w)) return; }} }} ");
             List<StatementSyntax> checks = [SyntaxFactory.ParseStatement(prologue.ToString())];
 

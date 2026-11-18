@@ -33,11 +33,8 @@ public static class StaticRpcProbe
             _ => throw new ArgumentOutOfRangeException(nameof(id)) };
         if (rpc.Begin(out NetWriter writer))
         {
-            using (writer)
-            {
-                NetSerializer<int>.Write(writer, value);
-                if (!rpc.Send(writer)) return;
-            }
+            NetSerializer<int>.Write(writer, value);
+            if (!rpc.Send(writer)) return;
         }
         Calls.Add((value, Rpc.Caller));
         BodyAction?.Invoke();

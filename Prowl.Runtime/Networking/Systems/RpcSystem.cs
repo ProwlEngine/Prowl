@@ -40,6 +40,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     public void Dispose()
     {
         _rpcWriter.Dispose();
+        _staticWriter.Dispose();
         _sites.Dispose();
         _relaySites.Dispose();
         _staticSites.Dispose();

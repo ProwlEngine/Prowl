@@ -13,6 +13,7 @@ internal sealed partial class RpcSystem
 {
     internal StaticRpcMember? _incomingStatic;
     private readonly ReferenceSites _staticSites = new();
+    private readonly NetWriter _staticWriter = new();
 
     internal bool BeginStaticRpc(StaticRpcMember rpc, out NetWriter writer)
     {
@@ -28,7 +29,8 @@ internal sealed partial class RpcSystem
             return false;
         }
 
-        writer = new NetWriter();
+        _staticWriter.Reset();
+        writer = _staticWriter;
         RecordReferences(_staticSites, writer, 0);
         return true;
     }
