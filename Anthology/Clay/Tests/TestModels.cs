@@ -14,10 +14,12 @@ internal static class TestModels
     public static string GltfRoot { get; } = Resolve("test-models", "gltf");
     public static string FbxRoot { get; } = Resolve("test-models", "fbx");
     public static string ObjRoot { get; } = Resolve("test-models", "obj");
+    public static string BvhRoot { get; } = Resolve("test-models", "bvh");
 
     public static string Gltf(string relative) => Path.Combine(GltfRoot, relative);
     public static string Fbx(string relative) => Path.Combine(FbxRoot, relative);
     public static string Obj(string relative) => Path.Combine(ObjRoot, relative);
+    public static string Bvh(string relative) => Path.Combine(BvhRoot, relative);
 
     private static string Resolve(params string[] segments)
     {

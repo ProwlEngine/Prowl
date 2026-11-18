@@ -74,7 +74,11 @@ internal static class SceneBaker
             };
             bakedNodes[i] = node;
             if (src.Parent is null)
+            {
+                if (bakedRoot is not null)
+                    throw new NotImplementedException("Multiple roots in a skeletal hierarchy are not supported.");
                 bakedRoot = node;
+            }
         }
 
         for (int i = 0; i < scene.Nodes.Count; i++)

@@ -2,7 +2,7 @@
 
 A 3D model importing library for the Prowl Game Engine. Loads glTF 2.0 / GLB / VRM, Wavefront OBJ, and Autodesk FBX (binary + ASCII) into an Assimp-flavoured read-only `Model` graph with a configurable post-process pipeline.
 
-Pure C# .NET 10, no native dependencies, AOT-friendly. Math via [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector).
+Pure C#, no native dependencies, AOT-friendly. Math via [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector).
 
 ## Features
 
@@ -10,6 +10,7 @@ Pure C# .NET 10, no native dependencies, AOT-friendly. Math via [Prowl.Vector](h
   - glTF 2.0 (`.gltf` + external resources, `.glb` chunked binary, `.vrm`)
   - Wavefront OBJ (`.obj` + `.mtl`)
   - Autodesk FBX binary and ASCII (versions 7100-7700)
+  - Biovision BVH motion capture
 
 - **glTF Material Extensions**
   - `KHR_materials_unlit`, `KHR_materials_clearcoat`, `KHR_materials_sheen`,
@@ -112,7 +113,7 @@ foreach (var entry in model.Log.Entries)
 Clay/                main library
 Tests/               xUnit test suite
 DiffDebugger/        CLI sample, structural diff of two models
-test-models/         glTF + FBX + OBJ fixtures used by the test suite
+test-models/         files used by the test suite
 ```
 
 ## License
