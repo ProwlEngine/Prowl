@@ -60,6 +60,9 @@ internal sealed class SnapshotSystem : IDisposable
     private readonly List<Component> _scratchComponents = new();
     private readonly List<GameObject> _scratchRoots = new();
     private readonly List<uint> _scratchIds = new();
+
+    // Values changed since the last tick, with their flags, owed to peers once at the next.
+    private readonly Dictionary<SyncKey, SyncFlags> _changed = new();
     private readonly List<(uint NetId, uint Generation)> _scratchPositions = new();
     private readonly List<NetPeer> _sendTargets = new();
     private readonly Stack<SentSnapshot> _sentPool = new();
@@ -95,6 +98,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>Forgets everything owed and received, as when the scene changes.</summary>
     internal void Clear()
     {
+        _changed.Clear();
         foreach (PeerState state in _peers.Values)
         {
             Forget(state);
@@ -114,6 +118,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>A scene snapshot or catch-up is carrying <paramref name="peer" /> everything it is owed.</summary>
     internal void Delivered(NetPeer peer)
     {
+        FanOutChanges();
         if (_peers.TryGetValue(peer.Id, out PeerState? state))
         {
             state.Values.Clear();
@@ -131,6 +136,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>A spawn is carrying <paramref name="peer" /> the values and pose of <paramref name="root" />'s tree.</summary>
     internal void Delivered(NetPeer peer, GameObject root)
     {
+        FanOutChanges();
         if (!_peers.TryGetValue(peer.Id, out PeerState? state))
         {
             return;
@@ -393,24 +399,47 @@ internal sealed class SnapshotSystem : IDisposable
 
     // --- Changes --------------------------------------------------------------------------------
 
-    /// <summary>A [Sync] value changed here, or the host accepted it from a client: owe it to whoever doesn't control it.</summary>
-    internal void MarkChanged(Component component, SyncMember sync)
+    /// <summary>
+    ///     A [Sync] value changed here, or the host accepted it from a client: it is owed to whoever doesn't control it,
+    ///     from the next tick. Peers learn of it once a tick, however often it changes in between.
+    /// </summary>
+    internal void MarkChanged(Component component, SyncMember sync) => _changed[new SyncKey(component, sync.Slot)] = sync.Flags;
+
+    /// <summary>Owes the values changed since the last call to every peer that doesn't control them.</summary>
+    private void FanOutChanges()
     {
-        uint tick = _scene.Tick + 1;
-        int controller = ControllerOf(component, sync.Flags);
-        SyncKey key = new(component, sync.Slot);
-        NetworkObject? entry = _scene.Restricted.Count == 0 ? null : _scene.FindEntry(component.GameObject);
-        foreach (NetPeer peer in Targets())
+        if (_changed.Count == 0 || _scene.Session == null)
         {
-            PeerState state = State(peer);
-            if (peer.Id == controller || state.Missing.Contains(component) || !Sees(entry, peer))
+            _changed.Clear();
+            return;
+        }
+
+        uint tick = _scene.Tick + 1;
+        List<NetPeer> targets = Targets();
+        foreach ((SyncKey key, SyncFlags flags) in _changed)
+        {
+            Component component = key.Component;
+            if (component.IsDisposed)
             {
                 continue;
             }
 
-            Dictionary<SyncKey, Pending> values = state.Values;
-            values[key] = values.TryGetValue(key, out Pending pending) ? pending with { Changed = tick } : new Pending(tick, 0);
+            int controller = ControllerOf(component, flags);
+            NetworkObject? entry = _scene.Restricted.Count == 0 ? null : _scene.FindEntry(component.GameObject);
+            foreach (NetPeer peer in targets)
+            {
+                PeerState state = State(peer);
+                if (peer.Id == controller || state.Missing.Contains(component) || !Sees(entry, peer))
+                {
+                    continue;
+                }
+
+                Dictionary<SyncKey, Pending> values = state.Values;
+                values[key] = values.TryGetValue(key, out Pending pending) ? pending with { Changed = tick } : new Pending(tick, 0);
+            }
         }
+
+        _changed.Clear();
     }
 
     /// <summary>Whose changes to a value count: the object's controller for FromOwner ones, else the host's.</summary>
@@ -423,10 +452,10 @@ internal sealed class SnapshotSystem : IDisposable
         return owner == NoOwner ? NetPeer.HostId : owner;
     }
 
-    /// <summary>The peers this one sends snapshots to: every client from the host, the host from a client.</summary>
     /// <summary>The values owed to <paramref name="peer" /> that it would take now, for a catch-up to deliver at once.</summary>
     internal List<(Component Component, uint Slot)> OwedValues(NetPeer peer)
     {
+        FanOutChanges();
         List<(Component Component, uint Slot)> owed = new();
         if (!_peers.TryGetValue(peer.Id, out PeerState? state))
         {
@@ -447,6 +476,7 @@ internal sealed class SnapshotSystem : IDisposable
         return owed;
     }
 
+    /// <summary>The peers this one sends snapshots to: every client from the host, the host from a client.</summary>
     private List<NetPeer> Targets()
     {
         _targets.Clear();
@@ -496,6 +526,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>Takes this tick's transforms and sends every ready peer its snapshot.</summary>
     internal void Send()
     {
+        FanOutChanges();
         uint tick = ++_scene.Tick;
         double now = _scene.Now;
         CaptureTransforms(tick, now);
