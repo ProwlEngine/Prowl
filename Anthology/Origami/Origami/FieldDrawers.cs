@@ -19,19 +19,19 @@ public class BoolDrawer : FieldDrawer
 public class IntDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<int>(paper, id, (int)(value ?? 0), v => onChange(v)).Show();
+        => Origami.NumericField<int>(paper, id, (int)(value ?? 0), v => onChange(v)).DragHandle().Show();
 }
 
 public class FloatDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<float>(paper, id, (float)(value ?? 0f), v => onChange(v)).Show();
+        => Origami.NumericField<float>(paper, id, (float)(value ?? 0f), v => onChange(v)).DragHandle().Show();
 }
 
 public class DoubleDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<double>(paper, id, (double)(value ?? 0.0), v => onChange(v)).Show();
+        => Origami.NumericField<double>(paper, id, (double)(value ?? 0.0), v => onChange(v)).DragHandle().Show();
 }
 
 public class StringDrawer : FieldDrawer
@@ -43,49 +43,49 @@ public class StringDrawer : FieldDrawer
 public class ByteDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<byte>(paper, id, (byte)(value ?? (byte)0), v => onChange(v)).Min(0).Max(255).Show();
+        => Origami.NumericField<byte>(paper, id, (byte)(value ?? (byte)0), v => onChange(v)).Min(0).Max(255).DragHandle().Show();
 }
 
 public class LongDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<long>(paper, id, (long)(value ?? 0L), v => onChange(v)).Show();
+        => Origami.NumericField<long>(paper, id, (long)(value ?? 0L), v => onChange(v)).DragHandle().Show();
 }
 
 public class SByteDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<sbyte>(paper, id, (sbyte)(value ?? (sbyte)0), v => onChange(v)).Show();
+        => Origami.NumericField<sbyte>(paper, id, (sbyte)(value ?? (sbyte)0), v => onChange(v)).DragHandle().Show();
 }
 
 public class ShortDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<short>(paper, id, (short)(value ?? (short)0), v => onChange(v)).Show();
+        => Origami.NumericField<short>(paper, id, (short)(value ?? (short)0), v => onChange(v)).DragHandle().Show();
 }
 
 public class UShortDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<ushort>(paper, id, (ushort)(value ?? (ushort)0), v => onChange(v)).Show();
+        => Origami.NumericField<ushort>(paper, id, (ushort)(value ?? (ushort)0), v => onChange(v)).DragHandle().Show();
 }
 
 public class UIntDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<uint>(paper, id, (uint)(value ?? 0u), v => onChange(v)).Show();
+        => Origami.NumericField<uint>(paper, id, (uint)(value ?? 0u), v => onChange(v)).DragHandle().Show();
 }
 
 public class ULongDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<ulong>(paper, id, (ulong)(value ?? 0ul), v => onChange(v)).Show();
+        => Origami.NumericField<ulong>(paper, id, (ulong)(value ?? 0ul), v => onChange(v)).DragHandle().Show();
 }
 
 public class DecimalDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.NumericField<decimal>(paper, id, (decimal)(value ?? 0m), v => onChange(v)).Show();
+        => Origami.NumericField<decimal>(paper, id, (decimal)(value ?? 0m), v => onChange(v)).DragHandle().Show();
 }
 
 // ── Vectors ─────────────────────────────────────────────────

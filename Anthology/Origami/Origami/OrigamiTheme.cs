@@ -102,6 +102,12 @@ public sealed class OrigamiTheme
     /// <summary>Tooltip background.</summary>
     public Color TooltipBackground => TooltipOverride ?? Popover;
 
+    /// <summary>Tag on a floating-point numeric field's drag handle (<see cref="NumericFieldBuilder{T}.DragHandle"/>).</summary>
+    public Color FloatTag => Green.C500;
+
+    /// <summary>Tag on an integer numeric field's drag handle.</summary>
+    public Color IntTag => Blue.C500;
+
     /// <summary>Return <paramref name="c"/> with a new alpha (0-255). Handy for state overlays.</summary>
     public static Color WithAlpha(Color c, int a) => Color.FromArgb(a, c.R, c.G, c.B);
 
