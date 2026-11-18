@@ -297,17 +297,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/EJTP">
-                    <img src="https://avatars.githubusercontent.com/u/87308197?v=4" width="100;" alt="EJTP"/>
-                    <br />
-                    <sub><b>EJTP</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/Tryibion">
                     <img src="https://avatars.githubusercontent.com/u/71274967?v=4" width="100;" alt="Tryibion"/>
                     <br />
                     <sub><b>Chandler Cox</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/EJTP">
+                    <img src="https://avatars.githubusercontent.com/u/87308197?v=4" width="100;" alt="EJTP"/>
+                    <br />
+                    <sub><b>EJTP</b></sub>
                 </a>
             </td>
             <td align="center">
