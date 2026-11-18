@@ -593,7 +593,7 @@ public class AnimationGraphWindow : GraphWindow<AnimationGraphWindow, GraphNodeR
     {
         EditorGUI.Row(paper, "ag_trDuration", "Duration (s)", () =>
             Origami.NumericField<float>(paper, "ag_trDuration_v", transition.Duration,
-                v => Set("Set Transition Duration", () => transition.Duration = MathF.Max(0f, v), false)).Min(0f).Show());
+                v => Set("Set Transition Duration", () => transition.Duration = MathF.Max(0f, v), false)).DragHandle().Min(0f).Show());
 
         string[] easings = Enum.GetNames<TransitionEasing>();
         EditorGUI.Row(paper, "ag_trEasing", "Easing", () =>
@@ -835,7 +835,7 @@ public class AnimationGraphWindow : GraphWindow<AnimationGraphWindow, GraphNodeR
             case NodeValueKind.Integer:
                 EditorGUI.Row(paper, $"{id}_def", "Default", () =>
                     Origami.NumericField<int>(paper, $"{id}_def_v", parameter.Integer,
-                        v => Set("Set Parameter Default", () => parameter.Integer = v, false)).Show());
+                        v => Set("Set Parameter Default", () => parameter.Integer = v, false)).DragHandle().Show());
                 break;
             case NodeValueKind.Vector:
                 EditorGUI.Row(paper, $"{id}_def", "Default", () =>
@@ -852,7 +852,7 @@ public class AnimationGraphWindow : GraphWindow<AnimationGraphWindow, GraphNodeR
             default:
                 EditorGUI.Row(paper, $"{id}_def", "Default", () =>
                     Origami.NumericField<float>(paper, $"{id}_def_v", parameter.Number,
-                        v => Set("Set Parameter Default", () => parameter.Number = v, false)).Show());
+                        v => Set("Set Parameter Default", () => parameter.Number = v, false)).DragHandle().Show());
                 break;
         }
     }
