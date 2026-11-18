@@ -14,6 +14,7 @@ internal sealed partial class NetworkSystem
     private readonly Dictionary<int, PeerInterest> _interests = new();
     private readonly List<NetPeer> _interestPeers = new();
     private readonly List<(NetworkObject Entry, bool Visible)> _interestChanges = new();
+    private readonly List<(NetworkObject Entry, NetPeer Peer, bool Visible)> _interestBatch = new();
     private readonly HashSet<int> _warnedNoViewpoint = new();
     private readonly InterestGrid _grid = new();
     private readonly HashSet<NetworkObject> _nearby = new(ReferenceEqualityComparer.Instance);
@@ -103,6 +104,7 @@ internal sealed partial class NetworkSystem
             }
         }
 
+        _interestBatch.Clear();
         foreach (NetPeer peer in _interestPeers)
         {
             if (Session != session)
@@ -110,7 +112,60 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
-            CheckInterest(peer, true);
+            CheckInterest(peer, true, true);
+        }
+
+        ApplyInterestBatch(session);
+    }
+
+    /// <summary>Applies the changes gathered from several clients, sending each object once to all it enters.</summary>
+    private void ApplyInterestBatch(NetSession session)
+    {
+        (NetworkObject Entry, NetPeer Peer, bool Visible)[] changes = [.. _interestBatch];
+        _interestBatch.Clear();
+        List<NetworkObject> order = [];
+        Dictionary<NetworkObject, (List<NetPeer> Entering, List<NetPeer> Leaving)> byEntry = new();
+        foreach ((NetworkObject entry, NetPeer peer, bool visible) in changes)
+        {
+            if (!byEntry.TryGetValue(entry, out (List<NetPeer> Entering, List<NetPeer> Leaving) peers))
+            {
+                byEntry[entry] = peers = ([], []);
+                order.Add(entry);
+            }
+
+            (visible ? peers.Entering : peers.Leaving).Add(peer);
+        }
+
+        // Listeners run game code, which may check interest again.
+        foreach (NetworkObject entry in order)
+        {
+            if (Session != session)
+            {
+                return;
+            }
+
+            if (FindEntry(entry.GameObject) != entry || entry.TearingDown)
+            {
+                continue;
+            }
+
+            (List<NetPeer> entering, List<NetPeer> leaving) = byEntry[entry];
+            entering.RemoveAll(peer => !HasCurrentWorld(peer) || Sees(entry, peer));
+            leaving.RemoveAll(peer => !HasCurrentWorld(peer) || !Sees(entry, peer));
+            foreach (NetPeer peer in entering)
+            {
+                SetHidden(entry, peer.Id, false);
+            }
+
+            foreach (NetPeer peer in leaving)
+            {
+                SetHidden(entry, peer.Id, true);
+            }
+
+            if (entering.Count > 0 || leaving.Count > 0)
+            {
+                SendVisibility(entry, [.. entering], [.. leaving]);
+            }
         }
     }
 
@@ -122,7 +177,7 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    private void CheckInterest(NetPeer peer, bool onlyNearby = false)
+    private void CheckInterest(NetPeer peer, bool onlyNearby = false, bool batch = false)
     {
         if (!HasCurrentWorld(peer))
         {
@@ -157,6 +212,16 @@ internal sealed partial class NetworkSystem
 
         if (_interestChanges.Count == 0)
         {
+            return;
+        }
+
+        if (batch)
+        {
+            foreach ((NetworkObject entry, bool visible) in _interestChanges)
+            {
+                _interestBatch.Add((entry, peer, visible));
+            }
+
             return;
         }
 

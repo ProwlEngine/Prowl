@@ -4,6 +4,7 @@ using Prowl.Courier;
 using Prowl.Courier.Transports.Local;
 using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 using Xunit;
 
@@ -104,6 +105,25 @@ public partial class NetworkingTests
             Assert.True(elapsed < 20, $"300 withdrawals took {elapsed} ms");
         }
         finally { Networking.Networking.Shutdown(); }
+    }
+    [Fact]
+    public void AnObjectEnteringSeveralPeersInterestTogetherIsWrittenOnce()
+    {
+        using InterestSession session = InterestHost();
+        session.AliceSees.SetViewpoints([Float3.Zero]);
+        session.BobSees.SetViewpoints([Float3.Zero]);
+        GameObject crate = CreateGameObject("Counted crate");
+        crate.AddComponent<CountedWritesTestComponent>();
+        crate.Transform.Position = new Float3(100, 0, 0);
+        session.World.Add(crate);
+        crate.Network.SpawnSerialized();
+        PumpFor(10, session.Alice, session.Bob);
+        Assert.Equal(0, SpawnsOf(session.Alice, crate));
+
+        CountedWrites.Writes = 0;
+        crate.Transform.Position = Float3.Zero;
+        Pump(() => SpawnsOf(session.Alice, crate) == 1 && SpawnsOf(session.Bob, crate) == 1, session.Alice, session.Bob);
+        Assert.Equal(1, CountedWrites.Writes);
     }
 }
 
