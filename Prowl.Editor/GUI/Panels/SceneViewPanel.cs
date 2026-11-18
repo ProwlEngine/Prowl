@@ -538,12 +538,6 @@ public class SceneViewPanel : DockPanel
                             Transform2D.CreateScale(rw, -rh));
                         canvas.RoundedRectFilled(rx, ry, rw, rh, 0, 0, rnd, rnd, Color.White);
                         canvas.ClearBrushTexture();
-
-                        // Inset the border by half its width so the full stroke sits on top of the texture edge.
-                        canvas.RoundedRect(rx + 1, ry + 1, rw - 2, rh - 2, 0, 0, rnd, rnd);
-                        canvas.SetStrokeColor(EditorTheme.Purple500);
-                        canvas.SetStrokeWidth(2);
-                        canvas.Stroke();
                     });
 
                     // Draw transform gizmo as 2D overlay
