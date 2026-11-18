@@ -115,6 +115,7 @@ internal sealed partial class NetworkObject
 
         // End membership before notifying listeners so nested teardown cannot notify twice.
         SpawnNotified = false;
+        System.ForgetPlayer(this);
         GameObject.Network.DespawnReason = reason;
         TearingDown = true;
         HasLocalAuthority = false;

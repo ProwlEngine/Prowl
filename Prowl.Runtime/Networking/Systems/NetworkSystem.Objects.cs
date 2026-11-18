@@ -556,6 +556,7 @@ internal sealed partial class NetworkSystem
             }
 
             entry.NotifySpawn();
+            ClaimPendingPlayer(entry);
         }
         finally
         {
@@ -813,6 +814,7 @@ internal sealed partial class NetworkSystem
         Snapshots.RemovePeer(peer.Id);
         ForgetPeerVisibility(peer.Id);
         ForgetPeerLimits(peer.Id);
+        ForgetPlayerOf(peer.Id);
         DispatchNetworkListener(e => e.OnPeerDisconnected(peer, reason));
         if (Session != session)
         {

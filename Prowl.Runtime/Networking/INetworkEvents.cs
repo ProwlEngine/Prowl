@@ -22,6 +22,16 @@ public interface INetworkEvents : ISceneEvent<INetworkEvents>
     {
     }
 
+    /// <summary>The object became this peer's player, as Mirror's OnStartLocalPlayer.</summary>
+    void OnStartLocalPlayer()
+    {
+    }
+
+    /// <summary>The object is no longer this peer's player.</summary>
+    void OnStopLocalPlayer()
+    {
+    }
+
     /// <summary>This peer now simulates the object, as its owner or as the host of an unowned object.</summary>
     void OnNetworkAuthorityGained()
     {

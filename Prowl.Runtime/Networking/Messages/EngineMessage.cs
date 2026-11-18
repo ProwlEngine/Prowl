@@ -29,5 +29,6 @@ internal enum EngineMessage : ushort
     SectionRemove,
     SectionMove,
     Time,
-    SendInterval
+    SendInterval,
+    Player
 }

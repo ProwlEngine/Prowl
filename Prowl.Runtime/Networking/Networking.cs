@@ -158,6 +158,34 @@ public static partial class Networking
     public static void RegisterFactory(string name, NetworkFactory build, Action<GameObject>? destroy = null) =>
         NetworkFactories.Register(name, build, destroy);
 
+    /// <summary>This peer's player object, or null. Set by the host with <see cref="AddPlayer" />.</summary>
+    public static GameObject? LocalPlayer => System?.LocalPlayer;
+
+    /// <summary>
+    ///     Host: makes <paramref name="player" /> the player of <paramref name="peer" />, as Mirror's
+    ///     AddPlayerForConnection: spawned owned by them, or handed to them if already spawned. Replaces any player they had.
+    /// </summary>
+    public static void AddPlayer(NetPeer peer, GameObject player)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+        ArgumentNullException.ThrowIfNull(player);
+        System?.AddPlayer(peer, player);
+    }
+
+    /// <summary>Host: <paramref name="peer" /> no longer has a player. Its old player stays spawned.</summary>
+    public static void RemovePlayer(NetPeer peer)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+        System?.RemovePlayer(peer);
+    }
+
+    /// <summary>Host: the player of <paramref name="peer" />, or null.</summary>
+    public static GameObject? PlayerOf(NetPeer peer)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+        return System?.PlayerOf(peer);
+    }
+
     /// <summary>
     ///     Host: takes a spawned object out of the network, as Mirror's UnSpawn does. Clients despawn it, and this peer
     ///     keeps it, to pool or spawn again later; one built from a prefab or factory spawns again the same way.

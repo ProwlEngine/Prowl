@@ -198,6 +198,9 @@ public sealed class NetworkAccessor
     /// <summary>True while this object belongs to a live network session.</summary>
     public bool Active => Networking.System?.IsNetworked(_object) == true;
 
+    /// <summary>True when the object is this peer's player, as Mirror's isLocalPlayer.</summary>
+    public bool IsLocalPlayer => Networking.System?.LocalPlayer == _object;
+
     /// <summary>True when this peer receives this object's state from its controller.</summary>
     public bool IsProxy => Networking.System?.IsProxy(_object) == true;
 

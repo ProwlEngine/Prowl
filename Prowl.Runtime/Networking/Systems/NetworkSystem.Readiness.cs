@@ -171,6 +171,10 @@ internal sealed partial class NetworkSystem
         // Queue activation first, so RPCs from ready callbacks arrive after the client's local ready notification.
         state!.Stage = NetworkJoinState.Ready;
         SendSceneGeneration(peer, EngineMessage.SceneActivate);
+        if (PlayerOf(peer).IsValid())
+        {
+            SendPlayer(peer);
+        }
         DispatchNetworkListener(e =>
         {
             if (IsPeerReady(peer))
