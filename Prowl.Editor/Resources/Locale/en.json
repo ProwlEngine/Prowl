@@ -59,6 +59,7 @@
   "scene.camera_near": "Near Clip",
   "scene.camera_far": "Far Clip",
   "scene.camera_speed": "Fly Speed",
+  "scene.camera_smoothing": "Fly Smooth",
   "scene.camera_reset": "Reset",
   "scene.tool_handles": "Tool Handles",
   "scene.tool_move": "Move",

@@ -50,6 +50,7 @@
   "scene.camera_near": "ニアクリップ",
   "scene.camera_far": "ファークリップ",
   "scene.camera_speed": "飛行速度",
+  "scene.camera_smoothing": "飛行スムージング",
   "scene.camera_reset": "リセット",
   "scene.tool_handles": "Tool Handles",
   "scene.tool_move": "移動",

@@ -50,6 +50,7 @@
   "scene.camera_near": "近裁剪面",
   "scene.camera_far": "远裁剪面",
   "scene.camera_speed": "飞行速度",
+  "scene.camera_smoothing": "飞行平滑",
   "scene.camera_reset": "重置",
   "scene.tool_handles": "Tool Handles",
   "scene.tool_move": "移动",

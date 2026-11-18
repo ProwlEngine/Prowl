@@ -260,17 +260,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/xZekro51">
-                    <img src="https://avatars.githubusercontent.com/u/28503323?v=4" width="100;" alt="xZekro51"/>
-                    <br />
-                    <sub><b>Paolo</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/dimmerly">
                     <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
                     <br />
                     <sub><b>Dimmer</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/xZekro51">
+                    <img src="https://avatars.githubusercontent.com/u/28503323?v=4" width="100;" alt="xZekro51"/>
+                    <br />
+                    <sub><b>Paolo</b></sub>
                 </a>
             </td>
             <td align="center">

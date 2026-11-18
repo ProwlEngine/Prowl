@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Prefabs;
+using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
@@ -31,6 +34,7 @@ public class HierarchyPanel : DockPanel
     public override string Icon => EditorIcons.Sitemap;
 
     private string _searchText = "";
+    private bool _flatSearch = true;
     private Paper? _paper;
     // Rename state is managed by RenameOverlay
 
@@ -49,6 +53,11 @@ public class HierarchyPanel : DockPanel
     private float _dragHoverNormalizedYNext;
     private SceneHeader? _dragHoverHeader;
     private SceneHeader? _dragHoverHeaderNext;
+
+    // Holding a dragged script over a row for a moment selects it, so the Inspector shows what is on it.
+    private const float ScriptHoverSelectDelay = 0.35f;
+    private GameObject? _scriptHoverTarget;
+    private float _scriptHoverTime;
 
     // A header row: an open scene of the edit world, or a section of the play world.
     private sealed class SceneHeader
@@ -107,6 +116,8 @@ public class HierarchyPanel : DockPanel
             _dragHoverNormalizedYNext = 0f;
             _dragHoverHeaderNext = null;
         }
+
+        UpdateScriptHoverSelection(paper.DeltaTime);
 
         SceneInstance scene = EditorSceneManager.EditedWorld;
 
@@ -306,16 +317,27 @@ public class HierarchyPanel : DockPanel
                     })
                     .OnHover((n, normY) =>
                     {
-                        if (!DragDrop.IsDragging || DragDrop.Payload is not GameObjectDragPayload) return;
-                        if (n.UserData is SceneHeader header)
+                        if (!DragDrop.IsDragging) return;
+                        if (DragDrop.Payload is GameObjectDragPayload)
                         {
-                            _dragHoverHeaderNext = header;
-                            return;
+                            if (n.UserData is SceneHeader header)
+                            {
+                                _dragHoverHeaderNext = header;
+                                return;
+                            }
+                            if (n.UserData is not GameObject go) return;
+                            _dragHoverTargetNext = go;
+                            _dragHoverTargetIdNext = NodeId(go);
+                            _dragHoverNormalizedYNext = normY;
                         }
-                        if (n.UserData is not GameObject go) return;
-                        _dragHoverTargetNext = go;
-                        _dragHoverTargetIdNext = NodeId(go);
-                        _dragHoverNormalizedYNext = normY;
+                        else if (DragDrop.Payload is AssetDragPayload assetPayload
+                            && n.UserData is GameObject targetGo
+                            && ScriptComponentResolver.IsScriptAsset(assetPayload))
+                        {
+                            _dragHoverTargetNext = targetGo;
+                            _dragHoverTargetIdNext = NodeId(targetGo);
+                            _dragHoverNormalizedYNext = 0.5f;
+                        }
                     })
                     .CustomRowContent((paper, node, isSel, isExp) =>
                     {
@@ -387,8 +409,10 @@ public class HierarchyPanel : DockPanel
 
                 // --- All drop handling uses hier_bg (the stable outer background) ---
 
-                // Asset drops show visual indicator and spawn at root
-                if (DragDrop.IsDraggingType<AssetDragPayload>() && bgHovered)
+                // Script asset drops add component(s) to the hovered GameObject row.
+                // Other asset drops show visual indicator and spawn at root.
+                bool isScriptDrag = DragDrop.Payload is AssetDragPayload adp && ScriptComponentResolver.IsScriptAsset(adp);
+                if (DragDrop.IsDraggingType<AssetDragPayload>() && bgHovered && !isScriptDrag)
                 {
                     _assetDropTarget = true;
                     EditorGUI.DropBanner(paper, "hier_drop_zone", Loc.Get("hierarchy.drop_to_spawn"));
@@ -398,20 +422,40 @@ public class HierarchyPanel : DockPanel
                     _assetDropTarget = false;
                 }
 
-                if (DragDrop.IsDropFrame && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
+                if (DragDrop.IsDropFrame && DragDrop.Payload is AssetDragPayload assetDrop)
                 {
-                    if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
+                    if (isScriptDrag)
                     {
-                        AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
-                        if (entry != null && EditorSceneManager.SceneAt(entry.Path) is { } dropped && EditorSceneManager.CanEditScenes)
-                            EditorSceneManager.OpenAdditive(dropped, load: !Input.GetKey(KeyCode.AltLeft) && !Input.GetKey(KeyCode.AltRight));
+                        if (bgHovered)
+                        {
+                            if (_dragHoverTarget.IsValid())
+                            {
+                                IReadOnlyList<Type> componentTypes = ScriptComponentResolver.ResolveAddableComponentTypes(assetDrop, _dragHoverTarget);
+                                if (componentTypes.Count > 0)
+                                    GameObjectInspector.AddComponentsWithUndo([_dragHoverTarget], componentTypes);
+                            }
+                            DragDrop.EndDrag();
+                        }
+                        _assetDropTarget = false;
+                        _dragHoverTarget = null;
+                        _dragHoverTargetId = null;
+                        _dragHoverHeader = null;
                     }
-                    else
+                    else if (_assetDropTarget)
                     {
-                        SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                        if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
+                        {
+                            AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
+                            if (entry != null && EditorSceneManager.SceneAt(entry.Path) is { } dropped && EditorSceneManager.CanEditScenes)
+                                EditorSceneManager.OpenAdditive(dropped, load: !Input.GetKey(KeyCode.AltLeft) && !Input.GetKey(KeyCode.AltRight));
+                        }
+                        else
+                        {
+                            SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                        }
+                        DragDrop.EndDrag();
+                        _assetDropTarget = false;
                     }
-                    DragDrop.EndDrag();
-                    _assetDropTarget = false;
                 }
 
                 // GO drop process using hover target tracked by OnHover callback
@@ -466,6 +510,22 @@ public class HierarchyPanel : DockPanel
         }
     }
 
+    private void UpdateScriptHoverSelection(float deltaTime)
+    {
+        // For asset drags OnHover only sets _dragHoverTarget for .cs script drags.
+        GameObject? target = DragDrop.IsDraggingType<AssetDragPayload>() ? _dragHoverTarget : null;
+        if (target.IsNotValid() || !ReferenceEquals(target, _scriptHoverTarget))
+        {
+            _scriptHoverTarget = target;
+            _scriptHoverTime = 0f;
+            return;
+        }
+
+        _scriptHoverTime += MathF.Max(0f, deltaTime);
+        if (_scriptHoverTime >= ScriptHoverSelectDelay)
+            Selection.Select(target!); // no-op once it is the selection
+    }
+
     // ================================================================
     //  Scene headers
     // ================================================================
@@ -500,7 +560,7 @@ public class HierarchyPanel : DockPanel
             List<GameObject> roots = header.Section != null ? GetDisplayRoots(header.Section.Roots) : [];
             TreeNode node = header.Node;
             node.Id = HeaderId(header.Open is { } open ? SceneKey(open) : SectionKey(section));
-            node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) ? true : null;
+            node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) || !string.IsNullOrEmpty(_searchText) ? true : null;
             node.UserData = header;
             node.Label = HeaderName(header);
             node.Depth = 0;
@@ -601,16 +661,26 @@ public class HierarchyPanel : DockPanel
                     MenuItemAttribute.BuildContextMenu(b, "GameObject");
                 }));
         }
-
-        if (header.Open is { } open && EditorSceneManager.CanEditScenes)
-            BuildSceneHeaderMenu(paper, open);
     }
 
-    private static void BuildSceneHeaderMenu(Paper paper, OpenScene open)
+    private static Action<ContextBuilder> BuildSceneHeaderContextMenu(SceneHeader sceneHeader) => builder =>
     {
-        Origami.RightClickMenu(paper, "hier_scene_ctx", builder =>
+        string title = sceneHeader.Open?.Name ?? (sceneHeader.Section is { IsPersistent: true } ? Loc.Get("hierarchy.persistent") : sceneHeader.Section?.Name ?? "");
+        builder.Title(title, iconDraw: EditorIcons.Shapes_I);
+
+        if (sceneHeader.Section != null)
         {
-            builder.Title(open.Name, iconDraw: EditorIcons.Shapes_I);
+            builder.Submenu(Loc.Get("hierarchy.create"), (b) =>
+            {
+                MenuContext.SetSection(sceneHeader.Section);
+                BuildCreateMenuFor(b, parent: null);
+            }, EditorIcons.Plus);
+        }
+
+        if (sceneHeader.Open is { } open && EditorSceneManager.CanEditScenes)
+        {
+            if (sceneHeader.Section != null)
+                builder.Separator();
             if (open.IsLoaded && !open.IsActive)
                 builder.Item(Loc.Get("hierarchy.set_active_scene"), () => Guarded(() => EditorSceneManager.SetActive(open)));
             if (open.IsLoaded)
@@ -637,8 +707,8 @@ public class HierarchyPanel : DockPanel
                 open.IsHiddenInSceneView = !open.IsHiddenInSceneView;
                 EditorSceneManager.RememberSetup();
             });
-        });
-    }
+        }
+    };
 
     // A refusal from a menu, like unloading the last loaded scene, is told rather than thrown into the frame.
     private static void Guarded(Action action)
@@ -678,9 +748,11 @@ public class HierarchyPanel : DockPanel
 
     private void DrawToolbar(Paper paper, Scribe.FontFile font, float width)
     {
+        // Clicks in the toolbar are not background clicks, so they keep the selection
         using (paper.Row("hier_toolbar")
             .Height(ToolbarHeight)
             .Margin(4, 4, 4, 0)
+            .StopEventPropagation()
             .Enter())
         {
             using (paper.Row("hier_search_wrap")
@@ -689,57 +761,141 @@ public class HierarchyPanel : DockPanel
                 .Enter())
                 Origami.SearchField(paper, "hier_search", _searchText, v => _searchText = v)
                     .Width(UnitValue.StretchOne).Height(25).Show();
+
+            using (paper.Box("hier_search_mode_w").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                .Margin(4, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .Tooltip(_flatSearch ? "Search results: flat list" : "Search results: hierarchy").Enter())
+                Origami.IconButton(paper, "hier_search_mode", _flatSearch ? EditorIcons.List_I : EditorIcons.Sitemap_I, ToggleFlatSearch)
+                    .Small().Width(24).Height(24).Ghost().Show();
         }
     }
 
-    private void BuildNodeList(GameObject go, int depth, List<TreeNode> nodes)
+    private void ToggleFlatSearch()
+    {
+        _flatSearch = !_flatSearch;
+        if (!Application.IsPlaying)
+            EditorApplication.Instance?.SaveDockLayout();
+    }
+
+    public override bool SerializeState(JsonObject state)
+    {
+        state["flatSearch"] = _flatSearch;
+        return true;
+    }
+
+    public override void RestoreState(JsonObject state)
+    {
+        if (state["flatSearch"] is JsonValue flatVal && flatVal.TryGetValue(out bool flat))
+            _flatSearch = flat;
+    }
+
+    // "t:Light" matches objects with a component whose type, or a base type's, contains "Light"; anything else matches names
+    private bool MatchesSearch(GameObject go)
+    {
+        if (!_searchText.StartsWith("t:", StringComparison.OrdinalIgnoreCase))
+            return EditorUtils.MatchesSearch(go.Name, _searchText);
+
+        string type = _searchText[2..].Trim();
+        if (type.Length == 0)
+            return true;
+        foreach (Component component in go.GetComponents<Component>())
+        {
+            for (Type? t = component.GetType(); t != null && t != typeof(Component); t = t.BaseType)
+            {
+                if (t.Name.Contains(type, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // Adds the rows for go and its children. Returns whether any row was added for its subtree.
+    private bool BuildNodeList(GameObject go, int depth, List<TreeNode> nodes)
     {
         if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
-            return;
+            return false;
 
-        if (!EditorUtils.MatchesSearch(go.Name, _searchText)
-            && !go.GetChildrenDeep().Any(c => EditorUtils.MatchesSearch(c.Name, _searchText)))
-            return;
+        bool searching = !string.IsNullOrEmpty(_searchText);
 
-        TreeNode node = _nodeCache.GetValue(go, static g => new TreeNode { UserData = g });
-        node.Id = NodeId(go);
-        string goId = node.Id;
-        bool hasVisibleChildren = go.Children.Count > 0
-            && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
-
-        // Determine drop indicator for this node
-        TreeDropPosition? dropInd = null;
-        if (DragDrop.IsDragging && _dragHoverTargetId == goId)
+        // A flat search lists every match at the depth of the roots, without the objects around it
+        if (searching && _flatSearch)
         {
-            if (_dragHoverNormalizedY < 0.25f) dropInd = TreeDropPosition.Above;
-            else if (_dragHoverNormalizedY > 0.75f) dropInd = IsTargetExpanded(go, goId) ? TreeDropPosition.IntoFirst : TreeDropPosition.Below;
-            else dropInd = TreeDropPosition.Into;
+            bool any = MatchesSearch(go);
+            if (any)
+            {
+                TreeNode match = AddNode(go, depth, nodes);
+                match.HasChildren = false;
+                SetDropIndicator(go, match);
+            }
+            foreach (GameObject child in go.Children)
+                any |= BuildNodeList(child, depth, nodes);
+            return any;
         }
 
+        // Children are built first so one pass over the scene tells whether anything below matched.
+        // The tree widget handles skipping collapsed children internally.
+        int index = nodes.Count;
+        TreeNode node = AddNode(go, depth, nodes);
+        bool matchBelow = false;
+        foreach (GameObject child in go.Children)
+            matchBelow |= BuildNodeList(child, depth + 1, nodes);
+
+        if (searching)
+        {
+            // A tree search keeps the parents of every match, opened so all the matches show.
+            // With nothing below matching, this node is the last row added, so removing it is cheap.
+            if (!matchBelow && !MatchesSearch(go))
+            {
+                nodes.RemoveAt(index);
+                return false;
+            }
+            node.HasChildren = matchBelow;
+            if (matchBelow)
+                node.OverrideExpanded = true;
+        }
+
+        SetDropIndicator(go, node);
+        return true;
+    }
+
+    private TreeNode AddNode(GameObject go, int depth, List<TreeNode> nodes)
+    {
+        TreeNode node = _nodeCache.GetValue(go, static g => new TreeNode { UserData = g });
+        node.Id = NodeId(go);
         node.Label = go.Name;
-        node.HasChildren = hasVisibleChildren;
+        node.HasChildren = go.Children.Count > 0
+            && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
         node.Depth = depth;
         node.TrailingIcon = go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash;
         node.TrailingIconColor = go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300;
-        node.DropIndicator = dropInd;
 
         // Force expand parents of pinged nodes
-        node.OverrideExpanded = _forceExpandedIds.Contains(goId) ? true : null;
+        node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) ? true : null;
 
         nodes.Add(node);
+        return node;
+    }
 
-        // Recurse children (the tree widget handles skipping collapsed children internally)
-        foreach (GameObject child in go.Children)
-            BuildNodeList(child, depth + 1, nodes);
+    // Set once the row's children and expand state are final, since dropping below an open row puts the object first inside it
+    private void SetDropIndicator(GameObject go, TreeNode node)
+    {
+        node.DropIndicator = null;
+        if (!DragDrop.IsDragging || _dragHoverTargetId != node.Id)
+            return;
+        if (_dragHoverNormalizedY < 0.25f) node.DropIndicator = TreeDropPosition.Above;
+        else if (_dragHoverNormalizedY > 0.75f) node.DropIndicator = IsTargetExpanded(go, node.Id) ? TreeDropPosition.IntoFirst : TreeDropPosition.Below;
+        else node.DropIndicator = TreeDropPosition.Into;
     }
 
     // ================================================================
     //  Drag & Drop for reparenting/reordering
     // ================================================================
 
-    // True when the target node is expanded and actually has children (its first-child slot is visible).
+    // True when the target's row shows children under it (its first-child slot is visible).
+    // Reads the row as drawn, so flat search rows and rows forced open by search or a ping are right.
     private bool IsTargetExpanded(GameObject target, string targetId)
-        => target.Children.Count > 0 && _expandState.TryGetValue(targetId, out bool e) && e;
+        => _nodeCache.TryGetValue(target, out TreeNode? node) && node.HasChildren
+            && (node.OverrideExpanded ?? (_expandState.TryGetValue(targetId, out bool e) ? e : node.DefaultExpanded));
 
     private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
     {
@@ -878,11 +1034,7 @@ public class HierarchyPanel : DockPanel
         {
             // Build the scene header context menu.
             // Note: the selection might contain other items, which -- consistent with Unity -- we ignore.
-            return builder =>
-            {
-                builder.Title(sceneHeader.Section.Name, iconDraw: EditorIcons.Shapes_I);
-                builder.Submenu(Loc.Get("hierarchy.create"), (b) => { BuildCreateMenuFor(b, parent: null); }, EditorIcons.Plus);
-            };
+            return BuildSceneHeaderContextMenu(sceneHeader);
         }
         else if (clickedItem is GameObject gameObject)
         {

@@ -100,6 +100,7 @@ public class SceneViewPanel : DockPanel
                 if (lens.Far is float far) _editorCamera.FarClip = far;
                 if (lens.Near is float near) _editorCamera.NearClip = near;
                 if (lens.Speed is float speed) _editorCamera.SetMoveSpeed(speed);
+                if (lens.Smoothing is float smoothing) _editorCamera.MoveSmoothing = smoothing;
                 _pendingLens = null;
             }
             if (_pendingGizmos is bool pz) { _editorCamera.ShowGizmos = pz; _pendingGizmos = null; }
@@ -166,9 +167,10 @@ public class SceneViewPanel : DockPanel
             {
                 HeaderToggle(paper, font, "sv_hdr_rot_snap", EditorIcons.ArrowsRotate, Loc.Get("scene.rotation_snap"), SceneTools.RotationSnap,
                     () => SceneTools.RotationSnap = !SceneTools.RotationSnap);
-                HeaderField(paper, "sv_hdr_rot", () =>
+                // "45°" does not parse, but the field selects all on focus, so typing replaces the whole value.
+                HeaderField(paper, font, "sv_hdr_rot", RotateSnapLabels, () =>
                     Origami.NumericField<float>(paper, "sv_hdr_rot_field", SceneTools.RotateSnap, v => SceneTools.RotateSnap = v)
-                        .Min(SceneTools.MinRotateSnap).Max(SceneTools.MaxRotateSnap).Format("0.##").Suffix("°").Show());
+                        .Min(SceneTools.MinRotateSnap).Max(SceneTools.MaxRotateSnap).Format(SceneTools.RotateSnapFormat).Show());
                 HeaderStepper(paper, font, "sv_hdr_rot_step", SceneTools.StepRotateSnap);
             }
 
@@ -176,9 +178,9 @@ public class SceneViewPanel : DockPanel
             {
                 HeaderToggle(paper, font, "sv_hdr_grid_snap", EditorIcons.TableCells, Loc.Get("scene.grid_snap"), SceneTools.GridSnap,
                     () => SceneTools.GridSnap = !SceneTools.GridSnap);
-                HeaderField(paper, "sv_hdr_grid", () =>
+                HeaderField(paper, font, "sv_hdr_grid", MoveSnapLabels, () =>
                     Origami.NumericField<float>(paper, "sv_hdr_grid_field", SceneTools.MoveSnap, v => SceneTools.MoveSnap = v)
-                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format("0.######").Show());
+                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format(SceneTools.CurrentMoveSnapFormat).Show());
                 HeaderStepper(paper, font, "sv_hdr_grid_step", SceneTools.StepMoveSnap);
             }
 
@@ -229,14 +231,37 @@ public class SceneViewPanel : DockPanel
     private static void StepperArrow(Paper paper, Scribe.FontFile font, string id, string glyph, Action onClick)
         => paper.Box(id).Width(12).Height(ToggleSize / 2f).Rounded(2)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Cursor(PaperCursor.Pointer)
             .Text(glyph, font).TextColor(EditorTheme.Ink300).FontSize(9f).Alignment(TextAlignment.MiddleCenter)
             .IsNotFocusable()
             .OnClick(_ => onClick());
 
-    // A compact value field beside a toggle.
-    private static void HeaderField(Paper paper, string id, Action drawField)
+    // Every value the steppers move between, as the fields show them.
+    private static readonly string[] RotateSnapLabels =
+        [.. SceneTools.RotateSnapSteps.Select(v => v.ToString(SceneTools.RotateSnapFormat))];
+    private static readonly string[] MoveSnapLabels =
+        [.. Enumerable.Range(0, 14).Select(i => SceneTools.MinMoveSnap * MathF.Pow(2, i))
+            .Where(v => v <= SceneTools.MaxMoveSnap).Select(v => v.ToString(SceneTools.MoveSnapFormat(v)))];
+
+    // Widths already measured, keyed by field and font size.
+    private static readonly Dictionary<(string, float), float> s_headerFieldWidths = [];
+
+    // A compact value field beside a toggle, wide enough for the widest of its stepper values, so the width stays put
+    // and the stepper beside it does not shift while clicking through. Measured against the numeric field's own
+    // layout: monospace text inside a 1px border, 8 before the text and a 6 end pad after it, plus a couple of
+    // pixels so the caret does not scroll the text.
+    private static void HeaderField(Paper paper, Scribe.FontFile font, string id, string[] labels, Action drawField)
     {
-        using (paper.Row(id).Width(60).Height(ToggleSize).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+        float fontSize = Origami.Current.Metrics.FontSize;
+        if (!s_headerFieldWidths.TryGetValue((id, fontSize), out float width))
+        {
+            Scribe.FontFile mono = Origami.Current.Mono ?? font;
+            float text = labels.Max(l => (float)paper.MeasureText(l, fontSize, mono).X);
+            width = MathF.Ceiling(1f + 8f + text + 6f + 1f + 2f);
+            s_headerFieldWidths[(id, fontSize)] = width;
+        }
+
+        using (paper.Row(id).Width(width).Height(ToggleSize).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             drawField();
     }
 
@@ -310,6 +335,11 @@ public class SceneViewPanel : DockPanel
 
         CameraRow(paper, font, "sv_cam_speed", Loc.Get("scene.camera_speed"), () =>
             Origami.Slider(paper, "sv_cam_speed_v", cam.MoveSpeed, cam.SetMoveSpeed, 0.5f, 100f).Format("F1").Show());
+
+        CameraRow(paper, font, "sv_cam_smoothing", Loc.Get("scene.camera_smoothing"), () =>
+            // Shown in milliseconds so the steps read as whole numbers; stored in seconds.
+            Origami.Slider(paper, "sv_cam_smoothing_v", cam.MoveSmoothing * 1000f, v => cam.MoveSmoothing = v / 1000f,
+                0f, EditorCamera.MaxMoveSmoothing * 1000f).Step(5f).Format("0 ms").Show());
 
         Origami.Button(paper, "sv_cam_reset", Loc.Get("scene.camera_reset"), cam.ResetLens).FullWidth().Height(22).Show();
     }
@@ -508,12 +538,6 @@ public class SceneViewPanel : DockPanel
                             Transform2D.CreateScale(rw, -rh));
                         canvas.RoundedRectFilled(rx, ry, rw, rh, 0, 0, rnd, rnd, Color.White);
                         canvas.ClearBrushTexture();
-
-                        // Inset the border by half its width so the full stroke sits on top of the texture edge.
-                        canvas.RoundedRect(rx + 1, ry + 1, rw - 2, rh - 2, 0, 0, rnd, rnd);
-                        canvas.SetStrokeColor(EditorTheme.Purple500);
-                        canvas.SetStrokeWidth(2);
-                        canvas.Stroke();
                     });
 
                     // Draw transform gizmo as 2D overlay
@@ -583,13 +607,21 @@ public class SceneViewPanel : DockPanel
                     SetGizmoMode(TransformTool.Scale);
                 else if (ShortcutManager.IsPressed("Scene/ToolUniversal"))
                     SetGizmoMode(TransformTool.Universal);
+
+                if (ShortcutManager.IsPressed("Scene/ToggleMaximize"))
+                    EditorApplication.Instance?.Maximizer.RequestToggle(this);
             }
+
+            // Paper-space pointer to viewport-local via the cached viewport rect. CurrentParent here is an
+            // enclosing container (toolbar row etc.), so subtracting its origin put drops off to the side.
+            Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
+            var panelSize = new Float2(width, height);
 
             // Accept asset drops via registry-discovered handlers
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
             {
                 var dragPayload = (AssetDragPayload)DragDrop.Payload!;
-                ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(dragPayload.AssetType);
+                ISceneDropHandler? handler = SceneDrop.FindHandler(dragPayload);
 
                 if (handler != null)
                 {
@@ -603,6 +635,24 @@ public class SceneViewPanel : DockPanel
                         .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
+
+                UpdateDropPreview(scene, dragPayload, GetDropPosition(scene, _editorCamera!, mouseLocal, panelSize));
+            }
+            else
+            {
+                ClearDropPreview();
+            }
+
+            // An OS file drop over the viewport: remember where, so the files spawn here once imported.
+            if (isHovered && ExternalAssetDrop.IsResolvingDropTarget)
+            {
+                ExternalAssetDrop.SceneTarget = new SceneDropContext
+                {
+                    Scene = scene,
+                    Camera = _editorCamera!,
+                    MouseLocal = mouseLocal,
+                    PanelSize = panelSize,
+                };
             }
 
             if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
@@ -623,24 +673,9 @@ public class SceneViewPanel : DockPanel
                     return;
                 }
 
-                ISceneDropHandler? handler = EditorRegistries.FindSceneDropHandler(assetDrop.AssetType);
-                if (handler != null)
-                {
-                    // Convert Paper-space pointer to viewport-local using the cached viewport
-                    // rect. CurrentParent here is an enclosing container (toolbar row etc.),
-                    // so subtracting its origin put the drop off to the side of the camera.
-                    Float2 mouseLocal = paper.PointerPos - new Float2(
-                        (float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
-
-                    handler.Handle(assetDrop, new SceneDropContext
-                    {
-                        Scene = scene,
-                        Camera = _editorCamera!,
-                        MouseLocal = mouseLocal,
-                        PanelSize = new Float2(width, height),
-                    });
+                var dropContext = new SceneDropContext { Scene = scene, Camera = _editorCamera!, MouseLocal = mouseLocal, PanelSize = panelSize };
+                if (SceneDrop.Drop(assetDrop, dropContext))
                     DragDrop.EndDrag();
-                }
             }
 
             // Floating transform-tools panel (top-left)
@@ -852,7 +887,7 @@ public class SceneViewPanel : DockPanel
 
     /// <summary>
     /// Select everything whose screen-projected bounds centre falls inside the marquee. Shift adds to
-    /// the selection, Ctrl toggles, plain replaces.
+    /// the selection, Ctrl removes from it, plain replaces.
     /// </summary>
     private void ApplyMarquee(SceneInstance scene, Float2 panelSize)
     {
@@ -881,7 +916,7 @@ public class SceneViewPanel : DockPanel
 
         foreach (GameObject target in targets)
         {
-            if (_handles.Ctrl) Selection.ToggleSelection(target);
+            if (_handles.Ctrl) Selection.RemoveFromSelection(target);
             else Selection.AddToSelection(target);
         }
     }
@@ -916,8 +951,10 @@ public class SceneViewPanel : DockPanel
 
         if (picked.IsValid())
         {
-            GameObject target = SelectionTarget(picked, toggling: Input.IsCtrlPressed);
-            if (Input.IsCtrlPressed)
+            // Shift and Ctrl both add or remove the clicked object, as in Unity
+            bool toggling = Input.IsCtrlPressed || Input.IsShiftPressed;
+            GameObject target = SelectionTarget(picked, toggling);
+            if (toggling)
                 Selection.ToggleSelection(target);
             else
                 Selection.Select(target);
@@ -934,7 +971,7 @@ public class SceneViewPanel : DockPanel
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
         if (_editorCamera == null) return false;
-        Float3 p = _editorCamera.Position;
+        Float3 p = _editorCamera.RestPosition;
         state["px"] = p.X; state["py"] = p.Y; state["pz"] = p.Z;
         state["yaw"] = _editorCamera.Yaw;
         state["pitch"] = _editorCamera.Pitch;
@@ -943,6 +980,7 @@ public class SceneViewPanel : DockPanel
         state["near"] = _editorCamera.NearClip;
         state["far"] = _editorCamera.FarClip;
         state["speed"] = _editorCamera.MoveSpeed;
+        state["smoothing"] = _editorCamera.MoveSmoothing;
         state["gizmos"] = _editorCamera.ShowGizmos;
         state["post"] = _editorCamera.PostProcessing;
         state["debugView"] = _editorCamera.DebugView.ToString();
@@ -970,7 +1008,8 @@ public class SceneViewPanel : DockPanel
         // Camera is created lazily in OnGUI; stash toggles and apply when it exists.
         _pendingGrid = state["grid"]?.GetValue<bool>();
         _pendingLens = (state["fov"]?.GetValue<float>(), state["near"]?.GetValue<float>(),
-                        state["far"]?.GetValue<float>(), state["speed"]?.GetValue<float>());
+                        state["far"]?.GetValue<float>(), state["speed"]?.GetValue<float>(),
+                        state["smoothing"]?.GetValue<float>());
         _pendingGizmos = state["gizmos"]?.GetValue<bool>();
         _pendingPost = state["post"]?.GetValue<bool>();
         _pendingDebugView = Enum.TryParse(state["debugView"]?.GetValue<string>(), out DebugViewMode debugView) ? debugView : null;
@@ -988,7 +1027,7 @@ public class SceneViewPanel : DockPanel
     }
 
     private bool? _pendingGrid;
-    private (float? Fov, float? Near, float? Far, float? Speed)? _pendingLens;
+    private (float? Fov, float? Near, float? Far, float? Speed, float? Smoothing)? _pendingLens;
     private bool? _pendingGizmos;
     private bool? _pendingPost;
     private DebugViewMode? _pendingDebugView;
@@ -997,6 +1036,15 @@ public class SceneViewPanel : DockPanel
     /// Raycast into the scene to find a drop position. Falls back to the XZ plane at Y=0.
     /// </summary>
     internal static Float3 GetDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    {
+        Float3 p = RaycastDropPosition(scene, camera, screenPos, panelSize);
+        // Same toggle and Ctrl inversion as the move gizmo. Y stays on the surface hit so the drop doesn't sink into it.
+        float step = SceneTools.MoveSnap;
+        if (SceneTools.GridSnap == Input.IsCtrlPressed || step <= 0f) return p;
+        return new Float3(MathF.Round(p.X / step) * step, p.Y, MathF.Round(p.Z / step) * step);
+    }
+
+    private static Float3 RaycastDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
 
@@ -1042,6 +1090,103 @@ public class SceneViewPanel : DockPanel
         if (!ShowGizmos) return;
         editor?.DrawSceneGizmos(scene);
         DrawSelectionGizmos();
+
+        // Faint outline of each drag preview's extent.
+        foreach ((GameObject ghost, _) in _dropGhosts)
+            if (ghost.IsValid() && TryGetWorldBounds(ghost, out Float3 min, out Float3 max))
+                Debug.DrawWireCube((min + max) * 0.5f, (max - min) * 0.5f, new Vector.Color(1f, 1f, 1f, 0.25f));
+    }
+
+    // Drag preview: hidden, unsaved, render-only copies of what the drop would spawn, following the cursor, each
+    // at its offset from the drop point. _dropGhostPayload/_dropGhostScene are remembered even when no ghost could
+    // be built, so it isn't retried every frame.
+    private readonly List<(GameObject Ghost, Float3 Offset)> _dropGhosts = [];
+    private AssetDragPayload? _dropGhostPayload;
+    private SceneInstance? _dropGhostScene;
+    private bool _dropGhostTouched;
+    private static readonly List<SceneViewPanel> s_ghostOwners = [];
+    private static Material? s_meshGhostMaterial;
+
+    private void UpdateDropPreview(SceneInstance scene, AssetDragPayload payload, Float3 dropPos)
+    {
+        _dropGhostTouched = true;
+        if (!ReferenceEquals(payload, _dropGhostPayload) || !ReferenceEquals(scene, _dropGhostScene))
+        {
+            ClearDropPreview();
+            _dropGhostPayload = payload;
+            _dropGhostScene = scene;
+            // Not in a playing world: the copies would join the running game.
+            if (!scene.IsPlaying)
+            {
+                foreach ((AssetDragPayload item, Float3 pos) in SceneDrop.Layout(payload, Float3.Zero))
+                {
+                    GameObject? ghost = BuildDropGhost(item.AssetGuid);
+                    if (ghost.IsNotValid()) continue;
+                    scene.Add(ghost);
+                    _dropGhosts.Add((ghost, pos));
+                }
+                if (_dropGhosts.Count > 0) s_ghostOwners.Add(this);
+            }
+        }
+        foreach ((GameObject ghost, Float3 offset) in _dropGhosts)
+            if (ghost.IsValid()) ghost.Transform.Position = dropPos + offset;
+    }
+
+    /// <summary>
+    /// Once per editor frame: drop the preview of any view that didn't draw a drag hover since the last sweep
+    /// (hidden behind another dock tab, say), so its copy can't linger in the scene.
+    /// </summary>
+    internal static void SweepDropGhosts()
+    {
+        for (int i = s_ghostOwners.Count - 1; i >= 0; i--)
+        {
+            SceneViewPanel owner = s_ghostOwners[i];
+            if (owner._dropGhostTouched) owner._dropGhostTouched = false;
+            else owner.ClearDropPreview();
+        }
+    }
+
+    private static GameObject? BuildDropGhost(Guid guid)
+    {
+        GameObject? ghost = Runtime.AssetDatabase.Get(guid) switch
+        {
+            PrefabAsset prefab when prefab.IsValid() => GameObject.InstantiateDetached(prefab),
+            Mesh mesh when mesh.IsValid() => MeshGhost(mesh),
+            _ => null,
+        };
+        if (ghost.IsValid()) HideGhost(ghost);
+        return ghost;
+
+        static GameObject MeshGhost(Mesh mesh)
+        {
+            var go = new GameObject(mesh.Name);
+            MeshRenderer r = go.AddComponent<MeshRenderer>();
+            r.Mesh = mesh;
+            if (s_meshGhostMaterial.IsNotValid()) s_meshGhostMaterial = new Material(Shader.LoadDefault(DefaultShader.Lit));
+            r.Material = s_meshGhostMaterial;
+            return go;
+        }
+
+        // Per object, not just the root: picking and drop raycasts test each object's own flags. Everything but
+        // renderers is disabled before the copy enters the scene, so lights, colliders, audio and [ExecuteAlways]
+        // scripts never wake up.
+        static void HideGhost(GameObject go)
+        {
+            go.HideFlags |= HideFlags.Hide | HideFlags.HideAndDontSave | HideFlags.NotEditable | HideFlags.NoGizmos;
+            foreach (Component c in go.GetComponents<Component>())
+                if (c is not IMaterialRenderer) c.Enabled = false;
+            foreach (GameObject child in go.Children) HideGhost(child);
+        }
+    }
+
+    private void ClearDropPreview()
+    {
+        foreach ((GameObject ghost, _) in _dropGhosts)
+            if (ghost.IsValid()) ghost.Destroy();
+        _dropGhosts.Clear();
+        _dropGhostPayload = null;
+        _dropGhostScene = null;
+        s_ghostOwners.Remove(this);
     }
 
     private void DrawSelectionGizmos()
@@ -1137,6 +1282,7 @@ public class SceneViewPanel : DockPanel
     {
         if (_wasGizmoActive) EndGizmoDrag();
         _editorCamera?.ReleaseFlight();
+        ClearDropPreview();
     }
 
     // The kind of transform the current drag turned out to be, or null before it has moved.

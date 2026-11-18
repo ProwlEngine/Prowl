@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,6 +11,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -18,6 +19,8 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 using Color = System.Drawing.Color;
 namespace Prowl.Editor.GUI.Panels;
@@ -30,6 +33,8 @@ public class InspectorPanel : DockPanel
     public override string Title => Loc.Get("panel.inspector");
     public override string Icon => EditorIcons.Sliders;
     private bool _subscribed;
+    private Rect _viewportRect;
+    private readonly GameObjectInspector.ComponentLayout _componentLayout = new();
 
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
@@ -225,6 +230,11 @@ public class InspectorPanel : DockPanel
         }
 
         _overlayEditor = null;
+        paper.Box("insp_drop_viewport")
+            .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, height)
+            .IsNotInteractable()
+            .OnPostLayout((_, rect) => _viewportRect = rect);
+
         Origami.ScrollView(paper, "insp_scroll", width, height).Padding(0, 0, 0, 0).Body(() =>
         {
             // Determine what to inspect: current selection, unless it's a folder
@@ -258,7 +268,7 @@ public class InspectorPanel : DockPanel
                 if (gos.Count > 1)
                     GameObjectInspector.DrawMulti(paper, font, gos);
                 else
-                    GameObjectInspector.Draw(paper, font, gameObject);
+                    GameObjectInspector.Draw(paper, font, gameObject, _viewportRect, _componentLayout);
             }
             else
             {
@@ -319,19 +329,36 @@ public class InspectorPanel : DockPanel
     }
 
     /// <summary>
-    /// While a single GameObject is selected and a script asset that resolves to a component type is
-    /// being dragged, overlays the inspector with a drop target that adds that component on drop.
+    /// While GameObjects are selected and `.cs` script assets are being dragged:
+    /// single-object selections highlight the inspector border while <see cref="GameObjectInspector"/>
+    /// shows the unified component insertion line; multi-object selections show a full-panel drop overlay.
+    /// Component types are resolved and validated on drop so hover frames stay cheap.
     /// </summary>
-    private static void DrawScriptComponentDropZone(Paper paper, Scribe.FontFile font, float width, float height)
+    private void DrawScriptComponentDropZone(Paper paper, Scribe.FontFile font, float width, float height)
     {
         if (!DragDrop.IsDragging && !DragDrop.IsDropFrame) return;
         if (DragDrop.Payload is not AssetDragPayload payload) return;
+        if (!ScriptComponentResolver.IsScriptAsset(payload)) return;
+        if (Selection.ActiveObject is not GameObject) return;
 
-        var go = Selection.ActiveObject as GameObject;
-        if (go.IsNotValid() || Selection.GetSelected<GameObject>().Count() != 1) return;
+        var gos = Selection.GetSelected<GameObject>().Where(g => g.IsValid()).ToList();
+        if (gos.Count == 0) return;
 
-        Type? componentType = Prowl.Editor.Projects.Scripting.ScriptComponentResolver.ResolveComponentType(payload);
-        if (componentType == null) return;
+        if (gos.Count == 1)
+        {
+            // GameObjectInspector takes the drop itself so the script lands in the slot under the pointer;
+            // here we only frame the panel while the pointer is over it.
+            if (DragDrop.IsDragging && _viewportRect.Size.X > 0 && _viewportRect.Size.Y > 0 && _viewportRect.Contains(paper.PointerPos))
+            {
+                paper.Box("insp_script_drop_border")
+                    .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, height)
+                    .Layer(Layer.Overlay)
+                    .IsNotInteractable()
+                    .BackgroundColor(Color.FromArgb(14, EditorTheme.Purple400))
+                    .BorderColor(EditorTheme.Purple400).BorderWidth(2).Rounded(Origami.Current.Metrics.ContainerRounding);
+            }
+            return;
+        }
 
         using (paper.Box("insp_script_drop")
             .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, height)
@@ -342,14 +369,16 @@ public class InspectorPanel : DockPanel
         {
             paper.Box("insp_script_drop_lbl")
                 .Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).IsNotInteractable()
-                .Text($"{EditorIcons.Plus}  {Loc.Get("inspector.add_component")}: {componentType.Name}", font)
+                .Text($"{EditorIcons.Plus}  {Loc.Get("inspector.add_component")}: {payload.DisplayName}", font)
                 .TextColor(EditorTheme.Purple400)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
 
-            // Complete the drop: the drag has ended (released) while over this overlay.
+            // Complete the drop: resolve and add valid components once on release.
             if (paper.IsParentHovered && !DragDrop.IsDragging)
             {
-                GameObjectInspector.AddComponentWithUndo(go, componentType);
+                IReadOnlyList<Type> componentTypes = ScriptComponentResolver.ResolveAddableComponentTypes(payload, gos);
+                if (componentTypes.Count > 0)
+                    GameObjectInspector.AddComponentsWithUndo(gos, componentTypes);
                 DragDrop.EndDrag();
             }
         }

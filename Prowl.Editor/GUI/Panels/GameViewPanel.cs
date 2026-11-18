@@ -482,8 +482,7 @@ public class GameViewPanel : DockPanel
                         .BackgroundColor(Color.Black);
                 }
 
-                // Game viewport - rounded rect with purple border (matches SceneView)
-                bool playing = Application.IsPlaying;
+                // Game viewport - rounded rect with a hairline border
                 RenderTexture capturedRT = _rt;
                 paper.Box("gv_display")
                     .PositionType(PositionType.SelfDirected)
@@ -512,12 +511,11 @@ public class GameViewPanel : DockPanel
                         canvas.RoundedRectFilled(rx, ry, rw, rh, topRound, topRound, round, round, Color.White);
                         canvas.ClearBrushTexture();
 
-                        // Border inset by half its width so the full stroke sits on top of the texture edge.
-                        float bw = playing ? 2f : 1f;
-                        float half = bw * 0.5f;
-                        canvas.RoundedRect(rx + half, ry + half, rw - bw, rh - bw, topRound, topRound, round, round);
-                        canvas.SetStrokeColor(playing ? EditorTheme.Purple500 : EditorTheme.Ink200);
-                        canvas.SetStrokeWidth(bw);
+                        // Hairline border inset by half its width so the stroke sits on top of the texture edge.
+                        // Play mode is shown by the spotlight ring around the window, not here.
+                        canvas.RoundedRect(rx + 0.5f, ry + 0.5f, rw - 1f, rh - 1f, topRound, topRound, round, round);
+                        canvas.SetStrokeColor(EditorTheme.Ink200);
+                        canvas.SetStrokeWidth(1f);
                         canvas.Stroke();
                     });
                     });

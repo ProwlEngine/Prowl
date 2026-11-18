@@ -344,6 +344,7 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolRotate", "Rotate Tool", KeyCode.E);
         ShortcutManager.Register("Scene/ToolScale", "Scale Tool", KeyCode.R);
         ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
+        ShortcutManager.Register("Scene/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
 
         // Game View
         ShortcutManager.Register("Game/ToggleMaximize", "Toggle Maximize", KeyCode.F3);

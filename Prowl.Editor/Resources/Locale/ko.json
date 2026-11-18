@@ -50,6 +50,7 @@
   "scene.camera_near": "근거리 클립",
   "scene.camera_far": "원거리 클립",
   "scene.camera_speed": "비행 속도",
+  "scene.camera_smoothing": "비행 스무딩",
   "scene.camera_reset": "초기화",
   "scene.tool_handles": "Tool Handles",
   "scene.tool_move": "이동",

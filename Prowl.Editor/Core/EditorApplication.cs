@@ -685,6 +685,7 @@ public class EditorApplication : Game
 
         using (EditorFrameStats.Assets.Scope())
             ExternalAssetDrop.ProcessPending();
+        GUI.Panels.SceneViewPanel.SweepDropGhosts();
         using (FrameStats.Editor.Scope())
             CliServer.Update();
 
@@ -910,14 +911,14 @@ public class EditorApplication : Game
             .Width(UnitValue.Auto).Height(clH)
             .Margin(UnitValue.StretchOne, UnitValue.Pixels(pad), UnitValue.StretchOne, UnitValue.StretchOne).Gap(6).Enter())
         {
-            // FPS chip: [glowing dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
+            // FPS chip: [status dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
             // Auto width with a 120px floor lets the count grow into the spacer without moving anything.
             using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(120)).Height(clH).Rounded(Origami.Current.Metrics.ContainerRounding)
                 .Padding(rectPadX, rectPadX, 0, 0).BackdropBlur(blur)
                 .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
                 paper.Box("hs_fps_dot").Width(dot).Height(dot).Margin(0, 7, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(dot / 2f)
-                    .BackgroundColor(dotColor).Glow(0, 0, 8, 0, dotColor).IsNotInteractable();
+                    .BackgroundColor(dotColor).IsNotInteractable();
                 paper.Box("hs_fps_num").Width(UnitValue.Auto).Height(clH).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Text(fpsNum, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleLeft);
@@ -2368,23 +2369,19 @@ public class EditorApplication : Game
 
     private static DockNode CreateDefaultLayout()
     {
-        // Blender/Unreal-style: a big viewport column on the left, a thin outliner/properties column
-        // on the right.
-        return DockNode.Split(SplitDirection.Horizontal, 0.8f,
-            // Left column: Scene view on top, a Project | Console strip along the bottom.
-            DockNode.Split(SplitDirection.Vertical, 0.7f,
-                DockNode.Leaf(new SceneViewPanel(), new GameViewPanel()),
-                // Bottom strip: Project (65%) | Console (35%, smaller).
-                DockNode.Split(SplitDirection.Horizontal, 0.65f,
-                    DockNode.Leaf(new ProjectPanel()),
-                    DockNode.Leaf(new ConsolePanel())
-                )
+        // Unity-style: Inspector down the right, Hierarchy beside the viewport, Project and Console tabbed along the bottom.
+        return DockNode.Split(SplitDirection.Horizontal, 0.78f,
+            DockNode.Split(SplitDirection.Vertical, 0.65f,
+                // Top: Hierarchy (20%) | Scene and Game tabs.
+                DockNode.Split(SplitDirection.Horizontal, 0.2f,
+                    DockNode.Leaf(new HierarchyPanel()),
+                    DockNode.Leaf(new SceneViewPanel(), new GameViewPanel())
+                ),
+                // Bottom: Project and Console tabs.
+                DockNode.Leaf(new ProjectPanel(), new ConsolePanel())
             ),
-            // Right column: Hierarchy (top 30%) | Inspector (bottom 70%).
-            DockNode.Split(SplitDirection.Vertical, 0.3f,
-                DockNode.Leaf(new HierarchyPanel()),
-                DockNode.Leaf(new InspectorPanel())
-            )
+            // Right column: Inspector, full height.
+            DockNode.Leaf(new InspectorPanel())
         );
     }
 }
