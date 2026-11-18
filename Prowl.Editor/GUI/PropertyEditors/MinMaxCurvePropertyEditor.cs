@@ -30,7 +30,7 @@ public class MinMaxCurvePropertyEditor : PropertyEditor
                 case MinMaxCurveMode.Constant:
                     EditorGUI.Row(paper, $"{id}_val", "Value", () =>
                         Origami.NumericField<float>(paper, $"{id}_val_v", curve.ConstantValue,
-                            v => { curve.ConstantValue = v; onChange(curve); }).Show());
+                            v => { curve.ConstantValue = v; onChange(curve); }).DragHandle().Show());
                     break;
 
                 case MinMaxCurveMode.Curve:
@@ -43,10 +43,10 @@ public class MinMaxCurvePropertyEditor : PropertyEditor
                 case MinMaxCurveMode.RandomBetweenTwoConstants:
                     EditorGUI.Row(paper, $"{id}_min", "Min", () =>
                         Origami.NumericField<float>(paper, $"{id}_min_v", curve.MinValue,
-                            v => { curve.MinValue = v; onChange(curve); }).Show());
+                            v => { curve.MinValue = v; onChange(curve); }).DragHandle().Show());
                     EditorGUI.Row(paper, $"{id}_max", "Max", () =>
                         Origami.NumericField<float>(paper, $"{id}_max_v", curve.MaxValue,
-                            v => { curve.MaxValue = v; onChange(curve); }).Show());
+                            v => { curve.MaxValue = v; onChange(curve); }).DragHandle().Show());
                     break;
 
                 case MinMaxCurveMode.RandomBetweenTwoCurves:
@@ -65,5 +65,5 @@ public class MinMaxCurvePropertyEditor : PropertyEditor
     private static void MultiplierRow(Paper paper, string id, MinMaxCurve curve, Action<object?> onChange)
         => EditorGUI.Row(paper, $"{id}_mul", "Multiplier", () =>
             Origami.NumericField<float>(paper, $"{id}_mul_v", curve.CurveMultiplier,
-                v => { curve.CurveMultiplier = v; onChange(curve); }).Show());
+                v => { curve.CurveMultiplier = v; onChange(curve); }).DragHandle().Show());
 }

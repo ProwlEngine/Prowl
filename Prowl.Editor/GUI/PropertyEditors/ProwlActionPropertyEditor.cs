@@ -156,11 +156,11 @@ public class ProwlActionPropertyEditor : PropertyEditor
                 break;
             case ProwlActionArgType.Int:
                 EditorGUI.Row(paper, id, "Value", () =>
-                    Origami.NumericField<int>(paper, $"{id}_v", call.IntArg, v => { call.IntArg = v; changed(); }).Show());
+                    Origami.NumericField<int>(paper, $"{id}_v", call.IntArg, v => { call.IntArg = v; changed(); }).DragHandle().Show());
                 break;
             case ProwlActionArgType.Float:
                 EditorGUI.Row(paper, id, "Value", () =>
-                    Origami.NumericField<float>(paper, $"{id}_v", call.FloatArg, v => { call.FloatArg = v; changed(); }).Show());
+                    Origami.NumericField<float>(paper, $"{id}_v", call.FloatArg, v => { call.FloatArg = v; changed(); }).DragHandle().Show());
                 break;
             case ProwlActionArgType.String:
                 EditorGUI.Row(paper, id, "Value", () =>
