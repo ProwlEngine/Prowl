@@ -8,7 +8,9 @@ using System.Text.Json.Nodes;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Prefabs;
+using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
@@ -51,6 +53,11 @@ public class HierarchyPanel : DockPanel
     private float _dragHoverNormalizedYNext;
     private SceneHeader? _dragHoverHeader;
     private SceneHeader? _dragHoverHeaderNext;
+
+    // Holding a dragged script over a row for a moment selects it, so the Inspector shows what is on it.
+    private const float ScriptHoverSelectDelay = 0.35f;
+    private GameObject? _scriptHoverTarget;
+    private float _scriptHoverTime;
 
     // A header row: an open scene of the edit world, or a section of the play world.
     private sealed class SceneHeader
@@ -109,6 +116,8 @@ public class HierarchyPanel : DockPanel
             _dragHoverNormalizedYNext = 0f;
             _dragHoverHeaderNext = null;
         }
+
+        UpdateScriptHoverSelection(paper.DeltaTime);
 
         SceneInstance scene = EditorSceneManager.EditedWorld;
 
@@ -308,16 +317,27 @@ public class HierarchyPanel : DockPanel
                     })
                     .OnHover((n, normY) =>
                     {
-                        if (!DragDrop.IsDragging || DragDrop.Payload is not GameObjectDragPayload) return;
-                        if (n.UserData is SceneHeader header)
+                        if (!DragDrop.IsDragging) return;
+                        if (DragDrop.Payload is GameObjectDragPayload)
                         {
-                            _dragHoverHeaderNext = header;
-                            return;
+                            if (n.UserData is SceneHeader header)
+                            {
+                                _dragHoverHeaderNext = header;
+                                return;
+                            }
+                            if (n.UserData is not GameObject go) return;
+                            _dragHoverTargetNext = go;
+                            _dragHoverTargetIdNext = NodeId(go);
+                            _dragHoverNormalizedYNext = normY;
                         }
-                        if (n.UserData is not GameObject go) return;
-                        _dragHoverTargetNext = go;
-                        _dragHoverTargetIdNext = NodeId(go);
-                        _dragHoverNormalizedYNext = normY;
+                        else if (DragDrop.Payload is AssetDragPayload assetPayload
+                            && n.UserData is GameObject targetGo
+                            && ScriptComponentResolver.IsScriptAsset(assetPayload))
+                        {
+                            _dragHoverTargetNext = targetGo;
+                            _dragHoverTargetIdNext = NodeId(targetGo);
+                            _dragHoverNormalizedYNext = 0.5f;
+                        }
                     })
                     .CustomRowContent((paper, node, isSel, isExp) =>
                     {
@@ -380,8 +400,10 @@ public class HierarchyPanel : DockPanel
 
                 // --- All drop handling uses hier_bg (the stable outer background) ---
 
-                // Asset drops show visual indicator and spawn at root
-                if (DragDrop.IsDraggingType<AssetDragPayload>() && bgHovered)
+                // Script asset drops add component(s) to the hovered GameObject row.
+                // Other asset drops show visual indicator and spawn at root.
+                bool isScriptDrag = DragDrop.Payload is AssetDragPayload adp && ScriptComponentResolver.IsScriptAsset(adp);
+                if (DragDrop.IsDraggingType<AssetDragPayload>() && bgHovered && !isScriptDrag)
                 {
                     _assetDropTarget = true;
                     EditorGUI.DropBanner(paper, "hier_drop_zone", Loc.Get("hierarchy.drop_to_spawn"));
@@ -391,20 +413,40 @@ public class HierarchyPanel : DockPanel
                     _assetDropTarget = false;
                 }
 
-                if (DragDrop.IsDropFrame && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
+                if (DragDrop.IsDropFrame && DragDrop.Payload is AssetDragPayload assetDrop)
                 {
-                    if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
+                    if (isScriptDrag)
                     {
-                        AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
-                        if (entry != null && EditorSceneManager.SceneAt(entry.Path) is { } dropped && EditorSceneManager.CanEditScenes)
-                            EditorSceneManager.OpenAdditive(dropped, load: !Input.GetKey(KeyCode.AltLeft) && !Input.GetKey(KeyCode.AltRight));
+                        if (bgHovered)
+                        {
+                            if (_dragHoverTarget.IsValid())
+                            {
+                                IReadOnlyList<Type> componentTypes = ScriptComponentResolver.ResolveAddableComponentTypes(assetDrop, _dragHoverTarget);
+                                if (componentTypes.Count > 0)
+                                    GameObjectInspector.AddComponentsWithUndo([_dragHoverTarget], componentTypes);
+                            }
+                            DragDrop.EndDrag();
+                        }
+                        _assetDropTarget = false;
+                        _dragHoverTarget = null;
+                        _dragHoverTargetId = null;
+                        _dragHoverHeader = null;
                     }
-                    else
+                    else if (_assetDropTarget)
                     {
-                        SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                        if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
+                        {
+                            AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
+                            if (entry != null && EditorSceneManager.SceneAt(entry.Path) is { } dropped && EditorSceneManager.CanEditScenes)
+                                EditorSceneManager.OpenAdditive(dropped, load: !Input.GetKey(KeyCode.AltLeft) && !Input.GetKey(KeyCode.AltRight));
+                        }
+                        else
+                        {
+                            SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                        }
+                        DragDrop.EndDrag();
+                        _assetDropTarget = false;
                     }
-                    DragDrop.EndDrag();
-                    _assetDropTarget = false;
                 }
 
                 // GO drop process using hover target tracked by OnHover callback
@@ -457,6 +499,22 @@ public class HierarchyPanel : DockPanel
                 }
             }
         }
+    }
+
+    private void UpdateScriptHoverSelection(float deltaTime)
+    {
+        // For asset drags OnHover only sets _dragHoverTarget for .cs script drags.
+        GameObject? target = DragDrop.IsDraggingType<AssetDragPayload>() ? _dragHoverTarget : null;
+        if (target.IsNotValid() || !ReferenceEquals(target, _scriptHoverTarget))
+        {
+            _scriptHoverTarget = target;
+            _scriptHoverTime = 0f;
+            return;
+        }
+
+        _scriptHoverTime += MathF.Max(0f, deltaTime);
+        if (_scriptHoverTime >= ScriptHoverSelectDelay)
+            Selection.Select(target!); // no-op once it is the selection
     }
 
     // ================================================================

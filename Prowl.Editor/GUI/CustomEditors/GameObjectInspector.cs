@@ -8,6 +8,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Prefabs;
+using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
@@ -27,6 +28,11 @@ namespace Prowl.Editor.Inspector;
 public static class GameObjectInspector
 {
     public static void Draw(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
+        => Draw(paper, font, go, null, null);
+
+    /// <param name="viewportRect">The visible bounds a component drop is hit-tested against.</param>
+    /// <param name="layout">The calling panel's own layout state; pass the same instance every frame.</param>
+    public static void Draw(Paper paper, Prowl.Scribe.FontFile font, GameObject go, Rect? viewportRect, ComponentLayout? layout)
     {
         // Prefab header bar (if this GO is a prefab instance)
         if (go.IsPrefabInstance)
@@ -44,7 +50,7 @@ public static class GameObjectInspector
         }
 
         EditorGUI.Divider(paper, "gi_sep_transform", 6f);
-        DrawComponents(paper, font, go);
+        DrawComponents(paper, font, go, viewportRect, layout ?? s_sharedLayout);
 
         // Prefab instances included: a component added to an instance belongs to that instance and
         // is carried across refreshes. What a prefab instance cannot do is restructure the source.
@@ -799,86 +805,252 @@ public static class GameObjectInspector
     //  Components
     // ================================================================
 
-    private static void DrawComponents(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
-    {
-        var components = go.GetComponents<Component>().ToList();
+    // Component drag & drop: dragging a component header reorders it, dragging a script asset inserts
+    // its component(s). Both resolve to a slot between the visible components, measured against the
+    // previous frame's layout (an immediate-mode UI only knows rects after layout has run).
 
+    /// <summary>
+    /// Where the component sections landed last frame. Each Inspector panel owns one, so several
+    /// panels (or a panel drawn in several places) never overwrite each other's slot targeting.
+    /// </summary>
+    public sealed class ComponentLayout
+    {
+        internal Guid GameObject;
+        internal Rect Area;
+        internal Rect[] Rects = [];
+    }
+
+    // Used by callers that do not supply their own layout (the 3-argument Draw).
+    private static readonly ComponentLayout s_sharedLayout = new();
+
+    /// <summary>What releasing the current drag over the component list would do.</summary>
+    /// <param name="Moving">Reorder: the dragged component.</param>
+    /// <param name="Asset">Insert: the dragged script asset payload (resolved only on drop).</param>
+    /// <param name="Slot">Position among the visible components (Count means after the last one).</param>
+    /// <param name="InsertIndex">The same position as an index into all of the object's components.</param>
+    /// <param name="IsNoOp">A reorder that would leave the component where it already is.</param>
+    private readonly record struct ComponentDrop(
+        Component? Moving, AssetDragPayload? Asset, int Slot, int InsertIndex, bool IsNoOp);
+
+    private static void DrawComponents(Paper paper, Prowl.Scribe.FontFile font, GameObject go, Rect? viewportRect, ComponentLayout layout)
+    {
+        List<Component> components = go.GetComponents<Component>().ToList();
+
+        // Indices into components of the ones that get a section here.
+        var visible = new List<int>(components.Count);
         for (int i = 0; i < components.Count; i++)
         {
             Component comp = components[i];
             if (comp.HideFlags.HasFlag(HideFlags.Hide)) continue;
             if (comp is RectTransform) continue; // drawn at the top in place of the Transform
+            visible.Add(i);
+        }
 
-            string compId = $"gi_comp_{comp.Identifier}";
-            string compName = comp.GetType().Name;
-            string icon = GetComponentIcon(comp);
+        Rect hitBounds = viewportRect is { Size.X: > 0, Size.Y: > 0 } vp ? vp : layout.Area;
+        bool hasDrop = TryGetComponentDrop(go, layout, components, visible, hitBounds, paper.PointerPos, out ComponentDrop drop);
+        bool showIndicator = hasDrop && DragDrop.IsDragging && !drop.IsNoOp;
+        Component? dragged = DragDrop.IsDragging ? (DragDrop.Payload as ComponentDragPayload)?.Component : null;
 
-            int capturedI = i;
-            bool expanded = SectionHeader(paper, font, compId, icon, compName,
-                comp.Enabled ? EditorTheme.Ink500 : EditorTheme.Ink300,
-                trailing: () =>
-                {
-                    // Wrap the checkbox so its short toggle row centers vertically in the header.
-                    using (paper.Box($"{compId}_en_wrap").Width(UnitValue.Auto).Height(UnitValue.Auto)
-                        .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
-                        Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
-                            v => { Undo.RecordObject(comp, "Toggle Component"); comp.Enabled = v; comp.OnValidate(); })
-                            .NoLabel().Show();
-                },
-                onDragStart: () => DragDrop.StartDrag(new ComponentDragPayload(go, comp)),
-                contextMenu: b => BuildComponentContextMenu(b, go, comp, capturedI));
-
-            if (expanded)
+        // Parent post-layout runs before its children's, so the array is sized before they fill it in.
+        ElementBuilder area = paper.Column("gi_components_area")
+            .Width(UnitValue.Stretch())
+            .Height(UnitValue.Auto)
+            .OnPostLayout((handle, rect) =>
             {
-                // Set overridden field names for PropertyGrid highlighting
-                if (go.IsPrefabInstance)
-                {
-                    string pathPrefix = PrefabUtility.GetOverridePath(go, comp, "");
+                layout.GameObject = go.Identifier;
+                layout.Area = rect;
+                if (layout.Rects.Length != visible.Count)
+                    layout.Rects = new Rect[visible.Count];
+                if (showIndicator)
+                    paper.DrawForeground(ref handle, (canvas, r) => DrawInsertionIndicator(canvas, r, layout.Rects, drop.Slot));
+            });
 
-                    var overridden = new HashSet<string>();
-                    // Overrides are stored on the instance root with root-relative paths.
-                    GameObject? prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
-                    GameObject overrideHost = prefabRoot.IsValid() ? prefabRoot : go;
-                    foreach (PropertyOverride ov in overrideHost.PrefabOverrides)
-                    {
-                        if (ov.Path.StartsWith(pathPrefix))
-                            overridden.Add(ov.Path[pathPrefix.Length..].Split('.')[0]);
-                    }
-                    PropertyGridUtils.OverriddenFields = overridden.Count > 0 ? overridden : null;
-                }
+        using (area.Enter())
+        {
+            for (int v = 0; v < visible.Count; v++)
+            {
+                int slot = v;
+                Component comp = components[visible[v]];
 
-                // Component body use custom editor or default PropertyGrid. A broken custom editor, a
-                // throwing property getter, or a bad [Button] must not take down the whole Inspector.
-                // Contain it per component (finally keeps OverriddenFields from leaking to the next).
-                try
+                ElementBuilder wrap = paper.Column($"gi_comp_{comp.Identifier}_wrap")
+                    .Width(UnitValue.Stretch())
+                    .Height(UnitValue.Auto)
+                    .OnPostLayout((_, rect) => { if (slot < layout.Rects.Length) layout.Rects[slot] = rect; });
+                if (ReferenceEquals(comp, dragged))
+                    wrap.Opacity(0.55f);
+
+                using (wrap.Enter())
+                    DrawComponentEntry(paper, font, go, comp, visible[v]);
+
+                EditorGUI.Divider(paper, $"gi_comp_{comp.Identifier}_sep", 6f);
+            }
+        }
+
+        // Applied after the component bodies so drop targets inside them (a Component reference field,
+        // say) get first claim; once one consumes the payload this is no longer the drop frame.
+        if (hasDrop && DragDrop.IsDropFrame)
+            ApplyComponentDrop(go, components, drop);
+    }
+
+    private static void DrawComponentEntry(Paper paper, Prowl.Scribe.FontFile font, GameObject go, Component comp, int rawIndex)
+    {
+        string compId = $"gi_comp_{comp.Identifier}";
+        string compName = comp.GetType().Name;
+        string icon = GetComponentIcon(comp);
+
+        bool expanded = SectionHeader(paper, font, compId, icon, compName,
+            comp.Enabled ? EditorTheme.Ink500 : EditorTheme.Ink300,
+            trailing: () =>
+            {
+                // Wrap the checkbox so its short toggle row centers vertically in the header.
+                using (paper.Box($"{compId}_en_wrap").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+                    Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
+                        v => { Undo.RecordObject(comp, "Toggle Component"); comp.Enabled = v; comp.OnValidate(); })
+                        .NoLabel().Show();
+            },
+            onDragStart: () => DragDrop.StartDrag(new ComponentDragPayload(go, comp)),
+            contextMenu: b => BuildComponentContextMenu(b, go, comp, rawIndex));
+
+        if (expanded)
+        {
+            // Set overridden field names for PropertyGrid highlighting
+            if (go.IsPrefabInstance)
+            {
+                string pathPrefix = PrefabUtility.GetOverridePath(go, comp, "");
+
+                var overridden = new HashSet<string>();
+                // Overrides are stored on the instance root with root-relative paths.
+                GameObject? prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
+                GameObject overrideHost = prefabRoot.IsValid() ? prefabRoot : go;
+                foreach (PropertyOverride ov in overrideHost.PrefabOverrides)
                 {
-                    CustomEditor? customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
-                    if (customEditor != null)
-                    {
-                        using (EditorSceneManager.DrawingFor([comp]))
-                            customEditor.OnGUI(paper, compId, comp);
-                        // The PropertyGrid draws [Button] methods itself, a custom editor does not.
-                        DrawButtonMethods(paper, $"{compId}_btns", comp);
-                    }
-                    else
-                        PropertyGridUtils.Draw(paper, compId, comp);
+                    if (ov.Path.StartsWith(pathPrefix))
+                        overridden.Add(ov.Path[pathPrefix.Length..].Split('.')[0]);
                 }
-                catch (Exception ex)
-                {
-                    Runtime.Debug.LogError($"[Inspector] Drawing {comp.GetType().Name} threw and was skipped: {ex.Message}");
-                }
-                finally
-                {
-                    PropertyGridUtils.OverriddenFields = null;
-                }
+                PropertyGridUtils.OverriddenFields = overridden.Count > 0 ? overridden : null;
             }
 
-            // Auto-detect overrides by comparing against prefab source (index-based)
-            if (go.IsPrefabInstance)
-                PrefabUtility.RecordComponentOverrides(go, comp);
-
-            EditorGUI.Divider(paper, $"{compId}_sep", 6f);
+            // Component body use custom editor or default PropertyGrid. A broken custom editor, a
+            // throwing property getter, or a bad [Button] must not take down the whole Inspector.
+            // Contain it per component (finally keeps OverriddenFields from leaking to the next).
+            try
+            {
+                CustomEditor? customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
+                if (customEditor != null)
+                {
+                    using (EditorSceneManager.DrawingFor([comp]))
+                        customEditor.OnGUI(paper, compId, comp);
+                    // The PropertyGrid draws [Button] methods itself, a custom editor does not.
+                    DrawButtonMethods(paper, $"{compId}_btns", comp);
+                }
+                else
+                    PropertyGridUtils.Draw(paper, compId, comp);
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogError($"[Inspector] Drawing {comp.GetType().Name} threw and was skipped: {ex.Message}");
+            }
+            finally
+            {
+                PropertyGridUtils.OverriddenFields = null;
+            }
         }
+
+        // Auto-detect overrides by comparing against prefab source (index-based)
+        if (go.IsPrefabInstance)
+            PrefabUtility.RecordComponentOverrides(go, comp);
+    }
+
+    private static bool TryGetComponentDrop(GameObject go, ComponentLayout layout, List<Component> components, List<int> visible,
+        Rect bounds, Float2 pointer, out ComponentDrop drop)
+    {
+        drop = default;
+        if (DragDrop.Payload == null) return false; // neither dragging nor on the drop frame
+        if (bounds.Size.X <= 0 || bounds.Size.Y <= 0 || !bounds.Contains(pointer)) return false;
+
+        Component? moving = null;
+        AssetDragPayload? asset = null;
+        if (DragDrop.Payload is ComponentDragPayload { Component: var comp }
+            && comp.IsValid() && comp.GameObject == go && comp is not RectTransform)
+            moving = comp;
+        else if (DragDrop.Payload is AssetDragPayload assetPayload && ScriptComponentResolver.IsScriptAsset(assetPayload))
+            asset = assetPayload;
+        else
+            return false;
+
+        int slot = FindSlot(go, layout, visible.Count, pointer.Y);
+        int insertIndex = slot < visible.Count ? visible[slot] : components.Count;
+
+        bool isNoOp = false;
+        if (moving.IsValid())
+        {
+            int movingSlot = visible.FindIndex(i => ReferenceEquals(components[i], moving));
+            if (movingSlot < 0) return false;
+            isNoOp = slot == movingSlot || slot == movingSlot + 1;
+        }
+
+        drop = new ComponentDrop(moving, asset, slot, insertIndex, isNoOp);
+        return true;
+    }
+
+    /// <summary>The slot before the first visible component whose midline is below the pointer.</summary>
+    private static int FindSlot(GameObject go, ComponentLayout layout, int visibleCount, float pointerY)
+    {
+        // Last frame's rects belong to another object, or the list changed since: append.
+        if (layout.GameObject != go.Identifier || layout.Rects.Length != visibleCount)
+            return visibleCount;
+
+        for (int i = 0; i < visibleCount; i++)
+        {
+            Rect r = layout.Rects[i];
+            if (pointerY < (r.Min.Y + r.Max.Y) * 0.5) return i;
+        }
+        return visibleCount;
+    }
+
+    private static void ApplyComponentDrop(GameObject go, List<Component> components, ComponentDrop drop)
+    {
+        DragDrop.EndDrag();
+        if (drop.IsNoOp) return;
+
+        if (drop.Moving.IsValid())
+        {
+            Component moving = drop.Moving!;
+            int from = components.IndexOf(moving);
+            // Taking the component out first shifts every later position down by one.
+            int to = drop.InsertIndex > from ? drop.InsertIndex - 1 : drop.InsertIndex;
+            if (from >= 0 && to != from)
+                MoveComponent(moving, from, to, "Reorder Component");
+        }
+        else if (drop.Asset != null)
+        {
+            IReadOnlyList<Type> types = ScriptComponentResolver.ResolveAddableComponentTypes(drop.Asset, go);
+            if (types.Count > 0)
+                InsertComponentsWithUndo(go, types, drop.InsertIndex);
+        }
+    }
+
+    private static void DrawInsertionIndicator(Prowl.Quill.Canvas canvas, Rect area, Rect[] rects, int slot)
+    {
+        double y;
+        if (rects.Length == 0)
+            y = area.Min.Y;
+        else if (slot <= 0)
+            y = rects[0].Min.Y;
+        else if (slot < rects.Length)
+            y = (rects[slot - 1].Max.Y + rects[slot].Min.Y) * 0.5; // centred in the gap between the two
+        else
+            y = rects[^1].Max.Y + 3.0;
+
+        const float PadX = 8f, LineH = 3f;
+        float x = (float)area.Min.X + PadX;
+        float w = MathF.Max(20f, (float)area.Size.X - PadX * 2f);
+        float top = (float)y - LineH * 0.5f;
+        var accent = EditorTheme.ToColor32(EditorTheme.Purple400);
+
+        canvas.RoundedRectFilled(x, top, w, LineH, LineH * 0.5f, accent);
+        canvas.CircleFilled(x, top + LineH * 0.5f, 4f, accent);
     }
 
     /// <summary>Take a component off its object, undoably, restoring it where it sat.</summary>
@@ -1486,7 +1658,7 @@ public static class GameObjectInspector
             {
                 if (s_addComponentTarget.IsValid() && entry.Tag is Type type)
                 {
-                    AddComponentWithUndo(s_addComponentTarget, type);
+                    Undo.AddComponent(s_addComponentTarget, type);
                     CloseAddComponentPopup();
                 }
             },
@@ -1495,10 +1667,57 @@ public static class GameObjectInspector
     }
 
     /// <summary>
-    /// Adds a component of <paramref name="type"/> to <paramref name="go"/> with undo.
-    /// Shared by the popup and the drag-a-script-onto-the-inspector path.
+    /// Adds every component in <paramref name="componentTypes"/> to every valid GameObject in
+    /// <paramref name="targets"/> as a single undo step.
     /// </summary>
-    public static Component? AddComponentWithUndo(GameObject go, Type type) => Undo.AddComponent(go, type);
+    public static int AddComponentsWithUndo(IReadOnlyList<GameObject> targets, IReadOnlyList<Type> componentTypes)
+        => AddComponentsWithUndoCore(targets, componentTypes, insertIndex: null);
+
+    /// <summary>
+    /// Adds every component in <paramref name="componentTypes"/> to <paramref name="target"/> as a single
+    /// undo step, placing the new components at <paramref name="insertIndex"/> among all its components.
+    /// </summary>
+    public static int InsertComponentsWithUndo(GameObject target, IReadOnlyList<Type> componentTypes, int insertIndex)
+        => AddComponentsWithUndoCore([target], componentTypes, insertIndex);
+
+    private static int AddComponentsWithUndoCore(IReadOnlyList<GameObject> targets, IReadOnlyList<Type> componentTypes, int? insertIndex)
+    {
+        int addedCount = 0;
+        foreach (GameObject go in targets)
+        {
+            if (go.IsNotValid()) continue;
+
+            // Everything new after the adds moves to the insertion point, in creation order. That covers
+            // [RequireComponent] dependencies AddComponent pulls in, not just the requested types.
+            HashSet<Component>? before = insertIndex.HasValue
+                ? new HashSet<Component>(go.GetComponents<Component>(), ReferenceEqualityComparer.Instance)
+                : null;
+
+            foreach (Type type in componentTypes)
+            {
+                if (ScriptComponentResolver.CanAddComponent(go, type) && Undo.AddComponent(go, type).IsValid())
+                    addedCount++;
+            }
+
+            if (before == null) continue;
+            int cursor = Math.Clamp(insertIndex!.Value, 0, before.Count);
+            foreach (Component comp in go.GetComponents<Component>().ToList())
+            {
+                if (!before.Contains(comp))
+                    comp.SetSiblingIndex(cursor++);
+            }
+        }
+
+        if (addedCount > 0)
+        {
+            string label = componentTypes.Count == 1
+                ? $"Add {componentTypes[0].Name}"
+                : $"Add {componentTypes.Count} Components";
+            Undo.SetCurrentGroupName(label);
+        }
+
+        return addedCount;
+    }
 
     private static List<MenuTreeEntry> GatherComponents()
     {
