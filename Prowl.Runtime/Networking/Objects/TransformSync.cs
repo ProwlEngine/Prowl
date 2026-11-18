@@ -26,6 +26,9 @@ internal sealed class TransformSync
     // Ticks a channel is still sent after it stops changing, while the rest of the object moves on.
     private const int LingerTicks = 3;
 
+    // Ticks a teleport tags what goes out, so a receiver that lost the first tagged update still jumps.
+    private const int TeleportTicks = 32;
+
     private readonly TransformTimeline _timeline = new();
 
     // Sending, while this peer controls the object.
@@ -36,6 +39,11 @@ internal sealed class TransformSync
     private Float3 _sentPosition;
     private Quaternion _sentRotation;
     private Float3 _sentScale;
+    private byte _teleport;
+    private int _teleportTicks;
+
+    // The teleport sequence number this peer last jumped for, or -1 for none.
+    private int _receivedTeleport = -1;
 
     // Receiving, while someone else does. Oldest first.
     public List<TransformSample> Samples { get; } = new();
@@ -54,6 +62,8 @@ internal sealed class TransformSync
     public void Reset()
     {
         _hasSent = false;
+        _teleportTicks = 0;
+        _receivedTeleport = -1;
         HasReceived = false;
         ClearHistory();
     }
@@ -71,6 +81,14 @@ internal sealed class TransformSync
         Samples.Clear();
         _timeline.Clear();
         HasPendingInterpolation = false;
+    }
+
+    /// <summary>The object was just moved somewhere else at once: the next updates go whole, telling receivers to jump.</summary>
+    public void Teleport()
+    {
+        _teleport++;
+        _teleportTicks = TeleportTicks;
+        _hasSent = false;
     }
 
     /// <summary>
@@ -112,6 +130,13 @@ internal sealed class TransformSync
             return null;
         }
 
+        if (_teleportTicks > 0)
+        {
+            _teleportTicks--;
+            channels = (channels | TransformChannels.Teleport) & ~TransformChannels.Resumed;
+            stillFor = 0;
+        }
+
         _hasSent = true;
         _lastSentTime = now;
         if ((channels & TransformChannels.Position) != 0)
@@ -129,7 +154,7 @@ internal sealed class TransformSync
             _sentScale = scale;
         }
 
-        return new TransformUpdate(channels, stillFor, position, rotation, scale);
+        return new TransformUpdate(channels, stillFor, position, rotation, scale, _teleport);
     }
 
     /// <summary>
@@ -139,14 +164,26 @@ internal sealed class TransformSync
     public TransformUpdate? Receive(GameObject go, uint tick, double sentAt, double now, TransformUpdate update)
     {
         // Unreliable, so older updates can arrive after newer ones.
-        if ((HasReceived && (int)(tick - LastReceivedTick) <= 0) || !_timeline.Observe(sentAt, now))
+        if (HasReceived && (int)(tick - LastReceivedTick) <= 0)
+        {
+            return null;
+        }
+
+        bool jump = (update.Channels & TransformChannels.Teleport) != 0 && update.Teleport != _receivedTeleport;
+        if (jump)
+        {
+            ClearHistory();
+            _receivedTeleport = update.Teleport;
+        }
+
+        if (!_timeline.Observe(sentAt, now))
         {
             return null;
         }
 
         // Use the host-supplied object policy, never channels chosen by the sender.
-        TransformChannels channels = update.Channels &
-                                     (SyncedChannels(go) | TransformChannels.Exact | TransformChannels.Resumed);
+        TransformChannels channels = update.Channels & (SyncedChannels(go) | TransformChannels.Exact |
+                                                        TransformChannels.Resumed | TransformChannels.Teleport);
 
         // Channels left out are as they were in the latest update, or as the object is if there's none.
         Transform current = go.Transform;
@@ -168,8 +205,8 @@ internal sealed class TransformSync
         HasReceived = true;
         LastReceivedTick = tick;
         AddSample(new TransformSample(sentAt, position, rotation, scale));
-        HasPendingInterpolation = (go.Network.Flags & NetworkFlags.NoInterpolation) == 0;
-        if ((go.Network.Flags & NetworkFlags.NoInterpolation) != 0)
+        HasPendingInterpolation = !jump && (go.Network.Flags & NetworkFlags.NoInterpolation) == 0;
+        if (jump || (go.Network.Flags & NetworkFlags.NoInterpolation) != 0)
         {
             ApplyNetworkTransform(go, position, rotation, scale);
         }

@@ -197,6 +197,7 @@ public sealed class FakePeer : IDisposable
                 r.ReadVarUInt32(); r.ReadVarUInt32();
                 byte channels = r.ReadByte();
                 if ((channels & 16) != 0) r.ReadSingle();
+                if ((channels & 32) != 0) r.ReadByte();
                 if ((channels & 9) == 9) r.ReadBytes(12);
                 else if ((channels & 1) != 0) { r.ReadVarUInt32(); r.ReadVarInt64(); r.ReadVarInt64(); r.ReadVarInt64(); }
                 if ((channels & 2) != 0) r.ReadBytes((channels & 8) != 0 ? 16 : 4);
@@ -889,7 +890,7 @@ public partial class NetworkingTests : RuntimeTestBase
     }
 
     // Transform channel bits, as Networking.Transform.cs defines them.
-    private const byte PositionChannel = 1, RotationChannel = 2, ScaleChannel = 4, ExactChannel = 8, ResumedChannel = 16;
+    private const byte PositionChannel = 1, RotationChannel = 2, ScaleChannel = 4, ExactChannel = 8, ResumedChannel = 16, TeleportChannel = 32;
 
     /// <summary>A Snapshot holding one transform group, at one tick and time, of a full, exact pose for each object.</summary>
     private static void WriteTransforms(NetWriter w, uint tick, double time,
@@ -939,6 +940,7 @@ public partial class NetworkingTests : RuntimeTestBase
                 uint netId = r.ReadVarUInt32(), generation = r.ReadVarUInt32();
                 byte channels = r.ReadByte();
                 if ((channels & ResumedChannel) != 0) r.ReadSingle();
+                if ((channels & TeleportChannel) != 0) r.ReadByte();
                 Float3? position = null;
                 uint age = 0;
                 if ((channels & PositionChannel) != 0 && (channels & ExactChannel) != 0)

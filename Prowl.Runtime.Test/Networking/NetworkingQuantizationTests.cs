@@ -123,6 +123,7 @@ public partial class NetworkingTests
                 r.ReadVarUInt32();
                 byte channels = r.ReadByte();
                 if ((channels & ResumedChannel) != 0) r.ReadSingle();
+                if ((channels & TeleportChannel) != 0) r.ReadByte();
                 int before = r.Remaining;
                 uint age = 0;
                 if ((channels & (PositionChannel | ExactChannel)) == (PositionChannel | ExactChannel)) r.ReadBytes(12);

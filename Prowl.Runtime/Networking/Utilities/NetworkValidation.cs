@@ -55,6 +55,12 @@ internal static class NetworkValidation
         {
             throw new InvalidDataException("A transform has unknown channels.");
         }
+
+        if ((channels & (TransformChannels.Teleport | TransformChannels.Resumed)) ==
+            (TransformChannels.Teleport | TransformChannels.Resumed))
+        {
+            throw new InvalidDataException("A teleport can't also resume.");
+        }
     }
 
     internal static void Transform(float stillFor, Float3 position, Quaternion rotation, Float3 scale)

@@ -20,6 +20,7 @@ internal readonly record struct TransformRecord(
     GridPosition Grid = default)
 {
     // A moving position takes at most 1 + 3 * 7 bytes, so with the compact rotation it fits in an exact pose's 12 + 16.
+    // A teleport's sequence byte fits in the 4 of Resumed, which it never carries.
     internal const int MaxSize = 5 + 5 + 1 + 4 + 12 + 16 + 12;
 
     internal void Write(NetWriter writer)
@@ -31,6 +32,11 @@ internal readonly record struct TransformRecord(
         if ((channels & TransformChannels.Resumed) != 0)
         {
             writer.WriteSingle(Update.StillFor);
+        }
+
+        if ((channels & TransformChannels.Teleport) != 0)
+        {
+            writer.WriteByte(Update.Teleport);
         }
 
         if ((channels & TransformChannels.Position) != 0)
@@ -74,6 +80,7 @@ internal readonly record struct TransformRecord(
         NetworkValidation.ValidateTransformChannels(channels);
 
         float stillFor = (channels & TransformChannels.Resumed) != 0 ? reader.ReadSingle() : 0;
+        byte teleport = (channels & TransformChannels.Teleport) != 0 ? reader.ReadByte() : (byte)0;
         Float3 position = default;
         uint baselineAge = 0;
         GridPosition grid = default;
@@ -96,7 +103,7 @@ internal readonly record struct TransformRecord(
         NetworkValidation.Transform(stillFor, position, rotation, scale);
 
         return new TransformRecord(netId, generation,
-            new TransformUpdate(channels, stillFor, position, rotation, scale), baselineAge, grid);
+            new TransformUpdate(channels, stillFor, position, rotation, scale, teleport), baselineAge, grid);
     }
 
     internal bool HasGridPosition =>
@@ -139,8 +146,11 @@ internal enum TransformChannels : byte
     // It was still until the previous tick: receivers hold it at rest until then, then blend from there.
     Resumed = 16,
 
+    // Its controller teleported it: receivers drop what they were blending and jump, once for each sequence number.
+    Teleport = 32,
+
     Pose = Position | Rotation | Scale,
-    All = Pose | Exact | Resumed
+    All = Pose | Exact | Resumed | Teleport
 }
 
 /// <summary>One transform record: the channels it carries and their values. Channels left out are unchanged.</summary>
@@ -149,4 +159,5 @@ internal readonly record struct TransformUpdate(
     float StillFor,
     Float3 Position,
     Quaternion Rotation,
-    Float3 Scale);
+    Float3 Scale,
+    byte Teleport = 0);

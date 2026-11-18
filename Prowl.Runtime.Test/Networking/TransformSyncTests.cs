@@ -142,6 +142,47 @@ public class TransformSyncTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ATeleportTagsTheNextRecordsWholeAndWithoutResumed()
+    {
+        GameObject go = CreateGameObject();
+        TransformSync sync = new();
+        sync.Capture(go, 0, 0);
+        for (int tick = 1; tick <= 3; tick++) sync.Capture(go, tick, tick - 1);
+        Assert.True(sync.Settled);
+
+        go.Transform.LocalPosition = new Float3(50, 0, 0);
+        sync.Teleport();
+        TransformUpdate first = sync.Capture(go, 4, 3)!.Value;
+        Assert.Equal(TransformChannels.Pose | TransformChannels.Teleport, first.Channels);
+        go.Transform.LocalPosition = new Float3(51, 0, 0);
+        TransformUpdate second = sync.Capture(go, 5, 4)!.Value;
+        Assert.NotEqual(0, (int)(second.Channels & TransformChannels.Teleport));
+        Assert.Equal(first.Teleport, second.Teleport);
+
+        sync.Teleport();
+        Assert.NotEqual(first.Teleport, sync.Capture(go, 6, 5)!.Value.Teleport);
+    }
+
+    [Fact]
+    public void AReceiverSnapsOnceForEachTeleport()
+    {
+        GameObject go = CreateGameObject();
+        TransformSync sync = new();
+        sync.Receive(go, 1, 0, 10, Pose(0));
+        sync.Receive(go, 2, 0.1, 10.1, Pose(1));
+
+        TransformUpdate jump = Pose(100) with { Channels = TransformChannels.Pose | TransformChannels.Teleport, Teleport = 7 };
+        sync.Receive(go, 3, 0.2, 10.2, jump);
+        Assert.Equal(100f, go.Transform.LocalPosition.X);
+        Assert.Single(sync.Samples);
+        Assert.False(sync.HasPendingInterpolation);
+
+        sync.Receive(go, 4, 0.3, 10.3, jump with { Position = new Float3(101, 0, 0) });
+        Assert.Equal(2, sync.Samples.Count);
+        Assert.Equal(100f, go.Transform.LocalPosition.X);
+    }
+
+    [Fact]
     public void DisabledInterpolationAppliesImmediatelyWithoutPendingPlayback()
     {
         GameObject go = CreateGameObject();

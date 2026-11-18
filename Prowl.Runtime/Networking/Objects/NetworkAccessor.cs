@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.Courier;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Networking;
 
@@ -211,6 +212,31 @@ public sealed class NetworkAccessor
         !_object.IsStatic && (Flags & NetworkFlags.NoTransformSync) != NetworkFlags.NoTransformSync;
 
     internal bool IsExcluded => IsExcludedFromNetwork(_object);
+
+    /// <summary>
+    ///     Moves the object to a world pose at once, so peers jump there instead of blending across. Only the peer
+    ///     that controls it may, while it is networked.
+    /// </summary>
+    public void Teleport(Float3 position, Quaternion rotation)
+    {
+        if (Networking.System is { IsActive: true } system && system.FindEntry(_object) is { } entry)
+        {
+            if (entry.GameObject != _object)
+            {
+                throw new InvalidOperationException("Teleport the networked object's root, not a part of it.");
+            }
+
+            if (!system.HasControl(_object))
+            {
+                throw new InvalidOperationException("Only the peer that controls a networked object can teleport it.");
+            }
+
+            entry.TransformSync.Teleport();
+        }
+
+        _object.Transform.Position = position;
+        _object.Transform.Rotation = rotation;
+    }
 
     /// <summary>Host: spawns the tree for all peers, or assigns ownership if already spawned.</summary>
     public void SpawnSerialized(NetPeer? owner = null, NetworkOrphaned? orphaned = null)
