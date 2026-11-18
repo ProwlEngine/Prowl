@@ -308,10 +308,10 @@ internal sealed class ClipEventTrack
             }, kinds).Show());
 
         EditorGUI.Row(paper, $"{sid}_time", "Time (s)", () =>
-            Origami.NumericField<float>(paper, $"{sid}_time_v", e.Time, v => { e.Time = MathF.Max(0f, v); write(); }).Min(0f).Show());
+            Origami.NumericField<float>(paper, $"{sid}_time_v", e.Time, v => { e.Time = MathF.Max(0f, v); write(); }).DragHandle().Min(0f).Show());
 
         EditorGUI.Row(paper, $"{sid}_length", ClipEvent.IsStretch(e.Kind) ? "Length (s)" : "Length (s, 0 = moment)", () =>
-            Origami.NumericField<float>(paper, $"{sid}_length_v", e.Length, v => { e.Length = MathF.Max(0f, v); write(); }).Min(0f).Show());
+            Origami.NumericField<float>(paper, $"{sid}_length_v", e.Length, v => { e.Length = MathF.Max(0f, v); write(); }).DragHandle().Min(0f).Show());
 
         if (e.Kind is ClipEventKind.Named or ClipEventKind.TransitionWindow)
             EditorGUI.Row(paper, $"{sid}_name", e.Kind == ClipEventKind.Named ? "Name" : "Filter Id", () =>
@@ -333,7 +333,7 @@ internal sealed class ClipEventTrack
 
         if (e.Kind == ClipEventKind.RootMotion)
             EditorGUI.Row(paper, $"{sid}_blend", "Blend (s)", () =>
-                Origami.NumericField<float>(paper, $"{sid}_blend_v", e.BlendTime, v => { e.BlendTime = MathF.Max(0f, v); write(); }).Min(0f).Show());
+                Origami.NumericField<float>(paper, $"{sid}_blend_v", e.BlendTime, v => { e.BlendTime = MathF.Max(0f, v); write(); }).DragHandle().Min(0f).Show());
 
         OrigamiMetrics m = Origami.Current.Metrics;
         using (paper.Row($"{sid}_actions").Height(26).Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.Spacing).Enter())

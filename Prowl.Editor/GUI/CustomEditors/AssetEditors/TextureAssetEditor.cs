@@ -218,7 +218,7 @@ public class TextureAssetEditor : ImportSettingsEditor
 
         EditorGUI.Row(paper, $"{id}_ppu", "Pixels Per Unit", () =>
             Origami.NumericField<float>(paper, $"{id}_ppu_v", s.PixelsPerUnit,
-                v => EditSprite(guid, sprite, "Pixels Per Unit", st => st.PixelsPerUnit = MathF.Max(0.01f, v))).Show());
+                v => EditSprite(guid, sprite, "Pixels Per Unit", st => st.PixelsPerUnit = MathF.Max(0.01f, v))).DragHandle().Show());
 
         EditorGUI.Row(paper, $"{id}_mesh", "Mesh Type", () =>
             Origami.Dropdown(paper, $"{id}_mesh_v", s.GenerateTightMesh ? 1 : 0,

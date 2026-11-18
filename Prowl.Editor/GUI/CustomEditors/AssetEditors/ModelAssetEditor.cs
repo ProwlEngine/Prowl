@@ -220,7 +220,7 @@ public class ModelAssetEditor : ImportSettingsEditor
 
         EditorGUI.Row(paper, $"{id}_unitScale", "Unit Scale", () =>
             Origami.NumericField<float>(paper, $"{id}_unitScale_v", Float(settings, "unitScale", 1f),
-                v => settings["unitScale"] = new EchoObject(v)).Show());
+                v => settings["unitScale"] = new EchoObject(v)).DragHandle().Show());
 
         EditorGUI.SettingsToggle(paper, $"{id}_genNormals", "Generate Normals", Bool(settings, "generateNormals", true),
             v => settings["generateNormals"] = new EchoObject(v), separator: false);
@@ -249,7 +249,7 @@ public class ModelAssetEditor : ImportSettingsEditor
 
         EditorGUI.Row(paper, $"{id}_sceneIndex", "Scene Index (-1 = default)", () =>
             Origami.NumericField<int>(paper, $"{id}_sceneIndex_v", Int(settings, "sceneIndex", -1),
-                v => settings["sceneIndex"] = new EchoObject(v)).Min(-1).Show());
+                v => settings["sceneIndex"] = new EchoObject(v)).DragHandle().Min(-1).Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_h_optimize", "Optimization");
 
@@ -376,7 +376,7 @@ public class ModelAssetEditor : ImportSettingsEditor
 
             EditorGUI.Row(paper, $"{id}_sampleRate", "Sample Rate (fps)", () =>
                 Origami.NumericField<float>(paper, $"{id}_sampleRate_v", Float(settings, "animationSampleRate", 30f),
-                    v => settings["animationSampleRate"] = new EchoObject(v)).Min(1).Max(240).Show());
+                    v => settings["animationSampleRate"] = new EchoObject(v)).DragHandle().Min(1).Max(240).Show());
         }
 
         EditorGUI.SectionHeader(paper, $"{id}_h_clips", "Clips");
@@ -417,11 +417,11 @@ public class ModelAssetEditor : ImportSettingsEditor
         // Trimming is in seconds from the take's start.
         EditorGUI.Row(paper, $"{id}_clipTrimStart", "Trim Start (s)", () =>
             Origami.NumericField<float>(paper, $"{id}_clipTrimStart_v", Float(block, Importers.ModelImportKeys.ClipTrimStart, 0f),
-                v => Write()[Importers.ModelImportKeys.ClipTrimStart] = new EchoObject(MathF.Max(0f, v))).Min(0f).Show());
+                v => Write()[Importers.ModelImportKeys.ClipTrimStart] = new EchoObject(MathF.Max(0f, v))).DragHandle().Min(0f).Show());
 
         EditorGUI.Row(paper, $"{id}_clipTrimEnd", "Trim End (s, 0 = full)", () =>
             Origami.NumericField<float>(paper, $"{id}_clipTrimEnd_v", Float(block, Importers.ModelImportKeys.ClipTrimEnd, 0f),
-                v => Write()[Importers.ModelImportKeys.ClipTrimEnd] = new EchoObject(MathF.Max(0f, v))).Min(0f).Show());
+                v => Write()[Importers.ModelImportKeys.ClipTrimEnd] = new EchoObject(MathF.Max(0f, v))).DragHandle().Min(0f).Show());
 
         // What the body does across the clip can move the character instead of staying in the pose.
         EditorGUI.SectionHeader(paper, $"{id}_h_clipRoot", "Root Motion");

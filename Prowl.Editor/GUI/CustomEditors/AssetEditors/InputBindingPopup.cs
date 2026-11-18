@@ -606,7 +606,7 @@ internal sealed class InputBindingPopup
                 break;
             case InputInteractionType.MultiTap:
                 EditorGUI.Row(paper, $"{id}_count", "Taps", () =>
-                    Origami.NumericField<int>(paper, $"{id}_count_v", s.TapCount, v => s.TapCount = Math.Max(2, v)).Min(2).Show());
+                    Origami.NumericField<int>(paper, $"{id}_count_v", s.TapCount, v => s.TapCount = Math.Max(2, v)).DragHandle().Min(2).Show());
                 SecondsRow(paper, $"{id}_gap", "Gap under", s.TapWindow, v => s.TapWindow = v);
                 SecondsRow(paper, $"{id}_tap", "Max press", s.MaxTapDuration, v => s.MaxTapDuration = v);
                 break;
@@ -616,7 +616,7 @@ internal sealed class InputBindingPopup
     private static void SecondsRow(Paper paper, string id, string label, float value, Action<float> setter)
     {
         EditorGUI.Row(paper, id, label, () =>
-            Origami.NumericField<float>(paper, $"{id}_v", value, v => setter(MathF.Max(0.01f, v)))
+            Origami.NumericField<float>(paper, $"{id}_v", value, v => setter(MathF.Max(0.01f, v))).DragHandle()
                 .Min(0.01f).Step(0.05f).Suffix("s").Show());
     }
 
@@ -693,7 +693,7 @@ internal sealed class InputBindingPopup
     {
         InputBindingDisplay.Caption(paper, $"{id}_l", label);
         using (paper.Box($"{id}_w").Width(70).Height(28).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
-            Origami.NumericField<float>(paper, id, value, setter).Step(0.05f).Show();
+            Origami.NumericField<float>(paper, id, value, setter).DragHandle().Step(0.05f).Show();
     }
 
     private static void Swap(List<IInputProcessor> list, int a, int b)
