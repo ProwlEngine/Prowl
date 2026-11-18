@@ -93,4 +93,45 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void AWriteFromAPeerWithoutControlWarnsOnce()
+    {
+        SceneInstance hostWorld = CreateScene();
+        using NetWriter snapshot = new(), spawn = new();
+        NetworkTestScene.Current.WriteSnapshot(hostWorld, snapshot);
+        GameObject remote = CreateGameObject("Remote");
+        remote.AddComponent<NetTestComponent>();
+        remote.Network.Mode = NetworkMode.Object;
+        NetworkTestScene.Current.WriteSpawn(remote, owner: -1, NetworkOrphaned.Destroy, spawn, generation: 1);
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.Session.PeerJoined += peer =>
+        {
+            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
+        };
+        List<string> warnings = new();
+        void Capture(LogEvent e)
+        {
+            if (e.Severity == LogSeverity.Warning) warnings.Add(e.Message);
+        }
+
+        Debug.OnLog += Capture;
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == remote.Identifier), host);
+            NetTestComponent copy = Find(SceneInstance.Main, remote.Identifier).GetComponent<NetTestComponent>()!;
+            copy.Health = 5;
+            copy.Health = 6;
+            Assert.Equal(100, copy.Health);
+            Assert.Single(warnings, w => w.Contains("Health") && w.Contains("doesn't control it"));
+        }
+        finally
+        {
+            Debug.OnLog -= Capture;
+            Networking.Networking.Shutdown();
+        }
+    }
 }

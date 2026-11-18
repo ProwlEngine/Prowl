@@ -74,6 +74,7 @@ public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : S
             using FrameStatScope stats = FrameStats.Network.Scope();
             if (!Networking.System!.HasControl(component, Flags))
             {
+                Networking.System!.Sync.WarnSyncOnce(component, this, "was changed on a peer that doesn't control it");
                 return;
             }
 

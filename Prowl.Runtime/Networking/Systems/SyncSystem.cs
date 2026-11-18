@@ -30,7 +30,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     // Network collections with changes not yet sent. Other values are SnapshotSystem's.
     internal readonly HashSet<(Component Component, uint Slot)> Dirty = new();
     internal readonly List<Action> _notifications = new();
-    internal readonly HashSet<string> _syncWarnings = new();
+    internal readonly HashSet<(Type Type, uint Slot, string Problem)> _syncWarnings = new();
     internal readonly NetWriter _valueWriter = new();
     internal int _applying;
     public void Dispose() => _valueWriter.Dispose();
@@ -71,7 +71,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     {
         NetworkDiagnostics.TraceMember("SyncVar", "Rejected", scene.Session?.LocalPeer, component, sync.Slot, false,
             problem, default);
-        if (_syncWarnings.Add($"{component.GetType().FullName}:{sync.Slot}:{problem}"))
+        if (_syncWarnings.Add((component.GetType(), sync.Slot, problem)))
         {
             Debug.LogWarning($"[Network] {component.GetType().Name}.{sync.Name} {problem}, so the change was dropped.");
         }
