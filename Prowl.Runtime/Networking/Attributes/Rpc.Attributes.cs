@@ -41,4 +41,10 @@ public static partial class Rpc
 
     /// <summary>Runs on whoever controls the object: its owner, or the host when it has none.</summary>
     public sealed class OwnerAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Owner, flags);
+
+    /// <summary>
+    ///     Runs on the one peer its first parameter, a <c>NetPeer</c>, names, as Mirror's TargetRpc. Only the host calls
+    ///     it; on the peer it runs on, that parameter is the peer itself.
+    /// </summary>
+    public sealed class TargetAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Target, flags);
 }

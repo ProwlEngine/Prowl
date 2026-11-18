@@ -207,6 +207,10 @@ public abstract class RpcMember(uint id, string signature, RpcMode mode, RpcFlag
     public bool Send(Component component, NetWriter writer) =>
         Networking.System?.Rpcs.SendRpc(component, this, writer) == true;
 
+    /// <summary>Sends a target RPC's arguments to <paramref name="target" />, and returns whether the caller runs the body.</summary>
+    public bool Send(Component component, NetWriter writer, NetPeer target) =>
+        Networking.System?.Rpcs.SendRpc(component, this, writer, target) == true;
+
     /// <summary>Marks the end of argument decoding; subsequent exceptions belong to the RPC body.</summary>
     public static void ArgumentsRead() => Networking.System?.Rpcs.RpcArgumentsRead();
 

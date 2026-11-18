@@ -160,6 +160,39 @@ public class SyncAndRpcTests
     }
 
     [Fact]
+    public void ATargetRpcSendsAllButItsPeerAndRunsWithTheLocalPeer()
+    {
+        Type bell = Scripts.Compile("""
+            using Prowl.Courier;
+            using Prowl.Runtime;
+            using Prowl.Runtime.Networking;
+
+            public class Bell : Component
+            {
+                public string Heard = "";
+                [Rpc.Target] public void Whisper(NetPeer target, string text) => Heard = text;
+            }
+            """).GetType("Bell")!;
+        Scripts.WithComponent(bell, component =>
+        {
+            RpcMember rpc = NetworkMembers.Of(component).Rpc(NetworkCodeGen.NetworkId("Whisper(NetPeer,string)"))!;
+            Assert.Equal(RpcMode.Target, rpc.Mode);
+            using NetWriter arguments = new();
+            NetSerializer<string>.Write(arguments, "psst");
+            NetReader reader = new(arguments.WrittenSpan);
+            rpc.ValidateArguments(component, ref reader);
+            Assert.True(reader.IsAtEnd);
+        });
+    }
+
+    [Theory]
+    [InlineData("[Rpc.Target] public void Whisper(string text) { }")]
+    [InlineData("[Rpc.Target] public static void Whisper(Prowl.Courier.NetPeer target) { }")]
+    public void ATargetRpcNeedsAnInstanceMethodTakingItsPeerFirst(string method) =>
+        Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Bell : Component { " + method + " }").Errors,
+            e => e.Id == "PROWLNET011");
+
+    [Fact]
     public void RpcsNamedThroughAGlobalUsingStaticAreNetworked()
     {
         Type bell = Scripts.Compile("global using static Prowl.Runtime.Networking.Rpc;",

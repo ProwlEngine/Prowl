@@ -21,5 +21,8 @@ public enum RpcFlags : uint
     ///     Any client that has the object may call it. Without this, as with Mirror's commands, a client may only call it
     ///     on an object it controls, and calls from other clients are dropped. The host may always call.
     /// </summary>
-    AnyCaller = 4
+    AnyCaller = 4,
+
+    /// <summary>A broadcast skips the object's owner, as Mirror's includeOwner = false does.</summary>
+    ExcludeOwner = 8
 }

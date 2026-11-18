@@ -89,6 +89,11 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         "Static RPC '{0}' must be declared in a non-generic class and cannot use Owner",
         "Networking", DiagnosticSeverity.Error, true);
 
+    private static readonly DiagnosticDescriptor s_targetRpc = new(
+        "PROWLNET011", "Target RPC shape not supported",
+        "Target RPC '{0}' must be an instance method whose first parameter is the NetPeer it goes to",
+        "Networking", DiagnosticSeverity.Error, true);
+
     private static readonly DiagnosticDescriptor s_unreliableChannel = new(
         "PROWLNET009", "Channel ignored on an unreliable RPC",
         "RPC '{0}' is unreliable, so its Channel is ignored: unreliable calls have no order to keep and go on channel 0",
@@ -322,9 +327,13 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         uint Flags,
         IReadOnlyList<string> ParameterTypes,
         bool Static = false,
-        byte Channel = 0)
+        byte Channel = 0,
+        bool Targeted = false)
     {
         public string Signature => $"{Name}({string.Join(",", ParameterTypes)})";
+
+        /// <summary>The parameters that travel: all but a target RPC's first, the peer it goes to.</summary>
+        public IEnumerable<string> SentTypes => Targeted ? ParameterTypes.Skip(1) : ParameterTypes;
 
         public string Descriptor => $"__rpc_{Id}";
     }

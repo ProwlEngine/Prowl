@@ -100,15 +100,16 @@ internal sealed partial class NetworkCodeGen
                 ? $"if ({rpc.Descriptor}.Begin(out {WriterType} __rpc_w)) {{ "
                 : $"if ({rpc.Descriptor}.Begin(this, out {WriterType} __rpc_w)) {{ ");
             prologue.Append("using (global::Prowl.Runtime.Diagnostics.FrameStats.Network.Scope()) { ");
-            foreach (ParameterSyntax parameter in node.ParameterList.Parameters)
+            foreach (ParameterSyntax parameter in node.ParameterList.Parameters.Skip(rpc.Targeted ? 1 : 0))
             {
                 prologue.Append(
                     $"{Serializer}<{OneLine(parameter.Type!)}>.Write(__rpc_w, {parameter.Identifier.Text}); ");
             }
 
+            string sendTo = rpc.Targeted ? $", {node.ParameterList.Parameters[0].Identifier.Text}" : "";
             prologue.Append(rpc.Static
                 ? $"if (!{rpc.Descriptor}.Send(__rpc_w)) return; }} }} "
-                : $"if (!{rpc.Descriptor}.Send(this, __rpc_w)) return; }} }} ");
+                : $"if (!{rpc.Descriptor}.Send(this, __rpc_w{sendTo})) return; }} }} ");
             List<StatementSyntax> checks = [SyntaxFactory.ParseStatement(prologue.ToString())];
 
             // Instance RPCs can be overridden: a base call made from the running body runs here, not sent again.
@@ -183,18 +184,24 @@ internal sealed partial class NetworkCodeGen
                     StringBuilder invoke = new(rpc.Static
                         ? $"static (ref {ReaderType} __r, bool __execute) => {{ "
                         : $"static ({self} __c, ref {ReaderType} __r, bool __execute) => {{ ");
-                    for (int i = 0; i < rpc.ParameterTypes.Count; i++)
+                    List<string> sent = rpc.SentTypes.ToList();
+                    for (int i = 0; i < sent.Count; i++)
                     {
-                        invoke.Append(
-                            $"{rpc.ParameterTypes[i]} __a{i} = {Serializer}<{rpc.ParameterTypes[i]}>.Read(ref __r); ");
+                        invoke.Append($"{sent[i]} __a{i} = {Serializer}<{sent[i]}>.Read(ref __r); ");
                     }
 
                     string argumentsRead = rpc.Static
                         ? "global::Prowl.Runtime.Networking.StaticRpcMember.ArgumentsRead()"
                         : "global::Prowl.Runtime.Networking.RpcMember.ArgumentsRead()";
                     string target = rpc.Static ? self : "__c";
+                    IEnumerable<string> arguments = Enumerable.Range(0, sent.Count).Select(i => "__a" + i);
+                    if (rpc.Targeted)
+                    {
+                        arguments = arguments.Prepend("global::Prowl.Runtime.Networking.Networking.Session!.LocalPeer!");
+                    }
+
                     invoke.Append(
-                        $"if (!__execute) return; {argumentsRead}; {target}.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");
+                        $"if (!__execute) return; {argumentsRead}; {target}.{rpc.Name}({string.Join(", ", arguments)}); }}");
                     string descriptorType = rpc.Static ? "StaticRpcMember" : $"RpcMember<{self}>";
                     string declaringType = rpc.Static ? $"typeof({self}), " : "";
                     members.Add(
@@ -443,7 +450,15 @@ internal sealed partial class NetworkCodeGen
                 return null;
             }
 
-            foreach (IParameterSymbol parameter in method.Parameters)
+            bool targeted = kind.Name == "TargetAttribute";
+            if (targeted && (method.IsStatic || method.Parameters.Length == 0 ||
+                             method.Parameters[0].Type.ToDisplayString() != "Prowl.Courier.NetPeer"))
+            {
+                context.Report(s_targetRpc, location, method.Name);
+                return null;
+            }
+
+            foreach (IParameterSymbol parameter in method.Parameters.Skip(targeted ? 1 : 0))
             {
                 context.RequireSendable(parameter.Type, parameter.Name,
                     parameter.Locations.FirstOrDefault() ?? location);
@@ -454,7 +469,7 @@ internal sealed partial class NetworkCodeGen
             string key = $"{method.Name}({string.Join(",", WrittenParameterTypes(RootDeclaration(method)) ?? types)})";
             context.ClaimId(method.ContainingType, true, key, location);
             return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types,
-                method.IsStatic, channel);
+                method.IsStatic, channel, targeted);
         }
 
         private static MethodDeclarationSyntax? RootDeclaration(IMethodSymbol method)
