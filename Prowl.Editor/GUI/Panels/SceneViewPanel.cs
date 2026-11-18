@@ -322,16 +322,16 @@ public class SceneViewPanel : DockPanel
 
         if (cam.IsOrthographic)
             CameraRow(paper, font, "sv_cam_size", Loc.Get("scene.camera_ortho_size"), () =>
-                Origami.NumericField<float>(paper, "sv_cam_size_v", cam.OrthographicSize, v => cam.OrthographicSize = v).Show());
+                Origami.NumericField<float>(paper, "sv_cam_size_v", cam.OrthographicSize, v => cam.OrthographicSize = v).DragHandle().Show());
         else
             CameraRow(paper, font, "sv_cam_fov", Loc.Get("scene.camera_fov"), () =>
                 Origami.Slider(paper, "sv_cam_fov_v", cam.FieldOfView, v => cam.FieldOfView = v, EditorCamera.MinFieldOfView, EditorCamera.MaxFieldOfView).Format("F0").Show());
 
         CameraRow(paper, font, "sv_cam_near", Loc.Get("scene.camera_near"), () =>
-            Origami.NumericField<float>(paper, "sv_cam_near_v", cam.NearClip, v => cam.NearClip = v).Show());
+            Origami.NumericField<float>(paper, "sv_cam_near_v", cam.NearClip, v => cam.NearClip = v).DragHandle().Show());
 
         CameraRow(paper, font, "sv_cam_far", Loc.Get("scene.camera_far"), () =>
-            Origami.NumericField<float>(paper, "sv_cam_far_v", cam.FarClip, v => cam.FarClip = v).Show());
+            Origami.NumericField<float>(paper, "sv_cam_far_v", cam.FarClip, v => cam.FarClip = v).DragHandle().Show());
 
         CameraRow(paper, font, "sv_cam_speed", Loc.Get("scene.camera_speed"), () =>
             Origami.Slider(paper, "sv_cam_speed_v", cam.MoveSpeed, cam.SetMoveSpeed, 0.5f, 100f).Format("F1").Show());

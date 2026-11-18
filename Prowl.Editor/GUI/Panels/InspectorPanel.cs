@@ -567,13 +567,13 @@ public class InspectorPanel : DockPanel
                                 case Echo.EchoType.Int:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.NumericField<int>(paper, $"insp_set_{key}_v", val.IntValue,
-                                            v => SetImportSetting(guid, key, new EchoObject(v))).Show());
+                                            v => SetImportSetting(guid, key, new EchoObject(v))).DragHandle().Show());
                                     break;
 
                                 case Echo.EchoType.Float:
                                     EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.NumericField<float>(paper, $"insp_set_{key}_v", val.FloatValue,
-                                            v => SetImportSetting(guid, key, new EchoObject(v))).Show());
+                                            v => SetImportSetting(guid, key, new EchoObject(v))).DragHandle().Show());
                                     break;
 
                                 case Echo.EchoType.String:

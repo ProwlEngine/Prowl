@@ -54,7 +54,7 @@ public class RagdollGeneratorWindow : DockPanel
 
             EditorGUI.SectionHeader(paper, "rg_set_h", "Settings");
             EditorGUI.SettingsRow(paper, "rg_mass", "Total Mass", () =>
-                Origami.NumericField<float>(paper, "rg_mass_v", _settings.TotalMass, v => _settings = _settings with { TotalMass = v > 0f ? v : 0.01f }).Show());
+                Origami.NumericField<float>(paper, "rg_mass_v", _settings.TotalMass, v => _settings = _settings with { TotalMass = v > 0f ? v : 0.01f }).DragHandle().Show());
             EditorGUI.SettingsToggle(paper, "rg_extra", "Hands and Feet", _settings.HandsAndFeet, v => _settings = _settings with { HandsAndFeet = v });
 
             using (paper.Row("rg_buttons").Height(28).Margin(0, 0, 12, 0).Enter())
