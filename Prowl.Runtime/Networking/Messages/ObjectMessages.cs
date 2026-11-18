@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     Spawn header followed by a SyncBlock of initial component values. A root goes into section SectionSlot minus one,
-///     or the active one for 0. Snapshot holds the compressed tree, or a <see cref="PrefabSpawn" /> when Prefab is set.
+///     or the active one for 0. Snapshot holds the compressed tree, or a <see cref="TemplateSpawn" /> when Template is set.
 /// </summary>
 internal readonly ref struct SpawnMessage(
     Guid identifier,
@@ -24,11 +24,11 @@ internal readonly ref struct SpawnMessage(
     ReadOnlySpan<byte> snapshot,
     bool replace = false,
     uint tick = 0,
-    bool prefab = false)
+    bool template = false)
 {
     // Set in the orphaned byte when the object replaces any copy the client still has. The host tick then follows NetId.
     private const byte ReplaceBit = 0x80;
-    private const byte PrefabBit = 0x40;
+    private const byte TemplateBit = 0x40;
 
     internal readonly Guid Identifier = identifier;
     internal readonly Guid ParentId = parentId;
@@ -40,7 +40,7 @@ internal readonly ref struct SpawnMessage(
     internal readonly ReadOnlySpan<byte> Snapshot = snapshot;
     internal readonly bool Replace = replace;
     internal readonly uint Tick = tick;
-    internal readonly bool Prefab = prefab;
+    internal readonly bool Template = template;
 
     internal void Write(NetWriter writer)
     {
@@ -48,7 +48,7 @@ internal readonly ref struct SpawnMessage(
         writer.WriteGuid(ParentId);
         writer.WriteVarUInt32(SectionSlot);
         writer.WriteVarUInt32((uint)(OwnerId + 1));
-        writer.WriteByte((byte)((byte)Orphaned | (Replace ? ReplaceBit : 0) | (Prefab ? PrefabBit : 0)));
+        writer.WriteByte((byte)((byte)Orphaned | (Replace ? ReplaceBit : 0) | (Template ? TemplateBit : 0)));
         writer.WriteUInt32(Generation);
         writer.WriteVarUInt32(NetId);
         if (Replace)
@@ -70,8 +70,8 @@ internal readonly ref struct SpawnMessage(
         bool replace = (policy & ReplaceBit) != 0;
         uint tick = replace ? reader.ReadVarUInt32() : 0;
         return new SpawnMessage(identifier, parentId, sectionSlot, ownerId,
-            NetworkValidation.Orphaned((NetworkOrphaned)(policy & ~(ReplaceBit | PrefabBit))), generation, netId,
-            reader.ReadBytesWithLength(), replace, tick, (policy & PrefabBit) != 0);
+            NetworkValidation.Orphaned((NetworkOrphaned)(policy & ~(ReplaceBit | TemplateBit))), generation, netId,
+            reader.ReadBytesWithLength(), replace, tick, (policy & TemplateBit) != 0);
     }
 }
 
@@ -167,9 +167,14 @@ internal readonly record struct SendIntervalMessage(Guid Identifier, uint Genera
         reader.ReadByte());
 }
 
-/// <summary>A spawn by prefab: the asset, the identifiers its tree takes in build order, and the root's state.</summary>
-internal readonly record struct PrefabSpawn(
+/// <summary>
+///     A spawn by prefab or factory: what builds it, the identifiers its tree takes in build order, and the root's state.
+///     A factory spawn names the factory and carries the bytes the host passed it; a prefab spawn names the asset.
+/// </summary>
+internal readonly record struct TemplateSpawn(
     Guid Prefab,
+    string? Factory,
+    byte[] Data,
     Guid[] Identifiers,
     Float3 Position,
     Quaternion Rotation,
@@ -181,7 +186,17 @@ internal readonly record struct PrefabSpawn(
 {
     internal void Write(NetWriter writer)
     {
-        writer.WriteGuid(Prefab);
+        writer.WriteBool(Factory != null);
+        if (Factory != null)
+        {
+            writer.WriteString(Factory);
+            writer.WriteBytesWithLength(Data);
+        }
+        else
+        {
+            writer.WriteGuid(Prefab);
+        }
+
         writer.WriteVarUInt32((uint)Identifiers.Length);
         foreach (Guid id in Identifiers)
         {
@@ -197,13 +212,29 @@ internal readonly record struct PrefabSpawn(
         writer.WriteByte(SendInterval);
     }
 
-    internal static PrefabSpawn Read(ref NetReader reader)
+    internal static TemplateSpawn Read(ref NetReader reader)
     {
-        Guid prefab = reader.ReadGuid();
+        Guid prefab = Guid.Empty;
+        string? factory = null;
+        byte[] data = [];
+        if (reader.ReadBool())
+        {
+            factory = reader.ReadString();
+            data = reader.ReadBytesWithLength().ToArray();
+            if (string.IsNullOrEmpty(factory))
+            {
+                throw new InvalidDataException("A factory spawn has no factory name.");
+            }
+        }
+        else
+        {
+            prefab = reader.ReadGuid();
+        }
+
         uint count = reader.ReadVarUInt32();
         if (count == 0 || count > reader.Remaining / 16)
         {
-            throw new InvalidDataException("A prefab spawn has an invalid identifier count.");
+            throw new InvalidDataException("A template spawn has an invalid identifier count.");
         }
 
         Guid[] identifiers = new Guid[count];
@@ -222,9 +253,10 @@ internal readonly record struct PrefabSpawn(
         NetworkValidation.Transform(0, position, rotation, scale);
         if (!NetworkAccessor.ValidFlags(flags) || !Enum.IsDefined(transfer) || interval == 0)
         {
-            throw new InvalidDataException("A prefab spawn has invalid network settings.");
+            throw new InvalidDataException("A template spawn has invalid network settings.");
         }
 
-        return new PrefabSpawn(prefab, identifiers, position, rotation, scale, enabled, flags, transfer, interval);
+        return new TemplateSpawn(prefab, factory, data, identifiers, position, rotation, scale, enabled, flags, transfer,
+            interval);
     }
 }

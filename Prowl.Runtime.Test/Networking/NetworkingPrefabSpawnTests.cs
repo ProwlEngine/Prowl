@@ -33,13 +33,13 @@ public partial class NetworkingTests
         return ids;
     }
 
-    private static PrefabSpawn ReadPrefabSpawn(byte[] spawn)
+    private static TemplateSpawn ReadPrefabSpawn(byte[] spawn)
     {
         NetReader reader = new(spawn);
         SpawnMessage message = SpawnMessage.Read(ref reader);
-        Assert.True(message.Prefab);
+        Assert.True(message.Template);
         NetReader payload = new(message.Snapshot);
-        return PrefabSpawn.Read(ref payload);
+        return TemplateSpawn.Read(ref payload);
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
-            GameObject crate = Networking.Networking.Spawn(prefab, new Float3(1, 2, 3), Quaternion.Identity);
+            GameObject crate = Networking.Networking.SpawnPrefab(prefab, new Float3(1, 2, 3), Quaternion.Identity);
 
             Assert.True(crate.Network.Active);
             Assert.Equal(prefab.AssetID, crate.PrefabAssetId);
@@ -62,7 +62,7 @@ public partial class NetworkingTests
             Assert.Equal(new Float3(1, 2, 3), crate.Transform.LocalPosition);
 
             Pump(() => alice.Has(FakePeer.Spawn), alice);
-            PrefabSpawn spawn = ReadPrefabSpawn(alice.WireReceived.Last(m => m.Id == FakePeer.Spawn).Data);
+            TemplateSpawn spawn = ReadPrefabSpawn(alice.WireReceived.Last(m => m.Id == FakePeer.Spawn).Data);
             Assert.Equal(prefab.AssetID, spawn.Prefab);
             Assert.Equal(TreeIdentifiers(crate), spawn.Identifiers);
             Assert.Equal(new Float3(1, 2, 3), spawn.Position);
@@ -86,7 +86,7 @@ public partial class NetworkingTests
             try
             {
                 Pump(() => recorder.Has(FakePeer.SceneSnapshot), recorder);
-                GameObject crate = Networking.Networking.Spawn(prefab, new Float3(4, 5, 6), Quaternion.Identity);
+                GameObject crate = Networking.Networking.SpawnPrefab(prefab, new Float3(4, 5, 6), Quaternion.Identity);
                 ids = TreeIdentifiers(crate);
                 crate.GetComponent<NetTestComponent>()!.Health = 9;
                 using NetWriter written = new();
@@ -131,7 +131,7 @@ public partial class NetworkingTests
         Networking.Networking.Host(new LocalTransport(new(), "host"));
         try
         {
-            GameObject crate = Networking.Networking.Spawn(prefab, Float3.Zero, Quaternion.Identity);
+            GameObject crate = Networking.Networking.SpawnPrefab(prefab, Float3.Zero, Quaternion.Identity);
             Assert.True(SpawnIsPrefab(crate));
 
             crate.AddComponent<SyncPairTestComponent>();
@@ -150,8 +150,8 @@ public partial class NetworkingTests
         Networking.Networking.Host(new LocalTransport(network, "host"));
         try
         {
-            GameObject crate = Networking.Networking.Spawn(prefab, new Float3(1, 2, 3), Quaternion.Identity);
-            GameObject changed = Networking.Networking.Spawn(prefab, Float3.Zero, Quaternion.Identity);
+            GameObject crate = Networking.Networking.SpawnPrefab(prefab, new Float3(1, 2, 3), Quaternion.Identity);
+            GameObject changed = Networking.Networking.SpawnPrefab(prefab, Float3.Zero, Quaternion.Identity);
             changed.AddComponent<SyncPairTestComponent>();
 
             using FakePeer late = FakePeer.Join(network, "late");
@@ -165,7 +165,7 @@ public partial class NetworkingTests
                 Assert.Contains(snapshot.Objects, o => o.Identifier == changed.Identifier);
             }
 
-            PrefabSpawn spawn = ReadPrefabSpawn(Assert.Single(received, m => m.Id == FakePeer.Spawn).Data);
+            TemplateSpawn spawn = ReadPrefabSpawn(Assert.Single(received, m => m.Id == FakePeer.Spawn).Data);
             Assert.Equal(TreeIdentifiers(crate), spawn.Identifiers);
             Assert.Equal(new Float3(1, 2, 3), spawn.Position);
         }
@@ -184,7 +184,7 @@ public partial class NetworkingTests
         Networking.Networking.Host(new LocalTransport(source, "host"));
         try
         {
-            GameObject crate = Networking.Networking.Spawn(prefab, new Float3(4, 5, 6), Quaternion.Identity);
+            GameObject crate = Networking.Networking.SpawnPrefab(prefab, new Float3(4, 5, 6), Quaternion.Identity);
             crate.GetComponent<NetTestComponent>()!.Health = 9;
             ids = TreeIdentifiers(crate);
             using FakePeer recorder = FakePeer.Join(source, "recorder");
@@ -220,7 +220,7 @@ public partial class NetworkingTests
         using NetWriter output = new();
         NetworkTestScene.Current.WriteSpawn(go, -1, NetworkOrphaned.Destroy, output, 1, 1);
         NetReader reader = new(output.WrittenSpan);
-        return SpawnMessage.Read(ref reader).Prefab;
+        return SpawnMessage.Read(ref reader).Template;
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public partial class NetworkingTests
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.IsReady, host);
             int before = SceneInstance.Main.Objects.Count();
-            Assert.Throws<InvalidOperationException>(() => Networking.Networking.Spawn(prefab, Float3.Zero, Quaternion.Identity));
+            Assert.Throws<InvalidOperationException>(() => Networking.Networking.SpawnPrefab(prefab, Float3.Zero, Quaternion.Identity));
             Assert.Equal(before, SceneInstance.Main.Objects.Count());
         }
         finally { Networking.Networking.Shutdown(); }

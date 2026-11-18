@@ -501,7 +501,7 @@ internal sealed partial class NetworkSystem
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         SceneInstance world = ReplicatedWorld!;
-        NetworkObject[] prefabs = [.. Entries.Values.Where(e => e.GameObject.IsValid() && PrefabSpawnOf(e.GameObject) != null)];
+        NetworkObject[] prefabs = [.. Entries.Values.Where(e => e.GameObject.IsValid() && TemplateSpawnOf(e.GameObject) != null)];
         if (!SendPerPeer(EngineMessage.SceneSnapshot, peers, peer => WithPrefabRoots(HiddenRoots(peer), prefabs),
                 message => WriteSnapshot(world, message), session))
         {

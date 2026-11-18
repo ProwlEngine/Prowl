@@ -27,8 +27,8 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     public uint NetId;
 
     /// <summary>The prefab it was spawned from and its tree's identifiers then, or empty for one sent whole.</summary>
-    public Guid PrefabId;
-    public Guid[]? PrefabIdentifiers;
+    // What it was built from, for peers to build their own copy, or null when it goes serialized.
+    public SpawnTemplate? Template;
 
     public int NotifiedOwnerId = NoOwner;
     public int Owner = NoOwner;

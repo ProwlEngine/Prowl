@@ -137,8 +137,7 @@ internal sealed partial class NetworkSystem
     ///     is checked before anything changes. Spawning one that already is networked (a scene-placed one, say)
     ///     hands it to <paramref name="owner" /> instead.
     /// </summary>
-    internal void Spawn(GameObject go, NetPeer? owner, NetworkOrphaned orphaned, Guid prefab = default,
-        Guid[]? prefabIdentifiers = null)
+    internal void Spawn(GameObject go, NetPeer? owner, NetworkOrphaned orphaned, SpawnTemplate? template = null)
     {
         if (!Enum.IsDefined(orphaned))
         {
@@ -208,8 +207,7 @@ internal sealed partial class NetworkSystem
         bool heldAsContent = Configuration.InterestMode != InterestMode.None && HeldAsContent(go);
         NetworkObject entry = new(this, go)
         {
-            Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), PrefabId = prefab,
-            PrefabIdentifiers = prefabIdentifiers
+            Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template
         };
         Entries.Add(entry);
         IndexTree(go);
@@ -233,8 +231,53 @@ internal sealed partial class NetworkSystem
     ///     Builds <paramref name="prefab" /> into the networked world at a pose and spawns it. Clients build their copy
     ///     from the same prefab, so only its GUID, identifiers, root state and [Sync] values travel.
     /// </summary>
-    internal GameObject Spawn(PrefabAsset prefab, Float3 position, Quaternion rotation, NetPeer? owner,
+    internal GameObject SpawnPrefab(PrefabAsset prefab, Float3 position, Quaternion rotation, NetPeer? owner,
         NetworkOrphaned? orphaned)
+    {
+        CheckHostSpawn(owner);
+        GameObject? go = GameObject.InstantiateDetached(prefab);
+        if (go.IsNotValid())
+        {
+            throw new ArgumentException($"'{prefab.Name}' could not be instantiated.", nameof(prefab));
+        }
+
+        go!.Transform.Position = position;
+        go.Transform.Rotation = rotation;
+        return SpawnBuilt(go, prefab.AssetID, null, [], owner, orphaned);
+    }
+
+    /// <summary>Builds an object with a registered factory and spawns it. Clients build theirs with the same factory.</summary>
+    internal GameObject SpawnFactory(string factory, Float3 position, Quaternion rotation, byte[] data, NetPeer? owner,
+        NetworkOrphaned? orphaned)
+    {
+        CheckHostSpawn(owner);
+        return SpawnBuilt(BuildWithFactory(factory, position, rotation, data), Guid.Empty, factory, data, owner, orphaned);
+    }
+
+    /// <summary>Builds an object with a registered factory, refusing one the factory already put in a scene.</summary>
+    internal static GameObject BuildWithFactory(string factory, Float3 position, Quaternion rotation, byte[] data)
+    {
+        if (!NetworkFactories.TryGet(factory, out NetworkFactory build, out _))
+        {
+            throw new ArgumentException($"No network factory is registered as '{factory}'.", nameof(factory));
+        }
+
+        GameObject go = build(new NetworkSpawn(factory, position, rotation, data));
+        if (go.IsNotValid())
+        {
+            throw new InvalidOperationException($"The network factory '{factory}' returned no object.");
+        }
+
+        if (go.Scene.IsValid())
+        {
+            throw new InvalidOperationException(
+                $"The network factory '{factory}' must return an object in no scene yet; networking adds it.");
+        }
+
+        return go;
+    }
+
+    private void CheckHostSpawn(NetPeer? owner)
     {
         if (IsActive)
         {
@@ -245,19 +288,15 @@ internal sealed partial class NetworkSystem
 
             ValidateOwner(owner);
         }
+    }
 
-        GameObject? go = GameObject.InstantiateDetached(prefab);
-        if (go.IsNotValid())
-        {
-            throw new ArgumentException($"'{prefab.Name}' could not be instantiated.", nameof(prefab));
-        }
-
-        go!.Transform.Position = position;
-        go.Transform.Rotation = rotation;
+    private GameObject SpawnBuilt(GameObject go, Guid prefab, string? factory, byte[] data, NetPeer? owner,
+        NetworkOrphaned? orphaned)
+    {
         List<Guid> identifiers = new();
         CollectIdentifiers(go, identifiers);
         SceneInstance.Main.Add(go);
-        Spawn(go, owner, orphaned ?? go.Network.Orphaned, prefab.AssetID, [.. identifiers]);
+        Spawn(go, owner, orphaned ?? go.Network.Orphaned, new SpawnTemplate(prefab, factory, data, [.. identifiers]));
         return go;
     }
 
@@ -305,49 +344,73 @@ internal sealed partial class NetworkSystem
         return true;
     }
 
-    /// <summary>The spawn of <paramref name="go" /> by prefab, or null when it isn't one or its tree has changed since.</summary>
-    private PrefabSpawn? PrefabSpawnOf(GameObject go)
+    /// <summary>
+    ///     The spawn of <paramref name="go" /> by prefab or factory, or null when it was built neither way or its tree
+    ///     has changed since.
+    /// </summary>
+    private TemplateSpawn? TemplateSpawnOf(GameObject go)
     {
-        if (FindEntry(go) is not { PrefabIdentifiers: { } recorded } entry || entry.GameObject != go)
+        if (FindEntry(go) is not { Template: { } template } entry || entry.GameObject != go)
         {
             return null;
         }
 
-        List<Guid> current = new(recorded.Length);
+        List<Guid> current = new(template.Identifiers.Length);
         CollectIdentifiers(go, current);
-        if (!current.SequenceEqual(recorded))
+        if (!current.SequenceEqual(template.Identifiers))
         {
             return null;
         }
 
         Transform t = go.Transform;
-        return new PrefabSpawn(entry.PrefabId, recorded, t.LocalPosition, t.LocalRotation, t.LocalScale, go.Enabled,
-            go.Network.Flags, go.Network.OwnerTransfer, (byte)go.Network.SendInterval);
+        return new TemplateSpawn(template.Prefab, template.Factory, template.Data, template.Identifiers, t.LocalPosition,
+            t.LocalRotation, t.LocalScale, go.Enabled, go.Network.Flags, go.Network.OwnerTransfer,
+            (byte)go.Network.SendInterval);
     }
 
-    /// <summary>Builds a client's copy of a prefab spawn, before it goes into the scene.</summary>
-    private static GameObject BuildPrefab(ReadOnlySpan<byte> payload)
+    /// <summary>Builds a client's copy of a prefab or factory spawn, before it goes into the scene.</summary>
+    private static GameObject BuildTemplate(ReadOnlySpan<byte> payload, out SpawnTemplate template)
     {
         NetReader reader = new(payload);
-        PrefabSpawn spawn = PrefabSpawn.Read(ref reader);
+        TemplateSpawn spawn = TemplateSpawn.Read(ref reader);
         if (!reader.IsAtEnd)
         {
-            throw new InvalidDataException("A prefab spawn contains trailing bytes.");
+            throw new InvalidDataException("A template spawn contains trailing bytes.");
         }
 
-        PrefabAsset? prefab = AssetDatabase.Load<PrefabAsset>(spawn.Prefab);
-        if (prefab.IsNotValid() || prefab!.GameObjectData == null ||
-            GameObject.InstantiateDetached(prefab) is not { } go)
+        GameObject go;
+        string source;
+        if (spawn.Factory is { } factory)
         {
-            throw new InvalidDataException($"The host spawned the prefab {spawn.Prefab}, which this build does not have.");
+            source = $"factory '{factory}'";
+            if (!NetworkFactories.TryGet(factory, out _, out _))
+            {
+                throw new InvalidDataException($"The host spawned from the {source}, which this peer has not registered.");
+            }
+
+            go = BuildWithFactory(factory, spawn.Position, spawn.Rotation, spawn.Data);
+        }
+        else
+        {
+            source = $"prefab {spawn.Prefab}";
+            PrefabAsset? prefab = AssetDatabase.Load<PrefabAsset>(spawn.Prefab);
+            if (prefab.IsNotValid() || prefab!.GameObjectData == null ||
+                GameObject.InstantiateDetached(prefab) is not { } built)
+            {
+                throw new InvalidDataException($"The host spawned the {source}, which this build does not have.");
+            }
+
+            go = built;
         }
 
         int next = 0;
         if (!AssignIdentifiers(go, spawn.Identifiers, ref next) || next != spawn.Identifiers.Length)
         {
             go.Dispose();
-            throw new InvalidDataException($"The host's prefab {spawn.Prefab} does not match this build's.");
+            throw new InvalidDataException($"The host's {source} builds a different tree than this peer's.");
         }
+
+        template = new SpawnTemplate(spawn.Prefab, spawn.Factory, spawn.Data, spawn.Identifiers);
 
         go.Transform.LocalPosition = spawn.Position;
         go.Transform.LocalRotation = spawn.Rotation;
@@ -366,10 +429,10 @@ internal sealed partial class NetworkSystem
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         Guid parent = go.Parent.IsValid() ? go.Parent!.Identifier : Guid.Empty;
-        if (PrefabSpawnOf(go) is { } prefab)
+        if (TemplateSpawnOf(go) is { } built)
         {
-            using NetWriter payload = new(64 + prefab.Identifiers.Length * 16);
-            prefab.Write(payload);
+            using NetWriter payload = new(64 + built.Identifiers.Length * 16 + built.Data.Length);
+            built.Write(payload);
             new SpawnMessage(go.Identifier, parent, SectionSlot(go), owner, orphaned, generation,
                 netId == 0 ? NextNetId() : netId, payload.WrittenSpan, replace, Tick, true).Write(output);
             Sync.WriteSyncState(output, [go, .. go.GetChildrenDeep()]);
@@ -414,10 +477,11 @@ internal sealed partial class NetworkSystem
         int owner = message.OwnerId;
         NetworkOrphaned orphaned = message.Orphaned;
         uint generation = message.Generation, netId = message.NetId;
-        EchoObject? echo = message.Prefab ? null : Decompress(message.Snapshot);
+        EchoObject? echo = message.Template ? null : Decompress(message.Snapshot);
         SerializationContext context = SceneReferenceResolver.ContextForLinking(scene);
+        SpawnTemplate? template = null;
         GameObject? go = echo == null
-            ? BuildPrefab(message.Snapshot)
+            ? BuildTemplate(message.Snapshot, out template)
             : GameObject.DeserializePreservingIdentifiers(echo, context);
         if (go.IsNotValid())
         {
@@ -485,7 +549,10 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
-            NetworkObject entry = new(this, go) { Owner = owner, Generation = generation, NetId = netId };
+            NetworkObject entry = new(this, go)
+            {
+                Owner = owner, Generation = generation, NetId = netId, Template = adopted ? null : template
+            };
             go.Network.ApplyOrphaned(orphaned);
             Entries.Add(entry);
             if (applied != null)
@@ -609,7 +676,15 @@ internal sealed partial class NetworkSystem
         {
             ForgetLinksFrom(entry.GameObject);
             entry.NotifyDespawn(message.Reason);
-            entry.GameObject.Destroy();
+            if (entry.Template?.Factory is { } factory && NetworkFactories.TryGet(factory, out _, out Action<GameObject>? destroy) &&
+                destroy != null && entry.GameObject.IsValid())
+            {
+                destroy(entry.GameObject);
+            }
+            else if (entry.GameObject.IsValid())
+            {
+                entry.GameObject.Destroy();
+            }
         }
     }
 
