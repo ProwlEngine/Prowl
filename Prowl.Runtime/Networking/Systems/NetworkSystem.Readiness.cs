@@ -107,6 +107,8 @@ internal sealed partial class NetworkSystem
             return;
         }
 
+        // The snapshot held every value as it was written; only the ones that changed since go again.
+        List<(Component Component, uint Slot)> changed = Snapshots.OwedValues(peer);
         using NetWriter message = new();
         Snapshots.Delivered(peer);
         new SceneCatchUpMessage(generation).Write(message);
@@ -115,7 +117,7 @@ internal sealed partial class NetworkSystem
         {
             WithoutRoots(HiddenRoots(peer), () =>
             {
-                Sync.WriteSyncState(message, ReplicatedWorld.IsValid() ? ReplicatedWorld!.Objects : Enumerable.Empty<GameObject>());
+                Sync.WriteSyncState(message, changed);
                 WriteCatchUpTransforms(message);
             });
         }

@@ -424,6 +424,29 @@ internal sealed class SnapshotSystem : IDisposable
     }
 
     /// <summary>The peers this one sends snapshots to: every client from the host, the host from a client.</summary>
+    /// <summary>The values owed to <paramref name="peer" /> that it would take now, for a catch-up to deliver at once.</summary>
+    internal List<(Component Component, uint Slot)> OwedValues(NetPeer peer)
+    {
+        List<(Component Component, uint Slot)> owed = new();
+        if (!_peers.TryGetValue(peer.Id, out PeerState? state))
+        {
+            return owed;
+        }
+
+        foreach (SyncKey key in state.Values.Keys)
+        {
+            Component component = key.Component;
+            if (!component.IsDisposed && !state.Missing.Contains(component) &&
+                !NetworkAccessor.IsExcludedFromNetwork(component.GameObject) && _scene.Sees(component.GameObject, peer) &&
+                NetworkMembers.Of(component).Sync(key.Slot) is { } sync && ControllerOf(component, sync.Flags) != peer.Id)
+            {
+                owed.Add((component, key.Slot));
+            }
+        }
+
+        return owed;
+    }
+
     private List<NetPeer> Targets()
     {
         _targets.Clear();

@@ -281,6 +281,23 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         output.WriteBytes(values.WrittenSpan);
     }
 
+    /// <summary>Writes the given values, as a block <see cref="ApplySyncState" /> reads, skipping any in a hidden tree.</summary>
+    internal void WriteSyncState(NetWriter output, List<(Component Component, uint Slot)> values)
+    {
+        using NetWriter written = new(1024);
+        int count = 0;
+        foreach ((Component component, uint slot) in values)
+        {
+            if (!NetworkSerialization.InHiddenTree(component.GameObject) && WriteValue(written, component, slot, false))
+            {
+                count++;
+            }
+        }
+
+        new SyncBlock((uint)count).Write(output);
+        output.WriteBytes(written.WrittenSpan);
+    }
+
     internal void OnSync(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         if (!scene.IsHost && !sender.IsHost)
