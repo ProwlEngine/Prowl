@@ -100,6 +100,7 @@ public class SceneViewPanel : DockPanel
                 if (lens.Far is float far) _editorCamera.FarClip = far;
                 if (lens.Near is float near) _editorCamera.NearClip = near;
                 if (lens.Speed is float speed) _editorCamera.SetMoveSpeed(speed);
+                if (lens.Smoothing is float smoothing) _editorCamera.MoveSmoothing = smoothing;
                 _pendingLens = null;
             }
             if (_pendingGizmos is bool pz) { _editorCamera.ShowGizmos = pz; _pendingGizmos = null; }
@@ -310,6 +311,11 @@ public class SceneViewPanel : DockPanel
 
         CameraRow(paper, font, "sv_cam_speed", Loc.Get("scene.camera_speed"), () =>
             Origami.Slider(paper, "sv_cam_speed_v", cam.MoveSpeed, cam.SetMoveSpeed, 0.5f, 100f).Format("F1").Show());
+
+        CameraRow(paper, font, "sv_cam_smoothing", Loc.Get("scene.camera_smoothing"), () =>
+            // Shown in milliseconds so the steps read as whole numbers; stored in seconds.
+            Origami.Slider(paper, "sv_cam_smoothing_v", cam.MoveSmoothing * 1000f, v => cam.MoveSmoothing = v / 1000f,
+                0f, EditorCamera.MaxMoveSmoothing * 1000f).Step(5f).Format("0 ms").Show());
 
         Origami.Button(paper, "sv_cam_reset", Loc.Get("scene.camera_reset"), cam.ResetLens).FullWidth().Height(22).Show();
     }
@@ -944,7 +950,7 @@ public class SceneViewPanel : DockPanel
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
         if (_editorCamera == null) return false;
-        Float3 p = _editorCamera.Position;
+        Float3 p = _editorCamera.RestPosition;
         state["px"] = p.X; state["py"] = p.Y; state["pz"] = p.Z;
         state["yaw"] = _editorCamera.Yaw;
         state["pitch"] = _editorCamera.Pitch;
@@ -953,6 +959,7 @@ public class SceneViewPanel : DockPanel
         state["near"] = _editorCamera.NearClip;
         state["far"] = _editorCamera.FarClip;
         state["speed"] = _editorCamera.MoveSpeed;
+        state["smoothing"] = _editorCamera.MoveSmoothing;
         state["gizmos"] = _editorCamera.ShowGizmos;
         state["post"] = _editorCamera.PostProcessing;
         state["debugView"] = _editorCamera.DebugView.ToString();
@@ -980,7 +987,8 @@ public class SceneViewPanel : DockPanel
         // Camera is created lazily in OnGUI; stash toggles and apply when it exists.
         _pendingGrid = state["grid"]?.GetValue<bool>();
         _pendingLens = (state["fov"]?.GetValue<float>(), state["near"]?.GetValue<float>(),
-                        state["far"]?.GetValue<float>(), state["speed"]?.GetValue<float>());
+                        state["far"]?.GetValue<float>(), state["speed"]?.GetValue<float>(),
+                        state["smoothing"]?.GetValue<float>());
         _pendingGizmos = state["gizmos"]?.GetValue<bool>();
         _pendingPost = state["post"]?.GetValue<bool>();
         _pendingDebugView = Enum.TryParse(state["debugView"]?.GetValue<string>(), out DebugViewMode debugView) ? debugView : null;
@@ -998,7 +1006,7 @@ public class SceneViewPanel : DockPanel
     }
 
     private bool? _pendingGrid;
-    private (float? Fov, float? Near, float? Far, float? Speed)? _pendingLens;
+    private (float? Fov, float? Near, float? Far, float? Speed, float? Smoothing)? _pendingLens;
     private bool? _pendingGizmos;
     private bool? _pendingPost;
     private DebugViewMode? _pendingDebugView;

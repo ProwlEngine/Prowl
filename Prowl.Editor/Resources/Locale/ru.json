@@ -50,6 +50,7 @@
   "scene.camera_near": "Ближняя плоскость",
   "scene.camera_far": "Дальняя плоскость",
   "scene.camera_speed": "Скорость полета",
+  "scene.camera_smoothing": "Сглаживание полета",
   "scene.camera_reset": "Сбросить",
   "scene.tool_handles": "Tool Handles",
   "scene.tool_move": "Перемещение",

@@ -50,6 +50,7 @@
   "scene.camera_near": "Bliska plaszczyzna",
   "scene.camera_far": "Daleka plaszczyzna",
   "scene.camera_speed": "Predkosc lotu",
+  "scene.camera_smoothing": "Wygladzanie lotu",
   "scene.camera_reset": "Resetuj",
   "scene.tool_handles": "Uchwyty",
   "scene.tool_move": "Przesun",

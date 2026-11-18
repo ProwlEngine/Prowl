@@ -40,6 +40,10 @@ public class EditorCamera
     // Our lock context is on Input's stack while RMB flying, even if the hovered panel changes mid-gesture.
     private bool _flying;
 
+    // Where WASD flight is heading; the camera damps toward it over MoveSmoothing seconds.
+    private Float3? _moveTarget;
+    private Float3 _moveVelocity;
+
     // Toggles
     public bool ShowGrid { get; set; } = true;
     public bool ShowGizmos { get; set; } = true;
@@ -47,6 +51,9 @@ public class EditorCamera
     public Camera Camera => _camera;
     public RenderTexture? RenderTarget => _renderTarget;
     public Float3 Position => _position;
+
+    /// <summary>Where the camera comes to rest: the WASD flight target while gliding, otherwise its position.</summary>
+    public Float3 RestPosition => _moveTarget ?? _position;
     public float Yaw => _yaw;
     public float Pitch => _pitch;
     public Float3 Forward => _cameraObject.Transform.Forward;
@@ -73,6 +80,7 @@ public class EditorCamera
     /// </remarks>
     public void ToggleProjection()
     {
+        ClearMovementSmoothing();
         Float3 focus = ViewFocusPoint;
         float halfFov = MathF.Tan(Maths.ToRadians(_camera.FieldOfView) * 0.5f);
 
@@ -114,6 +122,7 @@ public class EditorCamera
     private void SyncOrthographicDepth()
     {
         if (!_camera.IsOrthographic) return;
+        ClearMovementSmoothing();
 
         // Captured first: both terms of it are about to move.
         Float3 focus = ViewFocusPoint;
@@ -167,6 +176,18 @@ public class EditorCamera
         set => SetOrthographicSize(value);
     }
 
+    public const float DefaultMoveSmoothing = 0.08f;
+    public const float MaxMoveSmoothing = 0.25f;
+
+    /// <summary>Approximate seconds the camera takes to catch up with WASD flight (the smooth time of
+    /// <see cref="Maths.SmoothDamp(Float3, Float3, ref Float3, float, float, float)"/>). 0 moves instantly.</summary>
+    public float MoveSmoothing
+    {
+        get => _moveSmoothing;
+        set => _moveSmoothing = Math.Clamp(value, 0f, MaxMoveSmoothing);
+    }
+    private float _moveSmoothing = DefaultMoveSmoothing;
+
     /// <summary>Fly speed in units per second.</summary>
     public void SetMoveSpeed(float speed) => _moveSpeed = Math.Clamp(speed, 0.1f, 1000f);
 
@@ -179,11 +200,13 @@ public class EditorCamera
         _perspectiveFarClip = 1000f;
         _camera.FarClipPlane = _perspectiveFarClip;
         _moveSpeed = 5f;
+        _moveSmoothing = DefaultMoveSmoothing;
     }
 
     /// <summary>Set the camera position directly.</summary>
     public void SetPosition(Float3 position)
     {
+        ClearMovementSmoothing();
         _position = position;
         UpdateTransform();
     }
@@ -191,6 +214,7 @@ public class EditorCamera
     /// <summary>Restore full navigation state (position + yaw/pitch). Pitch is clamped.</summary>
     public void SetPose(Float3 position, float yaw, float pitch)
     {
+        ClearMovementSmoothing();
         _position = position;
         _yaw = yaw;
         _pitch = MathF.Max(-89f, MathF.Min(89f, pitch));
@@ -340,7 +364,12 @@ public class EditorCamera
     {
         // While flying the pointer is pinned at the lock center rather than under the panel, so hover
         // cannot be trusted until the gesture ends and the lock context is back off the stack.
-        if (!isHovered && !_flying) return false;
+        // Flight still settles toward its target once the pointer has left the view.
+        if (!isHovered && !_flying)
+        {
+            ApplyMovementSmoothing(dt);
+            return false;
+        }
 
         bool consumed = false;
         float scroll = Input.MouseWheelDelta;
@@ -348,6 +377,7 @@ public class EditorCamera
         // Scroll to dolly forward/back (also adjusts orbit distance)
         if (scroll != 0 && !Input.GetMouseButton(1))
         {
+            ClearMovementSmoothing();
             if (_camera.IsOrthographic)
             {
                 // Moving along the view direction changes nothing an orthographic projection can
@@ -375,6 +405,7 @@ public class EditorCamera
         }
         if (orbiting)
         {
+            ClearMovementSmoothing();
             Float2 delta = Input.MouseDelta;
 
             _yaw += delta.X * 0.3f;
@@ -392,6 +423,7 @@ public class EditorCamera
         // Alt + Right mouse = dolly zoom
         if (Input.IsAltPressed && Input.GetMouseButton(1))
         {
+            ClearMovementSmoothing();
             Float2 delta = Input.MouseDelta;
             if (_camera.IsOrthographic)
             {
@@ -412,6 +444,7 @@ public class EditorCamera
         // Middle mouse = pan
         if (Input.GetMouseButton(2))
         {
+            ClearMovementSmoothing();
             Float2 delta = Input.MouseDelta;
             float panScale = 0.01f * _moveSpeed;
             Float3 right = _cameraObject.Transform.Right;
@@ -459,7 +492,7 @@ public class EditorCamera
             if (Float3.LengthSquared(move) > 0)
             {
                 move = Float3.Normalize(move) * speed;
-                _position += move;
+                _moveTarget = (_moveTarget ?? _position) + move;
             }
 
             // Scroll adjusts move speed while RMB held
@@ -470,7 +503,8 @@ public class EditorCamera
                 _speedChangedTime = Runtime.Time.UnscaledTotalTime;
             }
 
-            UpdateTransform();
+            // A glide updates the transform once it has moved, below.
+            if (_moveTarget == null) UpdateTransform();
             consumed = true;
         }
 
@@ -490,7 +524,31 @@ public class EditorCamera
             consumed = true;
         }
 
+        ApplyMovementSmoothing(dt);
+
         return consumed;
+    }
+
+    /// <summary>Moves the camera toward the WASD flight target.</summary>
+    private void ApplyMovementSmoothing(float dt)
+    {
+        if (_moveTarget is not { } target) return;
+
+        _position = Maths.SmoothDamp(_position, target, ref _moveVelocity, _moveSmoothing, float.PositiveInfinity, dt);
+
+        if (Float3.LengthSquared(_position - target) < 1e-6f)
+        {
+            _position = target;
+            ClearMovementSmoothing();
+        }
+        UpdateTransform();
+    }
+
+    /// <summary>Drops the flight target, so the camera stops gliding once it is placed directly (orbit, pan, zoom, focus).</summary>
+    private void ClearMovementSmoothing()
+    {
+        _moveTarget = null;
+        _moveVelocity = Float3.Zero;
     }
 
     /// <summary>Releases a mid-gesture flight whose owning panel closed before RMB went up; without this
@@ -584,6 +642,7 @@ public class EditorCamera
         }
 
         // Set orbit distance and position camera to look at target
+        ClearMovementSmoothing();
         _orbitDistance = dist;
         _position = target - GetForwardFromAngles() * dist;
         UpdateTransform();
