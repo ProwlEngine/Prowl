@@ -170,7 +170,7 @@ public class SceneViewPanel : DockPanel
                 // "45°" does not parse, but the field selects all on focus, so typing replaces the whole value.
                 HeaderField(paper, font, "sv_hdr_rot", RotateSnapLabels, () =>
                     Origami.NumericField<float>(paper, "sv_hdr_rot_field", SceneTools.RotateSnap, v => SceneTools.RotateSnap = v)
-                        .Min(SceneTools.MinRotateSnap).Max(SceneTools.MaxRotateSnap).Format(SceneTools.RotateSnapFormat).Show());
+                        .Min(SceneTools.MinRotateSnap).Max(SceneTools.MaxRotateSnap).Format(SceneTools.RotateSnapFormat).DragHandle(false).Show());
                 HeaderStepper(paper, font, "sv_hdr_rot_step", SceneTools.StepRotateSnap);
             }
 
@@ -180,7 +180,7 @@ public class SceneViewPanel : DockPanel
                     () => SceneTools.GridSnap = !SceneTools.GridSnap);
                 HeaderField(paper, font, "sv_hdr_grid", MoveSnapLabels, () =>
                     Origami.NumericField<float>(paper, "sv_hdr_grid_field", SceneTools.MoveSnap, v => SceneTools.MoveSnap = v)
-                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format(SceneTools.CurrentMoveSnapFormat).Show());
+                        .Min(SceneTools.MinMoveSnap).Max(SceneTools.MaxMoveSnap).Format(SceneTools.CurrentMoveSnapFormat).DragHandle(false).Show());
                 HeaderStepper(paper, font, "sv_hdr_grid_step", SceneTools.StepMoveSnap);
             }
 
