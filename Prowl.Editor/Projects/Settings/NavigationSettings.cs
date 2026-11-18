@@ -162,7 +162,7 @@ public class NavigationSettings : ProjectSettingsBase
                 DrawAgentNumField(paper, $"nav_agent_r_{type.Id}", NumW, type.Radius, v => AgentTypes[idx].Radius = MathF.Max(0.01f, v));
                 DrawAgentNumField(paper, $"nav_agent_h_{type.Id}", NumW, type.Height, v => AgentTypes[idx].Height = MathF.Max(0.01f, v));
                 DrawAgentNumField(paper, $"nav_agent_s_{type.Id}", NumW, type.MaxSlope, v => AgentTypes[idx].MaxSlope = Math.Clamp(v, 0f, 89f));
-                DrawAgentNumField(paper, $"nav_agent_c_{type.Id}", NumW, type.MaxClimb, v => { AgentTypes[idx].MaxClimb = MathF.Max(0f, v); Changed(); });
+                DrawAgentNumField(paper, $"nav_agent_c_{type.Id}", NumW, type.MaxClimb, v => AgentTypes[idx].MaxClimb = MathF.Max(0f, v));
 
                 DrawDeleteButton(paper, $"nav_agent_del_{type.Id}", DelW, idx, isBuiltin ? null : id =>
                 {
