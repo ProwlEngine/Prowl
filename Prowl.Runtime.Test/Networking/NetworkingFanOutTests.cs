@@ -69,6 +69,42 @@ public partial class NetworkingTests
             foreach (FakePeer peer in peers) peer.Dispose();
         }
     }
+    [Fact]
+    public void WithdrawingObjectsCostsOnlyTheirOwnTrees()
+    {
+        SceneInstance scene = CreateScene();
+        List<GameObject> objects = [];
+        for (int i = 0; i < 3000; i++)
+        {
+            GameObject go = CreateGameObject($"Owed {i}");
+            go.AddComponent<NetTestComponent>();
+            scene.Add(go);
+            objects.Add(go);
+        }
+
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            foreach (GameObject go in objects) go.Network.SpawnSerialized();
+            alice.AutoAck = false;
+            for (int tick = 0; tick < 40; tick++)
+            {
+                foreach (GameObject go in objects) go.GetComponent<NetTestComponent>()!.Health = tick;
+                Networking.Networking.System!.Snapshots.Send();
+            }
+
+            NetPeer peer = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
+            Stopwatch watch = Stopwatch.StartNew();
+            foreach (GameObject go in objects.Take(300)) Networking.Networking.System!.Snapshots.Withdraw(peer, go);
+            long elapsed = watch.ElapsedMilliseconds;
+            Assert.True(elapsed < 20, $"300 withdrawals took {elapsed} ms");
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }
 
 /// <summary>A value that counts how often it is written for the network.</summary>

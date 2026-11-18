@@ -148,44 +148,32 @@ internal sealed class SnapshotSystem : IDisposable
             return;
         }
 
-        _scratchKeys.Clear();
-        foreach (SyncKey key in state.Values.Keys)
+        foreach (GameObject go in TreeOf(root))
         {
-            if (InTree(key.Component.GameObject, root))
+            if (EntryAt(go) is { } entry)
             {
-                _scratchKeys.Add(key);
+                state.Poses.Remove(entry);
             }
-        }
 
-        foreach (SyncKey key in _scratchKeys)
-        {
-            state.Values.Remove(key);
-        }
-
-        _scratchObjects.Clear();
-        foreach (NetworkObject entry in state.Poses.Keys)
-        {
-            if (InTree(entry.GameObject, root))
+            foreach (Component component in go.GetComponents<Component>())
             {
-                _scratchObjects.Add(entry);
+                foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
+                {
+                    state.Values.Remove(new SyncKey(component, sync.Slot));
+                }
+
+                // Given up on before, it gets a fresh chance with what was just delivered.
+                state.Missing.Remove(component);
+                state.Rejecting.Remove(component);
             }
-        }
-
-        foreach (NetworkObject entry in _scratchObjects)
-        {
-            state.Poses.Remove(entry);
-        }
-
-        // Given up on before, its components get a fresh chance with what was just delivered.
-        state.Missing.RemoveWhere(component => !component.IsDisposed && InTree(component.GameObject, root));
-        _scratchComponents.Clear();
-        _scratchComponents.AddRange(state.Rejecting.Keys.Where(component =>
-            !component.IsDisposed && InTree(component.GameObject, root)));
-        foreach (Component component in _scratchComponents)
-        {
-            state.Rejecting.Remove(component);
         }
     }
+
+    private static List<GameObject> TreeOf(GameObject root) => [root, .. root.GetChildrenDeep()];
+
+    /// <summary>The networked object rooted at <paramref name="go" />, if it is one.</summary>
+    private NetworkObject? EntryAt(GameObject go) =>
+        _scene.Entries.TryGetValue(go.Identifier, out NetworkObject? entry) && entry.GameObject == go ? entry : null;
 
     /// <summary><paramref name="peer" /> no longer has <paramref name="root" />'s tree: forgets what it was owed and knew of it.</summary>
     internal void Withdraw(NetPeer peer, GameObject root)
@@ -196,20 +184,22 @@ internal sealed class SnapshotSystem : IDisposable
         }
 
         Delivered(peer, root);
-        _scratchObjects.Clear();
-        _scratchObjects.AddRange(state.SentPositions.Keys.Where(entry => InTree(entry.GameObject, root)));
-        foreach (NetworkObject entry in _scratchObjects)
+        foreach (GameObject go in TreeOf(root))
         {
-            state.SentPositions.Remove(entry);
-            state.Baselines.Remove(entry);
-        }
+            if (EntryAt(go) is { } entry)
+            {
+                state.SentPositions.Remove(entry);
+                state.Baselines.Remove(entry);
+            }
 
-        state.DefinedComponents.RemoveWhere(component => component.IsDisposed || InTree(component.GameObject, root));
-
-        // An acknowledgement still on its way must not mark them known again.
-        foreach (SentSnapshot sent in state.Sent.Values)
-        {
-            sent.Definitions.RemoveAll(component => component.IsDisposed || InTree(component.GameObject, root));
+            // An acknowledgement still on its way, for a snapshot sent before now, must not mark it known again.
+            foreach (Component component in go.GetComponents<Component>())
+            {
+                if (state.DefinedComponents.Remove(component) || state.Sent.Count > 0)
+                {
+                    state.WithdrawnBefore[component] = _nextSnapshotId;
+                }
+            }
         }
 
         // Values that named it now name nothing there, so they go again if it comes back.
@@ -576,6 +566,28 @@ internal sealed class SnapshotSystem : IDisposable
     {
         foreach (PeerState state in _peers.Values)
         {
+            if (state.SentOrder.Count == 0)
+            {
+                state.WithdrawnBefore.Clear();
+            }
+            else
+            {
+                uint oldest = state.SentOrder.Peek();
+                _scratchComponents.Clear();
+                foreach ((Component component, uint withdrawn) in state.WithdrawnBefore)
+                {
+                    if (component.IsDisposed || (int)(oldest - withdrawn) >= 0)
+                    {
+                        _scratchComponents.Add(component);
+                    }
+                }
+
+                foreach (Component component in _scratchComponents)
+                {
+                    state.WithdrawnBefore.Remove(component);
+                }
+            }
+
             _scratchObjects.Clear();
             _scratchObjects.AddRange(state.SentPositions.Keys.Where(entry => !IsCurrent(entry)));
             foreach (NetworkObject entry in _scratchObjects)
@@ -1485,7 +1497,10 @@ internal sealed class SnapshotSystem : IDisposable
             // The receiver knows these ids now, whether or not their values could be applied.
             foreach (Component component in sent.Definitions)
             {
-                state.DefinedComponents.Add(component);
+                if (!state.WithdrawnBefore.TryGetValue(component, out uint withdrawn) || (int)(id - withdrawn) >= 0)
+                {
+                    state.DefinedComponents.Add(component);
+                }
             }
 
             // Whatever couldn't be applied stays owed, and goes again at once; the rest is done if nothing changed since.
@@ -1721,6 +1736,9 @@ internal sealed class SnapshotSystem : IDisposable
         public readonly Dictionary<SyncKey, NamedRoots> Named = new();
         public readonly Dictionary<GameObject, HashSet<SyncKey>> NamedBy = new(ReferenceEqualityComparer.Instance);
         public uint NextComponentId = 1;
+
+        // Components the other had withdrawn, and the first snapshot id sent after, so older acknowledgements don't define them.
+        public readonly Dictionary<Component, uint> WithdrawnBefore = new();
 
         // Positions sent the other by snapshot tick and the latest it acknowledged, and positions received from it.
         public readonly Dictionary<NetworkObject, PositionHistory> SentPositions = new();
