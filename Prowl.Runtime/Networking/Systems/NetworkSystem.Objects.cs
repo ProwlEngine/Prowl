@@ -742,6 +742,7 @@ internal sealed partial class NetworkSystem
         LoadingPeers.Remove(peer.Id);
         Snapshots.RemovePeer(peer.Id);
         ForgetPeerVisibility(peer.Id);
+        ForgetPeerLimits(peer.Id);
         DispatchNetworkListener(e => e.OnPeerDisconnected(peer, reason));
         if (Session != session)
         {

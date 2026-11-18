@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Courier;
@@ -33,6 +34,11 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
+            if (IsHost && !peer.IsLocal && !AdmitClientMessage(peer, kind, reader.Remaining))
+            {
+                return;
+            }
+
             try
             {
                 if (!CanReceiveEngineMessage(peer, kind))
@@ -55,11 +61,67 @@ internal sealed partial class NetworkSystem
             }
             catch (Exception e) when (e is not (EndOfStreamException or InvalidDataException))
             {
-                // Anything else is a bug on this side, not the sender's fault. Report it and keep the session going.
+                // Anything else is a bug on this side. Report it, but a client that keeps causing it is let go.
                 NetworkDiagnostics.Record(kind.ToString(), "Failed", peer, Guid.Empty, e.Message);
-                Debug.LogError($"[Network] Handling a {kind} message from {peer.Name} failed: {e}");
+                int failures = IsHost && !peer.IsLocal ? CountFailure(peer) : 0;
+                if (failures <= LoggedFailures)
+                {
+                    Debug.LogError($"[Network] Handling a {kind} message from {peer.Name} failed: {e}");
+                }
+
+                if (failures >= MaxFailures && Session is { } session)
+                {
+                    session.Kick(peer, "Its messages kept failing on the host.");
+                }
             }
         });
+
+    // Failures a client's messages may cause before it is kicked, and how many of them are logged.
+    private const int MaxFailures = 10, LoggedFailures = 3;
+
+    private readonly Dictionary<int, int> _failures = new();
+    private readonly Dictionary<int, (double Tokens, double At)> _messageBudgets = new();
+
+    private int CountFailure(NetPeer peer) => _failures[peer.Id] = _failures.GetValueOrDefault(peer.Id) + 1;
+
+    /// <summary>
+    ///     False, kicking or dropping the client, when its message is over the client size limit or it has sent faster
+    ///     than its message budget refills.
+    /// </summary>
+    private bool AdmitClientMessage(NetPeer peer, EngineMessage kind, int size)
+    {
+        if (size > Configuration.MaxClientMessageSize)
+        {
+            throw new InvalidDataException(
+                $"A {kind} message of {size} bytes is over the {Configuration.MaxClientMessageSize} a client may send.");
+        }
+
+        int rate = Configuration.MaxClientMessagesPerSecond;
+        if (rate == 0)
+        {
+            return true;
+        }
+
+        double now = Now;
+        (double tokens, double at) = _messageBudgets.TryGetValue(peer.Id, out (double Tokens, double At) budget)
+            ? budget
+            : (rate, now);
+        tokens = Math.Min(rate, tokens + (now - at) * rate) - 1;
+        _messageBudgets[peer.Id] = (tokens, now);
+        if (tokens >= 0)
+        {
+            return true;
+        }
+
+        Session?.Kick(peer, $"It sent more than {rate} messages a second.");
+        return false;
+    }
+
+    internal void ForgetPeerLimits(int peer)
+    {
+        _failures.Remove(peer);
+        _messageBudgets.Remove(peer);
+    }
 
     internal void SendEngine(NetPeer peer, EngineMessage kind, ReadOnlySpan<byte> payload,
         Delivery delivery = Delivery.Reliable, byte channel = 0)

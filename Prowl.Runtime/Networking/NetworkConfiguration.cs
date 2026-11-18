@@ -50,6 +50,12 @@ public sealed class NetworkConfiguration
     public float LatencyMilliseconds;
     public string LocalAddress = "host";
     public int MaxMessageSize = 16 * 1024 * 1024;
+
+    /// <summary>Largest message the host takes from a client. A client sending more is dropped.</summary>
+    public int MaxClientMessageSize = 256 * 1024;
+
+    /// <summary>Messages a second the host takes from each client, with a second's worth of burst, or 0 for no limit.</summary>
+    public int MaxClientMessagesPerSecond = 1000;
     public int MaxPeers = 64;
     public int MaxRetransmits = 40;
 
@@ -135,6 +141,8 @@ public sealed class NetworkConfiguration
         copy.TransformScaleThreshold = Limit(copy.TransformScaleThreshold, 0, float.MaxValue, 0.0001f);
         copy.MaxPeers = Math.Clamp(copy.MaxPeers, 1, 4096);
         copy.MaxMessageSize = Math.Clamp(copy.MaxMessageSize, 1024, 1024 * 1024 * 1024);
+        copy.MaxClientMessageSize = Math.Clamp(copy.MaxClientMessageSize, 1024, copy.MaxMessageSize);
+        copy.MaxClientMessagesPerSecond = Math.Max(0, copy.MaxClientMessagesPerSecond);
         copy.MaxSnapshotDecompressedBytes = Math.Clamp(copy.MaxSnapshotDecompressedBytes, 1, 1024 * 1024 * 1024);
         copy.MaxSnapshotDepth = Math.Clamp(copy.MaxSnapshotDepth, 1, 256);
         copy.MaxSnapshotNodes = Math.Clamp(copy.MaxSnapshotNodes, 1, 1_000_000);
