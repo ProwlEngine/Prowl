@@ -299,7 +299,6 @@ internal sealed partial class NetworkSystem
         SceneGeneration++;
         ClearViewpoints();
         LocalJoinState = NetworkJoinState.Loading;
-        Index.Clear();
         Sync.Dirty.Clear();
         Snapshots.Clear();
         foreach (NetworkObject entry in Entries.Values.ToArray())
@@ -934,8 +933,6 @@ internal sealed partial class NetworkSystem
         }
 
         ReplicatedWorld = world;
-        Index.Clear();
-        IndexFrame = -1;
         Entries.Clear();
         Sync.Dirty.Clear();
         Snapshots.Clear();
@@ -982,7 +979,6 @@ internal sealed partial class NetworkSystem
         }
 
         ApplySections(world, sections);
-        IndexFrame = -1;
         if (Session != session)
         {
             return;
@@ -1158,11 +1154,6 @@ internal sealed partial class NetworkSystem
             if (data.Active)
             {
                 world.ActiveSection = section;
-            }
-
-            foreach (GameObject root in section.Roots)
-            {
-                IndexTree(root);
             }
 
             FillAllLinks();

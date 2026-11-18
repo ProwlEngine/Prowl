@@ -17,7 +17,6 @@ internal sealed partial class NetworkSystem : IDisposable
     internal readonly NetworkObjectTable Entries = new();
     internal readonly object Identity = new();
     internal readonly List<(NetPeer Peer, EngineMessageHandler Handler, byte[] Payload, Delivery Delivery)> EarlyRpcs = new();
-    internal readonly Dictionary<Guid, EngineObject> Index = new();
     internal readonly Dictionary<int, PeerReadiness> LoadingPeers = new();
     private readonly List<NetPeer> _overLimitPeers = new();
     internal readonly RpcSystem Rpcs;
@@ -26,7 +25,6 @@ internal sealed partial class NetworkSystem : IDisposable
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     internal bool CatchUpApplied;
     internal int Frame;
-    internal int IndexFrame = -1;
     internal double LastTransformTime;
     internal NetworkJoinState LocalJoinState;
     internal uint NextNetIdValue;
@@ -79,7 +77,6 @@ internal sealed partial class NetworkSystem : IDisposable
         Entries.Clear();
         ForgetVisibility();
         ForgetLinks();
-        Index.Clear();
         Spawning = null;
         ReplicatedWorld = null;
         ForgetSections();

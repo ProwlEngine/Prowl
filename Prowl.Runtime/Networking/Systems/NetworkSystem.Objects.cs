@@ -37,51 +37,8 @@ internal sealed partial class NetworkSystem
             return spawning;
         }
 
-        if (Index.TryGetValue(id, out EngineObject? found) && IsLive(found, id))
-        {
-            return found;
-        }
-
-        if (IndexFrame == Frame)
-        {
-            return null;
-        }
-
-        IndexFrame = Frame;
-        Index.Clear();
-        foreach (GameObject go in ReplicatedWorld!.Objects)
-        {
-            IndexObject(go);
-        }
-
-        return Index.TryGetValue(id, out found) && IsLive(found, id) ? found : null;
+        return ReplicatedWorld!.FindJoined(id);
     }
-
-    internal void IndexObject(GameObject go)
-    {
-        Index[go.Identifier] = go;
-        foreach (Component component in go.GetComponents<Component>())
-        {
-            Index[component.Identifier] = component;
-        }
-    }
-
-    internal void IndexTree(GameObject root)
-    {
-        IndexObject(root);
-        foreach (GameObject child in root.GetChildrenDeep())
-        {
-            IndexObject(child);
-        }
-    }
-
-    internal bool IsLive(EngineObject obj, Guid id) => obj switch
-    {
-        GameObject go => !go.IsDisposed && go.Identifier == id && go.Scene == ReplicatedWorld,
-        Component c => !c.IsDisposed && c.Identifier == id && c.GameObject.IsValid() &&
-                       c.GameObject.Scene == ReplicatedWorld,
-        _ => false
-    };
 
     /// <summary>The networked object <paramref name="go" /> belongs to, if any.</summary>
     internal NetworkObject? FindEntry(GameObject go)
@@ -210,7 +167,6 @@ internal sealed partial class NetworkSystem
             Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template
         };
         Entries.Add(entry);
-        IndexTree(go);
         InitVisibility(entry, heldAsContent);
 
         List<NetPeer> observers = new();
@@ -579,7 +535,6 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
-            IndexTree(go);
             FillLinks(go);
             if (!adopted && echo != null)
             {

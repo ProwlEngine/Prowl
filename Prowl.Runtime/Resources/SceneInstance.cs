@@ -1320,6 +1320,10 @@ public class SceneInstance : EngineObject, ISerializable
         return null;
     }
 
+    /// <summary>The object or component with this identifier among those that joined this world, without searching on a miss.</summary>
+    internal EngineObject? FindJoined(Guid identifier) =>
+        _identifiers.TryGetValue(identifier, out EngineObject? known) && IsHere(known, identifier, null) ? known : null;
+
     // Every identifier of a live object or component in the section, gathered in one walk.
     internal HashSet<Guid> IdentifiersIn(SceneSection section)
     {
