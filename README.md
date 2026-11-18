@@ -27,7 +27,7 @@
 
 Prowl is an open-source, **[MIT-licensed](https://github.com/ProwlEngine/Prowl/blob/main/LICENSE)** game engine developed in **pure C# in latest .NET**.
 
-It aims to provide a seamless transition for developers familiar with _Unity_ by maintaining a similar API while also following KISS and staying as small and customizable as possible. Ideally, _Unity_ projects can port over with as little resistance as possible.
+It aims to provide a seamless transition for developers familiar with _Unity_ by maintaining a similar API while also following KISS and staying as small and customizable as possible.
 
 Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, animation, navigation, VR and a rewritten asset system. Projects from earlier 1.0 previews are backed up and migrated automatically when opened (However this migration isnt gauranteed during Preview Releases always backup!). Until the final 1.0 release, further breaking changes are expected.
 
