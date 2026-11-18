@@ -6,7 +6,7 @@ namespace Prowl.CodeGen.Test.Networking;
 /// <summary>Game scripts the networking tests compile, each using most of what one part of it does.</summary>
 internal static class TestScripts
 {
-    /// <summary>[Sync] and RPCs, laid out over lines in every way the rewrite has to keep.</summary>
+    /// <summary>[Sync(SyncFlags.FromOwner)] and RPCs, laid out over lines in every way the rewrite has to keep.</summary>
     public const string Ship = """
                                using System.Collections.Generic;
                                using Prowl.Runtime;
@@ -15,9 +15,9 @@ internal static class TestScripts
 
                                public class Ship : Component
                                {
-                                   [Sync] public int Health { get; set; } = 100;
+                                   [Sync(SyncFlags.FromOwner)] public int Health { get; set; } = 100;
 
-                                   [Sync(SyncFlags.FromHost)]
+                                   [Sync]
                                    public string Callsign
                                    {
                                        get;
@@ -45,7 +45,7 @@ internal static class TestScripts
                                    #region Nested
                                    public class Turret : Component
                                    {
-                                       [Sync] public float Angle { get; set; }
+                                       [Sync(SyncFlags.FromOwner)] public float Angle { get; set; }
                                    }
                                    #endregion
                                }
@@ -62,7 +62,7 @@ internal static class TestScripts
 
                                     public partial class Ship : Component
                                     {
-                                        [Sync] public int Health { get; set; } = 100;
+                                        [Sync(SyncFlags.FromOwner)] public int Health { get; set; } = 100;
 
                                         [Rpc.Broadcast] public void Fire(int power) => Fired += power;
 
@@ -78,7 +78,7 @@ internal static class TestScripts
                                     {
                                         public partial class Ship
                                         {
-                                            [Sync(SyncFlags.FromHost)] public int Ammo { get; set; } = 30;
+                                            [Sync] public int Ammo { get; set; } = 30;
 
                                             [Rpc.Host] public void Reload() => Ammo = 30;
                                         }
@@ -139,20 +139,20 @@ internal static class TestScripts
 
                                     [Sync, Change("Ping")] public int Shield { get; set; }
 
-                                    [Sync] public NetList<Crew> Crew { get; }
+                                    [Sync(SyncFlags.FromOwner)] public NetList<Crew> Crew { get; }
                                         = new(); // MARKER-CREW
 
-                                    [Sync(SyncFlags.FromHost)] public NetDictionary<string, Loadout> Kits { get; } = new();
+                                    [Sync] public NetDictionary<string, Loadout> Kits { get; } = new();
 
-                                    [Sync] public NetSet<Packed> Codes { get; } = new();
+                                    [Sync(SyncFlags.FromOwner)] public NetSet<Packed> Codes { get; } = new();
 
-                                    [Sync] public Loadout Kit { get; set; }
+                                    [Sync(SyncFlags.FromOwner)] public Loadout Kit { get; set; }
 
-                                    [Sync] public Badge Badge { get; set; }
+                                    [Sync(SyncFlags.FromOwner)] public Badge Badge { get; set; }
 
-                                    [Sync] public Weapon Gear { get; set; }
+                                    [Sync(SyncFlags.FromOwner)] public Weapon Gear { get; set; }
 
-                                    [Sync] public NetList<ITrinket> Trinkets { get; } = new();
+                                    [Sync(SyncFlags.FromOwner)] public NetList<ITrinket> Trinkets { get; } = new();
 
                                     public List<string> Log = new();
 

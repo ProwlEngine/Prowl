@@ -27,7 +27,7 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
 
         public partial class Ship : Component
         {
-            [Sync] public int Health { get; set; } = 100;
+            [Sync(SyncFlags.FromOwner)] public int Health { get; set; } = 100;
 
             [Rpc.Broadcast] public void Fire(int power) => Fired += power;
 
@@ -42,7 +42,7 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
         {
             public partial class Ship
             {
-                [Sync(SyncFlags.FromHost)] public int Ammo { get; set; } = 30;
+                [Sync] public int Ammo { get; set; } = 30;
 
                 public struct Cargo { public int Crates; }
 
@@ -76,7 +76,7 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
         WriteScript("ShipB.cs", "namespace Fleet { public partial class Ship { } }");
         Assert.Equal(new[] { NetworkCodeGen.NetworkId("Health") }, SlotsOfFreshShip());
 
-        // ShipA.cs is untouched; only the other part gains a [Sync], and a type its RPC sends.
+        // ShipA.cs is untouched; only the other part gains a [Sync(SyncFlags.FromOwner)], and a type its RPC sends.
         WriteScript("ShipB.cs", ShipPartB);
         Assert.Equal(new[] { NetworkCodeGen.NetworkId("Health"), NetworkCodeGen.NetworkId("Ammo") }, SlotsOfFreshShip());
     }

@@ -54,23 +54,23 @@ public class NetCollectionTestComponent : Component
     [SerializeIgnore] public int? ScoreCountWhenEnabled;
 
     private int __sync_Health = 100;
-    private static readonly SyncMember<NetCollectionTestComponent, int> __syncnet_Health = new(HealthSlot, "Health", SyncFlags.None, static s => s.__sync_Health, static (s, v) => s.__sync_Health = v, static (s, o, n) => s.OnHealthChanged(o, n));
+    private static readonly SyncMember<NetCollectionTestComponent, int> __syncnet_Health = new(HealthSlot, "Health", SyncFlags.FromOwner, static s => s.__sync_Health, static (s, v) => s.__sync_Health = v, static (s, o, n) => s.OnHealthChanged(o, n));
     public int Health { get => __sync_Health; set => __syncnet_Health.Set(this, ref __sync_Health, value); }
 
     private readonly NetList<int> __sync_Scores = new();
-    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetList<int>> __syncnet_Scores = new(ScoresSlot, "Scores", SyncFlags.None, static s => s.__sync_Scores);
+    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetList<int>> __syncnet_Scores = new(ScoresSlot, "Scores", SyncFlags.FromOwner, static s => s.__sync_Scores);
     public NetList<int> Scores { get => __syncnet_Scores.Bind(this); }
 
     private readonly NetDictionary<string, int> __sync_Stats = new();
-    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetDictionary<string, int>> __syncnet_Stats = new(StatsSlot, "Stats", SyncFlags.None, static s => s.__sync_Stats);
+    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetDictionary<string, int>> __syncnet_Stats = new(StatsSlot, "Stats", SyncFlags.FromOwner, static s => s.__sync_Stats);
     public NetDictionary<string, int> Stats { get => __syncnet_Stats.Bind(this); }
 
     private readonly NetSet<string> __sync_Tags = new();
-    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetSet<string>> __syncnet_Tags = new(TagsSlot, "Tags", SyncFlags.None, static s => s.__sync_Tags);
+    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetSet<string>> __syncnet_Tags = new(TagsSlot, "Tags", SyncFlags.FromOwner, static s => s.__sync_Tags);
     public NetSet<string> Tags { get => __syncnet_Tags.Bind(this); }
 
     private Loadout __sync_Loadout;
-    private static readonly SyncMember<NetCollectionTestComponent, Loadout> __syncnet_Loadout = new(LoadoutSlot, "Loadout", SyncFlags.None, static s => s.__sync_Loadout, static (s, v) => s.__sync_Loadout = v);
+    private static readonly SyncMember<NetCollectionTestComponent, Loadout> __syncnet_Loadout = new(LoadoutSlot, "Loadout", SyncFlags.FromOwner, static s => s.__sync_Loadout, static (s, v) => s.__sync_Loadout = v);
     public Loadout Loadout { get => __sync_Loadout; set => __syncnet_Loadout.Set(this, ref __sync_Loadout, value); }
 
     public NetCollectionTestComponent()

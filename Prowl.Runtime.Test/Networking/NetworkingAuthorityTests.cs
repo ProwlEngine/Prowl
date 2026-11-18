@@ -67,4 +67,30 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void AnOwnerWritesOnlyTheSyncValuesThatTakeFromOwner()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject ship = CreateGameObject("Ship");
+        NetTestComponent component = ship.AddComponent<NetTestComponent>();
+        scene.Add(ship);
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            ship.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+
+            alice.SendSync(component.Identifier, NetTestComponent.ScoreSlot, 7);
+            alice.SendSync(component.Identifier, NetTestComponent.HealthSlot, 5);
+            Pump(() => component.Health == 5, alice);
+            PumpFor(5, alice);
+            Assert.Equal(0, component.Score);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

@@ -35,11 +35,11 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     private bool _applying;
 
     private static readonly SyncMember<NetworkAnimator, AnimatorParameters> s_parameters =
-        new(1, "Parameters", SyncFlags.None, static c => c._parameters, static (c, v) => c._parameters = v);
+        new(1, "Parameters", SyncFlags.FromOwner, static c => c._parameters, static (c, v) => c._parameters = v);
     private static readonly SyncMember<NetworkAnimator, AnimatorTriggers> s_triggers =
-        new(2, "Triggers", SyncFlags.None, static c => c._triggers, static (c, v) => c._triggers = v);
+        new(2, "Triggers", SyncFlags.FromOwner, static c => c._triggers, static (c, v) => c._triggers = v);
     private static readonly SyncMember<NetworkAnimator, float> s_speed =
-        new(3, "Speed", SyncFlags.None, static c => c._speed, static (c, v) => c._speed = v);
+        new(3, "Speed", SyncFlags.FromOwner, static c => c._speed, static (c, v) => c._speed = v);
 
     static NetworkAnimator()
     {

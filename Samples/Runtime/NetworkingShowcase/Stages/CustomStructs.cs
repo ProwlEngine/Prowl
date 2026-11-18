@@ -35,7 +35,7 @@ public class Armory : Component
 
     private readonly Tint _tint = new();
 
-    [Sync] public Loadout Current { get; set; } = Weapons[0];
+    [Sync(SyncFlags.FromOwner)] public Loadout Current { get; set; } = Weapons[0];
 
     public string LastShown { get; private set; } = "Nobody has shown off yet";
 

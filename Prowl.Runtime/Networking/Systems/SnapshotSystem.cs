@@ -413,9 +413,9 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
-    /// <summary>Whose changes to a value count: the host's for FromHost ones, else the object's owner, or the host.</summary>
+    /// <summary>Whose changes to a value count: the object's controller for FromOwner ones, else the host's.</summary>
     private int ControllerOf(Component component, SyncFlags flags) =>
-        (flags & SyncFlags.FromHost) != 0 ? NetPeer.HostId : ControllerOf(component.GameObject);
+        (flags & SyncFlags.FromOwner) == 0 ? NetPeer.HostId : ControllerOf(component.GameObject);
 
     private int ControllerOf(GameObject go)
     {

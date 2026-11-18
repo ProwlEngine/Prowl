@@ -12,5 +12,5 @@ namespace NetworkingShowcase;
 /// </summary>
 public class Tour : Component
 {
-    [Sync(SyncFlags.FromHost)] public int Station { get; set; }
+    [Sync] public int Station { get; set; }
 }

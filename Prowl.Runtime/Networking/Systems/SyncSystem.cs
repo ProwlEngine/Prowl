@@ -19,7 +19,7 @@ namespace Prowl.Runtime.Networking;
 // Ongoing Sync messages prefix this block with [i32 original writer]. The length lets a receiver skip values for
 // components it doesn't have or won't accept.
 //
-// Each value has one writer at a time (its controller, or the host for FromHost ones), whose changes travel in
+// Each value has one writer at a time (the host, or its controller for FromOwner ones), whose changes travel in
 // order on one reliable channel, relayed in order by the host. So the newest value is simply the last to arrive;
 // an earlier controller's late changes are told apart by their ownership generation.
 //
@@ -86,7 +86,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             return true;
         }
 
-        return (flags & SyncFlags.FromHost) == 0 && scene.OwnerOf(component.GameObject) == sender.Id;
+        return (flags & SyncFlags.FromOwner) != 0 && scene.OwnerOf(component.GameObject) == sender.Id;
     }
 
     internal void SendSyncChanges()

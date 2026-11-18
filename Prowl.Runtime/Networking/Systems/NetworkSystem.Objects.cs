@@ -117,7 +117,7 @@ internal sealed partial class NetworkSystem
 
     internal bool HasControl(Component component, SyncFlags flags) =>
         NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
-        ((flags & SyncFlags.FromHost) != 0 ? !IsActive || IsHost : HasControl(component.GameObject));
+        ((flags & SyncFlags.FromOwner) == 0 ? !IsActive || IsHost : HasControl(component.GameObject));
 
     internal NetPeer? GetOwner(GameObject go)
     {

@@ -13,7 +13,7 @@ namespace Prowl.Runtime.Test;
 public class SchemaProbe : Component
 {
     private float __sync_Speed;
-    private static readonly SyncMember<SchemaProbe, float> __syncnet_Speed = new(301, "Speed", SyncFlags.FromHost, static s => s.__sync_Speed, static (s, v) => s.__sync_Speed = v);
+    private static readonly SyncMember<SchemaProbe, float> __syncnet_Speed = new(301, "Speed", SyncFlags.None, static s => s.__sync_Speed, static (s, v) => s.__sync_Speed = v);
 
     private static readonly RpcMember<SchemaProbe> __rpc_302 = new(302, "Boost(int)", RpcMode.Host, RpcFlags.None,
         static (SchemaProbe s, ref NetReader r, bool execute) => NetSerializer<int>.Read(ref r));
@@ -26,7 +26,7 @@ public partial class NetworkingTests
     {
         string[] entries = NetworkSchema.Describe(typeof(SchemaProbe)).ToArray();
 
-        Assert.Contains(entries, e => e.Contains("Speed") && e.Contains("301") && e.Contains("System.Single") && e.Contains("FromHost"));
+        Assert.Contains(entries, e => e.Contains("Speed") && e.Contains("301") && e.Contains("System.Single") && e.Contains("None"));
         Assert.Contains(entries, e => e.Contains("Boost(int)") && e.Contains("302") && e.Contains("Host"));
         Assert.Empty(NetworkSchema.Describe(typeof(Component)));
     }

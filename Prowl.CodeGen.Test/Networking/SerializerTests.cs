@@ -29,7 +29,7 @@ public class SerializerTests
             NetworkMembers members = NetworkMembers.Of(fleet);
             Assert.Equal(typeof(SyncCollectionMember<,>),
                 members.Sync(NetworkCodeGen.NetworkId("Crew"))!.GetType().GetGenericTypeDefinition());
-            Assert.Equal(SyncFlags.FromHost, members.Sync(NetworkCodeGen.NetworkId("Kits"))!.Flags);
+            Assert.Equal(SyncFlags.None, members.Sync(NetworkCodeGen.NetworkId("Kits"))!.Flags);
 
             // Everything goes across as it was: generated serializers and a hand-written one, a Bow sent as a
             // Weapon, a Ring as an ITrinket, two crew who mentor each other.

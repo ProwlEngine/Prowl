@@ -224,7 +224,7 @@ public partial class NetworkingTests
             Pump(() => owner.IsReady, owner);
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
             uint generation = NetworkGeneration(root);
-            // A client can't write a FromHost value, even on its way out.
+            // A client can't write a value without FromOwner, even on its way out.
             RequestOwnership(owner, root, stale ? generation - 1 : generation, false, Poses(root, 42),
                 HandoffValue(state, NetTestComponent.ScoreSlot, generation, 66));
             PumpFor(30, owner);

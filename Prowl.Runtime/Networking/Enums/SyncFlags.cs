@@ -12,6 +12,9 @@ public enum SyncFlags : uint
 {
     None = 0,
 
-    /// <summary>Only the host may change the value, even on an object a client owns.</summary>
-    FromHost = 1
+    /// <summary>
+    ///     Whoever controls the object changes the value: its owner, or the host while nobody owns it. Without this, as
+    ///     with Mirror's default sync direction, only the host changes it, even on an object a client owns.
+    /// </summary>
+    FromOwner = 1
 }

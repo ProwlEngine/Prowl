@@ -36,7 +36,7 @@ public class SyncPairTestComponent : Component
     public const uint PairSlot = 402;
     private TestReferencePair _pair;
     private static readonly SyncMember<SyncPairTestComponent, TestReferencePair> PairState = new(PairSlot, "Pair",
-        SyncFlags.None, static c => c._pair, static (c, v) => c._pair = v);
+        SyncFlags.FromOwner, static c => c._pair, static (c, v) => c._pair = v);
     public TestReferencePair Pair { get => _pair; set => PairState.Set(this, ref _pair, value); }
 
     public static void RegisterSerializer() => NetSerializer<TestReferencePair>.Register(

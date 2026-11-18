@@ -18,7 +18,7 @@ using Xunit;
 namespace Prowl.CodeGen.Test.Networking;
 
 /// <summary>
-///     What [Sync] properties and RPCs compile to: plain members without a session, and descriptors the runtime
+///     What [Sync(SyncFlags.FromOwner)] properties and RPCs compile to: plain members without a session, and descriptors the runtime
 ///     networks them by.
 /// </summary>
 public class SyncAndRpcTests
@@ -53,7 +53,7 @@ public class SyncAndRpcTests
                 Scripts.Slots(ship));
             SyncMember health = members.Sync(NetworkCodeGen.NetworkId("Health"))!;
             Assert.Equal("Health", health.Name);
-            Assert.Equal(SyncFlags.FromHost, members.Sync(NetworkCodeGen.NetworkId("Callsign"))!.Flags);
+            Assert.Equal(SyncFlags.None, members.Sync(NetworkCodeGen.NetworkId("Callsign"))!.Flags);
             Assert.Null(members.Sync(0));
             Assert.Equal("100", health.FormatValue(ship));
 
@@ -98,7 +98,7 @@ public class SyncAndRpcTests
 
             NetworkMembers members = NetworkMembers.Of(ship);
             Assert.Equal(RpcMode.Host, members.Rpc(NetworkCodeGen.NetworkId("Reload()"))!.Mode);
-            Assert.Equal(SyncFlags.FromHost, members.Sync(NetworkCodeGen.NetworkId("Ammo"))!.Flags);
+            Assert.Equal(SyncFlags.None, members.Sync(NetworkCodeGen.NetworkId("Ammo"))!.Flags);
             Assert.NotNull(members.Rpc(NetworkCodeGen.NetworkId("Fire(int)")));
 
             // Offline, both parts' RPCs are plain calls.
@@ -108,7 +108,7 @@ public class SyncAndRpcTests
     }
 
     /// <summary>
-    ///     A [Sync] type and initializer only the declaring file's usings resolve: the field has to stay where those
+    ///     A [Sync(SyncFlags.FromOwner)] type and initializer only the declaring file's usings resolve: the field has to stay where those
     ///     usings apply.
     /// </summary>
     [Fact]
@@ -124,7 +124,7 @@ public class SyncAndRpcTests
 
                                    public partial class Ship
                                    {
-                                       [Sync] public Rank Rank { get; set; } = Rank.Captain;
+                                       [Sync(SyncFlags.FromOwner)] public Rank Rank { get; set; } = Rank.Captain;
 
                                        [Rpc.Broadcast] public void Promote(Rank to) => Rank = to;
                                    }
@@ -144,7 +144,7 @@ public class SyncAndRpcTests
 
                                           public class Holder<T> : Component
                                           {
-                                              [Sync] public int Count { get; set; } = 3;
+                                              [Sync(SyncFlags.FromOwner)] public int Count { get; set; } = 3;
 
                                               [Rpc.Broadcast] public void Bump(int by) => Count += by;
                                           }

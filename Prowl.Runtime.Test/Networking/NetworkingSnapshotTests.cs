@@ -13,7 +13,7 @@ public class SyncReferenceTestComponent : Component
     public const uint TargetSlot = 401;
     private GameObject? _target;
     private static readonly SyncMember<SyncReferenceTestComponent, GameObject?> TargetState = new(TargetSlot, "Target",
-        SyncFlags.None, static c => c._target, static (c, v) => c._target = v);
+        SyncFlags.FromOwner, static c => c._target, static (c, v) => c._target = v);
     public GameObject? Target { get => _target; set => TargetState.Set(this, ref _target, value); }
 }
 
@@ -188,7 +188,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void HostRelaysAClientsValuesToOthersButNotBackAndFromHostValuesReachTheOwner()
+    public void HostRelaysAClientsValuesToOthersButNotBackAndHostOnlyValuesReachTheOwner()
     {
         MakeCurrent(CreateScene());
         LocalNetwork network = new();

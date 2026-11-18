@@ -17,7 +17,7 @@ namespace Prowl.Runtime.Test;
 /// Exactly what Prowl's script compiler generates for
 /// <code>
 /// [Sync] public int Health { get; set; } = 100;
-/// [Sync(SyncFlags.FromHost)] public int Score { get; set; }
+/// [Sync(SyncFlags.None)] public int Score { get; set; }
 /// [Rpc.Broadcast] public void Shout(string text) => Shouts.Add((text, Rpc.Caller));
 /// [Rpc.Host] public void AskHost(int value) => Asked.Add(value);
 /// [Rpc.Host] public void Explode() => throw new InvalidOperationException("boom");
@@ -32,11 +32,11 @@ public class NetTestComponent : Component
     public readonly List<int> Asked = new();
 
     private int __sync_Health = 100;
-    private static readonly SyncMember<NetTestComponent, int> __syncnet_Health = new(HealthSlot, "Health", SyncFlags.None, static s => s.__sync_Health, static (s, v) => s.__sync_Health = v);
+    private static readonly SyncMember<NetTestComponent, int> __syncnet_Health = new(HealthSlot, "Health", SyncFlags.FromOwner, static s => s.__sync_Health, static (s, v) => s.__sync_Health = v);
     public int Health { get => __sync_Health; set => __syncnet_Health.Set(this, ref __sync_Health, value); }
 
     private int __sync_Score;
-    private static readonly SyncMember<NetTestComponent, int> __syncnet_Score = new(ScoreSlot, "Score", SyncFlags.FromHost, static s => s.__sync_Score, static (s, v) => s.__sync_Score = v);
+    private static readonly SyncMember<NetTestComponent, int> __syncnet_Score = new(ScoreSlot, "Score", SyncFlags.None, static s => s.__sync_Score, static (s, v) => s.__sync_Score = v);
     public int Score { get => __sync_Score; set => __syncnet_Score.Set(this, ref __sync_Score, value); }
 
     private static readonly RpcMember<NetTestComponent> __rpc_201 = new(ShoutId, "Shout(string)", RpcMode.Broadcast, RpcFlags.AnyCaller,

@@ -6,7 +6,7 @@
 //
 // One window hosts; "Launch a client" opens another that joins it over KCP on this machine (or run
 // NetworkingShowcase --join host:port). Each station shows one thing networking does, in every window at once:
-//   1  Sync values      [Sync] properties, set by whoever controls the object, ignored anywhere else
+//   1  Sync values      [Sync] properties, set by the host, ignored anywhere else
 //   2  Ownership        grab a puck with the mouse to take control of it; the host hands the rover around
 //   3  RPCs             calls that run on everyone, or on the host, and know who made them
 //   4  Change hooks     [Change] methods with the old and new value, wherever the value changes

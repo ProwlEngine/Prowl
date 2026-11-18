@@ -18,7 +18,7 @@ namespace NetworkingShowcase;
 /// </summary>
 public class Swarm : Component
 {
-    [Sync(SyncFlags.FromHost)] public bool Churn { get; set; }
+    [Sync] public bool Churn { get; set; }
 
     public int Drones => GameObject.Scene.IsValid() ? GameObject.Scene!.GetAll<Drone>(includeDisabled: true).Length : 0;
 
@@ -70,7 +70,7 @@ public class Drone : Component
     public float Seed;
     private Swarm? _swarm;
 
-    [Sync] public float Hue { get; set; }
+    [Sync(SyncFlags.FromOwner)] public float Hue { get; set; }
 
     public override void Update()
     {

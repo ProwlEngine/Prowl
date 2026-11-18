@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Test;
 public class RpcStateTestComponent : NetCollectionTestComponent
 {
     private int _hostValue;
-    private static readonly SyncMember<RpcStateTestComponent, int> HostState = new(799, "HostValue", SyncFlags.FromHost,
+    private static readonly SyncMember<RpcStateTestComponent, int> HostState = new(799, "HostValue", SyncFlags.None,
         static c => c._hostValue, static (c, v) => c._hostValue = v);
     public int HostValue { get => _hostValue; set => HostState.Set(this, ref _hostValue, value); }
     [SerializeIgnore] public readonly List<(int Health, int Scores, float Position)> Observed = new();

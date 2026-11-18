@@ -18,7 +18,7 @@ public class Bell : Component
     private readonly Tint _tint = new();
     private Color _color = new(0.6f, 0.6f, 0.65f, 1f);
     private float _ring;
-    [Sync(SyncFlags.FromHost)] public int Requests { get; set; }
+    [Sync] public int Requests { get; set; }
 
     public IReadOnlyList<string> Log => _log;
 

@@ -20,7 +20,7 @@ public class Rover : Component
     [SerializeField] public Float3 Center;
     [SerializeField] public float Radius = 3f;
 
-    [Sync] public float Speed { get; set; } = 1f;
+    [Sync(SyncFlags.FromOwner)] public float Speed { get; set; } = 1f;
 
     public override void Update()
     {
