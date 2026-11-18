@@ -7,6 +7,31 @@ public class JsonFileProviderTests
 {
     private static string LocalizationPath => Path.Combine(AppContext.BaseDirectory, "Localization", "{locale}.json");
 
+    // The file watcher runs as long as the provider lives, so whatever it copied from the thread that first
+    // loaded a file would stay alive that long.
+    [Fact]
+    public void Load_DoesNotKeepTheAsyncLocalsOfTheCallingThread()
+    {
+        AsyncLocal<object?> local = new();
+        WeakReference held = HoldInAsyncLocal(local);
+        var provider = new JsonFileProvider(LocalizationPath);
+        provider.Load("en");
+        local.Value = null;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        Assert.False(held.IsAlive, "the file watcher kept an object the loading thread held in an AsyncLocal");
+        GC.KeepAlive(provider);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static WeakReference HoldInAsyncLocal(AsyncLocal<object?> local)
+    {
+        object value = new byte[1 << 20];
+        local.Value = value;
+        return new WeakReference(value);
+    }
+
     [Fact]
     public void SupportsLocale_ReturnsTrueForExistingFile()
     {
