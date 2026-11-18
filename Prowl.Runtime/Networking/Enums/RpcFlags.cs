@@ -17,6 +17,9 @@ public enum RpcFlags : uint
     /// <summary>Only the host may call it. Calls from clients are dropped.</summary>
     HostOnly = 2,
 
-    /// <summary>Only whoever controls the object may call it. Calls from anyone else are dropped.</summary>
-    OwnerOnly = 4
+    /// <summary>
+    ///     Any client that has the object may call it. Without this, as with Mirror's commands, a client may only call it
+    ///     on an object it controls, and calls from other clients are dropped. The host may always call.
+    /// </summary>
+    AnyCaller = 4
 }

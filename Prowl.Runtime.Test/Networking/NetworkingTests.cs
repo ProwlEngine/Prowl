@@ -39,7 +39,7 @@ public class NetTestComponent : Component
     private static readonly SyncMember<NetTestComponent, int> __syncnet_Score = new(ScoreSlot, "Score", SyncFlags.FromHost, static s => s.__sync_Score, static (s, v) => s.__sync_Score = v);
     public int Score { get => __sync_Score; set => __syncnet_Score.Set(this, ref __sync_Score, value); }
 
-    private static readonly RpcMember<NetTestComponent> __rpc_201 = new(ShoutId, "Shout(string)", RpcMode.Broadcast, RpcFlags.None,
+    private static readonly RpcMember<NetTestComponent> __rpc_201 = new(ShoutId, "Shout(string)", RpcMode.Broadcast, RpcFlags.AnyCaller,
         static (NetTestComponent s, ref NetReader r, bool execute) => { string a0 = NetSerializer<string>.Read(ref r); if (!execute) return; RpcMember.ArgumentsRead(); s.Shout(a0); });
 
     public void Shout(string text)
@@ -48,7 +48,7 @@ public class NetTestComponent : Component
         Shouts.Add((text, Rpc.Caller));
     }
 
-    private static readonly RpcMember<NetTestComponent> __rpc_204 = new(204, "TellOwner(string)", RpcMode.Owner, RpcFlags.None,
+    private static readonly RpcMember<NetTestComponent> __rpc_204 = new(204, "TellOwner(string)", RpcMode.Owner, RpcFlags.AnyCaller,
         static (NetTestComponent s, ref NetReader r, bool execute) => { string value = NetSerializer<string>.Read(ref r); if (!execute) return; RpcMember.ArgumentsRead(); s.TellOwner(value); });
 
     public void TellOwner(string value)
@@ -57,7 +57,7 @@ public class NetTestComponent : Component
         Shouts.Add((value, Rpc.Caller));
     }
 
-    private static readonly RpcMember<NetTestComponent> __rpc_202 = new(AskHostId, "AskHost(int)", RpcMode.Host, RpcFlags.None,
+    private static readonly RpcMember<NetTestComponent> __rpc_202 = new(AskHostId, "AskHost(int)", RpcMode.Host, RpcFlags.AnyCaller,
         static (NetTestComponent s, ref NetReader r, bool execute) => { int a0 = NetSerializer<int>.Read(ref r); if (!execute) return; RpcMember.ArgumentsRead(); s.AskHost(a0); });
 
     public void AskHost(int value)
@@ -66,7 +66,7 @@ public class NetTestComponent : Component
         Asked.Add(value);
     }
 
-    private static readonly RpcMember<NetTestComponent> __rpc_203 = new(ExplodeId, "Explode()", RpcMode.Host, RpcFlags.None,
+    private static readonly RpcMember<NetTestComponent> __rpc_203 = new(ExplodeId, "Explode()", RpcMode.Host, RpcFlags.AnyCaller,
         static (NetTestComponent s, ref NetReader r, bool execute) => { if (!execute) return; RpcMember.ArgumentsRead(); s.Explode(); });
 
     public void Explode()

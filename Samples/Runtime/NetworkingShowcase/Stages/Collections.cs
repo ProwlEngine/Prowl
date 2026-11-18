@@ -58,7 +58,7 @@ public class Board : Component
         }
     }
 
-    [Rpc.Host]
+    [Rpc.Host(RpcFlags.AnyCaller)]
     public void Vote(string option)
     {
         Votes[option] = Votes.TryGetValue(option, out int count) ? count + 1 : 1;

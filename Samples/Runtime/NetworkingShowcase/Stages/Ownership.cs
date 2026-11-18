@@ -49,7 +49,7 @@ public class Grabbable : Component
     private readonly Tint _tint = new();
     public Float3 Home;
 
-    [Rpc.Host]
+    [Rpc.Host(RpcFlags.AnyCaller)]
     public void TakeControl()
     {
         NetPeer? caller = Rpc.Caller;

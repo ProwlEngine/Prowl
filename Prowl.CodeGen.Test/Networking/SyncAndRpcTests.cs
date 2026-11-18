@@ -227,17 +227,17 @@ public class SyncAndRpcTests
 
                                             public class Gun : Component
                                             {
-                                                [Rpc.Broadcast] public virtual void Fire(int power) { }
+                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public virtual void Fire(int power) { }
                                             }
 
                                             public class Cannon : Gun
                                             {
-                                                [Rpc.Broadcast] public override void Fire(Int32 power) { base.Fire(power); }
+                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public override void Fire(Int32 power) { base.Fire(power); }
                                             }
 
                                             public class Mortar : Cannon
                                             {
-                                                [Rpc.Broadcast] public override void Fire(System.Int32 power) { base.Fire(power); }
+                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public override void Fire(System.Int32 power) { base.Fire(power); }
                                             }
                                             """);
         Scripts.WithComponent(assembly.GetType("Mortar")!, component =>
@@ -260,12 +260,12 @@ public class SyncAndRpcTests
                                             public class Gun : Component
                                             {
                                                 public int Fired;
-                                                [Rpc.Broadcast] public virtual void Fire(int power) => Fired++;
+                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public virtual void Fire(int power) => Fired++;
                                             }
 
                                             public class Cannon : Gun
                                             {
-                                                [Rpc.Broadcast] public override void Fire(Int32 power) { base.Fire(power); }
+                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public override void Fire(Int32 power) { base.Fire(power); }
                                             }
                                             """);
         using HostedComponent hosted = new(assembly.GetType("Cannon")!);
@@ -293,12 +293,12 @@ public class SyncAndRpcTests
                                               public class Gun : Component
                                               {
                                                   public int Fired, Extra;
-                                                  [Rpc.Broadcast] public virtual void Fire(int power) => Fired++;
+                                                  [Rpc.Broadcast(RpcFlags.AnyCaller)] public virtual void Fire(int power) => Fired++;
                                               }
 
                                               public class Cannon : Gun
                                               {
-                                                  [Rpc.Broadcast] public override void Fire(int power) { {{overrideBody}} }
+                                                  [Rpc.Broadcast(RpcFlags.AnyCaller)] public override void Fire(int power) { {{overrideBody}} }
                                               }
                                               """);
         using HostedComponent hosted = new(assembly.GetType("Cannon")!);

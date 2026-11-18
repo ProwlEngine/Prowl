@@ -15,13 +15,13 @@ public class RpcStateTestComponent : NetCollectionTestComponent
         static c => c._hostValue, static (c, v) => c._hostValue = v);
     public int HostValue { get => _hostValue; set => HostState.Set(this, ref _hostValue, value); }
     [SerializeIgnore] public readonly List<(int Health, int Scores, float Position)> Observed = new();
-    private static readonly RpcMember<RpcStateTestComponent> Broadcast = new(701, "Observe()", RpcMode.Broadcast, RpcFlags.None,
+    private static readonly RpcMember<RpcStateTestComponent> Broadcast = new(701, "Observe()", RpcMode.Broadcast, RpcFlags.AnyCaller,
         static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Observe(); } });
-    private static readonly RpcMember<RpcStateTestComponent> Unreliable = new(702, "ObserveUnreliable()", RpcMode.Broadcast, RpcFlags.Unreliable,
+    private static readonly RpcMember<RpcStateTestComponent> Unreliable = new(702, "ObserveUnreliable()", RpcMode.Broadcast, RpcFlags.Unreliable | RpcFlags.AnyCaller,
         static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveUnreliable(); } });
-    private static readonly RpcMember<RpcStateTestComponent> Host = new(703, "ObserveHost()", RpcMode.Host, RpcFlags.None,
+    private static readonly RpcMember<RpcStateTestComponent> Host = new(703, "ObserveHost()", RpcMode.Host, RpcFlags.AnyCaller,
         static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveHost(); } });
-    private static readonly RpcMember<RpcStateTestComponent> Owner = new(704, "ObserveOwner()", RpcMode.Owner, RpcFlags.None,
+    private static readonly RpcMember<RpcStateTestComponent> Owner = new(704, "ObserveOwner()", RpcMode.Owner, RpcFlags.AnyCaller,
         static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveOwner(); } });
     private void Record() => Observed.Add((Health, Scores.Count, Transform.LocalPosition.X));
     public void Observe() { if (Broadcast.Begin(this, out var w) && !Broadcast.Send(this, w)) return; Record(); }
@@ -35,11 +35,11 @@ public class RpcChannelTestComponent : NetCollectionTestComponent
 {
     public const uint TalkId = 711;
     [SerializeIgnore] public int Talks;
-    private static readonly RpcMember<RpcChannelTestComponent> Talking = new(TalkId, "Talk()", RpcMode.Broadcast, RpcFlags.None,
+    private static readonly RpcMember<RpcChannelTestComponent> Talking = new(TalkId, "Talk()", RpcMode.Broadcast, RpcFlags.AnyCaller,
         static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Talks++; } }, 1);
     public void Talk() { if (Talking.Begin(this, out var w) && !Talking.Send(this, w)) return; Talks++; }
     public const uint ShoutId = 712;
-    private static readonly RpcMember<RpcChannelTestComponent> Shouting = new(ShoutId, "Shout()", RpcMode.Broadcast, RpcFlags.Unreliable,
+    private static readonly RpcMember<RpcChannelTestComponent> Shouting = new(ShoutId, "Shout()", RpcMode.Broadcast, RpcFlags.Unreliable | RpcFlags.AnyCaller,
         static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Talks++; } }, 1);
     public void Shout() { if (Shouting.Begin(this, out var w) && !Shouting.Send(this, w)) return; Talks++; }
 }

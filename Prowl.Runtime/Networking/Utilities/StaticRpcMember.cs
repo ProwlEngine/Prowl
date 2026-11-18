@@ -30,8 +30,7 @@ public sealed class StaticRpcMember
         byte channel = 0)
     {
         if (!declaringType.IsClass || declaringType.ContainsGenericParameters ||
-            mode is not (RpcMode.Broadcast or RpcMode.Host) ||
-            (flags & RpcFlags.OwnerOnly) != 0)
+            mode is not (RpcMode.Broadcast or RpcMode.Host))
         {
             throw new ArgumentException("Static RPCs require a non-generic class and cannot use object ownership.");
         }

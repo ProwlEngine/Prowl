@@ -45,7 +45,7 @@ public class PointerTestComponent : Component
 
     [SerializeIgnore] public readonly List<(GameObject? Target, NetPeer? Caller)> Points = new();
 
-    private static readonly RpcMember<PointerTestComponent> __rpc_501 = new(PointId, "Point(GameObject)", RpcMode.Host, RpcFlags.None,
+    private static readonly RpcMember<PointerTestComponent> __rpc_501 = new(PointId, "Point(GameObject)", RpcMode.Host, RpcFlags.AnyCaller,
         static (PointerTestComponent s, ref NetReader r, bool execute) => { GameObject? a0 = NetSerializer<GameObject?>.Read(ref r); if (!execute) return; RpcMember.ArgumentsRead(); s.Point(a0); });
 
     public void Point(GameObject? target)

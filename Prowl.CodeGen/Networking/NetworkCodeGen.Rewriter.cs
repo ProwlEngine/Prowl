@@ -436,7 +436,7 @@ internal sealed partial class NetworkCodeGen
                 context.Report(s_unreliableChannel, location, method.Name);
             }
 
-            if (method.IsStatic && (kind.Name == "OwnerAttribute" || (flags & 4u) != 0 ||
+            if (method.IsStatic && (kind.Name == "OwnerAttribute" ||
                                     GenericContainer(method.ContainingType)))
             {
                 context.Report(s_staticRpc, location, method.Name);

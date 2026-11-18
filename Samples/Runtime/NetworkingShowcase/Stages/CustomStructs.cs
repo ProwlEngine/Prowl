@@ -51,7 +51,7 @@ public class Armory : Component
 
     public void ToggleSilencer() => Current = Current with { Silenced = !Current.Silenced };
 
-    [Rpc.Broadcast]
+    [Rpc.Broadcast(RpcFlags.AnyCaller)]
     public void ShowOff(Loadout loadout) =>
         LastShown =
             $"{Rpc.Caller?.Name ?? "You"} showed a {(loadout.Silenced ? "silenced " : "")}{loadout.Weapon}, {loadout.Ammo} of {loadout.Magazine}";

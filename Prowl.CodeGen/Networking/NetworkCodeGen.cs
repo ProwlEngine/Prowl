@@ -86,7 +86,7 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
 
     private static readonly DiagnosticDescriptor s_staticRpc = new(
         "PROWLNET008", "Static RPC shape not supported",
-        "Static RPC '{0}' must be declared in a non-generic class and cannot use Owner or OwnerOnly",
+        "Static RPC '{0}' must be declared in a non-generic class and cannot use Owner",
         "Networking", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor s_unreliableChannel = new(

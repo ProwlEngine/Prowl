@@ -18,7 +18,7 @@ public class BeaconTestComponent : Component
 
     [SerializeIgnore] public readonly List<GameObject?> Marks = new();
 
-    private static readonly RpcMember<BeaconTestComponent> __rpc_601 = new(MarkId, "Mark(GameObject)", RpcMode.Broadcast, RpcFlags.None,
+    private static readonly RpcMember<BeaconTestComponent> __rpc_601 = new(MarkId, "Mark(GameObject)", RpcMode.Broadcast, RpcFlags.AnyCaller,
         static (BeaconTestComponent s, ref NetReader r, bool execute) => { GameObject? a0 = NetSerializer<GameObject?>.Read(ref r); if (!execute) return; RpcMember.ArgumentsRead(); s.Mark(a0); });
 
     public void Mark(GameObject? target)

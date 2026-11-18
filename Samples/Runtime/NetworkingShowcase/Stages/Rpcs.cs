@@ -22,7 +22,7 @@ public class Bell : Component
 
     public IReadOnlyList<string> Log => _log;
 
-    [Rpc.Broadcast]
+    [Rpc.Broadcast(RpcFlags.AnyCaller)]
     public void Ring(int colorIndex)
     {
         _color = SyncLamp.Colors[colorIndex % SyncLamp.Colors.Length];
@@ -30,7 +30,7 @@ public class Bell : Component
         Note($"{Rpc.Caller?.Name ?? "You"} rang it");
     }
 
-    [Rpc.Host]
+    [Rpc.Host(RpcFlags.AnyCaller)]
     public void AskHost()
     {
         Requests++;

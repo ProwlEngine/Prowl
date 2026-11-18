@@ -21,7 +21,7 @@ public class Reactor : Component
 
     public IReadOnlyList<string> Log => _log;
 
-    [Rpc.Host]
+    [Rpc.Host(RpcFlags.AnyCaller)]
     public void Stoke(int amount) => Heat = Math.Clamp(Heat + amount, 0, 100);
 
     private void OnHeatChanged(int oldValue, int newValue)

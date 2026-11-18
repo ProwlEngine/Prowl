@@ -102,7 +102,6 @@ public class StaticRpcTests
 
     [Theory]
     [InlineData("public static class Events { [Rpc.Owner] public static void F() { } }")]
-    [InlineData("public static class Events { [Rpc.Broadcast(RpcFlags.OwnerOnly)] public static void F() { } }")]
     [InlineData("public static class Events<T> { [Rpc.Host] public static void F() { } }")]
     [InlineData("public class Outer<T> { public static class Events { [Rpc.Host] public static void F() { } } }")]
     public void StaticRpcsRejectOwnershipAndGenericContainers(string source) =>

@@ -22,7 +22,7 @@ public class Hangar : Component
 
     public int Crates => GameObject.Scene.IsValid() ? GameObject.Scene!.GetAll<Crate>(includeDisabled: true).Length : 0;
 
-    [Rpc.Host]
+    [Rpc.Host(RpcFlags.AnyCaller)]
     public void RequestCrate()
     {
         NetPeer? caller = Rpc.Caller;

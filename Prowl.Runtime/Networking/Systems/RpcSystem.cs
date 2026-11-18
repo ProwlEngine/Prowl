@@ -105,9 +105,9 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        if ((flags & RpcFlags.OwnerOnly) != 0 && !scene.HasControl(component.GameObject))
+        if (!scene.IsHost && (flags & RpcFlags.AnyCaller) == 0 && !scene.HasControl(component.GameObject))
         {
-            WarnOnce(component, id, "can only be called by whoever controls the object");
+            WarnOnce(component, id, "can only be called by whoever controls the object, unless it takes RpcFlags.AnyCaller");
             return false;
         }
 
@@ -216,7 +216,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         (RpcMode mode, RpcFlags flags) = (rpc.Mode, rpc.Flags);
         bool senderControls = scene.OwnerOf(component.GameObject) == sender.Id;
-        if ((flags & RpcFlags.HostOnly) != 0 || ((flags & RpcFlags.OwnerOnly) != 0 && !senderControls))
+        if ((flags & RpcFlags.HostOnly) != 0 || ((flags & RpcFlags.AnyCaller) == 0 && !senderControls))
         {
             NetworkDiagnostics.TraceMember("RPC", "Rejected", sender, component, method, true, "Unauthorized caller",
                 arguments);
