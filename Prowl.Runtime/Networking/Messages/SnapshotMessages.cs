@@ -118,7 +118,7 @@ internal readonly record struct TransformGroup(uint Tick, double SentAt, uint Co
             throw new InvalidDataException("A transform group has an invalid time.");
         }
 
-        if (count > (uint)reader.Remaining / (5 + 5 + 1))
+        if (count > (uint)reader.Remaining / (1 + 1 + 1))
         {
             throw new InvalidDataException("Transform record count exceeds the remaining data.");
         }

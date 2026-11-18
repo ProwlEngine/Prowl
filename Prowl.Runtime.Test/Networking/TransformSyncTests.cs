@@ -45,7 +45,7 @@ public class TransformSyncTests : RuntimeTestBase
                 {
                     Assert.True(sync.Settled);
                     Assert.NotNull(update);
-                    Assert.True((update.Value.Channels & TransformChannels.ExactRotation) != 0);
+                    Assert.True((update.Value.Channels & TransformChannels.Exact) != 0);
                     Assert.Equal(go.Transform.LocalPosition, update.Value.Position);
                     Assert.Equal(go.Transform.LocalRotation, update.Value.Rotation);
                     Assert.Equal(go.Transform.LocalScale, update.Value.Scale);

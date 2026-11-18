@@ -104,7 +104,11 @@ public sealed class FakePeer : IDisposable
                 Deliveries.Add((captured, delivery));
                 Channels.Add((captured, channel));
                 Received.Add((captured, ReadEnginePayload(captured, ref reader)));
-                if (captured == Snapshot) SnapshotValues(WireReceived[^1].Data);
+                if (captured == Snapshot)
+                {
+                    SnapshotValues(WireReceived[^1].Data);
+                    NetworkingTests.Decoded.AddOrUpdate(WireReceived[^1].Data, NetworkingTests.DecodeTransforms(WireReceived[^1].Data, _positions));
+                }
                 if (AutoReady) HandleReadiness(sender, captured, WireReceived[^1].Data);
                 if (AutoAck && captured == Snapshot) Acknowledge(sender, WireReceived[^1].Data);
             });
@@ -118,6 +122,9 @@ public sealed class FakePeer : IDisposable
     public List<byte[]> TimesReceived { get; } = new();
 
     public bool AutoReady { get; set; } = true;
+
+    // Positions received by object and snapshot tick, to resolve the deltas that name them.
+    private readonly Dictionary<(uint NetId, uint Generation), Dictionary<uint, (long X, long Y, long Z)>> _positions = new();
 
     /// <summary>Acknowledges every Snapshot that asks for it, as a real peer would.</summary>
     public bool AutoAck { get; set; } = true;
@@ -190,7 +197,8 @@ public sealed class FakePeer : IDisposable
                 r.ReadVarUInt32(); r.ReadVarUInt32();
                 byte channels = r.ReadByte();
                 if ((channels & 16) != 0) r.ReadSingle();
-                if ((channels & 1) != 0) r.ReadBytes(12);
+                if ((channels & 9) == 9) r.ReadBytes(12);
+                else if ((channels & 1) != 0) { r.ReadVarUInt32(); r.ReadVarInt64(); r.ReadVarInt64(); r.ReadVarInt64(); }
                 if ((channels & 2) != 0) r.ReadBytes((channels & 8) != 0 ? 16 : 4);
                 if ((channels & 4) != 0) r.ReadBytes(12);
             }
@@ -881,7 +889,7 @@ public partial class NetworkingTests : RuntimeTestBase
     }
 
     // Transform channel bits, as Networking.Transform.cs defines them.
-    private const byte PositionChannel = 1, RotationChannel = 2, ScaleChannel = 4, ExactRotationChannel = 8, ResumedChannel = 16;
+    private const byte PositionChannel = 1, RotationChannel = 2, ScaleChannel = 4, ExactChannel = 8, ResumedChannel = 16;
 
     /// <summary>A Snapshot holding one transform group, at one tick and time, of a full, exact pose for each object.</summary>
     private static void WriteTransforms(NetWriter w, uint tick, double time,
@@ -893,7 +901,7 @@ public partial class NetworkingTests : RuntimeTestBase
         foreach (var record in records)
         {
             w.WriteVarUInt32(record.NetId); w.WriteVarUInt32(record.Generation);
-            w.WriteByte(PositionChannel | RotationChannel | ScaleChannel | ExactRotationChannel);
+            w.WriteByte(PositionChannel | RotationChannel | ScaleChannel | ExactChannel);
             NetSerializers.WriteFloat3(w, record.Position);
             NetSerializers.WriteQuaternion(w, record.Rotation);
             NetSerializers.WriteFloat3(w, record.Scale);
@@ -901,14 +909,25 @@ public partial class NetworkingTests : RuntimeTestBase
         w.WriteVarUInt32(0);
     }
 
-    private readonly record struct TransformRecord(uint NetId, uint Generation, byte Channels, Float3? Position,
-        Quaternion? Rotation, Float3? Scale);
+    internal readonly record struct TransformRecord(uint NetId, uint Generation, byte Channels, Float3? Position,
+        Quaternion? Rotation, Float3? Scale, uint BaselineAge = 0);
 
-    /// <summary>Decodes a Snapshot message's transform records, from every group; a channel left out is null.</summary>
-    private static List<TransformRecord> ReadTransforms(byte[] message)
+    internal static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], List<TransformRecord>> Decoded = new();
+
+    /// <summary>
+    ///     Decodes a Snapshot message's transform records, from every group; a channel left out is null. A delta
+    ///     position resolves only for a message a FakePeer received, against the positions it had.
+    /// </summary>
+    private static List<TransformRecord> ReadTransforms(byte[] message) =>
+        Decoded.TryGetValue(message, out List<TransformRecord>? decoded) ? decoded : DecodeTransforms(message, null);
+
+    internal static List<TransformRecord> DecodeTransforms(byte[] message,
+        Dictionary<(uint NetId, uint Generation), Dictionary<uint, (long X, long Y, long Z)>>? positions)
     {
+        const double step = 0.01;
         NetReader r = new(message);
-        r.ReadVarUInt32(); r.ReadVarUInt32(); r.ReadVarUInt32();
+        r.ReadVarUInt32(); r.ReadVarUInt32();
+        uint tick = r.ReadVarUInt32();
         List<TransformRecord> records = new();
         uint groups = r.ReadVarUInt32();
         for (uint g = 0; g < groups; g++)
@@ -920,11 +939,30 @@ public partial class NetworkingTests : RuntimeTestBase
                 uint netId = r.ReadVarUInt32(), generation = r.ReadVarUInt32();
                 byte channels = r.ReadByte();
                 if ((channels & ResumedChannel) != 0) r.ReadSingle();
-                Float3? position = (channels & PositionChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
+                Float3? position = null;
+                uint age = 0;
+                if ((channels & PositionChannel) != 0 && (channels & ExactChannel) != 0)
+                    position = NetSerializers.ReadFloat3(ref r);
+                else if ((channels & PositionChannel) != 0)
+                {
+                    age = r.ReadVarUInt32();
+                    (long X, long Y, long Z) grid = (r.ReadVarInt64(), r.ReadVarInt64(), r.ReadVarInt64());
+                    Dictionary<uint, (long X, long Y, long Z)>? history = null;
+                    if (positions != null && !positions.TryGetValue((netId, generation), out history))
+                        positions[(netId, generation)] = history = new();
+                    if (age != 0 && history != null && history.TryGetValue(tick - age, out var baseline))
+                        grid = (baseline.X + grid.X, baseline.Y + grid.Y, baseline.Z + grid.Z);
+                    if (age == 0 || history != null)
+                    {
+                        history?.TryAdd(tick, grid);
+                        position = new Float3((float)(grid.X * step), (float)(grid.Y * step), (float)(grid.Z * step));
+                    }
+                }
+
                 Quaternion? rotation = (channels & RotationChannel) == 0 ? null :
-                    (channels & ExactRotationChannel) != 0 ? NetSerializers.ReadQuaternion(ref r) : NetSerializers.ReadCompactQuaternion(ref r);
+                    (channels & ExactChannel) != 0 ? NetSerializers.ReadQuaternion(ref r) : NetSerializers.ReadCompactQuaternion(ref r);
                 Float3? scale = (channels & ScaleChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
-                records.Add(new TransformRecord(netId, generation, channels, position, rotation, scale));
+                records.Add(new TransformRecord(netId, generation, channels, position, rotation, scale, age));
             }
         }
 

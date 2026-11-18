@@ -103,7 +103,7 @@ internal sealed class TransformSync
         else if (!Settled && ++_quietTicks >= SettleTicks)
         {
             // Updates while moving can be lost, so the pose it comes to rest at must arrive, exactly.
-            channels = synced | TransformChannels.ExactRotation;
+            channels = synced | TransformChannels.Exact;
             Settled = true;
             _lingerPosition = _lingerRotation = _lingerScale = 0;
         }
@@ -146,7 +146,7 @@ internal sealed class TransformSync
 
         // Use the host-supplied object policy, never channels chosen by the sender.
         TransformChannels channels = update.Channels &
-                                     (SyncedChannels(go) | TransformChannels.ExactRotation | TransformChannels.Resumed);
+                                     (SyncedChannels(go) | TransformChannels.Exact | TransformChannels.Resumed);
 
         // Channels left out are as they were in the latest update, or as the object is if there's none.
         Transform current = go.Transform;

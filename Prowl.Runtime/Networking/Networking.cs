@@ -139,7 +139,7 @@ public static partial class Networking
     private static NetSessionOptions WithSchema(NetSessionOptions? options)
     {
         NetSessionOptions session = options ?? s_configuration.CreateSessionOptions();
-        session.AppVersion = NetworkSchema.AppVersion(session.AppVersion);
+        session.AppVersion = NetworkSchema.AppVersion(session.AppVersion, s_configuration.ValidatedCopy().PositionPrecision);
         return session;
     }
 }

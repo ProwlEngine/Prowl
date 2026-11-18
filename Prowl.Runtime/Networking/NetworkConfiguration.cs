@@ -75,6 +75,11 @@ public sealed class NetworkConfiguration
     public bool SimulateNetwork;
     public float TickRate = 30;
 
+    internal const float DefaultPositionPrecision = 0.01f;
+
+    /// <summary>Grid size, in world units, that moving positions snap to on the wire. Host and clients must match.</summary>
+    public float PositionPrecision = DefaultPositionPrecision;
+
     /// <summary>Local position change from the last sent pose required to resume transform updates.</summary>
     public float TransformPositionThreshold = 0.001f;
 
@@ -119,6 +124,10 @@ public sealed class NetworkConfiguration
 
         copy.TickRate = Limit(copy.TickRate, 1, 240, 30);
         copy.InterpolationMilliseconds = Limit(copy.InterpolationMilliseconds, 0, 5000, 100);
+        copy.PositionPrecision = float.IsFinite(copy.PositionPrecision) && copy.PositionPrecision > 0
+            ? Math.Clamp(copy.PositionPrecision, 1e-6f, 1000)
+            : DefaultPositionPrecision;
+
         copy.TransformPositionThreshold = Limit(copy.TransformPositionThreshold, 0, float.MaxValue, 0.001f);
         copy.TransformRotationThresholdDegrees = Limit(copy.TransformRotationThresholdDegrees, 0, 180, 0.1f);
         copy.TransformScaleThreshold = Limit(copy.TransformScaleThreshold, 0, float.MaxValue, 0.0001f);

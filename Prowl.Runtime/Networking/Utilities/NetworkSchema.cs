@@ -20,9 +20,11 @@ internal static class NetworkSchema
         BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
     /// <summary>The app version a session sends and expects: <paramref name="appVersion" /> mixed with the schema hash.</summary>
-    internal static uint AppVersion(uint appVersion)
+    internal static uint AppVersion(uint appVersion,
+        float positionPrecision = NetworkConfiguration.DefaultPositionPrecision)
     {
         uint hash = Fnv(2166136261, BitConverter.GetBytes(appVersion));
+        hash = Fnv(hash, BitConverter.GetBytes(positionPrecision));
         foreach (string entry in Entries())
         {
             hash = Fnv(hash, Encoding.UTF8.GetBytes(entry + "\n"));

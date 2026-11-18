@@ -217,7 +217,7 @@ public partial class NetworkingTests
             // Real ticks, so acknowledgements arrive in between as they would.
             PumpFor(400, client);
             TransformRecord settled = Assert.Single(Sent());
-            Assert.NotEqual(0, settled.Channels & ExactRotationChannel);
+            Assert.NotEqual(0, settled.Channels & ExactChannel);
             Assert.Equal(root.Transform.LocalRotation, settled.Rotation);
             Assert.Equal(Float3.One, settled.Scale);
             Assert.Equal(Delivery.Unreliable, client.Deliveries.Last(m => m.Id == FakePeer.Snapshot).Delivery);
