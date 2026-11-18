@@ -402,8 +402,10 @@ public class InputActionMap : Asset, ISerializable
             case NormalizeProcessor:
                 tag["type"] = new EchoObject("Normalize");
                 break;
-            case InvertProcessor:
+            case InvertProcessor ip:
                 tag["type"] = new EchoObject("Invert");
+                tag["invertX"] = new EchoObject(ip.InvertX);
+                tag["invertY"] = new EchoObject(ip.InvertY);
                 break;
             case ScaleProcessor sp:
                 tag["type"] = new EchoObject("Scale");
@@ -432,7 +434,11 @@ public class InputActionMap : Asset, ISerializable
         return type switch
         {
             "Normalize" => new NormalizeProcessor(),
-            "Invert" => new InvertProcessor(),
+            "Invert" => new InvertProcessor()
+            {
+                InvertX = !tag.TryGet("invertX", out EchoObject? ix) || ix.BoolValue,
+                InvertY = !tag.TryGet("invertY", out EchoObject? iy) || iy.BoolValue,
+            },
             "Scale" => new ScaleProcessor(tag.TryGet("scale", out EchoObject? s) ? s.FloatValue : 1f),
             "Clamp" => new ClampProcessor(
                 tag.TryGet("min", out EchoObject? mn) ? mn.FloatValue : 0f,

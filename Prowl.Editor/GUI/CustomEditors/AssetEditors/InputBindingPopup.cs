@@ -674,26 +674,37 @@ internal sealed class InputBindingPopup
         switch (proc)
         {
             case DeadzoneProcessor dp:
-                ProcessorField(paper, $"{id}_a", "threshold", dp.Threshold, v => dp.Threshold = Math.Clamp(v, 0f, 0.99f));
+                ProcessorFloat(paper, $"{id}_a", "threshold", dp.Threshold, v => dp.Threshold = Math.Clamp(v, 0f, 0.99f));
                 break;
             case ScaleProcessor sp:
-                ProcessorField(paper, $"{id}_a", "scale", sp.Scale, v => sp.Scale = v);
+                ProcessorFloat(paper, $"{id}_a", "scale", sp.Scale, v => sp.Scale = v);
                 break;
             case ClampProcessor cp:
-                ProcessorField(paper, $"{id}_a", "min", cp.Min, v => cp.Min = v);
-                ProcessorField(paper, $"{id}_b", "max", cp.Max, v => cp.Max = v);
+                ProcessorFloat(paper, $"{id}_a", "min", cp.Min, v => cp.Min = v);
+                ProcessorFloat(paper, $"{id}_b", "max", cp.Max, v => cp.Max = v);
                 break;
             case ExponentialProcessor ep:
-                ProcessorField(paper, $"{id}_a", "exponent", ep.Exponent, v => ep.Exponent = MathF.Max(0.1f, v));
+                ProcessorFloat(paper, $"{id}_a", "exponent", ep.Exponent, v => ep.Exponent = MathF.Max(0.1f, v));
+                break;
+            case InvertProcessor ip:
+                ProcessorBool(paper, $"{id}_a", "invert X", ip.InvertX, v => ip.InvertX = v);
+                ProcessorBool(paper, $"{id}_b", "invert Y", ip.InvertY, v => ip.InvertY = v);
                 break;
         }
     }
 
-    private static void ProcessorField(Paper paper, string id, string label, float value, Action<float> setter)
+    private static void ProcessorFloat(Paper paper, string id, string label, float value, Action<float> setter)
     {
         InputBindingDisplay.Caption(paper, $"{id}_l", label);
         using (paper.Box($"{id}_w").Width(70).Height(28).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             Origami.NumericField<float>(paper, id, value, setter).Step(0.05f).Show();
+    }
+
+    private static void ProcessorBool(Paper paper, string id, string label, bool value, Action<bool> setter)
+    {
+        InputBindingDisplay.Caption(paper, $"{id}_l", label);
+        using (paper.Box($"{id}_w").Width(UnitValue.Auto).Height(28).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+            Origami.Checkbox(paper, id, value, setter).Show();
     }
 
     private static void Swap(List<IInputProcessor> list, int a, int b)
