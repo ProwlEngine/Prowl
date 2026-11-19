@@ -1157,7 +1157,7 @@ public sealed partial class CodeEditor
 
     public void OpenCodeActions()
     {
-        if (Session == null) return;
+        if (Session == null || IsReadOnly) return;
         int start = Document.PositionToOffset(Selection.Start);
         int length = Document.PositionToOffset(Selection.End) - start;
         Continue(Session.GetCodeActionsAsync(start, length, CancellationToken.None), Document.Version, actions =>
@@ -1175,6 +1175,7 @@ public sealed partial class CodeEditor
 
     private void ApplyCodeAction(CodeAction action)
     {
+        if (IsReadOnly) return;
         if (action.Resolve == null)
         {
             ApplyEdits(action.Edits);

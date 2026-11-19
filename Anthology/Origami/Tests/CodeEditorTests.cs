@@ -162,6 +162,22 @@ public class CodeEditorEditingTests
     }
 
     [Fact]
+    public void ReadOnly_BlocksUndoAndRedo()
+    {
+        var e = Make("a", 0, 1);
+        Type(e, "b");
+        e.Options.ReadOnly = true;
+        e.UndoEdit();
+        Assert.Equal("ab", e.Text);
+
+        e.Options.ReadOnly = false;
+        e.UndoEdit();
+        e.Options.ReadOnly = true;
+        e.RedoEdit();
+        Assert.Equal("a", e.Text);
+    }
+
+    [Fact]
     public void Undo_RestoresMultiCaretEdit()
     {
         var e = Make("a\nb\nc", 0, 1);

@@ -47,6 +47,7 @@ public sealed partial class CodeEditor
 
     public void UndoEdit()
     {
+        if (IsReadOnly) return;
         var step = Undo.PopUndo();
         if (step == null) return;
         _replaying = true;
@@ -65,6 +66,7 @@ public sealed partial class CodeEditor
 
     public void RedoEdit()
     {
+        if (IsReadOnly) return;
         var step = Undo.PopRedo();
         if (step == null) return;
         _replaying = true;
