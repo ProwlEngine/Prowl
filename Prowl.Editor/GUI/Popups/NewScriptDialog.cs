@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 using Prowl.Editor.Core;
@@ -40,6 +41,7 @@ public static class NewScriptDialog
     public static void Open(string relativeFolder, Action<string>? onCreated = null, string? name = null)
     {
         s_folder = relativeFolder ?? "";
+        s_checkedName = null;
         s_name = SuggestUniqueName(s_folder, string.IsNullOrEmpty(name) ? "NewScript" : name);
         s_selectedIndex = 0;
         s_onCreated = onCreated;
@@ -338,7 +340,26 @@ public static class NewScriptDialog
         if (File.Exists(Path.Combine(abs, name + ".cs")))
             return (false, Loc.Get("newscript.err_exists", new { name = name }));
 
+        // The templates declare global classes, so one with this name anywhere in the scripts would not compile.
+        if (ClassExists(name))
+            return (false, Loc.Get("newscript.err_type_exists", new { name = name }));
+
         return (true, null);
+    }
+
+    // Validate runs every frame, so the type scan only reruns when the name changes.
+    private static string? s_checkedName;
+    private static bool s_checkedExists;
+
+    private static bool ClassExists(string name)
+    {
+        if (name != s_checkedName)
+        {
+            s_checkedName = name;
+            s_checkedExists = Utils.EditorUtils.GetAllTypes().Any(t =>
+                t.FullName == name && Projects.Scripting.ScriptAssemblyManager.IsScriptAssembly(t.Assembly));
+        }
+        return s_checkedExists;
     }
 
     private static string SuggestUniqueName(string folder, string baseName)
