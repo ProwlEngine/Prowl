@@ -431,7 +431,8 @@ public partial class NetworkingTests : RuntimeTestBase
         go.Network.Orphaned = NetworkOrphaned.ClearOwner;
         go.Network.Flags = NetworkFlags.NoTransformSync;
         EchoObject stored = Serializer.Serialize(go);
-        Assert.Equal((byte)NetworkMode.Object, stored["Network"]["Mode"].ByteValue);
+        Assert.True(stored["Network"]["Networked"].BoolValue);
+        Assert.False(stored["Network"].TryGet("Mode", out _));
 
         GameObject copy = Serializer.Deserialize<GameObject>(stored)!;
         Assert.Equal(NetworkMode.Object, copy.Network.Mode);

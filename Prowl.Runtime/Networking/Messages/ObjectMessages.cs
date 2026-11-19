@@ -182,7 +182,9 @@ internal readonly record struct TemplateSpawn(
     bool Enabled,
     NetworkFlags Flags,
     OwnerTransfer OwnerTransfer,
-    byte SendInterval)
+    byte SendInterval,
+    byte ComponentCount,
+    uint ComponentHash)
 {
     internal void Write(NetWriter writer)
     {
@@ -210,6 +212,8 @@ internal readonly record struct TemplateSpawn(
         writer.WriteByte((byte)Flags);
         writer.WriteByte((byte)OwnerTransfer);
         writer.WriteByte(SendInterval);
+        writer.WriteByte(ComponentCount);
+        writer.WriteUInt32(ComponentHash);
     }
 
     internal static TemplateSpawn Read(ref NetReader reader)
@@ -250,13 +254,16 @@ internal readonly record struct TemplateSpawn(
         NetworkFlags flags = (NetworkFlags)reader.ReadByte();
         OwnerTransfer transfer = (OwnerTransfer)reader.ReadByte();
         byte interval = reader.ReadByte();
+        byte componentCount = reader.ReadByte();
+        uint componentHash = reader.ReadUInt32();
         NetworkValidation.Transform(0, position, rotation, scale);
-        if (!NetworkAccessor.ValidFlags(flags) || !Enum.IsDefined(transfer) || interval == 0)
+        if (!NetworkAccessor.ValidFlags(flags) || !Enum.IsDefined(transfer) || interval == 0 ||
+            componentCount > NetworkComponents.MaxPerObject)
         {
             throw new InvalidDataException("A template spawn has invalid network settings.");
         }
 
         return new TemplateSpawn(prefab, factory, data, identifiers, position, rotation, scale, enabled, flags, transfer,
-            interval);
+            interval, componentCount, componentHash);
     }
 }

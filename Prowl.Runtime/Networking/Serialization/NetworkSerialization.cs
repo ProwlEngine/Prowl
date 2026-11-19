@@ -43,7 +43,7 @@ internal static class NetworkSerialization
     internal static List<GameObject> LinkedRoots => s_linkedRoots ??= new List<GameObject>();
 
     internal static bool Include(GameObject go) =>
-        !WritingSnapshot || (NetworkAccessor.ModeOf(go) != NetworkMode.Never && !IsHiddenRoot(go));
+        !WritingSnapshot || (!NetworkAccessor.ServerOnlyOf(go) && !IsHiddenRoot(go));
 
     internal static bool IsHiddenRoot(GameObject go) => HiddenRoots?.Contains(go) == true;
 
@@ -159,7 +159,7 @@ internal static class NetworkSerialization
     internal static void Write(GameObject go, EchoObject output)
     {
         NetworkAccessor? network = go._network;
-        if (network == null || (network.Mode == NetworkMode.Snapshot && network.OwnerTransfer == OwnerTransfer.Fixed &&
+        if (network == null || (!network.Networked && !network.ServerOnly && network.OwnerTransfer == OwnerTransfer.Fixed &&
                                 network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None && network.SendInterval == 1 &&
                                 network.Visibility == NetworkVisibility.Default && network.CullDistance == 0 &&
                                 network.Groups.IsEmpty))
@@ -168,7 +168,16 @@ internal static class NetworkSerialization
         }
 
         EchoObject settings = EchoObject.NewCompound(6);
-        settings.Add("Mode", new EchoObject((byte)network.Mode));
+        if (network.Networked)
+        {
+            settings.Add("Networked", new EchoObject(true));
+        }
+
+        if (network.ServerOnly)
+        {
+            settings.Add("ServerOnly", new EchoObject(true));
+        }
+
         settings.Add("OwnerTransfer", new EchoObject((byte)network.OwnerTransfer));
         settings.Add("Orphaned", new EchoObject((byte)network.Orphaned));
         settings.Add("Flags", new EchoObject((byte)network.Flags));
@@ -204,7 +213,8 @@ internal static class NetworkSerialization
                 return;
             }
 
-            existing.Mode = NetworkMode.Snapshot;
+            existing.Networked = false;
+            existing.ServerOnly = false;
             existing.OwnerTransfer = OwnerTransfer.Fixed;
             existing.Orphaned = NetworkOrphaned.Destroy;
             existing.Flags = NetworkFlags.None;
@@ -216,7 +226,10 @@ internal static class NetworkSerialization
         }
 
         NetworkAccessor network = go.Network;
-        network.Mode = (NetworkMode)(settings["Mode"]?.ByteValue ?? (byte)NetworkMode.Snapshot);
+        // Scenes and prefabs saved before Networked and ServerOnly hold the old mode.
+        NetworkMode stored = (NetworkMode)(settings["Mode"]?.ByteValue ?? (byte)NetworkMode.Snapshot);
+        network.Networked = settings["Networked"]?.BoolValue ?? stored == NetworkMode.Object;
+        network.ServerOnly = settings["ServerOnly"]?.BoolValue ?? stored == NetworkMode.Never;
         network.OwnerTransfer = (OwnerTransfer)(settings["OwnerTransfer"]?.ByteValue ?? (byte)OwnerTransfer.Fixed);
         network.Orphaned = (NetworkOrphaned)(settings["Orphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
         network.Flags = (NetworkFlags)(settings["Flags"]?.ByteValue ?? (byte)NetworkFlags.None);

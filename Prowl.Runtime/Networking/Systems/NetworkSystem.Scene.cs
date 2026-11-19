@@ -770,7 +770,7 @@ internal sealed partial class NetworkSystem
         void Collect(GameObject go)
         {
             if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0 ||
-                NetworkAccessor.ModeOf(go) == NetworkMode.Never || NetworkSerialization.IsHiddenRoot(go))
+                NetworkAccessor.ServerOnlyOf(go) || NetworkSerialization.IsHiddenRoot(go))
             {
                 return;
             }
@@ -1240,15 +1240,36 @@ internal sealed partial class NetworkSystem
                 break;
             }
 
-            if (NetworkAccessor.ModeOf(go) == NetworkMode.Object && go.Network.Root == go &&
-                !NetworkAccessor.IsExcludedFromNetwork(go) &&
-                !Entries.Contains(go.Identifier))
+            if (!NetworkAccessor.NetworkedOf(go) || NetworkAccessor.IsExcludedFromNetwork(go) ||
+                Entries.Contains(go.Identifier))
             {
-                NetworkObject entry = new(this, go) { Generation = NextGeneration(), NetId = NextNetId() };
-                Entries.Add(entry);
-                InitVisibility(entry);
-                entry.NotifySpawn();
+                continue;
             }
+
+            if (go.Network.Root is { } root && root != go)
+            {
+                Debug.LogWarning(
+                    $"'{go.Name}' is marked networked inside the networked object '{root.Name}', so it is part of that " +
+                    "object. A networked object can't hold another.");
+                continue;
+            }
+
+            Component[] components = NetworkComponents.Gather(go);
+            if (components.Length > NetworkComponents.MaxPerObject)
+            {
+                Debug.LogError(
+                    $"'{go.Name}' has {components.Length} networked components, and a networked object can hold " +
+                    $"{NetworkComponents.MaxPerObject}, so it is not networked. Split it into several networked objects.");
+                continue;
+            }
+
+            NetworkObject entry = new(this, go)
+            {
+                Generation = NextGeneration(), NetId = NextNetId(), Components = components
+            };
+            Entries.Add(entry);
+            InitVisibility(entry);
+            entry.NotifySpawn();
         }
     }
 

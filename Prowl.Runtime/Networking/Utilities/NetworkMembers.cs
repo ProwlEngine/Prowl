@@ -288,6 +288,9 @@ internal sealed class NetworkMembers
 
     private readonly Dictionary<uint, SyncMember> _syncs = new();
 
+    /// <summary>True when the type has anything networked, which makes its components networked components.</summary>
+    public bool Any => !ReferenceEquals(this, s_none);
+
     public static NetworkMembers Of(Component component) => Of(component.GetType());
 
     public static NetworkMembers Of(Type type) => s_byType[type];

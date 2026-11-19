@@ -21,7 +21,7 @@ namespace Prowl.Editor.Inspector;
 
 /// <summary>
 /// The GameObject header's network button: an icon that shows how the object networks, opening a popover
-/// to choose its <see cref="NetworkMode"/> and the settings of a networked object.
+/// to make it networked or server only, with the settings of a networked object under an advanced fold.
 /// </summary>
 internal static class NetworkPopover
 {
@@ -30,13 +30,23 @@ internal static class NetworkPopover
     private static bool s_open;
     private static GameObject? s_target;
 
-    /// <summary>The icon and colour that stand for a mode, here and in the hierarchy.</summary>
-    public static (IOrigamiIcon Icon, Color Color) Style(NetworkMode mode) => mode switch
+    private enum Sharing { Off, Networked, ServerOnly }
+
+    private static Sharing SharingOf(GameObject go) =>
+        NetworkAccessor.ServerOnlyOf(go) ? Sharing.ServerOnly
+        : NetworkAccessor.NetworkedOf(go) ? Sharing.Networked
+        : Sharing.Off;
+
+    private static (IOrigamiIcon Icon, Color Color) Style(Sharing sharing) => sharing switch
     {
-        NetworkMode.Object => (EditorIcons.Wifi_I, EditorTheme.Blue400),
-        NetworkMode.Never => (EditorIcons.LinkSlash_I, EditorTheme.InkDim),
+        Sharing.Networked => (EditorIcons.Wifi_I, EditorTheme.Blue400),
+        Sharing.ServerOnly => (EditorIcons.LinkSlash_I, EditorTheme.InkDim),
         _ => (EditorIcons.Signal_I, EditorTheme.Ink400),
     };
+
+    /// <summary>True when the object has networked components that nothing sends, since it is not part of a networked object.</summary>
+    private static bool NeedsNetworking(GameObject go) =>
+        go.Network.Root.IsNotValid() && !NetworkAccessor.IsExcludedFromNetwork(go) && NetworkComponents.Gather(go).Length > 0;
 
     /// <summary>
     /// The hierarchy's live ownership marker, or null outside play or when the object isn't networked.
@@ -60,10 +70,11 @@ internal static class NetworkPopover
 
     public static void DrawButton(Paper paper, FontFile font, GameObject go)
     {
-        NetworkMode mode = NetworkAccessor.ModeOf(go);
-        (IOrigamiIcon icon, Color color) = mode != NetworkMode.Never && NetworkAccessor.IsExcludedFromNetwork(go)
-            ? Style(NetworkMode.Never)
-            : Style(mode);
+        Sharing sharing = SharingOf(go);
+        bool needsNetworking = NeedsNetworking(go);
+        (IOrigamiIcon icon, Color color) = NetworkAccessor.IsExcludedFromNetwork(go) ? Style(Sharing.ServerOnly) : Style(sharing);
+        if (needsNetworking)
+            color = EditorTheme.Amber400;
 
         ElementBuilder trigger = paper.Box("gi_net_btn")
             .Width(26).Height(26).Rounded(EditorTheme.Roundness)
@@ -73,7 +84,7 @@ internal static class NetworkPopover
             .OnClick(go, (g, _) => Toggle(g));
 
         if (!s_open || s_target != go)
-            trigger.Tooltip(Loc.Get("network.title"), ModeName(mode));
+            trigger.Tooltip(Loc.Get("network.title"), needsNetworking ? Loc.Get("network.needs_networking") : SharingName(sharing));
 
         using (trigger.Enter())
         {
@@ -126,31 +137,47 @@ internal static class NetworkPopover
             .StopEventPropagation()
             .Enter())
         {
-            // Network Mode
             Heading(paper, font, "gi_net_mode", Loc.Get("network.title"), Loc.Get("network.title.desc"));
-            foreach (NetworkMode mode in new[] { NetworkMode.Never, NetworkMode.Object, NetworkMode.Snapshot })
+
+            // A networked object can't hold another, so inside one there is nothing to choose.
+            GameObject? parent = go.Parent;
+            GameObject? outer = parent.IsValid() ? parent!.Network.Root : null;
+            Sharing current = SharingOf(go);
+            if (outer.IsValid())
             {
-                (IOrigamiIcon icon, Color color) = Style(mode);
-                NetworkMode chosen = mode;
-                Option(paper, font, $"gi_net_mode_{mode}", icon, color, ModeName(mode), go.Network.Mode == mode, () =>
+                Note(paper, font, "gi_net_part_of", Loc.Get("network.part_of", new { name = outer!.Name }), EditorTheme.Blue400);
+                return;
+            }
+
+            foreach (Sharing sharing in new[] { Sharing.Off, Sharing.Networked, Sharing.ServerOnly })
+            {
+                (IOrigamiIcon icon, Color color) = Style(sharing);
+                Sharing chosen = sharing;
+                Option(paper, font, $"gi_net_mode_{sharing}", icon, color, SharingName(sharing), current == sharing, () =>
                 {
-                    Undo.RecordObject(go, "Change Network Mode");
-                    go.Network.Mode = chosen;
+                    Undo.RecordObject(go, "Change Networking");
+                    go.Network.Networked = chosen == Sharing.Networked;
+                    go.Network.ServerOnly = chosen == Sharing.ServerOnly;
                 });
             }
-            Note(paper, font, "gi_net_mode_note", ModeDescription(go.Network.Mode), EditorTheme.Ink400);
+            Note(paper, font, "gi_net_mode_note", SharingDescription(current), EditorTheme.Ink400);
 
-            // What a parent decides for it.
-            GameObject? parent = go.Parent;
-            if (go.Network.Mode != NetworkMode.Never && parent.IsValid() && parent!.Network.IsExcluded)
+            if (current != Sharing.ServerOnly && parent.IsValid() && parent!.Network.IsExcluded)
                 Note(paper, font, "gi_net_inherited", Loc.Get("network.inherited_never"), EditorTheme.Amber400);
-            else if (parent.IsValid() && parent!.Network.Root is { } root)
-                Note(paper, font, "gi_net_part_of", Loc.Get("network.part_of", new { name = root.Name }), EditorTheme.Blue400);
+            else if (NeedsNetworking(go))
+                Note(paper, font, "gi_net_needs", Loc.Get("network.needs_networking"), EditorTheme.Amber400);
 
-            if (go.Network.Mode == NetworkMode.Object)
+            if (current != Sharing.Networked)
+                return;
+
+            int components = NetworkComponents.Gather(go).Length;
+            Note(paper, font, "gi_net_components",
+                Loc.Get("network.components", new { count = components, max = NetworkComponents.MaxPerObject }),
+                components > NetworkComponents.MaxPerObject ? EditorTheme.Red400 : EditorTheme.Ink400);
+
+            Spacer(paper, "gi_net_gap1");
+            Origami.Foldout(paper, "gi_net_advanced", Loc.Get("network.advanced")).Body(() =>
             {
-                Spacer(paper, "gi_net_gap1");
-
                 Heading(paper, font, "gi_net_transfer", Loc.Get("network.owner_transfer"), Loc.Get("network.owner_transfer.desc"));
                 if (go.Network.Active && !Networking.IsHost)
                 {
@@ -191,7 +218,7 @@ internal static class NetworkPopover
                         Undo.RecordObject(go, "Change Send Interval");
                         go.Network.SendInterval = Math.Clamp(v, 1, 255);
                     }).Min(1).Max(255).Show();
-            }
+            });
         }
     }
 
@@ -226,17 +253,17 @@ internal static class NetworkPopover
             go.Network.Orphaned = value;
         });
 
-    private static string ModeName(NetworkMode mode) => mode switch
+    private static string SharingName(Sharing sharing) => sharing switch
     {
-        NetworkMode.Object => Loc.Get("network.object"),
-        NetworkMode.Never => Loc.Get("network.never"),
+        Sharing.Networked => Loc.Get("network.object"),
+        Sharing.ServerOnly => Loc.Get("network.never"),
         _ => Loc.Get("network.snapshot"),
     };
 
-    private static string ModeDescription(NetworkMode mode) => mode switch
+    private static string SharingDescription(Sharing sharing) => sharing switch
     {
-        NetworkMode.Object => Loc.Get("network.object.desc"),
-        NetworkMode.Never => Loc.Get("network.never.desc"),
+        Sharing.Networked => Loc.Get("network.object.desc"),
+        Sharing.ServerOnly => Loc.Get("network.never.desc"),
         _ => Loc.Get("network.snapshot.desc"),
     };
 

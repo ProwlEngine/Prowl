@@ -14,7 +14,8 @@ public sealed class NetworkAccessor
     private readonly GameObject _object;
     private NetworkFlags _flags;
     private int _sendInterval = 1;
-    private NetworkMode _mode = NetworkMode.Snapshot;
+    private bool _networked;
+    private bool _serverOnly;
     private NetworkOrphaned _orphaned = NetworkOrphaned.Destroy;
     private OwnerTransfer _ownerTransfer = OwnerTransfer.Fixed;
     private NetworkVisibility _visibility;
@@ -23,10 +24,28 @@ public sealed class NetworkAccessor
 
     internal NetworkAccessor(GameObject owner) => _object = owner;
 
-    /// <summary>How the object participates in a session. Configure before spawning.</summary>
+    /// <summary>
+    ///     Makes the object a networked object, as Mirror's NetworkIdentity: kept in sync for its whole life, with
+    ///     everything below it part of it. Spawning sets it. Configure before the session starts for scene objects.
+    /// </summary>
+    public bool Networked
+    {
+        get => _networked;
+        set => _networked = value;
+    }
+
+    /// <summary>The object and everything below it never leave the host, as Mirror's serverOnly.</summary>
+    public bool ServerOnly
+    {
+        get => _serverOnly;
+        set => _serverOnly = value;
+    }
+
+    /// <summary>The old three way setting, kept until scene content stops going over the wire.</summary>
+    [Obsolete("Use Networked and ServerOnly.")]
     public NetworkMode Mode
     {
-        get => _mode;
+        get => _serverOnly ? NetworkMode.Never : _networked ? NetworkMode.Object : NetworkMode.Snapshot;
         set
         {
             if (!Enum.IsDefined(value))
@@ -34,12 +53,8 @@ public sealed class NetworkAccessor
                 throw new ArgumentOutOfRangeException(nameof(value));
             }
 
-            if (value == _mode)
-            {
-                return;
-            }
-
-            _mode = value;
+            _networked = value == NetworkMode.Object;
+            _serverOnly = value == NetworkMode.Never;
         }
     }
 
@@ -207,7 +222,7 @@ public sealed class NetworkAccessor
     /// <summary>The owning peer, or null when the host controls the object or it is not networked.</summary>
     public NetPeer? Owner => Networking.System?.GetOwner(_object);
 
-    /// <summary>The nearest network root at or above this object, or null.</summary>
+    /// <summary>The networked object this one is, or is part of, or null.</summary>
     public GameObject? Root => RootOf(_object);
 
     // Static objects don't move, so there is nothing to sync.
@@ -256,7 +271,7 @@ public sealed class NetworkAccessor
         }
         else
         {
-            Mode = NetworkMode.Object;
+            Networked = true;
             Orphaned = policy;
         }
     }
@@ -307,7 +322,9 @@ public sealed class NetworkAccessor
     internal static bool ValidFlags(NetworkFlags value) =>
         (value & ~(NetworkFlags.NoTransformSync | NetworkFlags.NoInterpolation)) == 0;
 
-    internal static NetworkMode ModeOf(GameObject go) => go._network?.Mode ?? NetworkMode.Snapshot;
+    internal static bool NetworkedOf(GameObject go) => go._network?._networked == true;
+
+    internal static bool ServerOnlyOf(GameObject go) => go._network?._serverOnly == true;
 
     internal static int SendIntervalOf(GameObject go) => go._network?.SendInterval ?? 1;
 
@@ -315,7 +332,7 @@ public sealed class NetworkAccessor
     {
         for (GameObject? current = go; current.IsValid(); current = current.Parent)
         {
-            if (ModeOf(current) == NetworkMode.Never)
+            if (ServerOnlyOf(current))
             {
                 return true;
             }
@@ -324,16 +341,18 @@ public sealed class NetworkAccessor
         return false;
     }
 
+    // The outermost one: a networked object inside another is part of it.
     internal static GameObject? RootOf(GameObject go)
     {
+        GameObject? root = null;
         for (GameObject? current = go; current.IsValid(); current = current.Parent)
         {
-            if (ModeOf(current) == NetworkMode.Object)
+            if (NetworkedOf(current))
             {
-                return current;
+                root = current;
             }
         }
 
-        return null;
+        return root;
     }
 }

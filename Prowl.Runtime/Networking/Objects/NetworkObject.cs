@@ -36,5 +36,11 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     public bool TearingDown;
     public Float3? TransferVelocity;
     public NetworkOrphaned Orphaned => GameObject.Network.Orphaned;
+
+    /// <summary>Its networked components, fixed for the life of the spawn. A component's place here is its index on the wire.</summary>
+    public Component[] Components { get; init; } = NetworkComponents.Gather(gameObject);
+
+    /// <summary>The index of a networked component of this object, or -1.</summary>
+    public int IndexOf(Component component) => Array.IndexOf(Components, component);
     public GameObject GameObject { get; } = gameObject;
 }

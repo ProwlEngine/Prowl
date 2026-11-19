@@ -7,6 +7,6 @@ namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     The prefab or factory a networked object was built from, with the bytes its factory got and the identifiers its
-///     tree took in build order, so peers build the same tree.
+///     tree took in build order, so peers build the same tree, and its networked components as built.
 /// </summary>
-internal sealed record SpawnTemplate(Guid Prefab, string? Factory, byte[] Data, Guid[] Identifiers);
+internal sealed record SpawnTemplate(Guid Prefab, string? Factory, byte[] Data, Guid[] Identifiers, Component[] Components);

@@ -130,10 +130,10 @@ internal sealed partial class NetworkSystem
             if (NetworkAccessor.IsExcludedFromNetwork(go))
             {
                 throw new InvalidOperationException(
-                    $"'{go.Name}' is under an object that is NetworkMode.Never, so it can't be networked.");
+                    $"'{go.Name}' is under a server only object, so it can't be networked.");
             }
 
-            // Asked of the parent, since this object may be marked NetworkMode.Object already.
+            // Asked of the parent, since this object may be marked networked already.
             if (go.Parent.IsValid() && go.Parent!.Network.Root is { } outer)
             {
                 throw new InvalidOperationException(
@@ -144,7 +144,7 @@ internal sealed partial class NetworkSystem
             {
                 throw new InvalidOperationException(
                     $"'{go.Name}' is on clients already as part of the scene, so it can't be spawned hidden from any of them. " +
-                    "Spawn a new object instead, or make it NetworkMode.Object in the scene.");
+                    "Spawn a new object instead, or make it networked in the scene.");
             }
 
             if (go.Section is { } section)
@@ -153,7 +153,15 @@ internal sealed partial class NetworkSystem
             }
         }
 
-        go.Network.Mode = NetworkMode.Object;
+        Component[] components = template?.Components ?? NetworkComponents.Gather(go);
+        if (components.Length > NetworkComponents.MaxPerObject)
+        {
+            throw new InvalidOperationException(
+                $"'{go.Name}' has {components.Length} networked components, and a networked object can hold " +
+                $"{NetworkComponents.MaxPerObject}. Split it into several networked objects.");
+        }
+
+        go.Network.Networked = true;
         go.Network.Orphaned = orphaned;
         if (!IsActive)
         {
@@ -170,7 +178,8 @@ internal sealed partial class NetworkSystem
         bool heldAsContent = Configuration.InterestMode != InterestMode.None && HeldAsContent(go);
         NetworkObject entry = new(this, go)
         {
-            Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template
+            Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template,
+            Components = components
         };
         Entries.Add(entry);
         InitVisibility(entry, heldAsContent);
@@ -257,8 +266,11 @@ internal sealed partial class NetworkSystem
     {
         List<Guid> identifiers = new();
         CollectIdentifiers(go, identifiers);
+        // Gathered as built, before the scene runs anything on it, which is the tree clients build too.
+        Component[] components = NetworkComponents.Gather(go);
         SceneInstance.Main.Add(go);
-        Spawn(go, owner, orphaned ?? go.Network.Orphaned, new SpawnTemplate(prefab, factory, data, [.. identifiers]));
+        Spawn(go, owner, orphaned ?? go.Network.Orphaned,
+            new SpawnTemplate(prefab, factory, data, [.. identifiers], components));
         return go;
     }
 
@@ -327,7 +339,7 @@ internal sealed partial class NetworkSystem
         Transform t = go.Transform;
         return new TemplateSpawn(template.Prefab, template.Factory, template.Data, template.Identifiers, t.LocalPosition,
             t.LocalRotation, t.LocalScale, go.Enabled, go.Network.Flags, go.Network.OwnerTransfer,
-            (byte)go.Network.SendInterval);
+            (byte)go.Network.SendInterval, (byte)template.Components.Length, NetworkComponents.Hash(template.Components));
     }
 
     /// <summary>Builds a client's copy of a prefab or factory spawn, before it goes into the scene.</summary>
@@ -380,13 +392,23 @@ internal sealed partial class NetworkSystem
             throw new InvalidDataException($"The host's {source} builds a different tree than this peer's.");
         }
 
-        template = new SpawnTemplate(spawn.Prefab, spawn.Factory, spawn.Data, spawn.Identifiers);
+        Component[] components = NetworkComponents.Gather(go);
+        if (components.Length != spawn.ComponentCount || NetworkComponents.Hash(components) != spawn.ComponentHash)
+        {
+            string mine = NetworkComponents.Describe(components);
+            go.Dispose();
+            throw new InvalidDataException(
+                $"The host's {source} has {spawn.ComponentCount} networked components and this peer's builds " +
+                $"{components.Length} that don't match them ({mine}). Every peer has to build the same components.");
+        }
+
+        template = new SpawnTemplate(spawn.Prefab, spawn.Factory, spawn.Data, spawn.Identifiers, components);
 
         go.Transform.LocalPosition = spawn.Position;
         go.Transform.LocalRotation = spawn.Rotation;
         go.Transform.LocalScale = spawn.Scale;
         go.Enabled = spawn.Enabled;
-        go.Network.Mode = NetworkMode.Object;
+        go.Network.Networked = true;
         go.Network.ApplyFlags(spawn.Flags);
         go.Network.ApplyOwnerTransfer(spawn.OwnerTransfer);
         go.Network.ApplySendInterval(spawn.SendInterval);
@@ -484,7 +506,7 @@ internal sealed partial class NetworkSystem
             // An object the scene snapshot brought stays the same instance, so references to it keep working.
             if (!Entries.Contains(id) && FindByIdentifier(id) is GameObject existing)
             {
-                existing.Network.Mode = NetworkMode.Object;
+                existing.Network.Networked = true;
                 existing.Network.ApplyFlags(go.Network.Flags);
                 existing.Network.ApplySendInterval(go.Network.SendInterval);
                 existing.Network.ApplyOwnerTransfer(go.Network.OwnerTransfer);
@@ -521,7 +543,8 @@ internal sealed partial class NetworkSystem
 
             NetworkObject entry = new(this, go)
             {
-                Owner = owner, Generation = generation, NetId = netId, Template = adopted ? null : template
+                Owner = owner, Generation = generation, NetId = netId, Template = adopted ? null : template,
+                Components = adopted || template == null ? NetworkComponents.Gather(go) : template.Components
             };
             go.Network.ApplyOrphaned(orphaned);
             Entries.Add(entry);
