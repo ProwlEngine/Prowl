@@ -146,6 +146,7 @@ internal static class NetworkPopover
             if (outer.IsValid())
             {
                 Note(paper, font, "gi_net_part_of", Loc.Get("network.part_of", new { name = outer!.Name }), EditorTheme.Blue400);
+                ComponentIntervals(paper, font, go);
                 return;
             }
 
@@ -202,7 +203,44 @@ internal static class NetworkPopover
                         Undo.RecordObject(go, "Change Send Interval");
                         go.Network.SendInterval = Math.Clamp(v, 1, 255);
                     }).Min(1).Max(255).Show();
+
+                ComponentIntervals(paper, font, go);
             });
+        }
+    }
+
+    /// <summary>A send interval for each networked component on the object itself, as Mirror's syncInterval.</summary>
+    private static void ComponentIntervals(Paper paper, FontFile font, GameObject go)
+    {
+        bool any = false;
+        int row = 0;
+        foreach (Component component in go.GetComponents<Component>())
+        {
+            if (!NetworkMembers.Of(component).Any)
+            {
+                continue;
+            }
+
+            if (!any)
+            {
+                any = true;
+                Spacer(paper, "gi_net_gap_ci");
+                Heading(paper, font, "gi_net_ci", Loc.Get("network.component_interval"), Loc.Get("network.component_interval.desc"));
+            }
+
+            Component target = component;
+            string id = $"gi_net_ci_{row++}";
+            using (paper.Row(id).Height(EditorTheme.RowHeight).Gap(8).Enter())
+            {
+                paper.Box(id + "_name").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).IsNotInteractable()
+                    .Text(component.GetType().Name, font).TextColor(EditorTheme.Ink500)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                Origami.NumericField<int>(paper, id + "_v", go.Network.GetSendInterval(component), v =>
+                {
+                    Undo.RecordObject(go, "Change Component Send Interval");
+                    go.Network.SetSendInterval(target, Math.Clamp(v, 1, 255));
+                }).Min(1).Max(255).Show();
+            }
         }
     }
 

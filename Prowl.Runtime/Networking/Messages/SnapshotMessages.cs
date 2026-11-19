@@ -9,10 +9,9 @@ using Prowl.Courier;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     Starts a Snapshot message: then a TransformGroupBlock of groups, then the values (count, then SnapshotValue
-///     records). The id is the sender's own count for this receiver, which acknowledges it; zero asks for no
-///     acknowledgement. The epoch is the scene generation it was sent in; one from another scene is dropped, since its
-///     component ids belonged to that scene. Values are ordered by <see cref="Tick" />, the sender's.
+///     Starts a Snapshot message: then a TransformGroupBlock of groups. The id is the sender's own count for this
+///     receiver, which acknowledges it; zero asks for no acknowledgement. The epoch is the scene generation it was
+///     sent in; one from another scene is dropped. <see cref="Tick" /> is the sender's.
 /// </summary>
 internal readonly record struct SnapshotMessage(uint Id, uint Epoch, uint Tick)
 {
@@ -35,43 +34,6 @@ internal readonly record struct SnapshotMessage(uint Id, uint Epoch, uint Tick)
         reader.ReadVarUInt32());
 }
 
-/// <summary>
-///     One [Sync] value in a snapshot: [varuint key][guid, if the key's low bit is set][varuint slot][varuint
-///     generation][bytes value, length prefixed]. The key's other bits are a small id the sender gave the component for
-///     this receiver; the guid defines it, and goes along until the receiver has acknowledged a snapshot carrying it.
-/// </summary>
-internal readonly ref struct SnapshotValue(uint componentId, Guid? definition, uint slot, uint generation,
-    ReadOnlySpan<byte> value)
-{
-    internal const int MinimumSize = 1 + 1 + 1 + 1;
-
-    internal readonly uint ComponentId = componentId;
-    internal readonly Guid? Definition = definition;
-    internal readonly uint Slot = slot;
-    internal readonly uint Generation = generation;
-    internal readonly ReadOnlySpan<byte> Value = value;
-
-    internal void Write(NetWriter writer)
-    {
-        writer.WriteVarUInt32(ComponentId << 1 | (Definition.HasValue ? 1u : 0u));
-        if (Definition is { } guid)
-        {
-            writer.WriteGuid(guid);
-        }
-
-        writer.WriteVarUInt32(Slot);
-        writer.WriteVarUInt32(Generation);
-        writer.WriteBytesWithLength(Value);
-    }
-
-    internal static SnapshotValue Read(ref NetReader reader)
-    {
-        uint key = reader.ReadVarUInt32();
-        Guid? definition = (key & 1) != 0 ? reader.ReadGuid() : null;
-        return new SnapshotValue(key >> 1, definition, reader.ReadVarUInt32(), reader.ReadVarUInt32(),
-            reader.ReadBytesWithLength());
-    }
-}
 
 /// <summary>Count followed by Count TransformGroup records.</summary>
 internal readonly record struct TransformGroupBlock(uint Count)

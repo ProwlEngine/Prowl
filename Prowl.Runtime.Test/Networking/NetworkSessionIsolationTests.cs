@@ -80,10 +80,12 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
     }
 
     [Fact]
-    public void ObjectReferencesWithoutASessionStillConsumeTheirIdentifier()
+    public void ObjectReferencesWithoutASessionStillConsumeTheirBytes()
     {
+        // A reference is its object's NetId and a component index.
         using NetWriter writer = new();
-        writer.WriteGuid(Guid.NewGuid());
+        writer.WriteVarUInt32(7);
+        writer.WriteByte(0);
         writer.WriteInt32(42);
         NetReader reader = new(writer.WrittenSpan);
         Assert.Null(NetSerializer<GameObject>.Read(ref reader));

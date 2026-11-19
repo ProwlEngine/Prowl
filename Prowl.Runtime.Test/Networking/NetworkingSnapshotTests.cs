@@ -26,10 +26,6 @@ public partial class NetworkingTests
         return writer.ToArray();
     }
 
-    private static int SnapshotsHolding(FakePeer peer, Guid component, uint slot) =>
-        peer.WireReceived.Count(m => m.Id == FakePeer.Snapshot &&
-                                     FakePeer.SnapshotValues(m.Data).Any(v => v.Component == component && v.Slot == slot));
-
     /// <summary>A host-owned crate a ready client knows about.</summary>
     private (SceneInstance Scene, GameObject Crate, NetTestComponent Component) SpawnCrate(LocalNetwork network, NetPeer? owner,
         params FakePeer[] peers)

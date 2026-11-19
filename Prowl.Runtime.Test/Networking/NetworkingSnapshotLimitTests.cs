@@ -186,20 +186,4 @@ public partial class NetworkingTests
         finally { Networking.Networking.Configure(previous); }
     }
 
-    /// <summary>Sends a Snapshot defining <paramref name="count" /> component ids from <paramref name="firstId" /> on.</summary>
-    private static void SendDefinitions(FakePeer peer, uint snapshotId, uint firstId, int count, Func<Guid> component)
-    {
-        using NetWriter w = new();
-        new SnapshotMessage(snapshotId, (uint)NetworkTestScene.Current.SceneGeneration, firstId).Write(w);
-        w.WriteVarUInt32(0);
-        w.WriteVarUInt32((uint)count);
-        for (int i = 0; i < count; i++)
-        {
-            new SnapshotValue(firstId + (uint)i, component(), NetTestComponent.HealthSlot, 0, ReadOnlySpan<byte>.Empty).Write(w);
-        }
-
-        peer.Session.SendRaw(peer.Session.HostPeer!, FakePeer.Snapshot, w.WrittenSpan, Delivery.Unreliable);
-        peer.Session.Flush();
-    }
-
 }

@@ -10,15 +10,19 @@ namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     A component that writes its own network state, as Mirror's OnSerialize and OnDeserialize, for state that packs
-///     better by hand than as [Sync] values. It goes with spawns and snapshots like a [Sync] value, and again each time
-///     <see cref="Networking.SetDirty" /> marks it. Snapshots can be lost and sent again, so write the whole state every
-///     time, never a change from the last. The host writes it unless <see cref="NetworkSerializeAttribute" /> says otherwise.
+///     better by hand than as [Sync] values. It goes with a spawn, and again each time
+///     <see cref="Networking.SetDirty" /> marks it. State travels reliably and in order, so a later write may hold only
+///     what changed since the last. The host writes it unless <see cref="NetworkSerializeAttribute" /> says otherwise.
 /// </summary>
 public interface INetworkSerialize
 {
-    void OnSerialize(NetWriter writer);
+    /// <summary>
+    ///     Writes the state. <paramref name="initial" /> is true for a spawn, which needs all of it. Otherwise it follows
+    ///     a <see cref="Networking.SetDirty" /> and may write only what changed.
+    /// </summary>
+    void OnSerialize(NetWriter writer, bool initial);
 
-    /// <summary>Reads what <see cref="OnSerialize" /> wrote; <paramref name="initial" /> when it came with the object.</summary>
+    /// <summary>Reads what <see cref="OnSerialize" /> wrote, with the same <paramref name="initial" />.</summary>
     void OnDeserialize(ref NetReader reader, bool initial);
 }
 
@@ -37,12 +41,16 @@ public sealed class NetworkSerializeMember(SyncFlags flags) : SyncMember(CustomS
     public const uint CustomSlot = uint.MaxValue;
 
     internal override void Write(Component component, NetWriter writer) =>
-        ((INetworkSerialize)component).OnSerialize(writer);
+        ((INetworkSerialize)component).OnSerialize(writer, true);
+
+    internal override void WriteChanges(Component component, NetWriter writer) =>
+        ((INetworkSerialize)component).OnSerialize(writer, false);
 
     internal override void Read(Component component, ref NetReader reader, bool initial) =>
         ((INetworkSerialize)component).OnDeserialize(ref reader, initial);
 
-    // The component's own format: only it can read it, so the bytes are taken as they are.
+    // The component's own format: only it can read it, so the bytes are taken as they are. Its slot is the last
+    // one, so what is left of its component's block is all its.
     internal override void Validate(Component component, ref NetReader reader, bool initial = false) =>
         reader.ReadBytes(reader.Remaining);
 

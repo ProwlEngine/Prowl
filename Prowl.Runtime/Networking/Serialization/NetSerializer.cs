@@ -115,8 +115,13 @@ internal static class NetSerializers
     private const float CompactRange = 0.70710678f;
     private const uint CompactSteps = 1023;
 
-    /// <summary>Engine object references read so far whose object this peer doesn't have.</summary>
-    [ThreadStatic] internal static int UnresolvedReferences;
+    /// <summary>What a reference names in place of a component index when it is the networked object itself.</summary>
+    internal const byte RootIndex = byte.MaxValue;
+
+    /// <summary>The object and component the reference read last named, or zero for a null one.</summary>
+    [ThreadStatic] internal static (uint NetId, byte Index) LastReference;
+
+    [ThreadStatic] private static HashSet<Type>? s_unreferable;
 
     /// <summary>Host: the client whose data is being read. Its references to objects it doesn't have read as null.</summary>
     [ThreadStatic] internal static NetPeer? ReferencesFrom;
@@ -135,9 +140,6 @@ internal static class NetSerializers
         public void Dispose() => ReferencesFrom = _previous;
     }
 
-    /// <summary>Host: where engine references are written to, or read from, the arguments being recorded.</summary>
-    [ThreadStatic] internal static ReferenceSites? WrittenSites, ReadSites;
-
     private static GameObject? OwnerOf(object? value) => value switch
     {
         GameObject go => go.IsValid() ? go : null,
@@ -145,19 +147,62 @@ internal static class NetSerializers
         _ => null
     };
 
+    // A reference goes as the NetId of its networked object and the index of the component in it, as Mirror names a
+    // NetworkIdentity or NetworkBehaviour. Zero is null. Anything else can't be named, and goes as null.
     private static void WriteReference(NetWriter w, object? value)
     {
-        Guid id = value switch { GameObject go => go.Identifier, Component c => c.Identifier, _ => Guid.Empty };
-        if (OwnerOf(value) is { } owner)
+        if (Networking.System is { IsActive: true } system && OwnerOf(value) is { } owner)
         {
-            id = NetworkSerialization.ReferenceId(owner, id);
-            if (id != Guid.Empty && WrittenSites is { } sites && ReferenceEquals(sites.Writer, w))
+            NetworkObject? entry = system.FindEntry(owner);
+            int index = entry == null ? -1
+                : value is Component component ? entry.IndexOf(component)
+                : ReferenceEquals(entry.GameObject, owner) ? RootIndex
+                : -1;
+            if (index >= 0)
             {
-                sites.Add(w.Length, owner);
+                w.WriteVarUInt32(entry!.NetId);
+                w.WriteByte((byte)index);
+                return;
+            }
+
+            if ((s_unreferable ??= new HashSet<Type>()).Add(value!.GetType()))
+            {
+                Debug.LogWarning(
+                    $"[Network] A reference to a {value.GetType().Name} was sent as null: only a networked object, or " +
+                    "one of its networked components, can be named over the network.");
             }
         }
 
-        w.WriteGuid(id);
+        w.WriteVarUInt32(0);
+    }
+
+    private static T ReadReference<T>(ref NetReader r)
+    {
+        uint netId = r.ReadVarUInt32();
+        if (netId == 0)
+        {
+            LastReference = default;
+            return default!;
+        }
+
+        byte index = r.ReadByte();
+        LastReference = (netId, index);
+        if (Networking.System is not { } system || !system.Entries.TryGetNet(netId, out NetworkObject? entry) ||
+            !entry.GameObject.IsValid())
+        {
+            return default!;
+        }
+
+        // A client can't make the host act on an object it was never sent.
+        if (ReferencesFrom is { } client && !system.Sees(entry.GameObject, client))
+        {
+            return default!;
+        }
+
+        object? found = index == RootIndex ? entry.GameObject
+            : index < entry.Components.Length ? entry.Components[index]
+            : null;
+        return found is T value && ((EngineObject)found).IsValid() ? value : default!;
     }
 
     public static (NetSerializer<T>.Writer?, NetSerializer<T>.Reader?) Create<T>()
@@ -320,33 +365,7 @@ internal static class NetSerializers
         // Engine objects travel as their identifier, and come out as whatever the receiver has under it.
         if (typeof(GameObject).IsAssignableFrom(t) || typeof(Component).IsAssignableFrom(t))
         {
-            return (
-                (w, v) => WriteReference(w, v),
-                (ref r) =>
-                {
-                    int at = r.Position;
-                    Guid id = r.ReadGuid();
-                    if (Networking.System is not { } system || id == Guid.Empty)
-                    {
-                        return default!;
-                    }
-
-                    EngineObject? found = system.FindByIdentifier(id);
-                    if (found.IsNotValid())
-                    {
-                        UnresolvedReferences++;
-                    }
-                    else if (OwnerOf(found!) is { } owner)
-                    {
-                        ReadSites?.Add(at, owner);
-                        if (ReferencesFrom is { } client && !system.Sees(owner, client))
-                        {
-                            return default!;
-                        }
-                    }
-
-                    return found is T value ? value : default!;
-                });
+            return ((w, v) => WriteReference(w, v), static (ref r) => ReadReference<T>(ref r));
         }
 
         if (t == typeof(byte[]))

@@ -567,6 +567,7 @@ internal sealed partial class NetworkSystem
             };
             go.Network.ApplyOrphaned(orphaned);
             Entries.Add(entry);
+            Sync.ResolveReferencesTo(entry);
             if (message.Replace)
             {
                 entry.TransformSync.ReceivedAt(message.Tick);
@@ -588,12 +589,6 @@ internal sealed partial class NetworkSystem
             if (Session != session || ReplicatedWorld != scene)
             {
                 return;
-            }
-
-            FillLinks(go);
-            if (!adopted && echo != null)
-            {
-                CollectLinks(echo, context);
             }
 
             NotifyOrHold(entry);
@@ -673,7 +668,6 @@ internal sealed partial class NetworkSystem
             VisibilityOverrides.Remove(go);
         }
 
-        ForgetLinksFrom(go);
 
         if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)
         {
@@ -758,7 +752,6 @@ internal sealed partial class NetworkSystem
         DespawnMessage message = DespawnMessage.Read(ref reader);
         if (Entries.Remove(message.Identifier, out NetworkObject? entry) && entry.GameObject.IsValid())
         {
-            ForgetLinksFrom(entry.GameObject);
             entry.NotifyDespawn(message.Reason);
             if (entry.Template?.Factory is { } factory && NetworkFactories.TryGet(factory, out _, out Action<GameObject>? destroy) &&
                 destroy != null && entry.GameObject.IsValid())

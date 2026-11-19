@@ -10,151 +10,12 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>A [Sync] value written to clients, with the networked roots its references were masked for, or named.</summary>
-internal readonly record struct WrittenValue(Component Component, uint Slot, GameObject[] Masked, GameObject[] Linked);
-
 internal static class NetworkSerialization
 {
     [ThreadStatic] internal static bool WritingSnapshot;
 
-    // Networked roots the receiver of what is being written does not have.
-    [ThreadStatic] internal static HashSet<GameObject>? HiddenRoots;
-
-    // Host: the clients receiving what is being written, when it goes to some but not all of them.
-    [ThreadStatic] internal static NetPeer? Receiver;
-    [ThreadStatic] internal static IReadOnlyList<NetPeer>? Receivers;
-
-    // Host: [Sync] values written with references, for the snapshot system to remember per client.
-    [ThreadStatic] internal static List<WrittenValue>? WrittenValues;
-
-    // Host: the networked roots the [Sync] value being written was masked for, or named, while collecting.
-    [ThreadStatic] internal static bool CollectingRoots;
-    [ThreadStatic] private static List<GameObject>? s_maskedRoots, s_linkedRoots;
-
-    // Host: secret roots a link was emptied for although some receivers have them, while splitting.
-    [ThreadStatic] private static bool s_splitting;
-    [ThreadStatic] internal static List<GameObject>? PartlyHidden;
-
-    // Network collection changes are written once for everyone, so their references go unmasked.
-    [ThreadStatic] internal static bool KeepReferences;
-
-    internal static List<GameObject> MaskedRoots => s_maskedRoots ??= new List<GameObject>();
-
-    internal static List<GameObject> LinkedRoots => s_linkedRoots ??= new List<GameObject>();
-
     internal static bool Include(GameObject go) =>
-        !WritingSnapshot || (!NetworkAccessor.ServerOnlyOf(go) && !IsHiddenRoot(go));
-
-    internal static bool IsHiddenRoot(GameObject go) => HiddenRoots?.Contains(go) == true;
-
-    internal static bool InHiddenTree(GameObject go) =>
-        HiddenRoots is { Count: > 0 } roots && NetworkAccessor.RootOf(go) is { } root && roots.Contains(root);
-
-    /// <summary>True if a client receiving what is being written does not have the networked object <paramref name="go" /> is in.</summary>
-    internal static bool HiddenFromReceivers(GameObject go)
-    {
-        if (InHiddenTree(go))
-        {
-            return true;
-        }
-
-        if ((Receiver == null && Receivers == null) || Networking.System is not { Restricted.Count: > 0 } system ||
-            system.FindEntry(go)?.HiddenFrom is not { Count: > 0 } hidden)
-        {
-            return false;
-        }
-
-        if (Receiver != null)
-        {
-            return hidden.Contains(Receiver.Id);
-        }
-
-        for (int i = 0; i < Receivers!.Count; i++)
-        {
-            if (hidden.Contains(Receivers[i].Id))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    ///     True if the networked object <paramref name="go" /> is in is kept from clients by a rule, not by distance:
-    ///     Manual, OwnerOnly, in a group, or hidden from someone with HideFrom. Links to those never carry its identifier.
-    /// </summary>
-    internal static bool IsSecret(GameObject go) =>
-        NetworkAccessor.RootOf(go) is { } root &&
-        (root.Network.Visibility is NetworkVisibility.Manual or NetworkVisibility.OwnerOnly || !root.Network.Groups.IsEmpty ||
-         Networking.System?.IsForcedHidden(root) == true);
-
-    /// <summary>The identifier to write for an engine reference: Guid.Empty for an object a receiver lacks.</summary>
-    internal static Guid ReferenceId(GameObject go, Guid id)
-    {
-        if (KeepReferences || id == Guid.Empty)
-        {
-            return id;
-        }
-
-        bool hidden = HiddenFromReceivers(go);
-        if (CollectingRoots && Networking.System is { IsHost: true } system && system.FindEntry(go) is { GameObject: var root })
-        {
-            List<GameObject> roots = hidden ? MaskedRoots : LinkedRoots;
-            if (!roots.Contains(root))
-            {
-                roots.Add(root);
-            }
-        }
-
-        return hidden ? Guid.Empty : id;
-    }
-
-    // Notes a secret root a link was emptied for, when some of the receivers do have it.
-    private static void NotePartlyHidden(GameObject go)
-    {
-        if (!s_splitting || Receivers is not { Count: > 1 } receivers || Networking.System is not { } system ||
-            system.FindEntry(go) is not { } entry)
-        {
-            return;
-        }
-
-        for (int i = 0; i < receivers.Count; i++)
-        {
-            if (NetworkSystem.Sees(entry, receivers[i]))
-            {
-                PartlyHidden ??= new List<GameObject>();
-                if (!PartlyHidden.Contains(entry.GameObject))
-                {
-                    PartlyHidden.Add(entry.GameObject);
-                }
-
-                return;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     Sets who what is written goes to, and where its [Sync] values with references are collected, until disposed.
-    ///     With <paramref name="split" />, secret links emptied for only some receivers are noted in <see cref="PartlyHidden" />.
-    /// </summary>
-    internal readonly ref struct WritingFor
-    {
-        private readonly NetPeer? _receiver;
-        private readonly IReadOnlyList<NetPeer>? _receivers;
-        private readonly List<WrittenValue>? _values;
-        private readonly bool _splitting;
-        private readonly List<GameObject>? _partlyHidden;
-
-        internal WritingFor(NetPeer? receiver, IReadOnlyList<NetPeer>? receivers, List<WrittenValue>? values, bool split = false)
-        {
-            (_receiver, _receivers, _values, _splitting, _partlyHidden) = (Receiver, Receivers, WrittenValues, s_splitting, PartlyHidden);
-            (Receiver, Receivers, WrittenValues, s_splitting, PartlyHidden) = (receiver, receivers, values, split, null);
-        }
-
-        public void Dispose() =>
-            (Receiver, Receivers, WrittenValues, s_splitting, PartlyHidden) = (_receiver, _receivers, _values, _splitting, _partlyHidden);
-    }
+        !WritingSnapshot || !NetworkAccessor.ServerOnlyOf(go);
 
     internal static void Write(GameObject go, EchoObject output)
     {
@@ -162,7 +23,7 @@ internal static class NetworkSerialization
         if (network == null || (!network.Networked && !network.ServerOnly &&
                                 network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None && network.SendInterval == 1 &&
                                 network.Visibility == NetworkVisibility.Default && network.CullDistance == 0 &&
-                                network.Groups.IsEmpty))
+                                network.Groups.IsEmpty && !network.HasComponentIntervals))
         {
             return;
         }
@@ -200,6 +61,26 @@ internal static class NetworkSerialization
             settings.Add("Groups", new EchoObject(network.Groups.Mask));
         }
 
+        if (network.HasComponentIntervals)
+        {
+            // By each component's place among the object's own, which is how they are stored too.
+            EchoObject intervals = EchoObject.NewList();
+            List<Component> components = [.. go.GetComponents<Component>()];
+            for (int i = 0; i < components.Count; i++)
+            {
+                int interval = NetworkAccessor.SendIntervalOf(components[i]);
+                if (interval > 1)
+                {
+                    EchoObject entry = EchoObject.NewCompound(2);
+                    entry.Add("Index", new EchoObject(i));
+                    entry.Add("Ticks", new EchoObject((byte)interval));
+                    intervals.ListAdd(entry);
+                }
+            }
+
+            settings.Add("ComponentIntervals", intervals);
+        }
+
         output.Add("Network", settings);
     }
 
@@ -214,6 +95,7 @@ internal static class NetworkSerialization
 
             existing.Networked = false;
             existing.ServerOnly = false;
+            existing.ClearComponentIntervals();
             existing.Orphaned = NetworkOrphaned.Destroy;
             existing.Flags = NetworkFlags.None;
             existing.SendInterval = 1;
@@ -235,13 +117,29 @@ internal static class NetworkSerialization
         float cullDistance = settings["CullDistance"]?.FloatValue ?? 0;
         network.CullDistance = float.IsFinite(cullDistance) && cullDistance > 0 ? cullDistance : 0;
         network.Groups = new NetworkGroups(settings["Groups"]?.ULongValue ?? 0);
+        network.ClearComponentIntervals();
+        if (settings["ComponentIntervals"]?.List is { } intervals)
+        {
+            // The object's components are read after this, so the intervals wait for them by index.
+            List<(int Index, int Ticks)> pending = new();
+            foreach (EchoObject entry in intervals)
+            {
+                int index = entry["Index"]?.IntValue ?? -1;
+                int ticks = entry["Ticks"]?.ByteValue ?? 1;
+                if (index >= 0 && ticks > 1)
+                {
+                    pending.Add((index, ticks));
+                }
+            }
+
+            network.SetStoredIntervals(pending);
+        }
     }
 
     /// <summary>
-    ///     For writing what clients receive: a reference to anything server only, or in a networked
-    ///     object a receiver lacks, is linked instead of written by value, so a field pointing at it can't carry it along.
-    ///     The link names the object only when distance is all that keeps it away, so the client can fill it in once the
-    ///     object arrives. Everything else goes to <paramref name="inner" />, or is written as usual without one.
+    ///     For writing a tree clients receive: a reference to anything server only is written as nothing, so a field
+    ///     pointing at it can't carry it along. Everything else goes to <paramref name="inner" />, or is written as
+    ///     usual without one.
     /// </summary>
     internal sealed class SnapshotReferences(IExternalReferenceResolver? inner = null) : IExternalReferenceResolver
     {
@@ -260,17 +158,6 @@ internal static class NetworkSerialization
                 // Guid.Empty names no object, so it reads back as null without revealing which one it was.
                 if (NetworkAccessor.IsExcludedFromNetwork(owner!))
                 {
-                    return Guid.Empty;
-                }
-
-                if (HiddenFromReceivers(owner!))
-                {
-                    if (!IsSecret(owner!))
-                    {
-                        return value is Component part ? part.Identifier : owner!.Identifier;
-                    }
-
-                    NotePartlyHidden(owner!);
                     return Guid.Empty;
                 }
             }

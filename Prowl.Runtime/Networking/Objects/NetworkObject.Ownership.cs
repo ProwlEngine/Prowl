@@ -15,16 +15,15 @@ namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkObject
 {
-    /// <summary>The tree's poses: all of them, or only the ones this peer controls.</summary>
-    internal void WriteHandoffPoses(NetWriter output, bool includeAll)
+    /// <summary>The poses of the tree's objects that sync their transform.</summary>
+    internal void WriteHandoffPoses(NetWriter output)
     {
         using NetWriter poses = new();
         uint count = 0;
         foreach (GameObject go in GameObject.GetChildrenDeep().Prepend(GameObject))
         {
             if (NetworkAccessor.IsExcludedFromNetwork(go) || System.FindEntry(go) != this ||
-                !go.Network.HasTransformSync ||
-                (!includeAll && !System.HasControl(go)))
+                !go.Network.HasTransformSync)
             {
                 continue;
             }
@@ -122,7 +121,7 @@ internal sealed partial class NetworkObject
         // What changed so far goes ahead of the handoff, in order with it.
         System.Sync.SendSyncChanges();
         using NetWriter poses = new(), message = new();
-        WriteHandoffPoses(poses, true);
+        WriteHandoffPoses(poses);
         new OwnershipStateMessage(GameObject.Identifier, Generation, velocity, poses.WrittenSpan).Write(message);
         System.SendToObservers(this, EngineMessage.OwnershipState, message.WrittenSpan);
         foreach (NetPeer peer in System.Session!.Peers)

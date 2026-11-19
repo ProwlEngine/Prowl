@@ -195,36 +195,6 @@ internal sealed partial class NetworkSystem
         VisibilityOverrides.Clear();
     }
 
-    /// <summary>The networked roots <paramref name="peer" /> does not have, or null if it has them all.</summary>
-    private HashSet<GameObject>? HiddenRoots(NetPeer peer)
-    {
-        HashSet<GameObject>? roots = null;
-        foreach (NetworkObject entry in Restricted)
-        {
-            if (!Sees(entry, peer) && entry.GameObject.IsValid())
-            {
-                (roots ??= new HashSet<GameObject>(ReferenceEqualityComparer.Instance)).Add(entry.GameObject);
-            }
-        }
-
-        return roots;
-    }
-
-    /// <summary>Runs <paramref name="write" /> leaving out the networked roots in <paramref name="roots" />.</summary>
-    private static void WithoutRoots(HashSet<GameObject>? roots, Action write)
-    {
-        HashSet<GameObject>? previous = NetworkSerialization.HiddenRoots;
-        NetworkSerialization.HiddenRoots = roots;
-        try
-        {
-            write();
-        }
-        finally
-        {
-            NetworkSerialization.HiddenRoots = previous;
-        }
-    }
-
     private void ForgetInRange(NetworkObject entry)
     {
         foreach (PeerInterest interest in _interests.Values)
@@ -371,65 +341,16 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    // Sends entry whole to peers, written once for each group of them that has the same secret objects it links to.
+    // Sends entry whole to peers, written once for all of them.
     private void SendSpawn(NetworkObject entry, IReadOnlyList<NetPeer> peers, bool entering)
     {
-        if (SendSpawn(entry, peers, entering, true) is not { } partlyHidden)
-        {
-            return;
-        }
-
-        List<(bool[] Seen, List<NetPeer> Peers)> groups = [];
+        GameObject go = entry.GameObject;
+        using NetWriter message = new(4096);
+        WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation, entry.NetId, entering);
+        _lastSpawnBytes = message.Length;
         foreach (NetPeer peer in peers)
         {
-            bool[] seen = new bool[partlyHidden.Count];
-            for (int i = 0; i < seen.Length; i++)
-            {
-                seen[i] = Sees(FindEntry(partlyHidden[i]), peer);
-            }
-
-            int group = groups.FindIndex(g => g.Seen.AsSpan().SequenceEqual(seen));
-            if (group < 0)
-            {
-                groups.Add((seen, [peer]));
-            }
-            else
-            {
-                groups[group].Peers.Add(peer);
-            }
-        }
-
-        foreach ((_, List<NetPeer> members) in groups)
-        {
-            SendSpawn(entry, members, entering, false);
-        }
-    }
-
-    private List<GameObject>? SendSpawn(NetworkObject entry, IReadOnlyList<NetPeer> peers, bool entering, bool everyone)
-    {
-        GameObject go = entry.GameObject;
-        List<WrittenValue> written = new();
-        using NetWriter message = new(4096);
-        using (new NetworkSerialization.WritingFor(null, peers, written, everyone))
-        {
-            WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation, entry.NetId, entering);
-            if (NetworkSerialization.PartlyHidden is { } partlyHidden)
-            {
-                return partlyHidden;
-            }
-        }
-
-        _lastSpawnBytes = message.Length;
-        if (everyone && !entering)
-        {
-            SendToObservers(entry, EngineMessage.Spawn, message.WrittenSpan);
-        }
-        else
-        {
-            foreach (NetPeer peer in peers)
-            {
-                SendEngine(peer, EngineMessage.Spawn, message.WrittenSpan);
-            }
+            SendEngine(peer, EngineMessage.Spawn, message.WrittenSpan);
         }
 
         foreach (NetPeer peer in peers)
@@ -442,7 +363,5 @@ internal sealed partial class NetworkSystem
                 Sync.QueueMembers(peer, entry, static sync => (sync.Flags & SyncFlags.ToOwner) != 0);
             }
         }
-
-        return null;
     }
 }

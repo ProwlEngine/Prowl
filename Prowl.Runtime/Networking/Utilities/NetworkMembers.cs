@@ -53,6 +53,11 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 
     internal abstract string FormatValue(Component component);
 
+    /// <summary>Sets a reference member to the object it named once this peer has it. Runs no hook, as in Mirror.</summary>
+    internal virtual void Resolve(Component component, object target)
+    {
+    }
+
     internal virtual string FormatPayload(ref NetReader reader) => "Value unavailable";
 }
 
@@ -60,6 +65,10 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 [EditorBrowsable(EditorBrowsableState.Never)]
 public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : SyncMember(slot, name, flags)
 {
+    /// <summary>True when the value is a reference to a networked object or component, which travels by NetId.</summary>
+    internal static readonly bool IsReference =
+        typeof(GameObject).IsAssignableFrom(typeof(T)) || typeof(Component).IsAssignableFrom(typeof(T));
+
     /// <summary>Generated setter: applies an authorized local change and queues it for replication.</summary>
     public void Set(Component component, ref T field, T value)
     {
@@ -80,6 +89,11 @@ public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : S
 
             field = value;
             Networking.System!.Sync.MarkSyncDirty(component, Slot);
+            if (IsReference)
+            {
+                // Set here, so nothing received names it any more.
+                Networking.System!.Sync.NoteReference(component, this, default);
+            }
         }
         else
         {
@@ -114,6 +128,12 @@ public sealed class SyncMember<TComponent, T>(
     {
         TComponent c = (TComponent)component;
         T value = NetSerializer<T>.Read(ref reader);
+        if (IsReference)
+        {
+            // Kept by what it names, so it starts reading as that object if the object arrives later.
+            Networking.System?.Sync.NoteReference(c, this, NetSerializers.LastReference);
+        }
+
         if (changed == null)
         {
             set(c, value);
@@ -140,6 +160,14 @@ public sealed class SyncMember<TComponent, T>(
 
     internal override void Changed(Component component, T oldValue, T newValue) =>
         changed?.Invoke((TComponent)component, oldValue, newValue);
+
+    internal override void Resolve(Component component, object target)
+    {
+        if (target is T value)
+        {
+            set((TComponent)component, value);
+        }
+    }
 
     internal override string FormatValue(Component component) =>
         NetworkDiagnostics.FormatValue(get((TComponent)component));

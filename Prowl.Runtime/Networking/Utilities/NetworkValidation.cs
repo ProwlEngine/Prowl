@@ -41,14 +41,6 @@ internal static class NetworkValidation
         }
     }
 
-    internal static void SyncCount(uint count, int remaining)
-    {
-        if (count > remaining / SyncValue.MinimumSize)
-        {
-            throw new InvalidDataException("Sync count exceeds the remaining data.");
-        }
-    }
-
     internal static void ValidateTransformChannels(TransformChannels channels)
     {
         if ((channels & ~TransformChannels.All) != 0)

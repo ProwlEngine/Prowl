@@ -90,6 +90,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
         _batches.Clear();
         _spawnHooks.Clear();
+        _references.Clear();
+        _referenceOf.Clear();
     }
 
     internal void RemovePeer(int peerId)
@@ -98,6 +100,72 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         {
             batch.Records.Reset();
             _writerPool.Push(batch.Records);
+        }
+    }
+
+    // [Sync] references received, by the object each names, and what each member names. As Mirror's reference SyncVars
+    // look their object up when read, a reference to an object that arrives later starts reading as that object.
+    private readonly Dictionary<uint, List<(Component Component, SyncMember Sync, byte Index)>> _references = new();
+    private readonly Dictionary<(Component Component, uint Slot), uint> _referenceOf = new();
+
+    /// <summary>Remembers what a reference member was just told to name, or forgets it for a null or local value.</summary>
+    internal void NoteReference(Component component, SyncMember sync, (uint NetId, byte Index) reference)
+    {
+        (Component, uint) key = (component, sync.Slot);
+        if (_referenceOf.Remove(key, out uint previous) &&
+            _references.TryGetValue(previous, out List<(Component Component, SyncMember Sync, byte Index)>? named))
+        {
+            named.RemoveAll(e => ReferenceEquals(e.Component, component) && e.Sync.Slot == sync.Slot);
+            if (named.Count == 0)
+            {
+                _references.Remove(previous);
+            }
+        }
+
+        if (reference.NetId == 0)
+        {
+            return;
+        }
+
+        _referenceOf[key] = reference.NetId;
+        if (!_references.TryGetValue(reference.NetId, out named))
+        {
+            _references[reference.NetId] = named = new List<(Component, SyncMember, byte)>();
+        }
+
+        named.Add((component, sync, reference.Index));
+    }
+
+    /// <summary><paramref name="entry" /> arrived on this peer: the reference members naming it read as it from now.</summary>
+    internal void ResolveReferencesTo(NetworkObject entry)
+    {
+        if (!_references.TryGetValue(entry.NetId, out List<(Component Component, SyncMember Sync, byte Index)>? named))
+        {
+            return;
+        }
+
+        for (int i = named.Count - 1; i >= 0; i--)
+        {
+            (Component component, SyncMember sync, byte index) = named[i];
+            if (component.IsNotValid())
+            {
+                named.RemoveAt(i);
+                _referenceOf.Remove((component, sync.Slot));
+                continue;
+            }
+
+            object? target = index == NetSerializers.RootIndex ? entry.GameObject
+                : index < entry.Components.Length ? entry.Components[index]
+                : null;
+            if (target != null)
+            {
+                sync.Resolve(component, target);
+            }
+        }
+
+        if (named.Count == 0)
+        {
+            _references.Remove(entry.NetId);
         }
     }
 
@@ -404,8 +472,6 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     private bool WriteMember(Component component, SyncMember sync, bool whole)
     {
         _value.Reset();
-        bool keep = NetworkSerialization.KeepReferences;
-        NetworkSerialization.KeepReferences = true;
         try
         {
             if (whole)
@@ -422,10 +488,6 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         {
             WarnSyncOnce(component, sync, $"could not be serialized ({e.Message})");
             return false;
-        }
-        finally
-        {
-            NetworkSerialization.KeepReferences = keep;
         }
 
         if (NetworkDiagnostics.Enabled)

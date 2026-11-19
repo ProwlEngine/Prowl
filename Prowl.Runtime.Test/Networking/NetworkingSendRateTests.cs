@@ -15,10 +15,6 @@ public partial class NetworkingTests
         peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot && ReadTransforms(m.Data).Any(r => r.NetId == netId))
             .Select(m => SnapshotTick(m.Data)).ToList();
 
-    private static List<uint> TicksCarrying(FakePeer peer, Guid component, uint slot) =>
-        peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot && FakePeer.SnapshotValues(m.Data).Any(v => v.Component == component && v.Slot == slot))
-            .Select(m => SnapshotTick(m.Data)).ToList();
-
     private static uint SnapshotTick(byte[] snapshot)
     {
         NetReader r = new(snapshot);
@@ -70,6 +66,27 @@ public partial class NetworkingTests
             Assert.True(fastTicks.Count >= slowTicks.Count * 2, $"fast {fastTicks.Count}, slow {slowTicks.Count}");
         }
         finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void AComponentsSendIntervalIsSavedWithItsObject()
+    {
+        GameObject go = CreateGameObject("Saved");
+        go.AddComponent<PlainTestComponent>();
+        NetTestComponent slow = go.AddComponent<NetTestComponent>();
+        go.Network.SetSendInterval(slow, 6);
+        Assert.Throws<ArgumentOutOfRangeException>(() => go.Network.SetSendInterval(slow, 0));
+        Assert.Throws<ArgumentException>(() => go.Network.SetSendInterval(CreateGameObject().AddComponent<NetTestComponent>(), 2));
+
+        GameObject copy = Serializer.Deserialize<GameObject>(Serializer.Serialize(go))!;
+        Assert.Equal(6, copy.Network.GetSendInterval(copy.GetComponent<NetTestComponent>()!));
+        Assert.Equal(1, copy.Network.GetSendInterval(copy.GetComponent<PlainTestComponent>()!));
+
+        // Back at 1 it is the default, and nothing is stored for it.
+        go.Network.SetSendInterval(slow, 1);
+        Assert.False(Serializer.Serialize(go).TryGet("Network", out _));
+        copy.Dispose();
+        go.Dispose();
     }
 
     [Fact]

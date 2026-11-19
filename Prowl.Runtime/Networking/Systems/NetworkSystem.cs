@@ -75,7 +75,6 @@ internal sealed partial class NetworkSystem : IDisposable
 
         Entries.Clear();
         ForgetVisibility();
-        ForgetLinks();
         Spawning = null;
         ReplicatedWorld = null;
         ForgetSections();

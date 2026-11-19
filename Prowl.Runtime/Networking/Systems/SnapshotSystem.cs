@@ -46,7 +46,6 @@ internal sealed class SnapshotSystem : IDisposable
     private readonly List<(TransformGroup Group, NetworkObject Entry, TransformUpdate Update)> _relay = new();
     private readonly NetworkSystem _scene;
     private readonly List<NetworkObject> _scratchObjects = new();
-    private readonly List<uint> _scratchIds = new();
 
     private readonly List<(uint NetId, uint Generation)> _scratchPositions = new();
     private readonly List<NetPeer> _sendTargets = new();
@@ -154,9 +153,6 @@ internal sealed class SnapshotSystem : IDisposable
 
     // --- Changes --------------------------------------------------------------------------------
 
-    private static int ControllerOf(NetworkObject? entry) =>
-        entry == null || entry.Owner == NoOwner ? NetPeer.HostId : entry.Owner;
-
     private int ControllerOf(GameObject go)
     {
         int owner = _scene.OwnerOf(go);
@@ -203,8 +199,6 @@ internal sealed class SnapshotSystem : IDisposable
         int interval = entry == null ? 1 : NetworkAccessor.SendIntervalOf(entry.GameObject);
         return interval <= 1 || (tick + entry!.NetId) % (uint)interval == 0;
     }
-
-    private static bool InTree(GameObject go, GameObject root) => go == root || go.IsChildOf(root);
 
     private uint Epoch => (uint)_scene.SceneGeneration;
 

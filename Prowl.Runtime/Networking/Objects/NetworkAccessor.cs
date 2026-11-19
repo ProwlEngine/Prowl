@@ -25,6 +25,9 @@ public sealed class NetworkAccessor
     // The send interval of each component of this object that has one set, as Mirror's syncInterval.
     private Dictionary<Component, int>? _componentIntervals;
 
+    // Intervals as stored, by component index, until the object's components are there to take them.
+    private List<(int Index, int Ticks)>? _storedIntervals;
+
     internal NetworkAccessor(GameObject owner) => _object = owner;
 
     /// <summary>
@@ -87,8 +90,8 @@ public sealed class NetworkAccessor
     }
 
     /// <summary>
-    ///     How many ticks apart the object's moving transform and changed [Sync] values go out, from 1 (every tick)
-    ///     to 255. Only the host may change this after spawning.
+    ///     How many ticks apart the object's moving transform goes out, from 1 (every tick) to 255. Only the host may
+    ///     change this after spawning. [Sync] values have their own, per component: see <see cref="SetSendInterval" />.
     /// </summary>
     public int SendInterval
     {
@@ -127,6 +130,7 @@ public sealed class NetworkAccessor
             throw new ArgumentException("The component is not on this object.", nameof(component));
         }
 
+        TakeStoredIntervals();
         if (ticks == 1)
         {
             _componentIntervals?.Remove(component);
@@ -135,6 +139,34 @@ public sealed class NetworkAccessor
         {
             (_componentIntervals ??= new Dictionary<Component, int>())[component] = ticks;
         }
+    }
+
+    internal bool HasComponentIntervals => TakeStoredIntervals() is { Count: > 0 };
+
+    internal void ClearComponentIntervals() => (_componentIntervals, _storedIntervals) = (null, null);
+
+    internal void SetStoredIntervals(List<(int Index, int Ticks)> stored) =>
+        _storedIntervals = stored.Count > 0 ? stored : null;
+
+    // The intervals by component, once the stored ones found theirs.
+    private Dictionary<Component, int>? TakeStoredIntervals()
+    {
+        if (_storedIntervals is not { } stored)
+        {
+            return _componentIntervals;
+        }
+
+        _storedIntervals = null;
+        List<Component> components = [.. _object.GetComponents<Component>()];
+        foreach ((int index, int ticks) in stored)
+        {
+            if (index < components.Count)
+            {
+                (_componentIntervals ??= new Dictionary<Component, int>())[components[index]] = ticks;
+            }
+        }
+
+        return _componentIntervals;
     }
 
     /// <summary>The ticks between sends of a component's changed [Sync] values. See <see cref="SetSendInterval" />.</summary>
@@ -328,7 +360,7 @@ public sealed class NetworkAccessor
 
     /// <summary>The ticks between sends of a component's [Sync] state: its own, or 1 when it has none set.</summary>
     internal static int SendIntervalOf(Component component) =>
-        component.GameObject._network is { _componentIntervals: { } intervals } &&
+        component.GameObject._network?.TakeStoredIntervals() is { } intervals &&
         intervals.TryGetValue(component, out int interval)
             ? interval
             : 1;

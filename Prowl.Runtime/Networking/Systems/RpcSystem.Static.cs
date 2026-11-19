@@ -12,7 +12,6 @@ namespace Prowl.Runtime.Networking;
 internal sealed partial class RpcSystem
 {
     internal StaticRpcMember? _incomingStatic;
-    private readonly ReferenceSites _staticSites = new();
     private readonly NetWriter _staticWriter = new();
 
     internal bool BeginStaticRpc(StaticRpcMember rpc, out NetWriter writer)
@@ -31,13 +30,11 @@ internal sealed partial class RpcSystem
 
         _staticWriter.Reset();
         writer = _staticWriter;
-        RecordReferences(_staticSites, writer, 0);
         return true;
     }
 
     internal bool SendStaticRpc(StaticRpcMember rpc, NetWriter arguments)
     {
-        ReferenceSites? sites = ReferenceSites.Finish(arguments);
         if (!scene.IsHost && (!scene.IsReady || (rpc.Flags & RpcFlags.HostOnly) != 0))
         {
             return false;
@@ -73,7 +70,7 @@ internal sealed partial class RpcSystem
         if (scene.IsHost)
         {
             SendRpcRecipients(EngineMessage.StaticRpcFromHost, message.WrittenSpan, delivery, recipients,
-                channel: rpc.Channel, sites: sites, arguments: message.Length - arguments.Length);
+                channel: rpc.Channel);
         }
         else
         {
@@ -123,16 +120,7 @@ internal sealed partial class RpcSystem
             return;
         }
 
-        _relaySites.Begin(null, 0);
-        NetSerializers.ReadSites = _relaySites;
-        try
-        {
-            rpc.ValidateArguments(arguments);
-        }
-        finally
-        {
-            NetSerializers.ReadSites = null;
-        }
+        rpc.ValidateArguments(arguments);
 
         if (rpc.Mode == RpcMode.Broadcast)
         {
@@ -141,7 +129,7 @@ internal sealed partial class RpcSystem
             new RpcCallerMessage(sender.Id).Write(relay);
             WriteStaticCall(relay, rpc, arguments);
             SendRpcRecipients(EngineMessage.StaticRpcFromHost, relay.WrittenSpan, StaticRpcDelivery(rpc), recipients,
-                sender, rpc.Channel, sites: _relaySites, arguments: relay.Length - arguments.Length, caller: sender);
+                sender, rpc.Channel);
         }
 
         if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))

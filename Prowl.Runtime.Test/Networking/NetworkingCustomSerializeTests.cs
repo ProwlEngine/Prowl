@@ -12,9 +12,11 @@ public class PackedGridTestComponent : Component, INetworkSerialize
 {
     public bool[] Cells = new bool[16];
     public readonly List<bool> Initial = new();
+    public readonly List<bool> WrittenInitial = new();
 
-    public void OnSerialize(NetWriter writer)
+    public void OnSerialize(NetWriter writer, bool initial)
     {
+        WrittenInitial.Add(initial);
         ushort bits = 0;
         for (int i = 0; i < Cells.Length; i++) if (Cells[i]) bits |= (ushort)(1 << i);
         writer.WriteUInt16(bits);
@@ -49,9 +51,13 @@ public partial class NetworkingTests
             Pump(() => alice.Has(FakePeer.Spawn), alice);
             Assert.True(SpawnCarries(alice, NetworkSerializeMember.CustomSlot));
 
+            // A spawn asks for the whole state; a send after SetDirty may hold only what changed.
+            Assert.All(grid.WrittenInitial, Assert.True);
+            grid.WrittenInitial.Clear();
             grid.Cells[0] = true;
             Networking.Networking.SetDirty(grid);
             Pump(() => alice.SnapshotValues().Any(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot), alice);
+            Assert.Equal([false], grid.WrittenInitial);
             byte[] bytes = alice.SnapshotValues().Last(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot).Value;
             Assert.Equal(0b1001, new NetReader(bytes).ReadUInt16());
 

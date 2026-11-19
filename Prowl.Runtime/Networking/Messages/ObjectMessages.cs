@@ -10,7 +10,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     Spawn header followed by a SyncBlock of initial component values. A root goes into section SectionSlot minus one,
+///     Spawn header followed by the state of each networked component. A root goes into section SectionSlot minus one,
 ///     or the active one for 0. Snapshot holds the compressed tree, or a <see cref="TemplateSpawn" /> when Template is set.
 /// </summary>
 internal readonly ref struct SpawnMessage(

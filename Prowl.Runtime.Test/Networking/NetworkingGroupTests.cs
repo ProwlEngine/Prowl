@@ -142,17 +142,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ALinkToAGroupedObjectNeverNamesIt()
-    {
-        GameObject go = CreateGameObject("Grouped");
-        go.Network.Networked = true;
-        Assert.False(NetworkSerialization.IsSecret(go));
-        go.Network.Groups = NetworkGroups.Of(7);
-        Assert.True(NetworkSerialization.IsSecret(go));
-        go.Dispose();
-    }
-
-    [Fact]
     public void DistanceInterestMatchesEveryObjectsRangeWhileThingsMove()
     {
         using InterestSession session = InterestHost(c =>

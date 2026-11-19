@@ -129,25 +129,6 @@ public partial class NetworkingTests
         return (id, owner, replace, health);
     }
 
-    /// <summary>Whether the Health value in this Snapshot names its component by guid, or null if it holds none.</summary>
-    private static bool? DefinesHealth(byte[] snapshot, int health)
-    {
-        NetReader r = new(snapshot);
-        r.ReadVarUInt32(); r.ReadVarUInt32(); r.ReadVarUInt32();
-        FakePeer.SkipTransformGroups(ref r);
-        uint count = r.ReadVarUInt32();
-        for (uint i = 0; i < count; i++)
-        {
-            uint key = r.ReadVarUInt32();
-            if ((key & 1) != 0) r.ReadGuid();
-            uint slot = r.ReadVarUInt32(); r.ReadVarUInt32();
-            NetReader value = new(r.ReadBytesWithLength());
-            if (slot == NetTestComponent.HealthSlot && NetSerializer<int>.Read(ref value) == health) return (key & 1) != 0;
-        }
-
-        return null;
-    }
-
     [Fact]
     public void AHiddenPeerReceivesNothingAboutTheObject()
     {
@@ -549,8 +530,8 @@ public partial class NetworkingTests
         crate.Network.ShowTo(session.AliceHere);
         Pump(() => session.Bob.Has(FakePeer.Spawn), session.Alice, session.Bob);
 
-        session.Bob.Send(FakePeer.RpcToHost, w => { w.WriteGuid(pointer.Identifier); w.WriteUInt32(PointerTestComponent.PointId); w.WriteGuid(crate.Identifier); });
-        session.Alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(pointer.Identifier); w.WriteUInt32(PointerTestComponent.PointId); w.WriteGuid(crate.Identifier); });
+        session.Bob.Send(FakePeer.RpcToHost, w => { w.WriteGuid(pointer.Identifier); w.WriteUInt32(PointerTestComponent.PointId); NetSerializer<GameObject>.Write(w, crate); });
+        session.Alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(pointer.Identifier); w.WriteUInt32(PointerTestComponent.PointId); NetSerializer<GameObject>.Write(w, crate); });
         Pump(() => pointer.Points.Count == 2, session.Alice, session.Bob);
         Assert.Contains((null, session.BobHere), pointer.Points);
         Assert.Contains((crate, session.AliceHere), pointer.Points);
@@ -561,7 +542,7 @@ public partial class NetworkingTests
             w.WriteGuid(holder.Identifier);
             w.WriteVarUInt32(SyncReferenceTestComponent.TargetSlot);
             using NetWriter v = new();
-            v.WriteGuid(target.Identifier);
+            NetSerializer<GameObject>.Write(v, target);
             w.WriteBytesWithLength(v.WrittenSpan);
         });
 

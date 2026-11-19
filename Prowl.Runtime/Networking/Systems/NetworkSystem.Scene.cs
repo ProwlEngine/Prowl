@@ -332,7 +332,7 @@ internal sealed partial class NetworkSystem
         void Collect(GameObject go)
         {
             if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0 ||
-                NetworkAccessor.ServerOnlyOf(go) || NetworkSerialization.IsHiddenRoot(go))
+                NetworkAccessor.ServerOnlyOf(go))
             {
                 return;
             }
