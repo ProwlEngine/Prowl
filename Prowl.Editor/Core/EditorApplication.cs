@@ -79,7 +79,7 @@ public class EditorApplication : Game
     private Selection.Snapshot? _savedSelection;
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
-    private DockPanel? _maximizedForPlay; // the Game view play mode maximized, so stopping restores the layout
+    private bool _maximizedForPlay; // play mode maximized the Game view, so stopping restores the layout
     private DockPanel? _maximizedBeforePlay; // the panel the user had maximized when play started, maximized again on stop
 
 
@@ -2013,14 +2013,14 @@ public class EditorApplication : Game
             FocusPanel(typeof(GameViewPanel));
         // A maximized panel would hide the focused Game view behind it, so the Game view takes its place.
         // Reset first, so nothing a previous session left behind (an exit that threw) carries into this one.
-        _maximizedForPlay = null;
+        _maximizedForPlay = false;
         _maximizedBeforePlay = null;
         DockPanel? maximizedBefore = _panelMaximizer.MaximizedPanel;
         bool maximize = prefs.GameViewOnPlay == GameViewOnPlay.Maximize ||
             (prefs.GameViewOnPlay == GameViewOnPlay.Focus && maximizedBefore != null);
         if (maximize && FindOpenPanel<GameViewPanel>() is GameViewPanel gameView && _panelMaximizer.Maximize(gameView))
         {
-            _maximizedForPlay = gameView;
+            _maximizedForPlay = true;
             _maximizedBeforePlay = maximizedBefore;
         }
 
@@ -2119,9 +2119,9 @@ public class EditorApplication : Game
 
         // Undo play mode's swap: end the Game view maximize it made, then maximize again whatever the user had
         // maximized before play. Any change the user made to the maximize during play (F3, a double-click) is kept.
-        bool undoSwap = _maximizedForPlay != null && _panelMaximizer.MaximizedPanel == _maximizedForPlay;
+        bool undoSwap = _maximizedForPlay && _panelMaximizer.MaximizedPanel is GameViewPanel;
         DockPanel? maximizedBefore = _maximizedBeforePlay;
-        _maximizedForPlay = null;
+        _maximizedForPlay = false;
         _maximizedBeforePlay = null;
         if (undoSwap)
             _panelMaximizer.Restore();
