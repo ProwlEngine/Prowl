@@ -46,7 +46,7 @@ public class InputAction
         get => _expectedValueType;
         set
         {
-            // Type must be either Double or Float2
+            // Type must be either float or Float2
             if (value != typeof(float) && value != typeof(Float2))
                 throw new ArgumentException("ExpectedValueType must be either typeof(float) or typeof(Float2).");
 

@@ -921,7 +921,7 @@ public class AnimationGraphWindow : GraphWindow<AnimationGraphWindow, GraphNodeR
                     {
                         paired[index] = v.ToString(System.Globalization.CultureInfo.InvariantCulture);
                         Write();
-                    }).Width(72).Show();
+                    }).Width(72).DragHandle(false).Show();
                 }
 
                 Origami.Button(paper, $"{id}_x{index}", "X", () =>
@@ -957,7 +957,7 @@ public class AnimationGraphWindow : GraphWindow<AnimationGraphWindow, GraphNodeR
         {
             entries[index] = JoinWeight(bone, v);
             write();
-        }).Width(60).Show();
+        }).Width(60).DragHandle(false).Show();
     }
 }
 

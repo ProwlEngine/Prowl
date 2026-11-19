@@ -63,8 +63,7 @@ public class AssetSettings : ProjectSettingsBase
             Origami.NumericField<int>(paper, "assets_budget_v", MemoryBudgetMB, v =>
             {
                 MemoryBudgetMB = Math.Max(0, v);
-                EditorRegistries.SaveSettings();
-            }).Min(0).Show());
+            }).OnCommit(EditorRegistries.SaveSettings).Min(0).Show());
 
         Origami.Header(paper, "assets_h_sdf", $"{EditorIcons.Cubes}  Mesh Signed Distance Fields").Underline().Show();
 

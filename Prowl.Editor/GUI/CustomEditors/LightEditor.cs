@@ -142,7 +142,7 @@ public class LightEditor : CustomEditor
                     .Step(50f).ShowValue(false).CustomTrack(KelvinTrack).Show();
                 Origami.NumericField<float>(paper, $"{id}_col_kv", light.Temperature,
                         v => Edit(light, () => light.Temperature = Maths.Clamp(v, ColorTemperature.Min, ColorTemperature.Max)))
-                    .Format("0").Suffix("K").Width(72).Show();
+                    .Format("0").Suffix("K").Width(72).DragHandle(false).Show();
             }
             else
             {

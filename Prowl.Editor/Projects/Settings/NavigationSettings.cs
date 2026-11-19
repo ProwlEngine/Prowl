@@ -159,10 +159,10 @@ public class NavigationSettings : ProjectSettingsBase
                     }
                 }
 
-                DrawAgentNumField(paper, $"nav_agent_r_{type.Id}", NumW, type.Radius, v => { AgentTypes[idx].Radius = MathF.Max(0.01f, v); Changed(); });
-                DrawAgentNumField(paper, $"nav_agent_h_{type.Id}", NumW, type.Height, v => { AgentTypes[idx].Height = MathF.Max(0.01f, v); Changed(); });
-                DrawAgentNumField(paper, $"nav_agent_s_{type.Id}", NumW, type.MaxSlope, v => { AgentTypes[idx].MaxSlope = Math.Clamp(v, 0f, 89f); Changed(); });
-                DrawAgentNumField(paper, $"nav_agent_c_{type.Id}", NumW, type.MaxClimb, v => { AgentTypes[idx].MaxClimb = MathF.Max(0f, v); Changed(); });
+                DrawAgentNumField(paper, $"nav_agent_r_{type.Id}", NumW, type.Radius, v => AgentTypes[idx].Radius = MathF.Max(0.01f, v));
+                DrawAgentNumField(paper, $"nav_agent_h_{type.Id}", NumW, type.Height, v => AgentTypes[idx].Height = MathF.Max(0.01f, v));
+                DrawAgentNumField(paper, $"nav_agent_s_{type.Id}", NumW, type.MaxSlope, v => AgentTypes[idx].MaxSlope = Math.Clamp(v, 0f, 89f));
+                DrawAgentNumField(paper, $"nav_agent_c_{type.Id}", NumW, type.MaxClimb, v => AgentTypes[idx].MaxClimb = MathF.Max(0f, v));
 
                 DrawDeleteButton(paper, $"nav_agent_del_{type.Id}", DelW, idx, isBuiltin ? null : id =>
                 {
@@ -213,11 +213,12 @@ public class NavigationSettings : ProjectSettingsBase
             .Small().Width(width).Height(22).Ghost().Show();
     }
 
-    private static void DrawAgentNumField(Paper paper, string id, float width, float value, Action<float> setter)
+    // The setter only stores the value; applying and saving happen once the edit is final.
+    private void DrawAgentNumField(Paper paper, string id, float width, float value, Action<float> setter)
     {
         using (paper.Box(id).Width(width).Height(22).Enter())
         {
-            Origami.NumericField<float>(paper, $"{id}_nf", value, setter).Show();
+            Origami.NumericField<float>(paper, $"{id}_nf", value, setter).OnCommit(Changed).Show();
         }
     }
 
@@ -289,8 +290,7 @@ public class NavigationSettings : ProjectSettingsBase
                             {
                                 if (costLocked) return;
                                 AreaCosts[idx] = MathF.Max(1f, v);
-                                Changed();
-                            }).Show();
+                            }).OnCommit(Changed).Show();
                     }
                 }
 
