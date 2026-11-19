@@ -369,6 +369,91 @@ public sealed class GizmoBatch
         Arrow(point, point + n * size, color, width, 8f);
     }
 
+    /// <summary>An axis through a point, drawn both ways, with a head on its positive end.</summary>
+    public void AxisLine(Float3 center, Float3 direction, float length, Color32 color, float width = 1.5f, float headPixels = 12f)
+    {
+        Float3 half = Float3.NormalizeSafe(direction, default) * length;
+        if (Float3.LengthSquared(half) <= 0)
+            return;
+        Arrow(center - half, center + half, color, width, headPixels);
+    }
+
+    /// <summary>A cross across an axis, marking a stop along it.</summary>
+    public void CrossBar(Float3 position, Float3 axis, float size, Color32 color, float width = 1.5f)
+    {
+        (Float3 u, Float3 v) = Basis(axis);
+        Line(position - u * size, position + u * size, color, width);
+        Line(position - v * size, position + v * size, color, width);
+    }
+
+    /// <summary>An arc with a head on its swept end, showing a turn. A negative sweep turns the other way.</summary>
+    public void SpinArrow(Float3 center, Float3 normal, Float3 from, float radius, float sweep, Color32 color, float width = 1.5f, float headPixels = 12f)
+    {
+        Arc(center, normal, from, sweep, radius, color, width);
+        Float3 n = Float3.Normalize(normal);
+        Float3 u = Float3.NormalizeSafe(from - n * Float3.Dot(from, n), Basis(n).U);
+        Float3 end = center + Quaternion.AxisAngle(n, sweep) * u * radius;
+        Float3 before = center + Quaternion.AxisAngle(n, sweep * 0.98f) * u * radius;
+        Add(before, end, before, color, headPixels, GizmoKind.ArrowHead, headPixels);
+    }
+
+    /// <summary>
+    /// An angular range around a normal from a zero direction, angles in radians: the swept arc, and a spoke to each
+    /// stop unless it goes all the way round.
+    /// </summary>
+    public void ArcRange(Float3 center, Float3 normal, Float3 zero, float radius, float min, float max, Color32 rangeColor, Color32 limitColor, float width = 1.5f)
+    {
+        if (max < min)
+            (min, max) = (max, min);
+        Float3 n = Float3.Normalize(normal);
+        Float3 start = Quaternion.AxisAngle(n, min) * zero;
+        Arc(center, n, start, max - min, radius, rangeColor, width);
+        if (max - min >= MathF.Tau - 1e-3f)
+            return;
+        Float3 end = Quaternion.AxisAngle(n, max) * zero;
+        Line(center, center + Float3.Normalize(start) * radius, limitColor, width);
+        Line(center, center + Float3.Normalize(end) * radius, limitColor, width);
+    }
+
+    /// <summary>
+    /// A range along an axis with a cross bar at each stop. An infinite end runs on for the open length with no stop,
+    /// so an unbounded range looks unbounded.
+    /// </summary>
+    public void LinearRange(Float3 origin, Float3 direction, float min, float max, float openLength, float stopSize, Color32 rangeColor, Color32 limitColor, float width = 1.5f)
+    {
+        Float3 axis = Float3.NormalizeSafe(direction, default);
+        if (Float3.LengthSquared(axis) <= 0)
+            return;
+        bool hasMin = float.IsFinite(min), hasMax = float.IsFinite(max);
+        float from = hasMin ? min : -openLength;
+        float to = hasMax ? max : openLength;
+        if (to < from)
+            (from, to) = (to, from);
+        Line(origin + axis * from, origin + axis * to, rangeColor, width);
+        if (hasMin)
+            CrossBar(origin + axis * from, axis, stopSize, limitColor, width);
+        if (hasMax)
+            CrossBar(origin + axis * to, axis, stopSize, limitColor, width);
+    }
+
+    /// <summary>
+    /// A cone opening by an angle in radians from its axis, up to a half turn, its edges arcs a slant length from the
+    /// apex, as a swing limit or a vision cone. Past a quarter turn the rim lies behind the apex.
+    /// </summary>
+    public void SlantCone(Float3 apex, Float3 axis, float angle, float length, Color32 color, float width = 1.5f, int segments = 48)
+    {
+        Float3 n = Float3.NormalizeSafe(axis, default);
+        if (Float3.LengthSquared(n) <= 0)
+            return;
+        angle = Math.Clamp(angle, 0, MathF.PI);
+        Circle(apex + n * (length * MathF.Cos(angle)), n, length * MathF.Sin(angle), color, width, segments);
+        (Float3 u, Float3 v) = Basis(n);
+        Arc(apex, v, n, angle, length, color, width, segments);
+        Arc(apex, v, n, -angle, length, color, width, segments);
+        Arc(apex, u, n, angle, length, color, width, segments);
+        Arc(apex, u, n, -angle, length, color, width, segments);
+    }
+
     /// <summary>Arrows along a frame's X, Y and Z axes in red, green and blue.</summary>
     public void Axes(Float3 position, Quaternion rotation, float size, float width = 2f, float headPixels = 12f)
     {
