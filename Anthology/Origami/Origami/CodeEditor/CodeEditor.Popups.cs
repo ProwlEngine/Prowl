@@ -27,7 +27,7 @@ public sealed partial class CodeEditor
     #region Popup text
 
     // A popup line as coloured runs. Popups use the editor's monospace font so sizing is just counting chars.
-    private sealed class PopupLine
+    internal sealed class PopupLine
     {
         public readonly List<(string Text, Color32 Color, bool Underline)> Runs = new();
         public int Length;
@@ -67,7 +67,7 @@ public sealed partial class CodeEditor
         }
     }
 
-    private void WrapTagged(IReadOnlyList<CodeTaggedText> parts, int width, CodeEditorColors pal, List<PopupLine> into)
+    internal static void WrapTagged(IReadOnlyList<CodeTaggedText> parts, int width, CodeEditorColors pal, List<PopupLine> into)
     {
         var line = new PopupLine();
         foreach (var part in parts)
@@ -77,12 +77,12 @@ public sealed partial class CodeEditor
             {
                 if (i > 0) { into.Add(line); line = new PopupLine(); }
                 string piece = pieces[i];
-                while (line.Length + piece.Length > width && line.Length > 0 && piece.Trim().Length > 0)
+                // A piece that does not fit moves to a new indented line once, however long it is.
+                if (line.Length + piece.Length > width && line.Length > 0 && piece.Trim().Length > 0)
                 {
                     into.Add(line);
                     line = new PopupLine().Add("    ", pal.PopupText);
                     piece = piece.TrimStart();
-                    if (piece.Length > width) break;
                 }
                 line.Add(piece, KindColor(part.Kind, pal));
             }
