@@ -1160,22 +1160,29 @@ public sealed partial class CodeEditor
         if (Session == null || IsReadOnly) return;
         int start = Document.PositionToOffset(Selection.Start);
         int length = Document.PositionToOffset(Selection.End) - start;
-        Continue(Session.GetCodeActionsAsync(start, length, CancellationToken.None), Document.Version, actions =>
+        int version = Document.Version;
+        Continue(Session.GetCodeActionsAsync(start, length, CancellationToken.None), version, actions =>
         {
             if (actions.Count == 0) { OpenList("No code actions", new List<ListItem>()); return; }
             var items = new List<ListItem>();
             foreach (var a in actions)
             {
                 var action = a;
-                items.Add(new ListItem(a.Title, a.IsQuickFix ? "fix" : "", () => ApplyCodeAction(action)));
+                items.Add(new ListItem(a.Title, a.IsQuickFix ? "fix" : "", () => ApplyCodeAction(action, version)));
             }
             OpenList("Code actions", items);
         });
     }
 
-    private void ApplyCodeAction(CodeAction action)
+    // An action's edits are offsets into the text it was listed for, so they are dropped once that text has changed.
+    internal void ApplyCodeAction(CodeAction action, int version)
     {
         if (IsReadOnly) return;
+        if (Document.Version != version)
+        {
+            OpenList($"The text changed, run '{action.Title}' again", new List<ListItem>());
+            return;
+        }
         if (action.Resolve == null)
         {
             ApplyEdits(action.Edits);
@@ -1193,6 +1200,11 @@ public sealed partial class CodeEditor
             if (result == null || (result.Edits.Count == 0 && result.OtherDocuments.Count == 0))
             {
                 OpenList($"'{action.Title}' made no text changes", new List<ListItem>());
+                return;
+            }
+            if (Document.Version != version)
+            {
+                OpenList($"The text changed, run '{action.Title}' again", new List<ListItem>());
                 return;
             }
             ApplyEdits(result.Edits);

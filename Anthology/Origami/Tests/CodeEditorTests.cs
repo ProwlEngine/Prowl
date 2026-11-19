@@ -162,6 +162,21 @@ public class CodeEditorEditingTests
     }
 
     [Fact]
+    public void ACodeActionListedBeforeAnEdit_IsNotApplied()
+    {
+        var e = Make("abc", 0, 3);
+        int listed = e.Document.Version;
+        var action = new CodeAction { Title = "Fix", Edits = new[] { new CodeTextEdit(0, 1, "X") } };
+
+        Type(e, "d");
+        e.ApplyCodeAction(action, listed);
+        Assert.Equal("abcd", e.Text);
+
+        e.ApplyCodeAction(action, e.Document.Version);
+        Assert.Equal("Xbcd", e.Text);
+    }
+
+    [Fact]
     public void ReadOnly_BlocksUndoAndRedo()
     {
         var e = Make("a", 0, 1);
