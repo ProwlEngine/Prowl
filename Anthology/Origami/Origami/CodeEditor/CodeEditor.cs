@@ -655,6 +655,7 @@ public sealed partial class CodeEditor : IDisposable
             else _collapsed.RemoveAt(i);
         }
         RebuildHiddenLines();
+        MoveCaretsOutOfFolds();
     }
 
     internal bool TryGetFoldAt(int line, out CodeFoldRange fold)
