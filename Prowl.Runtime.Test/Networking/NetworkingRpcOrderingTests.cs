@@ -190,7 +190,7 @@ public partial class NetworkingTests
             int rpcIndex = client.WireReceived.FindLastIndex(m => m.Id == FakePeer.RpcFromHost);
             rpc = client.WireReceived[rpcIndex].Data;
             NetReader call = new(rpc);
-            call.ReadVarUInt32(); call.ReadGuid(); call.ReadUInt32(); call.ReadBytesWithLength();
+            call.ReadVarUInt32(); call.ReadVarUInt32(); call.ReadByte(); call.ReadVarUInt32(); call.ReadBytesWithLength();
             Assert.True(call.IsAtEnd);
             // Nothing goes ahead of an unreliable call; its state follows with the next tick, in no set order.
             // A reliable call's collection changes go just ahead of it; other values travel in snapshots, unordered.
@@ -332,7 +332,9 @@ public partial class NetworkingTests
     private static byte[] Call(Component component, uint method)
     {
         using NetWriter rpc = new();
-        rpc.WriteGuid(component.Identifier); rpc.WriteUInt32(method); rpc.WriteBytesWithLength(ReadOnlySpan<byte>.Empty);
+        (uint netId, byte index, uint methodIndex) = FakePeer.RpcTarget(component.Identifier, method);
+        rpc.WriteVarUInt32(netId); rpc.WriteByte(index); rpc.WriteVarUInt32(methodIndex);
+        rpc.WriteBytesWithLength(ReadOnlySpan<byte>.Empty);
         return rpc.ToArray();
     }
 
@@ -400,14 +402,27 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Talker");
+        go.Network.Networked = true;
         RpcChannelTestComponent component = go.AddComponent<RpcChannelTestComponent>();
         scene.Add(go);
-        using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        MakeCurrent(scene);
+
+        // Taken from a real host, which is what gives the networked object its NetId.
+        byte[] snapshot;
+        LocalNetwork source = new();
+        Networking.Networking.Host(new LocalTransport(source, "host"));
+        try
+        {
+            using FakePeer recorder = FakePeer.Join(source, "recorder");
+            Pump(() => recorder.Has(FakePeer.SceneSnapshot), recorder);
+            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data;
+        }
+        finally { Networking.Networking.Shutdown(); }
+
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.AutoReady = false;
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");

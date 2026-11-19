@@ -216,8 +216,7 @@ public partial class NetworkingTests
             foreach (ushort kind in new[] { FakePeer.StaticRpcToHost })
             {
                 NetReader wire = new(host.WireReceived.Last(m => m.Id == kind).Data);
-                if (kind == FakePeer.RpcToHost) wire.ReadGuid(); else wire.ReadString();
-                wire.ReadUInt32(); wire.ReadBytesWithLength();
+                wire.ReadUInt32(); wire.ReadUInt32(); wire.ReadBytesWithLength();
                 Assert.Equal(1u, wire.ReadVarUInt32());
                 Assert.Equal((uint)garry.Session.LocalPeer!.Id, wire.ReadVarUInt32());
                 Assert.True(wire.IsAtEnd);

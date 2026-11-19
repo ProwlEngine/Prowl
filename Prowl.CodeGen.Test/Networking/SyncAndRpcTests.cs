@@ -261,7 +261,7 @@ public class SyncAndRpcTests
             Assert.Equal(0, members.Rpc(NetworkCodeGen.NetworkId("Plain()"))!.Channel);
         });
 
-        StaticRpcMember announce = StaticRpcMember.Find($"{radio.FullName}, {assembly.GetName().Name}",
+        StaticRpcMember announce = StaticRpcMember.Find(StaticRpcMember.HashOf(radio),
             NetworkCodeGen.NetworkId("Announce(int)"))!;
         Assert.Equal(3, announce.Channel);
     }
@@ -333,8 +333,10 @@ public class SyncAndRpcTests
         using HostedComponent hosted = new(assembly.GetType("Cannon")!);
         using NetWriter call = new(), arguments = new();
         NetSerializer<int>.Write(arguments, 3);
-        call.WriteGuid(hosted.Component.Identifier);
-        call.WriteUInt32(NetworkCodeGen.NetworkId("Fire(int)"));
+        NetworkMembers members = NetworkMembers.Of(hosted.Component);
+        call.WriteVarUInt32(Net.System!.NetIdOf(hosted.Component.GameObject));
+        call.WriteByte(0);
+        call.WriteVarUInt32((uint)members.IndexOf(members.Rpc(NetworkCodeGen.NetworkId("Fire(int)"))!));
         call.WriteBytesWithLength(arguments.WrittenSpan);
         hosted.Client.SendRaw(hosted.Client.HostPeer!, HostedComponent.RpcToHost, call.WrittenSpan);
         hosted.Frames(50);
@@ -384,6 +386,7 @@ public class SyncAndRpcTests
         public HostedComponent(Type type)
         {
             GameObject go = new(type.Name);
+            go.Network.Networked = true;
             Component = go.AddComponent(type)!;
             _scene.Add(go);
             _scene.Activate();

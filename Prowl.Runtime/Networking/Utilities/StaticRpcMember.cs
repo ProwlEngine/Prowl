@@ -36,7 +36,8 @@ public sealed class StaticRpcMember
         }
 
         DeclaringType = declaringType;
-        TypeName = $"{declaringType.FullName}, {declaringType.Assembly.GetName().Name}";
+        TypeName = NameOf(declaringType);
+        TypeHash = Hash(TypeName);
         Id = id;
         Signature = signature;
         Mode = mode;
@@ -47,6 +48,9 @@ public sealed class StaticRpcMember
 
     public Type DeclaringType { get; }
     internal string TypeName { get; }
+
+    /// <summary>What a call names the declaring type by: a hash of its name and its assembly's.</summary>
+    internal uint TypeHash { get; }
     public uint Id { get; }
     public string Signature { get; }
     public RpcMode Mode { get; }
@@ -80,45 +84,108 @@ public sealed class StaticRpcMember
         }
     }
 
+    private static string NameOf(Type type) => $"{type.FullName}, {type.Assembly.GetName().Name}";
+
+    private static uint Hash(string name)
+    {
+        uint hash = 2166136261;
+        foreach (char c in name)
+        {
+            hash = (hash ^ c) * 16777619;
+        }
+
+        return hash;
+    }
+
+    /// <summary>The hash calls name <paramref name="type" /> by.</summary>
+    internal static uint HashOf(Type type) => Hash(NameOf(type));
+
+    // The types that declare static RPCs by hash, with the number of assemblies it was built from.
+    private static readonly ReloadCache<bool, (Dictionary<uint, Type> Types, int Assemblies)> s_types = new();
+
+    internal static StaticRpcMember? Find(uint typeHash, uint id)
+    {
+        int assemblies = 0;
+        foreach (Assembly _ in RuntimeUtils.AssemblySource())
+        {
+            assemblies++;
+        }
+
+        // Rebuilt only when assemblies came or went, so calls naming unknown types cost one lookup.
+        if (!s_types.TryGetValue(true, out (Dictionary<uint, Type> Types, int Assemblies) known) ||
+            known.Assemblies != assemblies)
+        {
+            known = (BuildTypes(), assemblies);
+            s_types.Set(true, known);
+        }
+
+        return known.Types.TryGetValue(typeHash, out Type? type) ? s_members[type].GetValueOrDefault(id) : null;
+    }
+
     [UnconditionalSuppressMessage("Trimming", "IL2026",
         Justification =
             "Player builds preserve script assemblies; generated descriptors root their declaring type fields.")]
-    internal static StaticRpcMember? Find(string typeName, uint id)
+    [UnconditionalSuppressMessage("Trimming", "IL2075",
+        Justification = "Player builds preserve script assemblies and their generated RPC descriptor fields.")]
+    private static Dictionary<uint, Type> BuildTypes()
     {
-        Type? type = ResolveDeclaringType(typeName);
-        return type is { IsClass: true, IsGenericType: false }
-            ? s_members[type].GetValueOrDefault(id)
-            : null;
-    }
-
-    /// <summary>A plain, non-generic type from an assembly already loaded, or null for any other name.</summary>
-    private static Type? ResolveDeclaringType(string typeName)
-    {
-        int comma = typeName.IndexOf(", ", StringComparison.Ordinal);
-        if (comma <= 0 || typeName.AsSpan().IndexOfAny("[]`*&") >= 0 || typeName.IndexOf(',') != comma)
-        {
-            return null;
-        }
-
-        ReadOnlySpan<char> assemblyName = typeName.AsSpan(comma + 2);
-        int end = assemblyName.IndexOf(',');
-        if (end >= 0)
-        {
-            assemblyName = assemblyName[..end];
-        }
-
-        // Matched against FullName, which "Name, Version=..." keeps cached, so a lookup allocates nothing per assembly.
+        string runtime = typeof(Component).Assembly.GetName().Name!;
+        Dictionary<uint, Type> types = new();
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
         foreach (Assembly assembly in RuntimeUtils.AssemblySource())
         {
-            string? fullName = assembly.FullName;
-            if (fullName != null && fullName.Length > assemblyName.Length && fullName[assemblyName.Length] == ',' &&
-                fullName.AsSpan(0, assemblyName.Length).SequenceEqual(assemblyName))
+            // The live build comes first, so a later assembly by the same name is a superseded one.
+            string name = assembly.GetName().Name ?? "";
+            if (!seen.Add(name) || assembly.IsDynamic ||
+                (name != runtime && !Array.Exists(assembly.GetReferencedAssemblies(), a => a.Name == runtime)))
             {
-                return assembly.GetType(typeName[..comma], false);
+                continue;
+            }
+
+            Type[] found;
+            try
+            {
+                found = assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException e)
+            {
+                found = Array.FindAll(e.Types, t => t != null)!;
+            }
+
+            foreach (Type type in found)
+            {
+                if (!type.IsClass || type.ContainsGenericParameters || !DeclaresStaticRpcs(type))
+                {
+                    continue;
+                }
+
+                uint hash = HashOf(type);
+                if (!types.TryAdd(hash, type))
+                {
+                    Debug.LogError(
+                        $"[Network] {NameOf(type)} and {NameOf(types[hash])} hash to the same static RPC type id, so " +
+                        $"calls to {type.Name} are dropped. Rename one of them.");
+                }
             }
         }
 
-        return null;
+        return types;
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2070",
+        Justification = "Player builds preserve script assemblies and their generated RPC descriptor fields.")]
+    private static bool DeclaresStaticRpcs(Type type)
+    {
+        foreach (FieldInfo field in type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |
+                                                   BindingFlags.DeclaredOnly))
+        {
+            if (field.FieldType == typeof(StaticRpcMember))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070",

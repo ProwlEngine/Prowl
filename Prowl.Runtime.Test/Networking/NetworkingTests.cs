@@ -292,12 +292,44 @@ public sealed class FakePeer : IDisposable
         {
             using NetWriter logical = new();
             logical.WriteVarUInt32(reader.ReadVarUInt32());
-            logical.WriteGuid(reader.ReadGuid());
-            logical.WriteUInt32(reader.ReadUInt32());
+            (Guid component, uint method) = RpcNamed(reader.ReadVarUInt32(), reader.ReadByte(), reader.ReadVarUInt32());
+            logical.WriteGuid(component);
+            logical.WriteUInt32(method);
             logical.WriteBytes(reader.ReadBytesWithLength());
             return logical.ToArray();
         }
         return reader.ReadBytes(reader.Remaining).ToArray();
+    }
+
+    /// <summary>
+    ///     How the wire names an RPC tests name by component and method id: its object's NetId, the component's index
+    ///     in it and the method's index in its type. Anything the engine side doesn't know gets a name nothing has.
+    /// </summary>
+    public static (uint NetId, byte Component, uint Method) RpcTarget(Guid componentId, uint methodId)
+    {
+        NetworkSystem system = NetworkTestScene.Current;
+        if (system.FindByIdentifier(componentId) is not Component component ||
+            system.FindEntry(component.GameObject) is not { } entry || entry.IndexOf(component) < 0)
+        {
+            return (uint.MaxValue >> 4, 0, methodId);
+        }
+
+        NetworkMembers members = NetworkMembers.Of(component);
+        int method = members.Rpc(methodId) is { } rpc ? members.IndexOf(rpc) : -1;
+        return (entry.NetId, (byte)entry.IndexOf(component), method < 0 ? 1000u : (uint)method);
+    }
+
+    /// <summary>The component and method id an RPC on the wire names, or empty ones.</summary>
+    public static (Guid Component, uint Method) RpcNamed(uint netId, byte index, uint method)
+    {
+        if (!NetworkTestScene.Current.Entries.TryGetNet(netId, out NetworkObject? entry) ||
+            index >= entry.Components.Length)
+        {
+            return (Guid.Empty, method);
+        }
+
+        Component component = entry.Components[index];
+        return (component.Identifier, NetworkMembers.Of(component).RpcAt(method)?.Id ?? method);
     }
 
     public bool Has(ushort id) => Received.Any(m => m.Id == id) &&
@@ -318,8 +350,10 @@ public sealed class FakePeer : IDisposable
         {
             NetReader arguments = new(writer.WrittenSpan);
             if (id == RpcFromHost) wire.WriteVarUInt32(arguments.ReadVarUInt32());
-            wire.WriteGuid(arguments.ReadGuid());
-            wire.WriteUInt32(arguments.ReadUInt32());
+            (uint netId, byte index, uint method) = RpcTarget(arguments.ReadGuid(), arguments.ReadUInt32());
+            wire.WriteVarUInt32(netId);
+            wire.WriteByte(index);
+            wire.WriteVarUInt32(method);
             wire.WriteBytesWithLength(arguments.ReadBytes(arguments.Remaining));
         }
         else if (id == Sync)

@@ -99,6 +99,22 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         "RPC '{0}' is unreliable, so its Channel is ignored: unreliable calls have no order to keep and go on channel 0",
         "Networking", DiagnosticSeverity.Warning, true);
 
+    private static readonly DiagnosticDescriptor s_tooManySyncs = new(
+        "PROWLNET012", "Too many [Sync] values",
+        "'{0}' has {1} [Sync] values counting its base types, and a component can hold " + MaxSyncMembersText +
+        ": they are sent as one bit each of a 64 bit mask. Split it into several components.",
+        "Networking", DiagnosticSeverity.Error, true);
+
+    private static readonly DiagnosticDescriptor s_staticTypeCollision = new(
+        "PROWLNET013", "Static RPC type id collision",
+        "'{0}' and '{1}' hash to the same static RPC type id, so calls to one would reach the other. Rename one of them.",
+        "Networking", DiagnosticSeverity.Error, true);
+
+    /// <summary>The [Sync] values a component can hold, its base types' and its own serialized state included.</summary>
+    internal const int MaxSyncMembers = 64;
+
+    private const string MaxSyncMembersText = "64";
+
     private static readonly DiagnosticDescriptor s_unnetworkedOverride = new(
         "PROWLNET010", "Override drops its networking",
         "'{0}' overrides a networked member, so it needs the {1} attribute too",
@@ -166,6 +182,18 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         {
             hash ^= b;
             hash *= 16777619;
+        }
+
+        return hash;
+    }
+
+    /// <summary>The hash the engine names a static RPC's declaring type by, over "FullName, AssemblyName".</summary>
+    internal static uint StaticTypeHash(string name)
+    {
+        uint hash = 2166136261;
+        foreach (char c in name)
+        {
+            hash = (hash ^ c) * 16777619;
         }
 
         return hash;
@@ -269,6 +297,8 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
     private sealed class Context(Compilation compilation, Symbols symbols)
     {
         private readonly Dictionary<(INamedTypeSymbol Type, bool Rpc, uint Id), string> _ids = new();
+        private readonly HashSet<INamedTypeSymbol> _counted = new(SymbolEqualityComparer.Default);
+        private readonly Dictionary<uint, string> _staticTypes = new();
         public Compilation Compilation { get; } = compilation;
 
         public Symbols Symbols { get; } = symbols;
@@ -288,7 +318,53 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
             {
                 Report(s_collision, location, key, _ids[id]);
             }
+
+            if (!rpc && _counted.Add(type.OriginalDefinition))
+            {
+                CheckSyncLimit(type, location);
+            }
         }
+
+        // Counted over the whole hierarchy, a redeclared property once, plus the slot OnSerialize state takes.
+        private void CheckSyncLimit(INamedTypeSymbol type, Location location)
+        {
+            HashSet<string> names = new();
+            for (INamedTypeSymbol? t = type; t != null; t = t.BaseType)
+            {
+                foreach (IPropertySymbol property in t.GetMembers().OfType<IPropertySymbol>())
+                {
+                    if (property.GetAttributes().Any(a =>
+                            SymbolEqualityComparer.Default.Equals(a.AttributeClass, Symbols.Sync)))
+                    {
+                        names.Add(property.Name);
+                    }
+                }
+            }
+
+            int count = names.Count + (type.AllInterfaces.Any(i => i.Name == "INetworkSerialize") ? 1 : 0);
+            if (count > MaxSyncMembers)
+            {
+                Report(s_tooManySyncs, location, type.Name, count);
+            }
+        }
+
+        /// <summary>Takes the id calls name a static RPC's type by; reports it if another type hashes to it too.</summary>
+        public void ClaimStaticType(INamedTypeSymbol type, Location location)
+        {
+            string name = $"{MetadataName(type)}, {Compilation.AssemblyName}";
+            uint hash = StaticTypeHash(name);
+            if (!_staticTypes.TryAdd(hash, name) && _staticTypes[hash] != name)
+            {
+                Report(s_staticTypeCollision, location, name, _staticTypes[hash]);
+            }
+        }
+
+        private static string MetadataName(INamedTypeSymbol type) =>
+            type.ContainingType is { } outer
+                ? $"{MetadataName(outer)}+{type.MetadataName}"
+                : type.ContainingNamespace is { IsGlobalNamespace: false } space
+                    ? $"{space.ToDisplayString()}.{type.MetadataName}"
+                    : type.MetadataName;
 
         /// <summary>Reports <paramref name="name" /> unless values of <paramref name="type" /> can be sent.</summary>
         public void RequireSendable(ITypeSymbol type, string name, Location location)

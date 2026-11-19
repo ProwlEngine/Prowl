@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 
 using Prowl.Runtime.Diagnostics;
@@ -12,7 +13,7 @@ using static Prowl.Runtime.Networking.NetworkSystem;
 
 namespace Prowl.Runtime.Networking;
 
-// RPCs. A call is [guid component][u32 method id][length-prefixed arguments]. As Mirror's commands and client RPCs,
+// RPCs. A call is [NetId][component index][method index][length-prefixed arguments]. As Mirror's commands and client RPCs,
 // a client only calls host RPCs: it sends the call to the host, which checks it against the method's own RpcMode
 // and RpcFlags (never trusting the caller about them) and runs it. Broadcast, owner and target RPCs are the host's
 // to call, and carry its id in front.
@@ -73,7 +74,10 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         _rpcWriter.Reset();
-        RpcCallMessage.WriteTarget(_rpcWriter, component.Identifier, rpc.Id);
+        NetworkObject? entry = scene.FindEntry(component.GameObject);
+        int index = entry?.IndexOf(component) ?? -1;
+        RpcCallMessage.WriteTarget(_rpcWriter, index < 0 ? 0 : entry!.NetId, (byte)Math.Max(index, 0),
+            (uint)NetworkMembers.Of(component).IndexOf(rpc));
         writer = _rpcWriter;
         RecordReferences(_sites, writer, writer.Length);
         return true;
@@ -98,6 +102,12 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         (uint id, RpcMode mode, RpcFlags flags) = (rpc.Id, rpc.Mode, rpc.Flags);
         Delivery delivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
+
+        if (scene.FindEntry(component.GameObject) is not { } networked || networked.IndexOf(component) < 0)
+        {
+            WarnOnce(component, id, "is on an object that is not networked, or was added to it after it spawned");
+            return false;
+        }
 
         if (!scene.IsHost && (mode != RpcMode.Host || (flags & RpcFlags.HostOnly) != 0))
         {
@@ -213,21 +223,19 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         }
 
         RpcCallMessage message = RpcCallMessage.Read(ref reader);
-        Guid id = message.ComponentId;
-        uint method = message.MethodId;
         ReadOnlySpan<byte> arguments = message.Arguments;
         RpcRecipients? recipients = RpcRecipientMessage.Read(ref reader, scene.Session!.Options.MaxPeers).Recipients;
 
-        if (scene.FindByIdentifier(id) is not Component component || NetworkAccessor.IsExcludedFromNetwork(
-                                                                      component.GameObject)
-                                                                  || NetworkMembers.Of(component).Rpc(method) is not
-                                                                      { } rpc)
+        if (!Resolve(message, out Component? component, out RpcMember? rpc) ||
+            NetworkAccessor.IsExcludedFromNetwork(component.GameObject))
         {
-            NetworkDiagnostics.Record("RPC", "Rejected", sender, id, $"Unknown or excluded component/method #{method}",
+            NetworkDiagnostics.Record("RPC", "Rejected", sender, Guid.Empty, $"Unknown or excluded {Describe(message)}",
                 arguments);
             return;
         }
 
+        Guid id = component.Identifier;
+        uint method = rpc.Id;
         if (!scene.Sees(component.GameObject, sender))
         {
             NetworkDiagnostics.Record("RPC", "Rejected", sender, id, $"Object not sent to the caller, method #{method}",
@@ -297,18 +305,16 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         int callerId = RpcCallerMessage.Read(ref reader).CallerId;
         RpcCallMessage message = RpcCallMessage.Read(ref reader);
-        Guid id = message.ComponentId;
-        uint method = message.MethodId;
         ReadOnlySpan<byte> arguments = message.Arguments;
         if (!reader.IsAtEnd)
         {
             throw new InvalidDataException("RPC contains trailing bytes.");
         }
 
-        if (scene.FindByIdentifier(id) is not Component component ||
-            NetworkMembers.Of(component).Rpc(method) is not { } rpc)
+        // A call naming an object this peer doesn't have is dropped, as Mirror drops one for an unknown netId.
+        if (!Resolve(message, out Component? component, out RpcMember? rpc))
         {
-            NetworkDiagnostics.Record("RPC", "Rejected", sender, id, $"Unknown component/method #{method}", arguments);
+            NetworkDiagnostics.Record("RPC", "Rejected", sender, Guid.Empty, $"Unknown {Describe(message)}", arguments);
             return;
         }
 
@@ -321,6 +327,26 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         rpc.ValidateArguments(component, ref validation);
         Invoke(component, rpc, arguments, caller);
     }
+
+    /// <summary>The component and RPC a call names, when this peer has them.</summary>
+    internal bool Resolve(in RpcCallMessage message, [NotNullWhen(true)] out Component? component,
+        [NotNullWhen(true)] out RpcMember? rpc)
+    {
+        component = null;
+        rpc = null;
+        if (!scene.Entries.TryGetNet(message.NetId, out NetworkObject? entry) ||
+            message.Component >= entry.Components.Length || entry.Components[message.Component].IsNotValid())
+        {
+            return false;
+        }
+
+        component = entry.Components[message.Component];
+        rpc = NetworkMembers.Of(component).RpcAt(message.Method);
+        return rpc != null;
+    }
+
+    private static string Describe(in RpcCallMessage message) =>
+        $"object {message.NetId}, component {message.Component}, method {message.Method}";
 
     internal void Invoke(Component component, RpcMember rpc, ReadOnlySpan<byte> arguments, NetPeer caller)
     {

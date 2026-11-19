@@ -9,13 +9,13 @@ namespace Prowl.Runtime.Test;
 public partial class NetworkingTests
 {
     [Fact]
-    public void FindingAStaticRpcByNameAllocatesNothingPerAssembly()
+    public void FindingAStaticRpcByHashAllocatesNothingPerAssembly()
     {
-        string typeName = $"{typeof(StaticRpcProbe).FullName}, {typeof(StaticRpcProbe).Assembly.GetName().Name}";
-        Assert.NotNull(StaticRpcMember.Find(typeName, 901));
+        uint type = StaticRpcMember.HashOf(typeof(StaticRpcProbe));
+        Assert.NotNull(StaticRpcMember.Find(type, 901));
 
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1000; i++) StaticRpcMember.Find(typeName, 901);
+        for (int i = 0; i < 1000; i++) StaticRpcMember.Find(type, 901);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.True(allocated < 2048 * 1000, $"1000 lookups allocated {allocated} bytes");
     }

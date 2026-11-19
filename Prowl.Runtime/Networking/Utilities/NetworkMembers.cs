@@ -286,6 +286,10 @@ internal sealed class NetworkMembers
 
     private readonly Dictionary<uint, RpcMember> _rpcs = new();
 
+    // The type's RPCs sorted by id. A call names its method by its place here, the same on every peer.
+    private RpcMember[] _rpcOrder = [];
+    private readonly Dictionary<uint, int> _rpcIndex = new();
+
     private readonly Dictionary<uint, SyncMember> _syncs = new();
 
     /// <summary>True when the type has anything networked, which makes its components networked components.</summary>
@@ -298,6 +302,12 @@ internal sealed class NetworkMembers
     public SyncMember? Sync(uint slot) => _syncs.GetValueOrDefault(slot);
 
     public RpcMember? Rpc(uint id) => _rpcs.GetValueOrDefault(id);
+
+    /// <summary>The RPC at <paramref name="index" /> among the type's RPCs sorted by id, or null.</summary>
+    public RpcMember? RpcAt(uint index) => index < (uint)_rpcOrder.Length ? _rpcOrder[index] : null;
+
+    /// <summary>Where <paramref name="rpc" /> is among the type's RPCs sorted by id, or -1.</summary>
+    public int IndexOf(RpcMember rpc) => _rpcIndex.GetValueOrDefault(rpc.Id, -1);
 
     [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
         Justification =
@@ -352,6 +362,17 @@ internal sealed class NetworkMembers
             members.Syncs.Add(custom);
         }
 
+        members?.OrderRpcs();
         return members ?? s_none;
+    }
+
+    private void OrderRpcs()
+    {
+        _rpcOrder = [.. _rpcs.Values];
+        Array.Sort(_rpcOrder, static (a, b) => a.Id.CompareTo(b.Id));
+        for (int i = 0; i < _rpcOrder.Length; i++)
+        {
+            _rpcIndex[_rpcOrder[i].Id] = i;
+        }
     }
 }

@@ -85,16 +85,16 @@ internal sealed partial class RpcSystem
         return rpc.Mode == RpcMode.Broadcast && localIncluded;
     }
 
-    // Calls carry [declaring type + assembly simple name][method id][length-prefixed arguments].
+    // Calls carry [hash of the declaring type's name][method id][length-prefixed arguments].
     // The type selects generated descriptors, never arbitrary methods. A host relay prefixes the original caller.
     internal void WriteStaticCall(NetWriter output, StaticRpcMember rpc, ReadOnlySpan<byte> arguments) =>
-        new StaticRpcMessage(rpc.TypeName, rpc.Id, arguments).Write(output);
+        new StaticRpcMessage(rpc.TypeHash, rpc.Id, arguments).Write(output);
 
     internal StaticRpcMember? ReadStaticCall(ref NetReader reader, out ReadOnlySpan<byte> arguments)
     {
         StaticRpcMessage message = StaticRpcMessage.Read(ref reader);
         arguments = message.Arguments;
-        return StaticRpcMember.Find(message.TypeName, message.MethodId);
+        return StaticRpcMember.Find(message.TypeHash, message.MethodId);
     }
 
     internal Delivery StaticRpcDelivery(StaticRpcMember rpc) =>

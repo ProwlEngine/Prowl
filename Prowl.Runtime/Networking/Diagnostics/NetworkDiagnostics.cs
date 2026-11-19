@@ -148,18 +148,16 @@ public static class NetworkDiagnostics
                     ? $"Caller ID: {RpcCallerMessage.Read(ref reader).CallerId}\n"
                     : "";
                 RpcCallMessage message = RpcCallMessage.Read(ref reader);
-                Guid id = message.ComponentId;
-                uint method = message.MethodId;
-                if (scene.FindByIdentifier(id) is not Component component)
+                if (!scene.Rpcs.Resolve(message, out Component? component, out RpcMember? rpc))
                 {
-                    return ($"{caller}Component: {id}\nUnknown RPC #{method}", $"Unknown RPC #{method}");
+                    return (
+                        $"{caller}Object: {message.NetId}\nComponent: {message.Component}\nUnknown RPC #{message.Method}",
+                        $"Unknown RPC #{message.Method}");
                 }
 
-                RpcMember? rpc = NetworkMembers.Of(component).Rpc(method);
                 return (
-                    $"{caller}Object: {component.GameObject.Name}\nComponent: {component.GetType().Name}\nRPC: {rpc?.Signature ?? $"#{method}"}"
-                    + (rpc == null ? "" : $"\nRecipient: {rpc.Mode}"),
-                    $"{component.GetType().Name}.{rpc?.Signature ?? $"#{method}"}");
+                    $"{caller}Object: {component.GameObject.Name}\nComponent: {component.GetType().Name}\nRPC: {rpc.Signature}\nRecipient: {rpc.Mode}",
+                    $"{component.GetType().Name}.{rpc.Signature}");
             }
 
             SyncMessage.Read(ref reader); // Original state writer, preserved by host relaying.

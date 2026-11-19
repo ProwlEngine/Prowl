@@ -52,7 +52,7 @@ public partial class NetworkingTests
     private static void WriteStaticRpc(NetWriter output, uint id, Action<NetWriter> arguments, int? caller = null)
     {
         if (caller is { } callerId) output.WriteVarUInt32((uint)callerId);
-        output.WriteString($"{typeof(StaticRpcProbe).FullName}, {typeof(StaticRpcProbe).Assembly.GetName().Name}");
+        output.WriteUInt32(StaticRpcMember.HashOf(typeof(StaticRpcProbe)));
         output.WriteUInt32(id);
         using NetWriter payload = new(); arguments(payload);
         output.WriteBytesWithLength(payload.WrittenSpan);
@@ -62,7 +62,7 @@ public partial class NetworkingTests
     {
         NetReader reader = new(message);
         int caller = (int)reader.ReadVarUInt32();
-        reader.ReadString();
+        reader.ReadUInt32();
         uint method = reader.ReadUInt32();
         NetReader arguments = new(reader.ReadBytesWithLength());
         return (caller, method, NetSerializer<int>.Read(ref arguments));
@@ -282,15 +282,14 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void StaticRpcsAreOnlyFoundUnderThePlainNamesTheySendThemselvesBy()
+    public void StaticRpcsAreOnlyFoundByTheHashOfAPlainDeclaringType()
     {
-        static string NameOf(Type type) => $"{type.FullName}, {type.Assembly.GetName().Name}";
-        Assert.NotNull(StaticRpcMember.Find(NameOf(typeof(StaticRpcProbe)), 901));
+        uint probe = StaticRpcMember.HashOf(typeof(StaticRpcProbe));
+        Assert.NotNull(StaticRpcMember.Find(probe, 901));
+        Assert.Null(StaticRpcMember.Find(probe, 905));
+        Assert.Null(StaticRpcMember.Find(probe + 1, 901));
         Assert.NotNull(StaticRpcGenericProbe<int>.Member);
-        Assert.Null(StaticRpcMember.Find(NameOf(typeof(StaticRpcGenericProbe<int>)), 905));
-        Assert.Null(StaticRpcMember.Find(NameOf(typeof(StaticRpcGenericProbe<List<NetTestComponent>>)), 905));
-        Assert.NotNull(StaticRpcMember.Find(typeof(StaticRpcProbe).AssemblyQualifiedName!, 901));
-        Assert.Null(StaticRpcMember.Find(NameOf(typeof(StaticRpcProbe)).Replace(",", "[],"), 901));
-        Assert.Null(StaticRpcMember.Find(typeof(StaticRpcProbe).FullName!, 901));
+        Assert.Null(StaticRpcMember.Find(StaticRpcMember.HashOf(typeof(StaticRpcGenericProbe<int>)), 905));
+        Assert.Null(StaticRpcMember.Find(StaticRpcMember.HashOf(typeof(StaticRpcGenericProbe<List<NetTestComponent>>)), 905));
     }
 }

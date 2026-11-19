@@ -94,6 +94,24 @@ public class DiagnosticTests
     public void UnsupportedNetworkingIsACompileError(string script, string id) =>
         Assert.Contains(Scripts.Build(script).Errors, e => e.Id == id);
 
+    private static string SyncProperties(int count, string prefix = "V") =>
+        string.Concat(Enumerable.Range(0, count)
+            .Select(i => $"[Prowl.Runtime.Networking.Sync] public int {prefix}{i} {{ get; set; }} "));
+
+    [Fact]
+    public void AComponentHoldsAtMost64SyncValuesCountingItsBaseTypes()
+    {
+        string within = $"public class A : Prowl.Runtime.Component {{ {SyncProperties(64)} }}";
+        Assert.DoesNotContain(Scripts.Build(within).Errors, e => e.Id == "PROWLNET012");
+
+        string over = $"public class A : Prowl.Runtime.Component {{ {SyncProperties(65)} }}";
+        Assert.Contains(Scripts.Build(over).Errors, e => e.Id == "PROWLNET012");
+
+        string inherited = $"public class A : Prowl.Runtime.Component {{ {SyncProperties(40)} }} " +
+                           $"public class B : A {{ {SyncProperties(25, "W")} }}";
+        Assert.Contains(Scripts.Build(inherited).Errors, e => e.Id == "PROWLNET012");
+    }
+
     [Fact]
     public void AnOverrideInAFileWithoutNetworkingStillNeedsTheRpcAttribute() =>
         Assert.Contains(Scripts.Build(

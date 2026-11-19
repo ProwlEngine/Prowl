@@ -38,7 +38,7 @@ public class WhisperTestComponent : Component
 public partial class NetworkingTests
 {
     private static int RpcsFromHost(FakePeer peer, uint method) =>
-        peer.WireReceived.Count(m => m.Id == FakePeer.RpcFromHost && MethodOf(m.Data) == method);
+        peer.Received.Count(m => m.Id == FakePeer.RpcFromHost && MethodOf(m.Data) == method);
 
     private static uint MethodOf(byte[] data)
     {

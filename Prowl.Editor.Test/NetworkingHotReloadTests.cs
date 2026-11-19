@@ -53,7 +53,7 @@ public class NetworkingHotReloadTests : EditorTestHarness
         try
         {
             RuntimeUtils.AssemblySource = () => new[] { v1 };
-            Assert.Same(staticRpc.GetValue(null), findStatic.Invoke(null, new object[] { global.AssemblyQualifiedName!, staticId }));
+            Assert.Same(staticRpc.GetValue(null), findStatic.Invoke(null, new object[] { StaticRpcMember.HashOf(global), staticId }));
 
             Assembly v2 = CompileGameAssembly("Actor.cs", script
                 .Replace("EXTRA_STATIC", "[Rpc.Host] public static void Added(int value) { }")
@@ -67,7 +67,7 @@ public class NetworkingHotReloadTests : EditorTestHarness
             global = v2.GetType("Announcements")!;
             staticRpc = global.GetFields(BindingFlags.Static | BindingFlags.NonPublic)
                 .Single(f => f.FieldType == typeof(StaticRpcMember) && ((StaticRpcMember)f.GetValue(null)!).Id == staticId);
-            Assert.Same(staticRpc.GetValue(null), findStatic.Invoke(null, new object[] { global.AssemblyQualifiedName!, staticId }));
+            Assert.Same(staticRpc.GetValue(null), findStatic.Invoke(null, new object[] { StaticRpcMember.HashOf(global), staticId }));
         }
         finally { RuntimeUtils.AssemblySource = previous; }
     }

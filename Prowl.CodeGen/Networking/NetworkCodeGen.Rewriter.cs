@@ -477,6 +477,11 @@ internal sealed partial class NetworkCodeGen
             List<string> types = node.ParameterList.Parameters.Select(p => OneLine(p.Type!)).ToList();
             string key = $"{method.Name}({string.Join(",", WrittenParameterTypes(RootDeclaration(method)) ?? types)})";
             context.ClaimId(method.ContainingType, true, key, location);
+            if (method.IsStatic)
+            {
+                context.ClaimStaticType(method.ContainingType, location);
+            }
+
             return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types,
                 method.IsStatic, channel, targeted);
         }

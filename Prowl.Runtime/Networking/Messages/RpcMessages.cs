@@ -8,51 +8,57 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>To host: call then optional RpcRecipientMessage. From host: RpcCallerMessage then call.</summary>
-internal readonly ref struct RpcCallMessage(Guid componentId, uint methodId, ReadOnlySpan<byte> arguments)
+/// <summary>
+///     A call names its object by NetId, its component by its index among the object's networked components and its
+///     method by its index among the type's RPCs. To host: call then optional RpcRecipientMessage. From host:
+///     RpcCallerMessage then call.
+/// </summary>
+internal readonly ref struct RpcCallMessage(uint netId, byte component, uint method, ReadOnlySpan<byte> arguments)
 {
-    internal readonly Guid ComponentId = componentId;
-    internal readonly uint MethodId = methodId;
+    internal readonly uint NetId = netId;
+    internal readonly byte Component = component;
+    internal readonly uint Method = method;
     internal readonly ReadOnlySpan<byte> Arguments = arguments;
 
     internal void Write(NetWriter writer)
     {
-        writer.WriteGuid(ComponentId);
-        writer.WriteUInt32(MethodId);
+        WriteTarget(writer, NetId, Component, Method);
         writer.WriteBytesWithLength(Arguments);
     }
 
-    internal static void WriteTarget(NetWriter writer, Guid componentId, uint methodId)
+    internal static void WriteTarget(NetWriter writer, uint netId, byte component, uint method)
     {
-        writer.WriteGuid(componentId);
-        writer.WriteUInt32(methodId);
+        writer.WriteVarUInt32(netId);
+        writer.WriteByte(component);
+        writer.WriteVarUInt32(method);
     }
 
     internal static RpcCallMessage ReadUnframed(ref NetReader reader) =>
-        new(reader.ReadGuid(), reader.ReadUInt32(), reader.ReadBytes(reader.Remaining));
+        new(reader.ReadVarUInt32(), reader.ReadByte(), reader.ReadVarUInt32(), reader.ReadBytes(reader.Remaining));
 
     internal static RpcCallMessage Read(ref NetReader reader) => new(
-        reader.ReadGuid(),
-        reader.ReadUInt32(),
+        reader.ReadVarUInt32(),
+        reader.ReadByte(),
+        reader.ReadVarUInt32(),
         reader.ReadBytesWithLength());
 }
 
 /// <summary>Same routing envelope as component RPCs; targets a generated static descriptor.</summary>
-internal readonly ref struct StaticRpcMessage(string typeName, uint methodId, ReadOnlySpan<byte> arguments)
+internal readonly ref struct StaticRpcMessage(uint typeHash, uint methodId, ReadOnlySpan<byte> arguments)
 {
-    internal readonly string TypeName = typeName;
+    internal readonly uint TypeHash = typeHash;
     internal readonly uint MethodId = methodId;
     internal readonly ReadOnlySpan<byte> Arguments = arguments;
 
     internal void Write(NetWriter writer)
     {
-        writer.WriteString(TypeName);
+        writer.WriteUInt32(TypeHash);
         writer.WriteUInt32(MethodId);
         writer.WriteBytesWithLength(Arguments);
     }
 
     internal static StaticRpcMessage Read(ref NetReader reader) => new(
-        reader.ReadString(1024),
+        reader.ReadUInt32(),
         reader.ReadUInt32(),
         reader.ReadBytesWithLength());
 }

@@ -45,6 +45,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject level = CreateGameObject("Level");
+        level.Network.Networked = true;
         level.AddComponent<NetTestComponent>();
         scene.Add(level);
         MakeCurrent(scene);

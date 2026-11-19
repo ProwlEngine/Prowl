@@ -51,10 +51,11 @@ public class StaticRpcTests
                                             }
                                             """);
         Type type = assembly.GetType("Container+Sounds")!;
-        string typeName = $"{type.FullName}, {assembly.GetName().Name}";
-        StaticRpcMember rpc = StaticRpcMember.Find(typeName, NetworkCodeGen.NetworkId("Play(SoundInfo)"))!;
+        uint typeHash = StaticRpcMember.HashOf(type);
+        Assert.Equal(NetworkCodeGen.StaticTypeHash($"{type.FullName}, {assembly.GetName().Name}"), typeHash);
+        StaticRpcMember rpc = StaticRpcMember.Find(typeHash, NetworkCodeGen.NetworkId("Play(SoundInfo)"))!;
         Assert.NotNull(rpc);
-        Assert.Null(StaticRpcMember.Find(typeName, 0));
+        Assert.Null(StaticRpcMember.Find(typeHash, 0));
         Assert.Equal(RpcFlags.Unreliable, rpc.Flags);
         Assert.Equal(RpcMode.Broadcast, rpc.Mode);
         using NetWriter arguments = new();
