@@ -274,6 +274,8 @@ internal static class ShaderFormatter
         if (x is "(" or "[") return "";
         if (x is "," or ";") return " ";
         if (x == "." || y == ".") return "";
+        // Two signs side by side would read as an increment or decrement.
+        if (a.Role == Role.Prefix && b.Role == Role.Prefix && x[^1] == y[0] && y[0] is '-' or '+') return " ";
         if (b.Role == Role.Postfix || a.Role == Role.Prefix) return "";
         if (y == ":" && caseLine) return "";
         if (a.Role == Role.Binary || b.Role == Role.Binary) return " ";

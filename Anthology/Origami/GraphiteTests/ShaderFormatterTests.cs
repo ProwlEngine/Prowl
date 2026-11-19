@@ -122,6 +122,13 @@ public class ShaderFormatterTests
     }
 
     [Fact]
+    public void RepeatedSignsStayApart()
+    {
+        const string input = "void main()\n{\n    float a = - -y;\n    float b = x + +y;\n    float c = - --y;\n}\n";
+        Assert.Equal(input, Format(input, shader: false));
+    }
+
+    [Fact]
     public void ContinuedLinesKeepTheirLeadingOperator()
     {
         const string input = "void main()\n{\n    float s = a\n        + b;\n    vec4 e = {};\n    if (x) { }\n}\n";
