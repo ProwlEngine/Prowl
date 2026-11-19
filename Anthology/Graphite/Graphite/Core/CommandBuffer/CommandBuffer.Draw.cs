@@ -266,8 +266,8 @@ public abstract partial class CommandBuffer
     private protected abstract void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ);
 
     /// <summary>
-    /// Makes earlier dispatches' writes visible to later dispatches of the same pass, for compute work that builds on
-    /// itself inside one pass. The render graph orders passes, this orders dispatches within one.
+    /// Makes earlier dispatches' writes visible to later dispatches of the same pass, including as indirect arguments,
+    /// for compute work that builds on itself inside one pass. The render graph orders passes, this orders dispatches within one.
     /// </summary>
     public void ComputeBarrier()
     {

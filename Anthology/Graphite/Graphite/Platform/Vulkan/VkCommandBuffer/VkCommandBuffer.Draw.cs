@@ -80,9 +80,9 @@ internal unsafe partial class VkCommandBuffer
         {
             SType = StructureType.MemoryBarrier,
             SrcAccessMask = AccessFlags.ShaderWriteBit,
-            DstAccessMask = AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit,
+            DstAccessMask = AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit | AccessFlags.IndirectCommandReadBit,
         };
-        _gd.Vk.CmdPipelineBarrier(_cb, PipelineStageFlags.ComputeShaderBit, PipelineStageFlags.ComputeShaderBit, 0, 1, in barrier, 0, null, 0, null);
+        _gd.Vk.CmdPipelineBarrier(_cb, PipelineStageFlags.ComputeShaderBit, PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.DrawIndirectBit, 0, 1, in barrier, 0, null, 0, null);
     }
 
     private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)

@@ -469,7 +469,7 @@ public sealed class FullscreenProgram : IDisposable
     private readonly Action<RendererError>? _report;
     private bool _failed;
 
-    private FullscreenProgram(GraphicsDevice device, PassVariants variants, int[] keys, BlendStateDescription blend, string name, bool source, bool lit, bool procedural, CompilePolicy policy, CompilePriority priority, Action<RendererError>? report)
+    private FullscreenProgram(GraphicsDevice device, PassVariants variants, int[] keys, BlendStateDescription blend, string name, bool source, bool lit, bool procedural, bool depth, CompilePolicy policy, CompilePriority priority, Action<RendererError>? report)
     {
         _device = device;
         _variants = variants;
@@ -479,6 +479,7 @@ public sealed class FullscreenProgram : IDisposable
         HasSource = source;
         Lit = lit;
         Procedural = procedural;
+        WritesDepth = depth;
         _policy = policy;
         _priority = priority;
         _report = report;
@@ -492,6 +493,9 @@ public sealed class FullscreenProgram : IDisposable
 
     /// <summary>Whether the program writes its own vertex stage, drawn through <see cref="FeatureContext.DrawProcedural"/>.</summary>
     public bool Procedural { get; }
+
+    /// <summary>Whether the program tests and writes the scene's depth as opaque geometry does, its fragments giving gl_FragDepth.</summary>
+    public bool WritesDepth { get; }
 
     /// <summary>The program to draw over a view of this many layers, for features that bind it themselves, compiled now when it is not ready. Render thread.</summary>
     public GraphicsProgram For(int layers)
@@ -539,7 +543,7 @@ public sealed class FullscreenProgram : IDisposable
     private GraphicsProgram Build(ShaderDescription description, int form)
     {
         description.BlendState = _blend;
-        description.DepthStencilState = DepthStencilStateDescription.Disabled;
+        description.DepthStencilState = WritesDepth ? DepthStencilStateDescription.DepthOnlyGreaterEqual : DepthStencilStateDescription.Disabled;
         description.RasterizerState = RasterizerStateDescription.CullNone;
         if (Lit)
             description.ResourceLayouts = LitLayouts(description.ResourceLayouts ?? []);
@@ -601,7 +605,7 @@ public sealed class FullscreenProgram : IDisposable
     /// A program whose forms compile under the policy: Async asks for the mono form now at the priority and the layered
     /// one when a layered view first wants it, the other policies build both now.
     /// </summary>
-    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false, string variant = "",
+    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false, string variant = "", bool depth = false,
         CompilePolicy policy = CompilePolicy.Sync, CompilePriority priority = CompilePriority.Visible, Action<RendererError>? report = null)
     {
         source &= !procedural;
@@ -615,7 +619,7 @@ public sealed class FullscreenProgram : IDisposable
                 throw new ArgumentException($"{name} has no variant '{variant}'.", nameof(variant));
         }
 
-        FullscreenProgram program = new(device, variants, keys, blend ?? BlendStateDescription.SingleOverrideBlend, name, source, lit, procedural, compiler == null ? CompilePolicy.BakedOnly : policy, priority, report);
+        FullscreenProgram program = new(device, variants, keys, blend ?? BlendStateDescription.SingleOverrideBlend, name, source, lit, procedural, depth, compiler == null ? CompilePolicy.BakedOnly : policy, priority, report);
         if (program._policy == CompilePolicy.Async)
         {
             program.Ready(1);
@@ -1143,7 +1147,7 @@ public sealed class FeatureContext
     /// Binds the view's lights, shadows and probes for a lit compute program, the one set by SetComputeShader, its
     /// Graphite_View the view's layer given. Needs DrawsRenderables in Setup.
     /// </summary>
-    internal void BindLighting(int layer = 0) => Drawer.BindTables(Command, (uint)layer);
+    public void BindLighting(int layer = 0) => Drawer.BindTables(Command, (uint)layer);
 
     private SceneDrawer Drawer => _pass.Draws ? _pass.Camera.Drawer
         : throw new InvalidOperationException($"{_pass.Name} draws renderables without declaring DrawsRenderables in Setup.");
@@ -1254,6 +1258,30 @@ public sealed class FeatureContext
         BindLighting(program);
         _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
         _properties.SetTexture(s_source, source, _pass.Frame.Resources.LinearClamp);
+        Command.SetProperties(_properties);
+        if (properties != null)
+            Command.SetProperties(properties);
+        Command.Draw(3);
+    }
+
+    /// <summary>
+    /// Draws a fullscreen program onto the scene, declared with <see cref="FeatureBuilder.DrawToScene"/>, for surfaces made
+    /// in the shader: a program that writes depth is tested against the scene's and writes its own, and may write the
+    /// G-buffer targets at the locations Graphite/Passes.glsl gives them. It reads no source colour.
+    /// </summary>
+    public void FullscreenScene(FullscreenProgram program, PropertySet? properties = null)
+    {
+        if (!_pass.OutputIsScene)
+            throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program onto the scene without drawing to it, declare DrawToScene.");
+        if (program.HasSource || program.Procedural)
+            throw new InvalidOperationException($"{_pass.Name} draws a program onto the scene it reads; create it with source: false.");
+        if (Program(program) is not { } shader)
+            return;
+        BeginOutput();
+        Command.SetShader(shader);
+        Command.SetVertexSource(VertexSource.None);
+        BindLighting(program);
+        _properties.SetBuffer(s_postViews, _pass.Camera.ViewBlocks.Buffer);
         Command.SetProperties(_properties);
         if (properties != null)
             Command.SetProperties(properties);

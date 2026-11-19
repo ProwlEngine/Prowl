@@ -705,9 +705,11 @@ public sealed class Renderer : IDisposable
     /// <remarks>
     /// A lit program may include Graphite/Lighting.glsl and Graphite/Shadows.glsl and read the world's lights, shadows,
     /// probes and bindless textures as forward passes do; its feature declares <see cref="FeatureBuilder.DrawsRenderables"/>.
+    /// A program with depth tests and writes the scene's depth through gl_FragDepth, drawn by
+    /// <see cref="FeatureContext.FullscreenScene"/>.
     /// </remarks>
-    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen", bool source = true, BlendStateDescription? blend = null, bool lit = false, string variant = "")
-        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend, lit, variant: variant, policy: _options.Compile, report: Report);
+    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen", bool source = true, BlendStateDescription? blend = null, bool lit = false, string variant = "", bool depth = false)
+        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend, lit, variant: variant, depth: depth, policy: _options.Compile, report: Report);
 
     /// <summary>
     /// Creates a program making its own geometry from gl_VertexIndex, drawn by features through
@@ -716,6 +718,23 @@ public sealed class Renderer : IDisposable
     /// </summary>
     public FullscreenProgram CreateProceduralProgram(string code, string name = "Procedural", BlendStateDescription? blend = null, bool lit = false)
         => FullscreenProgram.Create(Device, _compiler, code, name, false, blend, lit, procedural: true, policy: _options.Compile, report: Report);
+
+    /// <summary>
+    /// Creates a compute program from code holding a Compute block, as the library's compute files do. A lit one binds
+    /// the renderer's frame and view tables whole, so it can read Graphite_View and the world's lights and shadows: its
+    /// code declares "#pragma resource_set 3" and GRAPHITE_NO_OBJECT, and its feature declares
+    /// <see cref="FeatureBuilder.DrawsRenderables"/> and calls <see cref="FeatureContext.BindLighting"/> after setting it.
+    /// </summary>
+    public ComputeProgram CreateComputeProgram(string code, string name = "Compute", bool lit = false)
+    {
+        ShaderPass pass = new() { State = new PassState(), Source = code, SourceName = name };
+        ComputeDescription description = pass.Variants(_compiler, Device.BackendType).RequireCompute();
+        if (lit)
+            description.ResourceLayouts = FullscreenProgram.LitLayouts(description.ResourceLayouts ?? []);
+        ComputeProgram program = Device.ResourceFactory.CreateComputeProgram(description);
+        program.Name = name;
+        return program;
+    }
 
     internal InternalCompute CreateInternalCompute(string file) => InternalShaders.Compute(Device, _compiler, file, _options.Compile);
 
