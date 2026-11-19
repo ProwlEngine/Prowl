@@ -146,6 +146,26 @@ public static class ScriptComponentResolver
     }
 
     /// <summary>
+    /// The Assets-relative path of the `.cs` file that declares <paramref name="type"/>, or null when it is not a
+    /// project script (an engine or package type) or no file declares it. A file named after the type is tried first.
+    /// </summary>
+    public static string? FindScriptPath(Type type)
+    {
+        if (!ScriptAssemblyManager.IsScriptAssembly(type.Assembly) || Project.Current is not { } project) return null;
+        string assets = Path.GetFullPath(project.AssetsPath);
+        if (!Directory.Exists(assets)) return null;
+
+        IEnumerable<string> files = Directory.EnumerateFiles(assets, "*.cs", SearchOption.AllDirectories)
+            .OrderBy(f => string.Equals(Path.GetFileNameWithoutExtension(f), type.Name, StringComparison.OrdinalIgnoreCase) ? 0 : 1);
+        foreach (string file in files)
+        {
+            string rel = Path.GetRelativePath(assets, file).Replace(Path.DirectorySeparatorChar, '/');
+            if (ResolveComponentTypes(rel).Contains(type)) return rel;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Resolves an <see cref="AssetDragPayload"/> when it carries exactly one concrete <see cref="Component"/> type.
     /// </summary>
     public static Type? ResolveComponentType(AssetDragPayload? payload)
