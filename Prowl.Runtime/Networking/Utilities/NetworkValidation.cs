@@ -26,10 +26,10 @@ internal static class NetworkValidation
 
     internal static void SnapshotFormat(byte format)
     {
-        if (format != SceneSnapshotMessage.CurrentFormat)
+        if (format != NetworkSystem.SceneMessageFormat)
         {
             throw new InvalidDataException(
-                $"The host sent scene snapshot format {format}, this build reads {SceneSnapshotMessage.CurrentFormat}.");
+                $"The host sent scene message format {format}, this build reads {NetworkSystem.SceneMessageFormat}.");
         }
     }
 

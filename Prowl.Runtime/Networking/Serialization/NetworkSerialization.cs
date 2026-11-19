@@ -224,10 +224,10 @@ internal static class NetworkSerialization
         }
 
         NetworkAccessor network = go.Network;
-        // Scenes and prefabs saved before Networked and ServerOnly hold the old mode.
-        NetworkMode stored = (NetworkMode)(settings["Mode"]?.ByteValue ?? (byte)NetworkMode.Snapshot);
-        network.Networked = settings["Networked"]?.BoolValue ?? stored == NetworkMode.Object;
-        network.ServerOnly = settings["ServerOnly"]?.BoolValue ?? stored == NetworkMode.Never;
+        // Scenes and prefabs saved before Networked and ServerOnly hold the old mode: 1 was Never, 2 was Object.
+        byte stored = settings["Mode"]?.ByteValue ?? 0;
+        network.Networked = settings["Networked"]?.BoolValue ?? stored == 2;
+        network.ServerOnly = settings["ServerOnly"]?.BoolValue ?? stored == 1;
         network.Orphaned = (NetworkOrphaned)(settings["Orphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
         network.Flags = (NetworkFlags)(settings["Flags"]?.ByteValue ?? (byte)NetworkFlags.None);
         network.SendInterval = Math.Max(1, (int)(settings["SendInterval"]?.ByteValue ?? 1));
@@ -238,7 +238,7 @@ internal static class NetworkSerialization
     }
 
     /// <summary>
-    ///     For writing what clients receive: a reference to anything <see cref="NetworkMode.Never" />, or in a networked
+    ///     For writing what clients receive: a reference to anything server only, or in a networked
     ///     object a receiver lacks, is linked instead of written by value, so a field pointing at it can't carry it along.
     ///     The link names the object only when distance is all that keeps it away, so the client can fill it in once the
     ///     object arrives. Everything else goes to <paramref name="inner" />, or is written as usual without one.

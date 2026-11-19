@@ -103,7 +103,7 @@ public partial class NetworkingTests
         SceneInstance original = CreateScene();
         MakeCurrent(original);
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(original, snapshot);
+        NetworkTestScene.Current.WriteScene(original, snapshot);
         byte[] malformed = CompressedEcho(w =>
         {
             switch (kind)

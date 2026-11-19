@@ -83,13 +83,16 @@ public class NetTestComponent : Component
 /// </summary>
 public sealed class FakePeer : IDisposable
 {
+    // SceneSnapshot is the scene message: which scenes to load. Ready is the client's answer, and the host's spawns
+    // for it sit between SpawnStarted and SpawnFinished.
     public const ushort SceneSnapshot = Networking.Networking.EngineMessageIds, Spawn = SceneSnapshot + 1, Despawn = SceneSnapshot + 2,
-        Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Snapshot = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
-        SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11, StaticRpcToHost = SceneSnapshot + 12, StaticRpcFromHost = SceneSnapshot + 13,
-        Orphaned = SceneSnapshot + 14, OwnershipState = SceneSnapshot + 15,
-        NetworkFlags = SceneSnapshot + 16, SnapshotAck = SceneSnapshot + 17,
-        SectionAdd = SceneSnapshot + 18, SectionRemove = SceneSnapshot + 19, SectionMove = SceneSnapshot + 20, Time = SceneSnapshot + 21,
-        SendInterval = SceneSnapshot + 22, Player = SceneSnapshot + 23;
+        Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Snapshot = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7,
+        Ready = SceneSnapshot + 8, SpawnStarted = SceneSnapshot + 9, SpawnFinished = SceneSnapshot + 10,
+        StaticRpcToHost = SceneSnapshot + 11, StaticRpcFromHost = SceneSnapshot + 12,
+        Orphaned = SceneSnapshot + 13, OwnershipState = SceneSnapshot + 14,
+        NetworkFlags = SceneSnapshot + 15, SnapshotAck = SceneSnapshot + 16,
+        SectionAdd = SceneSnapshot + 17, SectionRemove = SceneSnapshot + 18, SectionMove = SceneSnapshot + 19, Time = SceneSnapshot + 20,
+        SendInterval = SceneSnapshot + 21, Player = SceneSnapshot + 22;
 
     private FakePeer(NetSession session)
     {
@@ -237,29 +240,32 @@ public sealed class FakePeer : IDisposable
             reader.ReadByte();
             SceneGeneration = reader.ReadUInt64();
             IsReady = false;
-            Send(SceneLoaded, w => w.WriteUInt64(SceneGeneration));
+            Send(Ready, w => w.WriteUInt64(SceneGeneration));
         }
-        else if (kind == SceneCatchUp && !Session.IsHost)
-        {
-            ulong generation = reader.ReadUInt64();
-            Send(SceneReady, w => w.WriteUInt64(generation));
-        }
-        else if (kind == SceneActivate && !Session.IsHost)
+        else if (kind == SpawnFinished && !Session.IsHost)
             IsReady = reader.ReadUInt64() == SceneGeneration;
-        else if (kind == SceneLoaded && Session.IsHost)
+        else if (kind == Ready && Session.IsHost)
         {
             ulong generation = reader.ReadUInt64();
-            Send(SceneCatchUp, w => { w.WriteUInt64(generation); w.WriteVarUInt32(0); w.WriteVarUInt32(0); }, sender);
-        }
-        else if (kind == SceneReady && Session.IsHost)
-        {
-            ulong generation = reader.ReadUInt64();
-            Send(SceneActivate, w => w.WriteUInt64(generation), sender);
+            Send(SpawnStarted, w => w.WriteUInt64(generation), sender);
+            foreach (byte[] spawn in JoinSpawns) Send(Spawn, w => w.WriteBytes(spawn), sender);
+            Send(SpawnFinished, w => w.WriteUInt64(generation), sender);
         }
     }
 
 
     public NetSession Session { get; }
+
+    /// <summary>As a host: the spawns a client gets once it says it is ready, between the started and finished messages.</summary>
+    public List<byte[]> JoinSpawns { get; } = new();
+
+    /// <summary>As a host: a scene message for <paramref name="world" />, as the engine writes it.</summary>
+    public static byte[] SceneMessage(SceneInstance world)
+    {
+        using NetWriter writer = new();
+        NetworkTestScene.Current.WriteScene(world, writer);
+        return writer.ToArray();
+    }
 
     public List<(ushort Id, byte[] Data)> Received { get; } = new();
     public List<(ushort Id, byte[] Data)> WireReceived { get; } = new();
@@ -390,21 +396,47 @@ public sealed class FakePeer : IDisposable
 
 public partial class NetworkingTests : RuntimeTestBase
 {
-    private static SnapshotSections RoundTrip(SceneInstance scene)
+    private static GameObject Find(SceneInstance scene, Guid id) => scene.Objects.Single(o => o.Identifier == id);
+
+    /// <summary>The object a Spawn message is for.</summary>
+    private static Guid SpawnedId(byte[] spawn)
     {
-        using NetWriter writer = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, writer);
-        NetReader reader = new(writer.WrittenSpan);
-        return NetworkTestScene.Current.ReadSnapshot(ref reader);
+        NetReader reader = new(spawn);
+        return reader.ReadGuid();
     }
 
-    private static GameObject Find(SceneInstance scene, Guid id) => scene.Objects.Single(o => o.Identifier == id);
+    /// <summary>The networked objects <paramref name="peer" /> was spawned so far, in order.</summary>
+    private static List<Guid> SpawnedIds(FakePeer peer) =>
+        [.. peer.WireReceived.Where(m => m.Id == FakePeer.Spawn).Select(m => SpawnedId(m.Data))];
 
     private static GameObject Find(SceneInstance scene, string name) => scene.Objects.Single(o => o.Name == name);
 
-    private static GameObject Find(SnapshotSections snapshot, Guid id) => snapshot.Objects.Single(o => o.Identifier == id);
+    /// <summary>The Spawn messages <paramref name="peer" /> received so far, as sent.</summary>
+    private static byte[][] RecordedSpawns(FakePeer peer) =>
+        [.. peer.WireReceived.Where(m => m.Id == FakePeer.Spawn).Select(m => m.Data)];
 
-    private static GameObject Find(SnapshotSections snapshot, string name) => snapshot.Objects.Single(o => o.Name == name);
+    /// <summary>The scene message and spawns the real host running on <paramref name="network" /> sends a joining client.</summary>
+    private static (byte[] Scene, byte[][] Spawns) RecordJoin(LocalNetwork network)
+    {
+        using FakePeer recorder = FakePeer.Join(network, "recorder");
+        Pump(() => recorder.IsReady, recorder);
+        return (recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data, RecordedSpawns(recorder));
+    }
+
+    /// <summary>The generation a scene message names.</summary>
+    private static ulong SceneGenerationOf(byte[] scene)
+    {
+        NetReader reader = new(scene);
+        reader.ReadByte();
+        return reader.ReadUInt64();
+    }
+
+    /// <summary>Makes a fake host send every joining client this scene message, then these spawns once it is ready.</summary>
+    private static void SendJoin(FakePeer host, byte[] scene, params byte[][] spawns)
+    {
+        host.JoinSpawns.AddRange(spawns);
+        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(scene), peer);
+    }
 
     /// <summary>Runs frames, the way the game loop does, until <paramref name="condition"/> holds.</summary>
     private static void Pump(Func<bool> condition, params FakePeer[] others)
@@ -440,28 +472,13 @@ public partial class NetworkingTests : RuntimeTestBase
     // --- Scene sharing ---------------------------------------------------------------------------
 
     [Fact]
-    public void SnapshotSerializationIsRecordedOutsideTheFramePump()
-    {
-        SceneInstance scene = CreateScene();
-        scene.Add(CreateGameObject("Snapshot object"));
-
-        FrameStats.Start();
-        using SnapshotSections received = RoundTrip(scene);
-        FrameStats.EndFrame();
-
-        Assert.Equal(2, FrameStats.Network.GetSample(0).Calls);
-        Assert.True(FrameStats.Network.GetSample(0).Ms > 0);
-        Assert.Contains(received.Objects, o => o.Name == "Snapshot object");
-    }
-
-    [Fact]
     public void NetworkModeIsOnlyStoredWhenSet()
     {
         GameObject go = CreateGameObject();
         EchoObject plain = Serializer.Serialize(go);
         Assert.False(plain.TryGet("Network", out _));
 
-        go.Network.Mode = NetworkMode.Object;
+        go.Network.Networked = true;
         go.Network.Orphaned = NetworkOrphaned.ClearOwner;
         go.Network.Flags = NetworkFlags.NoTransformSync;
         EchoObject stored = Serializer.Serialize(go);
@@ -469,7 +486,7 @@ public partial class NetworkingTests : RuntimeTestBase
         Assert.False(stored["Network"].TryGet("Mode", out _));
 
         GameObject copy = Serializer.Deserialize<GameObject>(stored)!;
-        Assert.Equal(NetworkMode.Object, copy.Network.Mode);
+        Assert.True(copy.Network.Networked);
         Assert.Equal(NetworkOrphaned.ClearOwner, copy.Network.Orphaned);
         Assert.Equal(NetworkFlags.NoTransformSync, copy.Network.Flags);
         copy.Dispose();
@@ -477,45 +494,6 @@ public partial class NetworkingTests : RuntimeTestBase
         GameObject fresh = Serializer.Deserialize<GameObject>(plain)!;
         Assert.Equal(NetworkFlags.None, fresh.Network.Flags);
         fresh.Dispose();
-    }
-
-    [Fact]
-    public void SnapshotLeavesOutNeverObjectsAndKeepsIdentifiers()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject level = CreateGameObject("Level");
-        GameObject prop = CreateGameObject("Prop");
-        GameObject secret = CreateGameObject("Secret");
-        prop.SetParent(level);
-        secret.SetParent(level);
-        secret.Network.Mode = NetworkMode.Never;
-
-        GameObject hostOnly = CreateGameObject("HostOnly");
-        GameObject hostChild = CreateGameObject("HostChild");
-        hostChild.SetParent(hostOnly);
-        hostOnly.Network.Mode = NetworkMode.Never;
-
-        scene.Add(level);
-        scene.Add(hostOnly);
-
-        SnapshotSections received = RoundTrip(scene);
-        try
-        {
-            Assert.Equal(new[] { "Level", "Prop" }, received.Objects.Select(o => o.Name).OrderBy(n => n));
-            Assert.Equal(level.Identifier, Find(received, "Level").Identifier);
-            Assert.Equal(prop.Identifier, Find(received, "Prop").Identifier);
-            Assert.Equal(Find(received, "Level"), Find(received, "Prop").Parent);
-
-            // Only the snapshot leaves them out; an ordinary save still has everything.
-            Assert.False(NetworkSerialization.WritingSnapshot);
-            SceneContent saved = scene.ActiveSection.Capture();
-            Assert.Equal(5, saved.Objects.Length);
-            saved.DisposeObjects();
-        }
-        finally
-        {
-            received.Dispose();
-        }
     }
 
     public class ReferenceHolder : Component
@@ -532,7 +510,7 @@ public partial class NetworkingTests : RuntimeTestBase
     private GameObject Secret(string name)
     {
         GameObject secret = CreateGameObject(name);
-        secret.Network.Mode = NetworkMode.Never;
+        secret.Network.ServerOnly = true;
         secret.AddComponent<SecretHolder>().Value = HostSecret;
         return secret;
     }
@@ -547,34 +525,11 @@ public partial class NetworkingTests : RuntimeTestBase
     }
 
     [Fact]
-    public void SnapshotDoesNotCarryNeverObjectsThroughReferences()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject level = CreateGameObject("Level");
-        GameObject secret = Secret("Secret");
-        ReferTo(level, secret);
-        scene.Add(level); scene.Add(secret);
-
-        using NetWriter writer = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, writer);
-        NetReader header = new(writer.WrittenSpan);
-        header.ReadByte(); header.ReadUInt64();
-        Assert.DoesNotContain(HostSecret, NetworkTestScene.Current.Decompress(header.ReadBytesWithLength()).WriteToJson());
-
-        using SnapshotSections received = RoundTrip(scene);
-        Assert.Equal(new[] { "Level" }, received.Objects.Select(o => o.Name));
-        ReferenceHolder refs = Find(received, "Level").GetComponent<ReferenceHolder>()!;
-        Assert.Null(refs.Target);
-        Assert.Null(refs.Part);
-        Assert.Null(refs.Pose);
-    }
-
-    [Fact]
     public void SpawnDoesNotCarryNeverObjectsThroughReferences()
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Root");
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         GameObject inside = Secret("Inside");
         inside.SetParent(root);
         GameObject outside = Secret("Outside");
@@ -590,74 +545,6 @@ public partial class NetworkingTests : RuntimeTestBase
         Assert.DoesNotContain(HostSecret, json);
         Assert.DoesNotContain(inside.Identifier.ToString(), json);
         Assert.DoesNotContain(outside.Identifier.ToString(), json);
-    }
-
-    [Fact]
-    public void JoiningClientsGetTheHostSceneAndEverySceneChange()
-    {
-        SceneInstance first = CreateScene();
-        GameObject level = CreateGameObject("Level");
-        first.Add(level);
-        MakeCurrent(first);
-
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
-            NetReader reader = new(alice.Last(FakePeer.SceneSnapshot));
-            using (SnapshotSections received = NetworkTestScene.Current.ReadSnapshot(ref reader))
-                Assert.Equal(level.Identifier, Find(received, "Level").Identifier);
-
-            SceneInstance second = CreateScene();
-            second.Add(CreateGameObject("Arena"));
-            FrameStats.Start();
-            MakeCurrent(second);
-            FrameStats.EndFrame();
-            Assert.True(FrameStats.Network.GetSample(0).Calls > 0);
-            Assert.True(FrameStats.Network.GetSample(0).Ms > 0);
-
-            Pump(() => alice.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2, alice);
-            reader = new NetReader(alice.Last(FakePeer.SceneSnapshot));
-            using (SnapshotSections received = NetworkTestScene.Current.ReadSnapshot(ref reader))
-                Assert.Contains(received.Objects, o => o.Name == "Arena");
-        }
-        finally
-        {
-            Networking.Networking.Shutdown();
-            alice.Dispose();
-        }
-    }
-
-    public class SerializeCounter : Component
-    {
-        public static int Count;
-        public override void OnBeforeSerialize() => Count++;
-    }
-
-    [Fact]
-    public void SceneChangeSerializesTheSnapshotOnceForEveryClient()
-    {
-        MakeCurrent(CreateScene());
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice"), bob = FakePeer.Join(network, "bob");
-        try
-        {
-            Pump(() => alice.IsReady && bob.IsReady, alice, bob);
-            SceneInstance next = CreateScene();
-            GameObject arena = CreateGameObject("Arena");
-            arena.AddComponent<SerializeCounter>();
-            next.Add(arena);
-            SerializeCounter.Count = 0;
-            MakeCurrent(next);
-            Assert.Equal(1, SerializeCounter.Count);
-            Pump(() => alice.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2 &&
-                       bob.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2, alice, bob);
-            Assert.Equal(alice.Last(FakePeer.SceneSnapshot), bob.Last(FakePeer.SceneSnapshot));
-        }
-        finally { Networking.Networking.Shutdown(); }
     }
 
     // --- Host side -------------------------------------------------------------------------------
@@ -681,7 +568,7 @@ public partial class NetworkingTests : RuntimeTestBase
             scene.Add(ship);
             ship.Network.SpawnSerialized(aliceHere);
 
-            Assert.Equal(NetworkMode.Object, ship.Network.Mode);
+            Assert.True(ship.Network.Networked);
             Assert.Same(aliceHere, ship.Network.Owner);
             Assert.True(ship.IsProxy && component.IsProxy);
 
@@ -778,7 +665,7 @@ public partial class NetworkingTests : RuntimeTestBase
     {
         SceneInstance scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
-        ship.Network.Mode = NetworkMode.Object;
+        ship.Network.Networked = true;
         scene.Add(ship);
         MakeCurrent(scene);
 
@@ -820,7 +707,7 @@ public partial class NetworkingTests : RuntimeTestBase
             parent.Network.SpawnSerialized();
 
             Assert.Throws<InvalidOperationException>(() => child.Network.SpawnSerialized(orphaned: NetworkOrphaned.ClearOwner));
-            Assert.Equal(NetworkMode.Snapshot, child.Network.Mode);
+            Assert.False(child.Network.Networked);
             Assert.Equal(NetworkOrphaned.Destroy, child.Network.Orphaned);
             Assert.Same(parent, child.Network.Root);
         }
@@ -896,9 +783,9 @@ public partial class NetworkingTests : RuntimeTestBase
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject original = CreateGameObject("Proxy");
-        original.Network.Mode = NetworkMode.Object;
+        original.Network.Networked = true;
         using NetWriter spawn = new();
         NetworkTestScene.Current.WriteSpawn(original, -1, NetworkOrphaned.ClearOwner, spawn);
         LocalNetwork network = new();
@@ -1120,18 +1007,21 @@ public partial class NetworkingTests : RuntimeTestBase
         SceneInstance hostScene = CreateScene();
         GameObject level = CreateGameObject("Level");
         level.AddComponent<NetTestComponent>().Health = 3;
+        level.Network.Networked = true;
         hostScene.Add(level);
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(hostScene, snapshot);
+        NetworkTestScene.Current.WriteScene(hostScene, snapshot);
+        using NetWriter levelSpawn = new();
+        NetworkTestScene.Current.WriteSpawn(level, owner: -1, NetworkOrphaned.Destroy, levelSpawn);
 
         GameObject ship = CreateGameObject("Ship");
         ship.AddComponent<NetTestComponent>().Health = 9;
-        ship.Network.Mode = NetworkMode.Object;
+        ship.Network.Networked = true;
         using NetWriter shipSpawn = new();
         NetworkTestScene.Current.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, shipSpawn); // the first client is peer 1
 
         GameObject crate = CreateGameObject("Crate");
-        crate.Network.Mode = NetworkMode.Object;
+        crate.Network.Networked = true;
         using NetWriter crateSpawn = new();
         NetworkTestScene.Current.WriteSpawn(crate, owner: -1, NetworkOrphaned.Destroy, crateSpawn);
 
@@ -1139,19 +1029,14 @@ public partial class NetworkingTests : RuntimeTestBase
 
         LocalNetwork network = new();
         FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer =>
-        {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
-            host.Session.SendRaw(peer, FakePeer.Spawn, shipSpawn.WrittenSpan);
-            host.Session.SendRaw(peer, FakePeer.Spawn, crateSpawn.WrittenSpan);
-        };
+        SendJoin(host, snapshot.ToArray(), levelSpawn.ToArray(), shipSpawn.ToArray(), crateSpawn.ToArray());
 
         Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
         try
         {
             Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == crateId), host);
 
-            // [Sync] values come with the snapshot and spawns, not from the scene data.
+            // [Sync] values come with the spawns.
             NetTestComponent levelHere = Find(SceneInstance.Main, levelId).GetComponent<NetTestComponent>()!;
             GameObject shipHere = Find(SceneInstance.Main, shipId);
             NetTestComponent shipComponent = shipHere.GetComponent<NetTestComponent>()!;
@@ -1213,7 +1098,7 @@ public partial class NetworkingTests : RuntimeTestBase
         Assert.Equal("alone", component.Shouts.Single().Text);
         Assert.Null(component.Shouts.Single().Caller);
         Assert.False(go.IsProxy);
-        Assert.Equal(NetworkMode.Object, go.Network.Mode);
+        Assert.True(go.Network.Networked);
     }
 
     [Fact]
@@ -1259,7 +1144,7 @@ public partial class NetworkingTests : RuntimeTestBase
     [InlineData(typeof(Float3))]
     [InlineData(typeof(Quaternion))]
     [InlineData(typeof(Color))]
-    [InlineData(typeof(NetworkMode))]
+    [InlineData(typeof(NetworkOrphaned))]
     public void SerializerSupportsCommonTypes(Type type)
     {
         bool supported = (bool)typeof(NetSerializer<>).MakeGenericType(type).GetProperty("IsSupported")!.GetValue(null)!;
@@ -1271,13 +1156,13 @@ public partial class NetworkingTests : RuntimeTestBase
     {
         using NetWriter writer = new();
         NetSerializer<Float3>.Write(writer, new Float3(1, 2, 3));
-        NetSerializer<NetworkMode>.Write(writer, NetworkMode.Object);
+        NetSerializer<NetworkOrphaned>.Write(writer, NetworkOrphaned.ClearOwner);
         NetSerializer<string>.Write(writer, "hi");
         NetSerializer<long>.Write(writer, -5);
 
         NetReader reader = new(writer.WrittenSpan);
         Assert.Equal(new Float3(1, 2, 3), NetSerializer<Float3>.Read(ref reader));
-        Assert.Equal(NetworkMode.Object, NetSerializer<NetworkMode>.Read(ref reader));
+        Assert.Equal(NetworkOrphaned.ClearOwner, NetSerializer<NetworkOrphaned>.Read(ref reader));
         Assert.Equal("hi", NetSerializer<string>.Read(ref reader));
         Assert.Equal(-5, NetSerializer<long>.Read(ref reader));
         Assert.False(NetSerializer<Dictionary<int, int>>.IsSupported);

@@ -35,34 +35,6 @@ public partial class NetworkingTests
 
 #pragma warning disable CS0618
     [Fact]
-    public void NetworkedAndServerOnlyStandInForTheMode()
-    {
-        GameObject go = CreateGameObject();
-        Assert.False(go.Network.Networked);
-        Assert.False(go.Network.ServerOnly);
-        Assert.Equal(NetworkMode.Snapshot, go.Network.Mode);
-
-        go.Network.Networked = true;
-        Assert.Equal(NetworkMode.Object, go.Network.Mode);
-
-        go.Network.ServerOnly = true;
-        Assert.Equal(NetworkMode.Never, go.Network.Mode);
-
-        go.Network.Mode = NetworkMode.Object;
-        Assert.True(go.Network.Networked);
-        Assert.False(go.Network.ServerOnly);
-
-        go.Network.Mode = NetworkMode.Never;
-        Assert.False(go.Network.Networked);
-        Assert.True(go.Network.ServerOnly);
-
-        go.Network.Mode = NetworkMode.Snapshot;
-        Assert.False(go.Network.Networked);
-        Assert.False(go.Network.ServerOnly);
-        go.Dispose();
-    }
-
-    [Fact]
     public void AStoredModeStillReadsAsNetworkedOrServerOnly()
     {
         GameObject go = CreateGameObject();
@@ -70,7 +42,7 @@ public partial class NetworkingTests
         EchoObject stored = Serializer.Serialize(go);
         EchoObject settings = stored["Network"];
         settings.Remove("Networked");
-        settings.Add("Mode", new EchoObject((byte)NetworkMode.Never));
+        settings.Add("Mode", new EchoObject((byte)1));
 
         GameObject copy = Serializer.Deserialize<GameObject>(stored)!;
         Assert.True(copy.Network.ServerOnly);

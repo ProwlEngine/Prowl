@@ -35,6 +35,71 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     internal int _applying;
     public void Dispose() => _valueWriter.Dispose();
 
+    // Hooks for values that came with a spawn, held until the object's spawn callbacks are due.
+    private readonly List<(Component Component, Action Hook)> _spawnHooks = new();
+
+    internal static void NotifySpawnChange(Component component, Action hook)
+    {
+        if (Networking.System is { } system)
+        {
+            system.Sync._spawnHooks.Add((component, hook));
+        }
+        else
+        {
+            hook();
+        }
+    }
+
+    /// <summary>Runs the hooks held for the values <paramref name="root" />'s tree was spawned with, in order.</summary>
+    internal void RunSpawnHooks(GameObject root)
+    {
+        if (_spawnHooks.Count == 0)
+        {
+            return;
+        }
+
+        List<Action>? due = null;
+        for (int i = 0; i < _spawnHooks.Count; i++)
+        {
+            (Component component, Action hook) = _spawnHooks[i];
+            bool gone = component.IsNotValid();
+            if (!gone && !IsUnder(component.GameObject, root))
+            {
+                continue;
+            }
+
+            if (!gone)
+            {
+                (due ??= new List<Action>()).Add(hook);
+            }
+
+            _spawnHooks.RemoveAt(i--);
+        }
+
+        if (due == null)
+        {
+            return;
+        }
+
+        foreach (Action hook in due)
+        {
+            Notify(hook);
+        }
+    }
+
+    private static bool IsUnder(GameObject go, GameObject root)
+    {
+        for (GameObject? current = go; current.IsValid(); current = current.Parent)
+        {
+            if (ReferenceEquals(current, root))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     internal static void NotifyChange(Action notification)
     {
         if (Networking.System is { } system)

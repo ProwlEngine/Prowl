@@ -114,7 +114,7 @@ public sealed class SyncMember<TComponent, T>(
     {
         TComponent c = (TComponent)component;
         T value = NetSerializer<T>.Read(ref reader);
-        if (changed == null || initial)
+        if (changed == null)
         {
             set(c, value);
             return;
@@ -122,7 +122,17 @@ public sealed class SyncMember<TComponent, T>(
 
         T old = get(c);
         set(c, value);
-        if (!EqualityComparer<T>.Default.Equals(old, value))
+        if (EqualityComparer<T>.Default.Equals(old, value))
+        {
+            return;
+        }
+
+        // As in Mirror, a spawn's values run their hooks too, once the object's spawn callbacks are due.
+        if (initial)
+        {
+            SyncSystem.NotifySpawnChange(c, () => changed(c, old, value));
+        }
+        else
         {
             SyncSystem.NotifyChange(() => changed(c, old, value));
         }

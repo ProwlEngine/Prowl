@@ -16,6 +16,7 @@ internal sealed partial class NetworkSystem
 {
     /// <summary>Current connection, admission, scene loading, or gameplay readiness stage.</summary>
     private readonly List<(int Peer, NetworkJoinState Stage)> _timedOut = new();
+    private readonly List<(int Peer, PeerReadiness State)> _continuing = new();
 
     internal NetworkJoinState JoinState
     {
@@ -76,7 +77,7 @@ internal sealed partial class NetworkSystem
         });
         if (Session == session && session!.TryGetPeer(peer.Id, out NetPeer? current) && current == peer)
         {
-            SendSnapshot(peer);
+            SendScene(peer);
         }
     }
 
@@ -87,7 +88,7 @@ internal sealed partial class NetworkSystem
         ResetVisibility(peer);
     }
 
-    /// <summary>The host's sections are in place on this client, so it asks for the values that changed meanwhile.</summary>
+    /// <summary>The host's scenes are loaded on this client, so it tells the host it is ready for their objects.</summary>
     internal void OnNetworkSceneActivated()
     {
         if (!IsClient || JoinState != NetworkJoinState.Loading)
@@ -96,109 +97,8 @@ internal sealed partial class NetworkSystem
         }
 
         LocalJoinState = NetworkJoinState.Synchronizing;
-        SendSceneGeneration(Session!.HostPeer!, EngineMessage.SceneLoaded);
+        SendSceneGeneration(Session!.HostPeer!, EngineMessage.Ready);
     }
-
-    // Snapshot -> scene activation -> full catch-up -> acknowledgement -> gameplay activation.
-    // Reliable delivery puts lifecycle/Sync traffic ahead of each following handshake message.
-    internal void OnClientSceneLoaded(NetPeer peer, ref NetReader reader, Delivery delivery)
-    {
-        ulong generation = ReadSceneGeneration(ref reader, delivery);
-        if (!TryGetLoadingPeer(peer, generation, NetworkJoinState.Loading, out PeerReadiness? state))
-        {
-            return;
-        }
-
-        // The snapshot held every value as it was written; only the ones that changed since go again.
-        List<(Component Component, uint Slot)> changed = Snapshots.OwedValues(peer);
-        using NetWriter message = new();
-        Snapshots.Delivered(peer);
-        new SceneCatchUpMessage(generation).Write(message);
-        List<WrittenValue> written = new();
-        using (new NetworkSerialization.WritingFor(null, null, written))
-        {
-            WithoutRoots(HiddenRoots(peer), () =>
-            {
-                Sync.WriteSyncState(message, changed);
-                WriteCatchUpTransforms(message);
-            });
-        }
-
-        state!.Stage = NetworkJoinState.Synchronizing;
-        SendEngine(peer, EngineMessage.SceneCatchUp, message.WrittenSpan);
-        Snapshots.Wrote(peer, written);
-    }
-
-    internal void OnSceneCatchUp(NetPeer peer, ref NetReader reader, Delivery delivery)
-    {
-        if (delivery != Delivery.Reliable)
-        {
-            throw new InvalidDataException("Scene catch-up must be reliable.");
-        }
-
-        ulong generation = SceneCatchUpMessage.Read(ref reader).Generation;
-        if (!IsClient || !peer.IsHost || generation != SceneGeneration ||
-            JoinState != NetworkJoinState.Synchronizing || ReplicatedWorld.IsNotValid() || CatchUpApplied)
-        {
-            return;
-        }
-
-        NetSession? session = Session;
-        Sync.ApplySyncState(peer, ref reader, null, true);
-        if (Session != session)
-        {
-            return;
-        }
-
-        ApplyCatchUpTransforms(ref reader);
-        if (!reader.IsAtEnd)
-        {
-            throw new InvalidDataException("Scene catch-up contains trailing bytes.");
-        }
-
-        CatchUpApplied = true;
-        SendSceneGeneration(peer, EngineMessage.SceneReady);
-    }
-
-    internal void OnClientSceneReady(NetPeer peer, ref NetReader reader, Delivery delivery)
-    {
-        ulong generation = ReadSceneGeneration(ref reader, delivery);
-        if (!TryGetLoadingPeer(peer, generation, NetworkJoinState.Synchronizing, out PeerReadiness? state))
-        {
-            return;
-        }
-
-        // Queue activation first, so RPCs from ready callbacks arrive after the client's local ready notification.
-        state!.Stage = NetworkJoinState.Ready;
-        SendSceneGeneration(peer, EngineMessage.SceneActivate);
-        if (PlayerOf(peer).IsValid())
-        {
-            SendPlayer(peer);
-        }
-        DispatchNetworkListener(e =>
-        {
-            if (IsPeerReady(peer))
-            {
-                e.OnPeerReady(peer);
-            }
-        });
-    }
-
-    internal void OnSceneActivate(NetPeer peer, ref NetReader reader, Delivery delivery)
-    {
-        ulong generation = ReadSceneGeneration(ref reader, delivery);
-        if (IsClient && peer.IsHost && generation == SceneGeneration && CatchUpApplied &&
-            LocalJoinState == NetworkJoinState.Synchronizing && ReplicatedWorld.IsValid())
-        {
-            SetLocalReady();
-            RunEarlyRpcs();
-        }
-    }
-
-    /// <summary>A call the host sent once this peer was ready, arriving on another channel ahead of the activation.</summary>
-    internal bool AwaitsActivation(EngineMessage kind) =>
-        IsClient && CatchUpApplied && LocalJoinState == NetworkJoinState.Synchronizing &&
-        kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost;
 
     internal void RunEarlyRpcs()
     {
@@ -324,6 +224,33 @@ internal sealed partial class NetworkSystem
         }
 
         NetSession session = Session!;
+        _continuing.Clear();
+        foreach ((int id, PeerReadiness state) in LoadingPeers)
+        {
+            if (state.Run != null)
+            {
+                _continuing.Add((id, state));
+            }
+        }
+
+        foreach ((int id, PeerReadiness state) in _continuing)
+        {
+            if (Session != session)
+            {
+                return;
+            }
+
+            if (session.TryGetPeer(id, out NetPeer? joining) && StillLoading(joining!, state))
+            {
+                ContinueJoin(joining!, state);
+            }
+        }
+
+        if (Session != session)
+        {
+            return;
+        }
+
         double now = Now;
         _timedOut.Clear();
         foreach ((int id, PeerReadiness state) in LoadingPeers)
@@ -348,45 +275,13 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    internal void WriteCatchUpTransforms(NetWriter message)
-    {
-        NetworkObject[] entries = Entries.Values
-            .Where(e => e.GameObject.IsValid() && e.GameObject.Network.HasTransformSync && Shown(e)).ToArray();
-        new CatchUpTransformBlock((uint)entries.Length).Write(message);
-        foreach (NetworkObject entry in entries)
-        {
-            Transform transform = entry.GameObject.Transform;
-            new CatchUpTransformMessage(entry.NetId, entry.Generation,
-                entry.TransformSync.HasReceived ? entry.TransformSync.LastReceivedTick : Tick,
-                transform.LocalPosition, transform.LocalRotation, transform.LocalScale).Write(message);
-        }
-    }
-
-    internal void ApplyCatchUpTransforms(ref NetReader reader)
-    {
-        uint count = CatchUpTransformBlock.Read(ref reader).Count;
-        for (uint i = 0; i < count; i++)
-        {
-            CatchUpTransformMessage message = CatchUpTransformMessage.Read(ref reader);
-            uint netId = message.NetId, generation = message.Generation, tick = message.Tick;
-            Float3 position = message.Position, scale = message.Scale;
-            Quaternion rotation = message.Rotation;
-            float length = Quaternion.LengthSquared(rotation);
-            if (!Finite(position) || !Finite(scale) || !float.IsFinite(length) || length < 1e-12f)
-            {
-                throw new InvalidDataException("Scene catch-up contains an invalid transform.");
-            }
-
-            if (Entries.TryGetNet(netId, out NetworkObject? entry) && entry.Generation == generation)
-            {
-                entry.TransformSync.Snap(entry.GameObject, tick, position, Quaternion.Normalize(rotation), scale);
-            }
-        }
-    }
-
     internal sealed class PeerReadiness(ulong generation, double deadline)
     {
-        public readonly double Deadline = deadline;
+        public double Deadline = deadline;
+
+        /// <summary>The objects of the peer's join run still to be looked at, from <see cref="Next" /> on, or null.</summary>
+        public NetworkObject[]? Run;
+        public int Next;
         public readonly ulong Generation = generation;
         public NetworkJoinState Stage = NetworkJoinState.Loading;
     }

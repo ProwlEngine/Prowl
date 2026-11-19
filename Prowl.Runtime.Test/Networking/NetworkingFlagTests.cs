@@ -51,9 +51,6 @@ public partial class NetworkingTests
             Assert.Equal(child.Identifier, childUpdate.ReadGuid());
             Assert.Equal(NetworkGeneration(spawned), childUpdate.ReadUInt32());
             Assert.Equal((byte)child.Network.Flags, childUpdate.ReadByte());
-            using SnapshotSections snapshot = RoundTrip(SceneInstance.Main);
-            Assert.Equal(root.Network.Flags, Find(snapshot, root.Identifier).Network.Flags);
-            Assert.Equal(child.Network.Flags, Find(snapshot, child.Identifier).Network.Flags);
             root.Network.Flags = NetworkFlags.NoScaleSync; // A no-op does not broadcast again.
             PumpFor(10, client);
             Assert.Equal(2, client.Received.Count(m => m.Id == FakePeer.NetworkFlags));
@@ -97,7 +94,7 @@ public partial class NetworkingTests
             SendProxyTransform(host, client, proxy.Identifier, 3, 30);
             Pump(() => proxy.Transform.LocalPosition.X == 30, host);
             // A delayed policy update from another ownership generation must not apply.
-            SendFlags(host, client, proxy, NetworkFlags.NoTransformSync, NetworkGeneration(proxy) + 1);
+            SendFlags(host, client, proxy, NetworkFlags.NoTransformSync, NetworkTestScene.Current.GenerationOf(proxy) + 1);
             host.Session.Flush(); PumpFor(10, host);
             Assert.Equal(NetworkFlags.None, proxy.Network.Flags);
         }
@@ -129,38 +126,47 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ClientReceivesRootAndChildFlagsWhileSceneActivationIsQueued()
+    public void ClientReceivesRootAndChildFlagsBeforeItsSpawnsFinish()
     {
         SceneInstance scene = CreateScene();
-        GameObject root = CreateGameObject("Flag root"); root.Network.Mode = NetworkMode.Object;
+        GameObject root = CreateGameObject("Flag root"); root.Network.Networked = true;
         GameObject child = CreateGameObject("Flag child"); child.SetParent(root);
         scene.Add(root); MakeCurrent(scene);
-        using NetWriter snapshot = new();
+        byte[] snapshot, spawn;
         uint generation;
+        LocalNetwork source = new();
+        Networking.Networking.Host(new LocalTransport(source, "host"));
         try
         {
-            Networking.Networking.Host(new LocalTransport(new(), "source"));
             generation = NetworkGeneration(root);
-            NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+            (snapshot, byte[][] spawns) = RecordJoin(source);
+            spawn = Assert.Single(spawns);
         }
         finally { Networking.Networking.Shutdown(); }
+        MakeCurrent(CreateScene());
+        ulong sceneGeneration = SceneGenerationOf(snapshot);
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer =>
-        {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
-            host.Session.SendRaw(peer, FakePeer.NetworkFlags, FlagMessage(root.Identifier, generation, NetworkFlags.NoScaleSync));
-            host.Session.SendRaw(peer, FakePeer.NetworkFlags, FlagMessage(child.Identifier, generation, NetworkFlags.NoRotationSync));
-        };
+        host.AutoReady = false;
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => host.Has(FakePeer.Ready), host);
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(sceneGeneration), client);
+            host.Session.SendRaw(client, FakePeer.Spawn, spawn);
+            host.Session.SendRaw(client, FakePeer.NetworkFlags, FlagMessage(root.Identifier, generation, NetworkFlags.NoScaleSync));
+            host.Session.SendRaw(client, FakePeer.NetworkFlags, FlagMessage(child.Identifier, generation, NetworkFlags.NoRotationSync));
+            host.Session.Flush();
             for (int i = 0; i < 1000 && NetworkTestScene.Current.FindByIdentifier(child.Identifier) is not GameObject { Network: { Flags: NetworkFlags.NoRotationSync } }; i++)
             {
                 Networking.Networking.Receive(); Networking.Networking.Flush(); host.Session.Update();
                 Thread.Sleep(1);
             }
             Assert.Equal(NetworkFlags.NoRotationSync, ((GameObject)NetworkTestScene.Current.FindByIdentifier(child.Identifier)!).Network.Flags);
+            Assert.False(Networking.Networking.IsReady);
+            host.Send(FakePeer.SpawnFinished, w => w.WriteUInt64(sceneGeneration), client);
             Pump(() => Networking.Networking.IsReady, host);
             Assert.Equal(NetworkFlags.NoScaleSync, Find(SceneInstance.Main, root.Identifier).Network.Flags);
             Assert.Equal(NetworkFlags.NoRotationSync, Find(SceneInstance.Main, child.Identifier).Network.Flags);
@@ -180,7 +186,7 @@ public partial class NetworkingTests
         try
         {
             using NetWriter message = new();
-            message.WriteBytes(FlagMessage(proxy.Identifier, NetworkGeneration(proxy), (NetworkFlags)flags));
+            message.WriteBytes(FlagMessage(proxy.Identifier, NetworkTestScene.Current.GenerationOf(proxy), (NetworkFlags)flags));
             if (trailing) message.WriteByte(0);
             host.Session.SendRaw(client, FakePeer.NetworkFlags, message.WrittenSpan,
                 unreliable ? Delivery.Unreliable : Delivery.Reliable);

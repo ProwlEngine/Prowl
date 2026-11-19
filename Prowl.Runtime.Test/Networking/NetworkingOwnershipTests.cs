@@ -42,7 +42,7 @@ public partial class NetworkingTests
         try
         {
             Assert.Throws<ArgumentException>(() => root.Network.SpawnSerialized(foreign.LocalPeer, NetworkOrphaned.ClearOwner));
-            Assert.Equal(NetworkMode.Snapshot, root.Network.Mode);
+            Assert.False(root.Network.Networked);
             Assert.Equal(NetworkOrphaned.Destroy, root.Network.Orphaned);
             Assert.False(root.Network.Active);
         }
@@ -100,12 +100,10 @@ public partial class NetworkingTests
 
             using FakePeer lateJoiner = FakePeer.Join(network, "late");
             Pump(() => lateJoiner.IsReady, ownerClient, lateJoiner);
-            NetReader snapshot = new(lateJoiner.Last(FakePeer.SceneSnapshot));
-            using (SnapshotSections received = NetworkTestScene.Current.ReadSnapshot(ref snapshot))
-                Assert.Equal(updated, Find(received, root.Identifier).Network.Orphaned);
-            Assert.Equal(1u, snapshot.ReadVarUInt32());
-            Assert.Equal(root.Identifier, snapshot.ReadGuid()); snapshot.ReadVarUInt32();
-            Assert.Equal((byte)updated, snapshot.ReadByte());
+            NetReader spawned = new(lateJoiner.WireReceived.Last(m => m.Id == FakePeer.Spawn).Data);
+            SpawnMessage lateSpawn = SpawnMessage.Read(ref spawned);
+            Assert.Equal(root.Identifier, lateSpawn.Identifier);
+            Assert.Equal(updated, lateSpawn.Orphaned);
 
             ownerClient.Session.Shutdown();
             if (updated == NetworkOrphaned.Destroy)
@@ -123,14 +121,19 @@ public partial class NetworkingTests
     [Fact]
     public void ClientsApplyHostPolicyChangesAndRejectLocalChangesAndStaleGenerations()
     {
-        var (_, state, _) = ReadinessHost();
+        var (_, state, source) = ReadinessHost();
         Guid objectId = state.GameObject.Identifier;
-        using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(SceneInstance.Main, snapshot);
-        Networking.Networking.Shutdown();
+        byte[] snapshot;
+        byte[][] spawns;
+        try
+        {
+            (snapshot, spawns) = RecordJoin(source);
+        }
+        finally { Networking.Networking.Shutdown(); }
+        MakeCurrent(CreateScene());
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
+        SendJoin(host, snapshot, spawns);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -166,7 +169,7 @@ public partial class NetworkingTests
             Assert.Throws<ArgumentOutOfRangeException>(() => root.Network.Orphaned = (NetworkOrphaned)255);
             Assert.Throws<ArgumentOutOfRangeException>(() => root.Network.SpawnSerialized(orphaned: (NetworkOrphaned)255));
             Assert.Equal(NetworkOrphaned.Destroy, root.Network.Orphaned);
-            Assert.Equal(NetworkMode.Snapshot, root.Network.Mode);
+            Assert.False(root.Network.Networked);
         }
         finally { Networking.Networking.Shutdown(); }
     }

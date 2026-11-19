@@ -23,7 +23,6 @@ internal sealed partial class NetworkSystem : IDisposable
     internal readonly SnapshotSystem Snapshots;
     internal readonly SyncSystem Sync;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
-    internal bool CatchUpApplied;
     internal int Frame;
     internal double LastTransformTime;
     internal NetworkJoinState LocalJoinState;
@@ -110,7 +109,7 @@ internal sealed partial class NetworkSystem : IDisposable
         session.PeerLeft += (peer, reason) =>
             NetworkDiagnostics.Record("Session", "Local", peer, Guid.Empty, $"Peer left: {reason}");
 
-        RegisterEngineMessage(session, EngineMessage.SceneSnapshot, OnSceneSnapshot);
+        RegisterEngineMessage(session, EngineMessage.Scene, OnScene);
         RegisterEngineMessage(session, EngineMessage.Spawn, OnSpawn);
         RegisterEngineMessage(session, EngineMessage.Despawn, OnDespawn);
         RegisterEngineMessage(session, EngineMessage.Owner, OnOwner);
@@ -120,10 +119,9 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.RpcToHost, Rpcs.OnRpcToHost);
         RegisterEngineMessage(session, EngineMessage.RpcFromHost, Rpcs.OnRpcFromHost);
 
-        RegisterEngineMessage(session, EngineMessage.SceneLoaded, OnClientSceneLoaded);
-        RegisterEngineMessage(session, EngineMessage.SceneCatchUp, OnSceneCatchUp);
-        RegisterEngineMessage(session, EngineMessage.SceneReady, OnClientSceneReady);
-        RegisterEngineMessage(session, EngineMessage.SceneActivate, OnSceneActivate);
+        RegisterEngineMessage(session, EngineMessage.Ready, OnClientReady);
+        RegisterEngineMessage(session, EngineMessage.SpawnStarted, OnSpawnStarted);
+        RegisterEngineMessage(session, EngineMessage.SpawnFinished, OnSpawnFinished);
         RegisterEngineMessage(session, EngineMessage.SectionAdd, OnSectionAdd);
         RegisterEngineMessage(session, EngineMessage.SectionRemove, OnSectionRemove);
         RegisterEngineMessage(session, EngineMessage.SectionMove, OnSectionMove);

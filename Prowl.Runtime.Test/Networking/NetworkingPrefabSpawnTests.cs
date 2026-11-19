@@ -155,17 +155,14 @@ public partial class NetworkingTests
             changed.AddComponent<SyncPairTestComponent>();
 
             using FakePeer late = FakePeer.Join(network, "late");
-            Pump(() => late.Has(FakePeer.Spawn), late);
-            List<(ushort Id, byte[] Data)> received = late.WireReceived.Where(m => m.Id is FakePeer.SceneSnapshot or FakePeer.Spawn).ToList();
-            Assert.Equal(FakePeer.SceneSnapshot, received[0].Id);
-            NetReader reader = new(received[0].Data);
-            using (SnapshotSections snapshot = NetworkTestScene.Current.ReadSnapshot(ref reader))
-            {
-                Assert.DoesNotContain(snapshot.Objects, o => o.Identifier == crate.Identifier);
-                Assert.Contains(snapshot.Objects, o => o.Identifier == changed.Identifier);
-            }
+            Pump(() => late.WireReceived.Count(m => m.Id == FakePeer.Spawn) == 2, late);
+            List<byte[]> spawns = [.. late.WireReceived.Where(m => m.Id == FakePeer.Spawn).Select(m => m.Data)];
 
-            TemplateSpawn spawn = ReadPrefabSpawn(Assert.Single(received, m => m.Id == FakePeer.Spawn).Data);
+            // One whose tree changed since it was built goes whole instead.
+            NetReader whole = new(spawns.Single(d => SpawnedId(d) == changed.Identifier));
+            Assert.False(SpawnMessage.Read(ref whole).Template);
+
+            TemplateSpawn spawn = ReadPrefabSpawn(spawns.Single(d => SpawnedId(d) == crate.Identifier));
             Assert.Equal(TreeIdentifiers(crate), spawn.Identifiers);
             Assert.Equal(new Float3(1, 2, 3), spawn.Position);
         }
@@ -230,7 +227,7 @@ public partial class NetworkingTests
         SceneInstance scene = CreateScene();
         MakeCurrent(scene);
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         byte[] bytes = snapshot.ToArray();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);

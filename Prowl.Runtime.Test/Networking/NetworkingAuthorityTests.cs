@@ -99,10 +99,10 @@ public partial class NetworkingTests
     {
         SceneInstance hostWorld = CreateScene();
         using NetWriter snapshot = new(), spawn = new();
-        NetworkTestScene.Current.WriteSnapshot(hostWorld, snapshot);
+        NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
         GameObject remote = CreateGameObject("Remote");
         remote.AddComponent<NetTestComponent>();
-        remote.Network.Mode = NetworkMode.Object;
+        remote.Network.Networked = true;
         NetworkTestScene.Current.WriteSpawn(remote, owner: -1, NetworkOrphaned.Destroy, spawn, generation: 1);
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);

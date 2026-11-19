@@ -141,7 +141,10 @@ internal sealed partial class NetworkObject
 
         Float3 velocity = TransferVelocity ?? OwnershipVelocity();
         SendOwnershipState(velocity);
+        int previous = Owner;
         ApplyOwner(owner, System.NextGeneration(), velocity);
+        System.ForgetViewpoints(previous);
+        System.ForgetViewpoints(owner);
 
         using NetWriter message = new(32);
         new OwnerMessage(GameObject.Identifier, owner, Generation).Write(message);

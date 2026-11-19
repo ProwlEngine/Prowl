@@ -13,7 +13,7 @@ public partial class NetworkingTests
     public static IEnumerable<object[]> TransformChannelCases()
     {
         for (byte mask = 0; mask <= (byte)(NetworkFlags.NoTransformSync | NetworkFlags.NoInterpolation); mask++)
-            foreach (string path in new[] { "Tick", "CatchUp", "Ownership" })
+            foreach (string path in new[] { "Tick", "Ownership" })
                 yield return new object[] { (NetworkFlags)mask, path };
     }
 
@@ -23,30 +23,32 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Channel proxy");
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         root.Network.Flags = mask;
         root.Transform.LocalPosition = new Float3(2, 3, 4);
         root.Transform.LocalScale = new Float3(2, 2, 2);
         root.AddComponent<NetTestComponent>();
         scene.Add(root); MakeCurrent(scene);
-        using NetWriter snapshot = new();
+        using NetWriter snapshot = new(), spawn = new();
         uint generation;
         try
         {
             Networking.Networking.Host(new LocalTransport(new(), "source"));
             generation = NetworkGeneration(root);
-            NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+            NetworkTestScene.Current.WriteScene(scene, snapshot);
+            NetworkTestScene.Current.WriteSpawn(root, -1, NetworkOrphaned.Destroy, spawn, generation,
+                NetworkTestScene.Current.NetIdOf(root));
         }
         finally { Networking.Networking.Shutdown(); }
 
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.AutoReady = path != "CatchUp";
+        host.JoinSpawns.Add(spawn.ToArray());
         host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => path == "CatchUp" ? host.Has(FakePeer.SceneLoaded) : Networking.Networking.IsReady, host);
+            Pump(() => Networking.Networking.IsReady, host);
             GameObject proxy = Find(SceneInstance.Main, root.Identifier);
             Assert.Equal(mask, proxy.Network.Flags);
             Assert.Throws<InvalidOperationException>(() => proxy.Network.Flags = mask ^ NetworkFlags.NoScaleSync);
@@ -67,17 +69,6 @@ public partial class NetworkingTests
             if (path == "Tick")
                 host.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
                     (netId, generation, remotePosition, remoteRotation, remoteScale)), client);
-            else if (path == "CatchUp")
-            {
-                NetReader loaded = new(host.Last(FakePeer.SceneLoaded));
-                ulong sceneGeneration = loaded.ReadUInt64();
-                host.Send(FakePeer.SceneCatchUp, w =>
-                {
-                    w.WriteUInt64(sceneGeneration); w.WriteVarUInt32(0); w.WriteVarUInt32(1);
-                    w.WriteVarUInt32(netId); w.WriteVarUInt32(generation); w.WriteVarUInt32(1); WritePose(w);
-                }, client);
-                Pump(() => host.Has(FakePeer.SceneReady), host);
-            }
             else
             {
                 using NetWriter poses = new(), message = new();
@@ -123,7 +114,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         root.Network.Flags = NetworkFlags.NoScaleSync;
         root.Transform.LocalScale = new Float3(2, 2, 2);
         scene.Add(root); MakeCurrent(scene);
@@ -175,7 +166,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         root.Transform.LocalRotation = Quaternion.AxisAngle(Float3.UnitY, 0.3f);
         scene.Add(root); MakeCurrent(scene);
         LocalNetwork network = new();
@@ -235,7 +226,7 @@ public partial class NetworkingTests
         parent.Transform.LocalRotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI * 0.5f);
         parent.Transform.LocalScale = new Float3(2, 2, 2);
         GameObject root = CreateGameObject();
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         root.Network.Flags = NetworkFlags.NoInterpolation; // Keep both samples.
         root.SetParent(parent);
         scene.Add(parent); MakeCurrent(scene);
@@ -277,7 +268,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         root.Network.Flags = mask;
         scene.Add(root); MakeCurrent(scene);
         LocalNetwork network = new();

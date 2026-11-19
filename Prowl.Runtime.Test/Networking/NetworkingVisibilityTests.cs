@@ -152,22 +152,6 @@ public partial class NetworkingTests
         return null;
     }
 
-    private static List<Guid> SnapshotObjectIds(byte[] snapshot)
-    {
-        NetReader reader = new(snapshot);
-        SceneSnapshotMessage.Read(ref reader);
-        uint count = ObjectStateBlock.Read(ref reader).Count;
-        List<Guid> ids = new();
-        for (uint i = 0; i < count; i++) ids.Add(SnapshotObjectMessage.Read(ref reader).Identifier);
-        return ids;
-    }
-
-    private static string SnapshotJson(byte[] snapshot)
-    {
-        NetReader reader = new(snapshot);
-        return NetworkTestScene.Current.Decompress(SceneSnapshotMessage.Read(ref reader).Sections).WriteToJson();
-    }
-
     [Fact]
     public void AHiddenPeerReceivesNothingAboutTheObject()
     {
@@ -349,9 +333,9 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new(), spawn = new(), despawn = new(), back = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject crate = CreateGameObject("Crate");
-        crate.Network.Mode = NetworkMode.Object;
+        crate.Network.Networked = true;
         NetTestComponent component = crate.AddComponent<NetTestComponent>();
         crate.AddComponent<VisibilityListener>();
         NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.Destroy, spawn, generation: 1, netId: 5);
@@ -394,9 +378,9 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new(), spawn = new(), despawn = new(), back = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject crate = CreateGameObject("Crate");
-        crate.Network.Mode = NetworkMode.Object;
+        crate.Network.Networked = true;
         NetTestComponent component = crate.AddComponent<NetTestComponent>();
         NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.Destroy, spawn, generation: 1, netId: 5);
         new DespawnMessage(crate.Identifier, NetworkDespawnReason.OutOfInterest).Write(despawn);
@@ -502,53 +486,13 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void AJoiningClientGetsNoHiddenObjectAndLinksToItAsNull()
-    {
-        SceneInstance world = CreateScene();
-        GameObject chest = CreateGameObject("Chest");
-        chest.Network.Mode = NetworkMode.Object;
-        chest.Network.Visibility = NetworkVisibility.Manual;
-        chest.AddComponent<SecretHolder>().Value = HostSecret;
-        NetTestComponent stats = chest.AddComponent<NetTestComponent>();
-        GameObject door = CreateGameObject("Door");
-        LinkHolder link = door.AddComponent<LinkHolder>();
-        link.Target = chest;
-        link.Part = stats;
-        world.Add(door);
-        world.Add(chest);
-        MakeCurrent(world);
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            Pump(() => alice.IsReady, alice);
-            byte[] payload = alice.Last(FakePeer.SceneSnapshot);
-            string json = SnapshotJson(payload);
-            Assert.DoesNotContain(HostSecret, json);
-            Assert.DoesNotContain(chest.Identifier.ToString(), json);
-            Assert.DoesNotContain(stats.Identifier.ToString(), json);
-            Assert.Empty(SnapshotObjectIds(payload));
-            Assert.False(Mentions(alice, chest.Identifier, stats.Identifier));
-
-            NetReader reader = new(payload);
-            using SnapshotSections received = NetworkTestScene.Current.ReadSnapshot(ref reader);
-            Assert.DoesNotContain(received.Objects, o => o.Name == "Chest");
-            LinkHolder linked = Find(received, "Door").GetComponent<LinkHolder>()!;
-            Assert.Null(linked.Target);
-            Assert.Null(linked.Part);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
     public void ASceneChangeSendsEachClientOnlyThePersistentObjectsItHas()
     {
         GameObject? chest = null;
         using VisibilitySession session = VisibilityHost(world =>
         {
             chest = Crate(world, NetworkVisibility.Manual, "Chest");
-            chest.Network.Mode = NetworkMode.Object;
+            chest.Network.Networked = true;
             chest.Persistent = true;
         });
         chest!.Network.ShowTo(session.AliceHere);
@@ -557,48 +501,11 @@ public partial class NetworkingTests
         session.World.ReplaceContent(new SceneContent { Objects = [new GameObject("Next")] }, "Next", null);
         Pump(() => Count(session.Alice, FakePeer.SceneSnapshot) == 2 && Count(session.Bob, FakePeer.SceneSnapshot) == 2,
             session.Alice, session.Bob);
-        Assert.Contains(chest.Identifier, SnapshotObjectIds(session.Alice.Last(FakePeer.SceneSnapshot)));
-        Assert.DoesNotContain(chest.Identifier, SnapshotObjectIds(session.Bob.Last(FakePeer.SceneSnapshot)));
+        Assert.Contains(chest.Identifier, SpawnedIds(session.Alice));
+        Assert.DoesNotContain(chest.Identifier, SpawnedIds(session.Bob));
         Assert.False(Mentions(session.Bob, chest.Identifier));
         Assert.True(chest.Network.IsVisibleTo(session.AliceHere));
         Assert.False(chest.Network.IsVisibleTo(session.BobHere));
-    }
-
-    [Fact]
-    public void AnAddedSectionLeavesOutHiddenObjectsAndLinksToThemAsNull()
-    {
-        var (world, alice) = SectionHost();
-        try
-        {
-            GameObject chest = new("Chest");
-            chest.Network.Mode = NetworkMode.Object;
-            chest.Network.Visibility = NetworkVisibility.Manual;
-            chest.AddComponent<SecretHolder>().Value = HostSecret;
-            GameObject door = new("Door");
-            door.AddComponent<LinkHolder>().Target = chest;
-            world.AddContent(new SceneContent { Objects = [chest, door] }, "Arena", null);
-
-            Pump(() => alice.Has(FakePeer.SectionAdd), alice);
-            byte[] payload = alice.Last(FakePeer.SectionAdd);
-            NetReader reader = new(payload);
-            string json = NetworkTestScene.Current.Decompress(SectionAddMessage.Read(ref reader).Sections).WriteToJson();
-            Assert.DoesNotContain(HostSecret, json);
-            Assert.DoesNotContain(chest.Identifier.ToString(), json);
-            List<SectionData> sections = ReadSectionAdd(payload, out uint objectCount, world);
-            try
-            {
-                Assert.Equal(0u, objectCount);
-                Assert.DoesNotContain(sections[0].Content.Objects, o => o.Name == "Chest");
-                Assert.Null(sections[0].Content.Objects.Single(o => o.Name == "Door").GetComponent<LinkHolder>()!.Target);
-            }
-            finally { DisposeSections(sections); }
-            Assert.False(Mentions(alice, chest.Identifier));
-        }
-        finally
-        {
-            Networking.Networking.Shutdown();
-            alice.Dispose();
-        }
     }
 
     [Fact]
@@ -622,7 +529,7 @@ public partial class NetworkingTests
         using FakePeer carol = FakePeer.Join(session.Network, "carol");
         Pump(() => carol.IsReady, carol, session.Bob);
 
-        List<Guid> carolHas = SnapshotObjectIds(carol.Last(FakePeer.SceneSnapshot));
+        List<Guid> carolHas = SpawnedIds(carol);
         Assert.DoesNotContain(shown.Identifier, carolHas);
         Assert.Contains(hidden.Identifier, carolHas);
         NetPeer carolHere = HostPeerOf(carol);
@@ -637,7 +544,7 @@ public partial class NetworkingTests
         try
         {
             GameObject chest = new("Chest");
-            chest.Network.Mode = NetworkMode.Object;
+            chest.Network.Networked = true;
             chest.Network.Visibility = NetworkVisibility.Manual;
             SceneSection arena = world.AddContent(new SceneContent { Objects = [chest] }, "Arena", null);
             Pump(() => alice.Has(FakePeer.SectionAdd), alice);
@@ -657,33 +564,10 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SpawningHiddenAnObjectClientsHaveAsSceneContentIsRefused()
-    {
-        GameObject? lamp = null;
-        using VisibilitySession session = VisibilityHost(world =>
-        {
-            lamp = CreateGameObject("Lamp");
-            world.Add(lamp);
-        });
-        lamp!.Network.Visibility = NetworkVisibility.Manual;
-        Assert.Throws<InvalidOperationException>(() => lamp.Network.SpawnSerialized());
-        Assert.Equal(NetworkMode.Snapshot, lamp.Network.Mode);
-        Assert.False(lamp.Network.Active);
-
-        lamp.Network.Visibility = NetworkVisibility.Default;
-        lamp.Network.SpawnSerialized();
-        Assert.True(lamp.Network.Active);
-
-        GameObject fresh = Crate(session.World, NetworkVisibility.Manual, "Fresh");
-        fresh.Network.SpawnSerialized();
-        Assert.True(fresh.Network.Active);
-    }
-
-    [Fact]
     public void NetworkVisibilityIsStoredOnlyWhenSet()
     {
         GameObject go = CreateGameObject();
-        go.Network.Mode = NetworkMode.Object;
+        go.Network.Networked = true;
         EchoObject plain = Serializer.Serialize(go);
         Assert.False(plain["Network"].TryGet("Visibility", out _));
 
@@ -704,9 +588,9 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new(), spawn = new(), despawn = new(), back = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject crate = CreateGameObject("Crate");
-        crate.Network.Mode = NetworkMode.Object;
+        crate.Network.Networked = true;
         crate.Network.Flags = NetworkFlags.NoInterpolation;
         NetTestComponent component = crate.AddComponent<NetTestComponent>();
         NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.Destroy, spawn, generation: 1, netId: 5);
@@ -763,16 +647,14 @@ public partial class NetworkingTests
         {
             ShowOnSpawn.Peer = session.AliceHere;
             GameObject chest = new("Chest");
-            chest.Network.Mode = NetworkMode.Object;
+            chest.Network.Networked = true;
             chest.Network.Visibility = NetworkVisibility.Manual;
             chest.AddComponent<ShowOnSpawn>();
             session.World.AddContent(new SceneContent { Objects = [chest] }, "Arena", null);
             Pump(() => session.Alice.Has(FakePeer.SectionAdd) && session.Bob.Has(FakePeer.SectionAdd), session.Alice, session.Bob);
             PumpFor(10, session.Alice, session.Bob);
 
-            Assert.False(session.Alice.Has(FakePeer.Spawn));
-            DisposeSections(ReadSectionAdd(session.Alice.Last(FakePeer.SectionAdd), out uint aliceObjects));
-            Assert.Equal(1u, aliceObjects);
+            Assert.Contains(chest.Identifier, SpawnedIds(session.Alice));
             Assert.False(Mentions(session.Bob, chest.Identifier));
             Assert.True(chest.Network.IsVisibleTo(session.AliceHere));
         }
@@ -780,23 +662,23 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ShowToFromOnNetworkSpawnOfALoadedSceneTravelsInsideTheSnapshot()
+    public void ShowToFromOnNetworkSpawnOfALoadedSceneSpawnsItForThatPeerOnly()
     {
         using VisibilitySession session = VisibilityHost();
         try
         {
             ShowOnSpawn.Peer = session.AliceHere;
             GameObject chest = new("Chest");
-            chest.Network.Mode = NetworkMode.Object;
+            chest.Network.Networked = true;
             chest.Network.Visibility = NetworkVisibility.Manual;
             chest.AddComponent<ShowOnSpawn>();
             session.World.ReplaceContent(new SceneContent { Objects = [chest] }, "Next", null);
             Pump(() => Count(session.Alice, FakePeer.SceneSnapshot) == 2 && Count(session.Bob, FakePeer.SceneSnapshot) == 2,
                 session.Alice, session.Bob);
+            Pump(() => session.Alice.IsReady && session.Bob.IsReady, session.Alice, session.Bob);
             PumpFor(10, session.Alice, session.Bob);
 
-            Assert.False(session.Alice.Has(FakePeer.Spawn));
-            Assert.Contains(chest.Identifier, SnapshotObjectIds(session.Alice.Last(FakePeer.SceneSnapshot)));
+            Assert.Contains(chest.Identifier, SpawnedIds(session.Alice));
             Assert.False(Mentions(session.Bob, chest.Identifier));
         }
         finally { ShowOnSpawn.Peer = null; }
@@ -899,23 +781,6 @@ public partial class NetworkingTests
         Pump(() => carol.IsReady, carol, session.Alice, session.Bob);
         Assert.False(visible);
         Assert.False(Mentions(carol, crate.Identifier, stats.Identifier));
-    }
-
-    [Fact]
-    public void PeersMissingTheSameObjectsShareOneSectionWrite()
-    {
-        using VisibilitySession session = VisibilityHost();
-        GameObject chest = new("Chest");
-        chest.Network.Mode = NetworkMode.Object;
-        chest.Network.Visibility = NetworkVisibility.Manual;
-        GameObject counter = new("Counter");
-        counter.AddComponent<SerializeCounter>();
-        SerializeCounter.Count = 0;
-        session.World.AddContent(new SceneContent { Objects = [chest, counter] }, "Arena", null);
-        Pump(() => session.Alice.Has(FakePeer.SectionAdd) && session.Bob.Has(FakePeer.SectionAdd), session.Alice, session.Bob);
-        Assert.Equal(1, SerializeCounter.Count);
-        Assert.False(Mentions(session.Alice, chest.Identifier));
-        Assert.False(Mentions(session.Bob, chest.Identifier));
     }
 
     [Fact]

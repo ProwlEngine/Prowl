@@ -140,13 +140,6 @@ internal sealed partial class NetworkSystem
                     $"'{go.Name}' is inside the networked object '{outer.Name}' already.");
             }
 
-            if (FindEntry(go) is null && HiddenFromItsCopies(go, owner?.Id ?? NoOwner))
-            {
-                throw new InvalidOperationException(
-                    $"'{go.Name}' is on clients already as part of the scene, so it can't be spawned hidden from any of them. " +
-                    "Spawn a new object instead, or make it networked in the scene.");
-            }
-
             if (go.Section is { } section)
             {
                 EnsureAnnounced(section);
@@ -175,14 +168,14 @@ internal sealed partial class NetworkSystem
             return;
         }
 
-        bool heldAsContent = Configuration.InterestMode != InterestMode.None && HeldAsContent(go);
         NetworkObject entry = new(this, go)
         {
             Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template,
             Components = components
         };
         Entries.Add(entry);
-        InitVisibility(entry, heldAsContent);
+        ForgetViewpoints(entry.Owner);
+        InitVisibility(entry);
 
         List<NetPeer> observers = new();
         foreach (NetPeer peer in Session!.Peers)
@@ -329,6 +322,12 @@ internal sealed partial class NetworkSystem
             return null;
         }
 
+        // Only a peer that just loaded the scene holds its objects: any other gets the object whole.
+        if (template.Scene && !_sceneSpawns)
+        {
+            return null;
+        }
+
         List<Guid> current = new(template.Identifiers.Length);
         CollectIdentifiers(go, current);
         if (!current.SequenceEqual(template.Identifiers))
@@ -339,11 +338,12 @@ internal sealed partial class NetworkSystem
         Transform t = go.Transform;
         return new TemplateSpawn(template.Prefab, template.Factory, template.Data, template.Identifiers, t.LocalPosition,
             t.LocalRotation, t.LocalScale, go.Enabled, go.Network.Flags,
-            (byte)go.Network.SendInterval, (byte)template.Components.Length, NetworkComponents.Hash(template.Components));
+            (byte)go.Network.SendInterval, (byte)template.Components.Length, NetworkComponents.Hash(template.Components),
+            template.Scene);
     }
 
     /// <summary>Builds a client's copy of a prefab or factory spawn, before it goes into the scene.</summary>
-    private static GameObject BuildTemplate(ReadOnlySpan<byte> payload, out SpawnTemplate template)
+    private GameObject BuildTemplate(Guid id, ReadOnlySpan<byte> payload, out SpawnTemplate template)
     {
         NetReader reader = new(payload);
         TemplateSpawn spawn = TemplateSpawn.Read(ref reader);
@@ -354,7 +354,18 @@ internal sealed partial class NetworkSystem
 
         GameObject go;
         string source;
-        if (spawn.Factory is { } factory)
+        if (spawn.Scene)
+        {
+            source = $"scene object {id}";
+            if (TakeHeld(id) is not { } held)
+            {
+                throw new InvalidDataException(
+                    $"The host spawned the {source}, which this peer's copy of the scene does not hold.");
+            }
+
+            go = held;
+        }
+        else if (spawn.Factory is { } factory)
         {
             source = $"factory '{factory}'";
             if (!NetworkFactories.TryGet(factory, out _, out _))
@@ -402,7 +413,7 @@ internal sealed partial class NetworkSystem
                 $"{components.Length} that don't match them ({mine}). Every peer has to build the same components.");
         }
 
-        template = new SpawnTemplate(spawn.Prefab, spawn.Factory, spawn.Data, spawn.Identifiers, components);
+        template = new SpawnTemplate(spawn.Prefab, spawn.Factory, spawn.Data, spawn.Identifiers, components, spawn.Scene);
 
         go.Transform.LocalPosition = spawn.Position;
         go.Transform.LocalRotation = spawn.Rotation;
@@ -472,7 +483,7 @@ internal sealed partial class NetworkSystem
         SerializationContext context = SceneReferenceResolver.ContextForLinking(scene);
         SpawnTemplate? template = null;
         GameObject? go = echo == null
-            ? BuildTemplate(message.Snapshot, out template)
+            ? BuildTemplate(id, message.Snapshot, out template)
             : GameObject.DeserializePreservingIdentifiers(echo, context);
         if (go.IsNotValid())
         {
@@ -502,7 +513,7 @@ internal sealed partial class NetworkSystem
                 }
             }
 
-            // An object the scene snapshot brought stays the same instance, so references to it keep working.
+            // An object this peer holds already stays the same instance, so references to it keep working.
             if (!Entries.Contains(id) && FindByIdentifier(id) is GameObject existing)
             {
                 existing.Network.Networked = true;
@@ -576,8 +587,7 @@ internal sealed partial class NetworkSystem
                 CollectLinks(echo, context);
             }
 
-            entry.NotifySpawn();
-            ClaimPendingPlayer(entry);
+            NotifyOrHold(entry);
         }
         finally
         {
@@ -630,7 +640,6 @@ internal sealed partial class NetworkSystem
             VisibilityOverrides.Remove(go);
         }
 
-        ForgetSentContent(go);
         ForgetLinksFrom(go);
 
         if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)

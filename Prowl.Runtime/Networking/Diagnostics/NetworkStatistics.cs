@@ -57,7 +57,7 @@ public static class NetworkStatistics
 
     internal static void CountReceived(EngineMessage kind, NetPeer peer, int bytes)
     {
-        int index = kind - EngineMessage.SceneSnapshot;
+        int index = kind - EngineMessage.Scene;
         if ((uint)index >= (uint)s_names.Length)
         {
             return;
@@ -70,7 +70,7 @@ public static class NetworkStatistics
 
     internal static void CountSent(EngineMessage kind, NetPeer peer, int bytes)
     {
-        int index = kind - EngineMessage.SceneSnapshot;
+        int index = kind - EngineMessage.Scene;
         if ((uint)index >= (uint)s_names.Length)
         {
             return;
@@ -98,7 +98,7 @@ public static class NetworkStatistics
         int last = 0;
         foreach (EngineMessage kind in Enum.GetValues<EngineMessage>())
         {
-            last = Math.Max(last, kind - EngineMessage.SceneSnapshot);
+            last = Math.Max(last, kind - EngineMessage.Scene);
         }
 
         string[] names = new string[last + 1];

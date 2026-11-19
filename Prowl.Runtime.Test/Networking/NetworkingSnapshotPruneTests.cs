@@ -14,9 +14,9 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject crate = CreateGameObject("Crate");
-        crate.Network.Mode = NetworkMode.Object;
+        crate.Network.Networked = true;
         NetTestComponent component = crate.AddComponent<NetTestComponent>();
         using NetWriter spawn = new();
         NetworkTestScene.Current.WriteSpawn(crate, owner: -1, NetworkOrphaned.Destroy, spawn, generation: 1);

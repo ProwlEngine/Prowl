@@ -41,8 +41,8 @@ public partial class NetworkingTests
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
         SceneInstance original = CreateScene(); MakeCurrent(original);
-        using NetWriter snapshot = new(); NetworkTestScene.Current.WriteSnapshot(original, snapshot);
-        GameObject root = CreateGameObject("Spawn root"); root.Network.Mode = NetworkMode.Object;
+        using NetWriter snapshot = new(); NetworkTestScene.Current.WriteScene(original, snapshot);
+        GameObject root = CreateGameObject("Spawn root"); root.Network.Networked = true;
         NetworkSpawnCleanupComponent component = root.AddComponent<NetworkSpawnCleanupComponent>();
         component.EndSessionOnDeserialize = kind == "cancel";
         component.Scores.Add(9);
@@ -129,17 +129,23 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SpawningAnObjectTheSceneSnapshotBroughtKeepsTheClientsOneInstance()
+    public void SpawningAnObjectTheClientBuiltItselfKeepsTheClientsOneInstance()
     {
+        // A scene built in code is built by every peer, so the client has the crate before the host spawns it.
         SceneInstance scene = CreateScene();
         GameObject crate = CreateGameObject("Crate");
         NetTestComponent original = crate.AddComponent<NetTestComponent>();
         scene.Add(crate);
+        MakeCurrent(scene);
         using NetWriter snapshot = new(), spawn = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
-        crate.Network.Mode = NetworkMode.Object;
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
+        crate.Network.Networked = true;
         original.Health = 7;
         NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.ClearOwner, spawn, 1, 1);
+
+        // The client's own crate is plain and at full health until the host's spawn reaches it.
+        crate.Network.Networked = false;
+        original.Health = 100;
         LocalNetwork network = new();
         FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);

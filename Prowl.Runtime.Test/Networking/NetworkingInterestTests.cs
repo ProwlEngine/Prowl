@@ -160,7 +160,7 @@ public partial class NetworkingTests
     public void CullDistanceIsStoredOnlyWhenSet()
     {
         GameObject go = CreateGameObject();
-        go.Network.Mode = NetworkMode.Object;
+        go.Network.Networked = true;
         EchoObject plain = Serializer.Serialize(go);
         Assert.False(plain["Network"].TryGet("CullDistance", out _));
 
@@ -303,7 +303,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ViewpointsSetAsAClientConnectsBringNearbyObjectsInItsSnapshot()
+    public void ViewpointsSetAsAClientConnectsBringNearbyObjectsInItsJoinSpawns()
     {
         VisibilityPeerListener? listener = null;
         using InterestSession session = InterestHost(setUp: world =>
@@ -320,10 +320,9 @@ public partial class NetworkingTests
         using FakePeer carol = FakePeer.Join(session.Network, "carol");
         Pump(() => carol.IsReady, carol, session.Alice, session.Bob);
         PumpFor(100, carol, session.Alice, session.Bob);
-        List<Guid> has = SnapshotObjectIds(carol.Last(FakePeer.SceneSnapshot));
+        List<Guid> has = SpawnedIds(carol);
         Assert.Contains(near.Identifier, has);
         Assert.DoesNotContain(far.Identifier, has);
-        Assert.False(carol.Has(FakePeer.Spawn));
         Assert.False(Mentions(carol, far.Identifier));
         Assert.True(near.Network.IsVisibleTo(HostPeerOf(carol)));
     }
@@ -446,90 +445,16 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SceneLinksToObjectsOutOfRangeCarryTheirIdButLinksToHiddenOnesDoNot()
-    {
-        GameObject? chest = null;
-        NetTestComponent? vaultStats = null;
-        using InterestSession session = InterestHost(setUp: world =>
-        {
-            chest = CreateGameObject("Chest");
-            chest.Network.Mode = NetworkMode.Object;
-            chest.AddComponent<SecretHolder>().Value = HostSecret;
-            chest.Transform.Position = new Float3(50, 0, 0);
-            GameObject vault = CreateGameObject("Vault");
-            vault.Network.Mode = NetworkMode.Object;
-            vault.Network.Visibility = NetworkVisibility.Manual;
-            vaultStats = vault.AddComponent<NetTestComponent>();
-            GameObject door = CreateGameObject("Door");
-            LinkHolder link = door.AddComponent<LinkHolder>();
-            link.Target = chest;
-            link.Part = vaultStats;
-            world.Add(door);
-            world.Add(chest);
-            world.Add(vault);
-        });
-
-        byte[] payload = session.Alice.Last(FakePeer.SceneSnapshot);
-        string json = SnapshotJson(payload);
-        Assert.Contains(chest!.Identifier.ToString(), json);
-        Assert.DoesNotContain(HostSecret, json);
-        Assert.DoesNotContain(vaultStats!.Identifier.ToString(), json);
-        Assert.Empty(SnapshotObjectIds(payload));
-    }
-
-    [Fact]
-    public void ASceneLinkToAnObjectOutOfRangeIsFilledInWhenItArrives()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject chest = CreateGameObject("Chest");
-        chest.Network.Mode = NetworkMode.Object;
-        NetTestComponent stats = chest.AddComponent<NetTestComponent>();
-        GameObject door = CreateGameObject("Door");
-        LinkHolder link = door.AddComponent<LinkHolder>();
-        link.Target = chest;
-        link.Part = stats;
-        scene.Add(door);
-        scene.Add(chest);
-        using NetWriter snapshot = new(), spawn = new();
-        NetworkSerialization.HiddenRoots = new HashSet<GameObject>(ReferenceEqualityComparer.Instance) { chest };
-        try { NetworkTestScene.Current.WriteSnapshot(scene, snapshot); }
-        finally { NetworkSerialization.HiddenRoots = null; }
-        Assert.Contains(chest.Identifier.ToString(), SnapshotJson(snapshot.ToArray()));
-        NetworkTestScene.Current.WriteSpawn(chest, -1, NetworkOrphaned.Destroy, spawn, generation: 1, netId: 5);
-
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
-        try
-        {
-            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady, host);
-            LinkHolder received = Find(SceneInstance.Main, "Door").GetComponent<LinkHolder>()!;
-            Assert.Null(received.Target);
-            Assert.Null(received.Part);
-
-            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            host.Session.SendRaw(client, FakePeer.Spawn, spawn.WrittenSpan);
-            host.Session.Flush();
-            Pump(() => received.Target.IsValid(), host);
-            GameObject arrived = Find(SceneInstance.Main, chest.Identifier);
-            Assert.Same(arrived, received.Target);
-            Assert.Same(arrived.GetComponent<NetTestComponent>(), received.Part);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
     public void ASpawnedObjectsLinkFollowsItsTargetInAndOutOfRange()
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new(), door = new(), chest = new(), despawn = new(), back = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject box = CreateGameObject("Chest");
-        box.Network.Mode = NetworkMode.Object;
+        box.Network.Networked = true;
         NetTestComponent stats = box.AddComponent<NetTestComponent>();
         GameObject gate = CreateGameObject("Door");
-        gate.Network.Mode = NetworkMode.Object;
+        gate.Network.Networked = true;
         LinkHolder link = gate.AddComponent<LinkHolder>();
         link.Target = box;
         link.Part = stats;
@@ -602,12 +527,6 @@ public partial class NetworkingTests
         Assert.False(Mentions(session.Bob, crate.Identifier));
     }
 
-    private static string SectionAddJson(byte[] payload)
-    {
-        NetReader reader = new(payload);
-        return NetworkTestScene.Current.Decompress(SectionAddMessage.Read(ref reader).Sections).WriteToJson();
-    }
-
     private static string SpawnJson(FakePeer peer, GameObject go)
     {
         byte[] payload = peer.Received.Last(m => m.Id == FakePeer.Spawn && ReadSpawn(m.Data, Guid.Empty).Id == go.Identifier).Data;
@@ -635,29 +554,13 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void AnAddedSectionDoesNotLinkToAHiddenObjectElsewhereInTheWorld()
-    {
-        using VisibilitySession session = VisibilityHost();
-        GameObject vault = Crate(session.World, NetworkVisibility.Manual, "Vault");
-        vault.Network.SpawnSerialized();
-        GameObject door = CreateGameObject("Door");
-        door.AddComponent<LinkHolder>().Target = vault;
-        session.World.AddContent(new SceneContent { Objects = [door] }, "Arena", null);
-        Pump(() => session.Alice.Has(FakePeer.SectionAdd) && session.Bob.Has(FakePeer.SectionAdd), session.Alice, session.Bob);
-
-        Assert.DoesNotContain(vault.Identifier.ToString(), SectionAddJson(session.Alice.Last(FakePeer.SectionAdd)));
-        Assert.DoesNotContain(vault.Identifier.ToString(), SectionAddJson(session.Bob.Last(FakePeer.SectionAdd)));
-        Assert.False(Mentions(session.Alice, vault.Identifier));
-    }
-
-    [Fact]
     public void AnAddedSectionsSyncReferenceToAHiddenObjectElsewhereReachesClientsEmpty()
     {
         using VisibilitySession session = VisibilityHost();
         GameObject vault = Crate(session.World, NetworkVisibility.Manual, "Vault");
         vault.Network.SpawnSerialized();
         GameObject holder = CreateGameObject("Holder");
-        holder.Network.Mode = NetworkMode.Object;
+        holder.Network.Networked = true;
         holder.AddComponent<SyncReferenceTestComponent>().Target = vault;
         session.World.AddContent(new SceneContent { Objects = [holder] }, "Arena", null);
         Pump(() => session.Alice.Has(FakePeer.SectionAdd) && session.Bob.Has(FakePeer.SectionAdd), session.Alice, session.Bob);
@@ -689,12 +592,12 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new(), player = new(), turret = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject hero = CreateGameObject("Player");
-        hero.Network.Mode = NetworkMode.Object;
+        hero.Network.Networked = true;
         NetworkTestScene.Current.WriteSpawn(hero, -1, NetworkOrphaned.Destroy, player, generation: 1, netId: 5);
         GameObject gun = CreateGameObject("Turret");
-        gun.Network.Mode = NetworkMode.Object;
+        gun.Network.Networked = true;
         GameObject barrel = CreateGameObject("Barrel");
         barrel.SetParent(gun, false);
         gun.AddComponent<LinkHolder>().Target = barrel;
@@ -703,7 +606,7 @@ public partial class NetworkingTests
         for (int i = 0; i < 20; i++)
         {
             GameObject bullet = CreateGameObject($"Bullet{i}");
-            bullet.Network.Mode = NetworkMode.Object;
+            bullet.Network.Networked = true;
             bullet.AddComponent<LinkHolder>().Target = hero;
             using NetWriter spawn = new(), despawn = new();
             NetworkTestScene.Current.WriteSpawn(bullet, -1, NetworkOrphaned.Destroy, spawn, generation: (uint)(10 + i), netId: (uint)(10 + i));

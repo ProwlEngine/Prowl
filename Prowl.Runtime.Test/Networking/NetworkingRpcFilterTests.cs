@@ -193,7 +193,7 @@ public partial class NetworkingTests
         var (_, original, _) = ReadinessHost();
         Guid objectId = original.GameObject.Identifier;
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(SceneInstance.Main, snapshot);
+        NetworkTestScene.Current.WriteScene(SceneInstance.Main, snapshot);
         Networking.Networking.Shutdown();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network), garry = FakePeer.Join(network, "Garry");

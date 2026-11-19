@@ -40,23 +40,6 @@ public sealed class NetworkAccessor
         set => _serverOnly = value;
     }
 
-    /// <summary>The old three way setting, kept until scene content stops going over the wire.</summary>
-    [Obsolete("Use Networked and ServerOnly.")]
-    public NetworkMode Mode
-    {
-        get => _serverOnly ? NetworkMode.Never : _networked ? NetworkMode.Object : NetworkMode.Snapshot;
-        set
-        {
-            if (!Enum.IsDefined(value))
-            {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
-
-            _networked = value == NetworkMode.Object;
-            _serverOnly = value == NetworkMode.Never;
-        }
-    }
-
     /// <summary>What happens when the owner leaves. Only the host may change this after spawning.</summary>
     public NetworkOrphaned Orphaned
     {

@@ -280,6 +280,15 @@ internal sealed partial class NetworkSystem
         return _nearby;
     }
 
+    /// <summary>What <paramref name="peerId" /> owns changed, so the observers it sees from are gathered again.</summary>
+    internal void ForgetViewpoints(int peerId)
+    {
+        if (_interests.TryGetValue(peerId, out PeerInterest? interest))
+        {
+            interest.Gathered = false;
+        }
+    }
+
     // The viewpoints of peer as gathered this tick, gathering them if they weren't.
     private PeerInterest ViewpointsOf(NetPeer peer)
     {

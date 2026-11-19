@@ -120,7 +120,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         // replaced by the host's.
         foreach (GameObject local in new[] { CameraObject, Hud.GameObject })
         {
-            local.Network.Mode = NetworkMode.Never;
+            local.Network.ServerOnly = true;
             local.Persistent = true;
         }
 
@@ -160,12 +160,18 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         CameraObject.GetComponent<PhysicsGrabber>()!.UnheldClicked +=
             body => body.GetComponent<Grabbable>()?.TakeControl();
 
-        // A client's world is the host's, and arrives when it joins.
-        if (!IsClientWindow)
+        // Every window builds the level itself: only networked objects travel, and those are the host's to spawn.
+        BuildWorld();
+        foreach (GameObject hostOnly in _hostOnly)
         {
-            BuildWorld();
+            hostOnly.Dispose();
         }
+
+        _hostOnly.Clear();
     }
+
+    // Networked objects a client window built along with the level, dropped once it is built: its own come from the host.
+    private readonly List<GameObject> _hostOnly = [];
 
     private void BuildWorld()
     {
@@ -283,7 +289,13 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     /// <summary>Placed in the scene as a networked object, which belongs to the host until it hands it out.</summary>
     private GameObject Networked(GameObject go)
     {
-        go.Network.Mode = NetworkMode.Object;
+        go.Network.Networked = true;
+        if (IsClientWindow)
+        {
+            _hostOnly.Add(go);
+            return go;
+        }
+
         return Add(go);
     }
 

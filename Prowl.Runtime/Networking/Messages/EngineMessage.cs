@@ -5,7 +5,7 @@ namespace Prowl.Runtime.Networking;
 
 internal enum EngineMessage : ushort
 {
-    SceneSnapshot = Networking.EngineMessageIds,
+    Scene = Networking.EngineMessageIds,
     Spawn,
     Despawn,
     Owner,
@@ -13,10 +13,9 @@ internal enum EngineMessage : ushort
     Snapshot,
     RpcToHost,
     RpcFromHost,
-    SceneLoaded,
-    SceneCatchUp,
-    SceneReady,
-    SceneActivate,
+    Ready,
+    SpawnStarted,
+    SpawnFinished,
     StaticRpcToHost,
     StaticRpcFromHost,
     Orphaned,

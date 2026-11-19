@@ -51,19 +51,19 @@ public partial class NetworkingTests
         MakeCurrent(scene);
         Guid levelId = level.Identifier;
         byte[] snapshot;
+        byte[][] spawns;
         LocalNetwork source = new();
         Networking.Networking.Host(new LocalTransport(source, "host"));
         try
         {
-            using FakePeer recorder = FakePeer.Join(source, "recorder");
-            Pump(() => recorder.Has(FakePeer.SceneSnapshot), recorder);
-            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data;
+            (snapshot, spawns) = RecordJoin(source);
         }
         finally { Networking.Networking.Shutdown(); }
 
+        MakeCurrent(CreateScene());
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
+        SendJoin(host, snapshot, spawns);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");

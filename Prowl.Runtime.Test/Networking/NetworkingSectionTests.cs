@@ -21,150 +21,6 @@ public partial class NetworkingTests
         return (world, alice);
     }
 
-    private static List<SectionData> ReadSectionAdd(byte[] payload, out uint objectCount, SceneInstance? linkTo = null)
-    {
-        NetReader reader = new(payload);
-        SectionAddMessage message = SectionAddMessage.Read(ref reader);
-        List<SectionData> sections = NetworkTestScene.Current.ReadSections(NetworkTestScene.Current.Decompress(message.Sections), linkTo);
-        objectCount = ObjectStateBlock.Read(ref reader).Count;
-        return sections;
-    }
-
-    [Fact]
-    public void HostSendsAnAdditiveSectionWithItsNetworkedObjects()
-    {
-        var (world, alice) = SectionHost();
-        try
-        {
-            GameObject crate = new("Crate");
-            crate.Network.Mode = NetworkMode.Object;
-            world.AddContent(new SceneContent { Objects = [crate] }, "Arena", null);
-
-            Pump(() => alice.Has(FakePeer.SectionAdd), alice);
-            List<SectionData> sections = ReadSectionAdd(alice.Last(FakePeer.SectionAdd), out uint objectCount);
-            try
-            {
-                SectionData arena = Assert.Single(sections);
-                Assert.Equal("Arena", arena.Name);
-                Assert.NotEqual(NetworkSystem.PersistentSectionId, arena.Id);
-                Assert.Contains(arena.Content.Objects, o => o.Identifier == crate.Identifier);
-                Assert.Equal(1u, objectCount);
-            }
-            finally
-            {
-                foreach (SectionData section in sections) section.Content.DisposeObjects();
-            }
-            Assert.Equal(1, NetworkDiagnostics.NetworkObjectCount);
-        }
-        finally
-        {
-            Networking.Networking.Shutdown();
-            alice.Dispose();
-        }
-    }
-
-    [Fact]
-    public void HostUnloadingASectionRemovesItWithoutDespawningItsObjects()
-    {
-        var (world, alice) = SectionHost();
-        try
-        {
-            GameObject crate = new("Crate");
-            crate.Network.Mode = NetworkMode.Object;
-            SceneSection arena = world.AddContent(new SceneContent { Objects = [crate] }, "Arena", null);
-            Pump(() => alice.Has(FakePeer.SectionAdd), alice);
-            List<SectionData> sent = ReadSectionAdd(alice.Last(FakePeer.SectionAdd), out _);
-            uint id = sent[0].Id;
-            foreach (SectionData section in sent) section.Content.DisposeObjects();
-
-            world.UnloadNow(arena);
-            Pump(() => alice.Has(FakePeer.SectionRemove), alice);
-
-            NetReader reader = new(alice.Last(FakePeer.SectionRemove));
-            Assert.Equal(id, SectionRemoveMessage.Read(ref reader).SectionId);
-            Assert.False(alice.Has(FakePeer.Despawn));
-            Assert.Equal(0, NetworkDiagnostics.NetworkObjectCount);
-        }
-        finally
-        {
-            Networking.Networking.Shutdown();
-            alice.Dispose();
-        }
-    }
-
-    [Fact]
-    public void ClientAddsAndRemovesTheSectionsTheHostSends()
-    {
-        SceneInstance hostWorld = CreateScene();
-        GameObject level = CreateGameObject("Level");
-        hostWorld.Add(level);
-        using NetWriter snapshot = new(), add = new(), remove = new();
-        NetworkTestScene.Current.SceneGeneration = 1;
-        NetworkTestScene.Current.WriteSnapshot(hostWorld, snapshot);
-        SceneSection arena = hostWorld.CreateSection("Arena");
-        GameObject crate = CreateGameObject("Crate");
-        hostWorld.Add(crate, arena);
-        NetworkTestScene.Current.WriteSection(arena, add);
-        new SectionRemoveMessage(1, NetworkTestScene.Current.SectionId(arena)).Write(remove);
-        NetworkTestScene.Current.SceneGeneration = 0;
-
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
-        try
-        {
-            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == level.Identifier), host);
-            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-
-            host.Session.SendRaw(client, FakePeer.SectionAdd, add.WrittenSpan);
-            Pump(() => SceneInstance.Main.Sections.Any(s => s.Name == "Arena"), host);
-            GameObject received = Find(SceneInstance.Main, crate.Identifier);
-            Assert.Equal("Arena", received.Section!.Name);
-            Assert.NotSame(crate, received);
-
-            host.Session.SendRaw(client, FakePeer.SectionRemove, remove.WrittenSpan);
-            Pump(() => SceneInstance.Main.Sections.All(s => s.Name != "Arena"), host);
-            Assert.DoesNotContain(SceneInstance.Main.Objects, o => o.Identifier == crate.Identifier);
-            Assert.Contains(SceneInstance.Main.Objects, o => o.Identifier == level.Identifier);
-            Assert.True(Networking.Networking.IsActive);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    private static void DisposeSections(List<SectionData> sections)
-    {
-        foreach (SectionData section in sections) section.Content.DisposeObjects();
-    }
-
-    [Fact]
-    public void AnAdditiveSectionLinksToObjectsInOtherSectionsInsteadOfCopyingThem()
-    {
-        var (world, alice) = SectionHost();
-        try
-        {
-            GameObject player = CreateGameObject("Player");
-            world.Add(player, world.Persistent);
-            GameObject door = new("Door");
-            door.AddComponent<ReferenceHolder>().Target = player;
-            world.AddContent(new SceneContent { Objects = [door] }, "Arena", null);
-
-            Pump(() => alice.Has(FakePeer.SectionAdd), alice);
-            List<SectionData> sections = ReadSectionAdd(alice.Last(FakePeer.SectionAdd), out _, world);
-            try
-            {
-                GameObject received = Assert.Single(sections[0].Content.Objects);
-                Assert.Same(player, received.GetComponent<ReferenceHolder>()!.Target);
-            }
-            finally { DisposeSections(sections); }
-        }
-        finally
-        {
-            Networking.Networking.Shutdown();
-            alice.Dispose();
-        }
-    }
-
     [Fact]
     public void UnloadingASectionSendsNoDespawnForANestedNetworkedObject()
     {
@@ -173,7 +29,7 @@ public partial class NetworkingTests
         {
             GameObject props = new("Props"), crate = new("Crate");
             crate.SetParent(props);
-            crate.Network.Mode = NetworkMode.Object;
+            crate.Network.Networked = true;
             SceneSection arena = world.AddContent(new SceneContent { Objects = [props, crate] }, "Arena", null);
             Pump(() => alice.Has(FakePeer.SectionAdd), alice);
             Assert.Equal(1, NetworkDiagnostics.NetworkObjectCount);
@@ -197,7 +53,7 @@ public partial class NetworkingTests
         try
         {
             GameObject crate = new("Crate");
-            crate.Network.Mode = NetworkMode.Object;
+            crate.Network.Networked = true;
             SceneSection arena = world.AddContent(new SceneContent { Objects = [crate] }, "Arena", null);
             Pump(() => alice.Has(FakePeer.SectionAdd), alice);
 
@@ -226,9 +82,9 @@ public partial class NetworkingTests
         SceneInstance hostWorld = CreateScene();
         hostWorld.Add(CreateGameObject("Level"));
         using NetWriter snapshot = new(), spawn = new(), move = new();
-        NetworkTestScene.Current.WriteSnapshot(hostWorld, snapshot);
+        NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
         GameObject crate = CreateGameObject("Crate");
-        crate.Network.Mode = NetworkMode.Object;
+        crate.Network.Networked = true;
         NetworkTestScene.Current.WriteSpawn(crate, owner: -1, NetworkOrphaned.Destroy, spawn, generation: 1);
         new SectionMoveMessage(crate.Identifier, NetworkSystem.PersistentSectionId).Write(move);
 
@@ -267,13 +123,9 @@ public partial class NetworkingTests
             Pump(() => alice.Has(FakePeer.Spawn), alice);
             int added = alice.Received.FindIndex(m => m.Id == FakePeer.SectionAdd);
             Assert.InRange(added, 0, alice.Received.FindIndex(m => m.Id == FakePeer.Spawn) - 1);
-            List<SectionData> sections = ReadSectionAdd(alice.Received[added].Data, out uint objectCount);
-            try
-            {
-                Assert.Equal("Late", Assert.Single(sections).Name);
-                Assert.Equal(0u, objectCount);
-            }
-            finally { DisposeSections(sections); }
+            NetReader section = new(alice.Received[added].Data);
+            section.ReadUInt64();
+            Assert.Equal("Late", SectionHeader.Read(ref section).Name);
         }
         finally
         {
@@ -295,9 +147,6 @@ public partial class NetworkingTests
             Bind(next);
 
             Pump(() => alice.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2, alice);
-            NetReader reader = new(alice.Last(FakePeer.SceneSnapshot));
-            using SnapshotSections received = NetworkTestScene.Current.ReadSnapshot(ref reader);
-            Assert.Contains(received.Objects, o => o.Name == "Arena");
         }
         finally
         {
@@ -312,7 +161,7 @@ public partial class NetworkingTests
         SceneInstance hostWorld = CreateScene();
         hostWorld.Add(CreateGameObject("Level"));
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(hostWorld, snapshot);
+        NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
         SceneInstance.Main = null!;
 
         LocalNetwork network = new();
@@ -334,24 +183,26 @@ public partial class NetworkingTests
     {
         SceneInstance hostWorld = CreateScene();
         GameObject root = CreateGameObject("Root");
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         NetworkLifecycleListener listener = root.AddComponent<NetworkLifecycleListener>();
         hostWorld.Add(root);
         Bind(hostWorld);
         byte[] snapshot;
+        byte[][] spawns;
+        LocalNetwork source = new();
         try
         {
-            Networking.Networking.Host(new LocalTransport(new(), "host"));
-            using NetWriter writer = new();
-            NetworkTestScene.Current.WriteSnapshot(hostWorld, writer);
-            snapshot = writer.ToArray();
+            Networking.Networking.Host(new LocalTransport(source, "host"));
+            (snapshot, spawns) = RecordJoin(source);
+            Assert.Single(spawns);
         }
         finally { Networking.Networking.Shutdown(); }
 
+        MakeCurrent(CreateScene());
         EngineObject? found = null;
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
+        SendJoin(host, snapshot, spawns);
         NetworkLifecycleListener.SpawnedOnClient = l => found = Networking.Networking.System!.FindByIdentifier(l.GameObject.Identifier);
         try
         {
@@ -439,7 +290,7 @@ public partial class NetworkingTests
         SceneInstance hostWorld = CreateScene();
         hostWorld.Add(CreateGameObject("Level"));
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(hostWorld, snapshot);
+        NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
 
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);

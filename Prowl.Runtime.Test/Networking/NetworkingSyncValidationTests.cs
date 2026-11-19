@@ -101,11 +101,13 @@ public partial class NetworkingTests
         Networking.Networking.Configure(new() { Execution = execution });
         SceneInstance source = CreateScene(); GameObject root = CreateGameObject();
         root.AddComponent<NetCollectionTestComponent>();
+        root.Network.Networked = true;
         source.Add(root);
-        using NetWriter snapshot = new(); NetworkTestScene.Current.WriteSnapshot(source, snapshot);
+        using NetWriter snapshot = new(); NetworkTestScene.Current.WriteScene(source, snapshot);
+        using NetWriter spawn = new(); NetworkTestScene.Current.WriteSpawn(root, -1, NetworkOrphaned.Destroy, spawn);
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
+        SendJoin(host, snapshot.ToArray(), spawn.ToArray());
         try
         {
             NetSession session = Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -126,45 +128,6 @@ public partial class NetworkingTests
             Assert.Empty(component.StatChanges);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
-    }
-
-    [Fact]
-    public void InvalidInitialCollectionStateDoesNotPartiallyApplyCatchUp()
-    {
-        SceneInstance source = CreateScene(); GameObject root = CreateGameObject();
-        NetCollectionTestComponent original = root.AddComponent<NetCollectionTestComponent>();
-        original.Scores.Add(9); source.Add(root);
-        using NetWriter snapshot = new(); NetworkTestScene.Current.WriteSnapshot(source, snapshot);
-        NetReader header = new(snapshot.WrittenSpan); header.ReadByte(); ulong generation = header.ReadUInt64();
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.AutoReady = false;
-        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
-        try
-        {
-            NetSession session = Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            SessionEndReason? reason = null;
-            session.Ended += (why, _) => reason = why;
-            Pump(() => Networking.Networking.JoinState == NetworkJoinState.Synchronizing && host.Has(FakePeer.SceneLoaded), host);
-            NetCollectionTestComponent component = Find(SceneInstance.Main, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
-            using NetWriter collection = new();
-            original.Scores.WriteChanges(collection);
-            host.Send(FakePeer.SceneCatchUp, w =>
-            {
-                w.WriteUInt64(generation); w.WriteVarUInt32(2);
-                using NetWriter health = new(); health.WriteVarInt32(42);
-                WriteSyncRecord(w, component, NetCollectionTestComponent.HealthSlot, health.WrittenSpan);
-                WriteSyncRecord(w, component, NetCollectionTestComponent.ScoresSlot, collection.WrittenSpan);
-                w.WriteVarUInt32(0); // No transform records.
-            }, host.Session.Peers.Single(p => !p.IsLocal));
-            Pump(() => reason.HasValue, host);
-            Assert.Equal(SessionEndReason.ProtocolError, reason);
-            Assert.Equal(100, component.Health);
-            Assert.Equal(new[] { 9 }, component.Scores);
-            Assert.Empty(component.HealthChanges);
-            Assert.Empty(component.ScoreChanges);
-        }
-        finally { Networking.Networking.Shutdown(); }
     }
 
     [Theory]

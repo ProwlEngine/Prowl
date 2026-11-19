@@ -55,7 +55,7 @@ public partial class NetworkingTests
     private static FakePeer JoinFakeHost(SceneInstance level)
     {
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(level, snapshot);
+        NetworkTestScene.Current.WriteScene(level, snapshot);
         byte[] payload = snapshot.WrittenSpan.ToArray();
         LocalNetwork network = new();
         FakePeer host = FakePeer.Host(network);

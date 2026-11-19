@@ -68,16 +68,18 @@ public partial class NetworkingTests
         SceneInstance scene = CreateScene();
         GameObject holderObject = CreateGameObject("Holder");
         SyncReferenceTestComponent holder = holderObject.AddComponent<SyncReferenceTestComponent>();
+        holderObject.Network.Networked = true;
         scene.Add(holderObject);
-        using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        using NetWriter snapshot = new(), holderSpawn = new();
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
+        NetworkTestScene.Current.WriteSpawn(holderObject, owner: -1, NetworkOrphaned.Destroy, holderSpawn);
         GameObject target = CreateGameObject("Target");
-        target.Network.Mode = NetworkMode.Object;
+        target.Network.Networked = true;
         using NetWriter spawn = new();
         NetworkTestScene.Current.WriteSpawn(target, owner: -1, NetworkOrphaned.Destroy, spawn, generation: 1);
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        SendJoin(host, snapshot.ToArray(), holderSpawn.ToArray());
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -220,7 +222,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);

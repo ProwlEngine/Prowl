@@ -153,8 +153,9 @@ internal readonly record struct SendIntervalMessage(Guid Identifier, uint Genera
 }
 
 /// <summary>
-///     A spawn by prefab or factory: what builds it, the identifiers its tree takes in build order, and the root's state.
-///     A factory spawn names the factory and carries the bytes the host passed it; a prefab spawn names the asset.
+///     A spawn by prefab, factory or scene: what builds it, the identifiers its tree takes in build order, and the
+///     root's state. A factory spawn names the factory and carries the bytes the host passed it, a prefab spawn names
+///     the asset, and a scene spawn names nothing more: the object is the one the peer's own copy of the scene holds.
 /// </summary>
 internal readonly record struct TemplateSpawn(
     Guid Prefab,
@@ -168,12 +169,18 @@ internal readonly record struct TemplateSpawn(
     NetworkFlags Flags,
     byte SendInterval,
     byte ComponentCount,
-    uint ComponentHash)
+    uint ComponentHash,
+    bool Scene = false)
 {
+    private const byte PrefabKind = 0, FactoryKind = 1, SceneKind = 2;
+
     internal void Write(NetWriter writer)
     {
-        writer.WriteBool(Factory != null);
-        if (Factory != null)
+        writer.WriteByte(Scene ? SceneKind : Factory != null ? FactoryKind : PrefabKind);
+        if (Scene)
+        {
+        }
+        else if (Factory != null)
         {
             writer.WriteString(Factory);
             writer.WriteBytesWithLength(Data);
@@ -204,7 +211,16 @@ internal readonly record struct TemplateSpawn(
         Guid prefab = Guid.Empty;
         string? factory = null;
         byte[] data = [];
-        if (reader.ReadBool())
+        byte kind = reader.ReadByte();
+        if (kind > SceneKind)
+        {
+            throw new InvalidDataException("A template spawn has an unknown kind.");
+        }
+
+        if (kind == SceneKind)
+        {
+        }
+        else if (kind == FactoryKind)
         {
             factory = reader.ReadString();
             data = reader.ReadBytesWithLength().ToArray();
@@ -246,6 +262,6 @@ internal readonly record struct TemplateSpawn(
         }
 
         return new TemplateSpawn(prefab, factory, data, identifiers, position, rotation, scale, enabled, flags, interval,
-            componentCount, componentHash);
+            componentCount, componentHash, kind == SceneKind);
     }
 }

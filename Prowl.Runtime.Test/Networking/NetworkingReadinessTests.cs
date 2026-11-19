@@ -38,7 +38,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Ready actor");
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         NetworkReadinessListener listener = root.AddComponent<NetworkReadinessListener>();
         NetTestComponent state = root.AddComponent<NetTestComponent>();
         scene.Add(root);
@@ -50,165 +50,6 @@ public partial class NetworkingTests
 
     private static void SendGeneration(FakePeer peer, ushort kind, ulong generation) =>
         peer.Send(kind, w => w.WriteUInt64(generation));
-
-    [Theory]
-    [InlineData(NetworkExecution.Inline)]
-    [InlineData(NetworkExecution.DedicatedThread)]
-    public void AdmissionWaitsForActivationAndCatchUpBeforePeerReady(NetworkExecution execution)
-    {
-        NetworkConfiguration previous = Networking.Networking.Configuration;
-        Networking.Networking.Configure(new() { Execution = execution });
-        var (listener, state, network) = ReadinessHost();
-        using FakePeer client = FakePeer.Join(network, "client");
-        client.AutoReady = false;
-        try
-        {
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
-            NetPeer peer = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            Assert.True(Networking.Networking.IsReady);
-            Assert.False(Networking.Networking.IsPeerReady(peer));
-            Assert.Equal(new[] { "loading", "ready", $"connected {peer.Id}" }, listener.Events);
-            NetReader snapshot = new(client.Last(FakePeer.SceneSnapshot));
-            snapshot.ReadByte();
-            ulong generation = snapshot.ReadUInt64();
-
-            // A premature ready acknowledgement and gameplay input cannot activate the peer.
-            SendGeneration(client, FakePeer.SceneReady, generation);
-            client.Send(FakePeer.RpcToHost, w =>
-            {
-                w.WriteGuid(state.Identifier); w.WriteUInt32(NetTestComponent.AskHostId); w.WriteInt32(17);
-            });
-            state.Shout("while loading");
-            PumpFor(20, client);
-            Assert.False(Networking.Networking.IsPeerReady(peer));
-            Assert.Empty(state.Asked);
-            Assert.False(client.Has(FakePeer.RpcFromHost));
-
-            state.Health = 42;
-            state.GameObject.Transform.LocalPosition = new Float3(7, 8, 9);
-            SendGeneration(client, FakePeer.SceneLoaded, generation);
-            Pump(() => client.Has(FakePeer.SceneCatchUp), client);
-            Assert.False(Networking.Networking.IsPeerReady(peer));
-            NetReader catchUp = new(client.Last(FakePeer.SceneCatchUp));
-            Assert.Equal(generation, catchUp.ReadUInt64());
-            uint count = catchUp.ReadVarUInt32();
-            int? health = null;
-            for (uint i = 0; i < count; i++)
-            {
-                catchUp.ReadGuid(); uint slot = catchUp.ReadVarUInt32(); catchUp.ReadVarUInt32();
-                NetReader value = new(catchUp.ReadBytesWithLength());
-                if (slot == NetTestComponent.HealthSlot) health = NetSerializer<int>.Read(ref value);
-            }
-            Assert.Equal(42, health);
-            Assert.Equal(1u, catchUp.ReadVarUInt32());
-            Assert.Equal(NetworkTestScene.Current.NetIdOf(state.GameObject), catchUp.ReadVarUInt32());
-            catchUp.ReadVarUInt32(); catchUp.ReadVarUInt32(); // Ownership generation, tick.
-            Assert.Equal(new Float3(7, 8, 9), NetSerializers.ReadFloat3(ref catchUp));
-
-            listener.PeerReadyAction = _ => state.Shout("welcome");
-            SendGeneration(client, FakePeer.SceneReady, generation);
-            Pump(() => client.Has(FakePeer.RpcFromHost), client);
-            Assert.True(Networking.Networking.IsPeerReady(peer));
-            Assert.Equal(1, listener.Events.Count(e => e == $"peer ready {peer.Id}"));
-            Assert.True(client.Received.FindIndex(m => m.Id == FakePeer.SceneActivate) <
-                client.Received.FindIndex(m => m.Id == FakePeer.RpcFromHost));
-            SendGeneration(client, FakePeer.SceneReady, generation);
-            PumpFor(20, client);
-            Assert.Equal(1, listener.Events.Count(e => e == $"peer ready {peer.Id}"));
-        }
-        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
-    }
-
-    [Fact]
-    public void SceneChangeInvalidatesReadyPeersAndOldAcknowledgements()
-    {
-        var (_, _, network) = ReadinessHost();
-        using FakePeer client = FakePeer.Join(network, "client");
-        try
-        {
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
-            ulong oldGeneration = client.SceneGeneration;
-            NetPeer peer = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            Assert.True(Networking.Networking.IsPeerReady(peer));
-            client.AutoReady = false;
-            SceneInstance next = CreateScene();
-            GameObject root = CreateGameObject();
-            NetworkReadinessListener listener = root.AddComponent<NetworkReadinessListener>();
-            next.Add(root); MakeCurrent(next);
-            Pump(() => client.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2, client);
-            Assert.False(Networking.Networking.IsPeerReady(peer));
-            SendGeneration(client, FakePeer.SceneLoaded, oldGeneration);
-            SendGeneration(client, FakePeer.SceneReady, oldGeneration);
-            PumpFor(20, client);
-            Assert.False(Networking.Networking.IsPeerReady(peer));
-            Assert.DoesNotContain($"peer ready {peer.Id}", listener.Events);
-            NetReader snapshot = new(client.Last(FakePeer.SceneSnapshot));
-            snapshot.ReadByte(); ulong generation = snapshot.ReadUInt64();
-            Assert.True(generation > oldGeneration);
-            SendGeneration(client, FakePeer.SceneLoaded, generation);
-            Pump(() => client.Received.Count(m => m.Id == FakePeer.SceneCatchUp) == 2, client);
-            SendGeneration(client, FakePeer.SceneReady, generation);
-            Pump(() => Networking.Networking.IsPeerReady(peer), client);
-            Assert.Contains($"peer ready {peer.Id}", listener.Events);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Theory]
-    [InlineData(NetworkExecution.Inline)]
-    [InlineData(NetworkExecution.DedicatedThread)]
-    public void ClientReadyRunsAfterSceneActivationAndCatchUpOnlyOnce(NetworkExecution execution)
-    {
-        NetworkConfiguration previous = Networking.Networking.Configuration;
-        Networking.Networking.Configure(new() { Execution = execution });
-        var (_, state, _) = ReadinessHost();
-        Guid objectId = state.GameObject.Identifier;
-        using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(SceneInstance.Main, snapshot);
-        Networking.Networking.Shutdown();
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.AutoReady = false;
-        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
-        try
-        {
-            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => host.Has(FakePeer.SceneLoaded), host);
-            Assert.Equal(NetworkJoinState.Synchronizing, Networking.Networking.JoinState);
-            Assert.False(Networking.Networking.IsReady);
-            GameObject root = Find(SceneInstance.Main, objectId);
-            NetworkReadinessListener listener = root.GetComponent<NetworkReadinessListener>()!;
-            Assert.Equal(new[] { "loading" }, listener.Events);
-            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            NetReader loaded = new(host.Last(FakePeer.SceneLoaded));
-            ulong generation = loaded.ReadUInt64();
-            host.Send(FakePeer.SceneActivate, w => w.WriteUInt64(generation), client); // Too soon.
-            PumpFor(20, host);
-            Assert.False(Networking.Networking.IsReady);
-            host.Send(FakePeer.SceneCatchUp, w =>
-            {
-                w.WriteUInt64(generation);
-                w.WriteVarUInt32(1);
-                w.WriteGuid(root.GetComponent<NetTestComponent>()!.Identifier);
-                w.WriteVarUInt32(NetTestComponent.HealthSlot);
-                w.WriteVarUInt32(NetworkTestScene.Current.GenerationOf(root));
-                using NetWriter value = new(); NetSerializer<int>.Write(value, 37);
-                w.WriteBytesWithLength(value.WrittenSpan);
-                w.WriteVarUInt32(0);
-            }, client);
-            Pump(() => host.Has(FakePeer.SceneReady), host);
-            Assert.False(Networking.Networking.IsReady);
-            host.Send(FakePeer.SceneActivate, w => w.WriteUInt64(generation), client);
-            Pump(() => Networking.Networking.IsReady, host);
-            Assert.Equal(new[] { "loading", "ready" }, listener.Events);
-            Assert.True(listener.WasActiveAtReady);
-            Assert.Equal(37, listener.HealthAtReady);
-            host.Send(FakePeer.SceneActivate, w => w.WriteUInt64(generation), client);
-            PumpFor(20, host);
-            Assert.Equal(1, listener.Events.Count(e => e == "ready"));
-        }
-        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
-    }
 
     [Fact]
     public void DisconnectDuringLoadingNeverRaisesPeerReady()
@@ -276,10 +117,15 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
-        ReadinessHost();
-        using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(SceneInstance.Main, snapshot);
-        Networking.Networking.Shutdown();
+        var (_, state, source) = ReadinessHost();
+        Guid actor = state.GameObject.Identifier;
+        byte[] snapshot;
+        byte[][] spawns;
+        try
+        {
+            (snapshot, spawns) = RecordJoin(source);
+        }
+        finally { Networking.Networking.Shutdown(); }
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.AutoReady = false;
@@ -303,12 +149,20 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.JoinState == NetworkJoinState.WaitingForScene, host);
 
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), client);
-            Pump(() => host.Has(FakePeer.SceneLoaded), host);
+            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), client);
+            Pump(() => host.Has(FakePeer.Ready), host);
             Assert.Same(local, SceneInstance.Main);
-            Assert.NotEmpty(local.Objects);
             Assert.Equal(NetworkJoinState.Synchronizing, Networking.Networking.JoinState);
             Assert.Same(session, Networking.Networking.Session);
+
+            // The host's networked object lands in the world the client brought up itself.
+            ulong generation = SceneGenerationOf(snapshot);
+            host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(generation), client);
+            foreach (byte[] spawn in spawns) host.Session.SendRaw(client, FakePeer.Spawn, spawn);
+            host.Send(FakePeer.SpawnFinished, w => w.WriteUInt64(generation), client);
+            Pump(() => Networking.Networking.IsReady, host);
+            Assert.Same(local, SceneInstance.Main);
+            Assert.Contains(local.Objects, o => o.Identifier == actor);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
     }
@@ -324,7 +178,7 @@ public partial class NetworkingTests
         Networking.Networking.Configure(new() { Execution = execution });
         ReadinessHost();
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(SceneInstance.Main, snapshot);
+        NetworkTestScene.Current.WriteScene(SceneInstance.Main, snapshot);
         Networking.Networking.Shutdown();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);

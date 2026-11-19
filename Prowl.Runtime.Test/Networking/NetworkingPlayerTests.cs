@@ -60,10 +60,10 @@ public partial class NetworkingTests
     {
         SceneInstance hostWorld = CreateScene();
         using NetWriter snapshot = new(), spawn = new(), player = new(), despawn = new();
-        NetworkTestScene.Current.WriteSnapshot(hostWorld, snapshot);
+        NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
         GameObject avatar = CreateGameObject("Avatar");
         avatar.AddComponent<LocalPlayerListener>();
-        avatar.Network.Mode = NetworkMode.Object;
+        avatar.Network.Networked = true;
         NetworkTestScene.Current.WriteSpawn(avatar, owner: -1, NetworkOrphaned.Destroy, spawn, generation: 1);
         player.WriteGuid(avatar.Identifier);
         new DespawnMessage(avatar.Identifier).Write(despawn);

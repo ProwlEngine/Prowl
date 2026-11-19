@@ -190,7 +190,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         ClearStaticProbe();
@@ -249,7 +249,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Board");
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>();
         scene.Add(root);
         MakeCurrent(scene);

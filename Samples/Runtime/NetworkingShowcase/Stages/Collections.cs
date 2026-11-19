@@ -114,7 +114,7 @@ public class Board : Component
                 Transform.Position + new Float3((i - (Bars.Count - 1) * 0.5f) * 0.7f, height * 0.5f, 0f));
 
             // Only what the bars show is local: the bars themselves are the synced list.
-            bar.Network.Mode = NetworkMode.Never;
+            bar.Network.ServerOnly = true;
             bar.MoveTo(GameObject.Scene!);
             _shown.Add(bar);
         }

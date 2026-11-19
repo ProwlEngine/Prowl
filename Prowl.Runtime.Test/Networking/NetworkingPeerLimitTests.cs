@@ -32,10 +32,12 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void HostKicksAPeerThatCannotReceiveTheSceneSnapshot()
+    public void HostKicksAPeerThatCannotReceiveAJoinSpawn()
     {
         SceneInstance scene = CreateScene();
-        scene.Add(CreateGameObject(Incompressible(2000)));
+        GameObject big = CreateGameObject(Incompressible(2000));
+        big.Network.Networked = true;
+        scene.Add(big);
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -46,6 +48,8 @@ public partial class NetworkingTests
         {
             Pump(() => small.Session.State == SessionState.Ended, small);
             Assert.Equal(SessionEndReason.Kicked, reason);
+            Assert.True(small.Has(FakePeer.SpawnStarted));
+            Assert.False(small.Has(FakePeer.Spawn));
             Assert.True(Networking.Networking.IsActive);
         }
         finally { Networking.Networking.Shutdown(); }
@@ -106,7 +110,7 @@ public partial class NetworkingTests
         SceneInstance scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
         NetTestComponent component = ship.AddComponent<NetTestComponent>();
-        ship.Network.Mode = NetworkMode.Object;
+        ship.Network.Networked = true;
         scene.Add(ship);
         MakeCurrent(scene);
         LocalNetwork network = new();

@@ -24,12 +24,12 @@ public partial class NetworkingTests
         {
             Pump(() => alice.IsReady, alice);
             (string Kind, NetworkTraffic Received, NetworkTraffic Sent) snapshot =
-                NetworkStatistics.ByKind().Single(k => k.Kind == "SceneSnapshot");
+                NetworkStatistics.ByKind().Single(k => k.Kind == "Scene");
             Assert.Equal(1, snapshot.Sent.Messages);
             Assert.True(snapshot.Sent.Bytes > 0);
-            Assert.Equal(1, NetworkStatistics.ByKind().Single(k => k.Kind == "SceneLoaded").Received.Messages);
+            Assert.Equal(1, NetworkStatistics.ByKind().Single(k => k.Kind == "Ready").Received.Messages);
             Assert.True(NetworkStatistics.Sent.Messages >= 3);
-            Assert.Contains(sent, info => info.Kind == "SceneSnapshot" && info.Peer.Name == "alice");
+            Assert.Contains(sent, info => info.Kind == "Scene" && info.Peer.Name == "alice");
         }
         finally
         {

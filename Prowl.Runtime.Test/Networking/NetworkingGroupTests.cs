@@ -31,7 +31,7 @@ public partial class NetworkingTests
     public void GroupsAreStoredOnlyWhenSet()
     {
         GameObject go = CreateGameObject();
-        go.Network.Mode = NetworkMode.Object;
+        go.Network.Networked = true;
         EchoObject plain = Serializer.Serialize(go);
         Assert.False(plain["Network"].TryGet("Groups", out _));
 
@@ -145,7 +145,7 @@ public partial class NetworkingTests
     public void ALinkToAGroupedObjectNeverNamesIt()
     {
         GameObject go = CreateGameObject("Grouped");
-        go.Network.Mode = NetworkMode.Object;
+        go.Network.Networked = true;
         Assert.False(NetworkSerialization.IsSecret(go));
         go.Network.Groups = NetworkGroups.Of(7);
         Assert.True(NetworkSerialization.IsSecret(go));

@@ -430,39 +430,38 @@ public partial class NetworkingTests
     // --- Client side -----------------------------------------------------------------------------
 
     [Fact]
-    public void ReceivedStateIsInPlaceBeforeComponentsStartAndRunsNoHooks()
+    public void ReceivedStateIsInPlaceBeforeComponentsStartAndRunsHooksForValuesThatDiffer()
     {
         SceneInstance hostScene = CreateScene();
         GameObject level = CreateGameObject("Level");
         NetCollectionTestComponent levelSource = level.AddComponent<NetCollectionTestComponent>();
         levelSource.Health = 3;
         levelSource.Scores.Add(1);
+        level.Network.Networked = true;
         hostScene.Add(level);
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(hostScene, snapshot);
+        NetworkTestScene.Current.WriteScene(hostScene, snapshot);
+        using NetWriter levelSpawn = new();
+        NetworkTestScene.Current.WriteSpawn(level, owner: -1, NetworkOrphaned.Destroy, levelSpawn);
 
         GameObject ship = CreateGameObject("Ship");
         NetCollectionTestComponent shipSource = ship.AddComponent<NetCollectionTestComponent>();
         shipSource.Health = 9;
         shipSource.Scores.Add(1);
         shipSource.Scores.Add(2);
-        ship.Network.Mode = NetworkMode.Object;
+        ship.Network.Networked = true;
         using NetWriter shipSpawn = new();
         NetworkTestScene.Current.WriteSpawn(ship, owner: -1, NetworkOrphaned.Destroy, shipSpawn);
         Guid levelId = level.Identifier, shipId = ship.Identifier;
 
         LocalNetwork network = new();
         FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer =>
-        {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
-            host.Session.SendRaw(peer, FakePeer.Spawn, shipSpawn.WrittenSpan);
-        };
+        SendJoin(host, snapshot.ToArray(), levelSpawn.ToArray(), shipSpawn.ToArray());
 
         Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
         try
         {
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == shipId), host);
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == shipId), host);
             NetCollectionTestComponent levelHere = Find(SceneInstance.Main, levelId).GetComponent<NetCollectionTestComponent>()!;
             NetCollectionTestComponent shipHere = Find(SceneInstance.Main, shipId).GetComponent<NetCollectionTestComponent>()!;
 
@@ -472,9 +471,10 @@ public partial class NetworkingTests
             Assert.Equal([1, 2], shipHere.Scores);
             Assert.Equal((3, 1), (levelHere.HealthWhenEnabled, levelHere.ScoreCountWhenEnabled));
             Assert.Equal((9, 2), (shipHere.HealthWhenEnabled, shipHere.ScoreCountWhenEnabled));
-            Assert.Empty(levelHere.HealthChanges);
+            // As in Mirror, a value that came with the spawn runs its hook when it differs from what was built.
+            Assert.Equal([(100, 3)], levelHere.HealthChanges);
             Assert.Empty(levelHere.ScoreChanges);
-            Assert.Empty(shipHere.HealthChanges);
+            Assert.Equal([(100, 9)], shipHere.HealthChanges);
             Assert.Empty(shipHere.ScoreChanges);
 
             // The host's, so not ours to change.
@@ -495,7 +495,7 @@ public partial class NetworkingTests
                 w.WriteBytesWithLength(ListChange(0, c => c.WriteByte((byte)NetChangeKind.Cleared)));
             }, to: bob);
             Pump(() => shipHere.Health == 8, host);
-            Assert.Equal([(9, 8)], shipHere.HealthChanges);
+            Assert.Equal([(100, 9), (9, 8)], shipHere.HealthChanges);
             Assert.Empty(shipHere.Scores);
             Assert.Equal(NetChangeKind.Cleared, Assert.Single(shipHere.ScoreChanges).Kind);
         }
@@ -511,12 +511,12 @@ public partial class NetworkingTests
     {
         SceneInstance hostScene = CreateScene();
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(hostScene, snapshot);
+        NetworkTestScene.Current.WriteScene(hostScene, snapshot);
         byte[] snapshotBytes = snapshot.ToArray();
 
         GameObject ship = CreateGameObject("Ship");
         ship.AddComponent<NetCollectionTestComponent>();
-        ship.Network.Mode = NetworkMode.Object;
+        ship.Network.Networked = true;
         Guid shipId = ship.Identifier;
 
         LocalNetwork network = new();
@@ -541,7 +541,7 @@ public partial class NetworkingTests
         try
         {
             GameObject local = CreateGameObject("Local effect");
-            local.Network.Mode = NetworkMode.Never;
+            local.Network.ServerOnly = true;
             NetCollectionTestComponent component = local.AddComponent<NetCollectionTestComponent>();
             SceneInstance.Main.Add(local);
 
@@ -563,19 +563,21 @@ public partial class NetworkingTests
         // A real host gives a ship to a client, takes it back, then changes its list. Its messages are kept.
         SceneInstance scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
-        ship.Network.Mode = NetworkMode.Object;
+        ship.Network.Networked = true;
         NetCollectionTestComponent source = ship.AddComponent<NetCollectionTestComponent>();
         scene.Add(ship);
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
         byte[] snapshot, given, handoff, takenBack, hostChange;
+        byte[][] spawns;
         using (FakePeer observer = FakePeer.Join(network, "observer"))
         {
             try
             {
                 Pump(() => observer.IsReady, observer);
                 snapshot = observer.Last(FakePeer.SceneSnapshot);
+                spawns = RecordedSpawns(observer);
                 ship.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
                 Pump(() => observer.Has(FakePeer.Owner), observer);
                 given = observer.Last(FakePeer.Owner);
@@ -594,22 +596,21 @@ public partial class NetworkingTests
         }
 
         // A client given the ship adds to the list, but the host takes the ship back before that arrives.
+        MakeCurrent(CreateScene());
         LocalNetwork receiving = new();
         using FakePeer host = FakePeer.Host(receiving);
-        host.Session.PeerJoined += peer =>
-        {
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
-            host.Send(FakePeer.Owner, w => w.WriteBytes(given), peer);
-        };
+        SendJoin(host, snapshot, spawns);
         try
         {
             Networking.Networking.Join(new LocalTransport(receiving, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && !Find(SceneInstance.Main, ship.Identifier).IsProxy, host);
+            Pump(() => Networking.Networking.IsReady, host);
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.Owner, w => w.WriteBytes(given), client);
+            Pump(() => !Find(SceneInstance.Main, ship.Identifier).IsProxy, host);
             NetCollectionTestComponent here = Find(SceneInstance.Main, ship.Identifier).GetComponent<NetCollectionTestComponent>()!;
             here.Scores.Add(5);
             Pump(() => host.Has(FakePeer.Sync), host);
 
-            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             host.Send(FakePeer.OwnershipState, w => w.WriteBytes(handoff), client);
             host.Send(FakePeer.Owner, w => w.WriteBytes(takenBack), client);
             host.Session.SendRaw(client, FakePeer.Sync, hostChange);

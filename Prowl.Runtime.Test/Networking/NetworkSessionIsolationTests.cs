@@ -46,7 +46,7 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject();
-        root.Network.Mode = NetworkMode.Object;
+        root.Network.Networked = true;
         NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>();
         scene.Add(root);
         Bind(scene);

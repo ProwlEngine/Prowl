@@ -20,8 +20,6 @@ internal sealed partial class NetworkSystem
     /// <summary>The game's own interest rule, set through <see cref="NetworkInterest.Rule" />.</summary>
     internal Func<GameObject, NetPeer, bool?>? InterestRule;
 
-    // Objects written as scene content, which clients may hold.
-    private readonly HashSet<GameObject> _sentAsContent = new(ReferenceEqualityComparer.Instance);
     private bool _warnedHiddenOwner;
 
     // A section being registered and sent, whose objects reach each client inside it.
@@ -145,14 +143,13 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>Works out which clients have <paramref name="entry" /> when it becomes networked, sending nothing.</summary>
-    private void InitVisibility(NetworkObject entry, bool heldAsContent = false)
+    private void InitVisibility(NetworkObject entry)
     {
         foreach (NetPeer peer in Session!.Peers)
         {
             if (!peer.IsLocal)
             {
-                SetHidden(entry, peer.Id,
-                    !(heldAsContent ? ShouldSee(entry.GameObject, entry.Owner, peer) : ShouldSee(entry, peer)));
+                SetHidden(entry, peer.Id, !ShouldSee(entry, peer));
             }
         }
     }
@@ -195,7 +192,6 @@ internal sealed partial class NetworkSystem
         _grid.Clear();
         _nearby.Clear();
         Restricted.Clear();
-        _sentAsContent.Clear();
         VisibilityOverrides.Clear();
     }
 
@@ -229,69 +225,11 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    /// <summary>True if a client that would not get <paramref name="go" /> may hold it as scene content already.</summary>
-    private bool HiddenFromItsCopies(GameObject go, int owner)
-    {
-        if (!HiddenFromAnyLoadedPeer(go, owner))
-        {
-            return false;
-        }
-
-        return HeldAsContent(go);
-    }
-
-    // True if go, or part of its tree, was sent to clients as scene content.
-    private bool HeldAsContent(GameObject go)
-    {
-        if (_sentAsContent.Count == 0)
-        {
-            return false;
-        }
-
-        if (_sentAsContent.Contains(go))
-        {
-            return true;
-        }
-
-        foreach (GameObject child in go.Children)
-        {
-            if (HeldAsContent(child))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private void ForgetInRange(NetworkObject entry)
     {
         foreach (PeerInterest interest in _interests.Values)
         {
             interest.InRangeAt.Remove(entry);
-        }
-    }
-
-    private bool HiddenFromAnyLoadedPeer(GameObject go, int owner)
-    {
-        foreach (NetPeer peer in Session!.Peers)
-        {
-            if (!peer.IsLocal && LoadingPeers.ContainsKey(peer.Id) && !ShouldSee(go, owner, peer))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    internal void NoteSentObjects(IEnumerable<GameObject> objects) => _sentAsContent.UnionWith(objects);
-
-    private void ForgetSentContent(GameObject go)
-    {
-        if (_sentAsContent.Count > 0)
-        {
-            _sentAsContent.Remove(go);
         }
     }
 
@@ -481,6 +419,7 @@ internal sealed partial class NetworkSystem
             }
         }
 
+        _lastSpawnBytes = message.Length;
         if (everyone && !entering)
         {
             SendToObservers(entry, EngineMessage.Spawn, message.WrittenSpan);

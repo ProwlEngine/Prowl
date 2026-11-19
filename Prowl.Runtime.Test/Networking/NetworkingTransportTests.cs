@@ -136,9 +136,9 @@ public partial class NetworkingTests
         Networking.Networking.Configure(new() { Execution = execution });
         SceneInstance scene = CreateScene();
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteSnapshot(scene, snapshot);
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject ship = CreateGameObject("Ship");
-        ship.Network.Mode = NetworkMode.Object;
+        ship.Network.Networked = true;
         using NetWriter spawn = new();
         NetworkTestScene.Current.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, spawn);
         LocalNetwork network = new();

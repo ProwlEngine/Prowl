@@ -155,7 +155,13 @@ internal sealed class SnapshotSystem : IDisposable
         FanOutChanges();
         if (!_peers.TryGetValue(peer.Id, out PeerState? state))
         {
-            return;
+            // A client the host has sent nothing yet is still owed the owner only values of what it is spawned.
+            if (!_scene.IsHost)
+            {
+                return;
+            }
+
+            state = State(peer);
         }
 
         foreach (GameObject go in TreeOf(root))
