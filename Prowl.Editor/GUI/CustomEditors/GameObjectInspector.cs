@@ -1697,16 +1697,20 @@ public static class GameObjectInspector
         {
             string className = System.IO.Path.GetFileNameWithoutExtension(relPath);
 
+            // Only the project's own scripts, so a "Light" script can't resolve to the engine's Light.
+            IEnumerable<Type> Candidates() => EditorUtils.GetAllTypes().Where(t => t.Name == className &&
+                ScriptAssemblyManager.IsScriptAssembly(t.Assembly) && typeof(Component).IsAssignableFrom(t) && !t.IsAbstract);
+            // Same-named components that already exist in other namespaces, so the new one is the type not in here.
+            HashSet<string?> existing = [.. Candidates().Select(t => t.FullName)];
+
             void OnCompiled(ScriptAssemblyManager.CompileReport report)
             {
-                // A packages-only compile reloads nothing, so keep waiting; any other outcome is final.
+                // A packages-only compile reloads nothing, so keep waiting.
                 if (report.Success && !report.Reloaded) return;
-                if (!report.Success) { ScriptAssemblyManager.CompileFinished -= OnCompiled; return; }
 
-                // Only the project's own scripts, so a "Light" script can't resolve to the engine's Light.
-                Type? type = EditorUtils.GetAllTypes().FirstOrDefault(t => t.Name == className &&
-                    ScriptAssemblyManager.IsScriptAssembly(t.Assembly) && typeof(Component).IsAssignableFrom(t) && !t.IsAbstract);
-                // A compile already running when the file was written lacks it; ours is still queued, so wait for that.
+                Type? type = report.Success ? Candidates().FirstOrDefault(t => !existing.Contains(t.FullName)) : null;
+                // A compile already running when the file was written lacks it, whether it passed or failed;
+                // ours is still queued, so wait for that one.
                 if (type == null && ScriptAssemblyManager.IsCompiling) return;
                 ScriptAssemblyManager.CompileFinished -= OnCompiled;
                 Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
