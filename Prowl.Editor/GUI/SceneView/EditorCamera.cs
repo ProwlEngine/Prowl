@@ -18,6 +18,8 @@ public class EditorCamera
     private Camera _camera;
     private RenderTexture? _renderTarget;
     private PanelLockContext _lockContext = new();
+    private bool _rightClickStartedHere;
+    private Float2 _lastMousePos;
 
     // Camera state
     private Float3 _position = new Float3(0, 5, -15);
@@ -456,7 +458,10 @@ public class EditorCamera
         }
 
         // Right mouse = look + WASD (with cursor lock)
-        if (Input.GetMouseButtonDown(1))
+        if (!_rightClickStartedHere && Input.GetMouseButtonDown(1))
+            _rightClickStartedHere = true;
+
+        if (_rightClickStartedHere && !_flying && Input.GetMouseButton(1) && _lastMousePos != mousePos)
         {
             _lockContext.PanelOrigin = panelOrigin;
             _lockContext.PanelSize = panelSize;
@@ -464,8 +469,8 @@ public class EditorCamera
             Input.PushLockContext(_lockContext);
             Input.LockCursor();
         }
-
-        if (Input.GetMouseButton(1))
+        _lastMousePos = mousePos;
+        if (Input.GetMouseButton(1) && _flying)
         {
             Float2 delta = Input.MouseDelta;
 
@@ -516,6 +521,9 @@ public class EditorCamera
             Input.UnlockCursor();
             Input.PopLockContext();
         }
+
+        if(Input.GetMouseButtonUp(1))
+            _rightClickStartedHere = false;
 
         // F = focus on selection
         if (ShortcutManager.IsPressed("Scene/Focus"))
