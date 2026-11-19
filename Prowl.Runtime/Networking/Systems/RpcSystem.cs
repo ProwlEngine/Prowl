@@ -12,10 +12,10 @@ using static Prowl.Runtime.Networking.NetworkSystem;
 
 namespace Prowl.Runtime.Networking;
 
-// RPCs. A call is [guid component][u32 method id][length-prefixed arguments]. Clients send theirs to the host,
-// followed by the recipients they chose, and the host checks it against the method's own RpcMode and RpcFlags
-// (never trusting the caller about them), runs it if it should and passes it on; calls from the host carry the
-// original caller's id in front.
+// RPCs. A call is [guid component][u32 method id][length-prefixed arguments]. As Mirror's commands and client RPCs,
+// a client only calls host RPCs: it sends the call to the host, which checks it against the method's own RpcMode
+// and RpcFlags (never trusting the caller about them) and runs it. Broadcast, owner and target RPCs are the host's
+// to call, and carry its id in front.
 //
 // A call carries no state. A reliable one sends the caller's pending Sync changes first, on the same ordered
 // channel, so it arrives after them. An unreliable one promises no ordering with anything.
@@ -66,8 +66,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        if (mode == RpcMode.Owner && scene.HasControl(component.GameObject) && (scene.IsHost || scene.IsReady) &&
-            !Rpc.HasFilters)
+        if (mode == RpcMode.Owner && scene.IsHost && scene.HasControl(component.GameObject) && !Rpc.HasFilters)
         {
             return false;
         }
@@ -100,7 +99,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         (uint id, RpcMode mode, RpcFlags flags) = (rpc.Id, rpc.Mode, rpc.Flags);
         Delivery delivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
 
-        if ((flags & RpcFlags.HostOnly) != 0 && !scene.IsHost)
+        if (!scene.IsHost && (mode != RpcMode.Host || (flags & RpcFlags.HostOnly) != 0))
         {
             WarnOnce(component, id, "can only be called by the host");
             return false;
@@ -112,18 +111,9 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        if (mode == RpcMode.Target)
+        if (mode == RpcMode.Target && (target == null || target.IsLocal))
         {
-            if (!scene.IsHost)
-            {
-                WarnOnce(component, id, "can only be called by the host");
-                return false;
-            }
-
-            if (target == null || target.IsLocal)
-            {
-                return true;
-            }
+            return true;
         }
 
         RpcRecipients? recipients = WithoutOwner(Rpc.CaptureRecipients(session), component.GameObject, flags);
@@ -170,7 +160,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
                     writer.WrittenSpan);
             }
 
-            return mode == RpcMode.Broadcast && localIncluded;
+            return false;
         }
 
         using NetWriter message = new(writer.Length + 8);
@@ -247,7 +237,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         (RpcMode mode, RpcFlags flags) = (rpc.Mode, rpc.Flags);
         bool senderControls = scene.OwnerOf(component.GameObject) == sender.Id;
-        if ((flags & RpcFlags.HostOnly) != 0 || mode == RpcMode.Target ||
+        if ((flags & RpcFlags.HostOnly) != 0 || mode != RpcMode.Host ||
             ((flags & RpcFlags.AnyCaller) == 0 && !senderControls))
         {
             NetworkDiagnostics.TraceMember("RPC", "Rejected", sender, component, method, true, "Unauthorized caller",
@@ -261,57 +251,11 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
                 arguments);
         }
 
-        // Validate on the host even when only another owner will execute the call.
         NetReader validation = new(arguments);
-        _relaySites.Begin(null, 0);
-        NetSerializers.ReadSites = _relaySites;
-        try
+        rpc.ValidateArguments(component, ref validation);
+        if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
         {
-            rpc.ValidateArguments(component, ref validation);
-        }
-        finally
-        {
-            NetSerializers.ReadSites = null;
-        }
-
-        Delivery relayDelivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
-        switch (mode)
-        {
-            case RpcMode.Broadcast:
-                recipients = WithoutOwner(recipients, component.GameObject, flags);
-                Relay(sender, id, method, arguments, relayDelivery, null, recipients, rpc.Channel, component.GameObject,
-                    _relaySites);
-                if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
-                {
-                    Invoke(component, rpc, arguments, sender);
-                }
-
-                break;
-
-            case RpcMode.Host:
-                if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
-                {
-                    Invoke(component, rpc, arguments, sender);
-                }
-
-                break;
-
-            case RpcMode.Owner:
-                int owner = scene.OwnerOf(component.GameObject);
-                if (owner == NoOwner || owner == scene.Session!.LocalPeer!.Id)
-                {
-                    if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
-                    {
-                        Invoke(component, rpc, arguments, sender);
-                    }
-                }
-                else if (owner != sender.Id && scene.Session!.TryGetPeer(owner, out NetPeer? ownerPeer))
-                {
-                    Relay(sender, id, method, arguments, relayDelivery, ownerPeer, recipients, rpc.Channel,
-                        sites: _relaySites);
-                }
-
-                break;
+            Invoke(component, rpc, arguments, sender);
         }
     }
 
@@ -337,35 +281,6 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         }
         ids.Remove(owner.Id);
         return new RpcRecipients(ids);
-    }
-
-    internal void Relay(NetPeer caller, Guid id, uint method, ReadOnlySpan<byte> arguments, Delivery delivery,
-        NetPeer? to, RpcRecipients? recipients, byte channel = 0, GameObject? target = null, ReferenceSites? sites = null)
-    {
-        // The caller's Sync changes were relayed as they arrived, ahead of this; send the host's own the same way.
-        if (delivery == Delivery.Reliable && channel == 0)
-        {
-            scene.Sync.SendSyncChanges();
-        }
-
-        using NetWriter message = new(arguments.Length + 32);
-        new RpcCallerMessage(caller.Id).Write(message);
-        new RpcCallMessage(id, method, arguments).Write(message);
-        int at = message.Length - arguments.Length;
-
-        if (to != null)
-        {
-            if (RpcRecipients.Includes(recipients, to))
-            {
-                scene.SendEngine(to, EngineMessage.RpcFromHost, Masked(sites, to, caller, message.WrittenSpan, at),
-                    delivery, channel);
-            }
-        }
-        else
-        {
-            SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients, caller, channel, target,
-                sites, at, caller);
-        }
     }
 
     // The call as peer may receive it, its references to objects it lacks made empty.

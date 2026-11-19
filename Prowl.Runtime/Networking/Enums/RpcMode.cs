@@ -6,13 +6,13 @@ namespace Prowl.Runtime.Networking;
 /// <summary>Who runs an RPC.</summary>
 public enum RpcMode : byte
 {
-    /// <summary>Everyone, the caller included.</summary>
+    /// <summary>Everyone who has the object, the host included. Only the host calls it.</summary>
     Broadcast,
 
-    /// <summary>The host only.</summary>
+    /// <summary>The host only. The one kind a client calls.</summary>
     Host,
 
-    /// <summary>Whoever controls the object: its owner, or the host when it has none.</summary>
+    /// <summary>Whoever controls the object: its owner, or the host when it has none. Only the host calls it.</summary>
     Owner,
 
     /// <summary>One peer the host names, as Mirror's TargetRpc. Only the host calls it.</summary>

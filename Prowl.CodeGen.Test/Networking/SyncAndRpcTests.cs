@@ -322,12 +322,12 @@ public class SyncAndRpcTests
                                             public class Gun : Component
                                             {
                                                 public int Fired;
-                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public virtual void Fire(int power) => Fired++;
+                                                [Rpc.Host(RpcFlags.AnyCaller)] public virtual void Fire(int power) => Fired++;
                                             }
 
                                             public class Cannon : Gun
                                             {
-                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public override void Fire(Int32 power) { base.Fire(power); }
+                                                [Rpc.Host(RpcFlags.AnyCaller)] public override void Fire(Int32 power) { base.Fire(power); }
                                             }
                                             """);
         using HostedComponent hosted = new(assembly.GetType("Cannon")!);

@@ -47,7 +47,7 @@ public class RpcChannelTestComponent : NetCollectionTestComponent
 public partial class NetworkingTests
 {
     [Fact]
-    public void RpcsOnAnotherChannelDoNotPushSyncAheadAndAreRelayedOnTheirChannel()
+    public void RpcsOnAnotherChannelDoNotPushSyncAhead()
     {
         SceneInstance scene = CreateScene();
         MakeCurrent(scene);
@@ -70,12 +70,6 @@ public partial class NetworkingTests
             Assert.Equal(1, component.Talks);
             Assert.NotEmpty(NetworkTestScene.Current.Sync.Dirty);
             Pump(() => bob.Has(FakePeer.RpcFromHost), alice, bob);
-            Assert.Equal(1, bob.Channels.Single(m => m.Id == FakePeer.RpcFromHost).Channel);
-
-            // The host relays on the RPC's own channel, whichever channel the caller used.
-            bob.Channels.Clear(); bob.Received.Clear();
-            alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(component.Identifier); w.WriteUInt32(RpcChannelTestComponent.TalkId); });
-            Pump(() => component.Talks == 2 && bob.Has(FakePeer.RpcFromHost), alice, bob);
             Assert.Equal(1, bob.Channels.Single(m => m.Id == FakePeer.RpcFromHost).Channel);
         }
         finally { Networking.Networking.Shutdown(); }
@@ -247,11 +241,8 @@ public partial class NetworkingTests
     }
 
     [Theory]
-    [InlineData(701)]
-    [InlineData(702)]
     [InlineData(703)]
-    [InlineData(704)]
-    public void ClientRpcRunsAfterItsSyncAndRelaysAfterTheHostsOwn(int method)
+    public void ClientRpcRunsAfterItsSync(int method)
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Client RPC");
@@ -274,29 +265,9 @@ public partial class NetworkingTests
                 ClientSync(component, owner.Id, generation, 0));
             client.Session.SendRaw(client.Session.HostPeer!, FakePeer.RpcToHost, Call(component, (uint)method));
             client.Session.Flush();
-            // An Owner call addressed to its own caller has no body anywhere else.
-            if (method == 704) Pump(() => component.Health == 0, client);
-            else
-            {
-                Pump(() => component.Observed.Count == 1, client);
-                Assert.Equal((0, 0, 0f), component.Observed[0]);
-            }
-
+            Pump(() => component.Observed.Count == 1, client);
+            Assert.Equal((0, 0, 0f), component.Observed[0]);
             Assert.Equal(SessionState.Active, client.Session.State);
-            if (method is 701 or 702)
-            {
-                Pump(() => observer.Has(FakePeer.RpcFromHost), client, observer);
-                int rpcIndex = observer.WireReceived.FindLastIndex(m => m.Id == FakePeer.RpcFromHost);
-                NetReader relay = new(observer.WireReceived[rpcIndex].Data);
-                Assert.Equal((uint)owner.Id, relay.ReadVarUInt32());
-                relay.ReadGuid(); relay.ReadUInt32(); relay.ReadBytesWithLength();
-                Assert.True(relay.IsAtEnd);
-                if (method == 701)
-                {
-                    // The host's own value isn't ordered with the call; it arrives in a snapshot.
-                    Pump(() => observer.SnapshotInt(component.Identifier, 799) == 9, client, observer);
-                }
-            }
         }
         finally { Networking.Networking.Shutdown(); }
     }

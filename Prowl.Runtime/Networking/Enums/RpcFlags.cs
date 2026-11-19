@@ -14,12 +14,12 @@ public enum RpcFlags : uint
     /// <summary>Send it unreliably: cheaper and lower latency, but it may be lost. Arguments must fit in one packet.</summary>
     Unreliable = 1,
 
-    /// <summary>Only the host may call it. Calls from clients are dropped.</summary>
+    /// <summary>Only the host may call it. Calls from clients are dropped. For static RPCs and host RPCs: the other kinds are the host's alone already.</summary>
     HostOnly = 2,
 
     /// <summary>
-    ///     Any client that has the object may call it. Without this, as with Mirror's commands, a client may only call it
-    ///     on an object it controls, and calls from other clients are dropped. The host may always call.
+    ///     Any client that has the object may call a host RPC. Without this, as with Mirror's commands, a client may only
+    ///     call it on an object it controls, and calls from other clients are dropped. The host may always call.
     /// </summary>
     AnyCaller = 4,
 

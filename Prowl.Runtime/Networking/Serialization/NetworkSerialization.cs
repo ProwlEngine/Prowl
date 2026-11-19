@@ -159,7 +159,7 @@ internal static class NetworkSerialization
     internal static void Write(GameObject go, EchoObject output)
     {
         NetworkAccessor? network = go._network;
-        if (network == null || (!network.Networked && !network.ServerOnly && network.OwnerTransfer == OwnerTransfer.Fixed &&
+        if (network == null || (!network.Networked && !network.ServerOnly &&
                                 network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None && network.SendInterval == 1 &&
                                 network.Visibility == NetworkVisibility.Default && network.CullDistance == 0 &&
                                 network.Groups.IsEmpty))
@@ -178,7 +178,6 @@ internal static class NetworkSerialization
             settings.Add("ServerOnly", new EchoObject(true));
         }
 
-        settings.Add("OwnerTransfer", new EchoObject((byte)network.OwnerTransfer));
         settings.Add("Orphaned", new EchoObject((byte)network.Orphaned));
         settings.Add("Flags", new EchoObject((byte)network.Flags));
         if (network.Visibility != NetworkVisibility.Default)
@@ -215,7 +214,6 @@ internal static class NetworkSerialization
 
             existing.Networked = false;
             existing.ServerOnly = false;
-            existing.OwnerTransfer = OwnerTransfer.Fixed;
             existing.Orphaned = NetworkOrphaned.Destroy;
             existing.Flags = NetworkFlags.None;
             existing.SendInterval = 1;
@@ -230,7 +228,6 @@ internal static class NetworkSerialization
         NetworkMode stored = (NetworkMode)(settings["Mode"]?.ByteValue ?? (byte)NetworkMode.Snapshot);
         network.Networked = settings["Networked"]?.BoolValue ?? stored == NetworkMode.Object;
         network.ServerOnly = settings["ServerOnly"]?.BoolValue ?? stored == NetworkMode.Never;
-        network.OwnerTransfer = (OwnerTransfer)(settings["OwnerTransfer"]?.ByteValue ?? (byte)OwnerTransfer.Fixed);
         network.Orphaned = (NetworkOrphaned)(settings["Orphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
         network.Flags = (NetworkFlags)(settings["Flags"]?.ByteValue ?? (byte)NetworkFlags.None);
         network.SendInterval = Math.Max(1, (int)(settings["SendInterval"]?.ByteValue ?? 1));

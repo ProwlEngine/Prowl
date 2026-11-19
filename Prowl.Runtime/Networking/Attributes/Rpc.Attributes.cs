@@ -33,13 +33,16 @@ public static partial class Rpc
         public byte Channel { get; set; }
     }
 
-    /// <summary>Runs on everyone, the caller included.</summary>
+    /// <summary>Runs on everyone who has the object, the host included, as Mirror's ClientRpc. Only the host calls it.</summary>
     public sealed class BroadcastAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Broadcast, flags);
 
-    /// <summary>Runs on the host only.</summary>
+    /// <summary>
+    ///     Runs on the host only, as Mirror's Command. The one kind a client calls: on an object it controls, or on any
+    ///     it has with <see cref="RpcFlags.AnyCaller" />.
+    /// </summary>
     public sealed class HostAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Host, flags);
 
-    /// <summary>Runs on whoever controls the object: its owner, or the host when it has none.</summary>
+    /// <summary>Runs on whoever controls the object: its owner, or the host when it has none. Only the host calls it.</summary>
     public sealed class OwnerAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Owner, flags);
 
     /// <summary>

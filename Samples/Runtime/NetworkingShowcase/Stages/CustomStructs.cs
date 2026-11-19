@@ -51,10 +51,14 @@ public class Armory : Component
 
     public void ToggleSilencer() => Current = Current with { Silenced = !Current.Silenced };
 
-    [Rpc.Broadcast(RpcFlags.AnyCaller)]
-    public void ShowOff(Loadout loadout) =>
+    // Only the host calls a broadcast, so a client asks the host to show it to everyone.
+    [Rpc.Host(RpcFlags.AnyCaller)]
+    public void RequestShowOff(Loadout loadout) => ShowOff(loadout, Rpc.Caller?.Name ?? "The host");
+
+    [Rpc.Broadcast]
+    public void ShowOff(Loadout loadout, string by) =>
         LastShown =
-            $"{Rpc.Caller?.Name ?? "You"} showed a {(loadout.Silenced ? "silenced " : "")}{loadout.Weapon}, {loadout.Ammo} of {loadout.Magazine}";
+            $"{by} showed a {(loadout.Silenced ? "silenced " : "")}{loadout.Weapon}, {loadout.Ammo} of {loadout.Magazine}";
 
     public override void Update()
     {

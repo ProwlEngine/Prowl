@@ -86,10 +86,10 @@ public sealed class FakePeer : IDisposable
     public const ushort SceneSnapshot = Networking.Networking.EngineMessageIds, Spawn = SceneSnapshot + 1, Despawn = SceneSnapshot + 2,
         Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Snapshot = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
         SceneReady = SceneSnapshot + 10, SceneActivate = SceneSnapshot + 11, StaticRpcToHost = SceneSnapshot + 12, StaticRpcFromHost = SceneSnapshot + 13,
-        Orphaned = SceneSnapshot + 14, OwnershipRequest = SceneSnapshot + 15, OwnershipState = SceneSnapshot + 16,
-        OwnerTransfer = SceneSnapshot + 17, NetworkFlags = SceneSnapshot + 18, SnapshotAck = SceneSnapshot + 19,
-        SectionAdd = SceneSnapshot + 20, SectionRemove = SceneSnapshot + 21, SectionMove = SceneSnapshot + 22, Time = SceneSnapshot + 23,
-        SendInterval = SceneSnapshot + 24, Player = SceneSnapshot + 25;
+        Orphaned = SceneSnapshot + 14, OwnershipState = SceneSnapshot + 15,
+        NetworkFlags = SceneSnapshot + 16, SnapshotAck = SceneSnapshot + 17,
+        SectionAdd = SceneSnapshot + 18, SectionRemove = SceneSnapshot + 19, SectionMove = SceneSnapshot + 20, Time = SceneSnapshot + 21,
+        SendInterval = SceneSnapshot + 22, Player = SceneSnapshot + 23;
 
     private FakePeer(NetSession session)
     {
@@ -674,13 +674,13 @@ public partial class NetworkingTests : RuntimeTestBase
                     Quaternion.Identity, Float3.One)));
             Pump(() => ship.Transform.LocalPosition.Equals(new Float3(3, 4, 5)), alice);
 
-            // Her broadcast RPC runs here as hers; the host's runs here and goes to her.
-            alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(component.Identifier); w.WriteUInt32(NetTestComponent.ShoutId); w.WriteString("hello"); });
-            Pump(() => component.Shouts.Count == 1, alice);
-            Assert.Equal(("hello", aliceHere), component.Shouts[0]);
+            // Her host RPC runs here; the host's broadcast runs here and goes to her.
+            alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(component.Identifier); w.WriteUInt32(NetTestComponent.AskHostId); w.WriteVarInt32(3); });
+            Pump(() => component.Asked.Count == 1, alice);
+            Assert.Equal(3, component.Asked[0]);
 
             component.Shout("from host");
-            Assert.Equal("from host", component.Shouts[1].Text);
+            Assert.Equal("from host", component.Shouts[0].Text);
             Pump(() => alice.Has(FakePeer.RpcFromHost), alice);
 
             // When she leaves, what she owned goes with her.
@@ -826,11 +826,9 @@ public partial class NetworkingTests : RuntimeTestBase
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public void MalformedRpcsAreRejectedBeforeRelay(bool ownerRpc, bool trailingBytes)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MalformedRpcsAreRejectedBeforeRunning(bool trailingBytes)
     {
         SceneInstance scene = CreateScene();
         MakeCurrent(scene);
@@ -848,12 +846,12 @@ public partial class NetworkingTests : RuntimeTestBase
             alice.Send(FakePeer.RpcToHost, w =>
             {
                 w.WriteGuid(component.Identifier);
-                w.WriteUInt32(ownerRpc ? 204u : NetTestComponent.ShoutId);
-                if (trailingBytes) { w.WriteString("hello"); w.WriteByte(42); }
+                w.WriteUInt32(NetTestComponent.AskHostId);
+                if (trailingBytes) { w.WriteVarInt32(3); w.WriteByte(42); }
             });
             for (int i = 0; i < 10; i++) Frame([alice, bob]);
             Assert.False(bob.Has(FakePeer.RpcFromHost));
-            Assert.Empty(component.Shouts);
+            Assert.Empty(component.Asked);
             Assert.Equal(SessionState.Ended, alice.Session.State);
             Assert.Equal(SessionState.Active, bob.Session.State);
         }

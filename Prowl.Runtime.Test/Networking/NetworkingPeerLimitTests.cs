@@ -101,7 +101,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ARelayedRpcTooLargeForOnePeerKicksThatPeerAndKeepsTheCaller()
+    public void ABroadcastTooLargeForOnePeerKicksThatPeerAndKeepsTheOthers()
     {
         SceneInstance scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
@@ -119,11 +119,8 @@ public partial class NetworkingTests
         {
             Pump(() => small.IsReady && alice.IsReady, small, alice);
             string text = Incompressible(8000);
-            alice.Send(FakePeer.RpcToHost, w =>
-            {
-                w.WriteGuid(component.Identifier); w.WriteUInt32(NetTestComponent.ShoutId); w.WriteString(text);
-            });
-            Pump(() => component.Shouts.Count == 1 && small.Session.State == SessionState.Ended, small, alice);
+            component.Shout(text);
+            Pump(() => small.Session.State == SessionState.Ended, small, alice);
             Assert.Equal(SessionEndReason.Kicked, reason);
             PumpFor(30, small, alice);
             Assert.Equal(SessionState.Active, alice.Session.State);

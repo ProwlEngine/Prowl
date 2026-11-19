@@ -446,37 +446,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void RelayedRpcReferencesReachClientsLackingTheTargetEmpty()
-    {
-        using InterestSession session = InterestHost();
-        session.AliceSees.SetViewpoints([Float3.Zero]);
-        GameObject crate = CrateAt(session.World, 3);
-        crate.Network.SpawnSerialized();
-        GameObject holder = CrateAt(session.World, 0, NetworkVisibility.Always, "Holder");
-        BeaconTestComponent beacon = holder.AddComponent<BeaconTestComponent>();
-        holder.Network.SpawnSerialized();
-        Pump(() => SpawnsOf(session.Bob, holder) == 1 && SpawnsOf(session.Alice, crate) == 1, session.Alice, session.Bob);
-
-        void MarkFrom(FakePeer peer, Guid target) => peer.Send(FakePeer.RpcToHost, w =>
-        {
-            w.WriteGuid(beacon.Identifier);
-            w.WriteUInt32(BeaconTestComponent.MarkId);
-            w.WriteGuid(target);
-        });
-
-        MarkFrom(session.Alice, crate.Identifier);
-        Pump(() => session.Bob.Has(FakePeer.RpcFromHost) && beacon.Marks.Count == 1, session.Alice, session.Bob);
-        Assert.Equal(Guid.Empty, LastArgument(session.Bob, FakePeer.RpcFromHost));
-        Assert.Same(crate, beacon.Marks[0]);
-        Assert.False(Mentions(session.Bob, crate.Identifier));
-
-        MarkFrom(session.Bob, crate.Identifier);
-        Pump(() => session.Alice.Has(FakePeer.RpcFromHost) && beacon.Marks.Count == 2, session.Alice, session.Bob);
-        Assert.Equal(Guid.Empty, LastArgument(session.Alice, FakePeer.RpcFromHost));
-        Assert.Null(beacon.Marks[1]);
-    }
-
-    [Fact]
     public void SceneLinksToObjectsOutOfRangeCarryTheirIdButLinksToHiddenOnesDoNot()
     {
         GameObject? chest = null;

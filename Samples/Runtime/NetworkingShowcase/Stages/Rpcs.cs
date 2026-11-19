@@ -8,8 +8,9 @@ using Prowl.Vector;
 namespace NetworkingShowcase;
 
 /// <summary>
-///     Stage 3. Calling an RPC runs it where its attribute says: <see cref="Ring" /> on every peer, the caller too;
-///     <see cref="AskHost" /> on the host only, which keeps a count only it may change. Inside an RPC,
+///     Stage 3. Calling an RPC runs it where its attribute says: <see cref="AskHost" /> on the host only, which keeps a
+///     count only it may change, and <see cref="Ring" /> on every peer. Only the host calls a broadcast, so a client
+///     asks with <see cref="RequestRing" /> and the host rings it for everyone. Inside an RPC,
 ///     <see cref="Rpc.Caller" /> is the peer that called it.
 /// </summary>
 public class Bell : Component
@@ -22,12 +23,15 @@ public class Bell : Component
 
     public IReadOnlyList<string> Log => _log;
 
-    [Rpc.Broadcast(RpcFlags.AnyCaller)]
-    public void Ring(int colorIndex)
+    [Rpc.Host(RpcFlags.AnyCaller)]
+    public void RequestRing(int colorIndex) => Ring(colorIndex, Rpc.Caller?.Name ?? "The host");
+
+    [Rpc.Broadcast]
+    public void Ring(int colorIndex, string by)
     {
         _color = SyncLamp.Colors[colorIndex % SyncLamp.Colors.Length];
         _ring = 1f;
-        Note($"{Rpc.Caller?.Name ?? "You"} rang it");
+        Note($"{by} rang it");
     }
 
     [Rpc.Host(RpcFlags.AnyCaller)]

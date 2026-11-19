@@ -524,7 +524,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     private static void BellControls(Paper paper, FontFile font, Bell bell)
     {
         Header(paper, font, "Bell");
-        Button(paper, font, "Ring it, everywhere", () => bell.Ring(Random.Shared.Next(SyncLamp.Colors.Length)), 1);
+        Button(paper, font, "Ring it, everywhere", () => bell.RequestRing(Random.Shared.Next(SyncLamp.Colors.Length)), 1);
         Button(paper, font, "Ask the host", bell.AskHost, 2);
         Header(paper, font, "Calls in this window", 3);
         for (int i = 0; i < bell.Log.Count; i++)
@@ -588,7 +588,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
             Label(paper, font, "The host equips it; the whole struct arrives as one value.", 1);
         }
 
-        Button(paper, font, "Show it off to everyone", () => armory.ShowOff(armory.Current), 5);
+        Button(paper, font, "Show it off to everyone", () => armory.RequestShowOff(armory.Current), 5);
         Label(paper, font, armory.LastShown, 6);
     }
 

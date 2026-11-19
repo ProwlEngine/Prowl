@@ -338,7 +338,7 @@ internal sealed partial class NetworkSystem
 
         Transform t = go.Transform;
         return new TemplateSpawn(template.Prefab, template.Factory, template.Data, template.Identifiers, t.LocalPosition,
-            t.LocalRotation, t.LocalScale, go.Enabled, go.Network.Flags, go.Network.OwnerTransfer,
+            t.LocalRotation, t.LocalScale, go.Enabled, go.Network.Flags,
             (byte)go.Network.SendInterval, (byte)template.Components.Length, NetworkComponents.Hash(template.Components));
     }
 
@@ -410,7 +410,6 @@ internal sealed partial class NetworkSystem
         go.Enabled = spawn.Enabled;
         go.Network.Networked = true;
         go.Network.ApplyFlags(spawn.Flags);
-        go.Network.ApplyOwnerTransfer(spawn.OwnerTransfer);
         go.Network.ApplySendInterval(spawn.SendInterval);
         return go;
     }
@@ -509,7 +508,6 @@ internal sealed partial class NetworkSystem
                 existing.Network.Networked = true;
                 existing.Network.ApplyFlags(go.Network.Flags);
                 existing.Network.ApplySendInterval(go.Network.SendInterval);
-                existing.Network.ApplyOwnerTransfer(go.Network.OwnerTransfer);
                 go.Dispose();
                 go = existing;
                 adopted = true;

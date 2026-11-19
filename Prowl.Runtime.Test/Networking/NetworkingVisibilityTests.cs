@@ -175,7 +175,6 @@ public partial class NetworkingTests
         GameObject crate = Crate(session.World, NetworkVisibility.Manual);
         NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
         NetCollectionTestComponent bag = crate.AddComponent<NetCollectionTestComponent>();
-        crate.Network.OwnerTransfer = OwnerTransfer.Takeover;
         crate.Network.SpawnSerialized();
         crate.Network.ShowTo(session.AliceHere);
 
@@ -185,7 +184,6 @@ public partial class NetworkingTests
         stats.Shout("hello");
         crate.Network.Flags = NetworkFlags.NoInterpolation;
         crate.Network.Orphaned = NetworkOrphaned.ClearOwner;
-        crate.Network.OwnerTransfer = OwnerTransfer.Fixed;
         Pump(() => session.Alice.SnapshotInt(stats.Identifier, NetTestComponent.HealthSlot) == 7 &&
                    session.Alice.Has(FakePeer.Sync) && session.Alice.Has(FakePeer.RpcFromHost), session.Alice, session.Bob);
         crate.Network.AssignOwnership(session.AliceHere);
@@ -481,24 +479,20 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void AHiddenPeerCannotCallRpcsOnTheObjectOrRequestIt()
+    public void AHiddenPeerCannotCallRpcsOnTheObject()
     {
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Manual);
         NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
-        crate.Network.OwnerTransfer = OwnerTransfer.Takeover;
         crate.Network.SpawnSerialized();
         crate.Network.ShowTo(session.AliceHere);
-        uint generation = NetworkTestScene.Current.GenerationOf(crate);
 
-        session.Bob.Send(FakePeer.RpcToHost, w => { w.WriteGuid(stats.Identifier); w.WriteUInt32(NetTestComponent.ShoutId); w.WriteString("bob"); });
-        RequestOwnership(session.Bob, crate, generation, true);
+        session.Bob.Send(FakePeer.RpcToHost, w => { w.WriteGuid(stats.Identifier); w.WriteUInt32(NetTestComponent.AskHostId); w.WriteVarInt32(1); });
         PumpFor(50, session.Alice, session.Bob);
-        session.Alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(stats.Identifier); w.WriteUInt32(NetTestComponent.ShoutId); w.WriteString("alice"); });
-        Pump(() => stats.Shouts.Count > 0, session.Alice, session.Bob);
+        session.Alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(stats.Identifier); w.WriteUInt32(NetTestComponent.AskHostId); w.WriteVarInt32(2); });
+        Pump(() => stats.Asked.Count > 0, session.Alice, session.Bob);
 
-        Assert.Equal(new[] { ("alice", (NetPeer?)session.AliceHere) }, stats.Shouts);
-        Assert.Null(crate.Network.Owner);
+        Assert.Equal(new[] { 2 }, stats.Asked);
     }
 
     public class LinkHolder : Component

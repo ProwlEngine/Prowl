@@ -90,7 +90,6 @@ public partial class NetworkingTests
     }
 
     [Theory]
-    [InlineData(false)]
     [InlineData(true)]
     public void ClientFiltersSurviveRelayingAndCanExcludeTheHost(bool isStatic)
     {
@@ -132,7 +131,6 @@ public partial class NetworkingTests
     }
 
     [Theory]
-    [InlineData(false)]
     [InlineData(true)]
     public void AmbientFiltersDoNotChangeIncomingRpcRecipients(bool isStatic)
     {
@@ -211,11 +209,11 @@ public partial class NetworkingTests
             NetTestComponent state = Find(SceneInstance.Main, objectId).GetComponent<NetTestComponent>()!;
             using (Rpc.FilterInclude(peer => peer.Name == "Garry"))
             {
-                state.Shout("only Garry"); StaticRpcProbe.Call(901, 1);
+                StaticRpcProbe.Call(901, 1);
             }
-            Pump(() => host.Has(FakePeer.RpcToHost) && host.Has(FakePeer.StaticRpcToHost), host, garry);
+            Pump(() => host.Has(FakePeer.StaticRpcToHost), host, garry);
             Assert.Empty(state.Shouts); Assert.Empty(StaticRpcProbe.Calls);
-            foreach (ushort kind in new[] { FakePeer.RpcToHost, FakePeer.StaticRpcToHost })
+            foreach (ushort kind in new[] { FakePeer.StaticRpcToHost })
             {
                 NetReader wire = new(host.WireReceived.Last(m => m.Id == kind).Data);
                 if (kind == FakePeer.RpcToHost) wire.ReadGuid(); else wire.ReadString();

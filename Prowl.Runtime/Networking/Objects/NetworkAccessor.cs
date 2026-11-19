@@ -17,7 +17,6 @@ public sealed class NetworkAccessor
     private bool _networked;
     private bool _serverOnly;
     private NetworkOrphaned _orphaned = NetworkOrphaned.Destroy;
-    private OwnerTransfer _ownerTransfer = OwnerTransfer.Fixed;
     private NetworkVisibility _visibility;
     private float _cullDistance;
     private NetworkGroups _groups;
@@ -55,27 +54,6 @@ public sealed class NetworkAccessor
 
             _networked = value == NetworkMode.Object;
             _serverOnly = value == NetworkMode.Never;
-        }
-    }
-
-    /// <summary>Who may take ownership. Only the host may change this after spawning.</summary>
-    public OwnerTransfer OwnerTransfer
-    {
-        get => _ownerTransfer;
-        set
-        {
-            if (!Enum.IsDefined(value))
-            {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
-
-            if (value == _ownerTransfer)
-            {
-                return;
-            }
-
-            Networking.System?.SetOwnerTransfer(_object, value);
-            _ownerTransfer = value;
         }
     }
 
@@ -276,14 +254,14 @@ public sealed class NetworkAccessor
         }
     }
 
-    /// <summary>Host: assigns ownership to a peer, or to the host's simulation with null.</summary>
+    /// <summary>
+    ///     Host: assigns ownership to a peer, or to the host's simulation with null, as Mirror's AssignClientAuthority.
+    ///     Only the host changes ownership: a client that wants an object asks with a host RPC.
+    /// </summary>
     public void AssignOwnership(NetPeer? owner) => Networking.System?.SetOwner(_object, owner);
 
-    /// <summary>Attempts to take ownership. Wait for authority gained before simulating.</summary>
-    public bool TakeOwnership() => Networking.System?.TransferOwnership(_object, true) == true;
-
-    /// <summary>Relinquishes ownership to the host's simulation.</summary>
-    public bool DropOwnership() => Networking.System?.TransferOwnership(_object, false) == true;
+    /// <summary>Host: the object goes back to the host's simulation, as Mirror's RemoveClientAuthority.</summary>
+    public void RemoveOwnership() => Networking.System?.SetOwner(_object, null);
 
     /// <summary>Host: true if <paramref name="peer" /> has this object. Outside a session, always true.</summary>
     public bool IsVisibleTo(NetPeer peer) => Networking.System?.IsVisibleTo(_object, peer) ?? true;
@@ -316,7 +294,6 @@ public sealed class NetworkAccessor
 
     internal void ApplyFlags(NetworkFlags value) => _flags = value;
     internal void ApplySendInterval(int value) => _sendInterval = value;
-    internal void ApplyOwnerTransfer(OwnerTransfer value) => _ownerTransfer = value;
     internal void ApplyOrphaned(NetworkOrphaned value) => _orphaned = value;
 
     internal static bool ValidFlags(NetworkFlags value) =>

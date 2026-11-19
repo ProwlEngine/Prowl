@@ -22,14 +22,12 @@ public partial class NetworkingTests
         Assert.Same(network, first.Network);
         Assert.Same(network, second.Network);
         network.Mode = NetworkMode.Object;
-        network.OwnerTransfer = OwnerTransfer.Takeover;
         network.Orphaned = NetworkOrphaned.ClearOwner;
         network.Flags = NetworkFlags.NoScaleSync;
 
         using GameObject copy = Serializer.Deserialize<GameObject>(Serializer.Serialize(go))!;
         Assert.NotSame(network, copy.Network);
         Assert.Equal(network.Mode, copy.Network.Mode);
-        Assert.Equal(network.OwnerTransfer, copy.Network.OwnerTransfer);
         Assert.Equal(network.Orphaned, copy.Network.Orphaned);
         Assert.Equal(network.Flags, copy.Network.Flags);
         Assert.Same(copy, copy.Network.Root);
@@ -44,13 +42,11 @@ public partial class NetworkingTests
         GameObject go = CreateGameObject();
         NetworkAccessor accessor = go.Network;
         accessor.Mode = NetworkMode.Object;
-        accessor.OwnerTransfer = OwnerTransfer.Takeover;
         accessor.Orphaned = NetworkOrphaned.ClearOwner;
         accessor.Flags = NetworkFlags.NoTransformSync;
         go.Deserialize(Serializer.Serialize(defaults), new SerializationContext());
         Assert.Same(accessor, go.Network);
         Assert.Equal(NetworkMode.Snapshot, accessor.Mode);
-        Assert.Equal(OwnerTransfer.Fixed, accessor.OwnerTransfer);
         Assert.Equal(NetworkOrphaned.Destroy, accessor.Orphaned);
         Assert.Equal(NetworkFlags.None, accessor.Flags);
         Assert.False(Serializer.Serialize(go).TryGet("Network", out _));
