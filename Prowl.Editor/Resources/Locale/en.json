@@ -373,6 +373,8 @@
 
   "popup.search_components": "Search components...",
   "popup.no_components": "No matching components",
+  "popup.new_component": "New Component",
+  "popup.new_component_named": "New Component '{{name}}'",
   "popup.search_shaders": "Search shaders...",
   "popup.no_shaders": "No matching shaders",
   "popup.uncategorized": "Uncategorized",
@@ -652,6 +654,7 @@
   "newscript.err_invalid": "Name must start with a letter or underscore, then letters/digits only.",
   "newscript.err_reserved": "'{{name}}' is a reserved C# keyword.",
   "newscript.err_exists": "{{name}}.cs already exists in this folder.",
+  "newscript.err_type_exists": "A class named {{name}} already exists in the project scripts.",
   "package.export_title": "Export ProwlPackage",
   "package.no_assets_export": "No assets to export.",
   "package.include_deps": "Include Dependencies",

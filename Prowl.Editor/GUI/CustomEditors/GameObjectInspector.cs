@@ -1651,19 +1651,79 @@ public static class GameObjectInspector
         s_addComponentTarget = null;
     }
 
+    // Tag of the "New Component" row, which creates a script instead of adding an existing type.
+    private static readonly object s_newComponentTag = new();
+
     private static void RenderAddComponentPopover(Paper paper, ElementHandle trigHandle)
     {
+        string search = s_addComponentMenu.Search;
+        string label = search.Length == 0
+            ? Loc.Get("popup.new_component")
+            : Loc.Get("popup.new_component_named", new { name = search });
+        var newEntry = new MenuTreeEntry { Path = label, Category = "", Name = label, Icon = EditorIcons.FileCode, Tag = s_newComponentTag };
+
         MenuTreePopup.Popover(paper, "gi_acp", trigHandle, s_cachedComponents ?? [], s_addComponentMenu,
             entry =>
             {
-                if (s_addComponentTarget.IsValid() && entry.Tag is Type type)
+                if (s_addComponentTarget.IsValid() && entry.Tag == s_newComponentTag)
+                {
+                    CreateNewComponent(s_addComponentTarget!, s_addComponentMenu.Search);
+                    CloseAddComponentPopup();
+                }
+                else if (s_addComponentTarget.IsValid() && entry.Tag is Type type)
                 {
                     Undo.AddComponent(s_addComponentTarget, type);
                     CloseAddComponentPopup();
                 }
             },
             Loc.Get("popup.search_components"),
-            Loc.Get("popup.no_components"));
+            Loc.Get("popup.no_components"),
+            pinned: newEntry);
+    }
+
+    /// <summary>
+    /// Opens the New Script dialog named after <paramref name="search"/>, then attaches the new
+    /// component to <paramref name="target"/> once the scripts recompile.
+    /// </summary>
+    private static void CreateNewComponent(GameObject target, string search)
+    {
+        // "my cool thing!" -> "MyCoolThing"; the dialog still validates whatever is left.
+        string name = string.Concat(System.Text.RegularExpressions.Regex.Split(search, "[^A-Za-z0-9_]+")
+            .Where(w => w.Length > 0).Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
+        if (name.Length > 0 && char.IsDigit(name[0])) name = "_" + name;
+        Guid targetId = target.Identifier;
+
+        GUI.Popups.NewScriptDialog.Open(AssetCreateMenu.GetCurrentFolder(), relPath =>
+        {
+            string className = System.IO.Path.GetFileNameWithoutExtension(relPath);
+
+            // Only the project's own scripts, so a "Light" script can't resolve to the engine's Light.
+            IEnumerable<Type> Candidates() => EditorUtils.GetAllTypes().Where(t => t.Name == className &&
+                ScriptAssemblyManager.IsScriptAssembly(t.Assembly) && typeof(Component).IsAssignableFrom(t) && !t.IsAbstract);
+            // Same-named components that already exist (other namespaces or assemblies), so the new one is the type
+            // not in here. Keyed by assembly name and full name, which both stay the same across rebuilds.
+            static string Key(Type t) => $"{t.Assembly.GetName().Name}|{t.FullName}";
+            HashSet<string> existing = [.. Candidates().Select(Key)];
+
+            void OnCompiled(ScriptAssemblyManager.CompileReport report)
+            {
+                // Nothing new is loaded after a failed or packages-only compile. Keep waiting: a queued compile may
+                // include the file, or the user fixes the errors and the next one does.
+                if (!report.Reloaded) return;
+
+                Type? type = Candidates().FirstOrDefault(t => !existing.Contains(Key(t)));
+                // A compile already running when the file was written lacks it; ours is still queued, so wait.
+                if (type == null && ScriptAssemblyManager.IsCompiling) return;
+                ScriptAssemblyManager.CompileFinished -= OnCompiled;
+                Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
+                GameObject? live = scene.IsValid() ? scene.FindObject<GameObject>(targetId) : null;
+                if (type != null && live.IsValid())
+                    Undo.AddComponent(live!, type);
+            }
+
+            ScriptAssemblyManager.CompileFinished += OnCompiled;
+            ScriptAssemblyManager.RequestRecompile();
+        }, name);
     }
 
     /// <summary>
