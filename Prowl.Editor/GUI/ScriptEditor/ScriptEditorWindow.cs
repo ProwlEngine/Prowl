@@ -508,6 +508,26 @@ public class ScriptEditorWindow : DockPanel
 
     private static bool SamePath(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
+    private static bool TryRead(string path, out string text, out bool bom, out DateTime time)
+    {
+        text = "";
+        bom = false;
+        time = default;
+        try
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            bom = HasBom(bytes);
+            text = new UTF8Encoding(false).GetString(bytes, bom ? 3 : 0, bytes.Length - (bom ? 3 : 0));
+            time = File.GetLastWriteTimeUtc(path);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Runtime.Debug.LogError($"[ScriptEditor] Could not open '{path}': {e.Message}");
+            return false;
+        }
+    }
+
     private ScriptTab? Load(string path)
     {
         string text;
@@ -523,21 +543,7 @@ public class ScriptEditorWindow : DockPanel
             }
             text = source.Text;
         }
-        else
-        {
-            try
-            {
-                byte[] bytes = File.ReadAllBytes(path);
-                bom = HasBom(bytes);
-                text = new UTF8Encoding(false).GetString(bytes, bom ? 3 : 0, bytes.Length - (bom ? 3 : 0));
-                time = File.GetLastWriteTimeUtc(path);
-            }
-            catch (Exception e)
-            {
-                Runtime.Debug.LogError($"[ScriptEditor] Could not open '{path}': {e.Message}");
-                return null;
-            }
-        }
+        else if (!TryRead(path, out text, out bom, out time)) return null;
         bool readOnly = library || !InAssets(path);
 
         bool onFallback = false;
@@ -724,17 +730,15 @@ public class ScriptEditorWindow : DockPanel
         Modal.Push(dialog);
     }
 
-    private void Reload(ScriptTab tab)
+    // In place, since a second editor cannot open a script its workspace still has open in the first.
+    private static void Reload(ScriptTab tab)
     {
-        int index = _tabs.IndexOf(tab);
-        if (index < 0) return;
+        if (tab.IsLibrary || !TryRead(tab.Path, out string text, out bool bom, out DateTime time)) return;
         var caret = tab.Editor.Caret;
-        var reloaded = Load(tab.Path);
-        if (reloaded == null) return;
-        tab.Editor.Dispose();
-        reloaded.Id = tab.Id;
-        _tabs[index] = reloaded;
-        reloaded.Editor.GoTo(reloaded.Editor.Document.Clamp(caret), center: false);
+        tab.Editor.SetText(text);
+        tab.HadBom = bom;
+        tab.DiskTime = time;
+        tab.Editor.GoTo(tab.Editor.Document.Clamp(caret), center: false);
     }
 
     // Points a tab at the new path of its file, keeping its text, undo history and workspace.
