@@ -291,7 +291,6 @@
   "network.orphaned.desc": "所有者离开时如何处理。",
   "network.orphaned.destroy": "销毁",
   "network.orphaned.host": "交给主机",
-  "network.flags": "网络标志",
   "network.sync_transform": "同步变换",
   "network.sync_transform.desc": "控制者把位置、旋转和缩放发送给其他所有人。",
   "network.live": "实时",

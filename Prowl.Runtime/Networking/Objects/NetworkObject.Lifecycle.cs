@@ -162,7 +162,7 @@ internal sealed partial class NetworkObject
         TransferVelocity = null;
         Owner = owner;
         Generation = generation;
-        TransformSync.Reset();
+        ResetTransforms();
         UpdatePhysics(velocity);
     }
 }

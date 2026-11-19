@@ -15,7 +15,7 @@ public partial class NetworkingTests
     {
         GameObject crate = new("Crate");
         crate.AddComponent<NetTestComponent>();
-        crate.Network.SendInterval = 2;
+        crate.AddComponent<NetworkTransform>().SendInterval = 2;
         GameObject lid = new("Lid");
         lid.AddComponent<NetTestComponent>();
         lid.SetParent(crate, false);
@@ -66,7 +66,6 @@ public partial class NetworkingTests
             Assert.Equal(prefab.AssetID, spawn.Prefab);
             Assert.Equal(TreeIdentifiers(crate), spawn.Identifiers);
             Assert.Equal(new Float3(1, 2, 3), spawn.Position);
-            Assert.Equal(2, spawn.SendInterval);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -116,7 +115,7 @@ public partial class NetworkingTests
             Assert.Equal(prefab.AssetID, copy.PrefabAssetId);
             Assert.Equal(new Float3(4, 5, 6), copy.Transform.LocalPosition);
             Assert.Equal(9, copy.GetComponent<NetTestComponent>()!.Health);
-            Assert.Equal(2, copy.Network.SendInterval);
+            Assert.Equal(2, copy.GetComponent<NetworkTransform>()!.SendInterval);
             Assert.True(copy.Network.Active);
         }
         finally { Networking.Networking.Shutdown(); }

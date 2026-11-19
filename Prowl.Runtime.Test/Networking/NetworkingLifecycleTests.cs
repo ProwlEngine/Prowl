@@ -50,6 +50,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject root = CreateGameObject("Physics root");
+        root.AddComponent<NetworkTransform>();
         root.Network.Networked = true;
         Rigidbody3D body = root.AddComponent<Rigidbody3D>();
         body.MotionType = Jitter2.Dynamics.MotionType.Dynamic;

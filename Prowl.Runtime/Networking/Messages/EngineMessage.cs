@@ -20,12 +20,10 @@ internal enum EngineMessage : ushort
     StaticRpcFromHost,
     Orphaned,
     OwnershipState,
-    NetworkFlags,
     SnapshotAck,
     SectionAdd,
     SectionRemove,
     SectionMove,
     Time,
-    SendInterval,
     Player
 }

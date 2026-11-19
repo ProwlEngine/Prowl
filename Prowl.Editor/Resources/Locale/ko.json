@@ -291,7 +291,6 @@
   "network.orphaned.desc": "소유자가 나갔을 때의 처리.",
   "network.orphaned.destroy": "파괴",
   "network.orphaned.host": "호스트에게 넘기기",
-  "network.flags": "네트워크 플래그",
   "network.sync_transform": "트랜스폼 동기화",
   "network.sync_transform.desc": "제어하는 쪽이 위치, 회전, 크기를 다른 모두에게 보냅니다.",
   "network.live": "실시간",

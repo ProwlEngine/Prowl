@@ -28,6 +28,7 @@ public class Swarm : Component
         for (int i = 0; i < count; i++)
         {
             GameObject drone = Model("Drone", mesh, Lit(new Color(0.7f, 0.7f, 0.75f, 1f)), Transform.Position);
+            drone.AddComponent<NetworkTransform>();
             drone.AddComponent<Drone>().Seed = Random.Shared.NextSingle() * 1000f;
             drone.MoveTo(GameObject.Scene!);
             drone.Network.SpawnSerialized();

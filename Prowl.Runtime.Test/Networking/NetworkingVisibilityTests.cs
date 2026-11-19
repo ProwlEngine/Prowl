@@ -143,7 +143,7 @@ public partial class NetworkingTests
         bag.Scores.Add(3);
         crate.Transform.LocalPosition = new Float3(1, 2, 3);
         stats.Shout("hello");
-        crate.Network.Flags = NetworkFlags.NoInterpolation;
+        crate.AddComponent<NetworkTransform>().Interpolate = false;
         crate.Network.Orphaned = NetworkOrphaned.ClearOwner;
         Pump(() => session.Alice.SnapshotInt(stats.Identifier, NetTestComponent.HealthSlot) == 7 &&
                    session.Alice.Has(FakePeer.Sync) && session.Alice.Has(FakePeer.RpcFromHost), session.Alice, session.Bob);

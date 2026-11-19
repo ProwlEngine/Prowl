@@ -25,39 +25,25 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    internal static TransformChannels SyncedChannels(GameObject go) =>
-        (go.Network.SyncsTransform(NetworkFlags.NoPositionSync) ? TransformChannels.Position : 0) |
-        (go.Network.SyncsTransform(NetworkFlags.NoRotationSync) ? TransformChannels.Rotation : 0) |
-        (go.Network.SyncsTransform(NetworkFlags.NoScaleSync) ? TransformChannels.Scale : 0);
-
     /// <summary>Plays pending transform samples for objects this peer doesn't control, InterpolationDelay behind.</summary>
     internal void ApplyInterpolation()
     {
         double now = Now;
         foreach (NetworkObject entry in Entries.Values)
         {
-            if (entry.TransformSync.HasPendingInterpolation && entry.GameObject.IsValid() && !HasControl(entry.GameObject))
+            NetworkTransform[] transforms = entry.Transforms;
+            if (transforms.Length == 0 || !entry.GameObject.IsValid() || HasControl(entry.GameObject))
             {
-                entry.TransformSync.Interpolate(entry.GameObject, now);
+                continue;
             }
-        }
-    }
 
-    internal static void ApplyNetworkTransform(GameObject go, Float3 position, Quaternion rotation, Float3 scale)
-    {
-        if (go.Network.SyncsTransform(NetworkFlags.NoPositionSync))
-        {
-            go.Transform.LocalPosition = position;
-        }
-
-        if (go.Network.SyncsTransform(NetworkFlags.NoRotationSync))
-        {
-            go.Transform.LocalRotation = rotation;
-        }
-
-        if (go.Network.SyncsTransform(NetworkFlags.NoScaleSync))
-        {
-            go.Transform.LocalScale = scale;
+            foreach (NetworkTransform transform in transforms)
+            {
+                if (transform.Sync.HasPendingInterpolation && transform.IsValid())
+                {
+                    transform.Sync.Interpolate(transform.Moved, now);
+                }
+            }
         }
     }
 

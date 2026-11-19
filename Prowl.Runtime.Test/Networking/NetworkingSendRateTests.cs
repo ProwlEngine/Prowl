@@ -23,17 +23,20 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SendIntervalIsValidatedAndStoredOnlyWhenSet()
+    public void ANetworkTransformsSendIntervalIsClampedAndSavedWithIt()
     {
         GameObject go = CreateGameObject("Rated");
-        Assert.Equal(1, go.Network.SendInterval);
-        Assert.Throws<ArgumentOutOfRangeException>(() => go.Network.SendInterval = 0);
-        Assert.Throws<ArgumentOutOfRangeException>(() => go.Network.SendInterval = 256);
+        NetworkTransform transform = go.AddComponent<NetworkTransform>();
+        Assert.Equal(1, transform.Interval);
+        transform.SendInterval = 0;
+        Assert.Equal(1, transform.Interval);
+        transform.SendInterval = 256;
+        Assert.Equal(255, transform.Interval);
 
-        go.Network.SendInterval = 4;
-        GameObject copy = Serializer.Deserialize<GameObject>(Serializer.Serialize(go))!;
-        Assert.Equal(4, copy.Network.SendInterval);
-        Assert.False(Serializer.Serialize(CreateGameObject("Plain")).TryGet("Network", out _));
+        transform.SendInterval = 4;
+        using GameObject copy = Serializer.Deserialize<GameObject>(Serializer.Serialize(go))!;
+        Assert.Equal(4, copy.GetComponent<NetworkTransform>()!.Interval);
+        Assert.False(Serializer.Serialize(go).TryGet("Network", out _));
     }
 
     [Fact]
@@ -48,7 +51,8 @@ public partial class NetworkingTests
         {
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
             GameObject slow = CreateGameObject("Slow"), fast = CreateGameObject("Fast");
-            slow.Network.SendInterval = 3;
+            slow.AddComponent<NetworkTransform>().SendInterval = 3;
+            fast.AddComponent<NetworkTransform>();
             scene.Add(slow); scene.Add(fast);
             slow.Network.SpawnSerialized(); fast.Network.SpawnSerialized();
             uint slowId = NetworkTestScene.Current.NetIdOf(slow), fastId = NetworkTestScene.Current.NetIdOf(fast);
@@ -129,7 +133,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ClientsLearnTheSendIntervalAtSpawnAndWhenTheHostChangesIt()
+    public void ClientsLearnATransformsSendIntervalWithItsSpawn()
     {
         SceneInstance scene = CreateScene();
         MakeCurrent(scene);
@@ -140,18 +144,11 @@ public partial class NetworkingTests
         {
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
             GameObject crate = CreateGameObject("Crate");
-            crate.Network.SendInterval = 5;
+            crate.AddComponent<NetworkTransform>().SendInterval = 5;
             scene.Add(crate);
             crate.Network.SpawnSerialized();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
             Assert.Contains("SendInterval", SpawnJson(alice, crate));
-
-            crate.Network.SendInterval = 2;
-            Pump(() => alice.Has(FakePeer.SendInterval), alice);
-            NetReader message = new(alice.Last(FakePeer.SendInterval));
-            Assert.Equal(crate.Identifier, message.ReadGuid());
-            message.ReadUInt32();
-            Assert.Equal(2, message.ReadByte());
         }
         finally { Networking.Networking.Shutdown(); }
     }

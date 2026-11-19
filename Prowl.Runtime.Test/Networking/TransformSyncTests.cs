@@ -186,8 +186,9 @@ public class TransformSyncTests : RuntimeTestBase
     public void DisabledInterpolationAppliesImmediatelyWithoutPendingPlayback()
     {
         GameObject go = CreateGameObject();
-        go.Network.Flags = NetworkFlags.NoInterpolation;
-        TransformSync sync = new();
+        NetworkTransform transform = go.AddComponent<NetworkTransform>();
+        transform.Interpolate = false;
+        TransformSync sync = transform.Sync;
         sync.Receive(go, 1, 0, 10, Pose(10));
         Assert.Equal(10f, go.Transform.LocalPosition.X);
         Assert.False(sync.HasPendingInterpolation);

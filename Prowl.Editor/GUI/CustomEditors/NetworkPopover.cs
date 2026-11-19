@@ -176,33 +176,15 @@ internal static class NetworkPopover
                 Loc.Get("network.components", new { count = components, max = NetworkComponents.MaxPerObject }),
                 components > NetworkComponents.MaxPerObject ? EditorTheme.Red400 : EditorTheme.Ink400);
 
+            Spacer(paper, "gi_net_gap0");
+            SyncTransform(paper, font, go);
+
             Spacer(paper, "gi_net_gap1");
             Origami.Foldout(paper, "gi_net_advanced", Loc.Get("network.advanced")).Body(() =>
             {
                 Heading(paper, font, "gi_net_orphaned", Loc.Get("network.orphaned"), Loc.Get("network.orphaned.desc"));
                 OrphanedOption(paper, font, go, NetworkOrphaned.Destroy, EditorIcons.Trash_I, Loc.Get("network.orphaned.destroy"));
                 OrphanedOption(paper, font, go, NetworkOrphaned.ClearOwner, EditorIcons.Server_I, Loc.Get("network.orphaned.host"));
-
-                Spacer(paper, "gi_net_gap2");
-
-                Heading(paper, font, "gi_net_flags", Loc.Get("network.flags"), null);
-                TransformOption(paper, font, go, NetworkFlags.NoPositionSync, Loc.Get("network.flags.no_position_sync"));
-                TransformOption(paper, font, go, NetworkFlags.NoRotationSync, Loc.Get("network.flags.no_rotation_sync"));
-                TransformOption(paper, font, go, NetworkFlags.NoScaleSync, Loc.Get("network.flags.no_scale_sync"));
-                TransformOption(paper, font, go, NetworkFlags.NoInterpolation, Loc.Get("network.flags.no_interpolation"));
-                if (go.Network.Active && !Networking.IsHost)
-                    Note(paper, font, "gi_net_sync_tf_readonly", Loc.Get("network.flags.host_only"), EditorTheme.Ink400);
-
-                Spacer(paper, "gi_net_gap3");
-                Heading(paper, font, "gi_net_interval", Loc.Get("network.send_interval"), Loc.Get("network.send_interval.desc"));
-                if (go.Network.Active && !Networking.IsHost)
-                    Note(paper, font, "gi_net_interval_value", go.Network.SendInterval.ToString(), EditorTheme.Ink500);
-                else
-                    Origami.NumericField<int>(paper, "gi_net_interval_v", go.Network.SendInterval, v =>
-                    {
-                        Undo.RecordObject(go, "Change Send Interval");
-                        go.Network.SendInterval = Math.Clamp(v, 1, 255);
-                    }).Min(1).Max(255).Show();
 
                 ComponentIntervals(paper, font, go);
             });
@@ -244,21 +226,31 @@ internal static class NetworkPopover
         }
     }
 
-    private static void TransformOption(Paper paper, FontFile font, GameObject go, NetworkFlags flag, string label)
+    /// <summary>Adds or removes the object's NetworkTransform, whose own settings show with its other components.</summary>
+    private static void SyncTransform(Paper paper, FontFile font, GameObject go)
     {
-        string id = $"gi_net_sync_tf_{flag}";
-        bool enabled = (go.Network.Flags & flag) != 0;
-        if (go.Network.Active && !Networking.IsHost)
+        const string id = "gi_net_sync_tf";
+        NetworkTransform? transform = go.GetComponent<NetworkTransform>();
+        bool enabled = transform.IsValid();
+        string label = Loc.Get("network.sync_transform");
+
+        // A spawned object's transforms are fixed, as the list every peer built at spawn.
+        if (go.Network.Active)
         {
             Text(paper, font, id, $"{(enabled ? EditorIcons.Check : EditorIcons.Xmark)}  {label}", EditorTheme.Ink500, EditorTheme.FontSizeSmall);
-            return;
         }
-        Origami.Checkbox(paper, id, enabled, on =>
+        else
         {
-            NetworkFlags value = on ? go.Network.Flags | flag : go.Network.Flags & ~flag;
-            Undo.RecordObject(go, "Change Transform Sync");
-            go.Network.Flags = value;
-        }).LabelRight(label).Show();
+            Origami.Checkbox(paper, id, enabled, on =>
+            {
+                if (on)
+                    Undo.AddComponent<NetworkTransform>(go);
+                else if (transform.IsValid())
+                    Undo.DestroyObjectImmediate(transform!);
+            }).LabelRight(label).Show();
+        }
+
+        Note(paper, font, id + "_desc", Loc.Get("network.sync_transform.desc"), EditorTheme.Ink400);
     }
 
     private static void OrphanedOption(Paper paper, FontFile font, GameObject go, NetworkOrphaned value, IOrigamiIcon icon, string label) =>

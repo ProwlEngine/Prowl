@@ -17,18 +17,27 @@ internal readonly record struct TransformRecord(
     uint Generation,
     TransformUpdate Update,
     uint BaselineAge = 0,
-    GridPosition Grid = default)
+    GridPosition Grid = default,
+    byte Index = 0)
 {
+    // Set in the channels byte when the record is for a transform of its object other than the first.
+    private const byte IndexedBit = 64;
+
     // A moving position takes at most 1 + 3 * 7 bytes, so with the compact rotation it fits in an exact pose's 12 + 16.
     // A teleport's sequence byte fits in the 4 of Resumed, which it never carries.
-    internal const int MaxSize = 5 + 5 + 1 + 4 + 12 + 16 + 12;
+    internal const int MaxSize = 5 + 5 + 1 + 1 + 4 + 12 + 16 + 12;
 
     internal void Write(NetWriter writer)
     {
         TransformChannels channels = Update.Channels;
         writer.WriteVarUInt32(NetId);
         writer.WriteVarUInt32(Generation);
-        writer.WriteByte((byte)channels);
+        writer.WriteByte((byte)((byte)channels | (Index != 0 ? IndexedBit : 0)));
+        if (Index != 0)
+        {
+            writer.WriteByte(Index);
+        }
+
         if ((channels & TransformChannels.Resumed) != 0)
         {
             writer.WriteSingle(Update.StillFor);
@@ -76,7 +85,9 @@ internal readonly record struct TransformRecord(
     {
         uint netId = reader.ReadVarUInt32();
         uint generation = reader.ReadVarUInt32();
-        TransformChannels channels = (TransformChannels)reader.ReadByte();
+        byte raw = reader.ReadByte();
+        byte index = (raw & IndexedBit) != 0 ? reader.ReadByte() : (byte)0;
+        TransformChannels channels = (TransformChannels)(raw & ~IndexedBit);
         NetworkValidation.ValidateTransformChannels(channels);
 
         float stillFor = (channels & TransformChannels.Resumed) != 0 ? reader.ReadSingle() : 0;
@@ -103,7 +114,7 @@ internal readonly record struct TransformRecord(
         NetworkValidation.Transform(stillFor, position, rotation, scale);
 
         return new TransformRecord(netId, generation,
-            new TransformUpdate(channels, stillFor, position, rotation, scale, teleport), baselineAge, grid);
+            new TransformUpdate(channels, stillFor, position, rotation, scale, teleport), baselineAge, grid, index);
     }
 
     internal bool HasGridPosition =>

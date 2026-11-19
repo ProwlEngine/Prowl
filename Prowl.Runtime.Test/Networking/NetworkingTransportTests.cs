@@ -59,12 +59,12 @@ public partial class NetworkingTests
     }
 
     [Theory]
-    [InlineData(false, NetworkExecution.Inline, 92, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.Inline, 92, DeliverySupport.All)]
-    [InlineData(false, NetworkExecution.DedicatedThread, 92, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.DedicatedThread, 92, DeliverySupport.All)]
-    [InlineData(false, NetworkExecution.Inline, 91, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.DedicatedThread, 91, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.Inline, SnapshotMessage.MinMessageSize, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.Inline, SnapshotMessage.MinMessageSize, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.DedicatedThread, SnapshotMessage.MinMessageSize, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.DedicatedThread, SnapshotMessage.MinMessageSize, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.Inline, SnapshotMessage.MinMessageSize - 1, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.DedicatedThread, SnapshotMessage.MinMessageSize - 1, DeliverySupport.All)]
     [InlineData(false, NetworkExecution.Inline, 0, DeliverySupport.Reliable)]
     [InlineData(true, NetworkExecution.DedicatedThread, 0, DeliverySupport.Reliable)]
     public void TransformBatchesAndRelaysRespectEachConnectionsLimit(bool batching, NetworkExecution execution, int smallLimit, DeliverySupport deliveries)
@@ -84,18 +84,19 @@ public partial class NetworkingTests
             GameObject[] objects = Enumerable.Range(0, 5).Select(i =>
             {
                 GameObject go = CreateGameObject($"Object {i}");
+                go.AddComponent<NetworkTransform>();
                 scene.Add(go);
                 go.Network.SpawnSerialized();
                 return go;
             }).ToArray();
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
-            // Under 92 bytes (SnapshotMessage.MinMessageSize) a datagram can't hold one whole record, so transforms fall back to reliable delivery.
-            int smallMax = smallLimit >= 92 ? smallLimit - 2 : 1000;
+            // Under SnapshotMessage.MinMessageSize a datagram can't hold one whole record, so transforms fall back to reliable delivery.
+            int smallMax = smallLimit >= SnapshotMessage.MinMessageSize ? smallLimit - 2 : 1000;
             int wideMax = deliveries == DeliverySupport.Reliable ? 1000 : 155 - 2;
             AssertTransformBatches(small, smallMax, objects);
             AssertTransformBatches(wide, wideMax, objects);
             Assert.All(small.Deliveries.Where(m => m.Id == FakePeer.Snapshot), m =>
-                Assert.Equal(smallLimit < 92 ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
+                Assert.Equal(smallLimit < SnapshotMessage.MinMessageSize ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
 
             StaticRpcMember rpc = new(typeof(NetworkingTests), 998, "Broadcast", RpcMode.Broadcast, RpcFlags.Unreliable,
                 static (ref NetReader reader, bool execute) => { });
@@ -138,6 +139,7 @@ public partial class NetworkingTests
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject ship = CreateGameObject("Ship");
+        ship.AddComponent<NetworkTransform>();
         ship.Network.Networked = true;
         using NetWriter spawn = new();
         NetworkTestScene.Current.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, spawn);

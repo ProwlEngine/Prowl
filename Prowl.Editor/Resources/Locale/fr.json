@@ -291,7 +291,6 @@
   "network.orphaned.desc": "Ce qui se passe quand son propriétaire part.",
   "network.orphaned.destroy": "Détruire",
   "network.orphaned.host": "Donner à l'hôte",
-  "network.flags": "Options réseau",
   "network.sync_transform": "Synchroniser le transform",
   "network.sync_transform.desc": "Celui qui le contrôle envoie sa position, rotation et échelle aux autres.",
   "network.live": "En direct",

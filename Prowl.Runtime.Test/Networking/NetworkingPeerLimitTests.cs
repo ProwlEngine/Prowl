@@ -93,6 +93,7 @@ public partial class NetworkingTests
             GameObject[] objects = Enumerable.Range(0, 200).Select(i =>
             {
                 GameObject go = CreateGameObject($"Object {i}");
+                go.AddComponent<NetworkTransform>();
                 scene.Add(go);
                 go.Network.SpawnSerialized();
                 return go;

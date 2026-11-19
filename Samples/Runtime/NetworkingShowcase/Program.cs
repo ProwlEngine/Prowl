@@ -192,17 +192,19 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         GameObject lamp = Networked(Model("Lamp", Mesh.CreateSphere(0.6f, 16, 24), Lit(SyncLamp.Colors[0]),
             StationCenter(0) + new Float3(0f, 1.5f, 0f)));
         lamp.AddComponent<SyncLamp>();
-        lamp.Network.Flags = NetworkFlags.NoTransformSync;
 
         Add(Block("Track", new Float3(6.6f, 0.05f, 6.6f), _stone, StationCenter(1) + new Float3(0f, 0.03f, 0f)));
         GameObject rover = Networked(Model("Rover", Mesh.CreateCube(new Float3(1f, 0.6f, 1.4f)),
             Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), StationCenter(1) + new Float3(3f, 0.6f, 0f)));
+        rover.AddComponent<NetworkTransform>();
         rover.AddComponent<Rover>().Center = StationCenter(1);
         for (int i = 0; i < 4; i++)
         {
             Float3 at = StationCenter(1) + new Float3(-1.5f + i, PuckHeight, -1.2f + i % 2 * 2.4f);
-            Networked(Model($"Puck {i + 1}", Mesh.CreateCylinder(0.4f, 0.2f, 24), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)),
-                at)).AddComponent<Grabbable>().Home = at;
+            GameObject puck = Networked(Model($"Puck {i + 1}", Mesh.CreateCylinder(0.4f, 0.2f, 24),
+                Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at));
+            puck.AddComponent<NetworkTransform>();
+            puck.AddComponent<Grabbable>().Home = at;
         }
 
         Pedestal(StationCenter(2));
@@ -251,6 +253,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
                 ? Model($"Ball {i + 1}", Mesh.CreateSphere(0.4f, 12, 18), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at)
                 : Model($"Box {i + 1}", Mesh.CreateCube(new Float3(0.8f, 0.8f, 0.8f)),
                     Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at));
+            body.AddComponent<NetworkTransform>();
             body.AddComponent<Rigidbody3D>().Mass = ball ? 1f : 2f;
             if (ball)
             {

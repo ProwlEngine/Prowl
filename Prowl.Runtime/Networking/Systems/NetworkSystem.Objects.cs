@@ -337,8 +337,8 @@ internal sealed partial class NetworkSystem
 
         Transform t = go.Transform;
         return new TemplateSpawn(template.Prefab, template.Factory, template.Data, template.Identifiers, t.LocalPosition,
-            t.LocalRotation, t.LocalScale, go.Enabled, go.Network.Flags,
-            (byte)go.Network.SendInterval, (byte)template.Components.Length, NetworkComponents.Hash(template.Components),
+            t.LocalRotation, t.LocalScale, go.Enabled,
+            (byte)template.Components.Length, NetworkComponents.Hash(template.Components),
             template.Scene);
     }
 
@@ -420,8 +420,6 @@ internal sealed partial class NetworkSystem
         go.Transform.LocalScale = spawn.Scale;
         go.Enabled = spawn.Enabled;
         go.Network.Networked = true;
-        go.Network.ApplyFlags(spawn.Flags);
-        go.Network.ApplySendInterval(spawn.SendInterval);
         return go;
     }
 
@@ -525,8 +523,6 @@ internal sealed partial class NetworkSystem
             if (!Entries.Contains(id) && FindByIdentifier(id) is GameObject existing)
             {
                 existing.Network.Networked = true;
-                existing.Network.ApplyFlags(go.Network.Flags);
-                existing.Network.ApplySendInterval(go.Network.SendInterval);
                 go.Dispose();
                 go = existing;
                 adopted = true;
@@ -570,7 +566,10 @@ internal sealed partial class NetworkSystem
             Sync.ResolveReferencesTo(entry);
             if (message.Replace)
             {
-                entry.TransformSync.ReceivedAt(message.Tick);
+                foreach (NetworkTransform transform in entry.Transforms)
+                {
+                    transform.Sync.ReceivedAt(message.Tick);
+                }
             }
             entry.UpdatePhysics();
             if (FindByIdentifier(parentId) is GameObject parent)

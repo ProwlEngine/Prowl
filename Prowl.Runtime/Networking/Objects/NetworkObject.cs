@@ -15,9 +15,7 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     public readonly HashSet<Component> AuthorityListeners = new();
     public readonly HashSet<Component> SpawnListeners = new();
     internal readonly NetworkSystem System = scene;
-    public readonly TransformSync TransformSync = new();
     public uint Generation;
-    public double LastCaptureTime;
     public bool HasLocalAuthority;
 
     /// <summary>Host: the clients that do not have this object, or null when they all do.</summary>
@@ -39,6 +37,47 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
 
     /// <summary>Its networked components, fixed for the life of the spawn. A component's place here is its index on the wire.</summary>
     public Component[] Components { get; init; } = NetworkComponents.Gather(gameObject);
+
+    private NetworkTransform[]? _transforms;
+
+    /// <summary>
+    ///     The NetworkTransform components in its tree, in tree order, fixed from the first time they are asked for. A
+    ///     transform's place here is its index on the wire.
+    /// </summary>
+    public NetworkTransform[] Transforms
+    {
+        get
+        {
+            if (_transforms == null)
+            {
+                _transforms = NetworkComponents.GatherTransforms(GameObject);
+                for (int i = 0; i < _transforms.Length; i++)
+                {
+                    _transforms[i].Entry = this;
+                    _transforms[i].Index = (byte)i;
+                }
+            }
+
+            return _transforms;
+        }
+    }
+
+    /// <summary>The transform that moves the networked object itself, or null when it has none.</summary>
+    public NetworkTransform? RootTransform
+    {
+        get
+        {
+            foreach (NetworkTransform transform in Transforms)
+            {
+                if (transform.IsValid() && ReferenceEquals(transform.Moved, GameObject))
+                {
+                    return transform;
+                }
+            }
+
+            return null;
+        }
+    }
 
     /// <summary>The changed [Sync] members of each networked component not sent yet, a bit each, or null for none.</summary>
     public ulong[]? Dirty;

@@ -113,8 +113,9 @@ public static class NetworkDiagnostics
                 continue;
             }
 
+            TransformSync? sync = entry.RootTransform is { } transform ? transform.Sync : null;
             output.Add(new ObjectDiagnostic(go.Identifier, go.Name, entry.Owner, scene.HasControl(go),
-                go.Network.HasTransformSync, entry.TransformSync.Samples.Count, entry.TransformSync.LastReceivedTick));
+                sync != null, sync?.Samples.Count ?? 0, sync?.LastReceivedTick ?? 0));
         }
     }
 

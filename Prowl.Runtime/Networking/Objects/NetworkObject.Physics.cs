@@ -20,7 +20,8 @@ internal sealed partial class NetworkObject
             return;
         }
 
-        bool proxy = System.IsProxy(GameObject);
+        // A body here is only driven from elsewhere when a NetworkTransform brings its poses.
+        bool proxy = System.IsProxy(GameObject) && Transforms.Length > 0;
         foreach (Rigidbody3D body in GameObject.GetComponentsInChildren<Rigidbody3D>(includeInactive: true))
         {
             if (proxy && body.MotionType == MotionType.Dynamic && !ProxyBodies.TryGetValue(body, out _))
@@ -41,8 +42,8 @@ internal sealed partial class NetworkObject
 
     internal Float3 SampledVelocity()
     {
-        List<TransformSample> samples = TransformSync.Samples;
-        if (samples.Count < 2)
+        List<TransformSample>? samples = RootTransform is { } root ? root.Sync.Samples : null;
+        if (samples == null || samples.Count < 2)
         {
             return Float3.Zero;
         }

@@ -122,36 +122,6 @@ internal readonly record struct OrphanedMessage(Guid Identifier, uint Generation
         NetworkValidation.Orphaned((NetworkOrphaned)reader.ReadByte()));
 }
 
-internal readonly record struct NetworkFlagsMessage(Guid Identifier, uint Generation, NetworkFlags Flags)
-{
-    internal void Write(NetWriter writer)
-    {
-        writer.WriteGuid(Identifier);
-        writer.WriteUInt32(Generation);
-        writer.WriteByte((byte)Flags);
-    }
-
-    internal static NetworkFlagsMessage Read(ref NetReader reader) => new(
-        reader.ReadGuid(),
-        reader.ReadUInt32(),
-        (NetworkFlags)reader.ReadByte());
-}
-
-internal readonly record struct SendIntervalMessage(Guid Identifier, uint Generation, byte Interval)
-{
-    internal void Write(NetWriter writer)
-    {
-        writer.WriteGuid(Identifier);
-        writer.WriteUInt32(Generation);
-        writer.WriteByte(Interval);
-    }
-
-    internal static SendIntervalMessage Read(ref NetReader reader) => new(
-        reader.ReadGuid(),
-        reader.ReadUInt32(),
-        reader.ReadByte());
-}
-
 /// <summary>
 ///     A spawn by prefab, factory or scene: what builds it, the identifiers its tree takes in build order, and the
 ///     root's state. A factory spawn names the factory and carries the bytes the host passed it, a prefab spawn names
@@ -166,8 +136,6 @@ internal readonly record struct TemplateSpawn(
     Quaternion Rotation,
     Float3 Scale,
     bool Enabled,
-    NetworkFlags Flags,
-    byte SendInterval,
     byte ComponentCount,
     uint ComponentHash,
     bool Scene = false)
@@ -200,8 +168,6 @@ internal readonly record struct TemplateSpawn(
         NetSerializers.WriteQuaternion(writer, Rotation);
         NetSerializers.WriteFloat3(writer, Scale);
         writer.WriteBool(Enabled);
-        writer.WriteByte((byte)Flags);
-        writer.WriteByte(SendInterval);
         writer.WriteByte(ComponentCount);
         writer.WriteUInt32(ComponentHash);
     }
@@ -250,18 +216,15 @@ internal readonly record struct TemplateSpawn(
         Quaternion rotation = NetSerializers.ReadQuaternion(ref reader);
         Float3 scale = NetSerializers.ReadFloat3(ref reader);
         bool enabled = reader.ReadBool();
-        NetworkFlags flags = (NetworkFlags)reader.ReadByte();
-        byte interval = reader.ReadByte();
         byte componentCount = reader.ReadByte();
         uint componentHash = reader.ReadUInt32();
         NetworkValidation.Transform(0, position, rotation, scale);
-        if (!NetworkAccessor.ValidFlags(flags) || interval == 0 ||
-            componentCount > NetworkComponents.MaxPerObject)
+        if (componentCount > NetworkComponents.MaxPerObject)
         {
             throw new InvalidDataException("A template spawn has invalid network settings.");
         }
 
-        return new TemplateSpawn(prefab, factory, data, identifiers, position, rotation, scale, enabled, flags, interval,
+        return new TemplateSpawn(prefab, factory, data, identifiers, position, rotation, scale, enabled,
             componentCount, componentHash, kind == SceneKind);
     }
 }

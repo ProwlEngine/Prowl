@@ -21,7 +21,7 @@ internal static class NetworkSerialization
     {
         NetworkAccessor? network = go._network;
         if (network == null || (!network.Networked && !network.ServerOnly &&
-                                network.Orphaned == NetworkOrphaned.Destroy && network.Flags == NetworkFlags.None && network.SendInterval == 1 &&
+                                network.Orphaned == NetworkOrphaned.Destroy &&
                                 network.Visibility == NetworkVisibility.Default && network.CullDistance == 0 &&
                                 network.Groups.IsEmpty && !network.HasComponentIntervals))
         {
@@ -40,15 +40,9 @@ internal static class NetworkSerialization
         }
 
         settings.Add("Orphaned", new EchoObject((byte)network.Orphaned));
-        settings.Add("Flags", new EchoObject((byte)network.Flags));
         if (network.Visibility != NetworkVisibility.Default)
         {
             settings.Add("Visibility", new EchoObject((byte)network.Visibility));
-        }
-
-        if (network.SendInterval != 1)
-        {
-            settings.Add("SendInterval", new EchoObject((byte)network.SendInterval));
         }
 
         if (network.CullDistance != 0)
@@ -97,8 +91,6 @@ internal static class NetworkSerialization
             existing.ServerOnly = false;
             existing.ClearComponentIntervals();
             existing.Orphaned = NetworkOrphaned.Destroy;
-            existing.Flags = NetworkFlags.None;
-            existing.SendInterval = 1;
             existing.Visibility = NetworkVisibility.Default;
             existing.CullDistance = 0;
             existing.Groups = NetworkGroups.None;
@@ -111,8 +103,6 @@ internal static class NetworkSerialization
         network.Networked = settings["Networked"]?.BoolValue ?? stored == 2;
         network.ServerOnly = settings["ServerOnly"]?.BoolValue ?? stored == 1;
         network.Orphaned = (NetworkOrphaned)(settings["Orphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
-        network.Flags = (NetworkFlags)(settings["Flags"]?.ByteValue ?? (byte)NetworkFlags.None);
-        network.SendInterval = Math.Max(1, (int)(settings["SendInterval"]?.ByteValue ?? 1));
         network.Visibility = (NetworkVisibility)(settings["Visibility"]?.ByteValue ?? (byte)NetworkVisibility.Default);
         float cullDistance = settings["CullDistance"]?.FloatValue ?? 0;
         network.CullDistance = float.IsFinite(cullDistance) && cullDistance > 0 ? cullDistance : 0;

@@ -34,20 +34,20 @@ internal readonly ref struct OwnershipStateMessage(
         reader.ReadBytesWithLength());
 }
 
-internal readonly record struct HandoffPoseMessage(Guid Identifier, Float3 Position, Quaternion Rotation, Float3 Scale)
+internal readonly record struct HandoffPoseMessage(byte Index, Float3 Position, Quaternion Rotation, Float3 Scale)
 {
-    internal const int Size = 16 + 12 + 16 + 12;
+    internal const int Size = 1 + 12 + 16 + 12;
 
     internal void Write(NetWriter writer)
     {
-        writer.WriteGuid(Identifier);
+        writer.WriteByte(Index);
         NetSerializers.WriteFloat3(writer, Position);
         NetSerializers.WriteQuaternion(writer, Rotation);
         NetSerializers.WriteFloat3(writer, Scale);
     }
 
     internal static HandoffPoseMessage Read(ref NetReader reader) => new(
-        reader.ReadGuid(),
+        reader.ReadByte(),
         NetSerializers.ReadFloat3(ref reader),
         NetSerializers.ReadQuaternion(ref reader),
         NetSerializers.ReadFloat3(ref reader));

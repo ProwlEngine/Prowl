@@ -45,6 +45,7 @@ public partial class NetworkingTests
         {
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
             GameObject mover = CreateGameObject("Mover");
+            mover.AddComponent<NetworkTransform>();
             scene.Add(mover);
             mover.Network.SpawnSerialized();
             uint netId = NetworkTestScene.Current.NetIdOf(mover);

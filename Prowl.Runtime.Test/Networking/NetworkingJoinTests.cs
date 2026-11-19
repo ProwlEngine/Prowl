@@ -14,6 +14,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Ticking");
+        go.AddComponent<NetworkTransform>();
         go.Network.Networked = true;
         scene.Add(go);
         MakeCurrent(scene);

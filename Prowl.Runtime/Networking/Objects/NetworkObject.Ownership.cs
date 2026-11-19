@@ -15,21 +15,21 @@ namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkObject
 {
-    /// <summary>The poses of the tree's objects that sync their transform.</summary>
+    /// <summary>The pose of each of its transforms.</summary>
     internal void WriteHandoffPoses(NetWriter output)
     {
         using NetWriter poses = new();
         uint count = 0;
-        foreach (GameObject go in GameObject.GetChildrenDeep().Prepend(GameObject))
+        foreach (NetworkTransform transform in Transforms)
         {
-            if (NetworkAccessor.IsExcludedFromNetwork(go) || System.FindEntry(go) != this ||
-                !go.Network.HasTransformSync)
+            if (transform.IsNotValid() || !transform.Syncs)
             {
                 continue;
             }
 
-            new HandoffPoseMessage(go.Identifier, go.Transform.LocalPosition,
-                go.Transform.LocalRotation, go.Transform.LocalScale).Write(poses);
+            Transform moved = transform.Moved.Transform;
+            new HandoffPoseMessage(transform.Index, moved.LocalPosition, moved.LocalRotation, moved.LocalScale)
+                .Write(poses);
             count++;
         }
 
@@ -47,15 +47,13 @@ internal sealed partial class NetworkObject
             throw new InvalidDataException("Handoff pose count exceeds the remaining data.");
         }
 
-        List<(GameObject Target, Float3 Position, Quaternion Rotation, Float3 Scale)> poses = new((int)count);
+        List<(NetworkTransform Transform, Float3 Position, Quaternion Rotation, Float3 Scale)> poses = new((int)count);
         for (uint i = 0; i < count; i++)
         {
             HandoffPoseMessage pose = HandoffPoseMessage.Read(ref reader);
-            Guid id = pose.Identifier;
             Float3 position = pose.Position, scale = pose.Scale;
             Quaternion rotation = pose.Rotation;
-            if (System.FindByIdentifier(id) is not GameObject go || !InHandoffTree(go) ||
-                NetworkAccessor.IsExcludedFromNetwork(go) || (!sender.IsHost && System.OwnerOf(go) != sender.Id))
+            if (pose.Index >= Transforms.Length || (!sender.IsHost && Owner != sender.Id))
             {
                 throw new InvalidDataException("A handoff contains an unknown or unauthorized transform.");
             }
@@ -66,7 +64,7 @@ internal sealed partial class NetworkObject
                 throw new InvalidDataException("A handoff contains an invalid transform.");
             }
 
-            poses.Add((go, position, Quaternion.Normalize(rotation), scale));
+            poses.Add((Transforms[pose.Index], position, Quaternion.Normalize(rotation), scale));
         }
 
         if (!reader.IsAtEnd)
@@ -74,16 +72,25 @@ internal sealed partial class NetworkObject
             throw new InvalidDataException("A handoff contains trailing bytes.");
         }
 
-        foreach ((GameObject go, Float3 position, Quaternion rotation, Float3 scale) in poses)
+        foreach ((NetworkTransform transform, Float3 position, Quaternion rotation, Float3 scale) in poses)
         {
-            if (go.Network.HasTransformSync)
+            if (transform.IsValid() && transform.Syncs)
             {
-                ApplyNetworkTransform(go, position, rotation, scale);
+                transform.Apply(position, rotation, scale);
+
+                // Older interpolation samples would pull it back from the pose it was handed over at.
+                transform.Sync.ClearHistory();
             }
         }
+    }
 
-        // Older interpolation samples would pull it back from the pose it was handed over at.
-        TransformSync.ClearHistory();
+    /// <summary>Forgets what its transforms had sent and received, as when its controller changes.</summary>
+    internal void ResetTransforms()
+    {
+        foreach (NetworkTransform transform in Transforms)
+        {
+            transform.Sync.Reset();
+        }
     }
 
     internal bool InHandoffTree(GameObject go)
@@ -112,10 +119,16 @@ internal sealed partial class NetworkObject
     internal void SendOwnershipState(Float3 velocity)
     {
         // A forced takeover starts from the host's latest accepted state, without interpolation delay.
-        if (!System.HasControl(GameObject) && TransformSync.Samples.Count > 0)
+        if (!System.HasControl(GameObject))
         {
-            TransformSample sample = TransformSync.Samples[^1];
-            ApplyNetworkTransform(GameObject, sample.Position, sample.Rotation, sample.Scale);
+            foreach (NetworkTransform transform in Transforms)
+            {
+                if (transform.IsValid() && transform.Sync.Samples.Count > 0)
+                {
+                    TransformSample sample = transform.Sync.Samples[^1];
+                    transform.Apply(sample.Position, sample.Rotation, sample.Scale);
+                }
+            }
         }
 
         // What changed so far goes ahead of the handoff, in order with it.

@@ -291,7 +291,6 @@
   "network.orphaned.desc": "Что происходит, когда владелец уходит.",
   "network.orphaned.destroy": "Удалить",
   "network.orphaned.host": "Отдать хосту",
-  "network.flags": "Сетевые флаги",
   "network.sync_transform": "Синхронизировать transform",
   "network.sync_transform.desc": "Тот, кто управляет, отправляет позицию, поворот и масштаб всем остальным.",
   "network.live": "Сейчас",

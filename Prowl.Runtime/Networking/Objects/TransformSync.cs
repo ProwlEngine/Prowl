@@ -16,9 +16,40 @@ internal readonly record struct TransformSample(double Time, Float3 Position, Qu
 ///     One networked object's transform: what its controller last sent, and what everyone else has received and
 ///     shows from it. The messages that carry it belong to <see cref="NetworkSystem" />; this decides what goes in them.
 /// </summary>
-internal sealed class TransformSync
+internal sealed class TransformSync(NetworkTransform? settings = null)
 {
     private const int MaxSamples = 32;
+
+    // The channels to send and take, and whether to blend, from the component it belongs to, or everything without one.
+    private TransformChannels Synced => ReferenceEquals(settings, null) ? TransformChannels.Pose : settings.Channels;
+    private bool Blends => ReferenceEquals(settings, null) || settings.Interpolate;
+    private int Interval => ReferenceEquals(settings, null) ? 1 : settings.Interval;
+
+    private void Apply(GameObject go, Float3 position, Quaternion rotation, Float3 scale)
+    {
+        if (!ReferenceEquals(settings, null))
+        {
+            settings.Apply(position, rotation, scale);
+            return;
+        }
+
+        go.Transform.LocalPosition = position;
+        go.Transform.LocalRotation = rotation;
+        go.Transform.LocalScale = scale;
+    }
+
+    // History taken under other settings would bring back poses the object no longer follows.
+    private (TransformChannels Synced, bool Blends) _settings = (TransformChannels.Pose, true);
+
+    private void NoteSettings()
+    {
+        (TransformChannels, bool) current = (Synced, Blends);
+        if (current != _settings)
+        {
+            _settings = current;
+            ClearHistory();
+        }
+    }
 
     // Quiet ticks before the final pose goes out reliably.
     private const int SettleTicks = 3;
@@ -58,7 +89,7 @@ internal sealed class TransformSync
     /// <summary>True once the object has come to rest and its exact pose has gone out reliably.</summary>
     public bool Settled { get; private set; }
 
-    /// <summary>Starts over, as for a new controller or new channel flags.</summary>
+    /// <summary>Starts over, as for a new controller.</summary>
     public void Reset()
     {
         _hasSent = false;
@@ -101,7 +132,7 @@ internal sealed class TransformSync
         Float3 position = t.LocalPosition;
         Quaternion rotation = t.LocalRotation;
         Float3 scale = t.LocalScale;
-        TransformChannels synced = SyncedChannels(go);
+        TransformChannels synced = Synced;
         TransformChannels changed = _hasSent ? Changes(synced, position, rotation, scale) : synced;
 
         TransformChannels channels;
@@ -163,6 +194,8 @@ internal sealed class TransformSync
     /// </summary>
     public TransformUpdate? Receive(GameObject go, uint tick, double sentAt, double now, TransformUpdate update)
     {
+        NoteSettings();
+
         // Unreliable, so older updates can arrive after newer ones.
         if (HasReceived && (int)(tick - LastReceivedTick) <= 0)
         {
@@ -181,8 +214,8 @@ internal sealed class TransformSync
             return null;
         }
 
-        // Use the host-supplied object policy, never channels chosen by the sender.
-        TransformChannels channels = update.Channels & (SyncedChannels(go) | TransformChannels.Exact |
+        // Use this peer's own component settings, never channels chosen by the sender.
+        TransformChannels channels = update.Channels & (Synced | TransformChannels.Exact |
                                                         TransformChannels.Resumed | TransformChannels.Teleport);
 
         // Channels left out are as they were in the latest update, or as the object is if there's none.
@@ -205,10 +238,10 @@ internal sealed class TransformSync
         HasReceived = true;
         LastReceivedTick = tick;
         AddSample(new TransformSample(sentAt, position, rotation, scale));
-        HasPendingInterpolation = !jump && (go.Network.Flags & NetworkFlags.NoInterpolation) == 0;
-        if (jump || (go.Network.Flags & NetworkFlags.NoInterpolation) != 0)
+        HasPendingInterpolation = !jump && Blends;
+        if (jump || !Blends)
         {
-            ApplyNetworkTransform(go, position, rotation, scale);
+            Apply(go, position, rotation, scale);
         }
 
         return update with { Channels = channels, Position = position, Rotation = rotation, Scale = scale };
@@ -225,18 +258,19 @@ internal sealed class TransformSync
         ClearHistory();
         HasReceived = true;
         LastReceivedTick = tick;
-        ApplyNetworkTransform(go, position, rotation, scale);
+        Apply(go, position, rotation, scale);
     }
 
     /// <summary>Shows the object where its controller had it, InterpolationDelay ago.</summary>
     public void Interpolate(GameObject go, double now)
     {
-        if (!HasPendingInterpolation || Samples.Count == 0 || (go.Network.Flags & NetworkFlags.NoInterpolation) != 0)
+        NoteSettings();
+        if (!HasPendingInterpolation || Samples.Count == 0 || !Blends)
         {
             return;
         }
 
-        double sendInterval = NetworkAccessor.SendIntervalOf(go) * Networking.TickInterval;
+        double sendInterval = Interval * Networking.TickInterval;
         double renderTime = _timeline.RenderTime(now, sendInterval, Networking.InterpolationDelay.TotalSeconds);
 
         // Drop samples nothing will blend from again: everything before the last one at or before renderTime.
@@ -258,7 +292,7 @@ internal sealed class TransformSync
             ? (float)Math.Clamp((renderTime - from.Time) / (to.Time - from.Time), 0, 1)
             : 1;
 
-        ApplyNetworkTransform(go, Maths.Lerp(from.Position, to.Position, t),
+        Apply(go, Maths.Lerp(from.Position, to.Position, t),
             Quaternion.Slerp(from.Rotation, to.Rotation, t), Maths.Lerp(from.Scale, to.Scale, t));
 
         // Keep the final sample for future updates, but stop applying it once playback catches up.

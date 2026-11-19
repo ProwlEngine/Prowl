@@ -90,14 +90,14 @@ public sealed class FakePeer : IDisposable
         Ready = SceneSnapshot + 8, SpawnStarted = SceneSnapshot + 9, SpawnFinished = SceneSnapshot + 10,
         StaticRpcToHost = SceneSnapshot + 11, StaticRpcFromHost = SceneSnapshot + 12,
         Orphaned = SceneSnapshot + 13, OwnershipState = SceneSnapshot + 14,
-        NetworkFlags = SceneSnapshot + 15, SnapshotAck = SceneSnapshot + 16,
-        SectionAdd = SceneSnapshot + 17, SectionRemove = SceneSnapshot + 18, SectionMove = SceneSnapshot + 19, Time = SceneSnapshot + 20,
-        SendInterval = SceneSnapshot + 21, Player = SceneSnapshot + 22;
+        SnapshotAck = SceneSnapshot + 15,
+        SectionAdd = SceneSnapshot + 16, SectionRemove = SceneSnapshot + 17, SectionMove = SceneSnapshot + 18, Time = SceneSnapshot + 19,
+        Player = SceneSnapshot + 20;
 
     private FakePeer(NetSession session)
     {
         Session = session;
-        foreach (ushort id in Enumerable.Range(SceneSnapshot, SectionMove - SceneSnapshot + 1).Select(i => (ushort)i).Append(SendInterval).Append(Player))
+        foreach (ushort id in Enumerable.Range(SceneSnapshot, SectionMove - SceneSnapshot + 1).Select(i => (ushort)i).Append(Player))
         {
             ushort captured = id;
             session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery, byte channel) =>
@@ -126,7 +126,7 @@ public sealed class FakePeer : IDisposable
     public bool AutoReady { get; set; } = true;
 
     // Positions received by object and snapshot tick, to resolve the deltas that name them.
-    private readonly Dictionary<(uint NetId, uint Generation), Dictionary<uint, (long X, long Y, long Z)>> _positions = new();
+    private readonly Dictionary<(uint NetId, uint Generation, byte Index), Dictionary<uint, (long X, long Y, long Z)>> _positions = new();
 
     /// <summary>Acknowledges every Snapshot that asks for it, as a real peer would.</summary>
     public bool AutoAck { get; set; } = true;
@@ -212,6 +212,7 @@ public sealed class FakePeer : IDisposable
             {
                 r.ReadVarUInt32(); r.ReadVarUInt32();
                 byte channels = r.ReadByte();
+                if ((channels & 64) != 0) r.ReadByte();
                 if ((channels & 16) != 0) r.ReadSingle();
                 if ((channels & 32) != 0) r.ReadByte();
                 if ((channels & 9) == 9) r.ReadBytes(12);
@@ -586,7 +587,6 @@ public partial class NetworkingTests : RuntimeTestBase
 
         go.Network.Networked = true;
         go.Network.Orphaned = NetworkOrphaned.ClearOwner;
-        go.Network.Flags = NetworkFlags.NoTransformSync;
         EchoObject stored = Serializer.Serialize(go);
         Assert.True(stored["Network"]["Networked"].BoolValue);
         Assert.False(stored["Network"].TryGet("Mode", out _));
@@ -594,12 +594,7 @@ public partial class NetworkingTests : RuntimeTestBase
         GameObject copy = Serializer.Deserialize<GameObject>(stored)!;
         Assert.True(copy.Network.Networked);
         Assert.Equal(NetworkOrphaned.ClearOwner, copy.Network.Orphaned);
-        Assert.Equal(NetworkFlags.NoTransformSync, copy.Network.Flags);
         copy.Dispose();
-
-        GameObject fresh = Serializer.Deserialize<GameObject>(plain)!;
-        Assert.Equal(NetworkFlags.None, fresh.Network.Flags);
-        fresh.Dispose();
     }
 
     public class ReferenceHolder : Component
@@ -670,6 +665,7 @@ public partial class NetworkingTests : RuntimeTestBase
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
 
             GameObject ship = CreateGameObject("Ship");
+            ship.AddComponent<NetworkTransform>();
             NetTestComponent component = ship.AddComponent<NetTestComponent>();
             scene.Add(ship);
             ship.Network.SpawnSerialized(aliceHere);
@@ -735,6 +731,7 @@ public partial class NetworkingTests : RuntimeTestBase
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
 
             GameObject crate = CreateGameObject("Crate");
+            crate.AddComponent<NetworkTransform>();
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
             crate.Network.SpawnSerialized();
@@ -892,6 +889,7 @@ public partial class NetworkingTests : RuntimeTestBase
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject original = CreateGameObject("Proxy");
         original.Network.Networked = true;
+        original.AddComponent<NetworkTransform>();
         using NetWriter spawn = new();
         NetworkTestScene.Current.WriteSpawn(original, -1, NetworkOrphaned.ClearOwner, spawn);
         LocalNetwork network = new();
@@ -916,10 +914,28 @@ public partial class NetworkingTests : RuntimeTestBase
     }
 
     // Transform channel bits, as Networking.Transform.cs defines them.
-    private const byte PositionChannel = 1, RotationChannel = 2, ScaleChannel = 4, ExactChannel = 8, ResumedChannel = 16, TeleportChannel = 32;
+    private const byte PositionChannel = 1, RotationChannel = 2, ScaleChannel = 4, ExactChannel = 8, ResumedChannel = 16, TeleportChannel = 32,
+        IndexedChannel = 64;
+
+    /// <summary>A NetworkTransform on the object, with the channels it syncs.</summary>
+    private static NetworkTransform SyncTransform(GameObject go, bool position = true, bool rotation = true, bool scale = true,
+        bool interpolate = true)
+    {
+        NetworkTransform transform = go.AddComponent<NetworkTransform>();
+        transform.SyncPosition = position;
+        transform.SyncRotation = rotation;
+        transform.SyncScale = scale;
+        transform.Interpolate = interpolate;
+        return transform;
+    }
 
     /// <summary>A Snapshot holding one transform group, at one tick and time, of a full, exact pose for each object.</summary>
     private static void WriteTransforms(NetWriter w, uint tick, double time,
+        params (uint NetId, uint Generation, Float3 Position, Quaternion Rotation, Float3 Scale)[] records) =>
+        WriteIndexedTransforms(w, tick, time, 0, records);
+
+    /// <summary>The same, for the transform at an index of each object.</summary>
+    private static void WriteIndexedTransforms(NetWriter w, uint tick, double time, byte index,
         params (uint NetId, uint Generation, Float3 Position, Quaternion Rotation, Float3 Scale)[] records)
     {
         w.WriteVarUInt32(0); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(tick);
@@ -928,7 +944,8 @@ public partial class NetworkingTests : RuntimeTestBase
         foreach (var record in records)
         {
             w.WriteVarUInt32(record.NetId); w.WriteVarUInt32(record.Generation);
-            w.WriteByte(PositionChannel | RotationChannel | ScaleChannel | ExactChannel);
+            w.WriteByte((byte)(PositionChannel | RotationChannel | ScaleChannel | ExactChannel | (index != 0 ? IndexedChannel : 0)));
+            if (index != 0) w.WriteByte(index);
             NetSerializers.WriteFloat3(w, record.Position);
             NetSerializers.WriteQuaternion(w, record.Rotation);
             NetSerializers.WriteFloat3(w, record.Scale);
@@ -936,7 +953,7 @@ public partial class NetworkingTests : RuntimeTestBase
     }
 
     internal readonly record struct TransformRecord(uint NetId, uint Generation, byte Channels, Float3? Position,
-        Quaternion? Rotation, Float3? Scale, uint BaselineAge = 0);
+        Quaternion? Rotation, Float3? Scale, uint BaselineAge = 0, byte Index = 0);
 
     internal static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], List<TransformRecord>> Decoded = new();
 
@@ -948,7 +965,7 @@ public partial class NetworkingTests : RuntimeTestBase
         Decoded.TryGetValue(message, out List<TransformRecord>? decoded) ? decoded : DecodeTransforms(message, null);
 
     internal static List<TransformRecord> DecodeTransforms(byte[] message,
-        Dictionary<(uint NetId, uint Generation), Dictionary<uint, (long X, long Y, long Z)>>? positions)
+        Dictionary<(uint NetId, uint Generation, byte Index), Dictionary<uint, (long X, long Y, long Z)>>? positions)
     {
         const double step = 0.01;
         NetReader r = new(message);
@@ -964,6 +981,8 @@ public partial class NetworkingTests : RuntimeTestBase
             {
                 uint netId = r.ReadVarUInt32(), generation = r.ReadVarUInt32();
                 byte channels = r.ReadByte();
+                byte index = (channels & IndexedChannel) != 0 ? r.ReadByte() : (byte)0;
+                channels = (byte)(channels & ~IndexedChannel);
                 if ((channels & ResumedChannel) != 0) r.ReadSingle();
                 if ((channels & TeleportChannel) != 0) r.ReadByte();
                 Float3? position = null;
@@ -975,8 +994,8 @@ public partial class NetworkingTests : RuntimeTestBase
                     age = r.ReadVarUInt32();
                     (long X, long Y, long Z) grid = (r.ReadVarInt64(), r.ReadVarInt64(), r.ReadVarInt64());
                     Dictionary<uint, (long X, long Y, long Z)>? history = null;
-                    if (positions != null && !positions.TryGetValue((netId, generation), out history))
-                        positions[(netId, generation)] = history = new();
+                    if (positions != null && !positions.TryGetValue((netId, generation, index), out history))
+                        positions[(netId, generation, index)] = history = new();
                     if (age != 0 && history != null && history.TryGetValue(tick - age, out var baseline))
                         grid = (baseline.X + grid.X, baseline.Y + grid.Y, baseline.Z + grid.Z);
                     if (age == 0 || history != null)
@@ -989,7 +1008,7 @@ public partial class NetworkingTests : RuntimeTestBase
                 Quaternion? rotation = (channels & RotationChannel) == 0 ? null :
                     (channels & ExactChannel) != 0 ? NetSerializers.ReadQuaternion(ref r) : NetSerializers.ReadCompactQuaternion(ref r);
                 Float3? scale = (channels & ScaleChannel) != 0 ? NetSerializers.ReadFloat3(ref r) : null;
-                records.Add(new TransformRecord(netId, generation, channels, position, rotation, scale, age));
+                records.Add(new TransformRecord(netId, generation, channels, position, rotation, scale, age, index));
             }
         }
 
@@ -1036,6 +1055,7 @@ public partial class NetworkingTests : RuntimeTestBase
             Networking.Networking.InterpolationDelay = TimeSpan.Zero;
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
             GameObject ship = CreateGameObject("Ship");
+            ship.AddComponent<NetworkTransform>();
             scene.Add(ship);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
             ship.Network.SpawnSerialized(owner);
@@ -1075,7 +1095,7 @@ public partial class NetworkingTests : RuntimeTestBase
             // Receive all three at once, before interpolation can discard samples.
             Networking.Networking.Receive();
             double[] times = Networking.Networking.System!.FindEntry(proxy)!
-                .TransformSync.Samples.Select(sample => sample.Time).ToArray();
+                .RootTransform!.Sync.Samples.Select(sample => sample.Time).ToArray();
             Assert.Equal(3, times.Length);
             Assert.InRange(times[2] - times[0], 0.06, 0.07);
         }
@@ -1120,12 +1140,14 @@ public partial class NetworkingTests : RuntimeTestBase
         NetworkTestScene.Current.WriteSpawn(level, owner: -1, NetworkOrphaned.Destroy, levelSpawn);
 
         GameObject ship = CreateGameObject("Ship");
+        ship.AddComponent<NetworkTransform>();
         ship.AddComponent<NetTestComponent>().Health = 9;
         ship.Network.Networked = true;
         using NetWriter shipSpawn = new();
         NetworkTestScene.Current.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, shipSpawn); // the first client is peer 1
 
         GameObject crate = CreateGameObject("Crate");
+        crate.AddComponent<NetworkTransform>();
         crate.Network.Networked = true;
         using NetWriter crateSpawn = new();
         NetworkTestScene.Current.WriteSpawn(crate, owner: -1, NetworkOrphaned.Destroy, crateSpawn);

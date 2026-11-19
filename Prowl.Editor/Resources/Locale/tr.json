@@ -291,7 +291,6 @@
   "network.orphaned.desc": "Sahibi ayrıldığında ne olacağı.",
   "network.orphaned.destroy": "Yok et",
   "network.orphaned.host": "Host'a ver",
-  "network.flags": "Ağ bayrakları",
   "network.sync_transform": "Transform'u senkronize et",
   "network.sync_transform.desc": "Onu kontrol eden; konum, dönüş ve ölçeği herkese gönderir.",
   "network.live": "Canlı",

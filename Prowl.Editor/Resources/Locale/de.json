@@ -291,7 +291,6 @@
   "network.orphaned.desc": "Was passiert, wenn sein Besitzer die Sitzung verlässt.",
   "network.orphaned.destroy": "Zerstören",
   "network.orphaned.host": "An den Host geben",
-  "network.flags": "Netzwerk-Flags",
   "network.sync_transform": "Transform synchronisieren",
   "network.sync_transform.desc": "Wer es steuert, sendet Position, Rotation und Skalierung an alle anderen.",
   "network.live": "Live",

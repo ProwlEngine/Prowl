@@ -40,14 +40,14 @@ internal sealed class SnapshotSystem : IDisposable
     private readonly List<Item> _items = new();
     private readonly NetWriter _itemBytes = new(4096);
     private readonly NetWriter _message = new(4096);
-    private readonly List<(NetworkObject Entry, TransformUpdate Update)> _moving = new();
+    private readonly List<(NetworkTransform Transform, TransformUpdate Update)> _moving = new();
     private readonly Dictionary<int, PeerState> _peers = new();
     private readonly HashSet<uint> _rejectedObjects = new();
-    private readonly List<(TransformGroup Group, NetworkObject Entry, TransformUpdate Update)> _relay = new();
+    private readonly List<(TransformGroup Group, NetworkTransform Transform, TransformUpdate Update)> _relay = new();
     private readonly NetworkSystem _scene;
-    private readonly List<NetworkObject> _scratchObjects = new();
+    private readonly List<NetworkTransform> _scratchTransforms = new();
 
-    private readonly List<(uint NetId, uint Generation)> _scratchPositions = new();
+    private readonly List<(uint NetId, uint Generation, byte Index)> _scratchPositions = new();
     private readonly List<NetPeer> _sendTargets = new();
     private readonly Stack<SentSnapshot> _sentPool = new();
     private readonly List<NetPeer> _targets = new();
@@ -104,38 +104,28 @@ internal sealed class SnapshotSystem : IDisposable
             return;
         }
 
-        foreach (GameObject go in TreeOf(root))
+        if (_scene.FindEntry(root) is { } entry)
         {
-            if (EntryAt(go) is { } entry)
+            foreach (NetworkTransform transform in entry.Transforms)
             {
-                state.Poses.Remove(entry);
+                state.Poses.Remove(transform);
             }
         }
     }
 
-    private static List<GameObject> TreeOf(GameObject root) => [root, .. root.GetChildrenDeep()];
-
-    /// <summary>The networked object rooted at <paramref name="go" />, if it is one.</summary>
-    private NetworkObject? EntryAt(GameObject go) =>
-        _scene.Entries.TryGetValue(go.Identifier, out NetworkObject? entry) && entry.GameObject == go ? entry : null;
-
     /// <summary><paramref name="peer" /> no longer has <paramref name="root" />'s tree: forgets what it was owed and knew of it.</summary>
     internal void Withdraw(NetPeer peer, GameObject root)
     {
-        if (!_peers.TryGetValue(peer.Id, out PeerState? state))
+        if (!_peers.TryGetValue(peer.Id, out PeerState? state) || _scene.FindEntry(root) is not { } entry)
         {
             return;
         }
 
-        Delivered(peer, root);
-        foreach (GameObject go in TreeOf(root))
+        foreach (NetworkTransform transform in entry.Transforms)
         {
-            if (EntryAt(go) is { } entry)
-            {
-                state.SentPositions.Remove(entry);
-                state.Baselines.Remove(entry);
-            }
-
+            state.Poses.Remove(transform);
+            state.SentPositions.Remove(transform);
+            state.Baselines.Remove(transform);
         }
     }
 
@@ -193,11 +183,11 @@ internal sealed class SnapshotSystem : IDisposable
         return state;
     }
 
-    /// <summary>Whether <paramref name="tick" /> is one the object sends on, spread across ticks by its NetId.</summary>
-    private static bool SendsOn(NetworkObject? entry, uint tick)
+    /// <summary>Whether <paramref name="tick" /> is one the transform sends on, spread across ticks by its object's NetId.</summary>
+    private static bool SendsOn(NetworkTransform transform, NetworkObject entry, uint tick)
     {
-        int interval = entry == null ? 1 : NetworkAccessor.SendIntervalOf(entry.GameObject);
-        return interval <= 1 || (tick + entry!.NetId) % (uint)interval == 0;
+        int interval = transform.Interval;
+        return interval <= 1 || (tick + entry.NetId) % (uint)interval == 0;
     }
 
     private uint Epoch => (uint)_scene.SceneGeneration;
@@ -235,28 +225,28 @@ internal sealed class SnapshotSystem : IDisposable
     {
         foreach (PeerState state in _peers.Values)
         {
-            _scratchObjects.Clear();
-            _scratchObjects.AddRange(state.SentPositions.Keys.Where(entry => !IsCurrent(entry)));
-            foreach (NetworkObject entry in _scratchObjects)
+            _scratchTransforms.Clear();
+            _scratchTransforms.AddRange(state.SentPositions.Keys.Where(transform => !IsCurrent(transform)));
+            foreach (NetworkTransform transform in _scratchTransforms)
             {
-                state.SentPositions.Remove(entry);
-                state.Baselines.Remove(entry);
+                state.SentPositions.Remove(transform);
+                state.Baselines.Remove(transform);
             }
 
             _scratchPositions.Clear();
-            foreach ((uint netId, uint generation) in state.ReceivedPositions.Keys)
+            foreach ((uint NetId, uint Generation, byte Index) key in state.ReceivedPositions.Keys)
             {
-                if (!_scene.Entries.TryGetNet(netId, out NetworkObject? entry) || entry.Generation != generation)
+                if (!_scene.Entries.TryGetNet(key.NetId, out NetworkObject? entry) || entry.Generation != key.Generation ||
+                    key.Index >= entry.Transforms.Length)
                 {
-                    _scratchPositions.Add((netId, generation));
+                    _scratchPositions.Add(key);
                 }
             }
 
-            foreach ((uint NetId, uint Generation) key in _scratchPositions)
+            foreach ((uint NetId, uint Generation, byte Index) key in _scratchPositions)
             {
                 state.ReceivedPositions.Remove(key);
             }
-
         }
     }
 
@@ -264,49 +254,57 @@ internal sealed class SnapshotSystem : IDisposable
     {
         foreach (NetworkObject entry in _scene.Entries.Values)
         {
-            GameObject go = entry.GameObject;
-            if (!go.IsValid() || !SendsOn(entry, tick) || !go.Network.HasTransformSync || !_scene.HasControl(go))
+            NetworkTransform[] transforms = entry.Transforms;
+            if (transforms.Length == 0 || !entry.GameObject.IsValid() || !_scene.HasControl(entry.GameObject))
             {
                 continue;
             }
 
-            double previous = NetworkAccessor.SendIntervalOf(go) > 1 ? entry.LastCaptureTime : _scene.LastTransformTime;
-            entry.LastCaptureTime = now;
-            if (entry.TransformSync.Capture(go, now, previous) is not { } update)
+            foreach (NetworkTransform transform in transforms)
             {
-                continue;
-            }
+                if (transform.IsNotValid() || !transform.Syncs || !SendsOn(transform, entry, tick))
+                {
+                    continue;
+                }
 
-            // The pose it came to rest at must arrive; poses on the way there only need to keep coming.
-            if ((update.Channels & TransformChannels.Exact) != 0)
-            {
-                Pend(entry, new PendingPose(tick, 0, _scene.Session!.LocalPeer!.Id, tick, now, update), -1);
-            }
-            else
-            {
-                _moving.Add((entry, update));
-                ClearPose(entry);
+                double previous = transform.Interval > 1 ? transform.LastCaptureTime : _scene.LastTransformTime;
+                transform.LastCaptureTime = now;
+                if (transform.Sync.Capture(transform.Moved, now, previous) is not { } update)
+                {
+                    continue;
+                }
+
+                // The pose it came to rest at must arrive; poses on the way there only need to keep coming.
+                if ((update.Channels & TransformChannels.Exact) != 0)
+                {
+                    Pend(transform, new PendingPose(tick, 0, _scene.Session!.LocalPeer!.Id, tick, now, update), -1);
+                }
+                else
+                {
+                    _moving.Add((transform, update));
+                    ClearPose(transform);
+                }
             }
         }
     }
 
-    private void Pend(NetworkObject entry, PendingPose pose, int except)
+    private void Pend(NetworkTransform transform, PendingPose pose, int except)
     {
         foreach (NetPeer peer in Targets())
         {
-            if (peer.Id != except && Sees(entry, peer))
+            if (peer.Id != except && Sees(transform.Entry, peer))
             {
-                State(peer).Poses[entry] = pose;
+                State(peer).Poses[transform] = pose;
             }
         }
     }
 
     /// <summary>It's moving again: nobody needs the pose it rested at any more.</summary>
-    private void ClearPose(NetworkObject entry)
+    private void ClearPose(NetworkTransform transform)
     {
         foreach (PeerState state in _peers.Values)
         {
-            state.Poses.Remove(entry);
+            state.Poses.Remove(transform);
         }
     }
 
@@ -321,31 +319,31 @@ internal sealed class SnapshotSystem : IDisposable
         uint resend = ResendTicks(peer);
         _items.Clear();
         _itemBytes.Reset();
-        foreach ((NetworkObject entry, TransformUpdate update) in _moving)
+        foreach ((NetworkTransform transform, TransformUpdate update) in _moving)
         {
-            if (Sees(entry, peer))
+            if (Sees(transform.Entry, peer))
             {
-                AddRecord(tick, now, entry, update, null, state, tick);
+                AddRecord(tick, now, transform, update, null, state, tick);
             }
         }
 
-        _scratchObjects.Clear();
-        foreach ((NetworkObject entry, PendingPose pose) in state.Poses)
+        _scratchTransforms.Clear();
+        foreach ((NetworkTransform transform, PendingPose pose) in state.Poses)
         {
-            if (!entry.GameObject.IsValid() || !_scene.Entries.TryGetNet(entry.NetId, out NetworkObject? current) ||
-                current != entry || ControllerOf(entry.GameObject) != pose.Controller || !Sees(entry, peer))
+            if (!IsCurrent(transform) || ControllerOf(transform.Entry!.GameObject) != pose.Controller ||
+                !Sees(transform.Entry, peer))
             {
-                _scratchObjects.Add(entry);
+                _scratchTransforms.Add(transform);
             }
             else if (pose.Changed > pose.LastSent || tick - pose.LastSent >= resend)
             {
-                AddRecord(pose.ControllerTick, pose.SentAt, entry, pose.Update, entry, state, tick);
+                AddRecord(pose.ControllerTick, pose.SentAt, transform, pose.Update, transform, state, tick);
             }
         }
 
-        foreach (NetworkObject entry in _scratchObjects)
+        foreach (NetworkTransform transform in _scratchTransforms)
         {
-            state.Poses.Remove(entry);
+            state.Poses.Remove(transform);
         }
 
         if (_items.Count > 0)
@@ -355,28 +353,29 @@ internal sealed class SnapshotSystem : IDisposable
     }
 
     /// <summary>Adds a transform record, its moving position as a step from the latest one the peer acknowledged.</summary>
-    private void AddRecord(uint groupTick, double sentAt, NetworkObject entry, TransformUpdate update,
-        NetworkObject? pose, PeerState state, uint tick)
+    private void AddRecord(uint groupTick, double sentAt, NetworkTransform transform, TransformUpdate update,
+        NetworkTransform? pose, PeerState state, uint tick)
     {
+        NetworkObject entry = transform.Entry!;
         int offset = _itemBytes.Length;
-        TransformRecord record = new(entry.NetId, entry.Generation, update);
+        TransformRecord record = new(entry.NetId, entry.Generation, update, Index: transform.Index);
         GridPosition grid = default;
         if (record.HasGridPosition)
         {
             grid = GridPosition.Of(update.Position, PositionStep);
             record = record with { Grid = grid };
-            if (state.Baselines.TryGetValue(entry, out (uint Tick, GridPosition Grid) baseline) &&
+            if (state.Baselines.TryGetValue(transform, out (uint Tick, GridPosition Grid) baseline) &&
                 tick - baseline.Tick is > 0 and < MaxBaselineAge)
             {
                 record = record with { BaselineAge = tick - baseline.Tick, Grid = grid - baseline.Grid };
             }
 
-            PositionsOf(state.SentPositions, entry).Add(tick, grid);
+            PositionsOf(state.SentPositions, transform).Add(tick, grid);
         }
 
         record.Write(_itemBytes);
         _items.Add(new Item(groupTick, sentAt, offset, _itemBytes.Length - offset, pose,
-            record.HasGridPosition ? entry : null, grid));
+            record.HasGridPosition ? transform : null, grid));
     }
 
     private static PositionHistory PositionsOf<TKey>(Dictionary<TKey, PositionHistory> histories, TKey key)
@@ -390,9 +389,11 @@ internal sealed class SnapshotSystem : IDisposable
         return history;
     }
 
-    private bool IsCurrent(NetworkObject entry) => entry.GameObject.IsValid() &&
-                                                  _scene.Entries.TryGetNet(entry.NetId, out NetworkObject? current) &&
-                                                  current == entry;
+    /// <summary>True while the transform is still one of a networked object this peer has.</summary>
+    private bool IsCurrent(NetworkTransform transform) =>
+        transform.IsValid() && transform.Entry is { } entry && entry.GameObject.IsValid() &&
+        _scene.Entries.TryGetNet(entry.NetId, out NetworkObject? current) && current == entry &&
+        transform.Index < entry.Transforms.Length && ReferenceEquals(entry.Transforms[transform.Index], transform);
 
     /// <summary>Splits the items into snapshots that fit the connection, and sends them.</summary>
     private void SendItems(NetPeer peer, PeerState? state, uint tick, Connection connection)
@@ -434,11 +435,11 @@ internal sealed class SnapshotSystem : IDisposable
             for (int i = start; i < end; i++)
             {
                 Item item = _items[i];
-                if (item.Pose is { } entry)
+                if (item.Pose is { } pose)
                 {
                     sent ??= Rent(tick);
-                    sent.Poses.Add(entry);
-                    state.Poses[entry] = state.Poses[entry] with { LastSent = tick };
+                    sent.Poses.Add(pose);
+                    state.Poses[pose] = state.Poses[pose] with { LastSent = tick };
                 }
                 else if (item.Moved is { } moved)
                 {
@@ -601,14 +602,16 @@ internal sealed class SnapshotSystem : IDisposable
             for (uint i = 0; i < group.Count; i++)
             {
                 TransformRecord record = TransformRecord.Read(ref reader);
-                (uint netId, uint generation, TransformUpdate update, _, _) = record;
+                (uint netId, uint generation, TransformUpdate update) = (record.NetId, record.Generation, record.Update);
                 if (!_scene.Entries.TryGetNet(netId, out NetworkObject? entry) || !entry.GameObject.IsValid() ||
-                    entry.Generation != generation)
+                    entry.Generation != generation || record.Index >= entry.Transforms.Length ||
+                    entry.Transforms[record.Index].IsNotValid())
                 {
                     state.RejectedObjects.Add(netId);
                     continue;
                 }
 
+                NetworkTransform transform = entry.Transforms[record.Index];
                 if (record.HasGridPosition)
                 {
                     if (ResolvePosition(state, header.Tick, record) is not { } position)
@@ -621,12 +624,12 @@ internal sealed class SnapshotSystem : IDisposable
                 }
 
                 // From a client, only for what it owns.
-                if (entry.GameObject.Network.HasTransformSync && !_scene.HasControl(entry.GameObject) &&
+                if (transform.Syncs && !_scene.HasControl(entry.GameObject) &&
                     (sender.IsHost || entry.Owner == sender.Id) &&
-                    entry.TransformSync.Receive(entry.GameObject, group.Tick, group.SentAt, now, update) is
+                    transform.Sync.Receive(transform.Moved, group.Tick, group.SentAt, now, update) is
                         { } accepted && _scene.IsHost)
                 {
-                    _relay.Add((group, entry, accepted));
+                    _relay.Add((group, transform, accepted));
                 }
             }
         }
@@ -650,7 +653,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>The position a record carries, or null when it steps from a position this peer doesn't have.</summary>
     private Float3? ResolvePosition(PeerState state, uint tick, TransformRecord record)
     {
-        PositionHistory history = PositionsOf(state.ReceivedPositions, (record.NetId, record.Generation));
+        PositionHistory history = PositionsOf(state.ReceivedPositions, (record.NetId, record.Generation, record.Index));
         GridPosition grid = record.Grid;
         if (record.BaselineAge != 0)
         {
@@ -673,16 +676,16 @@ internal sealed class SnapshotSystem : IDisposable
     private void Relay(NetPeer sender)
     {
         bool moving = false;
-        foreach ((TransformGroup group, NetworkObject entry, TransformUpdate update) in _relay)
+        foreach ((TransformGroup group, NetworkTransform transform, TransformUpdate update) in _relay)
         {
             if ((update.Channels & TransformChannels.Exact) != 0)
             {
-                Pend(entry, new PendingPose(_scene.Tick + 1, 0, sender.Id, group.Tick, group.SentAt, update),
+                Pend(transform, new PendingPose(_scene.Tick + 1, 0, sender.Id, group.Tick, group.SentAt, update),
                     sender.Id);
             }
             else
             {
-                ClearPose(entry);
+                ClearPose(transform);
                 moving = true;
             }
         }
@@ -713,11 +716,11 @@ internal sealed class SnapshotSystem : IDisposable
     {
         _items.Clear();
         _itemBytes.Reset();
-        foreach ((TransformGroup group, NetworkObject entry, TransformUpdate update) in _relay)
+        foreach ((TransformGroup group, NetworkTransform transform, TransformUpdate update) in _relay)
         {
-            if ((update.Channels & TransformChannels.Exact) == 0 && Sees(entry, peer))
+            if ((update.Channels & TransformChannels.Exact) == 0 && Sees(transform.Entry, peer))
             {
-                AddRecord(group.Tick, group.SentAt, entry, update, null, state, _scene.Tick);
+                AddRecord(group.Tick, group.SentAt, transform, update, null, state, _scene.Tick);
             }
         }
     }
@@ -756,33 +759,33 @@ internal sealed class SnapshotSystem : IDisposable
             }
 
             // A pose the peer couldn't place stays owed, and goes again at once; the rest is done if nothing changed since.
-            foreach (NetworkObject entry in sent.Poses)
+            foreach (NetworkTransform transform in sent.Poses)
             {
-                if (!state.Poses.TryGetValue(entry, out PendingPose pose))
+                if (!state.Poses.TryGetValue(transform, out PendingPose pose))
                 {
                     continue;
                 }
 
-                if (_rejectedObjects.Contains(entry.NetId))
+                if (transform.Entry is { } owner && _rejectedObjects.Contains(owner.NetId))
                 {
-                    state.Poses[entry] = pose with { LastSent = 0 };
+                    state.Poses[transform] = pose with { LastSent = 0 };
                 }
                 else if (pose.Changed <= sent.Tick)
                 {
-                    state.Poses.Remove(entry);
+                    state.Poses.Remove(transform);
                 }
             }
 
             // A tick that carried the object twice is no baseline: the peer may hold either.
-            foreach ((NetworkObject entry, uint tick, GridPosition grid) in sent.Positions)
+            foreach ((NetworkTransform transform, uint tick, GridPosition grid) in sent.Positions)
             {
-                if (!_rejectedObjects.Contains(entry.NetId) &&
-                    state.SentPositions.TryGetValue(entry, out PositionHistory? history) &&
+                if (transform.Entry is { } owner && !_rejectedObjects.Contains(owner.NetId) &&
+                    state.SentPositions.TryGetValue(transform, out PositionHistory? history) &&
                     history.TryGet(tick, out GridPosition latest) && latest == grid &&
-                    (!state.Baselines.TryGetValue(entry, out (uint Tick, GridPosition Grid) baseline) ||
+                    (!state.Baselines.TryGetValue(transform, out (uint Tick, GridPosition Grid) baseline) ||
                      (int)(tick - baseline.Tick) > 0))
                 {
-                    state.Baselines[entry] = (tick, grid);
+                    state.Baselines[transform] = (tick, grid);
                 }
             }
 
@@ -794,7 +797,10 @@ internal sealed class SnapshotSystem : IDisposable
         {
             if (_scene.Entries.TryGetNet(netId, out NetworkObject? entry))
             {
-                state.Baselines.Remove(entry);
+                foreach (NetworkTransform transform in entry.Transforms)
+                {
+                    state.Baselines.Remove(transform);
+                }
             }
         }
     }
@@ -813,8 +819,8 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>The poses and positions one sent snapshot carried that wait on its acknowledgement. Pooled.</summary>
     private sealed class SentSnapshot
     {
-        public readonly List<NetworkObject> Poses = new();
-        public readonly List<(NetworkObject Entry, uint Tick, GridPosition Grid)> Positions = new();
+        public readonly List<NetworkTransform> Poses = new();
+        public readonly List<(NetworkTransform Transform, uint Tick, GridPosition Grid)> Positions = new();
         public uint Tick;
     }
 
@@ -827,23 +833,23 @@ internal sealed class SnapshotSystem : IDisposable
         double GroupSentAt,
         int Offset,
         int Length,
-        NetworkObject? Pose,
-        NetworkObject? Moved = null,
+        NetworkTransform? Pose,
+        NetworkTransform? Moved = null,
         GridPosition Grid = default);
 
     /// <summary>What this peer owes another, and has received from it.</summary>
     private sealed class PeerState
     {
-        public readonly Dictionary<NetworkObject, PendingPose> Poses = new();
+        public readonly Dictionary<NetworkTransform, PendingPose> Poses = new();
         public readonly List<uint> Received = new();
         public readonly HashSet<uint> RejectedObjects = new();
         public readonly Dictionary<uint, SentSnapshot> Sent = new();
         public readonly Queue<uint> SentOrder = new();
 
         // Positions sent the other by snapshot tick and the latest it acknowledged, and positions received from it.
-        public readonly Dictionary<NetworkObject, PositionHistory> SentPositions = new();
-        public readonly Dictionary<NetworkObject, (uint Tick, GridPosition Grid)> Baselines = new();
-        public readonly Dictionary<(uint NetId, uint Generation), PositionHistory> ReceivedPositions = new();
+        public readonly Dictionary<NetworkTransform, PositionHistory> SentPositions = new();
+        public readonly Dictionary<NetworkTransform, (uint Tick, GridPosition Grid)> Baselines = new();
+        public readonly Dictionary<(uint NetId, uint Generation, byte Index), PositionHistory> ReceivedPositions = new();
     }
 
     /// <summary>Recent grid positions of one object by snapshot tick. A tick that carried two different ones is no baseline.</summary>

@@ -13,8 +13,6 @@ namespace Prowl.Runtime.Networking;
 public sealed class NetworkAccessor
 {
     private readonly GameObject _object;
-    private NetworkFlags _flags;
-    private int _sendInterval = 1;
     private bool _networked;
     private bool _serverOnly;
     private NetworkOrphaned _orphaned = NetworkOrphaned.Destroy;
@@ -65,51 +63,6 @@ public sealed class NetworkAccessor
 
             Networking.System?.SetOrphaned(_object, value);
             _orphaned = value;
-        }
-    }
-
-    /// <summary>Options that disable transform channels or interpolation. Only the host may change these after spawning.</summary>
-    public NetworkFlags Flags
-    {
-        get => _flags;
-        set
-        {
-            if (!ValidFlags(value))
-            {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
-
-            if (value == _flags)
-            {
-                return;
-            }
-
-            Networking.System?.SetNetworkFlags(_object, value);
-            _flags = value;
-        }
-    }
-
-    /// <summary>
-    ///     How many ticks apart the object's moving transform goes out, from 1 (every tick) to 255. Only the host may
-    ///     change this after spawning. [Sync] values have their own, per component: see <see cref="SetSendInterval" />.
-    /// </summary>
-    public int SendInterval
-    {
-        get => _sendInterval;
-        set
-        {
-            if (value < 1 || value > MaxSendInterval)
-            {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
-
-            if (value == _sendInterval)
-            {
-                return;
-            }
-
-            Networking.System?.SetSendInterval(_object, value);
-            _sendInterval = value;
         }
     }
 
@@ -256,15 +209,11 @@ public sealed class NetworkAccessor
     /// <summary>The networked object this one is, or is part of, or null.</summary>
     public GameObject? Root => RootOf(_object);
 
-    // Static objects don't move, so there is nothing to sync.
-    internal bool HasTransformSync =>
-        !_object.IsStatic && (Flags & NetworkFlags.NoTransformSync) != NetworkFlags.NoTransformSync;
-
     internal bool IsExcluded => IsExcludedFromNetwork(_object);
 
     /// <summary>
     ///     Moves the object to a world pose at once, so peers jump there instead of blending across. Only the peer
-    ///     that controls it may, while it is networked.
+    ///     that controls it may, while it is networked. It tags what the object's <see cref="NetworkTransform" /> sends.
     /// </summary>
     public void Teleport(Float3 position, Quaternion rotation)
     {
@@ -280,7 +229,10 @@ public sealed class NetworkAccessor
                 throw new InvalidOperationException("Only the peer that controls a networked object can teleport it.");
             }
 
-            entry.TransformSync.Teleport();
+            if (entry.RootTransform is { } transform)
+            {
+                transform.Sync.Teleport();
+            }
         }
 
         _object.Transform.Position = position;
@@ -342,21 +294,13 @@ public sealed class NetworkAccessor
         system.SetVisibilityOverride(_object, peer, visible);
     }
 
-    internal bool SyncsTransform(NetworkFlags exclusion) => (Flags & exclusion) == 0;
     internal const int MaxSendInterval = byte.MaxValue;
 
-    internal void ApplyFlags(NetworkFlags value) => _flags = value;
-    internal void ApplySendInterval(int value) => _sendInterval = value;
     internal void ApplyOrphaned(NetworkOrphaned value) => _orphaned = value;
-
-    internal static bool ValidFlags(NetworkFlags value) =>
-        (value & ~(NetworkFlags.NoTransformSync | NetworkFlags.NoInterpolation)) == 0;
 
     internal static bool NetworkedOf(GameObject go) => go._network?._networked == true;
 
     internal static bool ServerOnlyOf(GameObject go) => go._network?._serverOnly == true;
-
-    internal static int SendIntervalOf(GameObject go) => go._network?.SendInterval ?? 1;
 
     /// <summary>The ticks between sends of a component's [Sync] state: its own, or 1 when it has none set.</summary>
     internal static int SendIntervalOf(Component component) =>

@@ -35,6 +35,35 @@ internal static class NetworkComponents
         }
     }
 
+    /// <summary>A tree's NetworkTransform components in build order, at most 255 of them.</summary>
+    public static NetworkTransform[] GatherTransforms(GameObject root)
+    {
+        List<NetworkTransform> found = new();
+        GatherTransforms(root, found);
+        if (found.Count > byte.MaxValue)
+        {
+            found.RemoveRange(byte.MaxValue, found.Count - byte.MaxValue);
+        }
+
+        return [.. found];
+    }
+
+    private static void GatherTransforms(GameObject go, List<NetworkTransform> found)
+    {
+        foreach (Component component in go.GetComponents<Component>())
+        {
+            if (component is NetworkTransform transform)
+            {
+                found.Add(transform);
+            }
+        }
+
+        foreach (GameObject child in go.Children)
+        {
+            GatherTransforms(child, found);
+        }
+    }
+
     /// <summary>A hash of the components' type names in order, for peers to check they built the same list.</summary>
     public static uint Hash(IReadOnlyList<Component> components)
     {

@@ -291,7 +291,6 @@
   "network.orphaned.desc": "所有者が抜けたときの扱い。",
   "network.orphaned.destroy": "破棄",
   "network.orphaned.host": "ホストに渡す",
-  "network.flags": "ネットワークフラグ",
   "network.sync_transform": "トランスフォームを同期",
   "network.sync_transform.desc": "制御者が位置・回転・スケールを他の全員に送ります。",
   "network.live": "ライブ",
