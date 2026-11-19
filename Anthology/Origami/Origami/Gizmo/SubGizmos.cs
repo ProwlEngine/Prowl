@@ -343,6 +343,7 @@ public class ScaleSubGizmo : ISubGizmo
     public struct ScaleState
     {
         public float StartDelta;
+        public Float2 StartPos;
         public Float3 StartScale;
         public Float3 Scale;
         public Float3 ScaleDelta;
@@ -397,6 +398,7 @@ public class ScaleSubGizmo : ISubGizmo
 
         var startDelta = DistanceFromOrigin2D(_gizmo, screenPos);
         _state.StartDelta = startDelta.HasValue ? startDelta.Value : 0;
+        _state.StartPos = screenPos;
         _state.StartScale = _gizmo.Scale;
         _state.Scale = Float3.One;
         _state.ScaleDelta = Float3.One;
@@ -407,6 +409,9 @@ public class ScaleSubGizmo : ISubGizmo
 
     public GizmoResult? Update(Ray ray, Float2 screenPos)
     {
+        if (_params.TransformKind == TransformKind.Plane && _params.Direction == GizmoDirection.View)
+            return UpdateUniform(screenPos);
+
         var delta = DistanceFromOrigin2D(_gizmo, screenPos);
         if (!delta.HasValue)
             return null;
@@ -440,6 +445,21 @@ public class ScaleSubGizmo : ISubGizmo
         _state.Scale = scale;
 
 
+        return new GizmoResult { Scale = scale, StartScale = _state.StartScale, ScaleDelta = _state.ScaleDelta };
+    }
+
+    // The uniform handle sits on the gizmo's centre, so its scale follows the drag from where it was grabbed, not the
+    // distance to the centre: right or up grows, left or down shrinks, doubling or halving every gizmo length.
+    private GizmoResult UpdateUniform(Float2 screenPos)
+    {
+        float drag = (screenPos.X - _state.StartPos.X) - (screenPos.Y - _state.StartPos.Y);
+        float factor = MathF.Pow(2f, drag / MathF.Max(1f, _gizmo.GizmoSize));
+        if (_gizmo.Snapping)
+            factor = MathF.Max(GizmoUtils.RoundToInterval(factor, _gizmo.SnapScale), _gizmo.SnapScale);
+
+        var scale = Float3.One * factor;
+        _state.ScaleDelta = scale / _state.Scale;
+        _state.Scale = scale;
         return new GizmoResult { Scale = scale, StartScale = _state.StartScale, ScaleDelta = _state.ScaleDelta };
     }
 
