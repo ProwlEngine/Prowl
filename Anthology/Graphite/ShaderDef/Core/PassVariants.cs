@@ -461,14 +461,16 @@ internal sealed class PassVariants
     private void Queue(int key, Slot slot, Action work, CompilePriority priority)
     {
         slot.Job = CompileQueue.Enqueue(work, priority);
-        slot.Job.Done.ContinueWith(_ =>
+        // UnsafeOnCompleted leaves the caller's execution context behind, so a compile waiting in the queue does
+        // not keep the caller's AsyncLocal values alive.
+        slot.Job.Done.ConfigureAwait(false).GetAwaiter().UnsafeOnCompleted(() =>
         {
             lock (this)
             {
                 if (_slots.GetValueOrDefault(key) == slot)
                     Poll(key, slot);
             }
-        }, TaskScheduler.Default);
+        });
     }
 
     // A new variant every time, so a baked one seeded in is never changed and seeds again as it shipped

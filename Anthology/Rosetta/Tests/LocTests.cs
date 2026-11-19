@@ -7,6 +7,53 @@ public class LocTests
 {
     private static string LocalizationPath => Path.Combine(AppContext.BaseDirectory, "Localization", "{locale}.json");
 
+    private sealed class ContextProbeProvider : ILocalizationProvider
+    {
+        public readonly ManualResetEventSlim Reloaded = new();
+        public ExecutionContext? Seen;
+        private bool _changed;
+
+        public event EventHandler? Changed;
+
+        public bool SupportsLocale(string locale) => true;
+
+        public IReadOnlyDictionary<string, string> Load(string locale)
+        {
+            if (_changed)
+            {
+                Seen = ExecutionContext.Capture();
+                Reloaded.Set();
+            }
+            return new Dictionary<string, string>();
+        }
+
+        public void RaiseChanged()
+        {
+            _changed = true;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    // The reload timer lives as long as the process, so whatever it copied from the thread that first touched
+    // Loc would never be freed.
+    [Fact]
+    public void TheReloadTimer_RunsWithoutTheExecutionContextOfTheThreadThatFirstUsedLoc()
+    {
+        AsyncLocal<object?> local = new() { Value = new object() };
+        ContextProbeProvider provider = new();
+        Loc.Configure(cfg => cfg.SetFallbackLocale("en").AddProvider(provider).SetLocale("en"));
+
+        ExecutionContext? none = null;
+        Thread bare = new(() => none = ExecutionContext.Capture());
+        bare.UnsafeStart();
+        bare.Join();
+
+        provider.RaiseChanged();
+        Assert.True(provider.Reloaded.Wait(TimeSpan.FromSeconds(10)), "the reload never ran");
+        local.Value = null;
+        Assert.Same(none, provider.Seen);
+    }
+
     private void ConfigureEnglish(MissingKeyBehavior behavior = MissingKeyBehavior.ReturnFallback)
     {
         Loc.Configure(cfg => cfg

@@ -65,6 +65,9 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private bool _dragLabel;
     private int _dragDecimalPlaces;
     private bool _prefixCompact;
+    private bool _dragHandle = true; // type-tag scrub handle shown when no other prefix is set
+    private int _dragHandleDecimals = 2;
+    private Action? _onCommit;
 
     internal NumericFieldBuilder(Paper paper, string id, T value, Action<T> setter, OrigamiTheme theme)
     {
@@ -130,7 +133,15 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     /// Show a small colored label badge inside the field, before the text input.
     /// Useful for channel labels like "H", "S", "V" or "R", "G", "B".
     /// </summary>
-    public NumericFieldBuilder<T> Prefix(string text, Color color) { _prefixText = text; _prefixColor = color; return this; }
+    /// <remarks>Replaces any <see cref="DraggableLabel"/> / <see cref="DragHandle"/>: a plain label never scrubs.</remarks>
+    public NumericFieldBuilder<T> Prefix(string text, Color color)
+    {
+        _prefixText = text;
+        _prefixColor = color;
+        _dragLabel = false;
+        _prefixCompact = false;
+        return this;
+    }
     public NumericFieldBuilder<T> TrailingIcon(string glyph, Action? onClick = null)
     {
         _trailingIconGlyph = glyph;
@@ -155,6 +166,27 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         _prefixCompact = compact;
         return this;
     }
+
+    /// <summary>
+    /// Configure the type tag shown before the value that scrubs it when dragged: <c>f</c> in
+    /// <see cref="OrigamiTheme.FloatTag"/> for floating-point fields, <c>i</c> in
+    /// <see cref="OrigamiTheme.IntTag"/> for integer ones. Shift drags faster, Ctrl slower.
+    /// On by default; pass <c>false</c> to hide it. Ignored when <see cref="Prefix"/> or
+    /// <see cref="DraggableLabel"/> sets a label.
+    /// </summary>
+    public NumericFieldBuilder<T> DragHandle(bool enabled = true, int dragDecimalPlaces = 2)
+    {
+        _dragHandle = enabled;
+        _dragHandleDecimals = dragDecimalPlaces;
+        return this;
+    }
+
+    /// <summary>
+    /// Called once a change is final: after a typed or stepper edit, and when a scrub is released
+    /// (not on each scrub frame). Put expensive follow-up work here - saving to disk, rebuilding
+    /// resources - rather than in the setter, which runs every frame while scrubbing.
+    /// </summary>
+    public NumericFieldBuilder<T> OnCommit(Action onCommit) { _onCommit = onCommit; return this; }
 
     // ── Terminator ──────────────────────────────────────────────────
 
@@ -196,14 +228,17 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             tb.LeadingIcon(_leadingIconGlyph!);
         if (!string.IsNullOrEmpty(_trailingIconGlyph))
             tb.TrailingIcon(_trailingIconGlyph!, _trailingIconClick);
+        if (string.IsNullOrEmpty(_prefixText) && _dragHandle)
+            DraggableLabel(s_isFloatingPoint ? "f" : "i", s_isFloatingPoint ? _theme.FloatTag : _theme.IntTag, _dragHandleDecimals);
         if (!string.IsNullOrEmpty(_prefixText))
         {
             tb.Prefix(_prefixText!, _prefixColor ?? _theme.Ink.C400);
-            if (_dragLabel) tb.PrefixDrag(AddDelta);
-            if (_prefixCompact) tb.PrefixPad(5, 2);
+            if (_dragLabel) tb.PrefixDrag(AddDelta, BeginScrub, EndScrub, square: !_prefixCompact);
+            if (_prefixCompact) tb.PrefixPad(6, 6);
         }
         if (!string.IsNullOrEmpty(_suffixText)) tb.Suffix(_suffixText!);
         if (_stepper) tb.TrailingContent(DrawStepper);
+        if (_onCommit != null) tb.OnEditEnd(EndTypedEdit);
 
         if (_error != null) tb.Error(_error);
         if (_helperText != null) tb.HelperText(_helperText);
@@ -261,27 +296,68 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         if (_min is T mn && nv < mn) nv = mn;
         if (_max is T mx && nv > mx) nv = mx;
         _setter(nv);
+        _onCommit?.Invoke();
+    }
+
+    // Per-scrub state, kept in the field's root storage between frames and dropped on release.
+    private sealed class ScrubState
+    {
+        public double PerPixel;   // value change per pixel, fixed for the whole scrub
+        public double Remainder;  // what rounding dropped, carried so slow drags still move
+        public bool Changed;
+    }
+
+    private string ScrubKey => $"{_id}_scrub";
+
+    private void BeginScrub() => _paper.SetRootStorage<ScrubState?>(ScrubKey, new ScrubState { PerPixel = ScrubRate() });
+
+    private void EndScrub()
+    {
+        var state = _paper.GetRootStorage<ScrubState?>(ScrubKey);
+        _paper.SetRootStorage<ScrubState?>(ScrubKey, null);
+        if (state is { Changed: true }) _onCommit?.Invoke();
+    }
+
+    // Value change per pixel. An explicit Step sets it; otherwise it scales with the value's size at
+    // the start of the scrub (1% per pixel), so 0.0167 and 6500 both scrub at a usable rate.
+    private double ScrubRate()
+    {
+        if (_step is T s && s != T.Zero) return double.CreateSaturating(T.Abs(s)) * 0.5;
+        double mag = Math.Abs(double.CreateSaturating(_value)) * 0.01;
+        return s_isFloatingPoint
+            ? (mag > 0 ? mag : 0.01)
+            : Math.Max(mag, 0.25);
     }
 
     private void AddDelta(float dx)
     {
-        // Default adjustment
-        float mult = 1;
-        int decimalPlaces = _dragDecimalPlaces; // snap to this resolution
-        double cur = Convert.ToDouble(_value, _culture);
-        double stepv = _step is T s ? Convert.ToDouble(s, _culture) : (s_isFloatingPoint ? 0.1 : 1.0);
+        // Normally created by BeginScrub; if the drag-start event hasn't fired yet, start one now.
+        var state = _paper.GetRootStorage<ScrubState?>(ScrubKey);
+        if (state == null)
+        {
+            state = new ScrubState { PerPixel = ScrubRate() };
+            _paper.SetRootStorage<ScrubState?>(ScrubKey, state);
+        }
 
-        // Modifier Keys
-        // Shift - Speed/bigger adjustment (x4) and snap to 1 higher decimal place
-        // Ctrl - Precision adjustment (x0.1) and snap to 1 lower decimal place 
-        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift)) { mult = 4f; decimalPlaces--; }
-        else if (_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl)) { mult = 0.1f; decimalPlaces++; }
+        // Shift - faster (x4), Ctrl - finer (x0.1).
+        double mult = 1;
+        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift)) mult = 4;
+        else if (_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl)) mult = 0.1;
+        double perPixel = state.PerPixel * mult;
 
-        cur += dx * stepv * 0.5 * mult;
-        cur = (s_isFloatingPoint) ? Math.Round(cur, decimalPlaces) : Math.Round(cur);
-        if (_min is T mn) cur = Math.Max(cur, Convert.ToDouble(mn, _culture));
-        if (_max is T mx) cur = Math.Min(cur, Convert.ToDouble(mx, _culture));
-        _setter(T.CreateChecked(cur));
+        // Snap to the precision one pixel can express, but never coarser than the caller asked for.
+        int decimals = Math.Clamp(Math.Max(_dragDecimalPlaces, (int)Math.Ceiling(-Math.Log10(perPixel))), 0, 15);
+
+        double cur = double.CreateSaturating(_value);
+        double target = cur + state.Remainder + dx * perPixel;
+        double next = s_isFloatingPoint ? Math.Round(target, decimals) : Math.Round(target);
+        double rem = target - next;
+        if (_min is T mn && next < double.CreateSaturating(mn)) { next = double.CreateSaturating(mn); rem = 0; }
+        if (_max is T mx && next > double.CreateSaturating(mx)) { next = double.CreateSaturating(mx); rem = 0; }
+        state.Remainder = rem;
+        if (next == cur) return;
+        state.Changed = true;
+        _setter(T.CreateSaturating(next)); // saturate: an unsigned field scrubbed below 0 stops at 0
     }
 
     // ── Internals ───────────────────────────────────────────────────
@@ -374,5 +450,16 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         if (_max is T max && parsed > max) parsed = max;
 
         _setter(parsed);
+        // Typing applies as it goes; the commit waits for the edit to end
+        if (_onCommit != null) _paper.SetRootStorage(TypedKey, true);
+    }
+
+    private string TypedKey => $"{_id}_typed";
+
+    private void EndTypedEdit()
+    {
+        if (!_paper.GetRootStorage<bool>(TypedKey)) return;
+        _paper.SetRootStorage(TypedKey, false);
+        _onCommit?.Invoke();
     }
 }

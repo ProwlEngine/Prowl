@@ -80,7 +80,9 @@ sealed class CompileLane
                 try { done.SetResult(work()); }
                 catch (Exception e) { done.SetException(e); }
         }, maxStackSize: 64 * 1024 * 1024) { IsBackground = true, Name = "Prism compile" };
-        _thread.Start();
+        // Without the owner's execution context: the lane would keep the AsyncLocal values its owner had at the
+        // first compile alive for as long as the owner runs.
+        _thread.UnsafeStart();
     }
 
     ~CompileLane() => _queue.CompleteAdding();

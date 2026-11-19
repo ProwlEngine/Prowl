@@ -223,6 +223,39 @@ public sealed class ResourceUsageTests
         Assert.True(grown < callers / 2, $"{grown} threads were left behind by {callers} finished caller threads");
     }
 
+    // A lane lives as long as the thread that owns it, so whatever it copied from that thread when it started
+    // would stay alive that long too.
+    [Fact]
+    public void ACompileLaneDoesNotKeepItsOwnersAsyncLocals()
+    {
+        AsyncLocal<object?> local = new();
+        WeakReference? held = null;
+        using ManualResetEventSlim compiled = new(), observed = new();
+        var owner = new Thread(() =>
+        {
+            held = HoldInAsyncLocal(local);
+            GlslCompiler.Preprocess("#version 450\n");   // starts this thread's lane
+            local.Value = null;
+            compiled.Set();
+            observed.Wait();
+        });
+        owner.Start();
+        compiled.Wait();
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+        bool alive = held!.IsAlive;
+        observed.Set();
+        owner.Join();
+        Assert.False(alive, "the lane's thread kept an object its owner held in an AsyncLocal when the lane started");
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    static WeakReference HoldInAsyncLocal(AsyncLocal<object?> local)
+    {
+        object value = new byte[1 << 20];
+        local.Value = value;
+        return new WeakReference(value);
+    }
+
     // ---- #74: optimizer memory must stay proportionate on nested loops ----
 
     [Fact]

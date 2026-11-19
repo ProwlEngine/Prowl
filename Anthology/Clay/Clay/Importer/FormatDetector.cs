@@ -20,6 +20,7 @@ internal static class FormatDetector
             ".vrm" => "vrm",
             ".obj" => "obj",
             ".fbx" => "fbx",
+            ".bvh" => "bvh",
             _ => null,
         };
     }
@@ -59,6 +60,16 @@ internal static class FormatDetector
             {
                 // Likely a JSON document; could be .gltf.
                 format = "gltf";
+                return true;
+            }
+
+            if (read >= 8 &&
+                head[0] == 0x48 && head[1] == 0x49 && head[2] == 0x45 && head[3] == 0x52 &&
+                head[4] == 0x41 && head[5] == 0x52 && head[6] == 0x43 && head[7] == 0x48 &&
+                head[8] == 0x59)
+            {
+                // "HIERARCHY" a BVH file.
+                format = "bvh";
                 return true;
             }
 

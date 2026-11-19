@@ -253,7 +253,8 @@ public sealed class Renderer : IDisposable
         if (_options.Threading == RenderThreading.RenderThread)
         {
             _thread = new Thread(RenderLoop) { Name = "Graphite Render", IsBackground = true };
-            _thread.Start();
+            // Without the caller's execution context, so the thread does not keep the caller's AsyncLocal values alive.
+            _thread.UnsafeStart();
         }
     }
 

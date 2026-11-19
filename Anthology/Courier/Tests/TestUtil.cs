@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Prowl.Courier.Tests;
@@ -87,6 +88,15 @@ public sealed class Pump
 
 public static class TestData
 {
+    /// <summary>Puts a new object in the AsyncLocal and returns the only other reference to it, a weak one.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static WeakReference HoldInAsyncLocal(AsyncLocal<object?> local)
+    {
+        object value = new byte[1 << 20];
+        local.Value = value;
+        return new WeakReference(value);
+    }
+
     public static byte[] Pattern(int length, int seed)
     {
         byte[] data = new byte[length];

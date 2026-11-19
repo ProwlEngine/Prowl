@@ -22,7 +22,7 @@ public static partial class Loc
     private static MissingKeyBehavior _missingKeyBehavior = MissingKeyBehavior.ReturnFallback;
 
     // Hot reload state.
-    private static readonly Timer _timer = new(OnTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
+    private static readonly Timer _timer = CreateReloadTimer();
     private static int _retryCount = 0;
     private const int InitialDelayInMs = 100;
     private const int MaxRetryCount = 3;
@@ -349,6 +349,14 @@ public static partial class Loc
         // off the file system watcher thread.
         _retryCount = 0;
         _timer.Change(InitialDelayInMs, Timeout.Infinite);
+    }
+
+    // The timer lives as long as the process, so it must not hold what the first caller of Loc had around.
+    private static Timer CreateReloadTimer()
+    {
+        Timer timer = null!;
+        WithoutExecutionContext.Run(() => timer = new Timer(OnTimerElapsed, null, Timeout.Infinite, Timeout.Infinite));
+        return timer;
     }
 
     private static void OnTimerElapsed(object? state)

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
@@ -310,5 +312,30 @@ public sealed class RendererTests : IDisposable
 
         Assert.Equal(inline, pixels);
         Assert.Empty(_errors);
+    }
+
+    // The render thread runs until the renderer is disposed, so whatever it copied from the thread that created
+    // the renderer would stay alive that long.
+    [Fact]
+    public void TheRenderThreadDoesNotKeepTheAsyncLocalsOfTheThreadThatCreatedTheRenderer()
+    {
+        _renderer.Dispose();
+        AsyncLocal<object?> local = new();
+        WeakReference held = HoldInAsyncLocal(local);
+        Start(RenderThreading.RenderThread);
+        Frame();
+        local.Value = null;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        Assert.False(held.IsAlive, "the render thread kept an object its creator held in an AsyncLocal");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference HoldInAsyncLocal(AsyncLocal<object?> local)
+    {
+        object value = new byte[1 << 20];
+        local.Value = value;
+        return new WeakReference(value);
     }
 }

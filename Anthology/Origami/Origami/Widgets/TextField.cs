@@ -43,6 +43,8 @@ public sealed class TextFieldBuilder
     private string? _suffixText;
     private Action? _trailingContent;
     private Action<float>? _prefixDrag;
+    private Action? _prefixDragStart, _prefixDragEnd;
+    private bool _prefixDragSquare;
     private float _prefixPadL = 10f, _prefixPadR = 4f;
 
     // Slots
@@ -64,6 +66,7 @@ public sealed class TextFieldBuilder
     // Behaviour
     private bool _submitOnEnter;
     private bool _commitOnEnter;
+    private Action? _onEditEnd;
     private bool _autoFocus;
 
     // Filtering
@@ -126,6 +129,8 @@ public sealed class TextFieldBuilder
     /// that is costly or undoable to apply.
     /// </summary>
     public TextFieldBuilder CommitOnEnter(bool commit = true) { _commitOnEnter = commit; return this; }
+    /// <summary>Runs when the field loses focus, which Enter also causes in a single-line field.</summary>
+    public TextFieldBuilder OnEditEnd(Action onEditEnd) { _onEditEnd = onEditEnd; return this; }
 
     // ── Modes ──────────────────────────────────────────────────────────
 
@@ -190,8 +195,23 @@ public sealed class TextFieldBuilder
     /// <summary>Render caller content in the trailing slot (e.g. a numeric stepper).</summary>
     public TextFieldBuilder TrailingContent(Action render) { _trailingContent = render; return this; }
 
-    /// <summary>Make the <see cref="Prefix"/> label a horizontal drag handle; callback gets the pixel delta X.</summary>
-    public TextFieldBuilder PrefixDrag(Action<float> onDelta) { _prefixDrag = onDelta; return this; }
+    /// <summary>
+    /// Make the <see cref="Prefix"/> label a horizontal drag handle; <paramref name="onDelta"/> gets the
+    /// pixel delta X each frame, bracketed by <paramref name="onStart"/>/<paramref name="onEnd"/>.
+    /// <paramref name="square"/> gives the handle a full-height square grab area. A read-only field
+    /// keeps the handle's layout but takes no drag.
+    /// </summary>
+    public TextFieldBuilder PrefixDrag(Action<float> onDelta, Action? onStart = null, Action? onEnd = null, bool square = true)
+    {
+        _prefixDrag = onDelta;
+        _prefixDragStart = onStart;
+        _prefixDragEnd = onEnd;
+        _prefixDragSquare = square;
+        return this;
+    }
+
+    /// <summary>Make the <see cref="Prefix"/> label a horizontal drag handle; <paramref name="onDelta"/> gets the pixel delta X each frame.</summary>
+    public TextFieldBuilder PrefixDrag(Action<float> onDelta) => PrefixDrag(onDelta, null, null, true);
 
     /// <summary>Left/right padding around the <see cref="Prefix"/> label (default 10/4). Use tight values for vector axis tags.</summary>
     public TextFieldBuilder PrefixPad(float left, float right) { _prefixPadL = left; _prefixPadR = right; return this; }
@@ -306,8 +326,17 @@ public sealed class TextFieldBuilder
                 .Focused.BorderColor(focusBorder).Glow(0, 0, 10, 1, glowColor).End()
                 .Rounded(_theme.Metrics.Rounding)
                 .TabIndex(0);
-            if (_commitOnEnter)
-                rowBuilder.OnFocusChange(e => { if (!e.IsFocused) TextFieldCommits.Commit(e.Source.Data.ID); });
+            if (_commitOnEnter || _onEditEnd != null)
+            {
+                bool commit = _commitOnEnter;
+                Action? onEditEnd = _onEditEnd;
+                rowBuilder.OnFocusChange(e =>
+                {
+                    if (e.IsFocused) return;
+                    if (commit) TextFieldCommits.Commit(e.Source.Data.ID);
+                    onEditEnd?.Invoke();
+                });
+            }
 
             using (rowBuilder.Enter())
             {
@@ -332,24 +361,45 @@ public sealed class TextFieldBuilder
                 {
                     var pfx = _paper.Box($"{_id}_pfx")
                         .Height(fieldH).Width(UnitValue.Auto)
-                        .Margin(_prefixPadL, _prefixPadR, 0, 0)
                         .Text(_prefixText!, font)
                         .TextColor(_prefixColor ?? ink.C200)
-                        .FontSize(_theme.Metrics.FontSize - 1)
                         .Alignment(TextAlignment.MiddleCenter);
                     if (_prefixDrag != null)
                     {
-                        var d = _prefixDrag;
-                        // Wrap the pointer so scrubbing never runs out of screen; PointerDelta stays
-                        // continuous across the wrap, so the maths here is unchanged.
-                        pfx.OnDragging(_ =>
-                           {
-                               _paper.WrapPointer();
-                               d((float)_paper.PointerDelta.X);
-                           })
-                           .Cursor(PaperCursor.ResizeHorizontal);
+                        // Padded rather than margined so the whole tag (not just its glyph) takes the
+                        // drag. Laid out the same when read-only so the field never reflows.
+                        pfx.Margin(0, 2, 0, 0) // gap before the value
+                           .FontSize(_theme.Metrics.FontSize);
+                        // A square handle centres its tag, so it pads evenly; the side pads would
+                        // push the glyph off-centre.
+                        if (_prefixDragSquare)
+                        {
+                            float pad = MathF.Min(_prefixPadL, _prefixPadR);
+                            pfx.MinWidth(fieldH).Padding(pad, pad, 0, 0);
+                        }
+                        else pfx.Padding(_prefixPadL, _prefixPadR, 0, 0);
+                        if (_readOnly) pfx.IsNotInteractable();
+                        else
+                        {
+                            float r = MathF.Max(0f, _theme.Metrics.Rounding - 1f);
+                            var d = _prefixDrag;
+                            var start = _prefixDragStart;
+                            var end = _prefixDragEnd;
+                            pfx.Rounded(r, 0f, 0f, r)
+                               .Hovered.BackgroundColor(_theme.Hover).End()
+                               .OnDragStart(_ => start?.Invoke())
+                               // Wrap the pointer so scrubbing never runs out of screen; PointerDelta
+                               // stays continuous across the wrap, so the maths here is unchanged.
+                               .OnDragging(_ =>
+                               {
+                                   _paper.WrapPointer();
+                                   d((float)_paper.PointerDelta.X);
+                               })
+                               .OnDragEnd(_ => end?.Invoke())
+                               .Cursor(PaperCursor.ResizeHorizontal);
+                        }
                     }
-                    else pfx.IsNotInteractable();
+                    else pfx.Margin(_prefixPadL, _prefixPadR, 0, 0).FontSize(_theme.Metrics.FontSize - 1).IsNotInteractable();
                 }
 
                 // The edit element ─────────────────────────────────────

@@ -14,6 +14,22 @@ namespace Prowl.Courier.Tests;
 
 public sealed class ThreadedTransportTests
 {
+    // The worker runs until the transport is disposed, so whatever it copied from the thread that started it
+    // would stay alive that long.
+    [Fact]
+    public void TheWorkerDoesNotKeepTheAsyncLocalsOfTheThreadThatStartedIt()
+    {
+        AsyncLocal<object?> local = new();
+        WeakReference held = TestData.HoldInAsyncLocal(local);
+        using ThreadedTransport transport = new(new LocalTransport(new LocalNetwork(), "host"));
+        transport.Listen();
+        local.Value = null;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        Assert.False(held.IsAlive, "the worker kept an object its starter held in an AsyncLocal");
+    }
+
     [Fact]
     public void AShutdownThatTimesOutKeepsTheTransportAndCanBeRetried()
     {
