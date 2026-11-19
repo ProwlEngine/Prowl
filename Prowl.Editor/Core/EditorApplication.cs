@@ -79,7 +79,7 @@ public class EditorApplication : Game
     private Selection.Snapshot? _savedSelection;
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
-    private bool _maximizedForPlay; // play mode maximized the Game view, so stopping restores the layout
+    private DockPanel? _maximizedForPlay; // the Game view play mode maximized, so stopping restores the layout
     private DockPanel? _maximizedBeforePlay; // the panel the user had maximized when play started, maximized again on stop
 
 
@@ -2012,13 +2012,16 @@ public class EditorApplication : Game
         if (prefs.GameViewOnPlay != GameViewOnPlay.Nothing)
             FocusPanel(typeof(GameViewPanel));
         // A maximized panel would hide the focused Game view behind it, so the Game view takes its place.
+        // Reset first, so nothing a previous session left behind (an exit that threw) carries into this one.
+        _maximizedForPlay = null;
+        _maximizedBeforePlay = null;
         DockPanel? maximizedBefore = _panelMaximizer.MaximizedPanel;
         bool maximize = prefs.GameViewOnPlay == GameViewOnPlay.Maximize ||
             (prefs.GameViewOnPlay == GameViewOnPlay.Focus && maximizedBefore != null);
-        if (maximize && FindOpenPanel<GameViewPanel>() is GameViewPanel gameView)
+        if (maximize && FindOpenPanel<GameViewPanel>() is GameViewPanel gameView && _panelMaximizer.Maximize(gameView))
         {
-            _maximizedForPlay = _panelMaximizer.Maximize(gameView);
-            _maximizedBeforePlay = _maximizedForPlay ? maximizedBefore : null;
+            _maximizedForPlay = gameView;
+            _maximizedBeforePlay = maximizedBefore;
         }
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts
@@ -2114,19 +2117,20 @@ public class EditorApplication : Game
             Input.PopHandler();
         GameViewInputHandler.ClearSuppressedKeys();
 
-        // Only a maximize play mode made. One the user made before play is theirs to keep.
-        bool restored = _maximizedForPlay && _panelMaximizer.MaximizedPanel is GameViewPanel;
-        if (restored)
+        // Undo play mode's swap: end the Game view maximize it made, then maximize again whatever the user had
+        // maximized before play. Something the user maximized themselves during play is left as it is.
+        DockPanel? playMaximized = _maximizedForPlay;
+        DockPanel? maximizedBefore = _maximizedBeforePlay;
+        _maximizedForPlay = null;
+        _maximizedBeforePlay = null;
+        if (playMaximized != null && _panelMaximizer.MaximizedPanel == playMaximized)
             _panelMaximizer.Restore();
-        _maximizedForPlay = false;
 
         // Restore the previously active tab
         RestoreActiveTab();
 
-        // Put back the panel the user had maximized before play (Scene view, or the Game view itself).
-        if (restored && _maximizedBeforePlay != null)
-            _panelMaximizer.Maximize(_maximizedBeforePlay);
-        _maximizedBeforePlay = null;
+        if (playMaximized != null && maximizedBefore != null && _panelMaximizer.MaximizedPanel == null)
+            _panelMaximizer.Maximize(maximizedBefore);
 
         ApplyFramePacing();
 
