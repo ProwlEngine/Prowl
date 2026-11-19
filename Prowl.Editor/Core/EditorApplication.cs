@@ -2118,18 +2118,18 @@ public class EditorApplication : Game
         GameViewInputHandler.ClearSuppressedKeys();
 
         // Undo play mode's swap: end the Game view maximize it made, then maximize again whatever the user had
-        // maximized before play. Something the user maximized themselves during play is left as it is.
-        DockPanel? playMaximized = _maximizedForPlay;
+        // maximized before play. Any change the user made to the maximize during play (F3, a double-click) is kept.
+        bool undoSwap = _maximizedForPlay != null && _panelMaximizer.MaximizedPanel == _maximizedForPlay;
         DockPanel? maximizedBefore = _maximizedBeforePlay;
         _maximizedForPlay = null;
         _maximizedBeforePlay = null;
-        if (playMaximized != null && _panelMaximizer.MaximizedPanel == playMaximized)
+        if (undoSwap)
             _panelMaximizer.Restore();
 
         // Restore the previously active tab
         RestoreActiveTab();
 
-        if (playMaximized != null && maximizedBefore != null && _panelMaximizer.MaximizedPanel == null)
+        if (undoSwap && maximizedBefore != null)
             _panelMaximizer.Maximize(maximizedBefore);
 
         ApplyFramePacing();
