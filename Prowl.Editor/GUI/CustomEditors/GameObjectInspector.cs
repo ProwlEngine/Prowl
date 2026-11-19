@@ -1114,10 +1114,27 @@ public static class GameObjectInspector
 
         builder.Separator();
 
+        builder.Item(Loc.Get("inspector.move_up"), () =>
+        {
+            if (index > 0) MoveComponent(comp, index, index - 1, "Move Component Up");
+        }, icon: EditorIcons.ArrowUp, enabled: index > 0);
+
+        builder.Item(Loc.Get("inspector.move_down"), () => MoveComponent(comp, index, index + 1, "Move Component Down"),
+            icon: EditorIcons.ArrowDown);
+
+        builder.Separator();
+
+        builder.Item(Loc.Get("inspector.pop_out"), () =>
+        {
+            ComponentPopoutPanel.PopOut(go, comp);
+        }, icon: EditorIcons.ArrowUpRightFromSquare);
+
         // Only project scripts have a file to open, so engine and package components skip the item.
         Type compType = comp.GetType();
         if (ScriptAssemblyManager.IsScriptAssembly(compType.Assembly))
         {
+            builder.Separator();
+
             // Opens like a double-click in the Project panel: the preferred script editor, built in or external.
             // The file is looked up on click, as finding it reads the project's scripts.
             builder.Item(Loc.Get("inspector.edit_script"), () =>
@@ -1133,23 +1150,7 @@ public static class GameObjectInspector
                 if (!ExternalTools.OpenOnDoubleClick(abs)) ExternalTools.OpenWithSystem(abs);
             }, icon: EditorIcons.FileCode);
 
-            builder.Separator();
         }
-
-        builder.Item(Loc.Get("inspector.move_up"), () =>
-        {
-            if (index > 0) MoveComponent(comp, index, index - 1, "Move Component Up");
-        }, icon: EditorIcons.ArrowUp, enabled: index > 0);
-
-        builder.Item(Loc.Get("inspector.move_down"), () => MoveComponent(comp, index, index + 1, "Move Component Down"),
-            icon: EditorIcons.ArrowDown);
-
-        builder.Separator();
-
-        builder.Item(Loc.Get("inspector.pop_out"), () =>
-        {
-            ComponentPopoutPanel.PopOut(go, comp);
-        }, icon: EditorIcons.ArrowUpRightFromSquare);
     }
 
     private static void MoveComponent(Component comp, int oldIndex, int newIndex, string name)
