@@ -332,6 +332,53 @@ public sealed class FeatureTests : IDisposable
     // The luminance an Unlit surface needs to show its base colour as it is under the views' EV100 of 0
     private static readonly float UnitNits = 1f / RenderView.ExposureOf(0);
 
+    // Green over the left half at the nearest depth, and over the right half at a depth just past the clear
+    private const string DepthWritingFill = """
+        void main()
+        {
+            gl_FragDepth = vUV.x < 0.5 ? 1.0 : 1e-4;
+            outColor = vec4(0.0, 1.0, 0.0, 1.0);
+        }
+        """;
+
+    private sealed class SceneFill(FullscreenProgram program, RenderSlot slot) : RenderFeature(slot, order: 100)
+    {
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.DrawToScene();
+        public override void Render(FeatureContext context) => context.FullscreenScene(program);
+    }
+
+    private FullscreenProgram DepthProgram()
+    {
+        FullscreenProgram program = _renderer.CreateFullscreenProgram(DepthWritingFill, "DepthFill", source: false, depth: true);
+        _owned.Add(program);
+        Assert.True(program.WritesDepth);
+        return program;
+    }
+
+    [Fact]
+    public void DepthWritingFullscreenPrograms_AreHiddenBehindTheScenesSurfaces()
+    {
+        AddQuad(new Float3(1, 0, 0), scale: 0.5);
+        _world.Features.Add(new SceneFill(DepthProgram(), RenderSlot.Opaque));
+
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(0, 1, 0), pixels, i => i % Size < Size / 2);
+        AssertAll(new Float3(1, 0, 0), pixels, i => Centre(i) && i % Size >= Size / 2);
+        AssertAll(new Float3(0, 1, 0), pixels, i => !Centre(i) && i % Size >= Size / 2);
+    }
+
+    [Fact]
+    public void DepthWritingFullscreenPrograms_HideTheSurfacesDrawnAfterThem()
+    {
+        AddQuad(new Float3(1, 0, 0), scale: 0.5);
+        _world.Features.Add(new SceneFill(DepthProgram(), RenderSlot.AfterPrepass));
+
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(0, 1, 0), pixels, i => i % Size < Size / 2);
+        AssertAll(new Float3(1, 0, 0), pixels, i => Centre(i) && i % Size >= Size / 2);
+        AssertAll(new Float3(0, 1, 0), pixels, i => !Centre(i) && i % Size >= Size / 2);
+    }
+
     [Fact]
     public void SurfaceFunctions_ChangeTheStandardSurface_BeforeItDraws()
     {

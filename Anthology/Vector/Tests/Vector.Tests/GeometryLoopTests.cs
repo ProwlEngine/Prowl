@@ -9,6 +9,8 @@ using Prowl.Vector.Geometry;
 
 using Xunit;
 
+using Vertex = Prowl.Vector.Geometry.GeometryData.Vertex;
+
 namespace Prowl.Vector.Tests;
 
 public class GeometryLoopTests
@@ -173,6 +175,93 @@ public class GeometryLoopTests
         // Every side stands upright, so the rings were lined up and not twisted
         Assert.All(faces, f => Assert.True(Math.Abs(f.Normal().Y) < 1e-4f));
         Assert.All(faces, f => Assert.Equal(2f, f.Area(), 3));
+    }
+
+    private static Vertex[] RingOf(GeometryData mesh, int count, float radius, float height)
+    {
+        Vertex[] ring = Enumerable.Range(0, count)
+            .Select(i => mesh.AddVertex(MathF.Cos(i * MathF.Tau / count) * radius, height, MathF.Sin(i * MathF.Tau / count) * radius)).ToArray();
+        for (int i = 0; i < count; i++)
+            mesh.AddEdge(ring[i], ring[(i + 1) % count]);
+        return ring;
+    }
+
+    [Theory]
+    [InlineData(12, 8)]
+    [InlineData(8, 12)]
+    [InlineData(12, 4)]
+    [InlineData(9, 5)]
+    public void BridgeEdges_RingsOfDifferentSize_AreJoinedWithQuadsOnly(int lower, int upper)
+    {
+        GeometryData mesh = new();
+        RingOf(mesh, lower, 2, 0);
+        RingOf(mesh, upper, 1, 2);
+        int narrowings = Math.Abs(lower - upper) / 2;
+
+        var faces = GeometryOperators.BridgeEdges(mesh, mesh.Edges.ToList());
+
+        Assert.Equal(Math.Min(lower, upper) + narrowings * 3, faces.Count);
+        Assert.All(faces, f => Assert.Equal(4, f.VertCount));
+        Assert.Equal(lower + upper + narrowings * 2, mesh.Vertices.Count);
+
+        // A closed strip between the two rings: only the ring edges are borders, and every face looks outwards
+        Assert.Equal(lower + upper, mesh.Edges.Count(e => e.NeighborFaces().Count == 1));
+        Assert.All(mesh.Edges, e => Assert.InRange(e.NeighborFaces().Count, 1, 2));
+        int outwards = faces.Count(f => Float3.Dot(f.Normal(), f.Center() - new Float3(0, f.Center().Y, 0)) > 0);
+        Assert.True(outwards == 0 || outwards == faces.Count);
+    }
+
+    [Fact]
+    public void BridgeEdges_OpenRunsOfDifferentLength_NarrowBetweenTheirEnds()
+    {
+        GeometryData mesh = new();
+        Vertex[] wide = Enumerable.Range(0, 6).Select(i => mesh.AddVertex(i, 0, 0)).ToArray();
+        Vertex[] narrow = Enumerable.Range(0, 4).Select(i => mesh.AddVertex(i * 5f / 3f, 2, 0)).ToArray();
+        for (int i = 0; i < 5; i++) mesh.AddEdge(wide[i], wide[i + 1]);
+        for (int i = 0; i < 3; i++) mesh.AddEdge(narrow[i], narrow[i + 1]);
+
+        var faces = GeometryOperators.BridgeEdges(mesh, mesh.Edges.ToList());
+
+        Assert.Equal(6, faces.Count);
+        Assert.All(faces, f => Assert.Equal(4, f.VertCount));
+        Assert.NotNull(mesh.FindEdge(wide[0], narrow[0]));
+        Assert.NotNull(mesh.FindEdge(wide[5], narrow[3]));
+        Assert.All(faces, f => Assert.True(f.Normal().Z * faces[0].Normal().Z > 0));
+    }
+
+    [Fact]
+    public void BridgeEdges_NewVerticesOfANarrowing_BlendWhatTheirNeighboursCarry()
+    {
+        GeometryData mesh = new();
+        Vertex[] wide = RingOf(mesh, 6, 2, 0);
+        Vertex[] narrow = RingOf(mesh, 4, 1, 2);
+        mesh.AddVertexAttribute("heat", GeometryData.AttributeBaseType.Float, 1);
+        foreach (Vertex vertex in wide) vertex.SetAttribute("heat", new GeometryData.FloatAttributeValue { Data = [1] });
+        foreach (Vertex vertex in narrow) vertex.SetAttribute("heat", new GeometryData.FloatAttributeValue { Data = [3] });
+
+        GeometryOperators.BridgeEdges(mesh, mesh.Edges.ToList());
+
+        Assert.Equal(12, mesh.Vertices.Count);
+        foreach (Vertex made in mesh.Vertices.Skip(10))
+        {
+            Assert.InRange(made.Point.Y, 0.9f, 1.1f);
+            Assert.True(made.TryGetAttribute("heat", out var value));
+            Assert.Equal(2f, ((GeometryData.FloatAttributeValue)value!).Data[0], 4);
+        }
+    }
+
+    [Theory]
+    [InlineData(4, 3)]
+    [InlineData(14, 4)]
+    public void BridgeEdges_RingsThatCannotBeJoinedWithQuads_Throw(int lower, int upper)
+    {
+        GeometryData mesh = new();
+        RingOf(mesh, lower, 2, 0);
+        RingOf(mesh, upper, 1, 2);
+
+        Assert.Throws<InvalidOperationException>(() => GeometryOperators.BridgeEdges(mesh, mesh.Edges.ToList()));
+        Assert.Empty(mesh.Faces);
+        Assert.Equal(lower + upper, mesh.Vertices.Count);
     }
 
     [Fact]

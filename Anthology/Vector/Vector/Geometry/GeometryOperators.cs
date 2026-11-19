@@ -768,7 +768,9 @@ public static class GeometryOperators
 
     /// <summary>
     /// Joins two runs of edges with a strip of four sided faces. The edges must fall into exactly two chains or
-    /// rings with the same number of vertices. Throws <see cref="InvalidOperationException"/> when they do not.
+    /// two rings. Runs of different length are joined when they differ by an even number of vertices and the longer
+    /// has at most three edges for every edge of the shorter: the strip narrows in evenly spread places, over two
+    /// new vertices each. Throws <see cref="InvalidOperationException"/> when the runs do not fit.
     /// </summary>
     /// <returns>The new faces.</returns>
     public static List<GeometryData.Face> BridgeEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)

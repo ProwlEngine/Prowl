@@ -192,6 +192,13 @@ public partial class GeometryData
                 loop = loop.Next!;
             } while (loop != face.Loop);
 
+            if (corners.Count == 4 && FoldsAcrossFirstDiagonal(positions[corners[0]], positions[corners[1]], positions[corners[2]], positions[corners[3]]))
+            {
+                AddTriangle(target, f, corners[0], corners[1], corners[3], options.ReverseWinding);
+                AddTriangle(target, f, corners[1], corners[2], corners[3], options.ReverseWinding);
+                continue;
+            }
+
             if (corners.Count <= 4)
             {
                 for (int i = 1; i < corners.Count - 1; i++)
@@ -249,6 +256,14 @@ public partial class GeometryData
 
     // The smooth faces around a corner's vertex that no sharp edge, border or flat face separates from the corner's
     // face, walked both ways around the vertex. Calls visit for each, the corner's own face included.
+    // True when the second and fourth corner of a quad lie on the same side of the diagonal from the first to the third,
+    // so the two triangles along that diagonal would lie over each other. The rule Blender splits its quads by.
+    private static bool FoldsAcrossFirstDiagonal(Float3 a, Float3 b, Float3 c, Float3 d)
+    {
+        Float3 diagonal = c - a;
+        return Float3.Dot(Float3.Cross(b - a, diagonal), Float3.Cross(d - a, diagonal)) > 0;
+    }
+
     private static void WalkFan(Loop corner, bool[] faceSmooth, bool[] faceDrawn, Action<Loop> visit)
     {
         visit(corner);

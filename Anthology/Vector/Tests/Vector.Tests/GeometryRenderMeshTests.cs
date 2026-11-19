@@ -98,6 +98,26 @@ public class GeometryRenderMeshTests
     }
 
     [Fact]
+    public void ConcaveQuad_IsSplitAlongTheDiagonalInsideIt()
+    {
+        // A dart that bends in at its second corner, so the diagonal from the first to the third lies outside it
+        GeometryData mesh = new();
+        Float3[] points = [new(-1, 0, 0), new(0, 0.5f, 0), new(1, 0, 0), new(0, 2, 0)];
+        mesh.AddFace(points.Select(p => mesh.AddVertex(p)).ToArray());
+
+        RenderMesh render = mesh.ToRenderMesh();
+
+        Assert.Equal(2, render.TriangleFaces.Length);
+        float area = 0;
+        for (int t = 0; t < 2; t++)
+        {
+            Float3 a = render.Positions[render.Indices[t * 3]], b = render.Positions[render.Indices[t * 3 + 1]], c = render.Positions[render.Indices[t * 3 + 2]];
+            area += Float3.Length(Float3.Cross(b - a, c - a)) * 0.5f;
+        }
+        Assert.Equal(1.5f, area, 4);
+    }
+
+    [Fact]
     public void ConcaveFace_IsCutInsideItsOutline()
     {
         // An L shape, six corners, counter clockwise seen from +Z

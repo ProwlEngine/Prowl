@@ -15,52 +15,89 @@ namespace Prowl.Vector.Geometry.Operators;
 internal static class TopologyOp
 {
     /// <summary>
-    /// Joins two runs of edges with a strip of four sided faces. The edges must fall into exactly two chains or rings
-    /// with the same number of vertices. Rings are lined up where the strip comes out shortest. Throws
-    /// <see cref="InvalidOperationException"/> when they do not fit. Returns the new faces.
+    /// Joins two runs of edges with a strip of four sided faces. The edges must fall into exactly two chains or two
+    /// rings. Runs of the same length are joined edge to edge. Runs of different length are joined too when they
+    /// differ by an even number of vertices and the longer has at most three edges for every edge of the shorter:
+    /// the strip then narrows in evenly spread places, each taking three edges down to one over two new vertices.
+    /// Rings are lined up where the strip comes out shortest. Throws <see cref="InvalidOperationException"/> when
+    /// the runs do not fit. Returns the new faces.
     /// </summary>
     internal static List<Face> Bridge(GeometryData mesh, IEnumerable<Edge> edges)
     {
         List<(List<Vertex> Path, bool Ring)> runs = Runs(mesh, edges);
         if (runs.Count != 2)
             throw new InvalidOperationException($"Bridge needs two separate runs of edges, the selection has {runs.Count}.");
-        (List<Vertex> a, bool ringA) = runs[0];
-        (List<Vertex> b, bool ringB) = runs[1];
-        if (a.Count != b.Count || ringA != ringB)
-            throw new InvalidOperationException("Bridge needs both runs to have the same number of vertices.");
+        if (runs[0].Ring != runs[1].Ring)
+            throw new InvalidOperationException("Bridge needs two rings or two open runs, not one of each.");
+        bool ring = runs[0].Ring;
+        (List<Vertex> wide, List<Vertex> narrow) = runs[0].Path.Count >= runs[1].Path.Count ? (runs[0].Path, runs[1].Path) : (runs[1].Path, runs[0].Path);
 
-        // The second run is turned and, for rings, rotated to where its vertices lie nearest the first run's
-        int count = a.Count;
-        List<Vertex> best = b;
+        if ((wide.Count - narrow.Count) % 2 != 0)
+            throw new InvalidOperationException($"Bridge cannot join {wide.Count} vertices to {narrow.Count} with quads, they must differ by an even number. Add or merge one vertex.");
+        int narrowings = (wide.Count - narrow.Count) / 2;
+        int steps = ring ? narrow.Count : narrow.Count - 1;
+        if (narrowings > steps)
+            throw new InvalidOperationException($"Bridge cannot join {wide.Count} vertices to {narrow.Count}, the longer run may have at most three edges for every edge of the shorter.");
+
+        // Where along the wide run each edge of the narrow run starts, the narrowing ones taking three wide edges
+        var starts = new int[steps + 1];
+        for (int i = 0; i < steps; i++)
+            starts[i + 1] = starts[i] + ((i + 1) * narrowings / steps > i * narrowings / steps ? 3 : 1);
+
+        // The narrow run is turned and, for rings, rotated to where its vertices lie nearest the ones they join
+        List<Vertex> best = narrow;
         float bestCost = float.PositiveInfinity;
         for (int flip = 0; flip < 2; flip++)
         {
-            List<Vertex> turned = flip == 0 ? b : Enumerable.Reverse(b).ToList();
-            for (int shift = 0; shift < (ringA ? count : 1); shift++)
+            List<Vertex> turned = flip == 0 ? narrow : Enumerable.Reverse(narrow).ToList();
+            for (int shift = 0; shift < (ring ? narrow.Count : 1); shift++)
             {
                 float cost = 0;
-                for (int i = 0; i < count; i++)
-                    cost += Float3.LengthSquared(a[i].Point - turned[(i + shift) % count].Point);
+                for (int i = 0; i < narrow.Count; i++)
+                    cost += Float3.LengthSquared(wide[starts[i] % wide.Count].Point - turned[(i + shift) % narrow.Count].Point);
                 if (cost >= bestCost) continue;
                 bestCost = cost;
-                best = Enumerable.Range(0, count).Select(i => turned[(i + shift) % count]).ToList();
+                best = Enumerable.Range(0, narrow.Count).Select(i => turned[(i + shift) % narrow.Count]).ToList();
             }
         }
 
         var made = new List<Face>();
-        int sides = ringA ? count : count - 1;
-        for (int i = 0; i < sides; i++)
+        for (int i = 0; i < steps; i++)
         {
-            Vertex a0 = a[i], a1 = a[(i + 1) % count], b0 = best[i], b1 = best[(i + 1) % count];
-            Edge? along = mesh.FindEdge(a0, a1);
+            Vertex Wide(int offset) => wide[(starts[i] + offset) % wide.Count];
+            Vertex n0 = best[i], n1 = best[(i + 1) % narrow.Count];
 
-            // The new face runs against a face already on the first run, so the two face the same way
-            bool reversed = along?.Loop != null && along.Loop.Vert == a0;
-            Face? like = along?.Loop?.Face;
-            Vertex[] corners = reversed ? new[] { a1, a0, b0, b1 } : new[] { a0, a1, b1, b0 };
-            Face? face = like != null ? mesh.AddFace(corners, like) : mesh.AddFace(corners);
-            if (face != null) made.Add(face);
+            // The new faces run against the face already on the wide edge, or else on the narrow edge, so they face the same way
+            Loop? wideSide = mesh.FindEdge(Wide(0), Wide(1))?.Loop, narrowSide = mesh.FindEdge(n0, n1)?.Loop;
+            bool reversed = wideSide != null ? wideSide.Vert == Wide(0) : narrowSide != null && narrowSide.Vert == n1;
+            Face? like = (wideSide ?? narrowSide)?.Face;
+            void Add(params Vertex[] corners)
+            {
+                if (reversed) Array.Reverse(corners);
+                Face? face = like != null ? mesh.AddFace(corners, like) : mesh.AddFace(corners);
+                if (face != null) made.Add(face);
+            }
+
+            if (starts[i + 1] - starts[i] == 1)
+            {
+                Add(Wide(0), Wide(1), n1, n0);
+                continue;
+            }
+
+            Vertex inner0 = Between(mesh, Wide(1), n0, n1), inner1 = Between(mesh, Wide(2), n1, n0);
+            Add(Wide(0), Wide(1), inner0, n0);
+            Add(Wide(1), Wide(2), inner1, inner0);
+            Add(Wide(2), Wide(3), n1, inner1);
+            Add(inner0, inner1, n1, n0);
         }
+        return made;
+    }
+
+    // A new vertex half way from a vertex of the wide run to the narrow edge, a third along that edge from its near end
+    private static Vertex Between(GeometryData mesh, Vertex from, Vertex near, Vertex far)
+    {
+        Vertex made = mesh.AddVertex((from.Point + near.Point + (far.Point - near.Point) / 3f) * 0.5f);
+        made.Attributes = AttributeTransfer.Lerp(AttributeTransfer.Copy(from.Attributes), AttributeTransfer.Copy(near.Attributes), 0.5f);
         return made;
     }
 
