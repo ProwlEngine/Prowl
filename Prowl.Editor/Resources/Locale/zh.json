@@ -75,6 +75,8 @@
   "game.scale_fit": "适应",
   "game.scale_pixel_perfect": "像素完美",
   "game.maximize_on_play": "播放时最大化",
+  "game.input": "输入",
+  "game.lock_mouse_on_play": "播放时锁定鼠标",
   "game.play": "播放",
   "game.stop": "停止",
   "game.pause": "暂停",

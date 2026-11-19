@@ -75,6 +75,8 @@
   "game.scale_fit": "Ajustar",
   "game.scale_pixel_perfect": "Pixel perfeito",
   "game.maximize_on_play": "Maximizar ao jogar",
+  "game.input": "Entrada",
+  "game.lock_mouse_on_play": "Bloquear rato ao jogar",
   "game.play": "Iniciar",
   "game.stop": "Parar",
   "game.pause": "Pausar",

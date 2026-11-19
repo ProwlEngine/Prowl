@@ -75,6 +75,8 @@
   "game.scale_fit": "맞춤",
   "game.scale_pixel_perfect": "픽셀 퍼펙트",
   "game.maximize_on_play": "플레이 시 최대화",
+  "game.input": "입력",
+  "game.lock_mouse_on_play": "플레이 시 마우스 잠금",
   "game.play": "재생",
   "game.stop": "정지",
   "game.pause": "일시 정지",

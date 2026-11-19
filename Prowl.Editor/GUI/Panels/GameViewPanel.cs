@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Core;
-using Prowl.Editor.GUI;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
@@ -90,6 +90,8 @@ public class GameViewPanel : DockPanel
 
     private readonly PanelLockContext _lockContext = new();
     private bool _lockContextPushed;
+    private bool _lockMouseOnPlay;  // Whether the mouse should be locked when play mode is entered and on click.
+    private bool _lockMouseAtNextOpportunity;   // Whether the mouse should be locked ASAP.
 
     // Negative sizes are an aspect ratio, zero is the panel's own size.
     private static readonly (string name, int w, int h)[] BuiltInResolutions =
@@ -115,6 +117,11 @@ public class GameViewPanel : DockPanel
         .. EditorRegistries.GetSettings<ProjectsEditorSettings>().CustomResolutions
             .Select(r => (r.Name, r.Aspect ? -r.Width : r.Width, r.Aspect ? -r.Height : r.Height)),
     ];
+
+    public GameViewPanel()
+    {
+        EditorApplication.PlayModeRequested += OnPlayModeRequested;
+    }
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -236,6 +243,8 @@ public class GameViewPanel : DockPanel
                 b.Toggle(Loc.Get("game.show_stats"), () => { _showStats = !_showStats; SaveViewState(); }, () => _showStats);
                 b.Toggle(Loc.Get("game.maximize_on_play"), ToggleMaximizeOnPlay,
                     () => Preferences.Get<PlayModePreferences>().GameViewOnPlay == GameViewOnPlay.Maximize);
+                b.Header(Loc.Get("game.input"));
+                b.Toggle(Loc.Get("game.lock_mouse_on_play"), () => { _lockMouseOnPlay = !_lockMouseOnPlay; }, () => _lockMouseOnPlay);
             }));
     }
 
@@ -282,7 +291,7 @@ public class GameViewPanel : DockPanel
 
     private void DrawGameView(Paper paper, Scribe.FontFile font, float width, float height)
     {
-        using (paper.Box("gv_game").Clip().Enter())
+        using (paper.Box("gv_game").Clip().OnClick(OnClick).Enter())
         {
             SceneInstance scene = SceneInstance.Main;
             if (scene.IsNotValid())
@@ -393,6 +402,14 @@ public class GameViewPanel : DockPanel
                         PointerPosition = pointerInRT,
                         ReceivesInput = hovered && pointerInside,
                     };
+
+                // If the user turned on "Lock on Play Mode" and Play mode has been entered, then lock the mouse.
+                // Do this after Input.PushLockContext(...) is called.
+                if (_lockMouseAtNextOpportunity)
+                {
+                    Input.LockCursor();
+                    _lockMouseAtNextOpportunity = false;
+                }
             }
             else
             {
@@ -732,5 +749,22 @@ public class GameViewPanel : DockPanel
         _gamePaperRenderer?.Dispose();
         _gamePaperRenderer = null;
         _gamePaper = null;
+    }
+
+    /// <summary>Called when Play mode is entered or exited.</summary>
+    private void OnPlayModeRequested(PlayModeRequest request)
+    {
+        // If we're entering Play mode and the "Lock Mouse on Play" setting is enabled, then set a flag to indicate the
+        // mouse should be locked ASAP.
+        _lockMouseAtNextOpportunity = _lockMouseOnPlay && request.Entering;
+    }
+
+    /// <summary>Called when the game view panel is clicked.</summary>
+    private void OnClick(ClickEvent e)
+    {
+        // If the user wants to lock the mouse when starting Play mode, then it should also lock the mouse when
+        // clicking, as otherwise there is no way to re-lock the mouse in the event the user pushes ESCAPE.
+        if (Application.IsPlaying && _lockMouseOnPlay)
+            Input.LockCursor();
     }
 }

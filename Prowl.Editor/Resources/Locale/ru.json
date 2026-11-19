@@ -75,6 +75,8 @@
   "game.scale_fit": "Вписать",
   "game.scale_pixel_perfect": "Попиксельно",
   "game.maximize_on_play": "Развернуть при запуске игры",
+  "game.input": "Ввод",
+  "game.lock_mouse_on_play": "Блокировать курсор при запуске",
   "game.play": "Запустить",
   "game.stop": "Остановить",
   "game.pause": "Приостановить",
