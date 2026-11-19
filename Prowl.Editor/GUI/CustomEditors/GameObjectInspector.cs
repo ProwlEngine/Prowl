@@ -1128,6 +1128,29 @@ public static class GameObjectInspector
         {
             ComponentPopoutPanel.PopOut(go, comp);
         }, icon: EditorIcons.ArrowUpRightFromSquare);
+
+        // Only project scripts have a file to open, so engine and package components skip the item.
+        Type compType = comp.GetType();
+        if (ScriptAssemblyManager.IsScriptAssembly(compType.Assembly))
+        {
+            builder.Separator();
+
+            // Opens like a double-click in the Project panel: the preferred script editor, built in or external.
+            // The file is looked up on click, as finding it reads the project's scripts.
+            builder.Item(Loc.Get("inspector.edit_script"), () =>
+            {
+                string? script = ScriptComponentResolver.FindScriptPath(compType);
+                if (script == null)
+                {
+                    Runtime.Debug.LogWarning($"No script in Assets declares {compType.Name}.");
+                    return;
+                }
+                if (EditorRegistries.DispatchDoubleClick(script, EditorAssetBackend.Instance?.PathToGuid(script) ?? Guid.Empty)) return;
+                string abs = AssetCreateMenu.GetAbsoluteFolder(script);
+                if (!ExternalTools.OpenOnDoubleClick(abs)) ExternalTools.OpenWithSystem(abs);
+            }, icon: EditorIcons.FileCode);
+
+        }
     }
 
     private static void MoveComponent(Component comp, int oldIndex, int newIndex, string name)

@@ -301,6 +301,7 @@
   "inspector.paste_component_values": "Paste Component Values",
   "inspector.move_up": "Move Up",
   "inspector.move_down": "Move Down",
+  "inspector.edit_script": "Edit Script",
   "inspector.pop_out": "Pop Out",
   "inspector.select": "Select",
   "inspector.revert": "Revert",
