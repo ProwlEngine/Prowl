@@ -815,6 +815,8 @@ public class DesktopBuildPipeline : BuildPipeline
             Packaging = request.Packaging,
             WindowWidth = plan.Profile.WindowWidth,
             WindowHeight = plan.Profile.WindowHeight,
+            Fullscreen = plan.Profile.WindowMode == DesktopWindowMode.Fullscreen,
+            WindowMaximized = plan.Profile.WindowMode == DesktopWindowMode.Windowed && plan.Profile.WindowMaximized,
         };
     }
 
@@ -856,7 +858,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
         var properties = new Dictionary<string, string>
         {
-            ["OutputType"] = "Exe",
+            ["OutputType"] = desktopProfile.ShowConsole ? "Exe" : "WinExe",
             ["EnableDefaultCompileItems"] = "false",
             ["AllowUnsafeBlocks"] = "true",
             ["Nullable"] = "annotations",
