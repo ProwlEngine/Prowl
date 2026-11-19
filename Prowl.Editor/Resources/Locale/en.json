@@ -373,6 +373,8 @@
 
   "popup.search_components": "Search components...",
   "popup.no_components": "No matching components",
+  "popup.new_component": "New Component",
+  "popup.new_component_named": "New Component '{{name}}'",
   "popup.search_shaders": "Search shaders...",
   "popup.no_shaders": "No matching shaders",
   "popup.uncategorized": "Uncategorized",

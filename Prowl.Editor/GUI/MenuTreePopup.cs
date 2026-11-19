@@ -106,7 +106,8 @@ public static class MenuTreePopup
         Action<MenuTreeEntry> onPick,
         string searchPlaceholder,
         string emptyText,
-        float minWidth = 280f)
+        float minWidth = 280f,
+        MenuTreeEntry? pinned = null)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
@@ -147,21 +148,24 @@ public static class MenuTreePopup
                 .Body(() =>
             {
                 if (!string.IsNullOrEmpty(state.Search))
-                    DrawSearchResults(paper, font, id, entries, state, onPick, emptyText);
+                    DrawSearchResults(paper, font, id, entries, state, onPick, emptyText, pinned);
                 else
-                    DrawBrowseLevel(paper, font, id, entries, state, onPick, emptyText);
+                    DrawBrowseLevel(paper, font, id, entries, state, onPick, emptyText, pinned);
             });
         }
     }
 
     // Flat, globally-filtered list shown while the search box has text (ignores the current folder).
     private static void DrawSearchResults(Paper paper, Prowl.Scribe.FontFile font, string id,
-        IReadOnlyList<MenuTreeEntry> entries, MenuTreeState state, Action<MenuTreeEntry> onPick, string emptyText)
+        IReadOnlyList<MenuTreeEntry> entries, MenuTreeState state, Action<MenuTreeEntry> onPick, string emptyText,
+        MenuTreeEntry? pinned)
     {
         var filtered = entries.Where(e =>
             e.Name.Contains(state.Search, StringComparison.OrdinalIgnoreCase) ||
             e.Path.Contains(state.Search, StringComparison.OrdinalIgnoreCase))
             .ToList();
+        // Unfiltered and last, so Enter still picks the best real match while one exists.
+        if (pinned.HasValue) filtered.Add(pinned.Value);
 
         if (filtered.Count == 0)
         {
@@ -191,10 +195,17 @@ public static class MenuTreePopup
     // Click-to-navigate browser: the current folder's subfolders and leaves, with a "Back" row when
     // nested. Clicking a folder drills in; clicking Back steps back out.
     private static void DrawBrowseLevel(Paper paper, Prowl.Scribe.FontFile font, string id,
-        IReadOnlyList<MenuTreeEntry> entries, MenuTreeState state, Action<MenuTreeEntry> onPick, string emptyText)
+        IReadOnlyList<MenuTreeEntry> entries, MenuTreeState state, Action<MenuTreeEntry> onPick, string emptyText,
+        MenuTreeEntry? pinned)
     {
         string prefix = string.Join("/", state.Nav);
         (List<MenuTreeEntry>? leaves, List<string>? subfolders) = SplitLevel(entries, prefix);
+
+        if (pinned.HasValue && state.Nav.Count == 0)
+        {
+            DrawItem(paper, font, $"{id}_pinned", pinned.Value, onPick, showPath: false);
+            paper.Box($"{id}_pinned_sep").Height(1).Margin(8, 3, 8, 3).BackgroundColor(EditorTheme.BorderSoft);
+        }
 
         if (state.Nav.Count > 0)
         {

@@ -37,10 +37,10 @@ public static class NewScriptDialog
     /// new script will be created in; <paramref name="onCreated"/> receives the final
     /// relative path on success (e.g. for a post-create ping / selection).
     /// </summary>
-    public static void Open(string relativeFolder, Action<string>? onCreated = null)
+    public static void Open(string relativeFolder, Action<string>? onCreated = null, string? name = null)
     {
         s_folder = relativeFolder ?? "";
-        s_name = SuggestUniqueName(s_folder, "NewScript");
+        s_name = SuggestUniqueName(s_folder, string.IsNullOrEmpty(name) ? "NewScript" : name);
         s_selectedIndex = 0;
         s_onCreated = onCreated;
 
@@ -154,14 +154,19 @@ public static class NewScriptDialog
                         .Alignment(TextAlignment.Left)
                         .Wrap(Scribe.TextWrapMode.Wrap);
 
-                    // Path preview
+                    // Target folder, with a picker limited to folders inside Assets.
                     string folderDisplay = string.IsNullOrEmpty(s_folder) ? "Assets" : $"Assets/{s_folder}";
-                    paper.Box("scr_path")
-                        .Width(UnitValue.Stretch()).Height(16)
-                        .Text(folderDisplay, font)
-                        .TextColor(EditorTheme.Ink300)
-                        .FontSize(EditorTheme.FontSizeSmall)
-                        .Alignment(TextAlignment.MiddleLeft);
+                    using (paper.Row("scr_path_row").Height(EditorTheme.RowHeight).Gap(6).Enter())
+                    {
+                        paper.Box("scr_path")
+                            .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                            .Text(folderDisplay, font)
+                            .TextColor(EditorTheme.Ink300)
+                            .FontSize(EditorTheme.FontSizeSmall)
+                            .Alignment(TextAlignment.MiddleLeft);
+
+                        Origami.Button(paper, "scr_path_browse", "...", BrowseFolder).Small().Width(32).Show();
+                    }
                 }
             }
         }
@@ -193,6 +198,26 @@ public static class NewScriptDialog
                 Origami.Button(paper, "scr_create_disabled", Loc.Get("launcher.create"), null).Primary().Disabled(true).Width(90).Show();
             }
         }
+    }
+
+    private static void BrowseFolder()
+    {
+        string assets = AssetCreateMenu.GetAbsoluteFolder("");
+        if (assets.Length == 0) return;
+
+        EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder, path =>
+        {
+            if (path == null) return;
+            string rel = Path.GetRelativePath(assets, path).Replace('\\', '/');
+            if (rel == ".") rel = "";
+            // Scripts outside Assets aren't compiled, so a folder elsewhere is ignored.
+            if (rel == ".." || rel.StartsWith("../") || Path.IsPathRooted(rel))
+            {
+                Runtime.Debug.LogWarning("New Script: pick a folder inside Assets.");
+                return;
+            }
+            s_folder = rel;
+        }, AssetCreateMenu.GetAbsoluteFolder(s_folder));
     }
 
     private static void DoCreate()
