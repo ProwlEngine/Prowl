@@ -33,6 +33,7 @@ internal sealed class CameraPreview
     private RenderView? _view;
     private RenderTexture? _rt;
     private Camera? _source, _lastSource;
+    private int _lastCutCount;
     private float _widthAtDragStart;
 
     /// <summary>Renders the selected camera, if any. Call once per frame before <see cref="Draw"/>.</summary>
@@ -57,9 +58,10 @@ internal sealed class CameraPreview
             EnsureTarget((int)w, (int)h);
             // The preview's own view: its effect history stays apart from the Game view's render of the same camera.
             _view ??= Graphics.Renderer.CreateView(world, "Camera Preview");
-            // A different camera, or the first frame after a gap or a jump: don't blend in the old history.
-            if (!ReferenceEquals(cam, _lastSource)) _view.Cut();
+            // A different camera, a gap or a jump, or the camera itself was cut (a teleport): don't blend in the old history.
+            if (!ReferenceEquals(cam, _lastSource) || cam.CutCount != _lastCutCount) _view.Cut();
             _lastSource = cam;
+            _lastCutCount = cam.CutCount;
 
             // Preview, not RenderTexture: screen-space canvases would lay out again at the preview's pixel size, every
             // frame alongside the Game view's. World-space UI still draws.

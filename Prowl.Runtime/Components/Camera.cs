@@ -379,7 +379,11 @@ public class Camera : Component
     {
         foreach (RenderView view in _views) view.Cut();
         _stereoView?.Cut();
+        CutCount++;
     }
+
+    /// <summary>How many times <see cref="Cut"/> has been called, so a caller's own view (a preview's) can cut too.</summary>
+    internal int CutCount { get; private set; }
 
     /// <summary>Frees the camera's Graphite views, which keep its history, made again on its next render.</summary>
     public void ReleaseViews()
@@ -461,9 +465,12 @@ public class Camera : Component
         view.World = world;
         view.Target = framebuffer;
         view.CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask;
-        view.ClearColor = Background == CameraBackground.Skybox ? GameObject.Scene.Environment.SkyColor.ToFloat4() : BackgroundColor.ToFloat4();
+        // A preview has no cameras drawn under it, so an overlay camera's clears to black rather than drawing over undefined pixels.
+        bool previewOverlay = into != null && Background == CameraBackground.None;
+        view.ClearColor = Background == CameraBackground.Skybox ? GameObject.Scene.Environment.SkyColor.ToFloat4()
+            : previewOverlay ? new Float4(0, 0, 0, 1) : BackgroundColor.ToFloat4();
         view.Sky = Background == CameraBackground.Skybox && GameObject.Scene.Rendering.HasSky;
-        view.Overlay = Background == CameraBackground.None;
+        view.Overlay = Background == CameraBackground.None && !previewOverlay;
         view.Kind = kind;
         view.Viewport = stereo || into != null ? new Float4(0, 0, 1, 1) : ClampViewport(ViewportRect);
         view.RenderScale = Maths.Clamp(RenderScale * QualitySettings.Active.RenderScale, 0.1f, 2.0f);
