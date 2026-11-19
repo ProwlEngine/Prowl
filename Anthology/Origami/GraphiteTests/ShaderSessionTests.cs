@@ -121,6 +121,17 @@ public class ShaderSessionTests
     }
 
     [Fact]
+    public async Task MemberCompletionAfterAnUnmatchedCloser_GivesNothing()
+    {
+        const string text = "void main() { }\nx).a.b.";
+        var session = Session(text, ShaderFileKind.Glsl);
+        var completion = session.GetCompletionsAsync(text.Length, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, '.'), default);
+
+        Assert.Same(completion, await Task.WhenAny(completion, Task.Delay(5000)));
+        Assert.Null(await completion);
+    }
+
+    [Fact]
     public async Task CompletesWrapperByBlock()
     {
         string text = Blur.Replace("        Cull Off", "        Cull \n        Cull Off");

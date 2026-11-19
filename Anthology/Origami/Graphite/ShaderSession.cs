@@ -158,6 +158,8 @@ public sealed partial class ShaderSession : CodeLanguageSession
         while (j >= 0)
         {
             var t = index.Token(j);
+            // An unmatched closer has no opener to step back to.
+            if (t.Text is "]" or ")" && index.CloseOf(j) is var opener && (opener >= j || opener < 1)) return null;
             if (t.Text == "]") { j = index.CloseOf(j) - 1; continue; }
             if (t.Text == ")")
             {
