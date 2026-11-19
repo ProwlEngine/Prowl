@@ -1044,33 +1044,31 @@ public class SceneViewPanel : DockPanel
         return new Float3(MathF.Round(p.X / step) * step, p.Y, MathF.Round(p.Z / step) * step);
     }
 
-    private static Float3 RaycastDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    /// <summary>Nearest point where <paramref name="ray"/> hits a visible mesh in the scene, or null.</summary>
+    internal static Float3? RaycastSurface(SceneInstance scene, Ray ray)
     {
-        Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
-
-        // Try raycasting against scene objects first
         float bestDist = float.MaxValue;
-        Float3 bestPos = Float3.Zero;
-        bool hit = false;
+        Float3? best = null;
 
         foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
             MeshRenderer? meshRenderer = go.GetComponent<MeshRenderer>();
-            if (meshRenderer.IsValid() && meshRenderer.Raycast(ray, out float dist))
+            if (meshRenderer.IsValid() && meshRenderer.EnabledInHierarchy && meshRenderer.Raycast(ray, out float dist) && dist < bestDist)
             {
-                if (dist < bestDist)
-                {
-                    bestDist = dist;
-                    bestPos = ray.Origin + ray.Direction * dist;
-                    hit = true;
-                }
+                bestDist = dist;
+                best = ray.Origin + ray.Direction * dist;
             }
-
         }
 
-        if (hit) return bestPos;
+        return best;
+    }
+
+    private static Float3 RaycastDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    {
+        Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
+        if (RaycastSurface(scene, ray) is { } hitPos) return hitPos;
 
         // Fallback: intersect with XZ plane at Y=0
         if (MathF.Abs(ray.Direction.Y) > 0.0001f)
