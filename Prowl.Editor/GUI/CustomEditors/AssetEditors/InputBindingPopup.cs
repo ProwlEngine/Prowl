@@ -178,7 +178,7 @@ internal sealed class InputBindingPopup
         List<IInputProcessor> processors, bool analog, bool givesVector)
     {
         DrawInteraction(paper, action, settings, analog, givesVector);
-        DrawProcessors(paper, processors);
+        DrawProcessors(paper, action, processors);
     }
 
     private static bool Owns(InputAction action, object entry) => entry switch
@@ -624,7 +624,7 @@ internal sealed class InputBindingPopup
     //  Processors
     // ================================================================
 
-    private static void DrawProcessors(Paper paper, List<IInputProcessor> processors)
+    private static void DrawProcessors(Paper paper, InputAction action, List<IInputProcessor> processors)
     {
         string badge = processors.Count switch
         {
@@ -632,10 +632,10 @@ internal sealed class InputBindingPopup
             1 => ProcessorName(processors[0]),
             _ => $"{processors.Count}, run top to bottom"
         };
-        Origami.Foldout(paper, "ibp_proc", "Processors").Badge(badge).Body(() => DrawProcessorList(paper, processors));
+        Origami.Foldout(paper, "ibp_proc", "Processors").Badge(badge).Body(() => DrawProcessorList(paper, action, processors));
     }
 
-    private static void DrawProcessorList(Paper paper, List<IInputProcessor> processors)
+    private static void DrawProcessorList(Paper paper, InputAction action, List<IInputProcessor> processors)
     {
         OrigamiMetrics m = Origami.Current.Metrics;
         for (int i = 0; i < processors.Count; i++)
@@ -653,7 +653,7 @@ internal sealed class InputBindingPopup
                     .Text(ProcessorName(proc), EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont!).TextColor(EditorTheme.Ink500)
                     .FontSize(InputBindingDisplay.LabelSize + 1).Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
 
-                DrawProcessorParams(paper, id, proc);
+                DrawProcessorParams(paper, action, id, proc);
 
                 paper.Box($"{id}_sp").Height(1).IsNotInteractable();
                 InputBindingDisplay.IconBox(paper, $"{id}_up", EditorIcons.ChevronUp, () => Swap(processors, index, index - 1), index == 0, "Move up");
@@ -669,31 +669,46 @@ internal sealed class InputBindingPopup
         }
     }
 
-    private static void DrawProcessorParams(Paper paper, string id, IInputProcessor proc)
+    private static void DrawProcessorParams(Paper paper, InputAction action, string id, IInputProcessor proc)
     {
         switch (proc)
         {
             case DeadzoneProcessor dp:
-                ProcessorField(paper, $"{id}_a", "threshold", dp.Threshold, v => dp.Threshold = Math.Clamp(v, 0f, 0.99f));
+                ProcessorFloat(paper, $"{id}_a", "threshold", dp.Threshold, v => dp.Threshold = Math.Clamp(v, 0f, 0.99f));
                 break;
             case ScaleProcessor sp:
-                ProcessorField(paper, $"{id}_a", "scale", sp.Scale, v => sp.Scale = v);
+                ProcessorFloat(paper, $"{id}_a", "scale", sp.Scale, v => sp.Scale = v);
                 break;
             case ClampProcessor cp:
-                ProcessorField(paper, $"{id}_a", "min", cp.Min, v => cp.Min = v);
-                ProcessorField(paper, $"{id}_b", "max", cp.Max, v => cp.Max = v);
+                ProcessorFloat(paper, $"{id}_a", "min", cp.Min, v => cp.Min = v);
+                ProcessorFloat(paper, $"{id}_b", "max", cp.Max, v => cp.Max = v);
                 break;
             case ExponentialProcessor ep:
-                ProcessorField(paper, $"{id}_a", "exponent", ep.Exponent, v => ep.Exponent = MathF.Max(0.1f, v));
+                ProcessorFloat(paper, $"{id}_a", "exponent", ep.Exponent, v => ep.Exponent = MathF.Max(0.1f, v));
+                break;
+            case InvertProcessor ip:
+                // Inverting individual axes only makes sense for a 2D input.
+                if (action.ExpectedValueType == typeof(Vector.Float2))
+                {
+                    ProcessorBool(paper, $"{id}_a", "invert X", ip.InvertX, v => ip.InvertX = v);
+                    ProcessorBool(paper, $"{id}_b", "invert Y", ip.InvertY, v => ip.InvertY = v);
+                }
                 break;
         }
     }
 
-    private static void ProcessorField(Paper paper, string id, string label, float value, Action<float> setter)
+    private static void ProcessorFloat(Paper paper, string id, string label, float value, Action<float> setter)
     {
         InputBindingDisplay.Caption(paper, $"{id}_l", label);
         using (paper.Box($"{id}_w").Width(70).Height(28).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             Origami.NumericField<float>(paper, id, value, setter).Step(0.05f).Show();
+    }
+
+    private static void ProcessorBool(Paper paper, string id, string label, bool value, Action<bool> setter)
+    {
+        InputBindingDisplay.Caption(paper, $"{id}_l", label);
+        using (paper.Box($"{id}_w").Width(UnitValue.Auto).Height(28).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+            Origami.Checkbox(paper, id, value, setter).Show();
     }
 
     private static void Swap(List<IInputProcessor> list, int a, int b)

@@ -42,8 +42,10 @@ public class NormalizeProcessor : IInputProcessor
 /// </summary>
 public class InvertProcessor : IInputProcessor
 {
-    public float Process(float value) => -value;
-    public Float2 Process(Float2 value) => -value;
+    public bool InvertX { get; set; } = true;
+    public bool InvertY { get; set; } = true;
+    public float Process(float value) => InvertX ? -value : value;
+    public Float2 Process(Float2 value) => new(InvertX ? -value.X : value.X, InvertY ? -value.Y : value.Y);
 }
 
 /// <summary>
