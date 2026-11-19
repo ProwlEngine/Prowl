@@ -56,6 +56,14 @@ public struct CameraRenderOptions
 
     /// <summary>Global axis values for this render alone, such as a debug view's GRAPHITE_DEBUG.</summary>
     public GlobalKeyword[]? Keywords;
+
+    /// <summary>
+    /// A view of the caller's own, for a preview of the camera such as the editor's. The render draws the whole of
+    /// <see cref="FallbackTarget"/> at its aspect, even when the camera has a <see cref="Camera.Target"/>, and keeps its
+    /// history in this view. The camera's screen size, aspect and own views stay as its last real render left them.
+    /// It always draws through the forward path, whatever <see cref="Graphics.CameraPipeline"/> is.
+    /// </summary>
+    public RenderView? View;
 }
 
 /// <summary>
@@ -202,6 +210,9 @@ public class Camera : Component
 
     private float _aspect;
     private bool _customAspect;
+
+    /// <summary>Whether <see cref="Aspect"/> was set by hand rather than taken from the target.</summary>
+    internal bool HasCustomAspect => _customAspect;
     private Float4x4 _projectionMatrix;
     private bool _customProjectionMatrix;
 
@@ -210,6 +221,7 @@ public class Camera : Component
     [SerializeIgnore, NonSerialized, NotHeld] private ulong _viewsFrame = ulong.MaxValue;
     [SerializeIgnore, NonSerialized, NotHeld] private int _viewsUsed;
     [SerializeIgnore, NonSerialized, NotHeld] private readonly ExtensionSet<RenderFeature> _features = new();
+    [SerializeIgnore, NonSerialized, NotHeld] private readonly ExtensionSet<RenderFeature> _previewFeatures = new();
     [SerializeIgnore, NonSerialized, NotHeld] private readonly List<RenderFeature> _activeFeatures = [];
     [SerializeIgnore, NonSerialized, NotHeld] private VolumeStack? _volumes;
     [SerializeIgnore, NonSerialized, NotHeld] private AntiAliasingFeatures? _antiAliasing;
@@ -353,7 +365,10 @@ public class Camera : Component
     {
         using SceneInstance.SceneScope active = EnterOwnWorld();
         using Diagnostics.FrameStatScope stats = Diagnostics.FrameStats.Render.Scope();
-        Graphics.CameraPipeline.Render(this, options);
+        // A preview always draws through the forward path: a custom pipeline knows nothing of the caller's view, and
+        // would overwrite the camera's screen size and history with the preview's.
+        if (options.View != null) RenderForward(options);
+        else Graphics.CameraPipeline.Render(this, options);
     }
 
     /// <summary>
@@ -364,7 +379,11 @@ public class Camera : Component
     {
         foreach (RenderView view in _views) view.Cut();
         _stereoView?.Cut();
+        CutCount++;
     }
+
+    /// <summary>How many times <see cref="Cut"/> has been called, so a caller's own view (a preview's) can cut too.</summary>
+    internal int CutCount { get; private set; }
 
     /// <summary>Frees the camera's Graphite views, which keep its history, made again on its next render.</summary>
     public void ReleaseViews()
@@ -382,6 +401,20 @@ public class Camera : Component
         scene.Rendering.Sync();
         RenderWorld? world = scene.Rendering.World;
         if (world == null) return;
+
+        if (options.View != null)
+        {
+            RenderTexture? into = options.FallbackTarget;
+            if (into.IsNotValid()) return;
+            float aspect = _customAspect ? _aspect : into.Width / (float)Maths.Max(1, into.Height);
+            RenderView preview = BuildViewInto(world, into.Framebuffer, options.Kind, options.View, aspect);
+            if (options.DependsOn != null) preview.DependsOn.AddRange(options.DependsOn);
+            // Its own set: the camera's is held by the view the game drew it into this frame.
+            preview.Features = BuildFeatures(options.Features, _previewFeatures);
+            preview.Keywords = options.Keywords;
+            Graphics.AddView(preview);
+            return;
+        }
 
         RenderTexture? target = UpdateRenderData(options.FallbackTarget);
         RenderTexture? window = Graphics.WindowTarget;
@@ -421,18 +454,25 @@ public class Camera : Component
     /// its own, in the order it renders, so each keeps its own history.
     /// </summary>
     public RenderView BuildView(RenderWorld world, Graphite.Framebuffer framebuffer, ViewKind kind = ViewKind.Game)
+        => BuildViewInto(world, framebuffer, kind, null, _aspect);
+
+    // Into a caller's view (a preview), the view covers the whole target at the given aspect.
+    private RenderView BuildViewInto(RenderWorld world, Graphite.Framebuffer framebuffer, ViewKind kind, RenderView? into, float aspect)
     {
-        bool stereo = framebuffer.ViewCount == 2;
-        RenderView view = stereo ? _stereoView ??= Graphics.Renderer!.CreateView(world, Name) : NextView(world);
+        bool stereo = into == null && framebuffer.ViewCount == 2;
+        RenderView view = into ?? (stereo ? _stereoView ??= Graphics.Renderer!.CreateView(world, Name) : NextView(world));
         Float3 position = Transform.Position;
         view.World = world;
         view.Target = framebuffer;
         view.CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask;
-        view.ClearColor = Background == CameraBackground.Skybox ? GameObject.Scene.Environment.SkyColor.ToFloat4() : BackgroundColor.ToFloat4();
+        // A preview has no cameras drawn under it, so an overlay camera's clears to black rather than drawing over undefined pixels.
+        bool previewOverlay = into != null && Background == CameraBackground.None;
+        view.ClearColor = Background == CameraBackground.Skybox ? GameObject.Scene.Environment.SkyColor.ToFloat4()
+            : previewOverlay ? new Float4(0, 0, 0, 1) : BackgroundColor.ToFloat4();
         view.Sky = Background == CameraBackground.Skybox && GameObject.Scene.Rendering.HasSky;
-        view.Overlay = Background == CameraBackground.None;
+        view.Overlay = Background == CameraBackground.None && !previewOverlay;
         view.Kind = kind;
-        view.Viewport = stereo ? new Float4(0, 0, 1, 1) : ClampViewport(ViewportRect);
+        view.Viewport = stereo || into != null ? new Float4(0, 0, 1, 1) : ClampViewport(ViewportRect);
         view.RenderScale = Maths.Clamp(RenderScale * QualitySettings.Active.RenderScale, 0.1f, 2.0f);
         view.EV100 = EV100;
         view.Ldr = !HDR;
@@ -450,7 +490,7 @@ public class Camera : Component
         view.Camera = new ViewCamera(new ViewLayer
         {
             View = Float4x4.CreateLookTo(Float3.Zero, Transform.Forward, Transform.Up),
-            Projection = GraphiteProjection(),
+            Projection = GraphiteProjection(aspect),
             Position = new Double3(position.X, position.Y, position.Z),
         }, NearClipPlane, FarClipPlane);
         return view;
@@ -484,7 +524,7 @@ public class Camera : Component
         };
     }
 
-    private static Float4 ClampViewport(Float4 rect)
+    internal static Float4 ClampViewport(Float4 rect)
     {
         float x = Maths.Clamp(rect.X, 0, 0.999f), y = Maths.Clamp(rect.Y, 0, 0.999f);
         return new Float4(x, y, Maths.Clamp(rect.Z, 0.001f, 1 - x), Maths.Clamp(rect.W, 0.001f, 1 - y));
@@ -494,7 +534,7 @@ public class Camera : Component
     /// The projection Graphite draws with: reversed depth, 1 at the near plane falling toward 0 into the distance, with
     /// no far plane for a perspective camera. A hand set projection is turned around to match.
     /// </summary>
-    private Float4x4 GraphiteProjection()
+    private Float4x4 GraphiteProjection(float aspect)
     {
         if (_customProjectionMatrix)
         {
@@ -505,7 +545,7 @@ public class Camera : Component
             p.c3.Z = p.c3.W - p.c3.Z;
             return p;
         }
-        return ReversedProjection(_aspect);
+        return ReversedProjection(aspect);
     }
 
     private Float4x4 ReversedProjection(float aspect)
@@ -533,7 +573,9 @@ public class Camera : Component
     }
 
     // The features of the blended volumes and the anti aliasing, then the render's own
-    private ExtensionSet<RenderFeature> BuildFeatures(IReadOnlyList<RenderFeature>? extra)
+    private ExtensionSet<RenderFeature> BuildFeatures(IReadOnlyList<RenderFeature>? extra) => BuildFeatures(extra, _features);
+
+    private ExtensionSet<RenderFeature> BuildFeatures(IReadOnlyList<RenderFeature>? extra, ExtensionSet<RenderFeature> set)
     {
         Renderer renderer = Graphics.Renderer!;
         _activeFeatures.Clear();
@@ -548,12 +590,12 @@ public class Camera : Component
         if (extra != null) _activeFeatures.AddRange(extra);
 
         List<RenderFeature> stale = [];
-        foreach (RenderFeature feature in _features)
+        foreach (RenderFeature feature in set)
             if (!_activeFeatures.Contains(feature)) stale.Add(feature);
-        foreach (RenderFeature feature in stale) _features.Remove(feature);
+        foreach (RenderFeature feature in stale) set.Remove(feature);
         foreach (RenderFeature feature in _activeFeatures)
-            if (!_features.Contains(feature)) _features.Add(feature);
-        return _features;
+            if (!set.Contains(feature)) set.Add(feature);
+        return set;
     }
 
     /// <param name="fallbackTarget">Where this render goes when the camera has no <see cref="Target"/> of its own. Null means the window.</param>

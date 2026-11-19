@@ -39,6 +39,7 @@ public class SceneViewPanel : DockPanel
     private const string ViewCubeControl = "sceneview_viewcube";
 
     private readonly HandleContext _handles = new();
+    private readonly CameraPreview _cameraPreview = new();
     private readonly SceneToolContext _toolContext;
     private EditorCamera? _editorCamera;
     /// <summary>Includes restored settings before the camera is created on the first draw.</summary>
@@ -507,6 +508,9 @@ public class SceneViewPanel : DockPanel
             GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
         }
 
+        // The selected camera, for the corner preview.
+        _cameraPreview.Render(width, height);
+
         if (rt.IsValid() && rt.MainTexture.IsValid())
         {
             paper.Box("sv_viewport")
@@ -686,6 +690,9 @@ public class SceneViewPanel : DockPanel
 
             // View manipulator (orientation cube) drawn as 2D overlay on top-right
             DrawViewManipulator(paper, font, width, height);
+
+            // What the selected camera sees, bottom-right
+            _cameraPreview.Draw(paper, font, width, height, _editorCamera!);
         }
     }
 
@@ -1044,33 +1051,31 @@ public class SceneViewPanel : DockPanel
         return new Float3(MathF.Round(p.X / step) * step, p.Y, MathF.Round(p.Z / step) * step);
     }
 
-    private static Float3 RaycastDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    /// <summary>Nearest point where <paramref name="ray"/> hits a visible mesh in the scene, or null.</summary>
+    internal static Float3? RaycastSurface(SceneInstance scene, Ray ray)
     {
-        Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
-
-        // Try raycasting against scene objects first
         float bestDist = float.MaxValue;
-        Float3 bestPos = Float3.Zero;
-        bool hit = false;
+        Float3? best = null;
 
         foreach (GameObject go in scene.Objects.Where(o => o.EnabledInHierarchy && o.Section is not { HiddenInSceneView: true }))
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
             MeshRenderer? meshRenderer = go.GetComponent<MeshRenderer>();
-            if (meshRenderer.IsValid() && meshRenderer.Raycast(ray, out float dist))
+            if (meshRenderer.IsValid() && meshRenderer.EnabledInHierarchy && meshRenderer.Raycast(ray, out float dist) && dist < bestDist)
             {
-                if (dist < bestDist)
-                {
-                    bestDist = dist;
-                    bestPos = ray.Origin + ray.Direction * dist;
-                    hit = true;
-                }
+                bestDist = dist;
+                best = ray.Origin + ray.Direction * dist;
             }
-
         }
 
-        if (hit) return bestPos;
+        return best;
+    }
+
+    private static Float3 RaycastDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    {
+        Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
+        if (RaycastSurface(scene, ray) is { } hitPos) return hitPos;
 
         // Fallback: intersect with XZ plane at Y=0
         if (MathF.Abs(ray.Direction.Y) > 0.0001f)
@@ -1283,6 +1288,7 @@ public class SceneViewPanel : DockPanel
         if (_wasGizmoActive) EndGizmoDrag();
         _editorCamera?.ReleaseFlight();
         ClearDropPreview();
+        _cameraPreview.Dispose();
     }
 
     // The kind of transform the current drag turned out to be, or null before it has moved.

@@ -483,6 +483,30 @@ public class UndoTests : EditorTestHarness
     }
 
     [Fact]
+    public void CameraPreviewAlignWithView_IsOneUndoStep()
+    {
+        SceneInstance scene = OpenScene();
+        GameObject cam = Add(scene, "Camera");
+        cam.Transform.SetPositionAndRotation(new Float3(1, 2, 3), Quaternion.Identity);
+        Quaternion turned = Quaternion.FromEuler(10, 45, 0);
+
+        CameraPreview.MoveTo(cam, new Float3(7, 8, 9), turned);
+        Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
+
+        // Position and rotation both come back from a single undo, and a second undo has nothing left to change.
+        Undo.PerformUndo();
+        Assert.Equal(new Float3(1, 2, 3), cam.Transform.Position);
+        Assert.True(MathF.Abs(Quaternion.Dot(Quaternion.Identity, cam.Transform.Rotation)) > 0.9999f);
+        Undo.PerformUndo();
+        Assert.Equal(new Float3(1, 2, 3), cam.Transform.Position);
+        Assert.True(MathF.Abs(Quaternion.Dot(Quaternion.Identity, cam.Transform.Rotation)) > 0.9999f);
+
+        Undo.PerformRedo();
+        Assert.Equal(new Float3(7, 8, 9), cam.Transform.Position);
+        Assert.True(MathF.Abs(Quaternion.Dot(turned, cam.Transform.Rotation)) > 0.9999f);
+    }
+
+    [Fact]
     public void DestroyedRoot_ComesBackAtItsRootIndex()
     {
         SceneInstance scene = OpenScene();
