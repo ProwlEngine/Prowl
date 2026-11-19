@@ -72,6 +72,9 @@ public class GameViewPanel : DockPanel
 
     /// <summary> What the game view last rendered into, or null before it has drawn. </summary>
     internal RenderTexture? RenderTarget => _rt;
+
+    /// <summary>The aspect the Game view last showed its cameras at, for previews that should match it.</summary>
+    internal static float LastAspect { get; private set; } = 16f / 9f;
     private int _resolutionIndex = -1; // read from the project on first use, see ResolutionIndex
     private bool _showStats;
     private GameViewScale _scale = GameViewScale.Fit;
@@ -705,6 +708,7 @@ public class GameViewPanel : DockPanel
 
     private void EnsureRT(int w, int h)
     {
+        LastAspect = w / (float)Math.Max(1, h);
         if (_rt.IsValid() && _rt.Width == w && _rt.Height == h) return;
         if (_rt.IsValid()) _rt.Dispose();
         _rt = new RenderTexture(w, h, true, [TextureFormat.RGBA8]);
