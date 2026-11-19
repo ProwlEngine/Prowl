@@ -1055,7 +1055,7 @@ public class SceneViewPanel : DockPanel
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
             MeshRenderer? meshRenderer = go.GetComponent<MeshRenderer>();
-            if (meshRenderer.IsValid() && meshRenderer.Raycast(ray, out float dist) && dist < bestDist)
+            if (meshRenderer.IsValid() && meshRenderer.EnabledInHierarchy && meshRenderer.Raycast(ray, out float dist) && dist < bestDist)
             {
                 bestDist = dist;
                 best = ray.Origin + ray.Direction * dist;
