@@ -149,6 +149,7 @@ internal sealed partial class NetworkObject
         using NetWriter message = new(32);
         new OwnerMessage(GameObject.Identifier, owner, Generation).Write(message);
         System.SendToObservers(this, EngineMessage.Owner, message.WrittenSpan);
+        System.SendOwnerState(this, previous);
         NotifyOwnership();
         if (System.FindEntry(GameObject) == this && !TearingDown)
         {

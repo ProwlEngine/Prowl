@@ -437,7 +437,7 @@ internal sealed partial class NetworkSystem
             built.Write(payload);
             new SpawnMessage(go.Identifier, parent, SectionSlot(go), owner, orphaned, generation,
                 netId == 0 ? NextNetId() : netId, payload.WrittenSpan, replace, Tick, true).Write(output);
-            Sync.WriteSyncState(output, [go, .. go.GetChildrenDeep()]);
+            Sync.WriteSpawnState(output, FindEntry(go)?.Components ?? NetworkComponents.Gather(go));
             return;
         }
 
@@ -460,8 +460,16 @@ internal sealed partial class NetworkSystem
 
         new SpawnMessage(go.Identifier, parent, SectionSlot(go), owner, orphaned, generation, netId == 0 ? NextNetId() : netId, Compress(echo), replace, Tick).Write(output);
 
-        List<GameObject> tree = [go, .. go.GetChildrenDeep()];
-        Sync.WriteSyncState(output, tree);
+        // The tree may have gained networked components since it spawned, which are not networked. So a spawn that
+        // carries the tree names the ones that are, for the receiver to find in its copy.
+        Component[] components = FindEntry(go)?.Components ?? NetworkComponents.Gather(go);
+        output.WriteByte((byte)components.Length);
+        foreach (Component component in components)
+        {
+            output.WriteGuid(component.Identifier);
+        }
+
+        Sync.WriteSpawnState(output, components);
     }
 
     internal void OnSpawn(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -491,7 +499,7 @@ internal sealed partial class NetworkSystem
         }
 
         bool attached = false, adopted = false;
-        List<(Component Component, SyncMember Sync)>? applied = null;
+        Component[] components = [];
         try
         {
             if (Session != session || ReplicatedWorld != scene)
@@ -537,8 +545,10 @@ internal sealed partial class NetworkSystem
                     }
                 }
 
-                applied = message.Replace ? [] : null;
-                Sync.ApplySyncState(sender, ref reader, null, true, true, accepted: applied);
+                components = template != null
+                    ? adopted ? NetworkComponents.Gather(go) : template.Components
+                    : ReadSpawnComponents(ref reader);
+                Sync.ApplySpawnState(sender, components, ref reader);
             }
             finally
             {
@@ -553,13 +563,12 @@ internal sealed partial class NetworkSystem
             NetworkObject entry = new(this, go)
             {
                 Owner = owner, Generation = generation, NetId = netId, Template = adopted ? null : template,
-                Components = adopted || template == null ? NetworkComponents.Gather(go) : template.Components
+                Components = components
             };
             go.Network.ApplyOrphaned(orphaned);
             Entries.Add(entry);
-            if (applied != null)
+            if (message.Replace)
             {
-                Snapshots.Received(sender, applied, message.Tick);
                 entry.TransformSync.ReceivedAt(message.Tick);
             }
             entry.UpdatePhysics();
@@ -606,6 +615,30 @@ internal sealed partial class NetworkSystem
                 }
             }
         }
+    }
+
+    // The networked components a spawn that carries its tree names, found in the tree being spawned.
+    private Component[] ReadSpawnComponents(ref NetReader reader)
+    {
+        int count = reader.ReadByte();
+        if (count > NetworkComponents.MaxPerObject)
+        {
+            throw new InvalidDataException("A spawn names too many networked components.");
+        }
+
+        Component[] components = new Component[count];
+        for (int i = 0; i < count; i++)
+        {
+            Guid id = reader.ReadGuid();
+            if (Spawning == null || !Spawning.TryGetValue(id, out EngineObject? found) || found is not Component component)
+            {
+                throw new InvalidDataException("A spawn names a networked component its tree doesn't hold.");
+            }
+
+            components[i] = component;
+        }
+
+        return components;
     }
 
     /// <summary>Removes the copy of an object the host is sending again, even one still being destroyed.</summary>

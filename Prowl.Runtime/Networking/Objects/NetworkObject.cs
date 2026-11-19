@@ -40,6 +40,12 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     /// <summary>Its networked components, fixed for the life of the spawn. A component's place here is its index on the wire.</summary>
     public Component[] Components { get; init; } = NetworkComponents.Gather(gameObject);
 
+    /// <summary>The changed [Sync] members of each networked component not sent yet, a bit each, or null for none.</summary>
+    public ulong[]? Dirty;
+
+    /// <summary>True while this object is on the list of objects with changes to send.</summary>
+    public bool StateDirty;
+
     /// <summary>The index of a networked component of this object, or -1.</summary>
     public int IndexOf(Component component) => Array.IndexOf(Components, component);
     public GameObject GameObject { get; } = gameObject;

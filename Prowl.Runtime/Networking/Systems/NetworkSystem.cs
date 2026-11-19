@@ -82,7 +82,7 @@ internal sealed partial class NetworkSystem : IDisposable
         LoadingPeers.Clear();
         _overLimitPeers.Clear();
         EarlyRpcs.Clear();
-        Sync.Dirty.Clear();
+        Sync.Clear();
         Sync.Dispose();
         Snapshots.Clear();
         Snapshots.Dispose();
@@ -165,7 +165,6 @@ internal sealed partial class NetworkSystem : IDisposable
         UpdateReadiness();
         if (IsActive)
         {
-            Snapshots.ResolveReferences();
             ApplyInterpolation();
         }
 

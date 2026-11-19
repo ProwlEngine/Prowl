@@ -19,90 +19,6 @@ public class SyncReferenceTestComponent : Component
 
 public partial class NetworkingTests
 {
-    [Fact]
-    public void ALateAcknowledgementFromThePreviousSceneDoesNotAcknowledgeTheNextScenesSnapshots()
-    {
-        var (_, state, network) = ReadinessHost();
-        using FakePeer client = FakePeer.Join(network, "client");
-        try
-        {
-            Pump(() => client.IsReady, client);
-            state.Health = 5;
-            Pump(() => client.WireReceived.Any(m => m.Id == FakePeer.Snapshot && new NetReader(m.Data).ReadVarUInt32() != 0), client);
-            uint oldId = new NetReader(client.WireReceived.First(m => m.Id == FakePeer.Snapshot).Data).ReadVarUInt32();
-            PumpFor(20, client);
-
-            SceneInstance next = CreateScene();
-            GameObject root = CreateGameObject("Next actor");
-            NetTestComponent component = root.AddComponent<NetTestComponent>();
-            next.Add(root);
-            MakeCurrent(next);
-            Pump(() => client.IsReady && Networking.Networking.IsPeerReady(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal)), client);
-            client.AutoAck = false;
-            client.WireReceived.Clear();
-            component.Health = 7;
-            Pump(() => client.WireReceived.Any(m => m.Id == FakePeer.Snapshot), client);
-
-            // An unreliable acknowledgement of the previous scene's snapshot, arriving this late.
-            using NetWriter stale = new();
-            stale.WriteVarUInt32(1); stale.WriteVarUInt32(oldId); stale.WriteVarUInt32(0); stale.WriteVarUInt32(0);
-            client.Session.SendRaw(client.Session.HostPeer!, FakePeer.SnapshotAck, stale.WrittenSpan, Delivery.Unreliable);
-            client.Session.Flush();
-            PumpFor(20, client);
-
-            client.WireReceived.Clear();
-            component.Health = 8;
-            Pump(() => client.WireReceived.Any(m => m.Id == FakePeer.Snapshot), client);
-            NetReader snapshot = new(client.WireReceived.Last(m => m.Id == FakePeer.Snapshot).Data);
-            snapshot.ReadVarUInt32(); snapshot.ReadVarUInt32(); snapshot.ReadVarUInt32();
-            FakePeer.SkipTransformGroups(ref snapshot);
-            Assert.True(snapshot.ReadVarUInt32() > 0);
-            Assert.True((snapshot.ReadVarUInt32() & 1) != 0, "The value names a component the client was never told about.");
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
-    public void AReferenceThatArrivesBeforeItsSpawnResolvesOnceTheSpawnArrives()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject holderObject = CreateGameObject("Holder");
-        SyncReferenceTestComponent holder = holderObject.AddComponent<SyncReferenceTestComponent>();
-        holderObject.Network.Networked = true;
-        scene.Add(holderObject);
-        using NetWriter snapshot = new(), holderSpawn = new();
-        NetworkTestScene.Current.WriteScene(scene, snapshot);
-        NetworkTestScene.Current.WriteSpawn(holderObject, owner: -1, NetworkOrphaned.Destroy, holderSpawn);
-        GameObject target = CreateGameObject("Target");
-        target.Network.Networked = true;
-        using NetWriter spawn = new();
-        NetworkTestScene.Current.WriteSpawn(target, owner: -1, NetworkOrphaned.Destroy, spawn, generation: 1);
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        SendJoin(host, snapshot.ToArray(), holderSpawn.ToArray());
-        try
-        {
-            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady, host);
-            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
-            using NetWriter reference = new();
-            reference.WriteGuid(target.Identifier);
-
-            // Unreliable, so the value can overtake the reliable spawn of the object it names.
-            host.SendSnapshotValues(peer, 7, 1, (holder.Identifier, SyncReferenceTestComponent.TargetSlot, 0u, reference.ToArray()));
-            Pump(() => host.Has(FakePeer.SnapshotAck), host);
-            host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
-            host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == target.Identifier), host);
-            PumpFor(50, host);
-
-            GameObject? resolved = Find(SceneInstance.Main, holderObject.Identifier).GetComponent<SyncReferenceTestComponent>()!.Target;
-            Assert.NotNull(resolved);
-            Assert.Equal(target.Identifier, resolved!.Identifier);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
     private static byte[] IntValue(int value)
     {
         using NetWriter writer = new();
@@ -112,7 +28,7 @@ public partial class NetworkingTests
 
     private static int SnapshotsHolding(FakePeer peer, Guid component, uint slot) =>
         peer.WireReceived.Count(m => m.Id == FakePeer.Snapshot &&
-                                     peer.SnapshotValues(m.Data).Any(v => v.Component == component && v.Slot == slot));
+                                     FakePeer.SnapshotValues(m.Data).Any(v => v.Component == component && v.Slot == slot));
 
     /// <summary>A host-owned crate a ready client knows about.</summary>
     private (SceneInstance Scene, GameObject Crate, NetTestComponent Component) SpawnCrate(LocalNetwork network, NetPeer? owner,
@@ -126,67 +42,6 @@ public partial class NetworkingTests
         crate.Network.SpawnSerialized(owner);
         Pump(() => peers.All(p => p.Has(FakePeer.Spawn)), peers);
         return (scene, crate, component);
-    }
-
-    [Fact]
-    public void UnacknowledgedValuesAreResentUntilAcknowledged()
-    {
-        MakeCurrent(CreateScene());
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            (_, _, NetTestComponent component) = SpawnCrate(network, null, alice);
-
-            // Unacknowledged, it keeps coming.
-            alice.AutoAck = false;
-            component.Health = 7;
-            Pump(() => SnapshotsHolding(alice, component.Identifier, NetTestComponent.HealthSlot) >= 3, alice);
-            Assert.Equal(7, alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot));
-
-            // Acknowledged, it stops.
-            alice.AutoAck = true;
-            PumpFor(300, alice);
-            alice.WireReceived.Clear();
-            PumpFor(300, alice);
-            Assert.Equal(0, SnapshotsHolding(alice, component.Identifier, NetTestComponent.HealthSlot));
-
-            // A new change goes out once, and only the value that changed.
-            component.Health = 8;
-            PumpFor(300, alice);
-            Assert.Equal(1, SnapshotsHolding(alice, component.Identifier, NetTestComponent.HealthSlot));
-            Assert.Equal(0, SnapshotsHolding(alice, component.Identifier, NetTestComponent.ScoreSlot));
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
-    public void OlderSnapshotsDoNotRollValuesBack()
-    {
-        MakeCurrent(CreateScene());
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            Pump(() => alice.IsReady, alice);
-            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            (_, GameObject crate, NetTestComponent component) = SpawnCrate(network, aliceHere, alice);
-            uint generation = NetworkGeneration(crate);
-
-            alice.SendSnapshotValues(null, 1, 10, (component.Identifier, NetTestComponent.HealthSlot, generation, IntValue(5)));
-            Pump(() => component.Health == 5, alice);
-            // Tick 9 was taken before tick 10, so it arrives late and is dropped; it's still acknowledged.
-            alice.SendSnapshotValues(null, 2, 9, (component.Identifier, NetTestComponent.HealthSlot, generation, IntValue(3)));
-            alice.SendSnapshotValues(null, 3, 11, (component.Identifier, NetTestComponent.HealthSlot, generation, IntValue(6)));
-            Pump(() => component.Health == 6, alice);
-            alice.SendSnapshotValues(null, 4, 9, (component.Identifier, NetTestComponent.HealthSlot, generation, IntValue(3)));
-            PumpFor(50, alice);
-            Assert.Equal(6, component.Health);
-            Assert.Equal(SessionState.Active, alice.Session.State);
-        }
-        finally { Networking.Networking.Shutdown(); }
     }
 
     [Fact]
@@ -218,33 +73,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ValuesForObjectsNotSpawnedYetAreRejectedSoTheyStayOwed()
-    {
-        SceneInstance scene = CreateScene();
-        using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteScene(scene, snapshot);
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
-        Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-        try
-        {
-            Pump(() => Networking.Networking.IsReady, host);
-            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            Guid unknown = Guid.NewGuid();
-            host.SendSnapshotValues(client, 5, 1, (unknown, NetTestComponent.HealthSlot, 1, IntValue(1)));
-            Pump(() => host.Has(FakePeer.SnapshotAck), host);
-
-            NetReader ack = new(host.Last(FakePeer.SnapshotAck));
-            Assert.Equal(1u, ack.ReadVarUInt32());
-            Assert.Equal(5u, ack.ReadVarUInt32());
-            Assert.Equal(1u, ack.ReadVarUInt32());
-            Assert.Equal(unknown, ack.ReadGuid());
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
     public void SnapshotsConvergeOverReliableOnlyTransports()
     {
         MakeCurrent(CreateScene());
@@ -258,44 +86,6 @@ public partial class NetworkingTests
             component.Health = 3;
             Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == 3, alice);
             Assert.All(alice.Deliveries.Where(m => m.Id == FakePeer.Snapshot), m => Assert.Equal(Delivery.Reliable, m.Delivery));
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
-    public void ComponentsAreNamedByGuidOnlyUntilAcknowledged()
-    {
-        MakeCurrent(CreateScene());
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            (_, _, NetTestComponent component) = SpawnCrate(network, null, alice);
-            bool[] Definitions()
-            {
-                List<bool> defines = new();
-                foreach ((ushort id, byte[] data) in alice.WireReceived.Where(m => m.Id == FakePeer.Snapshot))
-                {
-                    NetReader r = new(data);
-                    r.ReadVarUInt32(); r.ReadVarUInt32(); r.ReadVarUInt32();
-                    FakePeer.SkipTransformGroups(ref r);
-                    if (r.ReadVarUInt32() == 0) continue;
-                    defines.Add((r.ReadVarUInt32() & 1) != 0);
-                }
-                return defines.ToArray();
-            }
-
-            component.Health = 1;
-            Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == 1, alice);
-            PumpFor(200, alice);
-            component.Health = 2;
-            Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == 2, alice);
-
-            // The first names it by guid; once that's acknowledged, its small id is enough.
-            bool[] defines = Definitions();
-            Assert.True(defines[0]);
-            Assert.False(defines[^1]);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -367,49 +157,4 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    [Fact]
-    public void ValuesOfAComponentAPeerKeepsRejectingStopBeingResent()
-    {
-        SceneInstance scene = CreateScene();
-        MakeCurrent(scene);
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            Pump(() => alice.IsReady, alice);
-            GameObject crate = CreateGameObject("Crate");
-            scene.Add(crate);
-            crate.Network.SpawnSerialized();
-            Pump(() => alice.Has(FakePeer.Spawn), alice);
-
-            // Added after the spawn, so alice never gets it and rejects its values, as a client does.
-            NetTestComponent late = crate.AddComponent<NetTestComponent>();
-            alice.AutoAck = false;
-            late.Health = 5;
-            int handled = alice.WireReceived.Count, owed = 0;
-            DateTime quietFrom = DateTime.UtcNow.AddMilliseconds(SnapshotSystem.MissingComponentSeconds * 1000 + 500);
-            DateTime end = quietFrom.AddMilliseconds(1000);
-            while (DateTime.UtcNow < end)
-            {
-                Frame([alice]);
-                for (; handled < alice.WireReceived.Count; handled++)
-                {
-                    if (alice.WireReceived[handled].Id != FakePeer.Snapshot) continue;
-                    NetReader reader = new(alice.WireReceived[handled].Data);
-                    uint id = reader.ReadVarUInt32();
-                    if (id == 0) continue;
-                    if (DateTime.UtcNow >= quietFrom) owed++;
-                    using NetWriter ack = new();
-                    ack.WriteVarUInt32(1); ack.WriteVarUInt32(id);
-                    ack.WriteVarUInt32(1); ack.WriteGuid(late.Identifier);
-                    ack.WriteVarUInt32(0);
-                    alice.Session.SendRaw(alice.Session.HostPeer!, FakePeer.SnapshotAck, ack.WrittenSpan, Delivery.Unreliable);
-                }
-            }
-
-            Assert.Equal(0, owed);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
 }

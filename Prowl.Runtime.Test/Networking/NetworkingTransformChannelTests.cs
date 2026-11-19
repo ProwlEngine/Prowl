@@ -76,7 +76,6 @@ public partial class NetworkingTests
                 message.WriteGuid(proxy.Identifier); message.WriteUInt32(generation);
                 NetSerializers.WriteFloat3(message, Float3.Zero);
                 message.WriteBytesWithLength(poses.WrittenSpan);
-                message.WriteVarUInt32(1); message.WriteVarUInt32(0); // No values.
                 host.Session.SendRaw(client, FakePeer.OwnershipState, message.WrittenSpan);
                 host.Session.Flush();
             }

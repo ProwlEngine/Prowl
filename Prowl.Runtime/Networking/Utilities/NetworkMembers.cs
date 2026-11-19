@@ -296,6 +296,13 @@ internal sealed class NetworkMembers
 
     private readonly Dictionary<uint, RpcMember> _rpcs = new();
 
+    // The type's [Sync] members sorted by slot. A member's place here is its bit in the dirty mask, the same on every peer.
+    private SyncMember[] _syncOrder = [];
+    private readonly Dictionary<uint, int> _syncIndex = new();
+
+    /// <summary>The most [Sync] members a component can hold: one bit each of a 64 bit mask.</summary>
+    public const int MaxSyncMembers = 64;
+
     // The type's RPCs sorted by id. A call names its method by its place here, the same on every peer.
     private RpcMember[] _rpcOrder = [];
     private readonly Dictionary<uint, int> _rpcIndex = new();
@@ -312,6 +319,15 @@ internal sealed class NetworkMembers
     public SyncMember? Sync(uint slot) => _syncs.GetValueOrDefault(slot);
 
     public RpcMember? Rpc(uint id) => _rpcs.GetValueOrDefault(id);
+
+    /// <summary>How many [Sync] members the type has that take a bit.</summary>
+    public int SyncCount => _syncOrder.Length;
+
+    /// <summary>The [Sync] member at <paramref name="index" /> in slot order, or null.</summary>
+    public SyncMember? SyncAt(int index) => (uint)index < (uint)_syncOrder.Length ? _syncOrder[index] : null;
+
+    /// <summary>The bit <paramref name="sync" /> takes in its type's mask, or -1.</summary>
+    public int IndexOf(SyncMember sync) => _syncIndex.GetValueOrDefault(sync.Slot, -1);
 
     /// <summary>The RPC at <paramref name="index" /> among the type's RPCs sorted by id, or null.</summary>
     public RpcMember? RpcAt(uint index) => index < (uint)_rpcOrder.Length ? _rpcOrder[index] : null;
@@ -373,7 +389,27 @@ internal sealed class NetworkMembers
         }
 
         members?.OrderRpcs();
+        members?.OrderSyncs(type);
         return members ?? s_none;
+    }
+
+    private void OrderSyncs(Type type)
+    {
+        SyncMember[] order = [.. Syncs];
+        Array.Sort(order, static (a, b) => a.Slot.CompareTo(b.Slot));
+        if (order.Length > MaxSyncMembers)
+        {
+            Debug.LogError(
+                $"[Network] {type.Name} has {order.Length} [Sync] members and a component can hold {MaxSyncMembers}, " +
+                "so the last ones are not sent. Split it into several components.");
+            order = order[..MaxSyncMembers];
+        }
+
+        _syncOrder = order;
+        for (int i = 0; i < order.Length; i++)
+        {
+            _syncIndex[order[i].Slot] = i;
+        }
     }
 
     private void OrderRpcs()

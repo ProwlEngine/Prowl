@@ -20,15 +20,7 @@ public class AmmoTestComponent : Component
 public partial class NetworkingTests
 {
     private static bool SpawnCarries(FakePeer peer, uint slot) =>
-        peer.WireReceived.Where(m => m.Id == FakePeer.Spawn).Any(m =>
-        {
-            NetReader reader = new(m.Data);
-            SpawnMessage.Read(ref reader);
-            uint count = SyncBlock.Read(ref reader).Count;
-            for (uint i = 0; i < count; i++)
-                if (SyncValue.Read(ref reader).Slot == slot) return true;
-            return false;
-        });
+        peer.WireReceived.Where(m => m.Id == FakePeer.Spawn).Any(m => SpawnValues(m.Data).Any(v => v.Slot == slot));
 
     [Fact]
     public void AnOwnerOnlyValueReachesTheOwnerAndNobodyElse()

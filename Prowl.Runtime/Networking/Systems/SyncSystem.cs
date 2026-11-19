@@ -4,36 +4,102 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Numerics;
 
 using Prowl.Courier;
 
+using static Prowl.Runtime.Networking.NetworkSystem;
+
 namespace Prowl.Runtime.Networking;
 
-// [Sync] properties. Values travel in snapshots (SnapshotSystem), unreliably and acknowledged. Network collections
-// are collected as they change and sent once per tick, reliably: from the host to every client, or from a client to
-// the host, which applies them and passes them on. A reliable RPC or an ownership handoff sends them early, so they
-// arrive ahead of it. This file also applies blocks of values, from whichever message carries them.
+// [Sync] state, as Mirror's SyncVars: each networked component has a dirty bit per [Sync] member, and once a tick
+// the changed members go out reliably and in order. The host writes each changed object once, into a record for its
+// owner and one for everyone else, and sends each peer the one it gets. A client sends the host the FromOwner
+// members of what it owns, and the host applies them and passes them on to everyone but that owner. A reliable RPC
+// sends the pending changes first, on the same channel, so a call always arrives after the state set before it.
 //
-// A block of values, as in a Sync message, a snapshot or a spawn, is
-// [varuint count] then per value [guid component][varuint slot][varuint ownership generation][bytes value, length prefixed].
-// Ongoing Sync messages prefix this block with [i32 original writer]. The length lets a receiver skip values for
-// components it doesn't have or won't accept.
+// A state message is [varuint count] then per object a record:
+// [varuint NetId][varuint ownership generation][varuint64 component mask], then for each component in the mask
+// [bytes, length prefixed]: [varuint64 member mask] and the value of each member in it, in member order.
+// A spawn carries the same per component blocks for every component, with every member.
 //
-// Each value has one writer at a time (the host, or its controller for FromOwner ones), whose changes travel in
-// order on one reliable channel, relayed in order by the host. So the newest value is simply the last to arrive;
-// an earlier controller's late changes are told apart by their ownership generation.
+// The length lets a receiver skip a component it lacks. A record for an object it doesn't have is skipped whole.
+// A record from a peer that doesn't own the object, or from an earlier ownership, is dropped.
 //
-// A network collection's value is its changes since the last tick, or all of it in a snapshot or spawn;
-// NetCollection has the layout. Either way it travels, is relayed and is authorized like any other value.
+// A network collection's value is its changes since they were last sent, or all of it in a spawn. It carries its
+// own sequence number, so changes a spawn already held are read past, not applied twice.
 internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 {
-    // Network collections with changes not yet sent. Other values are SnapshotSystem's.
-    internal readonly HashSet<(Component Component, uint Slot)> Dirty = new();
     internal readonly List<Action> _notifications = new();
     internal readonly HashSet<(Type Type, uint Slot, string Problem)> _syncWarnings = new();
-    internal readonly NetWriter _valueWriter = new();
     internal int _applying;
-    public void Dispose() => _valueWriter.Dispose();
+
+    // Objects with dirty members, each once.
+    private readonly List<NetworkObject> _dirty = new();
+    private readonly List<NetworkObject> _flushing = new();
+
+    // Records waiting to go to each peer, by peer id, with how many.
+    private readonly Dictionary<int, (NetWriter Records, int Count)> _batches = new();
+    private readonly Stack<NetWriter> _writerPool = new();
+    private readonly NetWriter _value = new(256);
+    private readonly NetWriter _observerValues = new(256), _ownerValues = new(256);
+    private readonly NetWriter _observerBlocks = new(512), _ownerBlocks = new(512);
+    private readonly NetWriter _record = new(512), _message = new(1024);
+
+    /// <summary>How many objects have [Sync] changes not sent yet.</summary>
+    internal int PendingCount => _dirty.Count;
+
+    public void Dispose()
+    {
+        _value.Dispose();
+        _observerValues.Dispose();
+        _ownerValues.Dispose();
+        _observerBlocks.Dispose();
+        _ownerBlocks.Dispose();
+        _record.Dispose();
+        _message.Dispose();
+        foreach ((NetWriter records, _) in _batches.Values)
+        {
+            records.Dispose();
+        }
+
+        foreach (NetWriter writer in _writerPool)
+        {
+            writer.Dispose();
+        }
+
+        _batches.Clear();
+        _writerPool.Clear();
+    }
+
+    /// <summary>Forgets every change not sent yet, as when the scene changes.</summary>
+    internal void Clear()
+    {
+        foreach (NetworkObject entry in _dirty)
+        {
+            entry.StateDirty = false;
+            entry.Dirty = null;
+        }
+
+        _dirty.Clear();
+        foreach ((NetWriter records, _) in _batches.Values)
+        {
+            records.Reset();
+            _writerPool.Push(records);
+        }
+
+        _batches.Clear();
+        _spawnHooks.Clear();
+    }
+
+    internal void RemovePeer(int peerId)
+    {
+        if (_batches.Remove(peerId, out (NetWriter Records, int Count) batch))
+        {
+            batch.Records.Reset();
+            _writerPool.Push(batch.Records);
+        }
+    }
 
     // Hooks for values that came with a spawn, held until the object's spawn callbacks are due.
     private readonly List<(Component Component, Action Hook)> _spawnHooks = new();
@@ -112,21 +178,30 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
     }
 
-    /// <summary>Queues a [Sync] value to be sent. False if its object is never networked, so it won't be.</summary>
+    /// <summary>
+    ///     Marks a [Sync] member changed, to go out with the next state. False if its component is not part of a
+    ///     networked object, so it won't be.
+    /// </summary>
     internal bool MarkSyncDirty(Component component, uint slot)
     {
-        if (NetworkAccessor.IsExcludedFromNetwork(component.GameObject))
+        if (scene.FindEntry(component.GameObject) is not { TearingDown: false } entry)
         {
             return false;
         }
 
-        if (NetworkMembers.Of(component).Sync(slot) is { IsCollection: false } sync)
+        int index = entry.IndexOf(component);
+        NetworkMembers members = NetworkMembers.Of(component);
+        int member = members.Sync(slot) is { } sync ? members.IndexOf(sync) : -1;
+        if (index < 0 || member < 0)
         {
-            scene.Snapshots.MarkChanged(component, sync);
+            return false;
         }
-        else
+
+        (entry.Dirty ??= new ulong[entry.Components.Length])[index] |= 1UL << member;
+        if (!entry.StateDirty)
         {
-            Dirty.Add((component, slot));
+            entry.StateDirty = true;
+            _dirty.Add(entry);
         }
 
         return true;
@@ -142,162 +217,206 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
     }
 
-    /// <summary>Whether the peer whose values are being applied may change this [Sync] property.</summary>
-    internal bool AcceptSync(NetPeer sender, Component component, SyncFlags flags)
-    {
-        // The host is the authority over everything; a client only over what it owns.
-        if (sender.IsHost)
-        {
-            return true;
-        }
+    /// <summary>Whether <paramref name="sender" /> may change a [Sync] member of an object.</summary>
+    internal bool AcceptSync(NetPeer sender, NetworkObject entry, SyncFlags flags) =>
+        // The host is the authority over everything; a client only over the FromOwner members of what it owns.
+        sender.IsHost || ((flags & SyncFlags.FromOwner) != 0 && entry.Owner == sender.Id);
 
-        return (flags & SyncFlags.FromOwner) != 0 && scene.OwnerOf(component.GameObject) == sender.Id;
-    }
+    // --- Sending --------------------------------------------------------------------------------------
 
+    /// <summary>Sends every [Sync] change made since the last time, and whatever was queued to pass on.</summary>
     internal void SendSyncChanges()
     {
-        if (Dirty.Count == 0)
+        if (_dirty.Count == 0 && _batches.Count == 0)
         {
             return;
         }
 
-        int count = 0;
-        using NetWriter values = new(1024);
-        foreach ((Component component, uint slot) in Dirty)
+        if (scene.Session is not { } session || !scene.IsActive)
         {
-            if (!component.IsDisposed && WriteValue(values, component, slot, true))
-            {
-                count++;
-            }
-        }
-
-        Dirty.Clear();
-
-        if (count == 0)
-        {
+            Clear();
             return;
         }
 
-        if (scene.IsHost)
+        _flushing.Clear();
+        _flushing.AddRange(_dirty);
+        _dirty.Clear();
+        uint tick = scene.Tick;
+        foreach (NetworkObject entry in _flushing)
         {
-            BroadcastSync(scene.Session!.LocalPeer!.Id, values.WrittenSpan, count, null);
-            return;
-        }
-
-        using NetWriter message = new(1024);
-        new SyncMessage(scene.Session!.LocalPeer!.Id).Write(message);
-        new SyncBlock((uint)count).Write(message);
-        message.WriteBytes(values.WrittenSpan);
-        scene.SendEngine(scene.Session.HostPeer!, EngineMessage.Sync, message.WrittenSpan);
-    }
-
-    /// <summary>Sends a block of values to every client but <paramref name="except" />, each only those of objects it has.</summary>
-    private void BroadcastSync(int origin, ReadOnlySpan<byte> values, int count, NetPeer? except)
-    {
-        using NetWriter message = new(values.Length + 16);
-        if (scene.Restricted.Count == 0)
-        {
-            new SyncMessage(origin).Write(message);
-            new SyncBlock((uint)count).Write(message);
-            message.WriteBytes(values);
-            scene.BroadcastEngine(EngineMessage.Sync, message.WrittenSpan, except: except);
-            return;
-        }
-
-        List<(int Start, int End, NetworkObject? Entry)> ranges = new(count);
-        NetReader reader = new(values);
-        for (int i = 0; i < count; i++)
-        {
-            int start = reader.Position;
-            Guid component = SyncValue.Read(ref reader).ComponentId;
-            ranges.Add((start, reader.Position,
-                scene.FindByIdentifier(component) is Component part ? scene.FindEntry(part.GameObject) : null));
-        }
-
-        using NetWriter visible = new(values.Length);
-        foreach (NetPeer peer in scene.Session!.Peers)
-        {
-            if (peer.IsLocal || peer == except)
+            entry.StateDirty = false;
+            if (entry.Dirty is not { } masks)
             {
                 continue;
             }
 
-            visible.Reset();
-            uint sent = 0;
-            foreach ((int start, int end, NetworkObject? entry) in ranges)
+            if (!entry.GameObject.IsValid() || entry.TearingDown || scene.FindEntry(entry.GameObject) != entry)
             {
-                if (NetworkSystem.Sees(entry, peer))
-                {
-                    visible.WriteBytes(values[start..end]);
-                    sent++;
-                }
-            }
-
-            if (sent == 0)
-            {
+                entry.Dirty = null;
                 continue;
             }
 
-            message.Reset();
-            new SyncMessage(origin).Write(message);
-            new SyncBlock(sent).Write(message);
-            message.WriteBytes(visible.WrittenSpan);
-            scene.SendEngine(peer, EngineMessage.Sync, message.WrittenSpan);
-        }
-    }
-
-    /// <summary>Writes one value: what changed since it was last sent if <paramref name="changes" />, else all of it.</summary>
-    internal bool WriteValue(NetWriter output, Component component, uint slot, bool changes)
-    {
-        if (NetworkMembers.Of(component).Sync(slot) is not { } sync)
-        {
-            return false;
-        }
-
-        _valueWriter.Reset();
-        if (changes)
-        {
-            bool keep = NetworkSerialization.KeepReferences;
-            NetworkSerialization.KeepReferences = true;
-            try
+            if (WriteChanged(entry, masks, tick, session))
             {
-                sync.WriteChanges(component, _valueWriter);
+                // Members whose send interval hasn't come round stay marked.
+                entry.StateDirty = true;
+                _dirty.Add(entry);
             }
-            finally
-            {
-                NetworkSerialization.KeepReferences = keep;
-            }
-
-            sync.ChangesSent(component);
-        }
-        else if (!TryWrite(component, sync, _valueWriter))
-        {
-            return false;
         }
 
-        new SyncValue(component.Identifier, slot, scene.GenerationOf(component.GameObject),
-            _valueWriter.WrittenSpan).Write(output);
-        NetworkDiagnostics.TraceMember("SyncVar", "Serialize", scene.Session?.LocalPeer, component, slot, false,
-            "Serialized",
-            _valueWriter.WrittenSpan);
-        return true;
+        _flushing.Clear();
+        SendBatches(session);
     }
 
     /// <summary>
-    ///     Writes the whole value into <paramref name="scratch" />, or warns once and returns false if it can't be
-    ///     serialized. Its references to objects the receivers lack are masked, except in a network collection.
+    ///     Writes the dirty members of <paramref name="entry" /> that are due and queues them for whoever gets them.
+    ///     True if some stay dirty for a later tick.
     /// </summary>
-    internal bool TryWrite(Component component, SyncMember sync, NetWriter scratch)
+    private bool WriteChanged(NetworkObject entry, ulong[] masks, uint tick, NetSession session)
     {
-        List<GameObject> masked = NetworkSerialization.MaskedRoots, linked = NetworkSerialization.LinkedRoots;
-        masked.Clear();
-        linked.Clear();
-        bool keep = NetworkSerialization.KeepReferences, collecting = NetworkSerialization.CollectingRoots;
-        NetworkSerialization.KeepReferences = sync.IsCollection;
-        NetworkSerialization.CollectingRoots = scene.IsHost;
+        bool host = scene.IsHost, waiting = false;
+        ulong observerComponents = 0, ownerComponents = 0;
+        _observerBlocks.Reset();
+        _ownerBlocks.Reset();
+        for (int c = 0; c < masks.Length; c++)
+        {
+            ulong bits = masks[c];
+            if (bits == 0)
+            {
+                continue;
+            }
+
+            Component component = entry.Components[c];
+            if (component.IsNotValid())
+            {
+                masks[c] = 0;
+                continue;
+            }
+
+            if (!scene.SendsStateOn(entry, component, tick))
+            {
+                waiting = true;
+                continue;
+            }
+
+            masks[c] = 0;
+            NetworkMembers members = NetworkMembers.Of(component);
+            ulong observerBits = 0, ownerBits = 0;
+            _observerValues.Reset();
+            _ownerValues.Reset();
+            while (bits != 0)
+            {
+                int m = BitOperations.TrailingZeroCount(bits);
+                ulong bit = 1UL << m;
+                bits &= ~bit;
+                if (members.SyncAt(m) is not { } sync || !WriteMember(component, sync, false))
+                {
+                    continue;
+                }
+
+                // Only the owner gets an owner only member. The owner wrote its own, so it gets those back from nobody.
+                if ((sync.Flags & SyncFlags.ToOwner) == 0)
+                {
+                    observerBits |= bit;
+                    _observerValues.WriteBytes(_value.WrittenSpan);
+                }
+
+                if (host && ((sync.Flags & SyncFlags.FromOwner) == 0 || entry.Owner == NoOwner))
+                {
+                    ownerBits |= bit;
+                    _ownerValues.WriteBytes(_value.WrittenSpan);
+                }
+            }
+
+            if (observerBits != 0)
+            {
+                observerComponents |= 1UL << c;
+                WriteBlock(_observerBlocks, observerBits, _observerValues);
+            }
+
+            if (ownerBits != 0)
+            {
+                ownerComponents |= 1UL << c;
+                WriteBlock(_ownerBlocks, ownerBits, _ownerValues);
+            }
+        }
+
+        if (!host)
+        {
+            // What a client changed is what it controls, and it all goes to the host.
+            if (observerComponents != 0)
+            {
+                Queue(NetPeer.HostId, entry, observerComponents, _observerBlocks.WrittenSpan);
+            }
+
+            return waiting;
+        }
+
+        if (observerComponents == 0 && ownerComponents == 0)
+        {
+            return waiting;
+        }
+
+        foreach (NetPeer peer in session.Peers)
+        {
+            if (peer.IsLocal || !Sees(entry, peer))
+            {
+                continue;
+            }
+
+            if (peer.Id == entry.Owner)
+            {
+                if (ownerComponents != 0)
+                {
+                    Queue(peer.Id, entry, ownerComponents, _ownerBlocks.WrittenSpan);
+                }
+            }
+            else if (observerComponents != 0)
+            {
+                Queue(peer.Id, entry, observerComponents, _observerBlocks.WrittenSpan);
+            }
+        }
+
+        return waiting;
+    }
+
+    private static void WriteBlock(NetWriter blocks, ulong members, NetWriter values)
+    {
+        int size = VarSize(members) + values.Length;
+        blocks.WriteVarUInt32((uint)size);
+        blocks.WriteVarUInt64(members);
+        blocks.WriteBytes(values.WrittenSpan);
+    }
+
+    private static int VarSize(ulong value)
+    {
+        int size = 1;
+        while (value >= 0x80)
+        {
+            value >>= 7;
+            size++;
+        }
+
+        return size;
+    }
+
+    /// <summary>Writes one member's value into the scratch writer: its changes, or all of it. False if it can't be written.</summary>
+    private bool WriteMember(Component component, SyncMember sync, bool whole)
+    {
+        _value.Reset();
+        bool keep = NetworkSerialization.KeepReferences;
+        NetworkSerialization.KeepReferences = true;
         try
         {
-            sync.Write(component, scratch);
+            if (whole)
+            {
+                sync.Write(component, _value);
+            }
+            else
+            {
+                sync.WriteChanges(component, _value);
+                sync.ChangesSent(component);
+            }
         }
         catch (Exception e)
         {
@@ -307,62 +426,124 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         finally
         {
             NetworkSerialization.KeepReferences = keep;
-            NetworkSerialization.CollectingRoots = collecting;
         }
 
-        if (NetworkSerialization.WrittenValues is { } written && (masked.Count > 0 || linked.Count > 0))
+        if (NetworkDiagnostics.Enabled)
         {
-            written.Add(new WrittenValue(component, sync.Slot, [.. masked], [.. linked]));
+            NetworkDiagnostics.TraceMember("SyncVar", "Serialize", scene.Session?.LocalPeer, component, sync.Slot, false,
+                "Serialized", _value.WrittenSpan);
         }
 
         return true;
     }
 
-    /// <summary>Writes every [Sync] value of every component on <paramref name="objects" />, for a snapshot or spawn.</summary>
-    internal void WriteSyncState(NetWriter output, IEnumerable<GameObject> objects)
+    private void Queue(int peerId, NetworkObject entry, ulong components, ReadOnlySpan<byte> blocks)
     {
-        using NetWriter values = new(1024);
-        int count = 0;
-        foreach (GameObject go in objects)
+        if (!_batches.TryGetValue(peerId, out (NetWriter Records, int Count) batch))
         {
-            if (NetworkAccessor.IsExcludedFromNetwork(go) || NetworkSerialization.InHiddenTree(go))
+            batch = (_writerPool.Count > 0 ? _writerPool.Pop() : new NetWriter(1024), 0);
+        }
+
+        batch.Records.WriteVarUInt32(entry.NetId);
+        batch.Records.WriteVarUInt32(entry.Generation);
+        batch.Records.WriteVarUInt64(components);
+        batch.Records.WriteBytes(blocks);
+        _batches[peerId] = (batch.Records, batch.Count + 1);
+    }
+
+    private void SendBatches(NetSession session)
+    {
+        if (_batches.Count == 0)
+        {
+            return;
+        }
+
+        foreach ((int peerId, (NetWriter records, int count)) in _batches)
+        {
+            if (count > 0 && session.TryGetPeer(peerId, out NetPeer? peer) && !peer!.IsLocal)
+            {
+                _message.Reset();
+                _message.WriteVarUInt32((uint)count);
+                _message.WriteBytes(records.WrittenSpan);
+                scene.SendEngine(peer, EngineMessage.Sync, _message.WrittenSpan);
+            }
+
+            records.Reset();
+            _writerPool.Push(records);
+        }
+
+        _batches.Clear();
+    }
+
+    /// <summary>
+    ///     Queues the whole value of every member of <paramref name="entry" /> that <paramref name="which" /> picks for
+    ///     one peer: the owner only ones for a new owner, or the ones a past owner wrote, as the host has them.
+    /// </summary>
+    internal void QueueMembers(NetPeer peer, NetworkObject entry, Func<SyncMember, bool> which)
+    {
+        ulong components = 0;
+        _observerBlocks.Reset();
+        for (int c = 0; c < entry.Components.Length; c++)
+        {
+            Component component = entry.Components[c];
+            if (component.IsNotValid())
             {
                 continue;
             }
 
-            foreach (Component component in go.GetComponents<Component>())
+            NetworkMembers members = NetworkMembers.Of(component);
+            ulong bits = 0;
+            _observerValues.Reset();
+            for (int m = 0; m < members.SyncCount; m++)
             {
-                foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
+                SyncMember sync = members.SyncAt(m)!;
+                if (which(sync) && WriteMember(component, sync, true))
                 {
-                    // Written for several peers at once, so values only an owner gets go to it separately.
-                    if ((sync.Flags & SyncFlags.ToOwner) == 0 && WriteValue(values, component, sync.Slot, false))
-                    {
-                        count++;
-                    }
+                    bits |= 1UL << m;
+                    _observerValues.WriteBytes(_value.WrittenSpan);
                 }
             }
-        }
 
-        new SyncBlock((uint)count).Write(output);
-        output.WriteBytes(values.WrittenSpan);
-    }
-
-    /// <summary>Writes the given values, as a block <see cref="ApplySyncState" /> reads, skipping any in a hidden tree.</summary>
-    internal void WriteSyncState(NetWriter output, List<(Component Component, uint Slot)> values)
-    {
-        using NetWriter written = new(1024);
-        int count = 0;
-        foreach ((Component component, uint slot) in values)
-        {
-            if (!NetworkSerialization.InHiddenTree(component.GameObject) && WriteValue(written, component, slot, false))
+            if (bits != 0)
             {
-                count++;
+                components |= 1UL << c;
+                WriteBlock(_observerBlocks, bits, _observerValues);
             }
         }
 
-        new SyncBlock((uint)count).Write(output);
-        output.WriteBytes(written.WrittenSpan);
+        if (components != 0)
+        {
+            Queue(peer.Id, entry, components, _observerBlocks.WrittenSpan);
+        }
     }
+
+    /// <summary>
+    ///     Writes the state a spawn carries: a block for each of <paramref name="components" /> with every member all
+    ///     peers get. Owner only members follow to the owner on their own.
+    /// </summary>
+    internal void WriteSpawnState(NetWriter output, Component[] components)
+    {
+        output.WriteByte((byte)components.Length);
+        foreach (Component component in components)
+        {
+            NetworkMembers members = NetworkMembers.Of(component);
+            ulong bits = 0;
+            _observerValues.Reset();
+            for (int m = 0; m < members.SyncCount; m++)
+            {
+                SyncMember sync = members.SyncAt(m)!;
+                if ((sync.Flags & SyncFlags.ToOwner) == 0 && WriteMember(component, sync, true))
+                {
+                    bits |= 1UL << m;
+                    _observerValues.WriteBytes(_value.WrittenSpan);
+                }
+            }
+
+            WriteBlock(output, bits, _observerValues);
+        }
+    }
+
+    // --- Receiving ------------------------------------------------------------------------------------
 
     internal void OnSync(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
@@ -371,97 +552,39 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             return;
         }
 
-        NetSession? session = scene.Session;
-        int originId = SyncMessage.Read(ref reader).OriginId;
-        if (!sender.IsHost && originId != sender.Id)
+        if (delivery != Delivery.Reliable)
         {
-            throw new InvalidDataException("Invalid Sync origin.");
+            throw new InvalidDataException("State must be sent reliably.");
         }
 
-        if (!scene.Session!.TryGetPeer(originId, out NetPeer? origin))
-        {
-            return;
-        }
-
-        using NetWriter? relay = scene.IsHost ? new NetWriter(1024) : null;
-        int relayed = ApplySyncState(origin, ref reader, relay, false, true);
-
-        // The host passes on what it accepted from a client to everyone else.
-        if (scene.Session == session && relay != null && relayed > 0)
-        {
-            BroadcastSync(originId, relay.WrittenSpan, relayed, sender);
-        }
-    }
-
-    /// <summary>
-    ///     Applies a block of values from <paramref name="sender" />. Values it may not change are skipped.
-    ///     Accepted ones are copied to <paramref name="relay" /> when given; returns how many were.
-    ///     <paramref name="initial" /> for a snapshot or spawn, whose values change nothing that was running,
-    ///     so nothing is notified. Otherwise notifications run once every value in the block is in place.
-    ///     <paramref name="filter" /> can skip values that would otherwise be accepted; <paramref name="accepted" />
-    ///     collects the ones applied, and <paramref name="rejected" /> the components that weren't there to apply to.
-    /// </summary>
-    internal int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay, bool initial,
-        bool requireEnd = false, Func<Component, SyncMember, bool>? filter = null,
-        List<(Component Component, SyncMember Sync)>? accepted = null, HashSet<Guid>? rejected = null,
-        List<(Component Component, SyncMember Sync, byte[] Value)>? unresolved = null)
-    {
         using NetSerializers.ReadingFrom references = new(scene.RemoteClient(sender));
 
-        // Validate all framing and accepted values before changing live state or relays.
-        // Collection validation only reads, so partial operations cannot leak out.
-        ValidateSyncState(sender, reader, initial, requireEnd, filter);
-        int relayed = 0;
-        uint count = SyncBlock.Read(ref reader).Count;
+        // Everything is checked before anything is applied, so a malformed message changes nothing.
+        NetReader check = reader;
+        uint count = check.ReadVarUInt32();
+        if (count > check.Remaining)
+        {
+            throw new InvalidDataException("State message names more records than it holds.");
+        }
+
+        for (uint i = 0; i < count; i++)
+        {
+            ReadRecord(sender, ref check, false);
+        }
+
+        if (!check.IsAtEnd)
+        {
+            throw new InvalidDataException("State message contains trailing bytes.");
+        }
+
+        reader.ReadVarUInt32();
         int notificationsFrom = _notifications.Count;
         _applying++;
         try
         {
             for (uint i = 0; i < count; i++)
             {
-                SyncValue message = SyncValue.Read(ref reader);
-                Guid id = message.ComponentId;
-                uint slot = message.Slot, generation = message.Generation;
-                ReadOnlySpan<byte> value = message.Value;
-
-                if (scene.FindByIdentifier(id) is not Component component ||
-                    NetworkAccessor.IsExcludedFromNetwork(component.GameObject))
-                {
-                    NetworkDiagnostics.Record("SyncVar", "Rejected", sender, id,
-                        $"Unknown or excluded component, slot #{slot}", value);
-                    rejected?.Add(id);
-                    continue;
-                }
-
-                if (!initial && generation != scene.GenerationOf(component.GameObject))
-                {
-                    rejected?.Add(id);
-                }
-
-                SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
-                bool take = sync != null && AcceptSync(sender, component, sync.Flags) &&
-                            (initial || generation == scene.GenerationOf(component.GameObject)) &&
-                            (filter == null || filter(component, sync));
-                if (take)
-                {
-                    NetReader valueReader = new(value);
-                    int unresolvedBefore = NetSerializers.UnresolvedReferences;
-                    sync!.Read(component, ref valueReader, initial);
-                    accepted?.Add((component, sync));
-                    if (unresolved != null && NetSerializers.UnresolvedReferences != unresolvedBefore)
-                    {
-                        unresolved.Add((component, sync, value.ToArray()));
-                    }
-                }
-
-                NetworkDiagnostics.TraceMember("SyncVar", take ? "Apply" : "Rejected", sender, component, slot,
-                    false,
-                    take ? "Applied" : "Unknown slot or unauthorized", value);
-                if (take && relay != null)
-                {
-                    new SyncValue(id, slot, generation, value).Write(relay);
-                    relayed++;
-                }
+                ReadRecord(sender, ref reader, true);
             }
         }
         catch
@@ -475,47 +598,188 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
 
         RunNotifications(notificationsFrom);
-        return relayed;
     }
 
-    internal void ValidateSyncState(NetPeer sender, NetReader reader, bool initial, bool requireEnd,
-        Func<Component, SyncMember, bool>? filter = null)
+    // Reads one object's record: checking it, or applying what the sender may change and passing that on.
+    private void ReadRecord(NetPeer sender, ref NetReader reader, bool apply)
     {
-        uint count = SyncBlock.Read(ref reader).Count;
-        for (uint i = 0; i < count; i++)
+        uint netId = reader.ReadVarUInt32(), generation = reader.ReadVarUInt32();
+        ulong components = reader.ReadVarUInt64();
+
+        // An object this peer doesn't have, or one whose ownership moved on since, is read past.
+        NetworkObject? entry = scene.Entries.TryGetNet(netId, out NetworkObject? found) && !found.TearingDown &&
+                               found.Generation == generation && (sender.IsHost || found.Owner == sender.Id)
+            ? found
+            : null;
+        if (apply && found == null && NetworkDiagnostics.Enabled)
         {
-            SyncValue message = SyncValue.Read(ref reader);
-            Guid id = message.ComponentId;
-            uint slot = message.Slot, generation = message.Generation;
-            NetReader value = new(message.Value);
-            if (scene.FindByIdentifier(id) is not Component component ||
-                NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
-                NetworkMembers.Of(component).Sync(slot) is not { } sync || !AcceptSync(sender, component, sync.Flags) ||
-                (!initial && generation != scene.GenerationOf(component.GameObject)) ||
-                (filter != null && !filter(component, sync)))
+            NetworkDiagnostics.Record("SyncVar", "Rejected", sender, Guid.Empty, $"Unknown object {netId}", default);
+        }
+
+        bool relay = apply && scene.IsHost && entry != null;
+        ulong relayComponents = 0;
+        if (relay)
+        {
+            _observerBlocks.Reset();
+        }
+
+        while (components != 0)
+        {
+            int c = BitOperations.TrailingZeroCount(components);
+            components &= components - 1;
+            ReadOnlySpan<byte> bytes = reader.ReadBytesWithLength();
+            if (entry == null)
+            {
+                // The object is here but not the sender's to change: say which component it tried for.
+                if (apply && NetworkDiagnostics.Enabled && found != null && c < found.Components.Length)
+                {
+                    NetworkDiagnostics.Record("SyncVar", "Rejected", sender, found.Components[c].Identifier,
+                        "Not the sender's to change, or from an earlier ownership", bytes);
+                }
+
+                continue;
+            }
+
+            if (c >= entry.Components.Length)
+            {
+                throw new InvalidDataException("State names a component its object doesn't have.");
+            }
+
+            Component component = entry.Components[c];
+            if (component.IsNotValid())
             {
                 continue;
             }
 
+            ulong accepted = ReadBlock(sender, entry, component, bytes, apply, false, relay ? _observerValues : null);
+            if (relay && accepted != 0)
+            {
+                relayComponents |= 1UL << c;
+                WriteBlock(_observerBlocks, accepted, _observerValues);
+            }
+        }
+
+        // The host passes on what it took from a client to everyone else who has the object.
+        if (relay && relayComponents != 0)
+        {
+            foreach (NetPeer peer in scene.Session!.Peers)
+            {
+                if (!peer.IsLocal && peer != sender && Sees(entry!, peer))
+                {
+                    Queue(peer.Id, entry!, relayComponents, _observerBlocks.WrittenSpan);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Reads one component's block: its member mask and their values. Members the sender may change are applied
+    ///     when <paramref name="apply" />, the rest read past. Returns the members taken, with their bytes copied to
+    ///     <paramref name="taken" /> when given.
+    /// </summary>
+    private ulong ReadBlock(NetPeer sender, NetworkObject? entry, Component component, ReadOnlySpan<byte> bytes,
+        bool apply, bool initial, NetWriter? taken)
+    {
+        NetworkMembers members = NetworkMembers.Of(component);
+        NetReader block = new(bytes);
+        ulong bits = block.ReadVarUInt64(), accepted = 0;
+        taken?.Reset();
+        while (bits != 0)
+        {
+            int m = BitOperations.TrailingZeroCount(bits);
+            bits &= bits - 1;
+            if (members.SyncAt(m) is not { } sync)
+            {
+                throw new InvalidDataException("State names a member its component doesn't have.");
+            }
+
+            // A spawn's state is the host's own, so all of it is taken.
+            bool take = entry == null || AcceptSync(sender, entry, sync.Flags);
+            int start = block.Position;
             try
             {
-                sync.Validate(component, ref value, initial);
+                if (apply && take)
+                {
+                    sync.Read(component, ref block, initial);
+                }
+                else
+                {
+                    sync.Validate(component, ref block, initial);
+                }
             }
             catch (Exception e) when (e is ArgumentException or OverflowException or FormatException
                                           or IndexOutOfRangeException)
             {
-                throw new InvalidDataException("Sync contains a malformed value.", e);
+                throw new InvalidDataException("State contains a malformed value.", e);
             }
 
-            if (!value.IsAtEnd)
+            if (!take)
             {
-                throw new InvalidDataException("Sync value contains trailing bytes.");
+                continue;
+            }
+
+            accepted |= 1UL << m;
+            ReadOnlySpan<byte> value = bytes[start..block.Position];
+            taken?.WriteBytes(value);
+            if (apply && NetworkDiagnostics.Enabled)
+            {
+                NetworkDiagnostics.TraceMember("SyncVar", "Apply", sender, component, sync.Slot, false, "Applied", value);
             }
         }
 
-        if (requireEnd && !reader.IsAtEnd)
+        if (!block.IsAtEnd)
         {
-            throw new InvalidDataException("Sync message contains trailing bytes.");
+            throw new InvalidDataException("State value contains trailing bytes.");
+        }
+
+        return accepted;
+    }
+
+    /// <summary>
+    ///     Applies the state a spawn carries to <paramref name="components" />, once all of it checks out. It changes
+    ///     nothing that was running, so hooks for it are held until the object's spawn callbacks are due.
+    /// </summary>
+    internal void ApplySpawnState(NetPeer sender, Component[] components, ref NetReader reader)
+    {
+        using NetSerializers.ReadingFrom references = new(scene.RemoteClient(sender));
+        NetReader check = reader;
+        ReadSpawnState(sender, components, ref check, false);
+        if (!check.IsAtEnd)
+        {
+            throw new InvalidDataException("Spawn contains trailing bytes.");
+        }
+
+        int notificationsFrom = _notifications.Count;
+        _applying++;
+        try
+        {
+            ReadSpawnState(sender, components, ref reader, true);
+        }
+        catch
+        {
+            _notifications.RemoveRange(notificationsFrom, _notifications.Count - notificationsFrom);
+            throw;
+        }
+        finally
+        {
+            _applying--;
+        }
+
+        RunNotifications(notificationsFrom);
+    }
+
+    private void ReadSpawnState(NetPeer sender, Component[] components, ref NetReader reader, bool apply)
+    {
+        int count = reader.ReadByte();
+        if (count != components.Length)
+        {
+            throw new InvalidDataException(
+                $"A spawn carries state for {count} networked components and this peer's object has {components.Length}.");
+        }
+
+        for (int c = 0; c < count; c++)
+        {
+            ReadBlock(sender, null, components[c], reader.ReadBytesWithLength(), apply, true, null);
         }
     }
 

@@ -17,6 +17,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Counter");
+        go.Network.Networked = true;
         NetTestComponent component = go.AddComponent<NetTestComponent>();
         scene.Add(go);
         MakeCurrent(scene);
@@ -47,6 +48,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Counted");
+        go.Network.Networked = true;
         CountedWritesTestComponent component = go.AddComponent<CountedWritesTestComponent>();
         scene.Add(go);
         MakeCurrent(scene);
@@ -61,7 +63,7 @@ public partial class NetworkingTests
 
             component.Value = new CountedWrites(7);
             CountedWrites.Writes = 0;
-            Networking.Networking.System!.Snapshots.Send();
+            Networking.Networking.System!.Sync.SendSyncChanges();
             Assert.Equal(1, CountedWrites.Writes);
         }
         finally

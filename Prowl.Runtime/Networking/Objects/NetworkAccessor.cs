@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Courier;
 using Prowl.Vector;
@@ -20,6 +21,9 @@ public sealed class NetworkAccessor
     private NetworkVisibility _visibility;
     private float _cullDistance;
     private NetworkGroups _groups;
+
+    // The send interval of each component of this object that has one set, as Mirror's syncInterval.
+    private Dictionary<Component, int>? _componentIntervals;
 
     internal NetworkAccessor(GameObject owner) => _object = owner;
 
@@ -104,6 +108,40 @@ public sealed class NetworkAccessor
             Networking.System?.SetSendInterval(_object, value);
             _sendInterval = value;
         }
+    }
+
+    /// <summary>
+    ///     How many ticks apart a component of this object sends its changed [Sync] values, from 1 (every tick) to 255,
+    ///     as Mirror's syncInterval. It is this peer's own setting for the state it writes, and is never sent.
+    /// </summary>
+    public void SetSendInterval(Component component, int ticks)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        if (ticks < 1 || ticks > MaxSendInterval)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ticks));
+        }
+
+        if (component.GameObject != _object)
+        {
+            throw new ArgumentException("The component is not on this object.", nameof(component));
+        }
+
+        if (ticks == 1)
+        {
+            _componentIntervals?.Remove(component);
+        }
+        else
+        {
+            (_componentIntervals ??= new Dictionary<Component, int>())[component] = ticks;
+        }
+    }
+
+    /// <summary>The ticks between sends of a component's changed [Sync] values. See <see cref="SetSendInterval" />.</summary>
+    public int GetSendInterval(Component component)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        return SendIntervalOf(component);
     }
 
     /// <summary>Which clients receive this object. Only the host may change this after spawning.</summary>
@@ -287,6 +325,13 @@ public sealed class NetworkAccessor
     internal static bool ServerOnlyOf(GameObject go) => go._network?._serverOnly == true;
 
     internal static int SendIntervalOf(GameObject go) => go._network?.SendInterval ?? 1;
+
+    /// <summary>The ticks between sends of a component's [Sync] state: its own, or 1 when it has none set.</summary>
+    internal static int SendIntervalOf(Component component) =>
+        component.GameObject._network is { _componentIntervals: { } intervals } &&
+        intervals.TryGetValue(component, out int interval)
+            ? interval
+            : 1;
 
     internal static bool IsExcludedFromNetwork(GameObject go)
     {

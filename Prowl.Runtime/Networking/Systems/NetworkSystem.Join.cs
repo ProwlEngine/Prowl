@@ -181,7 +181,7 @@ internal sealed partial class NetworkSystem
 
         ReplicatedWorld = world;
         Entries.Clear();
-        Sync.Dirty.Clear();
+        Sync.Clear();
         Snapshots.Clear();
         ForgetSections();
         DisposeHeld();

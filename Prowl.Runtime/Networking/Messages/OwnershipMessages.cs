@@ -12,16 +12,12 @@ internal readonly ref struct OwnershipStateMessage(
     Guid identifier,
     uint generation,
     Float3 velocity,
-    ReadOnlySpan<byte> poses,
-    ReadOnlySpan<byte> values)
+    ReadOnlySpan<byte> poses)
 {
     internal readonly Guid Identifier = identifier;
     internal readonly uint Generation = generation;
     internal readonly Float3 Velocity = velocity;
     internal readonly ReadOnlySpan<byte> Poses = poses;
-
-    /// <summary>The tree's [Sync] values as the host has them, as a SyncBlock.</summary>
-    internal readonly ReadOnlySpan<byte> Values = values;
 
     internal void Write(NetWriter writer)
     {
@@ -29,14 +25,12 @@ internal readonly ref struct OwnershipStateMessage(
         writer.WriteUInt32(Generation);
         NetSerializers.WriteFloat3(writer, Velocity);
         writer.WriteBytesWithLength(Poses);
-        writer.WriteBytesWithLength(Values);
     }
 
     internal static OwnershipStateMessage Read(ref NetReader reader) => new(
         reader.ReadGuid(),
         reader.ReadUInt32(),
         NetSerializers.ReadFloat3(ref reader),
-        reader.ReadBytesWithLength(),
         reader.ReadBytesWithLength());
 }
 

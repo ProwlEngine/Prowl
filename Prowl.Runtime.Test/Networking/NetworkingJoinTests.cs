@@ -14,7 +14,7 @@ public partial class NetworkingTests
     {
         SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Ticking");
-        NetTestComponent component = go.AddComponent<NetTestComponent>();
+        go.Network.Networked = true;
         scene.Add(go);
         MakeCurrent(scene);
         LocalNetwork network = new();
@@ -25,7 +25,7 @@ public partial class NetworkingTests
             Pump(() => alice.IsReady, alice);
             NetworkTestScene.Current.NetworkTick += 5;
             alice.WireReceived.Clear();
-            component.Health = 3;
+            go.Transform.Position = new Prowl.Vector.Float3(1, 2, 3);
             Networking.Networking.System!.Snapshots.Send();
             uint tick = Networking.Networking.Tick;
             Pump(() => alice.Has(FakePeer.Snapshot), alice);

@@ -109,7 +109,6 @@ public sealed class FakePeer : IDisposable
                 Received.Add((captured, ReadEnginePayload(captured, ref reader)));
                 if (captured == Snapshot)
                 {
-                    SnapshotValues(WireReceived[^1].Data);
                     NetworkingTests.Decoded.AddOrUpdate(WireReceived[^1].Data, NetworkingTests.DecodeTransforms(WireReceived[^1].Data, _positions));
                 }
                 if (AutoReady) HandleReadiness(sender, captured, WireReceived[^1].Data);
@@ -139,37 +138,51 @@ public sealed class FakePeer : IDisposable
         if (id == 0) return;
         using NetWriter ack = new();
         ack.WriteVarUInt32(1); ack.WriteVarUInt32(id);
-        ack.WriteVarUInt32(0); ack.WriteVarUInt32(0);
+        ack.WriteVarUInt32(0);
         Session.SendRaw(sender, SnapshotAck, ack.WrittenSpan, Delivery.Unreliable);
     }
 
-    // Component ids senders defined in the snapshots received so far, as they defined them.
-    private readonly Dictionary<uint, Guid> _componentIds = new();
-
     /// <summary>
-    ///     The [Sync] values in a Snapshot message, as (component, slot, value bytes). Learns the component ids it
-    ///     defines; it must be read after any snapshot defining the ids it uses, as messages are on arrival.
+    ///     The [Sync] values in a state message, as (component, slot, value bytes). The engine side's own objects say
+    ///     which component and member each bit is, so a record for an object it doesn't have is skipped.
     /// </summary>
-    public List<(Guid Component, uint Slot, byte[] Value)> SnapshotValues(byte[] snapshot)
+    public static List<(Guid Component, uint Slot, byte[] Value)> SnapshotValues(byte[] state)
     {
-        NetReader r = new(snapshot);
-        r.ReadVarUInt32(); r.ReadVarUInt32(); r.ReadVarUInt32();
-        SkipTransformGroups(ref r);
         List<(Guid, uint, byte[])> values = new();
+        NetReader r = new(state);
         uint count = r.ReadVarUInt32();
         for (uint i = 0; i < count; i++)
         {
-            uint key = r.ReadVarUInt32();
-            if ((key & 1) != 0) _componentIds[key >> 1] = r.ReadGuid();
-            Guid component = _componentIds[key >> 1];
-            uint slot = r.ReadVarUInt32(); r.ReadVarUInt32();
-            values.Add((component, slot, r.ReadBytesWithLength().ToArray()));
+            uint netId = r.ReadVarUInt32();
+            r.ReadVarUInt32();
+            ulong components = r.ReadVarUInt64();
+            NetworkObject? entry = NetworkTestScene.Current.Entries.TryGetNet(netId, out NetworkObject? found) ? found : null;
+            while (components != 0)
+            {
+                int c = System.Numerics.BitOperations.TrailingZeroCount(components);
+                components &= components - 1;
+                ReadOnlySpan<byte> bytes = r.ReadBytesWithLength();
+                if (entry == null || c >= entry.Components.Length) continue;
+                Component component = entry.Components[c];
+                NetworkMembers members = NetworkMembers.Of(component);
+                NetReader block = new(bytes);
+                ulong bits = block.ReadVarUInt64();
+                while (bits != 0)
+                {
+                    int m = System.Numerics.BitOperations.TrailingZeroCount(bits);
+                    bits &= bits - 1;
+                    SyncMember sync = members.SyncAt(m)!;
+                    int start = block.Position;
+                    sync.Validate(component, ref block);
+                    values.Add((component.Identifier, sync.Slot, bytes[start..block.Position].ToArray()));
+                }
+            }
         }
 
         return values;
     }
 
-    /// <summary>The latest int value of a [Sync] slot received in snapshots, or null if none came.</summary>
+    /// <summary>The latest int value of a [Sync] slot received, or null if none came.</summary>
     public int? SnapshotInt(Guid component, uint slot)
     {
         foreach ((Guid id, uint s, byte[] value) in Enumerable.Reverse(SnapshotValues()))
@@ -184,9 +197,9 @@ public sealed class FakePeer : IDisposable
         return null;
     }
 
-    /// <summary>Every [Sync] value received in snapshots so far, latest last.</summary>
+    /// <summary>Every [Sync] value received in state messages so far, latest last.</summary>
     public List<(Guid Component, uint Slot, byte[] Value)> SnapshotValues() =>
-        WireReceived.Where(m => m.Id == Snapshot).SelectMany(m => SnapshotValues(m.Data)).ToList();
+        WireReceived.Where(m => m.Id == Sync).SelectMany(m => SnapshotValues(m.Data)).ToList();
 
     internal static void SkipTransformGroups(ref NetReader r)
     {
@@ -210,25 +223,79 @@ public sealed class FakePeer : IDisposable
     }
 
     /// <summary>
-    ///     Sends [Sync] values the way a peer does: in a Snapshot with this id (zero for no acknowledgement) and tick, in
-    ///     the current scene, each component defined by its guid.
+    ///     One state record for each value: its object's NetId, the ownership generation given, and the component and
+    ///     member the engine side knows the value by. A value for something it doesn't know gets a NetId nothing has.
     /// </summary>
+    public static void WriteStateRecords(NetWriter w, params (Guid Component, uint Slot, uint Generation, byte[] Value)[] values)
+    {
+        w.WriteVarUInt32((uint)values.Length);
+        foreach ((Guid componentId, uint slot, uint generation, byte[] value) in values)
+        {
+            NetworkSystem system = NetworkTestScene.Current;
+            if (system.FindByIdentifier(componentId) is not Component component ||
+                system.FindEntry(component.GameObject) is not { } entry || entry.IndexOf(component) < 0 ||
+                NetworkMembers.Of(component).Sync(slot) is not { } sync || NetworkMembers.Of(component).IndexOf(sync) < 0)
+            {
+                w.WriteVarUInt32(uint.MaxValue >> 4); w.WriteVarUInt32(generation); w.WriteVarUInt64(0);
+                continue;
+            }
+
+            w.WriteVarUInt32(entry.NetId);
+            w.WriteVarUInt32(generation);
+            w.WriteVarUInt64(1UL << entry.IndexOf(component));
+            using NetWriter block = new();
+            block.WriteVarUInt64(1UL << NetworkMembers.Of(component).IndexOf(sync));
+            block.WriteBytes(value);
+            w.WriteBytesWithLength(block.WrittenSpan);
+        }
+    }
+
+    /// <summary>
+    ///     A state message for values a test spelled out the old way: [i32 writer][varuint count], then per value
+    ///     [guid component][varuint slot][varuint generation][bytes, length prefixed]. Anything after the values is
+    ///     kept as it is, so a test can still send a message with a malformed tail.
+    /// </summary>
+    public static byte[] StateFromOld(ReadOnlySpan<byte> old)
+    {
+        NetReader reader = new(old);
+        reader.ReadInt32();
+        uint count = reader.ReadVarUInt32();
+        List<(Guid, uint, uint, byte[])> values = new();
+        try
+        {
+            for (uint i = 0; i < count; i++)
+            {
+                values.Add((reader.ReadGuid(), reader.ReadVarUInt32(), reader.ReadVarUInt32(), reader.ReadBytesWithLength().ToArray()));
+            }
+        }
+        catch (EndOfStreamException)
+        {
+            // A record cut short: what was read of it goes as the tail.
+        }
+
+        using NetWriter state = new();
+        WriteStateRecords(state, [.. values]);
+        if (values.Count == count)
+        {
+            state.WriteBytes(reader.ReadBytes(reader.Remaining));
+        }
+        else
+        {
+            state.WriteByte(255);
+        }
+
+        return state.ToArray();
+    }
+
+    /// <summary>Sends [Sync] values the way a peer does: as state records, reliably. The id and tick are no longer sent.</summary>
     public void SendSnapshotValues(NetPeer? to, uint id, uint tick, params (Guid Component, uint Slot, uint Generation, byte[] Value)[] values)
     {
         using NetWriter w = new();
-        w.WriteVarUInt32(id); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(tick);
-        w.WriteVarUInt32(0);
-        w.WriteVarUInt32((uint)values.Length);
-        for (int i = 0; i < values.Length; i++)
-        {
-            var value = values[i];
-            w.WriteVarUInt32((uint)(i + 1) << 1 | 1); w.WriteGuid(value.Component);
-            w.WriteVarUInt32(value.Slot); w.WriteVarUInt32(value.Generation);
-            w.WriteBytesWithLength(value.Value);
-        }
-        Session.SendRaw(to ?? Session.HostPeer!, Snapshot, w.WrittenSpan, Delivery.Unreliable);
+        WriteStateRecords(w, values);
+        Session.SendRaw(to ?? Session.HostPeer!, Sync, w.WrittenSpan);
         Session.Flush();
     }
+
     public ulong SceneGeneration { get; private set; }
     public bool IsReady { get; private set; }
 
@@ -284,13 +351,13 @@ public sealed class FakePeer : IDisposable
     {
         if (id == Sync)
         {
-            reader.ReadInt32();
+            // Tests read state as a count, then per value its component, slot and bytes.
+            List<(Guid Component, uint Slot, byte[] Value)> values = SnapshotValues(reader.ReadBytes(reader.Remaining).ToArray());
             using NetWriter logical = new();
-            uint count = reader.ReadVarUInt32(); logical.WriteVarUInt32(count);
-            for (uint i = 0; i < count; i++)
+            logical.WriteVarUInt32((uint)values.Count);
+            foreach ((Guid component, uint slot, byte[] value) in values)
             {
-                logical.WriteGuid(reader.ReadGuid()); logical.WriteVarUInt32(reader.ReadVarUInt32());
-                reader.ReadVarUInt32(); logical.WriteBytesWithLength(reader.ReadBytesWithLength());
+                logical.WriteGuid(component); logical.WriteVarUInt32(slot); logical.WriteBytesWithLength(value);
             }
             return logical.ToArray();
         }
@@ -348,10 +415,6 @@ public sealed class FakePeer : IDisposable
         using NetWriter writer = new();
         write(writer);
         using NetWriter wire = new();
-        if (id == Sync)
-        {
-            wire.WriteInt32(Session.LocalPeer!.Id);
-        }
         if (id == RpcToHost || id == RpcFromHost)
         {
             NetReader arguments = new(writer.WrittenSpan);
@@ -365,16 +428,17 @@ public sealed class FakePeer : IDisposable
         else if (id == Sync)
         {
             NetReader block = new(writer.WrittenSpan);
-            uint count = block.ReadVarUInt32(); wire.WriteVarUInt32(count);
+            uint count = block.ReadVarUInt32();
+            (Guid, uint, uint, byte[])[] values = new (Guid, uint, uint, byte[])[count];
             for (uint i = 0; i < count; i++)
             {
-                Guid componentId = block.ReadGuid(); wire.WriteGuid(componentId);
-                wire.WriteVarUInt32(block.ReadVarUInt32());
+                Guid componentId = block.ReadGuid();
+                uint slot = block.ReadVarUInt32();
                 uint generation = NetworkTestScene.Current.FindByIdentifier(componentId) is Component part
                     ? NetworkTestScene.Current.GenerationOf(part.GameObject) : 0;
-                wire.WriteVarUInt32(generation);
-                wire.WriteBytesWithLength(block.ReadBytesWithLength());
+                values[i] = (componentId, slot, generation, block.ReadBytesWithLength().ToArray());
             }
+            WriteStateRecords(wire, values);
         }
         else wire.WriteBytes(writer.WrittenSpan);
         Session.SendRaw(to ?? Session.HostPeer!, id, wire.WrittenSpan, channel: channel);
@@ -403,6 +467,48 @@ public partial class NetworkingTests : RuntimeTestBase
     {
         NetReader reader = new(spawn);
         return reader.ReadGuid();
+    }
+
+    /// <summary>
+    ///     The [Sync] values a Spawn message carries, as (component, slot, value bytes), read with the engine side's own
+    ///     object, which says what each block and bit is. Empty when it no longer has the object.
+    /// </summary>
+    private static List<(Guid Component, uint Slot, byte[] Value)> SpawnValues(byte[] spawn)
+    {
+        List<(Guid, uint, byte[])> values = new();
+        NetReader reader = new(spawn);
+        SpawnMessage message = SpawnMessage.Read(ref reader);
+        Guid id = message.Identifier;
+        bool whole = !message.Template;
+        if (!NetworkTestScene.Current.Entries.TryGetValue(id, out NetworkObject? entry)) return values;
+
+        // A spawn that carries its tree names its networked components first.
+        if (whole)
+        {
+            int named = reader.ReadByte();
+            for (int i = 0; i < named; i++) reader.ReadGuid();
+        }
+
+        int count = reader.ReadByte();
+        for (int c = 0; c < count && c < entry.Components.Length; c++)
+        {
+            ReadOnlySpan<byte> bytes = reader.ReadBytesWithLength();
+            Component component = entry.Components[c];
+            NetworkMembers members = NetworkMembers.Of(component);
+            NetReader block = new(bytes);
+            ulong bits = block.ReadVarUInt64();
+            while (bits != 0)
+            {
+                int m = System.Numerics.BitOperations.TrailingZeroCount(bits);
+                bits &= bits - 1;
+                SyncMember sync = members.SyncAt(m)!;
+                int start = block.Position;
+                sync.Validate(component, ref block, true);
+                values.Add((component.Identifier, sync.Slot, bytes[start..block.Position].ToArray()));
+            }
+        }
+
+        return values;
     }
 
     /// <summary>The networked objects <paramref name="peer" /> was spawned so far, in order.</summary>
@@ -827,7 +933,6 @@ public partial class NetworkingTests : RuntimeTestBase
             NetSerializers.WriteQuaternion(w, record.Rotation);
             NetSerializers.WriteFloat3(w, record.Scale);
         }
-        w.WriteVarUInt32(0);
     }
 
     internal readonly record struct TransformRecord(uint NetId, uint Generation, byte Channels, Float3? Position,

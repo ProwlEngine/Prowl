@@ -435,13 +435,11 @@ internal sealed partial class NetworkSystem
         foreach (NetPeer peer in peers)
         {
             Snapshots.Delivered(peer, go);
-            if (entering)
+
+            // A spawn is written for everyone, so what only the owner gets follows to it.
+            if (peer.Id == entry.Owner)
             {
-                Snapshots.Entered(peer, go, written, peers.Count > 1);
-            }
-            else
-            {
-                Snapshots.Wrote(peer, written, peers.Count > 1);
+                Sync.QueueMembers(peer, entry, static sync => (sync.Flags & SyncFlags.ToOwner) != 0);
             }
         }
 

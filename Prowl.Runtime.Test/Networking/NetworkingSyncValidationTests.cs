@@ -44,7 +44,7 @@ public partial class NetworkingTests
             if (kind == "trailing-value") { loadout.WriteString("Bow"); loadout.WriteByte(255); }
             WriteSyncRecord(message, component, NetCollectionTestComponent.LoadoutSlot, loadout.WrittenSpan);
         }
-        return message.ToArray();
+        return FakePeer.StateFromOld(message.WrittenSpan);
     }
 
     [Theory]
@@ -163,7 +163,7 @@ public partial class NetworkingTests
             WriteSyncRecord(message, skipped == "unauthorized" ? unauthorized : component,
                 skipped == "unknown" ? uint.MaxValue : NetCollectionTestComponent.HealthSlot,
                 new byte[] { 0x80 }, skipped == "stale" ? NetworkTestScene.Current.GenerationOf(root) - 1 : null);
-            owner.Session.SendRaw(owner.Session.HostPeer!, FakePeer.Sync, message.WrittenSpan);
+            owner.Session.SendRaw(owner.Session.HostPeer!, FakePeer.Sync, FakePeer.StateFromOld(message.WrittenSpan));
             Pump(() => component.Health == 42 && observer.Has(FakePeer.Sync), owner, observer);
             Assert.Equal(SessionState.Active, owner.Session.State);
             Assert.Equal(new[] { 7 }, component.Scores);

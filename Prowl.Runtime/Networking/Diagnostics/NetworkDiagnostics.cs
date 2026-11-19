@@ -29,7 +29,7 @@ public static class NetworkDiagnostics
     /// <summary>Changes whenever entries are recorded or cleared, so a viewer can skip unchanged frames.</summary>
     public static long Version { get; private set; }
     public static int NetworkObjectCount => Networking.System?.Entries.Count ?? 0;
-    public static int PendingSyncCount => Networking.System?.Sync.Dirty.Count ?? 0;
+    public static int PendingSyncCount => Networking.System?.Sync.PendingCount ?? 0;
 
     /// <summary>Returns a captured entry, oldest first.</summary>
     public static Entry GetEntry(int index)
@@ -160,24 +160,7 @@ public static class NetworkDiagnostics
                     $"{component.GetType().Name}.{rpc.Signature}");
             }
 
-            SyncMessage.Read(ref reader); // Original state writer, preserved by host relaying.
-            uint count = SyncBlock.Read(ref reader).Count;
-            StringBuilder context = new($"{count} SyncVar value(s)");
-            List<string> names = new();
-            // Bound capture work and retained text even for very large sync batches.
-            for (uint i = 0; i < Math.Min(count, 32u); i++)
-            {
-                SyncValue message = SyncValue.Read(ref reader);
-                AppendValue(context, names, scene.FindByIdentifier(message.ComponentId) as Component,
-                    message.ComponentId.ToString(), message.Slot, message.Value);
-            }
-
-            if (count > 32)
-            {
-                context.Append($"\n\n{count - 32} more values omitted");
-            }
-
-            return (context.ToString(), count == 0 ? "No SyncVars" : JoinNames(names, (int)count));
+            return DescribeState(scene, ref reader);
         }
         catch (Exception)
         {
@@ -219,55 +202,64 @@ public static class NetworkDiagnostics
             context.Append($"\n\n{transforms - 32} more transforms omitted");
         }
 
+        return (context.ToString(), transforms == 0 ? "Empty" : transforms == 1 ? "1 transform" : $"{transforms} transforms");
+    }
+
+    // A state message: the objects it has records for, and which members of each component changed.
+    private static (string Context, string Name) DescribeState(NetworkSystem scene, ref NetReader reader)
+    {
         uint count = reader.ReadVarUInt32();
-        for (uint i = 0; i < Math.Min(count, 32u); i++)
+        StringBuilder context = new($"{count} object(s) with [Sync] changes");
+        List<string> names = new();
+        for (uint i = 0; i < count; i++)
         {
-            SnapshotValue value = SnapshotValue.Read(ref reader);
-            Component? component = value.Definition is { } guid
-                ? scene.FindByIdentifier(guid) as Component
-                : SnapshotComponent(scene, peer, value.ComponentId, outgoing);
-            AppendValue(context, names, component, value.Definition?.ToString() ?? $"#{value.ComponentId}", value.Slot,
-                value.Value);
+            uint netId = reader.ReadVarUInt32();
+            reader.ReadVarUInt32();
+            ulong components = reader.ReadVarUInt64();
+            NetworkObject? entry = scene.Entries.TryGetNet(netId, out NetworkObject? found) ? found : null;
+
+            // Bound capture work and retained text even for very large batches.
+            bool shown = i < 32;
+            if (shown)
+            {
+                context.Append($"\n\nObject: {(entry != null && entry.GameObject.IsValid() ? entry.GameObject.Name : $"Unknown object #{netId}")}");
+            }
+
+            while (components != 0)
+            {
+                int c = System.Numerics.BitOperations.TrailingZeroCount(components);
+                components &= components - 1;
+                NetReader block = new(reader.ReadBytesWithLength());
+                if (!shown || entry == null || c >= entry.Components.Length || entry.Components[c].IsNotValid())
+                {
+                    continue;
+                }
+
+                Component component = entry.Components[c];
+                NetworkMembers members = NetworkMembers.Of(component);
+                ulong bits = block.ReadVarUInt64();
+                while (bits != 0)
+                {
+                    int m = System.Numerics.BitOperations.TrailingZeroCount(bits);
+                    bits &= bits - 1;
+                    if (members.SyncAt(m) is not { } sync)
+                    {
+                        break;
+                    }
+
+                    string member = $"{component.GetType().Name}.{sync.Name}";
+                    names.Add(member);
+                    context.Append($"\nMember: {member}\nValue: {sync.FormatPayload(ref block)}");
+                }
+            }
         }
 
         if (count > 32)
         {
-            context.Append($"\n\n{count - 32} more values omitted");
+            context.Append($"\n\n{count - 32} more objects omitted");
         }
 
-        string transformText = transforms == 1 ? "1 transform" : $"{transforms} transforms";
-        string name = (transforms, count) switch
-        {
-            (0, 0) => "Empty",
-            (_, 0) => transformText,
-            (0, _) => JoinNames(names, (int)count),
-            _ => $"{transformText}, {JoinNames(names, (int)count)}"
-        };
-        return (context.ToString(), name);
-    }
-
-    // An id this peer gave when sending, or one the other peer defined when receiving.
-    private static Component? SnapshotComponent(NetworkSystem scene, NetPeer? peer, uint id, bool outgoing)
-    {
-        if (peer == null || !scene.Snapshots.TryGetComponentIds(peer, out var given, out var received))
-        {
-            return null;
-        }
-
-        if (!outgoing)
-        {
-            return received.TryGetValue(id, out Guid guid) ? scene.FindByIdentifier(guid) as Component : null;
-        }
-
-        foreach ((Component component, uint value) in given)
-        {
-            if (value == id)
-            {
-                return component;
-            }
-        }
-
-        return null;
+        return (context.ToString(), names.Count == 0 ? "No SyncVars" : JoinNames(names, names.Count));
     }
 
     private static (string Context, string Name) DescribeAck(ref NetReader reader)
@@ -279,21 +271,14 @@ public static class NetworkDiagnostics
             acknowledged.Add(reader.ReadVarUInt32());
         }
 
-        uint components = SnapshotAckMessage.ReadCount(ref reader, 16);
-        for (uint i = 0; i < components; i++)
-        {
-            reader.ReadGuid();
-        }
-
         uint objects = SnapshotAckMessage.ReadCount(ref reader, 1);
         string name = ids == 1 ? $"Snapshot #{acknowledged[0]}" : $"{ids} snapshots";
-        if (components + objects > 0)
+        if (objects > 0)
         {
-            name += $", {components + objects} rejected";
+            name += $", {objects} rejected";
         }
 
-        return ($"Acknowledges: {string.Join(", ", acknowledged)}\nRejected components: {components}\nRejected objects: {objects}",
-            name);
+        return ($"Acknowledges: {string.Join(", ", acknowledged)}\nRejected objects: {objects}", name);
     }
 
     private static void AppendValue(StringBuilder context, List<string> names, Component? component, string id,

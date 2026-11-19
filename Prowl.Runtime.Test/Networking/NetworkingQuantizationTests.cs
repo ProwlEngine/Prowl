@@ -91,14 +91,12 @@ public partial class NetworkingTests
                 w.WriteVarUInt32(50); w.WriteDouble(1); w.WriteVarUInt32(1);
                 w.WriteVarUInt32(netId); w.WriteVarUInt32(generation); w.WriteByte(PositionChannel);
                 w.WriteVarUInt32(5); w.WriteVarInt64(100); w.WriteVarInt64(0); w.WriteVarInt64(0);
-                w.WriteVarUInt32(0);
             });
 
             Pump(() => owner.Has(FakePeer.SnapshotAck), owner);
             NetReader ack = new(owner.Last(FakePeer.SnapshotAck));
             Assert.Equal(1u, ack.ReadVarUInt32());
             Assert.Equal(9u, ack.ReadVarUInt32());
-            Assert.Equal(0u, ack.ReadVarUInt32());
             Assert.Equal(1u, ack.ReadVarUInt32());
             Assert.Equal(netId, ack.ReadVarUInt32());
             Assert.Equal(Float3.Zero, root.Transform.LocalPosition);

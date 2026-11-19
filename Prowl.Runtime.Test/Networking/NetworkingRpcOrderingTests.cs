@@ -68,7 +68,7 @@ public partial class NetworkingTests
             component.Scores.Add(5);
             component.Talk();
             Assert.Equal(1, component.Talks);
-            Assert.NotEmpty(NetworkTestScene.Current.Sync.Dirty);
+            Assert.True(NetworkTestScene.Current.Sync.PendingCount > 0);
             Pump(() => bob.Has(FakePeer.RpcFromHost), alice, bob);
             Assert.Equal(1, bob.Channels.Single(m => m.Id == FakePeer.RpcFromHost).Channel);
         }
@@ -175,7 +175,7 @@ public partial class NetworkingTests
         root.AddComponent<NetworkLifecycleListener>().TryEditOnSpawn = true;
         scene.Add(root); Bind(scene);
         LocalNetwork network = new();
-        byte[] snapshot, rpc, nextSync, health;
+        byte[] snapshot, rpc, nextSync;
         byte[][] spawns;
         byte[]? stateSync = null;
         try
@@ -194,8 +194,8 @@ public partial class NetworkingTests
             NetReader call = new(rpc);
             call.ReadVarUInt32(); call.ReadVarUInt32(); call.ReadByte(); call.ReadVarUInt32(); call.ReadBytesWithLength();
             Assert.True(call.IsAtEnd);
-            // Nothing goes ahead of an unreliable call; its state follows with the next tick, in no set order.
-            // A reliable call's collection changes go just ahead of it; other values travel in snapshots, unordered.
+            // Nothing goes ahead of an unreliable call; its state follows with the next tick.
+            // A reliable call's state, values and collection changes alike, goes just ahead of it.
             if (!unreliable)
             {
                 Assert.Equal(FakePeer.Sync, client.WireReceived[rpcIndex - 1].Id);
@@ -205,8 +205,6 @@ public partial class NetworkingTests
             SendSyncChanges();
             Pump(() => client.SnapshotInt(component.Identifier, NetCollectionTestComponent.HealthSlot) == 0, client);
             nextSync = client.WireReceived.Last(m => m.Id == FakePeer.Sync).Data;
-            health = client.WireReceived.Last(m => m.Id == FakePeer.Snapshot &&
-                client.SnapshotValues(m.Data).Any(v => v.Slot == NetCollectionTestComponent.HealthSlot)).Data;
         }
         finally { Networking.Networking.Shutdown(); }
 
@@ -228,10 +226,9 @@ public partial class NetworkingTests
             host.Session.SendRaw(client, FakePeer.RpcFromHost, rpc, unreliable ? Delivery.Unreliable : Delivery.Reliable);
             host.Session.Flush();
             Pump(() => proxy.Observed.Count == 1, host);
-            Assert.Equal(unreliable ? (100, 0, 0f) : (100, 1, 0f), proxy.Observed[0]);
+            Assert.Equal(unreliable ? (100, 0, 0f) : (0, 1, 0f), proxy.Observed[0]);
             // The state follows; collection changes the proxy already has aren't applied twice.
             host.Session.SendRaw(client, FakePeer.Sync, nextSync);
-            host.Session.SendRaw(client, FakePeer.Snapshot, health);
             host.Session.Flush(); PumpFor(10, host);
             Assert.Equal(0, proxy.Health);
             Assert.Equal(new[] { 7 }, proxy.Scores);
@@ -349,7 +346,7 @@ public partial class NetworkingTests
         sync.WriteInt32(origin); sync.WriteVarUInt32(1);
         sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(slot);
         sync.WriteVarUInt32(generation); sync.WriteBytesWithLength(payload.WrittenSpan);
-        return sync.ToArray();
+        return FakePeer.StateFromOld(sync.WrittenSpan);
     }
 
     private static uint NetworkGeneration(GameObject root)
@@ -379,7 +376,7 @@ public partial class NetworkingTests
             sync.WriteInt32(owner.Id); sync.WriteVarUInt32(1);
             sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(NetCollectionTestComponent.HealthSlot);
             sync.WriteVarUInt32(generation); NetSerializer<int>.Write(value, 0); sync.WriteBytesWithLength(value.WrittenSpan);
-            client.Session.SendRaw(client.Session.HostPeer!, FakePeer.Sync, sync.WrittenSpan);
+            client.Session.SendRaw(client.Session.HostPeer!, FakePeer.Sync, FakePeer.StateFromOld(sync.WrittenSpan));
             client.Session.Flush(); PumpFor(20, client);
             Assert.Equal(100, component.Health);
             Assert.Equal(SessionState.Active, client.Session.State);

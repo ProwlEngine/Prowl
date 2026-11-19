@@ -148,13 +148,6 @@ public partial class NetworkingTests
     private static List<KeyValuePair<uint, byte[]>> SyncValues(FakePeer peer, Guid component)
     {
         List<KeyValuePair<uint, byte[]>> values = new();
-        // Collections travel in Sync messages, other values in snapshots.
-        foreach ((Guid target, uint slot, byte[] value) in peer.SnapshotValues())
-        {
-            if (target == component)
-                values.Add(new(slot, value));
-        }
-
         foreach ((ushort id, byte[] data) in peer.Received.Where(m => m.Id == FakePeer.Sync))
         {
             NetReader reader = new(data);
@@ -358,7 +351,6 @@ public partial class NetworkingTests
             alice.Received.Clear();
             later.ClearSeen();
             component.Scores.Add(4);
-            // Only collections travel as Sync messages; other values may still be on their way in snapshots.
             List<KeyValuePair<uint, byte[]>> Collections() => SyncValues(alice, component.Identifier)
                 .Where(v => v.Key is NetCollectionTestComponent.ScoresSlot or NetCollectionTestComponent.StatsSlot
                     or NetCollectionTestComponent.TagsSlot).ToList();

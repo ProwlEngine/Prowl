@@ -120,13 +120,9 @@ public partial class NetworkingTests
         SpawnMessage message = SpawnMessage.Read(ref reader);
         (Guid id, int owner, bool replace) = (message.Identifier, message.OwnerId, message.Replace);
         int? health = null;
-        uint count = reader.ReadVarUInt32();
-        for (uint i = 0; i < count; i++)
+        foreach ((Guid target, uint slot, byte[] bytes) in SpawnValues(payload))
         {
-            Guid target = reader.ReadGuid();
-            uint slot = reader.ReadVarUInt32();
-            reader.ReadVarUInt32();
-            NetReader value = new(reader.ReadBytesWithLength());
+            NetReader value = new(bytes);
             if (target == component && slot == NetTestComponent.HealthSlot) health = NetSerializer<int>.Read(ref value);
         }
 
@@ -374,95 +370,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void AnObjectComingBackWithinAPruneIntervalKeepsItsComponentIds()
-    {
-        SceneInstance scene = CreateScene();
-        using NetWriter snapshot = new(), spawn = new(), despawn = new(), back = new();
-        NetworkTestScene.Current.WriteScene(scene, snapshot);
-        GameObject crate = CreateGameObject("Crate");
-        crate.Network.Networked = true;
-        NetTestComponent component = crate.AddComponent<NetTestComponent>();
-        NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.Destroy, spawn, generation: 1, netId: 5);
-        new DespawnMessage(crate.Identifier, NetworkDespawnReason.OutOfInterest).Write(despawn);
-        NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.Destroy, back, generation: 1, netId: 5, replace: true);
-
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
-        float tickRate = Networking.Networking.TickRate;
-        float fixedDelta = Time.FixedDeltaTime;
-        try
-        {
-            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady, host);
-            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            host.Session.SendRaw(client, FakePeer.Spawn, spawn.WrittenSpan);
-            host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
-            NetTestComponent first = Find(SceneInstance.Main, crate.Identifier).GetComponent<NetTestComponent>()!;
-            host.SendSnapshotValues(client, 7, 1, (component.Identifier, NetTestComponent.HealthSlot, 1u, IntValue(5)));
-            Pump(() => first.Health == 5, host);
-
-            host.Session.SendRaw(client, FakePeer.Despawn, despawn.WrittenSpan);
-            host.Session.Flush();
-            Pump(() => first.IsDisposed, host);
-            host.Session.SendRaw(client, FakePeer.Spawn, back.WrittenSpan);
-            host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier && !o.IsDisposed), host);
-            NetTestComponent second = Find(SceneInstance.Main, crate.Identifier).GetComponent<NetTestComponent>()!;
-            host.SendSnapshotValues(client, 8, 2, (component.Identifier, NetTestComponent.HealthSlot, 1u, IntValue(6)));
-            Pump(() => second.Health == 6, host);
-
-            Networking.Networking.TickRate = 1000;
-            Time.FixedDeltaTime = 0.001f;
-            uint pruned = (Networking.Networking.System!.Tick / 64 + 1) * 64;
-            Pump(() => Networking.Networking.System?.Tick > pruned, host);
-            using NetWriter byId = new();
-            byId.WriteVarUInt32(9); byId.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); byId.WriteVarUInt32(3);
-            byId.WriteVarUInt32(0); byId.WriteVarUInt32(1);
-            byId.WriteVarUInt32(1u << 1); byId.WriteVarUInt32(NetTestComponent.HealthSlot); byId.WriteVarUInt32(1);
-            byId.WriteBytesWithLength(IntValue(11));
-            host.Session.SendRaw(client, FakePeer.Snapshot, byId.WrittenSpan, Delivery.Unreliable);
-            host.Session.Flush();
-            Pump(() => second.Health == 11, host);
-            Assert.True(Networking.Networking.IsActive);
-        }
-        finally
-        {
-            Networking.Networking.TickRate = tickRate;
-            Time.FixedDeltaTime = fixedDelta;
-            Networking.Networking.Shutdown();
-        }
-    }
-
-    [Fact]
-    public void AnAcknowledgementArrivingAfterTheObjectLeftDoesNotSkipItsDefinitionLater()
-    {
-        using VisibilitySession session = VisibilityHost();
-        FakePeer alice = session.Alice;
-        alice.AutoAck = false;
-        GameObject crate = Crate(session.World, NetworkVisibility.Default);
-        NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
-        crate.Network.SpawnSerialized();
-        Pump(() => alice.Has(FakePeer.Spawn), alice, session.Bob);
-        stats.Health = 5;
-        Pump(() => alice.WireReceived.Any(m => m.Id == FakePeer.Snapshot && DefinesHealth(m.Data, 5) == true), alice, session.Bob);
-        byte[] early = alice.WireReceived.First(m => m.Id == FakePeer.Snapshot && DefinesHealth(m.Data, 5) == true).Data;
-
-        crate.Network.HideFrom(session.AliceHere);
-        Pump(() => alice.Has(FakePeer.Despawn), alice, session.Bob);
-        NetReader header = new(early);
-        uint snapshotId = header.ReadVarUInt32();
-        alice.Send(FakePeer.SnapshotAck, w => { w.WriteVarUInt32(1); w.WriteVarUInt32(snapshotId); w.WriteVarUInt32(0); w.WriteVarUInt32(0); });
-        PumpFor(50, alice, session.Bob);
-
-        crate.Network.ShowTo(session.AliceHere);
-        stats.Health = 6;
-        Pump(() => alice.WireReceived.Any(m => m.Id == FakePeer.Snapshot && DefinesHealth(m.Data, 6) != null), alice, session.Bob);
-        Assert.True(DefinesHealth(alice.WireReceived.First(m => m.Id == FakePeer.Snapshot && DefinesHealth(m.Data, 6) != null).Data, 6));
-    }
-
-    [Fact]
     public void AHiddenPeerCannotCallRpcsOnTheObject()
     {
         using VisibilitySession session = VisibilityHost();
@@ -581,62 +488,6 @@ public partial class NetworkingTests
         GameObject reset = Serializer.Deserialize<GameObject>(plain)!;
         Assert.Equal(NetworkVisibility.Default, reset.Network.Visibility);
         reset.Dispose();
-    }
-
-    [Fact]
-    public void ASnapshotSentBeforeAnObjectLeftCannotRollBackItsReplacement()
-    {
-        SceneInstance scene = CreateScene();
-        using NetWriter snapshot = new(), spawn = new(), despawn = new(), back = new();
-        NetworkTestScene.Current.WriteScene(scene, snapshot);
-        GameObject crate = CreateGameObject("Crate");
-        crate.Network.Networked = true;
-        crate.Network.Flags = NetworkFlags.NoInterpolation;
-        NetTestComponent component = crate.AddComponent<NetTestComponent>();
-        NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.Destroy, spawn, generation: 1, netId: 5);
-        new DespawnMessage(crate.Identifier, NetworkDespawnReason.OutOfInterest).Write(despawn);
-        component.Health = 9;
-        uint tick = NetworkTestScene.Current.Tick;
-        NetworkTestScene.Current.Tick = 6;
-        NetworkTestScene.Current.WriteSpawn(crate, -1, NetworkOrphaned.Destroy, back, generation: 1, netId: 5, replace: true);
-        NetworkTestScene.Current.Tick = tick;
-
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
-        try
-        {
-            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady, host);
-            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            host.Session.SendRaw(client, FakePeer.Spawn, spawn.WrittenSpan);
-            host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
-            NetTestComponent first = Find(SceneInstance.Main, crate.Identifier).GetComponent<NetTestComponent>()!;
-            host.SendSnapshotValues(client, 7, 5, (component.Identifier, NetTestComponent.HealthSlot, 1u, IntValue(5)));
-            Pump(() => first.Health == 5, host);
-
-            host.Session.SendRaw(client, FakePeer.Despawn, despawn.WrittenSpan);
-            host.Session.SendRaw(client, FakePeer.Spawn, back.WrittenSpan);
-            host.Session.Flush();
-            Pump(() => first.IsDisposed && SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier && !o.IsDisposed), host);
-            GameObject replaced = Find(SceneInstance.Main, crate.Identifier);
-            NetTestComponent second = replaced.GetComponent<NetTestComponent>()!;
-            Assert.Equal(9, second.Health);
-
-            host.SendSnapshotValues(client, 8, 4, (component.Identifier, NetTestComponent.HealthSlot, 1u, IntValue(4)));
-            host.Send(FakePeer.Snapshot, w => WriteTransforms(w, 4, 4 / 30.0,
-                (5u, 1u, new Float3(4, 0, 0), Quaternion.Identity, Float3.One)), client);
-            PumpFor(30, host);
-            Assert.Equal(9, second.Health);
-            Assert.Equal(0f, replaced.Transform.LocalPosition.X);
-
-            host.SendSnapshotValues(client, 9, 7, (component.Identifier, NetTestComponent.HealthSlot, 1u, IntValue(10)));
-            host.Send(FakePeer.Snapshot, w => WriteTransforms(w, 7, 7 / 30.0,
-                (5u, 1u, new Float3(7, 0, 0), Quaternion.Identity, Float3.One)), client);
-            Pump(() => second.Health == 10 && replaced.Transform.LocalPosition.X == 7, host);
-        }
-        finally { Networking.Networking.Shutdown(); }
     }
 
     [Fact]

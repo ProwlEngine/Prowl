@@ -377,54 +377,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SyncReferencesToObjectsAClientLacksReachItEmptyAndAreResentWhenTheyArrive()
-    {
-        using InterestSession session = InterestHost();
-        session.AliceSees.SetViewpoints([Float3.Zero]);
-        session.BobSees.SetViewpoints([new Float3(1000, 0, 0)]);
-        GameObject crate = CrateAt(session.World, 3);
-        crate.Network.SpawnSerialized();
-        GameObject holder = CrateAt(session.World, 0, NetworkVisibility.Always, "Holder");
-        SyncReferenceTestComponent pointer = holder.AddComponent<SyncReferenceTestComponent>();
-        holder.Network.SpawnSerialized();
-
-        pointer.Target = crate;
-        Pump(() => HoldsReference(session.Alice, pointer, crate.Identifier) && HoldsReference(session.Bob, pointer, Guid.Empty),
-            session.Alice, session.Bob);
-        Assert.False(Mentions(session.Bob, crate.Identifier));
-
-        session.BobSees.SetViewpoints([Float3.Zero]);
-        Pump(() => SpawnsOf(session.Bob, crate) == 1 && HoldsReference(session.Bob, pointer, crate.Identifier),
-            session.Alice, session.Bob);
-
-        session.BobSees.SetViewpoints([new Float3(1000, 0, 0)]);
-        Pump(() => DespawnsOf(session.Bob, crate) == 1, session.Alice, session.Bob);
-        int before = CountReference(session.Bob, pointer, crate.Identifier);
-        session.BobSees.SetViewpoints([Float3.Zero]);
-        Pump(() => SpawnsOf(session.Bob, crate) == 2 && CountReference(session.Bob, pointer, crate.Identifier) > before,
-            session.Alice, session.Bob);
-    }
-
-    [Fact]
-    public void AClientsSyncReferenceIsPassedOnEmptyToClientsLackingItsTarget()
-    {
-        using InterestSession session = InterestHost();
-        session.AliceSees.SetViewpoints([Float3.Zero]);
-        GameObject crate = CrateAt(session.World, 3);
-        crate.Network.SpawnSerialized();
-        GameObject holder = CrateAt(session.World, 0, NetworkVisibility.Always, "Holder");
-        SyncReferenceTestComponent pointer = holder.AddComponent<SyncReferenceTestComponent>();
-        holder.Network.SpawnSerialized(session.AliceHere);
-        Pump(() => SpawnsOf(session.Bob, holder) == 1, session.Alice, session.Bob);
-
-        session.Alice.SendSnapshotValues(null, 0, 1,
-            (pointer.Identifier, SyncReferenceTestComponent.TargetSlot, NetworkTestScene.Current.GenerationOf(holder),
-                crate.Identifier.ToByteArray()));
-        Pump(() => ReferenceEquals(pointer.Target, crate) && HoldsReference(session.Bob, pointer, Guid.Empty), session.Alice, session.Bob);
-        Assert.False(Mentions(session.Bob, crate.Identifier));
-    }
-
-    [Fact]
     public void RpcReferencesToObjectsAClientLacksReachItEmpty()
     {
         using InterestSession session = InterestHost();
@@ -554,23 +506,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void AnAddedSectionsSyncReferenceToAHiddenObjectElsewhereReachesClientsEmpty()
-    {
-        using VisibilitySession session = VisibilityHost();
-        GameObject vault = Crate(session.World, NetworkVisibility.Manual, "Vault");
-        vault.Network.SpawnSerialized();
-        GameObject holder = CreateGameObject("Holder");
-        holder.Network.Networked = true;
-        holder.AddComponent<SyncReferenceTestComponent>().Target = vault;
-        session.World.AddContent(new SceneContent { Objects = [holder] }, "Arena", null);
-        Pump(() => session.Alice.Has(FakePeer.SectionAdd) && session.Bob.Has(FakePeer.SectionAdd), session.Alice, session.Bob);
-        PumpFor(50, session.Alice, session.Bob);
-
-        Assert.False(Mentions(session.Alice, vault.Identifier));
-        Assert.False(Mentions(session.Bob, vault.Identifier));
-    }
-
-    [Fact]
     public void TurningInterestOffSendsWhatDistanceHeldBack()
     {
         using InterestSession session = InterestHost();
@@ -687,58 +622,6 @@ public partial class NetworkingTests
         Stopwatch left = Stopwatch.StartNew();
         Pump(() => session.Alice.Has(FakePeer.Despawn), session.Alice, session.Bob);
         Assert.InRange(left.Elapsed.TotalSeconds, 0.4, 30);
-    }
-
-    [Fact]
-    public void OnlyValuesNamingTheObjectThatArrivedGoAgain()
-    {
-        using InterestSession session = InterestHost();
-        session.AliceSees.SetViewpoints([new Float3(1000, 0, 0)]);
-        GameObject near = CrateAt(session.World, 0, name: "Near"), far = CrateAt(session.World, 500, name: "Far");
-        near.Network.SpawnSerialized();
-        far.Network.SpawnSerialized();
-        GameObject nearHolder = CrateAt(session.World, 0, NetworkVisibility.Always, "NearHolder");
-        SyncReferenceTestComponent toNear = nearHolder.AddComponent<SyncReferenceTestComponent>();
-        nearHolder.Network.SpawnSerialized();
-        GameObject farHolder = CrateAt(session.World, 0, NetworkVisibility.Always, "FarHolder");
-        SyncReferenceTestComponent toFar = farHolder.AddComponent<SyncReferenceTestComponent>();
-        farHolder.Network.SpawnSerialized();
-
-        toNear.Target = near;
-        toFar.Target = far;
-        Pump(() => HoldsReference(session.Alice, toNear, Guid.Empty) && HoldsReference(session.Alice, toFar, Guid.Empty),
-            session.Alice, session.Bob);
-        PumpFor(100, session.Alice, session.Bob);
-        int farBefore = CountReference(session.Alice, toFar, Guid.Empty);
-
-        session.AliceSees.SetViewpoints([Float3.Zero]);
-        Pump(() => HoldsReference(session.Alice, toNear, near.Identifier), session.Alice, session.Bob);
-        PumpFor(100, session.Alice, session.Bob);
-        Assert.Equal(farBefore, CountReference(session.Alice, toFar, Guid.Empty));
-    }
-
-    [Fact]
-    public void AValueNamingSeveralObjectsGoesAgainWhenAnyOfThemComesBack()
-    {
-        SyncPairTestComponent.RegisterSerializer();
-        using InterestSession session = InterestHost();
-        session.AliceSees.SetViewpoints([Float3.Zero]);
-        GameObject first = CrateAt(session.World, 3, name: "First"), second = CrateAt(session.World, -3, name: "Second");
-        first.Network.SpawnSerialized();
-        second.Network.SpawnSerialized();
-        GameObject holder = CrateAt(session.World, 0, NetworkVisibility.Always, "Holder");
-        SyncPairTestComponent pair = holder.AddComponent<SyncPairTestComponent>();
-        holder.Network.SpawnSerialized();
-
-        pair.Pair = new TestReferencePair(first, second);
-        Pump(() => CountPair(session.Alice, pair, first, second) > 0, session.Alice, session.Bob);
-        first.Transform.Position = new Float3(500, 0, 0);
-        Pump(() => DespawnsOf(session.Alice, first) == 1, session.Alice, session.Bob);
-        int before = CountPair(session.Alice, pair, first, second);
-
-        first.Transform.Position = new Float3(3, 0, 0);
-        Pump(() => SpawnsOf(session.Alice, first) == 2 && CountPair(session.Alice, pair, first, second) > before,
-            session.Alice, session.Bob);
     }
 
     [Fact]

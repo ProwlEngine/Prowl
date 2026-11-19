@@ -14,19 +14,17 @@ using static Prowl.Runtime.Networking.NetworkSystem;
 
 namespace Prowl.Runtime.Networking;
 
-// Snapshots carry [Sync] values and transforms, unreliably. Every tick each peer is sent what it hasn't
-// acknowledged yet: values changed since, and the pose a still object came to rest at. A lost snapshot is never
-// resent as such; whatever it held is still unacknowledged, so a later snapshot carries it, current. Objects on the
-// move send their transforms every tick anyway, so those aren't tracked. Network collections stay on the reliable
-// Sync message, since their changes are operations that must arrive in order.
+// Snapshots carry transforms, unreliably. Every tick each peer is sent the transforms of what is moving, and the
+// pose a still object came to rest at until it acknowledges it. A lost snapshot is never resent as such: a pose it
+// held is still unacknowledged, so a later snapshot carries it, and objects on the move send theirs every tick anyway.
+// [Sync] state does not travel here: it goes reliably, through SyncSystem.
 //
-// The receiver acknowledges each snapshot it gets, naming the components and objects in it that it couldn't apply
-// (not spawned there yet, say), which stay pending. Values are applied only if newer than the last applied from that
-// sender, since unreliable snapshots can arrive out of order. Components are named by small ids the sender gives them
-// per receiver, sent with their guid until a snapshot carrying it has been acknowledged.
+// The receiver acknowledges each snapshot that asks for it, naming the objects in it that it couldn't place (not
+// spawned there yet, say), which stay pending. A moving position goes as a step from the latest one the receiver
+// acknowledged, so both ends keep a short history of positions by tick.
 //
-// The host relays: a value it accepts from a client becomes the host's own change, owed to everyone but that client.
-// A client's moving transforms are passed on as they arrive, under the client's tick and clock.
+// The host relays a client's transforms: moving ones are passed on as they arrive, under the client's tick and
+// clock, and the pose it came to rest at is owed to everyone else until they acknowledge it.
 //
 // Sending and receiving reuse their buffers, so a steady stream of snapshots allocates nothing per tick.
 internal sealed class SnapshotSystem : IDisposable
@@ -34,77 +32,43 @@ internal sealed class SnapshotSystem : IDisposable
     // Sent but unacknowledged snapshots remembered per peer. Older ones are forgotten, and their state resent.
     private const int MaxOutstanding = 256;
 
-    // How long a peer may keep rejecting a component before its values stop going to that peer.
-    internal const double MissingComponentSeconds = 3;
-
     // Snapshot ticks a position baseline stays usable for, and how far back a receiver keeps positions for them.
     private const uint MaxBaselineAge = 64;
     private const uint PositionHistoryTicks = 96;
 
-    private readonly List<(Component Component, SyncMember Sync)> _applied = new();
-    private readonly List<(Component Component, SyncMember Sync, byte[] Value)> _unresolved = new();
     private readonly HashSet<uint> _ackedIds = new();
-    private readonly Func<Component, SyncMember, bool> _filter;
     private readonly List<Item> _items = new();
     private readonly NetWriter _itemBytes = new(4096);
     private readonly NetWriter _message = new(4096);
-    private readonly HashSet<Type> _missingWarnings = new();
     private readonly List<(NetworkObject Entry, TransformUpdate Update)> _moving = new();
     private readonly Dictionary<int, PeerState> _peers = new();
-    private readonly HashSet<Guid> _rejectedComponents = new();
     private readonly HashSet<uint> _rejectedObjects = new();
     private readonly List<(TransformGroup Group, NetworkObject Entry, TransformUpdate Update)> _relay = new();
     private readonly NetworkSystem _scene;
     private readonly List<NetworkObject> _scratchObjects = new();
-    private readonly List<SyncKey> _scratchKeys = new();
-    private readonly List<Component> _scratchComponents = new();
-    private readonly List<GameObject> _scratchRoots = new();
     private readonly List<uint> _scratchIds = new();
 
-    // Values changed since the last tick, with their flags, owed to peers once at the next.
-    private readonly Dictionary<SyncKey, SyncFlags> _changed = new();
-
-    // Values written this tick that read the same for every peer.
-    private readonly Dictionary<SyncKey, WrittenOnce> _written = new();
-
-    // What each object's network membership was found to be this tick.
-    private readonly Dictionary<GameObject, (bool Excluded, NetworkObject? Entry)> _objectInfo = new(ReferenceEqualityComparer.Instance);
     private readonly List<(uint NetId, uint Generation)> _scratchPositions = new();
     private readonly List<NetPeer> _sendTargets = new();
     private readonly Stack<SentSnapshot> _sentPool = new();
     private readonly List<NetPeer> _targets = new();
-    private readonly NetWriter _translated = new(4096);
-    private readonly NetWriter _translatedValues = new(4096);
-    private readonly NetWriter _valueWriter = new();
 
     // Never reset with the scene, so a late acknowledgement can't match a later scene's snapshot.
     private uint _nextSnapshotId = 1;
 
-    // What the filter of the values being applied compares against.
-    private PeerState? _filterState;
-    private uint _filterTick;
-
     private double PositionStep => GridPosition.Step(_scene.Configuration.PositionPrecision);
 
-    public SnapshotSystem(NetworkSystem scene)
-    {
-        _scene = scene;
-        _filter = Filter;
-    }
+    public SnapshotSystem(NetworkSystem scene) => _scene = scene;
 
     public void Dispose()
     {
-        _valueWriter.Dispose();
         _itemBytes.Dispose();
         _message.Dispose();
-        _translated.Dispose();
-        _translatedValues.Dispose();
     }
 
     /// <summary>Forgets everything owed and received, as when the scene changes.</summary>
     internal void Clear()
     {
-        _changed.Clear();
         foreach (PeerState state in _peers.Values)
         {
             Forget(state);
@@ -121,47 +85,24 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
-    /// <summary>A scene snapshot or catch-up is carrying <paramref name="peer" /> everything it is owed.</summary>
+    /// <summary><paramref name="peer" /> is loading the world again: nothing sent it before counts any more.</summary>
     internal void Delivered(NetPeer peer)
     {
-        FanOutChanges();
         if (_peers.TryGetValue(peer.Id, out PeerState? state))
         {
-            state.Values.Clear();
             state.Poses.Clear();
             state.Baselines.Clear();
             state.SentPositions.Clear();
-            if (_scene.IsHost)
-            {
-                foreach (NetworkObject entry in _scene.Entries.Values)
-                {
-                    if (entry.Owner == peer.Id && entry.GameObject.IsValid())
-                    {
-                        OweOwnerValues(state, peer, entry.GameObject);
-                    }
-                }
-            }
-            state.Rejecting.Clear();
-            state.Missing.Clear();
-            state.Named.Clear();
-            state.NamedBy.Clear();
             Forget(state);
         }
     }
 
-    /// <summary>A spawn is carrying <paramref name="peer" /> the values and pose of <paramref name="root" />'s tree.</summary>
+    /// <summary>A spawn is carrying <paramref name="peer" /> the pose of <paramref name="root" />'s tree.</summary>
     internal void Delivered(NetPeer peer, GameObject root)
     {
-        FanOutChanges();
         if (!_peers.TryGetValue(peer.Id, out PeerState? state))
         {
-            // A client the host has sent nothing yet is still owed the owner only values of what it is spawned.
-            if (!_scene.IsHost)
-            {
-                return;
-            }
-
-            state = State(peer);
+            return;
         }
 
         foreach (GameObject go in TreeOf(root))
@@ -170,23 +111,6 @@ internal sealed class SnapshotSystem : IDisposable
             {
                 state.Poses.Remove(entry);
             }
-
-            foreach (Component component in go.GetComponents<Component>())
-            {
-                foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
-                {
-                    state.Values.Remove(new SyncKey(component, sync.Slot));
-                }
-
-                // Given up on before, it gets a fresh chance with what was just delivered.
-                state.Missing.Remove(component);
-                state.Rejecting.Remove(component);
-            }
-        }
-
-        if (_scene.IsHost)
-        {
-            OweOwnerValues(state, peer, root);
         }
     }
 
@@ -213,194 +137,8 @@ internal sealed class SnapshotSystem : IDisposable
                 state.Baselines.Remove(entry);
             }
 
-            // An acknowledgement still on its way, for a snapshot sent before now, must not mark it known again.
-            foreach (Component component in go.GetComponents<Component>())
-            {
-                if (state.DefinedComponents.Remove(component) || state.Sent.Count > 0)
-                {
-                    state.WithdrawnBefore[component] = _nextSnapshotId;
-                }
-            }
-        }
-
-        // Values that named it now name nothing there, so they go again if it comes back.
-        if (state.NamedBy.TryGetValue(root, out HashSet<SyncKey>? keys))
-        {
-            foreach (SyncKey key in keys)
-            {
-                NamedRoots roots = state.Named[key];
-                if (Holds(roots.Linked, root))
-                {
-                    state.Named[key] = new NamedRoots([.. roots.Masked, root], Without(roots.Linked, root));
-                }
-            }
         }
     }
-
-    /// <summary>
-    ///     <paramref name="root" /> reached <paramref name="peer" />: values that were masked for it go again, and the values
-    ///     written for it are remembered, owed again too when <paramref name="owe" /> as some other receiver lacked one.
-    /// </summary>
-    internal void Entered(NetPeer peer, GameObject root, List<WrittenValue> written, bool owe)
-    {
-        PeerState state = State(peer);
-        uint tick = _scene.Tick + 1;
-        if (state.NamedBy.TryGetValue(root, out HashSet<SyncKey>? keys))
-        {
-            foreach (SyncKey key in keys)
-            {
-                if (!key.Component.IsDisposed && Holds(state.Named[key].Masked, root))
-                {
-                    Owe(state, key, tick);
-                }
-            }
-        }
-
-        Wrote(peer, written, owe);
-    }
-
-    /// <summary>Remembers which networked roots the values written for <paramref name="peer" /> were masked for, or named.</summary>
-    internal void Wrote(NetPeer peer, List<WrittenValue> written, bool owe = false)
-    {
-        if (written.Count == 0)
-        {
-            return;
-        }
-
-        PeerState state = State(peer);
-        uint tick = _scene.Tick + 1;
-        foreach (WrittenValue value in written)
-        {
-            SyncKey key = new(value.Component, value.Slot);
-            Remember(state, key, value.Masked, value.Linked);
-            if (owe && value.Masked.Length > 0)
-            {
-                Owe(state, key, tick);
-            }
-        }
-    }
-
-    private static void Remember(PeerState state, SyncKey key, IReadOnlyList<GameObject> masked, IReadOnlyList<GameObject> linked)
-    {
-        bool had = state.Named.TryGetValue(key, out NamedRoots old);
-        if (!had && masked.Count == 0 && linked.Count == 0)
-        {
-            return;
-        }
-
-        if (had && Same(old.Masked, masked) && Same(old.Linked, linked))
-        {
-            return;
-        }
-
-        if (had)
-        {
-            Unname(state, key, old);
-        }
-
-        if (masked.Count == 0 && linked.Count == 0)
-        {
-            state.Named.Remove(key);
-            return;
-        }
-
-        NamedRoots roots = new([.. masked], [.. linked]);
-        state.Named[key] = roots;
-        Name(state, key, roots.Masked);
-        Name(state, key, roots.Linked);
-    }
-
-    private static void Name(PeerState state, SyncKey key, GameObject[] roots)
-    {
-        foreach (GameObject root in roots)
-        {
-            if (!state.NamedBy.TryGetValue(root, out HashSet<SyncKey>? keys))
-            {
-                state.NamedBy[root] = keys = new HashSet<SyncKey>();
-            }
-
-            keys.Add(key);
-        }
-    }
-
-    private static void Unname(PeerState state, SyncKey key, NamedRoots roots)
-    {
-        Unname(state, key, roots.Masked);
-        Unname(state, key, roots.Linked);
-    }
-
-    private static void Unname(PeerState state, SyncKey key, GameObject[] roots)
-    {
-        foreach (GameObject root in roots)
-        {
-            if (state.NamedBy.TryGetValue(root, out HashSet<SyncKey>? keys) && keys.Remove(key) && keys.Count == 0)
-            {
-                state.NamedBy.Remove(root);
-            }
-        }
-    }
-
-    // Forgets root in every value that named it.
-    private static void Unname(PeerState state, GameObject root)
-    {
-        if (!state.NamedBy.Remove(root, out HashSet<SyncKey>? keys))
-        {
-            return;
-        }
-
-        foreach (SyncKey key in keys)
-        {
-            NamedRoots roots = state.Named[key];
-            NamedRoots rest = new(Without(roots.Masked, root), Without(roots.Linked, root));
-            if (rest.Masked.Length == 0 && rest.Linked.Length == 0)
-            {
-                state.Named.Remove(key);
-            }
-            else
-            {
-                state.Named[key] = rest;
-            }
-        }
-    }
-
-    private static bool Same(GameObject[] remembered, IReadOnlyList<GameObject> written)
-    {
-        if (remembered.Length != written.Count)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < remembered.Length; i++)
-        {
-            if (!ReferenceEquals(remembered[i], written[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool Holds(GameObject[] roots, GameObject root)
-    {
-        foreach (GameObject named in roots)
-        {
-            if (ReferenceEquals(named, root))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static GameObject[] Without(GameObject[] roots, GameObject root) =>
-        Holds(roots, root) ? [.. roots.Where(named => !ReferenceEquals(named, root))] : roots;
-
-    private static void Owe(PeerState state, SyncKey key, uint tick) =>
-        state.Values[key] = state.Values.TryGetValue(key, out Pending pending)
-            ? pending with { Changed = tick }
-            : new Pending(tick, 0);
 
     /// <summary>Hands every remembered sent snapshot back to the pool.</summary>
     private void Forget(PeerState state)
@@ -416,127 +154,13 @@ internal sealed class SnapshotSystem : IDisposable
 
     // --- Changes --------------------------------------------------------------------------------
 
-    /// <summary>
-    ///     A [Sync] value changed here, or the host accepted it from a client: it is owed to whoever doesn't control it,
-    ///     from the next tick. Peers learn of it once a tick, however often it changes in between.
-    /// </summary>
-    internal void MarkChanged(Component component, SyncMember sync) => _changed[new SyncKey(component, sync.Slot)] = sync.Flags;
-
-    /// <summary>Owes the values changed since the last call to every peer that doesn't control them.</summary>
-    private void FanOutChanges()
-    {
-        if (_changed.Count == 0 || _scene.Session == null)
-        {
-            _changed.Clear();
-            return;
-        }
-
-        uint tick = _scene.Tick + 1;
-        List<NetPeer> targets = Targets();
-        foreach ((SyncKey key, SyncFlags flags) in _changed)
-        {
-            Component component = key.Component;
-            if (component.IsDisposed)
-            {
-                continue;
-            }
-
-            int controller = ControllerOf(component, flags);
-            bool toOwner = (flags & SyncFlags.ToOwner) != 0;
-            NetworkObject? entry = _scene.Restricted.Count == 0 && !toOwner ? null : _scene.FindEntry(component.GameObject);
-            foreach (NetPeer peer in targets)
-            {
-                PeerState state = State(peer);
-                if (peer.Id == controller || state.Missing.Contains(component) || !Sees(entry, peer) ||
-                    (toOwner && !OwnedBy(entry, peer)))
-                {
-                    continue;
-                }
-
-                Dictionary<SyncKey, Pending> values = state.Values;
-                values[key] = values.TryGetValue(key, out Pending pending) ? pending with { Changed = tick } : new Pending(tick, 0);
-            }
-        }
-
-        _changed.Clear();
-    }
-
-    /// <summary>Whose changes to a value count: the object's controller for FromOwner ones, else the host's.</summary>
-    private int ControllerOf(Component component, SyncFlags flags) =>
-        (flags & SyncFlags.FromOwner) == 0 ? NetPeer.HostId : ControllerOf(component.GameObject);
-
-    private static bool OwnedBy(NetworkObject? entry, NetPeer peer) => entry != null && entry.Owner == peer.Id;
-
-    /// <summary>
-    ///     Owes <paramref name="peer" /> the owner only values of what it owns in <paramref name="root" />'s tree,
-    ///     which shared writes leave out.
-    /// </summary>
-    private void OweOwnerValues(PeerState state, NetPeer peer, GameObject root)
-    {
-        uint tick = _scene.Tick + 1;
-        foreach (GameObject go in TreeOf(root))
-        {
-            if (!OwnedBy(_scene.FindEntry(go), peer))
-            {
-                continue;
-            }
-
-            foreach (Component component in go.GetComponents<Component>())
-            {
-                foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
-                {
-                    if ((sync.Flags & SyncFlags.ToOwner) != 0 && ControllerOf(component, sync.Flags) != peer.Id)
-                    {
-                        Owe(state, new SyncKey(component, sync.Slot), tick);
-                    }
-                }
-            }
-        }
-    }
-
     private static int ControllerOf(NetworkObject? entry) =>
         entry == null || entry.Owner == NoOwner ? NetPeer.HostId : entry.Owner;
-
-    /// <summary>Whether an object is left out of the network, and the networked object it belongs to, found once a tick.</summary>
-    private (bool Excluded, NetworkObject? Entry) InfoOf(GameObject go)
-    {
-        if (!_objectInfo.TryGetValue(go, out (bool Excluded, NetworkObject? Entry) info))
-        {
-            _objectInfo[go] = info = (NetworkAccessor.IsExcludedFromNetwork(go), _scene.FindEntry(go));
-        }
-
-        return info;
-    }
 
     private int ControllerOf(GameObject go)
     {
         int owner = _scene.OwnerOf(go);
         return owner == NoOwner ? NetPeer.HostId : owner;
-    }
-
-    /// <summary>The values owed to <paramref name="peer" /> that it would take now, for a catch-up to deliver at once.</summary>
-    internal List<(Component Component, uint Slot)> OwedValues(NetPeer peer)
-    {
-        FanOutChanges();
-        List<(Component Component, uint Slot)> owed = new();
-        if (!_peers.TryGetValue(peer.Id, out PeerState? state))
-        {
-            return owed;
-        }
-
-        foreach (SyncKey key in state.Values.Keys)
-        {
-            Component component = key.Component;
-            if (!component.IsDisposed && !state.Missing.Contains(component) &&
-                !NetworkAccessor.IsExcludedFromNetwork(component.GameObject) && _scene.Sees(component.GameObject, peer) &&
-                NetworkMembers.Of(component).Sync(key.Slot) is { } sync && ControllerOf(component, sync.Flags) != peer.Id &&
-                ((sync.Flags & SyncFlags.ToOwner) == 0 || OwnedBy(_scene.FindEntry(component.GameObject), peer)))
-            {
-                owed.Add((component, key.Slot));
-            }
-        }
-
-        return owed;
     }
 
     /// <summary>The peers this one sends snapshots to: every client from the host, the host from a client.</summary>
@@ -589,9 +213,6 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>Takes this tick's transforms and sends every ready peer its snapshot.</summary>
     internal void Send()
     {
-        FanOutChanges();
-        _written.Clear();
-        _objectInfo.Clear();
         // The network tick the game sees, and never the same twice, so receivers can order what each peer sends.
         uint tick = _scene.Tick = Math.Max(_scene.Tick + 1, _scene.NetworkTick);
         double now = _scene.Now;
@@ -620,28 +241,6 @@ internal sealed class SnapshotSystem : IDisposable
     {
         foreach (PeerState state in _peers.Values)
         {
-            if (state.SentOrder.Count == 0)
-            {
-                state.WithdrawnBefore.Clear();
-            }
-            else
-            {
-                uint oldest = state.SentOrder.Peek();
-                _scratchComponents.Clear();
-                foreach ((Component component, uint withdrawn) in state.WithdrawnBefore)
-                {
-                    if (component.IsDisposed || (int)(oldest - withdrawn) >= 0)
-                    {
-                        _scratchComponents.Add(component);
-                    }
-                }
-
-                foreach (Component component in _scratchComponents)
-                {
-                    state.WithdrawnBefore.Remove(component);
-                }
-            }
-
             _scratchObjects.Clear();
             _scratchObjects.AddRange(state.SentPositions.Keys.Where(entry => !IsCurrent(entry)));
             foreach (NetworkObject entry in _scratchObjects)
@@ -664,68 +263,6 @@ internal sealed class SnapshotSystem : IDisposable
                 state.ReceivedPositions.Remove(key);
             }
 
-            _scratchKeys.Clear();
-            foreach (SyncKey key in state.Applied.Keys)
-            {
-                if (key.Component.IsDisposed)
-                {
-                    _scratchKeys.Add(key);
-                }
-            }
-
-            foreach (SyncKey key in _scratchKeys)
-            {
-                state.Applied.Remove(key);
-
-                // Forgets the id the host gave a component that is gone here, unless it came back since.
-                if (!_scene.IsHost && _scene.FindByIdentifier(key.Component.Identifier) is not Component &&
-                    state.ReceivedGuids.Remove(key.Component.Identifier, out uint id))
-                {
-                    state.ReceivedIds.Remove(id);
-                }
-            }
-
-            _scratchComponents.Clear();
-            foreach (Component component in state.ComponentIds.Keys)
-            {
-                if (component.IsDisposed)
-                {
-                    _scratchComponents.Add(component);
-                }
-            }
-
-            foreach (Component component in _scratchComponents)
-            {
-                state.ComponentIds.Remove(component);
-                state.DefinedComponents.Remove(component);
-            }
-
-            state.Missing.RemoveWhere(component => component.IsDisposed);
-            _scratchKeys.Clear();
-            _scratchKeys.AddRange(state.Named.Keys.Where(key => key.Component.IsDisposed));
-            foreach (SyncKey key in _scratchKeys)
-            {
-                Remember(state, key, [], []);
-            }
-
-            _scratchRoots.Clear();
-            _scratchRoots.AddRange(state.NamedBy.Keys.Where(root => root.IsDisposed));
-            foreach (GameObject root in _scratchRoots)
-            {
-                Unname(state, root);
-            }
-
-            _scratchComponents.Clear();
-            _scratchComponents.AddRange(state.Rejecting.Keys.Where(component => component.IsDisposed));
-            foreach (Component component in _scratchComponents)
-            {
-                state.Rejecting.Remove(component);
-            }
-
-            if (_scene.IsHost)
-            {
-                ForgetGoneDefinitions(state);
-            }
         }
     }
 
@@ -817,39 +354,6 @@ internal sealed class SnapshotSystem : IDisposable
             state.Poses.Remove(entry);
         }
 
-        _scratchKeys.Clear();
-        using NetworkSerialization.WritingFor receiver = new(_scene.IsHost ? peer : null, null, null);
-        bool restricted = _scene.Restricted.Count > 0;
-        foreach ((SyncKey key, Pending pending) in state.Values)
-        {
-            Component component = key.Component;
-            if (component.IsDisposed || state.Missing.Contains(component))
-            {
-                _scratchKeys.Add(key);
-                continue;
-            }
-
-            (bool excluded, NetworkObject? entry) = InfoOf(component.GameObject);
-            if (excluded || (restricted && !Sees(entry, peer)) || NetworkMembers.Of(component).Sync(key.Slot) is not { } sync ||
-                ((sync.Flags & SyncFlags.ToOwner) != 0 && _scene.IsHost && !OwnedBy(entry, peer)) ||
-                (_scene.IsHost
-                    ? ((sync.Flags & SyncFlags.FromOwner) == 0 ? NetPeer.HostId : ControllerOf(entry)) == peer.Id
-                    : !_scene.HasControl(component, sync.Flags)))
-            {
-                _scratchKeys.Add(key);
-            }
-            else if ((pending.Changed > pending.LastSent || tick - pending.LastSent >= resend) &&
-                     SendsOn(entry, tick) && !AddValue(state, key, component, sync, entry))
-            {
-                _scratchKeys.Add(key);
-            }
-        }
-
-        foreach (SyncKey key in _scratchKeys)
-        {
-            state.Values.Remove(key);
-        }
-
         if (_items.Count > 0)
         {
             SendItems(peer, state, tick, connection);
@@ -877,7 +381,7 @@ internal sealed class SnapshotSystem : IDisposable
         }
 
         record.Write(_itemBytes);
-        _items.Add(new Item(true, groupTick, sentAt, offset, _itemBytes.Length - offset, pose, default, null,
+        _items.Add(new Item(groupTick, sentAt, offset, _itemBytes.Length - offset, pose,
             record.HasGridPosition ? entry : null, grid));
     }
 
@@ -896,61 +400,6 @@ internal sealed class SnapshotSystem : IDisposable
                                                   _scene.Entries.TryGetNet(entry.NetId, out NetworkObject? current) &&
                                                   current == entry;
 
-    private bool AddValue(PeerState state, SyncKey key, Component component, SyncMember sync, NetworkObject? entry)
-    {
-        ReadOnlySpan<byte> value;
-        uint generation;
-        if (_written.TryGetValue(key, out WrittenOnce once))
-        {
-            if (once.Bytes == null)
-            {
-                return false;
-            }
-
-            value = once.Bytes;
-            generation = once.Generation;
-            if (_scene.IsHost)
-            {
-                Remember(state, key, [], []);
-            }
-        }
-        else
-        {
-            _valueWriter.Reset();
-            if (!_scene.Sync.TryWrite(component, sync, _valueWriter))
-            {
-                _written[key] = new WrittenOnce(null, 0);
-                return false;
-            }
-
-            value = _valueWriter.WrittenSpan;
-            generation = entry?.Generation ?? 0;
-            if (_scene.IsHost)
-            {
-                Remember(state, key, NetworkSerialization.MaskedRoots, NetworkSerialization.LinkedRoots);
-            }
-
-            // Bytes naming no networked object are the same for every peer, so they are written once a tick.
-            if (NetworkSerialization.MaskedRoots.Count == 0 && NetworkSerialization.LinkedRoots.Count == 0)
-            {
-                _written[key] = new WrittenOnce(value.ToArray(), generation);
-            }
-        }
-
-        if (!state.ComponentIds.TryGetValue(component, out uint id))
-        {
-            id = state.NextComponentId++;
-            state.ComponentIds.Add(component, id);
-        }
-
-        // Named by its guid too, until the receiver is known to have that.
-        bool define = !state.DefinedComponents.Contains(component);
-        int offset = _itemBytes.Length;
-        new SnapshotValue(id, define ? component.Identifier : null, key.Slot, generation, value).Write(_itemBytes);
-        _items.Add(new Item(false, 0, 0, offset, _itemBytes.Length - offset, null, key, define ? component : null));
-        return true;
-    }
-
     /// <summary>Splits the items into snapshots that fit the connection, and sends them.</summary>
     private void SendItems(NetPeer peer, PeerState? state, uint tick, Connection connection)
     {
@@ -962,7 +411,7 @@ internal sealed class SnapshotSystem : IDisposable
             do
             {
                 Item item = _items[end];
-                bool newGroup = item.IsTransform && (end == start || !SameGroup(_items[end - 1], item));
+                bool newGroup = end == start || !SameGroup(_items[end - 1], item);
                 int itemSize = item.Length + (newGroup ? TransformGroup.HeaderSize : 0);
                 if (end > start && size + itemSize > budget)
                 {
@@ -978,8 +427,7 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
-    private static bool SameGroup(Item a, Item b) =>
-        a.IsTransform && a.GroupTick == b.GroupTick && a.GroupSentAt == b.GroupSentAt;
+    private static bool SameGroup(Item a, Item b) => a.GroupTick == b.GroupTick && a.GroupSentAt == b.GroupSentAt;
 
     /// <summary>Sends items [start, end) as one snapshot, remembering what it owes if <paramref name="state" /> is given.</summary>
     private void SendPart(NetPeer peer, PeerState? state, uint tick, int start, int end, Delivery delivery)
@@ -992,17 +440,7 @@ internal sealed class SnapshotSystem : IDisposable
             for (int i = start; i < end; i++)
             {
                 Item item = _items[i];
-                if (!item.IsTransform)
-                {
-                    sent ??= Rent(tick);
-                    sent.Values.Add(item.Key);
-                    state.Values[item.Key] = state.Values[item.Key] with { LastSent = tick };
-                    if (item.Defines is { } component)
-                    {
-                        sent.Definitions.Add(component);
-                    }
-                }
-                else if (item.Pose is { } entry)
+                if (item.Pose is { } entry)
                 {
                     sent ??= Rent(tick);
                     sent.Poses.Add(entry);
@@ -1030,21 +468,21 @@ internal sealed class SnapshotSystem : IDisposable
         _message.Reset();
         new SnapshotMessage(id, Epoch, tick).Write(_message);
 
-        // Transform items come first, in runs that share a controller tick.
-        int groups = 0, transforms = start;
-        for (; transforms < end && _items[transforms].IsTransform; transforms++)
+        // The records go in runs that share a controller tick.
+        int groups = 0;
+        for (int i = start; i < end; i++)
         {
-            if (transforms == start || !SameGroup(_items[transforms - 1], _items[transforms]))
+            if (i == start || !SameGroup(_items[i - 1], _items[i]))
             {
                 groups++;
             }
         }
 
         new TransformGroupBlock((uint)groups).Write(_message);
-        for (int i = start; i < transforms;)
+        for (int i = start; i < end;)
         {
             int runEnd = i + 1;
-            while (runEnd < transforms && SameGroup(_items[i], _items[runEnd]))
+            while (runEnd < end && SameGroup(_items[i], _items[runEnd]))
             {
                 runEnd++;
             }
@@ -1054,12 +492,6 @@ internal sealed class SnapshotSystem : IDisposable
             {
                 _message.WriteBytes(_itemBytes.WrittenSpan.Slice(_items[i].Offset, _items[i].Length));
             }
-        }
-
-        _message.WriteVarUInt32((uint)(end - transforms));
-        for (int i = transforms; i < end; i++)
-        {
-            _message.WriteBytes(_itemBytes.WrittenSpan.Slice(_items[i].Offset, _items[i].Length));
         }
 
         _scene.SendEngine(peer, EngineMessage.Snapshot, _message.WrittenSpan, delivery);
@@ -1074,9 +506,7 @@ internal sealed class SnapshotSystem : IDisposable
 
     private void Release(SentSnapshot sent)
     {
-        sent.Values.Clear();
         sent.Poses.Clear();
-        sent.Definitions.Clear();
         sent.Positions.Clear();
         _sentPool.Push(sent);
     }
@@ -1133,19 +563,12 @@ internal sealed class SnapshotSystem : IDisposable
             if (state.Received.Count == 0 || !session.TryGetPeer(peerId, out NetPeer? peer))
             {
                 state.Received.Clear();
-                state.RejectedComponents.Clear();
                 state.RejectedObjects.Clear();
                 continue;
             }
 
             _message.Reset();
             SnapshotAckMessage.WriteIds(_message, CollectionsMarshal.AsSpan(state.Received));
-            _message.WriteVarUInt32((uint)state.RejectedComponents.Count);
-            foreach (Guid id in state.RejectedComponents)
-            {
-                _message.WriteGuid(id);
-            }
-
             _message.WriteVarUInt32((uint)state.RejectedObjects.Count);
             foreach (uint netId in state.RejectedObjects)
             {
@@ -1153,7 +576,6 @@ internal sealed class SnapshotSystem : IDisposable
             }
 
             state.Received.Clear();
-            state.RejectedComponents.Clear();
             state.RejectedObjects.Clear();
             _scene.SendEngine(peer, EngineMessage.SnapshotAck, _message.WrittenSpan, Delivery.Unreliable);
         }
@@ -1215,42 +637,9 @@ internal sealed class SnapshotSystem : IDisposable
             }
         }
 
-        // Values name components by id; spell them out as a SyncBlock for the shared validation and apply.
-        ReadValues(state, ref reader);
-        NetReader translated = new(_translated.WrittenSpan);
-        NetSession? session = _scene.Session;
-        _applied.Clear();
-        _unresolved.Clear();
-        _filterState = state;
-        _filterTick = header.Tick;
-        try
+        if (!reader.IsAtEnd)
         {
-            _scene.Sync.ApplySyncState(sender, ref translated, null, false, true, _filter, _applied,
-                state.RejectedComponents, _unresolved);
-        }
-        finally
-        {
-            _filterState = null;
-        }
-
-        if (_scene.Session != session)
-        {
-            return;
-        }
-
-        foreach ((Component component, SyncMember sync) in _applied)
-        {
-            state.Applied[new SyncKey(component, sync.Slot)] = header.Tick;
-            if (_scene.IsHost)
-            {
-                MarkChanged(component, sync);
-            }
-        }
-
-        foreach ((Component component, SyncMember sync, byte[] value) in _unresolved)
-        {
-            state.Unresolved[new SyncKey(component, sync.Slot)] =
-                new UnresolvedValue(value, header.Tick, _scene.GenerationOf(component.GameObject));
+            throw new InvalidDataException("Snapshot contains trailing bytes.");
         }
 
         if (header.Id != 0)
@@ -1282,176 +671,6 @@ internal sealed class SnapshotSystem : IDisposable
         history.Add(tick, grid);
         return grid.ToFloat3(PositionStep);
     }
-
-    /// <summary>Values <paramref name="sender" /> sent as of <paramref name="tick" />, so snapshots from before then are stale.</summary>
-    internal void Received(NetPeer sender, List<(Component Component, SyncMember Sync)> values, uint tick)
-    {
-        PeerState state = State(sender);
-        foreach ((Component component, SyncMember sync) in values)
-        {
-            state.Applied[new SyncKey(component, sync.Slot)] = tick;
-        }
-    }
-
-    /// <summary>Applies again the received values whose referenced objects have arrived since, unless newer ones came.</summary>
-    internal void ResolveReferences()
-    {
-        NetSession session = _scene.Session!;
-        foreach ((int peerId, PeerState state) in _peers)
-        {
-            if (state.Unresolved.Count == 0)
-            {
-                continue;
-            }
-
-            _scratchKeys.Clear();
-            session.TryGetPeer(peerId, out NetPeer? sender);
-            using NetSerializers.ReadingFrom references = new(sender == null ? null : _scene.RemoteClient(sender));
-            foreach ((SyncKey key, UnresolvedValue pending) in state.Unresolved)
-            {
-                Component component = key.Component;
-                if (sender == null || component.IsDisposed ||
-                    NetworkMembers.Of(component).Sync(key.Slot) is not { } sync ||
-                    !state.Applied.TryGetValue(key, out uint applied) || applied != pending.Tick ||
-                    _scene.GenerationOf(component.GameObject) != pending.Generation ||
-                    !_scene.Sync.AcceptSync(sender, component, sync.Flags) ||
-                    (!_scene.IsHost && _scene.HasControl(component, sync.Flags)))
-                {
-                    _scratchKeys.Add(key);
-                    continue;
-                }
-
-                int before = NetSerializers.UnresolvedReferences;
-                NetReader probe = new(pending.Value);
-                sync.Validate(component, ref probe);
-                if (NetSerializers.UnresolvedReferences != before)
-                {
-                    continue;
-                }
-
-                NetReader reader = new(pending.Value);
-                sync.Read(component, ref reader, false);
-                _scratchKeys.Add(key);
-                if (_scene.IsHost)
-                {
-                    MarkChanged(component, sync);
-                }
-            }
-
-            foreach (SyncKey key in _scratchKeys)
-            {
-                state.Unresolved.Remove(key);
-            }
-        }
-    }
-
-    /// <summary>The component ids snapshots use with this peer: those this peer gave, and those it learned from the other.</summary>
-    internal bool TryGetComponentIds(NetPeer peer, out IReadOnlyDictionary<Component, uint> given,
-        out IReadOnlyDictionary<uint, Guid> received)
-    {
-        bool known = _peers.TryGetValue(peer.Id, out PeerState? state);
-        given = state?.ComponentIds ?? (IReadOnlyDictionary<Component, uint>)new Dictionary<Component, uint>();
-        received = state?.ReceivedIds ?? (IReadOnlyDictionary<uint, Guid>)new Dictionary<uint, Guid>();
-        return known;
-    }
-
-    /// <summary>Reads a snapshot's values into <see cref="_translated" /> as a SyncBlock, learning the ids it defines.</summary>
-    private void ReadValues(PeerState state, ref NetReader reader)
-    {
-        uint count = reader.ReadVarUInt32();
-        if (count > (uint)reader.Remaining / SnapshotValue.MinimumSize)
-        {
-            throw new InvalidDataException("Snapshot value count exceeds the remaining data.");
-        }
-
-        _translatedValues.Reset();
-        uint kept = 0;
-        for (uint i = 0; i < count; i++)
-        {
-            SnapshotValue value = SnapshotValue.Read(ref reader);
-            if (TryResolve(state, value, out Guid component))
-            {
-                new SyncValue(component, value.Slot, value.Generation, value.Value).Write(_translatedValues);
-                kept++;
-            }
-        }
-
-        if (!reader.IsAtEnd)
-        {
-            throw new InvalidDataException("Snapshot contains trailing bytes.");
-        }
-
-        _translated.Reset();
-        new SyncBlock(kept).Write(_translated);
-        _translated.WriteBytes(_translatedValues.WrittenSpan);
-    }
-
-    /// <summary>The component a value names. The host keeps a client's definitions only for components it has, one id each.</summary>
-    private bool TryResolve(PeerState state, SnapshotValue value, out Guid component)
-    {
-        if (value.Definition is { } definition)
-        {
-            component = definition;
-            if (!_scene.IsHost || _scene.FindByIdentifier(definition) is Component)
-            {
-                Define(state, value.ComponentId, definition);
-            }
-
-            return true;
-        }
-
-        if (state.ReceivedIds.TryGetValue(value.ComponentId, out component))
-        {
-            return true;
-        }
-
-        if (!_scene.IsHost)
-        {
-            throw new InvalidDataException("A snapshot names a component it never defined.");
-        }
-
-        return false;
-    }
-
-    private static void Define(PeerState state, uint id, Guid component)
-    {
-        if (state.ReceivedGuids.Remove(component, out uint previous))
-        {
-            state.ReceivedIds.Remove(previous);
-        }
-
-        if (state.ReceivedIds.Remove(id, out Guid replaced))
-        {
-            state.ReceivedGuids.Remove(replaced);
-        }
-
-        state.ReceivedIds[id] = component;
-        state.ReceivedGuids[component] = id;
-    }
-
-    private void ForgetGoneDefinitions(PeerState state)
-    {
-        _scratchIds.Clear();
-        foreach ((uint id, Guid component) in state.ReceivedIds)
-        {
-            if (_scene.FindByIdentifier(component) is not Component)
-            {
-                _scratchIds.Add(id);
-            }
-        }
-
-        foreach (uint id in _scratchIds)
-        {
-            state.ReceivedGuids.Remove(state.ReceivedIds[id]);
-            state.ReceivedIds.Remove(id);
-        }
-    }
-
-    /// <summary>Values newer than the last applied from this sender; on a client, not ones it controls itself.</summary>
-    private bool Filter(Component component, SyncMember sync) =>
-        (!_filterState!.Applied.TryGetValue(new SyncKey(component, sync.Slot), out uint last) ||
-         (int)(_filterTick - last) > 0) &&
-        (_scene.IsHost || !_scene.HasControl(component, sync.Flags));
 
     /// <summary>
     ///     Passes a client's transforms on. Moving ones go straight out, as before; the pose it came to rest at is
@@ -1512,18 +731,11 @@ internal sealed class SnapshotSystem : IDisposable
     internal void OnAck(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         _ackedIds.Clear();
-        _rejectedComponents.Clear();
         _rejectedObjects.Clear();
         uint count = SnapshotAckMessage.ReadCount(ref reader, 1);
         for (uint i = 0; i < count; i++)
         {
             _ackedIds.Add(reader.ReadVarUInt32());
-        }
-
-        uint components = SnapshotAckMessage.ReadCount(ref reader, 16);
-        for (uint i = 0; i < components; i++)
-        {
-            _rejectedComponents.Add(reader.ReadGuid());
         }
 
         uint objects = SnapshotAckMessage.ReadCount(ref reader, 1);
@@ -1549,41 +761,7 @@ internal sealed class SnapshotSystem : IDisposable
                 continue;
             }
 
-            // The receiver knows these ids now, whether or not their values could be applied.
-            foreach (Component component in sent.Definitions)
-            {
-                if (!state.WithdrawnBefore.TryGetValue(component, out uint withdrawn) || (int)(id - withdrawn) >= 0)
-                {
-                    state.DefinedComponents.Add(component);
-                }
-            }
-
-            // Whatever couldn't be applied stays owed, and goes again at once; the rest is done if nothing changed since.
-            foreach (SyncKey key in sent.Values)
-            {
-                if (!state.Values.TryGetValue(key, out Pending pending))
-                {
-                    continue;
-                }
-
-                if (!_rejectedComponents.Contains(key.Component.Identifier))
-                {
-                    state.Rejecting.Remove(key.Component);
-                    if (pending.Changed <= sent.Tick)
-                    {
-                        state.Values.Remove(key);
-                    }
-                }
-                else if (KeepsRejecting(state, key.Component, sender))
-                {
-                    state.Values.Remove(key);
-                }
-                else
-                {
-                    state.Values[key] = pending with { LastSent = 0 };
-                }
-            }
-
+            // A pose the peer couldn't place stays owed, and goes again at once; the rest is done if nothing changed since.
             foreach (NetworkObject entry in sent.Poses)
             {
                 if (!state.Poses.TryGetValue(entry, out PendingPose pose))
@@ -1627,106 +805,7 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
-    /// <summary>
-    ///     True once <paramref name="peer" /> has rejected the component for too long to be catching up, so it never
-    ///     got it: from then on its values don't go to that peer.
-    /// </summary>
-    private bool KeepsRejecting(PeerState state, Component component, NetPeer peer)
-    {
-        double now = _scene.Now;
-        if (state.Rejecting.TryAdd(component, now) || now - state.Rejecting[component] < MissingComponentSeconds)
-        {
-            return false;
-        }
-
-        state.Rejecting.Remove(component);
-        state.Missing.Add(component);
-        if (_missingWarnings.Add(component.GetType()))
-        {
-            Debug.LogWarning(
-                $"[Network] {peer.Name} doesn't have {component.GetType().Name} on '{component.GameObject.Name}', so its [Sync] values stopped going there. Components added to an object after it spawns aren't replicated.");
-        }
-
-        return true;
-    }
-
-    // --- Ownership handoff ----------------------------------------------------------------------
-
-    /// <summary>
-    ///     The [Sync] values in <paramref name="entry" />'s tree, for a handoff: all of them from the host, or the ones
-    ///     this peer controls for a release. They go reliably with it, since once ownership moves on, snapshots
-    ///     wouldn't carry them: the old owner's would be turned away, and the new owner isn't sent what it controls.
-    ///     The host's include network collections whole, replacing any changes it turned away from the old owner.
-    /// </summary>
-    internal void WriteHandoffValues(NetWriter output, NetworkObject entry, bool includeAll)
-    {
-        using NetWriter values = new(1024);
-        uint count = 0;
-        foreach (GameObject go in (List<GameObject>)[entry.GameObject, .. entry.GameObject.GetChildrenDeep()])
-        {
-            if (NetworkAccessor.IsExcludedFromNetwork(go) || _scene.FindEntry(go) != entry)
-            {
-                continue;
-            }
-
-            foreach (Component component in go.GetComponents<Component>())
-            {
-                foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
-                {
-                    if (!includeAll && (sync.IsCollection || !_scene.HasControl(component, sync.Flags)))
-                    {
-                        continue;
-                    }
-
-                    // Everyone gets the host's handoff; the new owner is owed these once it has it.
-                    if (includeAll && (sync.Flags & SyncFlags.ToOwner) != 0)
-                    {
-                        continue;
-                    }
-
-                    _valueWriter.Reset();
-                    if (!_scene.Sync.TryWrite(component, sync, _valueWriter))
-                    {
-                        continue;
-                    }
-
-                    new SyncValue(component.Identifier, sync.Slot, entry.Generation, _valueWriter.WrittenSpan)
-                        .Write(values);
-                    count++;
-                }
-            }
-        }
-
-        new SyncBlock(count).Write(output);
-        output.WriteBytes(values.WrittenSpan);
-    }
-
-    /// <summary>Applies handed-over values. On the host, a releasing client's are then owed to everyone else.</summary>
-    internal void ApplyHandoffValues(NetPeer sender, ReadOnlySpan<byte> data)
-    {
-        NetReader reader = new(data);
-        List<(Component Component, SyncMember Sync)> applied = new();
-        _scene.Sync.ApplySyncState(sender, ref reader, null, false, true, accepted: applied);
-        if (!_scene.IsHost)
-        {
-            return;
-        }
-
-        foreach ((Component component, SyncMember sync) in applied)
-        {
-            MarkChanged(component, sync);
-        }
-    }
-
     // --- State ------------------------------------------------------------------------------------
-
-    private readonly record struct SyncKey(Component Component, uint Slot);
-
-    /// <summary>A value as written this tick for every peer, or null bytes when it could not be written.</summary>
-    private readonly record struct WrittenOnce(byte[]? Bytes, uint Generation);
-
-    /// <summary>A value owed to a peer: the tick it last changed, and the tick it last went out.</summary>
-    private readonly record struct Pending(uint Changed, uint LastSent);
 
     /// <summary>A rest pose owed to a peer, under the tick and clock of the controller that took it.</summary>
     private readonly record struct PendingPose(
@@ -1737,69 +816,35 @@ internal sealed class SnapshotSystem : IDisposable
         double SentAt,
         TransformUpdate Update);
 
-    private readonly record struct NamedRoots(GameObject[] Masked, GameObject[] Linked);
-
-    /// <summary>A received value naming an object this peer didn't have yet.</summary>
-    private readonly record struct UnresolvedValue(byte[] Value, uint Tick, uint Generation);
-
-    /// <summary>What one sent snapshot owed, and the component ids it defined. Pooled.</summary>
+    /// <summary>The poses and positions one sent snapshot carried that wait on its acknowledgement. Pooled.</summary>
     private sealed class SentSnapshot
     {
-        public readonly List<Component> Definitions = new();
         public readonly List<NetworkObject> Poses = new();
         public readonly List<(NetworkObject Entry, uint Tick, GridPosition Grid)> Positions = new();
-        public readonly List<SyncKey> Values = new();
         public uint Tick;
     }
 
     /// <summary>
-    ///     One entry of a snapshot, its bytes at [Offset, Offset + Length) of the item buffer: a transform record in its
-    ///     controller's group, or a SnapshotValue.
+    ///     One transform record of a snapshot, its bytes at [Offset, Offset + Length) of the item buffer, in its
+    ///     controller's group.
     /// </summary>
     private readonly record struct Item(
-        bool IsTransform,
         uint GroupTick,
         double GroupSentAt,
         int Offset,
         int Length,
         NetworkObject? Pose,
-        SyncKey Key,
-        Component? Defines,
         NetworkObject? Moved = null,
         GridPosition Grid = default);
 
     /// <summary>What this peer owes another, and has received from it.</summary>
     private sealed class PeerState
     {
-        public readonly Dictionary<SyncKey, uint> Applied = new();
-
-        // Ids this peer gave components for the other, and the ones it knows the other has.
-        public readonly Dictionary<Component, uint> ComponentIds = new();
-        public readonly HashSet<Component> DefinedComponents = new();
-
-        // Components the other keeps rejecting, since when, and the ones it was given up on for.
-        public readonly HashSet<Component> Missing = new();
-        public readonly Dictionary<Component, double> Rejecting = new();
         public readonly Dictionary<NetworkObject, PendingPose> Poses = new();
         public readonly List<uint> Received = new();
-
-        // Ids the other gave components, as it defined them.
-        public readonly Dictionary<uint, Guid> ReceivedIds = new();
-        public readonly Dictionary<Guid, uint> ReceivedGuids = new();
-        public readonly HashSet<Guid> RejectedComponents = new();
         public readonly HashSet<uint> RejectedObjects = new();
         public readonly Dictionary<uint, SentSnapshot> Sent = new();
         public readonly Queue<uint> SentOrder = new();
-        public readonly Dictionary<SyncKey, Pending> Values = new();
-        public readonly Dictionary<SyncKey, UnresolvedValue> Unresolved = new();
-
-        // The networked roots each value's last write here was masked for, or named, and the values naming each root.
-        public readonly Dictionary<SyncKey, NamedRoots> Named = new();
-        public readonly Dictionary<GameObject, HashSet<SyncKey>> NamedBy = new(ReferenceEqualityComparer.Instance);
-        public uint NextComponentId = 1;
-
-        // Components the other had withdrawn, and the first snapshot id sent after, so older acknowledgements don't define them.
-        public readonly Dictionary<Component, uint> WithdrawnBefore = new();
 
         // Positions sent the other by snapshot tick and the latest it acknowledged, and positions received from it.
         public readonly Dictionary<NetworkObject, PositionHistory> SentPositions = new();

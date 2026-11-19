@@ -16,7 +16,7 @@ public partial class NetworkingTests
             .Select(m => SnapshotTick(m.Data)).ToList();
 
     private static List<uint> TicksCarrying(FakePeer peer, Guid component, uint slot) =>
-        peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot && peer.SnapshotValues(m.Data).Any(v => v.Component == component && v.Slot == slot))
+        peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot && FakePeer.SnapshotValues(m.Data).Any(v => v.Component == component && v.Slot == slot))
             .Select(m => SnapshotTick(m.Data)).ToList();
 
     private static uint SnapshotTick(byte[] snapshot)
@@ -73,7 +73,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ASyncValueChangingEveryTickWaitsForItsObjectsInterval()
+    public void ASyncValueChangingEveryTickWaitsForItsComponentsInterval()
     {
         SceneInstance scene = CreateScene();
         MakeCurrent(scene);
@@ -84,19 +84,28 @@ public partial class NetworkingTests
         {
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
             GameObject crate = CreateGameObject("Crate");
-            crate.Network.SendInterval = 4;
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
+            crate.Network.SetSendInterval(component, 4);
+            Assert.Equal(4, crate.Network.GetSendInterval(component));
             scene.Add(crate);
             crate.Network.SpawnSerialized();
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
 
+            // Changing every tick, it still goes out only every fourth, so three more sends take twelve ticks or more.
+            int Sends() => alice.WireReceived.Count(m => m.Id == FakePeer.Sync &&
+                FakePeer.SnapshotValues(m.Data).Any(v => v.Component == component.Identifier && v.Slot == NetTestComponent.HealthSlot));
             Pump(() =>
             {
                 component.Health++;
-                return TicksCarrying(alice, component.Identifier, NetTestComponent.HealthSlot).Count >= 4;
+                return Sends() >= 1;
             }, alice);
-
-            List<uint> ticks = TicksCarrying(alice, component.Identifier, NetTestComponent.HealthSlot);
-            Assert.All(ticks.Zip(ticks.Skip(1)), pair => Assert.Equal(0u, (pair.Second - pair.First) % 4));
+            uint first = Networking.Networking.Tick;
+            Pump(() =>
+            {
+                component.Health++;
+                return Sends() >= 4;
+            }, alice);
+            Assert.True(Networking.Networking.Tick - first >= 12, $"Three more sends took {Networking.Networking.Tick - first} ticks");
             Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == component.Health, alice);
         }
         finally { Networking.Networking.Shutdown(); }

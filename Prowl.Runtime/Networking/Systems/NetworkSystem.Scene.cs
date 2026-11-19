@@ -279,7 +279,7 @@ internal sealed partial class NetworkSystem
         SceneGeneration++;
         ClearViewpoints();
         LocalJoinState = NetworkJoinState.Loading;
-        Sync.Dirty.Clear();
+        Sync.Clear();
         Snapshots.Clear();
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
