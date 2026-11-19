@@ -71,16 +71,17 @@ public sealed class ShaderWorkspace
     }
 
     /// <summary>
-    /// The model shader of a Surface block and the place in it the block's code is spliced, the first "#pragma surface".
-    /// What is visible there is visible to the block. Null when the model cannot be found.
+    /// The model shader of a Surface block and the places in it the block's programs are spliced: the first
+    /// "#pragma surface" for its code and Lighting, the first "#pragma surface_vertex" for its Vertex code.
+    /// What is visible there is visible to the program. Null when the model cannot be found.
     /// </summary>
     internal SurfaceModel? Surface(string model) => _surfaceModels.GetOrAdd(model, m =>
     {
         var source = Resolve($"{ShaderLibrary.Prefix}Standard/{m}.shader", null);
         if (source == null) return null;
         var index = new ShaderIndex(source.Text, source.Path, isShaderFile: true);
-        var pragma = index.Directives.Find(d => d.Name == "pragma" && d.Args.Trim() == "surface");
-        return pragma == null ? null : new SurfaceModel(index, pragma.Offset);
+        int Splice(string pragma) => index.Directives.Find(d => d.Name == "pragma" && d.Args.Trim() == pragma)?.Offset ?? -1;
+        return new SurfaceModel(index, Splice("surface"), Splice("surface_vertex"));
     });
 
     /// <summary>Drops cached include indexes, such as after an include file changed on disk.</summary>
@@ -117,7 +118,11 @@ public sealed class ShaderWorkspace
     }
 }
 
-internal sealed record SurfaceModel(ShaderIndex Index, int SpliceOffset);
+internal sealed record SurfaceModel(ShaderIndex Index, int CodeOffset, int VertexOffset)
+{
+    /// <summary>Where a part of a Surface block lands in the model, or -1 when the model has no place for it.</summary>
+    public int SpliceOffset(SurfacePart part) => part == SurfacePart.Vertex ? VertexOffset : CodeOffset;
+}
 
 /// <summary>Which kind of shader file a document is.</summary>
 public enum ShaderFileKind

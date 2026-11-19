@@ -83,11 +83,19 @@ public sealed partial class ShaderSession : CodeLanguageSession
             AddInclude(include.Name, index.Path ?? _path, result, seen);
         }
 
-        // Surface code sees what the model shader has in scope where the code is spliced in, after the file's own.
-        if (index.IsShaderFile && index.SurfaceAt(offset) is { } surface && _workspace.Surface(surface.Model) is { } model && model.Index != index)
-            foreach (var s in Visible(model.Index, model.SpliceOffset))
-                if (s.Kind != ShaderSymbolKind.Property || !result.Exists(r => r.Kind == ShaderSymbolKind.Property && r.Name == s.Name))
-                    result.Add(s);
+        if (index.IsShaderFile && index.SurfaceAt(offset) is { } surface)
+        {
+            // Lighting code is compiled right after the Surface block's own code.
+            if (surface.Part == SurfacePart.Lighting && index.Surfaces.Find(s => s.Part == SurfacePart.Code && s.Model == surface.Model) is { } code)
+                foreach (var s in index.Symbols)
+                    if (!s.IsLocal && s.ScopeStart >= code.Program.Start && s.ScopeEnd <= code.Program.End) result.Add(s);
+
+            // Surface code sees what the model shader has in scope where the code is spliced in, after the file's own.
+            if (_workspace.Surface(surface.Model) is { } model && model.Index != index && model.SpliceOffset(surface.Part) >= 0)
+                foreach (var s in Visible(model.Index, model.SpliceOffset(surface.Part)))
+                    if (s.Kind != ShaderSymbolKind.Property || !result.Exists(r => r.Kind == ShaderSymbolKind.Property && r.Name == s.Name))
+                        result.Add(s);
+        }
         return result;
     }
 

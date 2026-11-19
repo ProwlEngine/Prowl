@@ -68,8 +68,11 @@ internal sealed record ShaderSection(string Name, int HeaderOffset, int BodyStar
 
 internal sealed record ShaderProgram(int Start, int End);
 
-/// <summary>A Surface block: its code runs inside the passes of a model shader, such as Graphite/Standard/Lit.shader.</summary>
-internal sealed record SurfaceBlock(string Model, ShaderProgram Program);
+/// <summary>Which program of a Surface block: its own code, or the code of its Lighting or Vertex block.</summary>
+internal enum SurfacePart { Code, Lighting, Vertex }
+
+/// <summary>A program of a Surface block. It runs inside the passes of a model shader, such as Graphite/Standard/Lit.shader.</summary>
+internal sealed record SurfaceBlock(string Model, ShaderProgram Program, SurfacePart Part);
 
 internal sealed record Directive(string Name, string Args, int Offset, int ArgsOffset, int End);
 
@@ -293,16 +296,29 @@ public sealed class ShaderIndex
         return null;
     }
 
-    // Surface "Model" followed by its block: the next program is the block's code.
+    // Surface "Model" { GLSLPROGRAM ... ENDGLSL  Lighting { GLSLPROGRAM ... }  Vertex { GLSLPROGRAM ... } }
     private void FindSurfaces()
     {
-        for (int i = 0; i + 1 < WrapperTokens.Count; i++)
+        for (int i = 0; i + 2 < WrapperTokens.Count; i++)
         {
-            var t = WrapperTokens[i];
-            var next = WrapperTokens[i + 1];
-            if (t.Kind != TokKind.Ident || !string.Equals(t.Text, "Surface", StringComparison.OrdinalIgnoreCase) || next.Kind != TokKind.String) continue;
-            var program = Programs.Find(p => p.Start > next.End);
-            if (program != null) Surfaces.Add(new SurfaceBlock(next.Text.Trim('"'), program));
+            var name = WrapperTokens[i + 1];
+            if (WrapperTokens[i].Kind != TokKind.Ident || !string.Equals(WrapperTokens[i].Text, "Surface", StringComparison.OrdinalIgnoreCase)) continue;
+            if (name.Kind != TokKind.String || WrapperTokens[i + 2].Text != "{") continue;
+
+            string model = name.Text.Trim('"');
+            var part = SurfacePart.Code;
+            int depth = 0;
+            for (int k = i + 2; k < WrapperTokens.Count; k++)
+            {
+                var t = WrapperTokens[k];
+                if (t.Text == "{") depth++;
+                else if (t.Text == "}" && --depth == 0) break;
+                else if (t.Kind != TokKind.Ident) continue;
+                else if (depth == 1 && t.Text == "Lighting") part = SurfacePart.Lighting;
+                else if (depth == 1 && t.Text == "Vertex") part = SurfacePart.Vertex;
+                else if (t.Text == "GLSLPROGRAM" && Programs.Find(p => p.Start == t.End) is { } program)
+                    Surfaces.Add(new SurfaceBlock(model, program, depth == 1 ? SurfacePart.Code : part));
+            }
         }
     }
 
@@ -326,7 +342,7 @@ public sealed class ShaderIndex
     internal GlslStages StagesAt(int offset)
     {
         if (!IsShaderFile) return GlslStages.All;
-        if (SurfaceAt(offset) != null) return GlslStages.Fragment;
+        if (SurfaceAt(offset) is { } surface) return surface.Part == SurfacePart.Vertex ? GlslStages.Vertex : GlslStages.Fragment;
         return SectionAt(offset)?.Name switch
         {
             "Vertex" => GlslStages.Vertex,
