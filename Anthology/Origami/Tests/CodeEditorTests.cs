@@ -420,6 +420,33 @@ public class CSharpLexerTests
 public class CodeEditorViewTests
 {
     [Fact]
+    public void MergingACaretIntoAReversedSelection_KeepsItsDirection()
+    {
+        var e = new CodeEditor("abcdef", new CSharpLanguage());
+        e.Select(new TextPosition(0, 4), new TextPosition(0, 1));
+        e.AddSelection(new CodeSelection(new TextPosition(0, 2)));
+
+        var merged = Assert.Single(e.Selections);
+        Assert.Equal(new TextPosition(0, 1), merged.Caret);
+        Assert.Equal(new TextPosition(0, 4), merged.Anchor);
+    }
+
+    [Fact]
+    public void ACollapsedFoldGrowingOverTheCaret_MovesTheCaretToItsHeader()
+    {
+        var e = new CodeEditor("a\nb\nc\nd\ne\nf\ng", new CSharpLanguage());
+        e.SetFolds(new List<CodeFoldRange> { new(1, 3, "") });
+        e.Fold(1);
+        e.Select(new TextPosition(4, 0), new TextPosition(4, 0));
+        Assert.False(e.IsLineHidden(4));
+
+        e.SetFolds(new List<CodeFoldRange> { new(1, 5, "") });
+
+        Assert.True(e.IsLineHidden(4));
+        Assert.Equal(1, e.Caret.Line);
+    }
+
+    [Fact]
     public void Folding_MapsRowsAroundHiddenLines()
     {
         var e = new CodeEditor("a\n{\nb\nc\n}\nd", new CSharpLanguage());

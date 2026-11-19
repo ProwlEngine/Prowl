@@ -445,7 +445,8 @@ public sealed partial class CodeEditor : IDisposable
                 {
                     var start = TextPosition.Min(last.Start, s.Start);
                     var end = TextPosition.Max(last.End, s.End);
-                    bool reversed = last.IsReversed && s.IsReversed;
+                    // A bare caret has no direction of its own, so it takes the selection's.
+                    bool reversed = (last.IsEmpty || last.IsReversed) && (s.IsEmpty || s.IsReversed);
                     merged[^1] = reversed ? new CodeSelection(end, start) : new CodeSelection(start, end);
                     continue;
                 }
