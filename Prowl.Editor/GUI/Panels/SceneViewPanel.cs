@@ -39,6 +39,7 @@ public class SceneViewPanel : DockPanel
     private const string ViewCubeControl = "sceneview_viewcube";
 
     private readonly HandleContext _handles = new();
+    private readonly CameraPreview _cameraPreview = new();
     private readonly SceneToolContext _toolContext;
     private EditorCamera? _editorCamera;
     /// <summary>Includes restored settings before the camera is created on the first draw.</summary>
@@ -507,6 +508,9 @@ public class SceneViewPanel : DockPanel
             GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
         }
 
+        // The selected camera, for the corner preview.
+        _cameraPreview.Render(width, height);
+
         if (rt.IsValid() && rt.MainTexture.IsValid())
         {
             paper.Box("sv_viewport")
@@ -686,6 +690,9 @@ public class SceneViewPanel : DockPanel
 
             // View manipulator (orientation cube) drawn as 2D overlay on top-right
             DrawViewManipulator(paper, font, width, height);
+
+            // What the selected camera sees, bottom-right
+            _cameraPreview.Draw(paper, font, width, height, _editorCamera!);
         }
     }
 
@@ -1283,6 +1290,7 @@ public class SceneViewPanel : DockPanel
         if (_wasGizmoActive) EndGizmoDrag();
         _editorCamera?.ReleaseFlight();
         ClearDropPreview();
+        _cameraPreview.Dispose();
     }
 
     // The kind of transform the current drag turned out to be, or null before it has moved.
