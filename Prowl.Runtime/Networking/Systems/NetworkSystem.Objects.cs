@@ -832,24 +832,39 @@ internal sealed partial class NetworkSystem
         if (Entries.Remove(message.Identifier, out NetworkObject? entry) && entry.GameObject.IsValid())
         {
             entry.NotifyDespawn(message.Reason);
-            if (entry.Template.Scene)
-            {
-                Hold(entry.GameObject);
-            }
-            else if (entry.Template.Factory is { } factory && NetworkFactories.TryGet(factory, out _, out Action<GameObject>? destroy) &&
-                destroy != null && entry.GameObject.IsValid())
-            {
-                destroy(entry.GameObject);
-            }
-            else if (entry.Template is { Factory: null } template &&
-                     NetworkPrefabHandlers.For(template.Prefab).Unspawn is { } unspawn && entry.GameObject.IsValid())
-            {
-                unspawn(entry.GameObject);
-            }
-            else if (entry.GameObject.IsValid())
-            {
-                entry.GameObject.Destroy();
-            }
+            ReleaseCopy(entry);
+        }
+    }
+
+    /// <summary>
+    ///     What a client does with its copy of an object that left the network: a scene object is held for the host
+    ///     to spawn again, one from a factory or prefab goes back to its handler, and anything else is destroyed.
+    /// </summary>
+    private void ReleaseCopy(NetworkObject entry)
+    {
+        GameObject go = entry.GameObject;
+        if (go.IsNotValid())
+        {
+            return;
+        }
+
+        if (entry.Template.Scene)
+        {
+            Hold(go);
+        }
+        else if (entry.Template.Factory is { } factory &&
+                 NetworkFactories.TryGet(factory, out _, out Action<GameObject>? destroy) && destroy != null)
+        {
+            destroy(go);
+        }
+        else if (entry.Template is { Factory: null } template &&
+                 NetworkPrefabHandlers.For(template.Prefab).Unspawn is { } unspawn)
+        {
+            unspawn(go);
+        }
+        else
+        {
+            go.Destroy();
         }
     }
 

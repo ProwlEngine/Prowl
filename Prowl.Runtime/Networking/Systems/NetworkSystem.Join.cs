@@ -190,7 +190,7 @@ internal sealed partial class NetworkSystem
         Sync.Clear();
         Transforms.Clear();
         ForgetSections();
-        DisposeHeld();
+        DisposeHeld(world);
 
         // One kept through the change that never had its spawn callbacks still waits for them.
         _pendingSpawns.RemoveAll(e => !e.AwaitingRespawn);
@@ -329,17 +329,22 @@ internal sealed partial class NetworkSystem
         _held[go.Identifier] = go;
     }
 
-    private void DisposeHeld()
+    /// <summary>Lets go of the held scene objects, but for the ones in the persistent section of <paramref name="keeping" />.</summary>
+    private void DisposeHeld(SceneInstance? keeping = null)
     {
-        foreach (GameObject go in _held.Values.ToArray())
+        foreach ((Guid id, GameObject go) in _held.ToArray())
         {
+            if (go.IsValid() && !ReferenceEquals(keeping, null) && go.Scene == keeping && go.Section is { IsPersistent: true })
+            {
+                continue;
+            }
+
+            _held.Remove(id);
             if (go.IsValid())
             {
                 go.Dispose();
             }
         }
-
-        _held.Clear();
     }
 
     /// <summary>Replaces every section of <paramref name="world" /> but the persistent one with the ones just loaded.</summary>
@@ -350,7 +355,8 @@ internal sealed partial class NetworkSystem
         {
             // A load the client queued before joining would replace the host's sections again.
             world.PendingLoad?.Cancel();
-            HashSet<Guid> incoming = [.. _held.Keys];
+            // What is held and still in the world was kept through the change: only fresh copies are incoming.
+            HashSet<Guid> incoming = [.. _held.Where(h => h.Value.Scene.IsNotValid()).Select(h => h.Key)];
             foreach ((_, _, SceneContent content) in sections)
             {
                 incoming.UnionWith(content.IdentifierMap().Keys);
@@ -770,10 +776,7 @@ internal sealed partial class NetworkSystem
                     return;
                 }
 
-                if (entry.GameObject.IsValid())
-                {
-                    entry.GameObject.Destroy();
-                }
+                ReleaseCopy(entry);
             }
         }
 

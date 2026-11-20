@@ -107,4 +107,88 @@ public partial class NetworkingTests
             AssetDatabase.ClearForTests();
         }
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void APersistentSceneObjectTheClientHoldsOutlastsASceneChange(bool despawnedBeforeTheChange)
+    {
+        AssetBackend? previous = AssetDatabase.Backend;
+        MemoryAssetBackend backend = new();
+        AssetDatabase.ClearForTests();
+        AssetDatabase.Backend = backend;
+        try
+        {
+            SceneInstance authoring = new();
+            GameObject authoredDoor = authoring.Create("Door");
+            authoredDoor.Network.Networked = true;
+            authoredDoor.AddComponent<NetworkLifecycleListener>();
+            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            authoring.Dispose();
+
+            MakeCurrent(CreateScene());
+            byte[] scene;
+            byte[] spawn;
+            Guid doorId;
+            LocalNetwork source = new();
+            Networking.Networking.Host(new LocalTransport(source, "host"));
+            try
+            {
+                arena.LoadAdditive(SceneInstance.Main).Wait();
+                doorId = SceneInstance.Main.Objects.Single(o => o.Name == "Door").Identifier;
+                (scene, byte[][] spawns) = RecordJoin(source);
+                spawn = spawns.Single(s => SpawnedId(s) == doorId);
+            }
+            finally { Networking.Networking.Shutdown(); }
+
+            MakeCurrent(CreateScene());
+            LocalNetwork network = new();
+            using FakePeer host = FakePeer.Host(network);
+            SendJoin(host, scene, spawn);
+            try
+            {
+                Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+                Pump(() => Networking.Networking.IsReady, host);
+                GameObject door = Find(SceneInstance.Main, doorId);
+                NetworkLifecycleListener listener = door.GetComponent<NetworkLifecycleListener>()!;
+                NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+
+                // The host keeps the door across loads, so it does here too.
+                using NetWriter move = new();
+                new SectionMoveMessage(doorId, NetworkSystem.PersistentSectionId).Write(move);
+                host.Session.SendRaw(client, FakePeer.SectionMove, move.WrittenSpan);
+                Pump(() => door.Persistent, host);
+
+                if (despawnedBeforeTheChange)
+                {
+                    using NetWriter despawn = new();
+                    new DespawnMessage(doorId, NetworkDespawnReason.OutOfInterest).Write(despawn);
+                    host.Session.SendRaw(client, FakePeer.Despawn, despawn.WrittenSpan);
+                    Pump(() => !door.Network.Active, host);
+                }
+
+                // The host changes scene and does not spawn the door for this peer, which is out of its interest.
+                host.JoinSpawns.Clear();
+                host.Session.SendRaw(client, FakePeer.Scene, CodeBuiltScene(2));
+                Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
+                PumpFor(30, host);
+                Assert.True(door.IsValid());
+                Assert.False(door.Network.Active);
+                Assert.False(door.Enabled);
+
+                // Back in interest, it is the same door, and the session goes on.
+                host.Session.SendRaw(client, FakePeer.Spawn, spawn);
+                Pump(() => door.Network.Active, host);
+                Assert.True(door.Enabled);
+                Assert.True(Networking.Networking.IsActive);
+                Assert.Equal(new[] { "spawn", "despawn", "spawn" }, listener.Events);
+            }
+            finally { Networking.Networking.Shutdown(); }
+        }
+        finally
+        {
+            AssetDatabase.Backend = previous;
+            AssetDatabase.ClearForTests();
+        }
+    }
 }
