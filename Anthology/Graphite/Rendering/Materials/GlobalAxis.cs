@@ -32,9 +32,6 @@ public sealed class GlobalAxis
     /// <summary>On while a light of the world has a mask, set by the renderer.</summary>
     public static readonly GlobalAxis LightMasks = Toggle("GRAPHITE_LIGHT_MASKS");
 
-    /// <summary>On while a light of the world casts contact shadows, set by the renderer.</summary>
-    public static readonly GlobalAxis ContactShadows = Toggle("GRAPHITE_CONTACT_SHADOWS");
-
     /// <summary>On while the world has decals, set by the renderer.</summary>
     public static readonly GlobalAxis Decals = Toggle("GRAPHITE_DECALS");
 

@@ -19,9 +19,6 @@
 #include "Graphite/FarShadow.glsl"
 #include "Graphite/Ltc.glsl"
 
-// Contact hardening is compiled in while a light of the world uses it
-#pragma variant global GRAPHITE_CONTACT_SHADOWS
-
 // Cookies and profiles are compiled in while a light of the world has one
 #pragma variant global GRAPHITE_LIGHT_MASKS
 
@@ -108,7 +105,7 @@ float Graphite_LocalLightShadow(Graphite_LightSample L, vec3 relativePos, vec3 g
     int slot = floatBitsToInt(Graphite_SpatialVec4(L.recordArray, L.recordWord + 6u).z);
     if (slot < 0)
         return 1.0;
-    return Graphite_LocalShadow(slot, L.type == GRAPHITE_LIGHT_POINT, L.position, Graphite_LightDirection(L), Graphite_LightSourceRadius(L), relativePos, geomNormal);
+    return Graphite_LocalShadow(slot, L.type == GRAPHITE_LIGHT_POINT, L.position, Graphite_LightDirection(L), relativePos, geomNormal);
 }
 
 // Reads where a recorded light is and what it is. offset and offsetLow move camera relative positions into its tree.
@@ -593,7 +590,7 @@ bool Graphite_ContributeLocal(Graphite_LightIterator it, Graphite_LightSample L,
 // A shadowed directional light's shadow map alone
 float graphite_DirectionalMapShadow(Graphite_DirectionalLight d, uint index, vec3 relativePos, vec3 geomNormal)
 {
-    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, d.sinRadius / max(d.cosRadius, 1e-4), relativePos, geomNormal);
+    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, relativePos, geomNormal);
 }
 
 // How much of a directional light reaches a surface past its shadow, 1 lit. index is its place in the world's buffer,

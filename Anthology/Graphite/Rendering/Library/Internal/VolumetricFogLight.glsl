@@ -37,7 +37,7 @@ Compute
         {
             Graphite_DirectionalLight d = Graphite_GetDirectional(i);
             // The shadow maps alone, the fog leaves the clouds' shadow out
-            float shadow = d.shadow ? Graphite_DirectionalShadow(i, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, 0.0, p, d.direction) : 1.0;
+            float shadow = d.shadow ? Graphite_DirectionalShadow(i, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, p, d.direction) : 1.0;
             total += d.color * (exposure * shadow * Fog_Phase(dot(ray, d.direction), g));
         }
 

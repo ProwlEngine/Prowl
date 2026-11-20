@@ -17,12 +17,6 @@ public enum ShadowFilter : byte
 
     /// <summary>A 5x5 tent from 9 hardware comparisons.</summary>
     Tent,
-
-    /// <summary>
-    /// Soft by how far a shadow falls from what casts it, for lights with a size: a spot or point light's SourceRadius, a
-    /// directional light's AngularRadius. Lights of no size use the tent.
-    /// </summary>
-    ContactHardening,
 }
 
 /// <summary>How a world's local light shadows are stored and sized. Host thread, read at SubmitFrame.</summary>

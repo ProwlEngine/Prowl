@@ -590,7 +590,6 @@ public sealed partial class RenderWorld
         _lights.Extract(Lighting.ReceiveLight);
         _decals.Extract(Lighting.ReceiveDecal);
         Globals?.Set(GlobalAxis.LightMasks, Lighting.MaskedLights > 0);
-        Globals?.Set(GlobalAxis.ContactShadows, Lighting.ContactLights > 0);
         Globals?.Set(GlobalAxis.Decals, Lighting.LiveDecals > 0);
         Globals?.SnapshotKeywords();
         ExtractBakedLighting();
@@ -713,9 +712,8 @@ internal sealed class WorldLighting
     /// <summary>The sun as of the last world record, the first directional light in shader order, or null for none.</summary>
     public LightDesc? Sun => _sun >= 0 && _lightAlive[_sun] ? _lights[_sun] : null;
 
-    /// <summary>Live lights with a cookie or profile, and live lights with contact hardening shadows.</summary>
+    /// <summary>Live lights with a cookie or profile.</summary>
     public int MaskedLights { get; private set; }
-    public int ContactLights { get; private set; }
 
     /// <summary>Live decals.</summary>
     public int LiveDecals { get; private set; }
@@ -833,8 +831,6 @@ internal sealed class WorldLighting
     {
         if ((slots.Flags & 96u) != 0)
             MaskedLights += delta;
-        if (light.Shadow.Enabled && light.Shadow.Filter == ShadowFilter.ContactHardening)
-            ContactLights += delta;
     }
 
     // The cookie and profile's bindless slots, with the record's flags for what the light has
