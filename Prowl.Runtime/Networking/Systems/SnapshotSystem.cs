@@ -181,6 +181,31 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
+    /// <summary>
+    ///     <paramref name="entry" /> changed hands, under a new generation. Receivers keep positions by generation, so
+    ///     what peers acknowledged before is no baseline any more, and neither is an acknowledgement still on its way.
+    /// </summary>
+    internal void OwnerChanged(NetworkObject entry)
+    {
+        uint floor = _scene.Tick + 1;
+        foreach (NetworkTransform transform in entry.Transforms)
+        {
+            int slot = transform.SnapshotSlot;
+            if (slot < 0 || slot >= _slotOwners.Count || !ReferenceEquals(_slotOwners[slot], transform))
+            {
+                continue;
+            }
+
+            foreach (PeerState state in _peers.Values)
+            {
+                if (slot < state.Positions.Length)
+                {
+                    state.Positions[slot] = new SentPosition { Stamp = transform.SnapshotStamp, Floored = true, Floor = floor };
+                }
+            }
+        }
+    }
+
     /// <summary>The transform's slot, given one the first time it is asked for.</summary>
     private int SlotOf(NetworkTransform transform)
     {
@@ -997,7 +1022,8 @@ internal sealed class SnapshotSystem : IDisposable
                 }
 
                 ref SentPosition position = ref PositionFor(transform, state);
-                if (position.HasLast && (!position.HasBaseline || (int)(tick - position.BaselineTick) > 0))
+                if (position.HasLast && (!position.Floored || (int)(tick - position.Floor) >= 0) &&
+                    (!position.HasBaseline || (int)(tick - position.BaselineTick) > 0))
                 {
                     position.HasBaseline = true;
                     position.BaselineTick = tick;
@@ -1138,6 +1164,10 @@ internal struct SentPosition
 {
     public uint Stamp;
     public bool HasLast, HasBaseline;
+
+    // Set when the object changed hands: nothing sent before this tick may become the baseline.
+    public bool Floored;
+    public uint Floor;
     public uint LastTick, BaselineTick;
     public GridPosition Last, Baseline;
 }

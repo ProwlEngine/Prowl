@@ -70,6 +70,47 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void AnOwnershipChangeStartsPositionsWholeAgain()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        using FakePeer bob = FakePeer.Join(network, "bob");
+        try
+        {
+            Pump(() => alice.IsReady && bob.IsReady, alice, bob);
+            GameObject mover = CreateGameObject("Mover");
+            mover.AddComponent<NetworkTransform>();
+            scene.Add(mover);
+            mover.Network.SpawnSerialized();
+            uint netId = NetworkTestScene.Current.NetIdOf(mover);
+
+            float x = 1000;
+            bool Moving(Func<bool> until)
+            {
+                x += 0.25f;
+                mover.Transform.LocalPosition = new Float3(x, 0, 0);
+                return until();
+            }
+
+            List<uint> Ages() => alice.WireReceived.Where(m => m.Id == FakePeer.Snapshot).SelectMany(m => RawRecords(m.Data))
+                .Where(r => r.NetId == netId && (r.Channels & PositionChannel) != 0 && (r.Channels & ExactChannel) == 0)
+                .Select(r => r.BaselineAge).ToList();
+            Pump(() => Moving(() => Ages().Count(age => age != 0) >= 3), alice, bob);
+
+            // Away and back: observers keep positions under the object's generation, which both changes replaced.
+            mover.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => p.Name == "bob"));
+            mover.Network.AssignOwnership(null);
+            alice.WireReceived.Clear();
+            Pump(() => Moving(() => Ages().Count >= 1), alice, bob);
+            Assert.Equal(0u, Ages()[0]);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void ADeltaFromAnUnknownBaselineIsRejected()
     {
         SceneInstance scene = CreateScene();

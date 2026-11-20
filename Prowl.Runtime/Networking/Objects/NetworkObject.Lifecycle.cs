@@ -163,6 +163,7 @@ internal sealed partial class NetworkObject
         TransferVelocity = null;
         Owner = owner;
         Generation = generation;
+        System.Snapshots.OwnerChanged(this);
         ResetTransforms();
         UpdatePhysics(velocity);
     }
