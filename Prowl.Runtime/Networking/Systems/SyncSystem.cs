@@ -477,8 +477,9 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                     continue;
                 }
 
-                // Only the owner gets an owner only member. The owner wrote its own, so it gets those back from nobody.
-                if ((sync.Flags & SyncFlags.ToOwner) == 0)
+                // Only the owner gets an owner only member. The owner wrote its own, so it gets those back from nobody,
+                // and everything a client wrote goes to the host, which is the one to keep it from the others.
+                if (!host || (sync.Flags & SyncFlags.ToOwner) == 0)
                 {
                     observerBits |= bit;
                     _observerValues.WriteBytes(_value.WrittenSpan);

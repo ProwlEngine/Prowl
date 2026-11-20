@@ -17,8 +17,47 @@ public class AmmoTestComponent : Component
     public int Ammo { get => __sync_Ammo; set => __syncnet_Ammo.Set(this, ref __sync_Ammo, value); }
 }
 
+/// <summary>What the script compiler generates for <c>[Sync(SyncFlags.FromOwner | SyncFlags.ToOwner)] public int Stash</c>.</summary>
+public class StashTestComponent : Component
+{
+    public const uint StashSlot = 972;
+    private int __sync_Stash;
+    private static readonly SyncMember<StashTestComponent, int> __syncnet_Stash =
+        new(StashSlot, "Stash", SyncFlags.FromOwner | SyncFlags.ToOwner, static s => s.__sync_Stash, static (s, v) => s.__sync_Stash = v);
+    public int Stash { get => __sync_Stash; set => __syncnet_Stash.Set(this, ref __sync_Stash, value); }
+}
+
 public partial class NetworkingTests
 {
+    [Fact]
+    public void AnOwnerOnlyValueItsOwnerWritesReachesTheHost()
+    {
+        SceneInstance hostScene = CreateScene();
+        using NetWriter snapshot = new();
+        NetworkTestScene.Current.WriteScene(hostScene, snapshot);
+        GameObject purse = CreateGameObject("Purse");
+        purse.AddComponent<StashTestComponent>();
+        purse.Network.Networked = true;
+        using NetWriter spawn = new();
+        NetworkTestScene.Current.WriteSpawn(purse, owner: 1, NetworkOrphaned.Destroy, spawn); // the first client is peer 1
+
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        SendJoin(host, snapshot.ToArray(), spawn.ToArray());
+        Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
+        try
+        {
+            Pump(() => Networking.Networking.IsReady, host);
+            StashTestComponent mine = Find(SceneInstance.Main, purse.Identifier).GetComponent<StashTestComponent>()!;
+            Assert.False(mine.IsProxy);
+
+            // As a Mirror owner sends every client to server value, whoever else it is kept from.
+            mine.Stash = 5;
+            Pump(() => host.SyncInt(mine.Identifier, StashTestComponent.StashSlot) == 5, host);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     private static bool SpawnCarries(FakePeer peer, uint slot) =>
         peer.WireReceived.Where(m => m.Id == FakePeer.Spawn).Any(m => SpawnValues(m.Data).Any(v => v.Slot == slot));
 
