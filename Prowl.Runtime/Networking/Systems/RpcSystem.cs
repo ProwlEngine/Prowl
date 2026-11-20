@@ -142,16 +142,43 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
+        // The call is copied out of the shared argument writer before anything else runs: sending state below can run
+        // game code that calls another RPC, which writes its own arguments there. Such a call inside this one takes
+        // writers of its own.
+        bool nested = _sending;
+        NetWriter envelope = nested ? new NetWriter(writer.Length + 32) : _envelope;
+        envelope.Reset();
+        NetReader raw = new(writer.WrittenSpan);
+        RpcCallMessage.ReadUnframed(ref raw).Write(envelope);
+        _sending = true;
+        try
+        {
+            return SendEnvelope(component, rpc, envelope, nested, networked, target, recipients, localIncluded, delivery);
+        }
+        finally
+        {
+            _sending = nested;
+            if (nested)
+            {
+                envelope.Dispose();
+            }
+        }
+    }
+
+    // True while a call is being sent, so one made from inside it knows.
+    private bool _sending;
+
+    private bool SendEnvelope(Component component, RpcMember rpc, NetWriter envelope, bool nested, NetworkObject networked,
+        NetPeer? target, RpcRecipients? recipients, bool localIncluded, Delivery delivery)
+    {
+        NetSession session = scene.Session!;
+        (uint id, RpcMode mode) = (rpc.Id, rpc.Mode);
+
         // Only channel 0 keeps the call behind the Sync changes made before it, its own object's whatever their interval.
         if (delivery == Delivery.Reliable && rpc.Channel == 0)
         {
             scene.Sync.SendSyncChanges(networked);
         }
-
-        NetWriter envelope = _envelope;
-        envelope.Reset();
-        NetReader raw = new(writer.WrittenSpan);
-        RpcCallMessage.ReadUnframed(ref raw).Write(envelope);
 
         if (!scene.IsHost)
         {
@@ -161,20 +188,21 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             if (NetworkDiagnostics.Enabled)
             {
                 NetworkDiagnostics.TraceMember("RPC", "Send", session.HostPeer, component, id, true, $"{mode}, {delivery}",
-                    writer.WrittenSpan);
+                    envelope.WrittenSpan);
             }
 
             return false;
         }
 
-        NetWriter message = _fromHost;
+        using NetWriter? own = nested ? new NetWriter(envelope.Length + 8) : null;
+        NetWriter message = own ?? _fromHost;
         message.Reset();
         new RpcCallerMessage(session.LocalPeer!.Id).Write(message);
         message.WriteBytes(envelope.WrittenSpan);
         if (NetworkDiagnostics.Enabled)
         {
             NetworkDiagnostics.TraceMember("RPC", "Send", null, component, id, true, $"{mode}, {delivery}",
-                writer.WrittenSpan);
+                envelope.WrittenSpan);
         }
 
         switch (mode)

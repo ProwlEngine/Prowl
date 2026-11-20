@@ -50,6 +50,9 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     private readonly NetWriter _value = new(256);
     private readonly NetWriter _observerValues = new(256), _ownerValues = new(256);
     private readonly NetWriter _observerBlocks = new(512), _ownerBlocks = new(512);
+
+    // What the host passes on of a record it is reading, apart from the ones above: reading runs game code.
+    private readonly NetWriter _relayValues = new(256), _relayBlocks = new(512);
     private readonly NetWriter _record = new(512), _message = new(1024);
 
     /// <summary>How many objects have [Sync] changes not sent yet.</summary>
@@ -61,6 +64,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         _observerValues.Dispose();
         _ownerValues.Dispose();
         _observerBlocks.Dispose();
+        _relayValues.Dispose();
+        _relayBlocks.Dispose();
         _ownerBlocks.Dispose();
         _record.Dispose();
         _message.Dispose();
@@ -365,10 +370,28 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     /// </summary>
     internal void SendSyncChanges(NetworkObject? urgent = null)
     {
-        if (_dirty.Count == 0 && _batches.Count == 0 && _sharedCount == 0)
+        // Writing state can run game code that sends an RPC, which asks for this again. The send under way takes
+        // what is dirty, so there is nothing for the one inside it to do, and it must not touch the buffers in use.
+        if (_flushingNow || (_dirty.Count == 0 && _batches.Count == 0 && _sharedCount == 0))
         {
             return;
         }
+
+        _flushingNow = true;
+        try
+        {
+            SendDirty(urgent);
+        }
+        finally
+        {
+            _flushingNow = false;
+        }
+    }
+
+    private bool _flushingNow;
+
+    private void SendDirty(NetworkObject? urgent)
+    {
 
         if (scene.Session is not { } session || !scene.IsActive)
         {
@@ -819,7 +842,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         ulong relayComponents = 0;
         if (relay)
         {
-            _observerBlocks.Reset();
+            _relayBlocks.Reset();
         }
 
         while (components != 0)
@@ -850,11 +873,11 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 continue;
             }
 
-            ulong accepted = ReadBlock(sender, entry, component, bytes, apply, false, relay ? _observerValues : null);
+            ulong accepted = ReadBlock(sender, entry, component, bytes, apply, false, relay ? _relayValues : null);
             if (relay && accepted != 0)
             {
                 relayComponents |= 1UL << c;
-                WriteBlock(_observerBlocks, accepted, _observerValues);
+                WriteBlock(_relayBlocks, accepted, _relayValues);
             }
         }
 
@@ -865,7 +888,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             {
                 if (!peer.IsLocal && peer != sender && Sees(entry!, peer))
                 {
-                    Queue(peer.Id, entry!, relayComponents, _observerBlocks.WrittenSpan);
+                    Queue(peer.Id, entry!, relayComponents, _relayBlocks.WrittenSpan);
                 }
             }
         }

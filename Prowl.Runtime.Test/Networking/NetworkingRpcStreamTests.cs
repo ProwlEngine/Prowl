@@ -22,8 +22,74 @@ public class RpcSpawnOrderTestComponent : Component, INetworkEvents
     public void OnNetworkOwnerChanged(NetPeer? previousOwner, NetPeer? owner) { }
 }
 
+/// <summary>Writes its own state, and calls an RPC while doing so, as game code may.</summary>
+public class ReentrantRpcTestComponent : Component, INetworkSerialize
+{
+    public const uint OuterId = 731, PingId = 732;
+    [SerializeIgnore] public int Pings, Written;
+    private static readonly RpcMember<ReentrantRpcTestComponent> Outering = new(OuterId, "Outer(int)", RpcMode.Broadcast, RpcFlags.AnyCaller,
+        static (ReentrantRpcTestComponent c, ref NetReader r, bool execute) => { int a0 = NetSerializer<int>.Read(ref r); if (!execute) return; RpcMember.ArgumentsRead(); });
+    private static readonly RpcMember<ReentrantRpcTestComponent> Pinging = new(PingId, "Ping()", RpcMode.Broadcast, RpcFlags.AnyCaller,
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Pings++; } });
+    public void Outer(int value) { if (Outering.Begin(this, out NetWriter w)) { NetSerializer<int>.Write(w, value); if (!Outering.Send(this, w)) return; } }
+    public void Ping() { if (Pinging.Begin(this, out var w) && !Pinging.Send(this, w)) return; Pings++; }
+
+    public void OnSerialize(NetWriter writer, bool initial)
+    {
+        writer.WriteByte(7);
+        if (!initial)
+        {
+            Written++;
+            Ping();
+        }
+    }
+
+    public void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
+}
+
 public partial class NetworkingTests
 {
+    [Fact]
+    public void AnRpcCalledWhileStateIsWrittenLeavesTheCallBeingSentIntact()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject root = CreateGameObject("Reentrant"); root.Network.Networked = true;
+        ReentrantRpcTestComponent component = root.AddComponent<ReentrantRpcTestComponent>();
+        scene.Add(root); Bind(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.IsReady, client);
+            client.WireReceived.Clear();
+
+            // The call sends the pending state first, and writing that state calls another RPC.
+            Networking.Networking.SetDirty(component);
+            component.Outer(42);
+            Assert.Equal(1, component.Written);
+            Pump(() => client.WireReceived.Count(m => m.Id == FakePeer.RpcFromHost) >= 2, client);
+
+            List<(uint Method, byte[] Arguments)> calls = [];
+            foreach ((ushort id, byte[] data) in client.WireReceived.Where(m => m.Id == FakePeer.RpcFromHost))
+            {
+                NetReader reader = new(data);
+                reader.ReadVarUInt32();
+                uint netId = reader.ReadVarUInt32();
+                byte index = reader.ReadByte();
+                uint method = reader.ReadVarUInt32();
+                calls.Add((FakePeer.RpcNamed(netId, index, method).Method, reader.ReadBytesWithLength().ToArray()));
+            }
+
+            byte[] outer = Assert.Single(calls, c => c.Method == ReentrantRpcTestComponent.OuterId).Arguments;
+            NetReader arguments = new(outer);
+            Assert.Equal(42, NetSerializer<int>.Read(ref arguments));
+            Assert.True(arguments.IsAtEnd);
+            Assert.Single(calls, c => c.Method == ReentrantRpcTestComponent.PingId);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     [Fact]
     public void AnRpcFollowsTheStateOfItsObjectEvenWhenAComponentSendsSlowly()
     {
