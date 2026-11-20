@@ -491,7 +491,11 @@ internal sealed partial class NetworkSystem
         if (components.Length != spawn.ComponentCount || NetworkComponents.Hash(components) != spawn.ComponentHash)
         {
             string mine = NetworkComponents.Describe(components);
-            go.Dispose();
+            if (!live)
+            {
+                go.Dispose();
+            }
+
             throw new InvalidDataException(
                 $"The host's {source} has {spawn.ComponentCount} networked components and this peer's builds " +
                 $"{components.Length} that don't match them ({mine}). Every peer has to build the same components.");
