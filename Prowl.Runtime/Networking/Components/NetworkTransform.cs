@@ -40,6 +40,10 @@ public sealed class NetworkTransform : Component
     internal byte Index;
     internal double LastCaptureTime;
 
+    // The tick it last had a turn to send on, once it has had one.
+    internal uint LastSendTick;
+    internal bool HasSendTick;
+
     // Its place in what the snapshot system keeps for each peer, and a stamp that outdates what that place held before.
     internal int SnapshotSlot = -1;
     internal uint SnapshotStamp;

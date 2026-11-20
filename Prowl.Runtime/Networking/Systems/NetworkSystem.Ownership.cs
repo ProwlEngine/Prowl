@@ -35,13 +35,56 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>
-    ///     Whether <paramref name="component" /> sends its changed [Sync] members on <paramref name="tick" />: every
-    ///     tick, or as far apart as its send interval, spread across ticks by its object's NetId.
+    ///     Whether the component at <paramref name="index" /> of <paramref name="entry" /> sends its changed [Sync]
+    ///     members on <paramref name="tick" />: every tick, or once its send interval has passed since it last did.
     /// </summary>
-    internal bool SendsStateOn(NetworkObject entry, Component component, uint tick)
+    internal bool SendsStateOn(NetworkObject entry, int index, uint tick)
     {
-        int interval = NetworkAccessor.SendIntervalOf(component);
-        return interval <= 1 || (tick + entry.NetId) % (uint)interval == 0;
+        int interval = NetworkAccessor.SendIntervalOf(entry.Components[index]);
+        if (interval <= 1)
+        {
+            return true;
+        }
+
+        entry.StateSent ??= new (uint, bool)[entry.Components.Length];
+        ref (uint Tick, bool Set) sent = ref entry.StateSent[index];
+        return IntervalPassed(ref sent.Tick, ref sent.Set, entry.NetId, (uint)interval, tick, false);
+    }
+
+    /// <summary>The component at <paramref name="index" /> sent its changes on <paramref name="tick" />.</summary>
+    internal void NoteStateSent(NetworkObject entry, int index, uint tick)
+    {
+        if (entry.StateSent is { } sent)
+        {
+            sent[index] = (tick, true);
+        }
+    }
+
+    /// <summary>
+    ///     True once <paramref name="interval" /> ticks have passed since <paramref name="last" />. Ticks can skip
+    ///     values, so it counts from the last turn and does not wait for a tick of its own. The first turn is spread
+    ///     across ticks by the object's NetId. <paramref name="take" /> marks the turn as taken.
+    /// </summary>
+    internal static bool IntervalPassed(ref uint last, ref bool set, uint netId, uint interval, uint tick, bool take)
+    {
+        if (!set)
+        {
+            uint phase = (tick + netId) % interval;
+            last = tick - (phase == 0 ? interval : phase);
+            set = true;
+        }
+
+        if (tick - last < interval)
+        {
+            return false;
+        }
+
+        if (take)
+        {
+            last = tick;
+        }
+
+        return true;
     }
 
     internal void OnOwnershipState(NetPeer sender, ref NetReader reader, Delivery delivery)

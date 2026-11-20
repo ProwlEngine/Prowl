@@ -56,6 +56,7 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
                     _transforms[i].Entry = this;
                     _transforms[i].Index = (byte)i;
                     _transforms[i].SnapshotSlot = -1;
+                    _transforms[i].HasSendTick = false;
                 }
             }
 
@@ -85,6 +86,9 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
 
     /// <summary>True while this object is on the list of objects with changes to send.</summary>
     public bool StateDirty;
+
+    /// <summary>The tick each networked component last sent its changes on, once it has, for its send interval.</summary>
+    public (uint Tick, bool Set)[]? StateSent;
 
     /// <summary>The index of a networked component of this object, or -1.</summary>
     public int IndexOf(Component component) => Array.IndexOf(Components, component);

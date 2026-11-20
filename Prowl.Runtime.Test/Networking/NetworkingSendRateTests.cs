@@ -152,4 +152,59 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void ASendIntervalStillSendsWhenTheTickSkipsAhead()
+    {
+        SceneInstance scene = CreateScene();
+        List<GameObject> objects = [];
+        List<NetTestComponent> components = [];
+        for (int i = 0; i < 2; i++)
+        {
+            GameObject go = CreateGameObject($"Slow {i}");
+            go.Network.Networked = true;
+            go.AddComponent<NetworkTransform>().SendInterval = 2;
+            NetTestComponent component = go.AddComponent<NetTestComponent>();
+            go.Network.SetSendInterval(component, 2);
+            scene.Add(go);
+            objects.Add(go);
+            components.Add(component);
+        }
+
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            NetworkSystem system = Networking.Networking.System!;
+
+            // Two network ticks pass each frame, as at half the tick rate, so the tick only takes every other value.
+            for (int frame = 1; frame <= 40; frame++)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    objects[i].Transform.LocalPosition = new Float3(frame, i, 0);
+                    components[i].Health = frame;
+                }
+
+                system.NetworkTick = system.Tick + 2;
+                system.Sync.SendSyncChanges();
+                system.Snapshots.Send();
+                Networking.Networking.Session!.Flush();
+                alice.Session.Update();
+                Networking.Networking.Receive();
+            }
+
+            for (int i = 0; i < 2; i++)
+            {
+                uint netId = NetworkTestScene.Current.NetIdOf(objects[i]);
+                Assert.True(TicksCarrying(alice, netId).Count >= 10, $"Object {i} sent {TicksCarrying(alice, netId).Count} transforms");
+                Assert.True(alice.SnapshotInt(components[i].Identifier, NetTestComponent.HealthSlot) >= 38,
+                    $"Object {i} last sent health {alice.SnapshotInt(components[i].Identifier, NetTestComponent.HealthSlot)}");
+            }
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

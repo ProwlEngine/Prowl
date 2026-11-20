@@ -373,12 +373,13 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 continue;
             }
 
-            if (!urgent && !scene.SendsStateOn(entry, component, tick))
+            if (!urgent && !scene.SendsStateOn(entry, c, tick))
             {
                 waiting = true;
                 continue;
             }
 
+            scene.NoteStateSent(entry, c, tick);
             masks[c] = 0;
             NetworkMembers members = NetworkMembers.Of(component);
             ulong observerBits = 0, ownerBits = 0;

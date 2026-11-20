@@ -276,11 +276,12 @@ internal sealed class SnapshotSystem : IDisposable
         return state;
     }
 
-    /// <summary>Whether <paramref name="tick" /> is one the transform sends on, spread across ticks by its object's NetId.</summary>
+    /// <summary>Whether the transform has a turn to send on <paramref name="tick" />, taking it if so.</summary>
     private static bool SendsOn(NetworkTransform transform, NetworkObject entry, uint tick)
     {
         int interval = transform.Interval;
-        return interval <= 1 || (tick + entry.NetId) % (uint)interval == 0;
+        return interval <= 1 || IntervalPassed(ref transform.LastSendTick, ref transform.HasSendTick, entry.NetId,
+            (uint)interval, tick, true);
     }
 
     private uint Epoch => (uint)_scene.SceneGeneration;
