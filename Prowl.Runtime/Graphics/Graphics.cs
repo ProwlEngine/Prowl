@@ -138,7 +138,8 @@ public static class Graphics
         {
             BakedVariants baked = new(Compiler);
             using System.IO.FileStream file = System.IO.File.OpenRead(BakedShadersPath);
-            baked.Read(file);
+            using System.IO.Compression.ZstandardStream compressed = new(file, System.IO.Compression.CompressionMode.Decompress);
+            baked.Read(compressed);
             return baked;
         }
         catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or ArgumentException)

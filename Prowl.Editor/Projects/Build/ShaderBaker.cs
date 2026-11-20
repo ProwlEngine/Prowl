@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,7 +66,8 @@ internal static class ShaderBaker
         });
 
         using FileStream file = File.Create(path);
-        baked.Write(file);
+        using ZstandardStream compressed = new(file, CompressionLevel.Optimal);
+        baked.Write(compressed);
         return baked.Count;
     }
 
