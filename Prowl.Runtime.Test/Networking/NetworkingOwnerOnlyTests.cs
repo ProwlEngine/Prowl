@@ -58,6 +58,39 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
+    [Fact]
+    public void TheHostKeepsAnOwnersOwnerOnlyValueFromEveryoneElse()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        using FakePeer bob = FakePeer.Join(network, "bob");
+        try
+        {
+            Pump(() => alice.IsReady && bob.IsReady, alice, bob);
+            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
+            GameObject purse = CreateGameObject("Purse");
+            StashTestComponent stash = purse.AddComponent<StashTestComponent>();
+            NetTestComponent stats = purse.AddComponent<NetTestComponent>();
+            scene.Add(purse);
+            purse.SpawnBuilt(aliceHere);
+            Pump(() => alice.Has(FakePeer.Spawn) && bob.Has(FakePeer.Spawn), alice, bob);
+            uint generation = NetworkGeneration(purse);
+
+            // Sent together: the host takes both, and passes on only the one the others may see.
+            alice.SendSyncValues(null, 1, 1,
+                (stash.Identifier, StashTestComponent.StashSlot, generation, IntValue(5)),
+                (stats.Identifier, NetTestComponent.HealthSlot, generation, IntValue(42)));
+            Pump(() => bob.SyncInt(stats.Identifier, NetTestComponent.HealthSlot) == 42, alice, bob);
+            Assert.Equal(5, stash.Stash);
+            PumpFor(30, alice, bob);
+            Assert.DoesNotContain(bob.SyncValues(), v => v.Slot == StashTestComponent.StashSlot);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     private static bool SpawnCarries(FakePeer peer, uint slot) =>
         peer.WireReceived.Where(m => m.Id == FakePeer.Spawn).Any(m => SpawnValues(m.Data).Any(v => v.Slot == slot));
 

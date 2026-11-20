@@ -938,7 +938,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     /// <summary>
     ///     Reads one component's block: its member mask and their values. Members the sender may change are applied
     ///     when <paramref name="apply" />, the rest read past. Returns the members taken, with their bytes copied to
-    ///     <paramref name="taken" /> when given.
+    ///     <paramref name="taken" /> when given, which is for passing them on to other peers.
     /// </summary>
     private ulong ReadBlock(NetPeer sender, NetworkObject? entry, Component component, ReadOnlySpan<byte> bytes,
         bool apply, bool initial, NetWriter? taken)
@@ -988,13 +988,20 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 continue;
             }
 
-            accepted |= 1UL << m;
             ReadOnlySpan<byte> value = bytes[start..block.Position];
-            taken?.WriteBytes(value);
             if (apply && NetworkDiagnostics.Enabled)
             {
                 NetworkDiagnostics.TraceMember("SyncVar", "Apply", sender, component, sync.Slot, false, "Applied", value);
             }
+
+            // What is taken to pass on leaves out what only the owner gets: it came from the owner, and stops here.
+            if (taken != null && (sync.Flags & SyncFlags.ToOwner) != 0)
+            {
+                continue;
+            }
+
+            accepted |= 1UL << m;
+            taken?.WriteBytes(value);
         }
 
         if (!block.IsAtEnd)
