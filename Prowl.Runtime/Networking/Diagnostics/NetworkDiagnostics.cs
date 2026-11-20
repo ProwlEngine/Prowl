@@ -209,11 +209,9 @@ public static class NetworkDiagnostics
         List<string> names = new();
 
         int transforms = 0;
-        uint groups = TransformGroupBlock.Read(ref reader).Count;
-        for (uint g = 0; g < groups; g++)
+        uint records = SnapshotMessage.ReadRecordCount(ref reader);
         {
-            TransformGroup group = TransformGroup.Read(ref reader);
-            for (uint i = 0; i < group.Count; i++, transforms++)
+            for (uint i = 0; i < records; i++, transforms++)
             {
                 TransformRecord record = TransformRecord.Read(ref reader);
                 // Bound capture work and retained text, as for sync values.
@@ -223,7 +221,7 @@ public static class NetworkDiagnostics
                                     entry.GameObject.IsValid()
                         ? entry.GameObject.Name
                         : $"Unknown object #{record.NetId}";
-                    context.Append($"\n\nTransform: {target}\nTick: {group.Tick}\nChannels: {record.Update.Channels}");
+                    context.Append($"\n\nTransform: {target}\nTick: {header.Tick - record.TicksAgo}\nChannels: {record.Update.Channels}");
                 }
             }
         }

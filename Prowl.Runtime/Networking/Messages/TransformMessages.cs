@@ -18,24 +18,43 @@ internal readonly record struct TransformRecord(
     TransformUpdate Update,
     uint BaselineAge = 0,
     GridPosition Grid = default,
-    byte Index = 0)
+    byte Index = 0,
+    uint TicksAgo = 0,
+    uint AgeMilliseconds = 0)
 {
     // Set in the channels byte when the record is for a transform of its object other than the first.
     private const byte IndexedBit = 64;
 
+    // Set when the pose was taken before the snapshot that carries it: a client's passed on by the host, or a rest
+    // pose sent again. [varuint milliseconds * 2 + 1 if ticks follow][varuint ticks].
+    private const byte StampedBit = 128;
+
+    /// <summary>The longest a record says it was taken before its snapshot.</summary>
+    internal const uint MaxAgeMilliseconds = 600_000;
+
     // A moving position takes at most 1 + 3 * 7 bytes, so with the compact rotation it fits in an exact pose's 12 + 16.
     // A teleport's sequence byte fits in the 4 of Resumed, which it never carries.
-    internal const int MaxSize = 5 + 5 + 1 + 1 + 4 + 12 + 16 + 12;
+    internal const int MaxSize = 5 + 5 + 1 + 1 + 5 + 5 + 4 + 12 + 16 + 12;
 
     internal void Write(NetWriter writer)
     {
         TransformChannels channels = Update.Channels;
         writer.WriteVarUInt32(NetId);
         writer.WriteVarUInt32(Generation);
-        writer.WriteByte((byte)((byte)channels | (Index != 0 ? IndexedBit : 0)));
+        bool stamped = TicksAgo != 0 || AgeMilliseconds != 0;
+        writer.WriteByte((byte)((byte)channels | (Index != 0 ? IndexedBit : 0) | (stamped ? StampedBit : 0)));
         if (Index != 0)
         {
             writer.WriteByte(Index);
+        }
+
+        if (stamped)
+        {
+            writer.WriteVarUInt32((Math.Min(AgeMilliseconds, MaxAgeMilliseconds) << 1) | (TicksAgo != 0 ? 1u : 0u));
+            if (TicksAgo != 0)
+            {
+                writer.WriteVarUInt32(TicksAgo);
+            }
         }
 
         if ((channels & TransformChannels.Resumed) != 0)
@@ -87,7 +106,19 @@ internal readonly record struct TransformRecord(
         uint generation = reader.ReadVarUInt32();
         byte raw = reader.ReadByte();
         byte index = (raw & IndexedBit) != 0 ? reader.ReadByte() : (byte)0;
-        TransformChannels channels = (TransformChannels)(raw & ~IndexedBit);
+        uint ticksAgo = 0, age = 0;
+        if ((raw & StampedBit) != 0)
+        {
+            uint stamp = reader.ReadVarUInt32();
+            age = stamp >> 1;
+            ticksAgo = (stamp & 1) != 0 ? reader.ReadVarUInt32() : 0;
+            if (age > MaxAgeMilliseconds)
+            {
+                throw new System.IO.InvalidDataException("A transform is older than a record can say.");
+            }
+        }
+
+        TransformChannels channels = (TransformChannels)(raw & ~(IndexedBit | StampedBit));
         NetworkValidation.ValidateTransformChannels(channels);
 
         float stillFor = (channels & TransformChannels.Resumed) != 0 ? reader.ReadSingle() : 0;
@@ -114,7 +145,8 @@ internal readonly record struct TransformRecord(
         NetworkValidation.Transform(stillFor, position, rotation, scale);
 
         return new TransformRecord(netId, generation,
-            new TransformUpdate(channels, stillFor, position, rotation, scale, teleport), baselineAge, grid, index);
+            new TransformUpdate(channels, stillFor, position, rotation, scale, teleport), baselineAge, grid, index,
+            ticksAgo, age);
     }
 
     internal bool HasGridPosition =>

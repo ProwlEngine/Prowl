@@ -203,16 +203,15 @@ public sealed class FakePeer : IDisposable
 
     internal static void SkipTransformGroups(ref NetReader r)
     {
-        uint groups = r.ReadVarUInt32();
-        for (uint g = 0; g < groups; g++)
+        r.ReadDouble();
         {
-            r.ReadVarUInt32(); r.ReadDouble();
             uint records = r.ReadVarUInt32();
             for (uint i = 0; i < records; i++)
             {
                 r.ReadVarUInt32(); r.ReadVarUInt32();
                 byte channels = r.ReadByte();
                 if ((channels & 64) != 0) r.ReadByte();
+                if ((channels & 128) != 0) { uint stamp = r.ReadVarUInt32(); if ((stamp & 1) != 0) r.ReadVarUInt32(); }
                 if ((channels & 16) != 0) r.ReadSingle();
                 if ((channels & 32) != 0) r.ReadByte();
                 if ((channels & 9) == 9) r.ReadBytes(12);
@@ -939,8 +938,7 @@ public partial class NetworkingTests : RuntimeTestBase
         params (uint NetId, uint Generation, Float3 Position, Quaternion Rotation, Float3 Scale)[] records)
     {
         w.WriteVarUInt32(0); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(tick);
-        w.WriteVarUInt32(1);
-        w.WriteVarUInt32(tick); w.WriteDouble(time); w.WriteVarUInt32((uint)records.Length);
+        w.WriteDouble(time); w.WriteVarUInt32((uint)records.Length);
         foreach (var record in records)
         {
             w.WriteVarUInt32(record.NetId); w.WriteVarUInt32(record.Generation);
@@ -972,17 +970,16 @@ public partial class NetworkingTests : RuntimeTestBase
         r.ReadVarUInt32(); r.ReadVarUInt32();
         uint tick = r.ReadVarUInt32();
         List<TransformRecord> records = new();
-        uint groups = r.ReadVarUInt32();
-        for (uint g = 0; g < groups; g++)
+        r.ReadDouble();
         {
-            r.ReadVarUInt32(); r.ReadDouble();
             uint count = r.ReadVarUInt32();
             for (uint i = 0; i < count; i++)
             {
                 uint netId = r.ReadVarUInt32(), generation = r.ReadVarUInt32();
                 byte channels = r.ReadByte();
                 byte index = (channels & IndexedChannel) != 0 ? r.ReadByte() : (byte)0;
-                channels = (byte)(channels & ~IndexedChannel);
+                if ((channels & 128) != 0) { uint stamp = r.ReadVarUInt32(); if ((stamp & 1) != 0) r.ReadVarUInt32(); }
+                channels = (byte)(channels & ~(IndexedChannel | 128));
                 if ((channels & ResumedChannel) != 0) r.ReadSingle();
                 if ((channels & TeleportChannel) != 0) r.ReadByte();
                 Float3? position = null;

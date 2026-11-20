@@ -172,8 +172,7 @@ public partial class NetworkingTests
                     {
                         int count = (objects.Count - owner + peerCount - 1) / peerCount;
                         w.WriteVarUInt32(0); w.WriteVarUInt32((uint)system.SceneGeneration); w.WriteVarUInt32(tick);
-                        w.WriteVarUInt32(1);
-                        w.WriteVarUInt32(tick); w.WriteDouble(tick / 30.0); w.WriteVarUInt32((uint)count);
+                        w.WriteDouble(tick / 30.0); w.WriteVarUInt32((uint)count);
                         for (int i = owner; i < objects.Count; i += peerCount)
                         {
                             w.WriteVarUInt32(system.NetIdOf(objects[i])); w.WriteVarUInt32(system.GenerationOf(objects[i]));

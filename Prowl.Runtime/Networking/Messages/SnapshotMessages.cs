@@ -9,83 +9,48 @@ using Prowl.Courier;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     Starts a Snapshot message: then a TransformGroupBlock of groups. The id is the sender's own count for this
-///     receiver, which acknowledges it; zero asks for no acknowledgement. The epoch is the scene generation it was
-///     sent in; one from another scene is dropped. <see cref="Tick" /> is the sender's.
+///     A Snapshot message: this header, then [varuint count] TransformRecord values. The id is the sender's own count
+///     for this receiver, which acknowledges it; zero asks for no acknowledgement. The epoch is the scene generation
+///     it was sent in; one from another scene is dropped. <see cref="Tick" /> and <see cref="Time" /> are the
+///     sender's tick and clock as it sends, which each record counts back from.
 /// </summary>
-internal readonly record struct SnapshotMessage(uint Id, uint Epoch, uint Tick)
+internal readonly record struct SnapshotMessage(uint Id, uint Epoch, uint Tick, double Time)
 {
-    internal const int HeaderSize = 5 + 5 + 5;
+    internal const int HeaderSize = 5 + 5 + 5 + 8;
 
     /// <summary>The smallest message that still holds one whole transform record.</summary>
-    internal const int MinMessageSize = sizeof(ushort) + HeaderSize + 1 + TransformGroup.HeaderSize +
-                                        TransformRecord.MaxSize + 1;
+    internal const int MinMessageSize = sizeof(ushort) + HeaderSize + 1 + TransformRecord.MaxSize;
 
     internal void Write(NetWriter writer)
     {
         writer.WriteVarUInt32(Id);
         writer.WriteVarUInt32(Epoch);
         writer.WriteVarUInt32(Tick);
+        writer.WriteDouble(Time);
     }
 
-    internal static SnapshotMessage Read(ref NetReader reader) => new(
-        reader.ReadVarUInt32(),
-        reader.ReadVarUInt32(),
-        reader.ReadVarUInt32());
-}
-
-
-/// <summary>Count followed by Count TransformGroup records.</summary>
-internal readonly record struct TransformGroupBlock(uint Count)
-{
-    // A group's smallest encoding: one-byte tick, time, one-byte count.
-    private const int HeaderBytes = 1 + 8 + 1;
-
-    internal void Write(NetWriter writer) => writer.WriteVarUInt32(Count);
-
-    internal static TransformGroupBlock Read(ref NetReader reader)
+    internal static SnapshotMessage Read(ref NetReader reader)
     {
-        uint count = reader.ReadVarUInt32();
-        if (count > (uint)reader.Remaining / HeaderBytes)
+        SnapshotMessage message = new(reader.ReadVarUInt32(), reader.ReadVarUInt32(), reader.ReadVarUInt32(),
+            reader.ReadDouble());
+        if (!double.IsFinite(message.Time) || message.Time < 0)
         {
-            throw new InvalidDataException("Transform group count exceeds the remaining data.");
+            throw new InvalidDataException("A snapshot has an invalid time.");
         }
 
-        return new TransformGroupBlock(count);
-    }
-}
-
-/// <summary>
-///     Transform records from one controller's tick, at its clock: [varuint tick][f64 sent at][varuint count] then
-///     Count TransformRecord values. The host relays a client's records under that client's tick and clock.
-/// </summary>
-internal readonly record struct TransformGroup(uint Tick, double SentAt, uint Count)
-{
-    internal const int HeaderSize = 5 + 8 + 5;
-
-    internal void Write(NetWriter writer)
-    {
-        writer.WriteVarUInt32(Tick);
-        writer.WriteDouble(SentAt);
-        writer.WriteVarUInt32(Count);
+        return message;
     }
 
-    internal static TransformGroup Read(ref NetReader reader)
+    /// <summary>How many records follow the header.</summary>
+    internal static uint ReadRecordCount(ref NetReader reader)
     {
-        uint tick = reader.ReadVarUInt32();
-        double sentAt = reader.ReadDouble();
         uint count = reader.ReadVarUInt32();
-        if (!double.IsFinite(sentAt) || sentAt < 0)
-        {
-            throw new InvalidDataException("A transform group has an invalid time.");
-        }
-
         if (count > (uint)reader.Remaining / (1 + 1 + 1))
         {
             throw new InvalidDataException("Transform record count exceeds the remaining data.");
         }
 
-        return new TransformGroup(tick, sentAt, count);
+        return count;
     }
 }
 

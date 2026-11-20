@@ -14,14 +14,37 @@ public partial class NetworkingTests
     private static void WriteMoving(NetWriter w, uint tick, uint netId, uint generation, Float3 position, Quaternion? rotation = null)
     {
         w.WriteVarUInt32(0); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(tick);
-        w.WriteVarUInt32(1);
-        w.WriteVarUInt32(tick); w.WriteDouble(tick / 30.0); w.WriteVarUInt32(1);
+        w.WriteDouble(tick / 30.0); w.WriteVarUInt32(1);
         w.WriteVarUInt32(netId); w.WriteVarUInt32(generation);
         w.WriteByte((byte)(PositionChannel | (rotation != null ? RotationChannel : 0)));
         w.WriteVarUInt32(0);
         w.WriteVarInt64((long)MathF.Round(position.X * 100)); w.WriteVarInt64((long)MathF.Round(position.Y * 100));
         w.WriteVarInt64((long)MathF.Round(position.Z * 100));
         if (rotation is { } turned) NetSerializers.WriteCompactQuaternion(w, turned);
+    }
+
+    [Fact]
+    public void ATransformRecordSaysHowLongBeforeItsSnapshotItWasTaken()
+    {
+        TransformUpdate update = new(TransformChannels.Position | TransformChannels.Exact, 0, new Float3(1, 2, 3),
+            Quaternion.Identity, default);
+        int Size(uint ticksAgo, uint age)
+        {
+            using NetWriter w = new();
+            new Networking.TransformRecord(7, 1, update, TicksAgo: ticksAgo, AgeMilliseconds: age).Write(w);
+            NetReader r = new(w.WrittenSpan);
+            Networking.TransformRecord back = Networking.TransformRecord.Read(ref r);
+            Assert.True(r.IsAtEnd);
+            Assert.Equal((ticksAgo, age, new Float3(1, 2, 3)), (back.TicksAgo, back.AgeMilliseconds, back.Update.Position));
+            return w.Length;
+        }
+
+        // Taken as it is sent it costs nothing, a moment before one byte, and a tick count one more.
+        int plain = Size(0, 0);
+        Assert.Equal(plain + 1, Size(0, 45));
+        Assert.Equal(plain + 2, Size(0, 100));
+        Assert.Equal(plain + 2, Size(3, 45));
+        Assert.Equal(plain + 2, Size(3, 0));
     }
 
     [Fact]

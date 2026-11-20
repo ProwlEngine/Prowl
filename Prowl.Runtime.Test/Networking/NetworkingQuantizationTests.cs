@@ -88,8 +88,7 @@ public partial class NetworkingTests
             owner.Send(FakePeer.Snapshot, w =>
             {
                 w.WriteVarUInt32(9); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(50);
-                w.WriteVarUInt32(1);
-                w.WriteVarUInt32(50); w.WriteDouble(1); w.WriteVarUInt32(1);
+                w.WriteDouble(1); w.WriteVarUInt32(1);
                 w.WriteVarUInt32(netId); w.WriteVarUInt32(generation); w.WriteByte(PositionChannel);
                 w.WriteVarUInt32(5); w.WriteVarInt64(100); w.WriteVarInt64(0); w.WriteVarInt64(0);
             });
@@ -111,16 +110,17 @@ public partial class NetworkingTests
         NetReader r = new(message);
         r.ReadVarUInt32(); r.ReadVarUInt32(); r.ReadVarUInt32();
         List<(uint, byte, int, uint)> records = new();
-        uint groups = r.ReadVarUInt32();
-        for (uint g = 0; g < groups; g++)
+        r.ReadDouble();
         {
-            r.ReadVarUInt32(); r.ReadDouble();
             uint count = r.ReadVarUInt32();
             for (uint i = 0; i < count; i++)
             {
                 uint netId = r.ReadVarUInt32();
                 r.ReadVarUInt32();
                 byte channels = r.ReadByte();
+                if ((channels & IndexedChannel) != 0) r.ReadByte();
+                if ((channels & 128) != 0) { uint stamp = r.ReadVarUInt32(); if ((stamp & 1) != 0) r.ReadVarUInt32(); }
+                channels = (byte)(channels & ~(IndexedChannel | 128));
                 if ((channels & ResumedChannel) != 0) r.ReadSingle();
                 if ((channels & TeleportChannel) != 0) r.ReadByte();
                 int before = r.Remaining;
