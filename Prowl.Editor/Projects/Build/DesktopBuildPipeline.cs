@@ -767,7 +767,9 @@ public class DesktopBuildPipeline : BuildPipeline
             string source = Path.Combine(engineRuntimes, relative);
             if (!File.Exists(source)) continue;
 
-            string dest = Path.Combine(destinationRoot, relative);
+            string dest = relative.Contains("native")
+                ? Path.Combine(destinationRoot, "native", Path.GetFileName(relative))
+                : Path.Combine(destinationRoot, Path.GetFileName(relative));
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             File.Copy(source, dest, true);
         }
