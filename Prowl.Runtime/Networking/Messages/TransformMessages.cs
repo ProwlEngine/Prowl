@@ -38,7 +38,13 @@ internal readonly record struct TransformRecord(
 
     internal void Write(NetWriter writer)
     {
+        // What a reader refuses is never written: a teleport takes the place of a resume.
         TransformChannels channels = Update.Channels;
+        if ((channels & TransformChannels.Teleport) != 0)
+        {
+            channels &= ~TransformChannels.Resumed;
+        }
+
         writer.WriteVarUInt32(NetId);
         writer.WriteVarUInt32(Generation);
         bool stamped = TicksAgo != 0 || AgeMilliseconds != 0;

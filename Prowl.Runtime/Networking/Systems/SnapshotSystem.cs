@@ -877,14 +877,7 @@ internal sealed class SnapshotSystem : IDisposable
             if (waiting)
             {
                 // What an update takes fills in the channels it left out, so the newer one carries the older one's too.
-                TransformUpdate earlier = _relayed[index].Update;
-                bool resumed = (update.Channels & TransformChannels.Resumed) == 0 &&
-                               (earlier.Channels & TransformChannels.Resumed) != 0;
-                _relayed[index] = (transform, update with
-                {
-                    Channels = update.Channels | earlier.Channels,
-                    StillFor = resumed ? earlier.StillFor : update.StillFor,
-                }, takenAt, sender.Id);
+                _relayed[index] = (transform, Merge(_relayed[index].Update, update), takenAt, sender.Id);
             }
             else
             {
@@ -892,6 +885,28 @@ internal sealed class SnapshotSystem : IDisposable
                 _relayed.Add((transform, update, takenAt, sender.Id));
             }
         }
+    }
+
+    /// <summary>
+    ///     A later moving update with what an earlier one carried that it does not. A teleport in either stays, under
+    ///     the number its sender gave it, and takes the place of a resume, which a record can't carry beside it.
+    /// </summary>
+    private static TransformUpdate Merge(in TransformUpdate earlier, in TransformUpdate later)
+    {
+        TransformChannels channels = later.Channels | earlier.Channels;
+        bool laterResumed = (later.Channels & TransformChannels.Resumed) != 0;
+        bool laterTeleported = (later.Channels & TransformChannels.Teleport) != 0;
+        if ((channels & TransformChannels.Teleport) != 0)
+        {
+            channels &= ~TransformChannels.Resumed;
+        }
+
+        return later with
+        {
+            Channels = channels,
+            StillFor = (channels & TransformChannels.Resumed) == 0 ? 0 : laterResumed ? later.StillFor : earlier.StillFor,
+            Teleport = laterTeleported ? later.Teleport : earlier.Teleport,
+        };
     }
 
     // A waiting transform nobody sent any more: its rest pose took its place.
