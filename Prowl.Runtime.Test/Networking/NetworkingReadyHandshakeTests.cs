@@ -38,6 +38,47 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void ASectionLoadedDuringAPeersJoinRunReachesThatPeer()
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        NetworkConfiguration paced = Networking.Networking.Configuration;
+        paced.JoinSpawnBytesPerTick = 1;
+        Networking.Networking.Configure(paced);
+        SceneInstance scene = CreateScene();
+        for (int i = 0; i < 8; i++)
+        {
+            GameObject actor = CreateGameObject($"Actor {i}");
+            actor.Network.Networked = true;
+            scene.Add(actor);
+        }
+
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer client = FakePeer.Join(network, "client");
+        try
+        {
+            Pump(() => client.Has(FakePeer.Spawn), client);
+            Assert.False(client.Has(FakePeer.SpawnFinished));
+
+            // The run is under way, and the host loads another section.
+            GameObject crate = new("Crate");
+            crate.Network.Networked = true;
+            scene.AddContent(new SceneContent { Objects = [crate] }, "Arena", null);
+
+            Pump(() => client.Has(FakePeer.SpawnFinished), client);
+            PumpFor(20, client);
+            Assert.Contains(crate.Identifier, SpawnedIds(client));
+            Assert.Equal(9, SpawnedIds(client).Distinct().Count());
+        }
+        finally
+        {
+            Networking.Networking.Shutdown();
+            Networking.Networking.Configure(previous);
+        }
+    }
+
+    [Fact]
     public void AJoinsSpawnsAreSpreadOverTicksByTheBudgetAndFinishAfterTheLast()
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;

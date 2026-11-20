@@ -462,10 +462,18 @@ internal sealed partial class NetworkSystem
             SendEngine(peer, EngineMessage.SectionAdd, message.WrittenSpan);
         }
 
-        // A peer still loading gets them with everything else once it is ready.
+        // A peer still loading gets them with everything else once it is ready, and one in the middle of its join
+        // run has them added to the end of it.
         NetPeer[] ready = [.. peers.Where(IsPeerReady)];
         NetworkObject[] entries = [.. Entries.Values.Where(e => e.GameObject.IsValid() && !e.TearingDown &&
             ReferenceEquals(e.GameObject.Section, section))];
+        foreach (PeerReadiness joining in LoadingPeers.Values)
+        {
+            if (joining.Run is { } run)
+            {
+                joining.Run = [.. run, .. entries];
+            }
+        }
         _sceneSpawns = true;
         try
         {
