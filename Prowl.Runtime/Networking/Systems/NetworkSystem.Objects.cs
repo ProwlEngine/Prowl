@@ -476,25 +476,40 @@ internal sealed partial class NetworkSystem
 
     /// <summary>
     ///     A spawn for an object this peer has already, found by its net id: it keeps
-    ///     the object and takes the spawn's pose, owner and state, with no spawn callbacks.
+    ///     the object and takes the spawn's parent, pose, owner and state, with no spawn callbacks.
     /// </summary>
     private void Respawn(NetworkObject entry, scoped SpawnMessage message, NetPeer sender, ref NetReader reader)
     {
         NetReader payload = new(message.Payload);
         TemplateSpawn spawn = TemplateSpawn.Read(ref payload);
         GameObject go = entry.GameObject;
-        go.Transform.LocalPosition = spawn.Position;
-        go.Transform.LocalRotation = spawn.Rotation;
-        go.Transform.LocalScale = spawn.Scale;
+
+        // What this peer controlled all along is its own to say: the host's copy of it may be older.
+        bool mine = Session?.LocalPeer is { } local && entry.Owner == local.Id && message.OwnerId == local.Id;
+        if (FindByIdentifier(message.ParentId) is GameObject parent && go.Parent != parent)
+        {
+            go.SetParent(parent, false);
+        }
+
+        if (!mine)
+        {
+            go.Transform.LocalPosition = spawn.Position;
+            go.Transform.LocalRotation = spawn.Rotation;
+            go.Transform.LocalScale = spawn.Scale;
+        }
+
         go.Enabled = spawn.Enabled;
-        ReadChildPoses(ref reader, entry.Transforms);
-        Sync.ApplySpawnState(sender, entry.Components, ref reader);
+        ReadChildPoses(ref reader, entry.Transforms, !mine);
+        Sync.ApplySpawnState(sender, entry.Components, ref reader, mine);
         entry.AwaitingRespawn = false;
         go.Network.ApplyOrphaned(message.Orphaned);
-        foreach (NetworkTransform transform in entry.Transforms)
+        if (!mine)
         {
-            transform.Sync.ClearHistory();
-            transform.Sync.ReceivedAt(message.Tick);
+            foreach (NetworkTransform transform in entry.Transforms)
+            {
+                transform.Sync.ClearHistory();
+                transform.Sync.ReceivedAt(message.Tick);
+            }
         }
 
         if (entry.Owner != message.OwnerId)
@@ -518,7 +533,7 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    private static void ReadChildPoses(ref NetReader reader, NetworkTransform[] transforms)
+    private static void ReadChildPoses(ref NetReader reader, NetworkTransform[] transforms, bool apply = true)
     {
         int count = reader.ReadByte();
         if (count != transforms.Length)
@@ -536,7 +551,10 @@ internal sealed partial class NetworkSystem
                 Quaternion rotation = NetSerializers.ReadQuaternion(ref reader);
                 Float3 scale = NetSerializers.ReadFloat3(ref reader);
                 NetworkValidation.Transform(0, position, rotation, scale);
-                transform.Apply(position, rotation, scale);
+                if (apply)
+                {
+                    transform.Apply(position, rotation, scale);
+                }
             }
         }
     }

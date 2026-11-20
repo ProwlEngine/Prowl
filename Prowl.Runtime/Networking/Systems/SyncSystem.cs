@@ -941,7 +941,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     ///     <paramref name="taken" /> when given, which is for passing them on to other peers.
     /// </summary>
     private ulong ReadBlock(NetPeer sender, NetworkObject? entry, Component component, ReadOnlySpan<byte> bytes,
-        bool apply, bool initial, NetWriter? taken)
+        bool apply, bool initial, NetWriter? taken, bool keepOwnerWritten = false)
     {
         NetworkMembers members = NetworkMembers.Of(component);
         NetReader block = new(bytes);
@@ -956,8 +956,11 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 throw new InvalidDataException("State names a member its component doesn't have.");
             }
 
-            // A spawn's state is the host's own, so all of it is taken.
-            bool take = entry == null || AcceptSync(sender, entry, sync.Flags);
+            // A spawn's state is the host's own, so all of it is taken, but for what this peer writes itself on an
+            // object it kept.
+            bool take = entry == null
+                ? !keepOwnerWritten || (sync.Flags & SyncFlags.FromOwner) == 0
+                : AcceptSync(sender, entry, sync.Flags);
             int start = block.Position;
             try
             {
@@ -1013,14 +1016,15 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     }
 
     /// <summary>
-    ///     Applies the state a spawn carries to <paramref name="components" />, once all of it checks out. It changes
-    ///     nothing that was running, so hooks for it are held until the object's spawn callbacks are due.
+    ///     Applies the state a spawn carries to <paramref name="components" />, once all of it checks out. Hooks for
+    ///     it are held until the object's spawn callbacks are due. With <paramref name="keepOwnerWritten" /> the
+    ///     members the owner writes are read past, for an owner that kept the object.
     /// </summary>
-    internal void ApplySpawnState(NetPeer sender, Component[] components, ref NetReader reader)
+    internal void ApplySpawnState(NetPeer sender, Component[] components, ref NetReader reader, bool keepOwnerWritten = false)
     {
         using NetSerializers.ReadingFrom references = new(scene.RemoteClient(sender));
         NetReader check = reader;
-        ReadSpawnState(sender, components, ref check, false);
+        ReadSpawnState(sender, components, ref check, false, keepOwnerWritten);
         if (!check.IsAtEnd)
         {
             throw new InvalidDataException("Spawn contains trailing bytes.");
@@ -1030,7 +1034,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         _applying++;
         try
         {
-            ReadSpawnState(sender, components, ref reader, true);
+            ReadSpawnState(sender, components, ref reader, true, keepOwnerWritten);
         }
         catch
         {
@@ -1045,7 +1049,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         RunNotifications(notificationsFrom);
     }
 
-    private void ReadSpawnState(NetPeer sender, Component[] components, ref NetReader reader, bool apply)
+    private void ReadSpawnState(NetPeer sender, Component[] components, ref NetReader reader, bool apply,
+        bool keepOwnerWritten)
     {
         int count = reader.ReadByte();
         if (count != components.Length)
@@ -1056,7 +1061,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
         for (int c = 0; c < count; c++)
         {
-            ReadBlock(sender, null, components[c], reader.ReadBytesWithLength(), apply, true, null);
+            ReadBlock(sender, null, components[c], reader.ReadBytesWithLength(), apply, true, null, keepOwnerWritten);
         }
     }
 
