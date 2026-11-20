@@ -247,7 +247,7 @@ internal sealed class TransformSync(NetworkTransform? settings = null)
         return update with { Channels = channels, Position = position, Rotation = rotation, Scale = scale };
     }
 
-    /// <summary>Jumps to a pose that arrived reliably (scene catch-up), unless a newer update is already here.</summary>
+    /// <summary>Jumps to a pose that arrived reliably (a spawn or an ownership handoff), unless a newer update is already here.</summary>
     public void Snap(GameObject go, uint tick, Float3 position, Quaternion rotation, Float3 scale)
     {
         if (HasReceived && (int)(tick - LastReceivedTick) < 0)

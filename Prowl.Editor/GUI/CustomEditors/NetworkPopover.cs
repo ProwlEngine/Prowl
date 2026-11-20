@@ -146,6 +146,7 @@ internal static class NetworkPopover
             if (outer.IsValid())
             {
                 Note(paper, font, "gi_net_part_of", Loc.Get("network.part_of", new { name = outer!.Name }), EditorTheme.Blue400);
+                Live(paper, font, go);
                 ComponentIntervals(paper, font, go);
                 return;
             }
@@ -178,6 +179,7 @@ internal static class NetworkPopover
 
             Spacer(paper, "gi_net_gap0");
             SyncTransform(paper, font, go);
+            Live(paper, font, go);
 
             Spacer(paper, "gi_net_gap1");
             Origami.Foldout(paper, "gi_net_advanced", Loc.Get("network.advanced")).Body(() =>
@@ -223,6 +225,42 @@ internal static class NetworkPopover
                     go.Network.SetSendInterval(target, Math.Clamp(v, 1, 255));
                 }).Min(1).Max(255).Show();
             }
+        }
+    }
+
+    /// <summary>While playing: the object's id, owner, who controls it and, on the host, how many clients have it.</summary>
+    private static void Live(Paper paper, FontFile font, GameObject go)
+    {
+        if (!Application.IsPlaying || Networking.Session == null)
+            return;
+
+        Spacer(paper, "gi_net_gap_live");
+        Heading(paper, font, "gi_net_live", Loc.Get("network.live"), null);
+        if (!NetworkDiagnostics.TryGetObjectDiagnostic(go, out NetworkDiagnostics.ObjectDiagnostic live))
+        {
+            Note(paper, font, "gi_net_live_none", Loc.Get("network.not_spawned"), EditorTheme.Ink400);
+            return;
+        }
+
+        string owner = go.Network.Owner is { } peer ? peer.Name : Loc.Get("network.owner.host");
+        LiveRow(paper, font, "gi_net_live_id", Loc.Get("network.net_id"), live.NetId.ToString());
+        LiveRow(paper, font, "gi_net_live_owner", Loc.Get("network.owner"), owner);
+        LiveRow(paper, font, "gi_net_live_control", Loc.Get("network.control"),
+            Loc.Get(live.Controlled ? "network.controlled" : "network.proxy"));
+        if (Networking.IsHost)
+            LiveRow(paper, font, "gi_net_live_observers", Loc.Get("network.observers"), live.Observers.ToString());
+    }
+
+    private static void LiveRow(Paper paper, FontFile font, string id, string label, string value)
+    {
+        using (paper.Row(id).Height(EditorTheme.RowHeight).Gap(8).Enter())
+        {
+            paper.Box(id + "_label").Width(96).Height(EditorTheme.RowHeight).IsNotInteractable()
+                .Text(label, font).TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            paper.Box(id + "_value").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).IsNotInteractable()
+                .Text(value, font).TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
         }
     }
 

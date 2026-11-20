@@ -49,7 +49,7 @@ public class NetworkDiagnosticsPanel : DockPanel
     private string? _filterKey;
 
     private static readonly string[] Views = ["Traffic", "Peers", "Objects"];
-    private static readonly string[] Kinds = ["All events", "RPC", "SyncVar", "Snapshot", "Session", "SceneSnapshot", "Spawn", "Despawn", "Owner"];
+    private static readonly string[] Kinds = ["All events", "RPC", "SyncVar", "Transform", "Session", "Scene", "Spawn", "Despawn", "Owner"];
     private static readonly string[] Directions = ["All directions", "In", "Out", "Rejected"];
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -266,7 +266,13 @@ public class NetworkDiagnosticsPanel : DockPanel
                 .CellContent((i, col) =>
                 {
                     NetworkDiagnostics.Entry e = _filtered[i];
-                    string eventName = e.Kind == "Sync" ? "SyncVar" : e.Kind;
+                    string eventName = e.Kind switch
+                    {
+                        "Sync" => "SyncVar",
+                        "Snapshot" => "Transform",
+                        "SnapshotAck" => "TransformAck",
+                        _ => e.Kind,
+                    };
                     bool warning = e.Direction is "Rejected" or "Failed";
                     if (col == 1)
                     {
@@ -372,7 +378,10 @@ public class NetworkDiagnosticsPanel : DockPanel
             {
                 "RPC" => entry.Kind.StartsWith("Rpc", StringComparison.OrdinalIgnoreCase),
                 "SyncVar" => entry.Kind is "Sync" or "SyncVar",
-                "Snapshot" => entry.Kind is "Snapshot" or "SnapshotAck",
+                "Transform" => entry.Kind is "Snapshot" or "SnapshotAck",
+                "Scene" => entry.Kind is "Scene" or "Ready" || entry.Kind.StartsWith("Section", StringComparison.Ordinal),
+                "Spawn" => entry.Kind.StartsWith("Spawn", StringComparison.Ordinal),
+                "Owner" => entry.Kind is "Owner" or "OwnershipState" or "Orphaned",
                 _ => entry.Kind == Kinds[_kind],
             })) continue;
             if (_direction > 0 && TrafficDirection(entry) != Directions[_direction]) continue;
@@ -427,7 +436,7 @@ public class NetworkDiagnosticsPanel : DockPanel
     private void DrawObjects(Paper paper, FontFile font, float width, float height)
     {
         NetworkDiagnostics.GetObjectDiagnostics(_objects);
-        _objects.RemoveAll(o => !Matches($"{o.Name} {o.Identifier} {o.OwnerId} {OwnerName(o.OwnerId)}"));
+        _objects.RemoveAll(o => !Matches($"{o.Name} {o.NetId} {o.Identifier} {o.OwnerId} {OwnerName(o.OwnerId)}"));
         _objects.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         if (_objects.Count == 0)
         {
@@ -438,14 +447,25 @@ public class NetworkDiagnosticsPanel : DockPanel
         }
         Origami.Table(paper, "net_objects", -1, _ => { })
             .Bordered(false).Scroll(width, height).Virtualize().RowHeight(EditorTheme.RowHeight)
-            .Column("Object", 2).Column("Owner", 1).Column("Control", 1).Column("Transform sync", 1)
+            .Column("Object", 2).Column("NetId", 0.6f).Column("Owner", 1).Column("Control", 0.8f)
+            .Column("Components", 0.8f).Column("Transforms", 0.8f).Column("Observers", 0.8f)
             .RowCount(_objects.Count).CellContent((i, col) =>
             {
                 NetworkDiagnostics.ObjectDiagnostic o = _objects[i];
-                string text = col switch { 0 => o.Name, 1 => OwnerName(o.OwnerId),
-                    2 => o.Controlled ? "Local" : "Remote", _ => o.SyncTransform ? "On" : "Off" };
+                string text = col switch
+                {
+                    0 => o.Name,
+                    1 => o.NetId.ToString(),
+                    2 => OwnerName(o.OwnerId),
+                    3 => o.Controlled ? "Local" : "Remote",
+                    4 => o.Components.ToString(),
+                    5 => o.Transforms.ToString(),
+                    _ => Networking.IsHost ? o.Observers.ToString() : "",
+                };
                 string? tooltip = col == 0 ? $"{o.Name}\n{o.Identifier}\nBuffered samples: {o.BufferedSamples}\nLast received tick: {o.LastReceivedTick}"
-                    : col == 1 ? $"{OwnerName(o.OwnerId)}" + (o.OwnerId < 0 ? "" : $"\nPeer ID: {o.OwnerId}") : null;
+                    : col == 2 ? $"{OwnerName(o.OwnerId)}" + (o.OwnerId < 0 ? "" : $"\nPeer ID: {o.OwnerId}")
+                    : col == 5 ? "NetworkTransform components sending this object's transforms"
+                    : col == 6 ? "Clients the host sends this object to" : null;
                 Label(paper, font, $"net_o_{i}_{col}", text, EditorTheme.RowHeight, tooltip: tooltip);
             }).Show();
     }

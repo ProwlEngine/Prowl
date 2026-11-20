@@ -197,6 +197,9 @@ public sealed class NetworkAccessor
     /// <summary>True while this object belongs to a live network session.</summary>
     public bool Active => Networking.System?.IsNetworked(_object) == true;
 
+    /// <summary>The id of the networked object this is or is part of, the same on every peer, or 0 while not spawned.</summary>
+    public uint NetId => Networking.System?.FindEntry(_object)?.NetId ?? 0;
+
     /// <summary>True when the object is this peer's player, as Mirror's isLocalPlayer.</summary>
     public bool IsLocalPlayer => Networking.System?.LocalPlayer == _object;
 

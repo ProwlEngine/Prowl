@@ -118,7 +118,7 @@ internal sealed partial class NetworkObject
 
     internal void SendOwnershipState(Float3 velocity)
     {
-        // A forced takeover starts from the host's latest accepted state, without interpolation delay.
+        // A new controller starts from the host's latest accepted state, without interpolation delay.
         if (!System.HasControl(GameObject))
         {
             foreach (NetworkTransform transform in Transforms)

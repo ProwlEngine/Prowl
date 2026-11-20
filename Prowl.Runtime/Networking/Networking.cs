@@ -56,7 +56,7 @@ public static partial class Networking
 
     public static NetworkJoinState JoinState => System?.JoinState ?? NetworkJoinState.Disconnected;
 
-    /// <summary>True after scene activation and catch-up. Repeats for each host scene change.</summary>
+    /// <summary>True once the scene is loaded and the host finished sending its spawns. Repeats for each host scene change.</summary>
     public static bool IsReady => System?.IsReady == true;
 
     /// <summary>Remote readiness is known on the host; clients know only their own readiness.</summary>

@@ -23,7 +23,7 @@ public interface INetworkListener : ISceneEvent<INetworkListener>
     {
     }
 
-    /// <summary>Host only: a remote peer activated this scene and acknowledged catch-up. Safe to spawn its player.</summary>
+    /// <summary>Host only: a remote peer loaded this scene and received its spawns. Safe to spawn its player.</summary>
     void OnPeerReady(NetPeer peer)
     {
     }

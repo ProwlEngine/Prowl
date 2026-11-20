@@ -99,6 +99,13 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
             var objects = new List<NetworkDiagnostics.ObjectDiagnostic>();
             NetworkDiagnostics.GetObjectDiagnostics(objects);
             Assert.Contains(objects, o => o.Identifier == go.Identifier && o.Controlled && o.OwnerId == -1);
+            Assert.True(NetworkDiagnostics.TryGetObjectDiagnostic(go, out NetworkDiagnostics.ObjectDiagnostic live));
+            Assert.Equal(go.Network.NetId, live.NetId);
+            Assert.NotEqual(0u, live.NetId);
+            Assert.Equal(1, live.Observers);
+            Assert.Equal(1, live.Components);
+            Assert.Equal(0, live.Transforms);
+            Assert.False(NetworkDiagnostics.TryGetObjectDiagnostic(CreateGameObject("Loose"), out _));
             Networking.Networking.Shutdown();
             Assert.True(NetworkDiagnostics.Count > 0);
             Assert.Contains(Enumerable.Range(0, NetworkDiagnostics.Count).Select(NetworkDiagnostics.GetEntry),

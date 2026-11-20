@@ -107,20 +107,50 @@ public static class NetworkDiagnostics
 
         foreach (NetworkObject entry in scene.Entries.Values)
         {
-            GameObject go = entry.GameObject;
-            if (!go.IsValid())
+            if (entry.GameObject.IsValid())
             {
-                continue;
+                output.Add(Describe(scene, entry));
             }
-
-            TransformSync? sync = entry.RootTransform is { } transform ? transform.Sync : null;
-            output.Add(new ObjectDiagnostic(go.Identifier, go.Name, entry.Owner, scene.HasControl(go),
-                sync != null, sync?.Samples.Count ?? 0, sync?.LastReceivedTick ?? 0));
         }
     }
 
+    /// <summary>Live diagnostics of the networked object <paramref name="go" /> is or is part of, when it is spawned.</summary>
+    public static bool TryGetObjectDiagnostic(GameObject go, out ObjectDiagnostic diagnostic)
+    {
+        diagnostic = default;
+        if (Networking.System is not { } scene || scene.FindEntry(go) is not { } entry)
+        {
+            return false;
+        }
+
+        diagnostic = Describe(scene, entry);
+        return true;
+    }
+
+    private static ObjectDiagnostic Describe(NetworkSystem scene, NetworkObject entry)
+    {
+        GameObject go = entry.GameObject;
+        TransformSync? sync = entry.RootTransform is { } transform ? transform.Sync : null;
+
+        // Only the host knows who else has the object.
+        int observers = 0;
+        if (scene.IsHost && scene.Session is { } session)
+        {
+            foreach (NetPeer peer in session.Peers)
+            {
+                if (!peer.IsLocal && scene.Sees(go, peer))
+                {
+                    observers++;
+                }
+            }
+        }
+
+        return new ObjectDiagnostic(go.Identifier, go.Name, entry.Owner, scene.HasControl(go), sync != null,
+            sync?.Samples.Count ?? 0, sync?.LastReceivedTick ?? 0, entry.NetId, entry.Transforms.Length,
+            entry.Components.Length, observers);
+    }
+
     // Decode a separate reader into captured text. Never apply values or invoke an RPC for diagnostics.
-    // The peer is who the message went to or came from, which snapshot component ids are relative to.
     internal static (string? Context, string? Name) DescribePayload(NetworkSystem scene, EngineMessage kind,
         ReadOnlySpan<byte> payload, NetPeer? peer = null, bool outgoing = false)
     {
@@ -354,5 +384,9 @@ public static class NetworkDiagnostics
         bool Controlled,
         bool SyncTransform,
         int BufferedSamples,
-        uint LastReceivedTick);
+        uint LastReceivedTick,
+        uint NetId = 0,
+        int Transforms = 0,
+        int Components = 0,
+        int Observers = 0);
 }
