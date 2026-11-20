@@ -595,34 +595,6 @@ public partial class NetworkingTests : RuntimeTestBase
         copy.Dispose();
     }
 
-    public class ReferenceHolder : Component
-    {
-        public GameObject? Target;
-        public Component? Part;
-        public Transform? Pose;
-    }
-
-    public class SecretHolder : Component { public string Value = ""; }
-
-    private const string HostSecret = "host-only-7f3a";
-
-    private GameObject Secret(string name)
-    {
-        GameObject secret = CreateGameObject(name);
-        secret.Network.ServerOnly = true;
-        secret.AddComponent<SecretHolder>().Value = HostSecret;
-        return secret;
-    }
-
-    private static ReferenceHolder ReferTo(GameObject holder, GameObject target)
-    {
-        ReferenceHolder refs = holder.AddComponent<ReferenceHolder>();
-        refs.Target = target;
-        refs.Part = target.GetComponent<SecretHolder>();
-        refs.Pose = target.Transform;
-        return refs;
-    }
-
     // --- Host side -------------------------------------------------------------------------------
 
     [Fact]

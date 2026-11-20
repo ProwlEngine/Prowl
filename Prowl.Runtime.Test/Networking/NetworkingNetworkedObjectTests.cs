@@ -35,6 +35,31 @@ public partial class NetworkingTests
 
 #pragma warning disable CS0618
     [Fact]
+    public void ServerOnlyMeansNothingInsideANetworkedObject()
+    {
+        // As Mirror's serverOnly, which is the whole identity's: a part of a networked object can't stay behind,
+        // since every peer builds the whole object and its networked components have to match.
+        GameObject root = CreateGameObject("Root"), part = CreateGameObject("Part"), leaf = CreateGameObject("Leaf");
+        part.SetParent(root);
+        leaf.SetParent(part);
+        root.Network.Networked = true;
+        part.Network.ServerOnly = true;
+        Assert.False(part.Network.IsExcluded);
+        Assert.False(leaf.Network.IsExcluded);
+
+        // On the networked object itself, or above it, it keeps the whole object on the host.
+        root.Network.ServerOnly = true;
+        Assert.True(root.Network.IsExcluded);
+        Assert.True(leaf.Network.IsExcluded);
+        root.Network.ServerOnly = false;
+        GameObject holder = CreateGameObject("Holder");
+        holder.Network.ServerOnly = true;
+        root.SetParent(holder);
+        Assert.True(root.Network.IsExcluded);
+        Assert.True(part.Network.IsExcluded);
+    }
+
+    [Fact]
     public void AStoredModeStillReadsAsNetworkedOrServerOnly()
     {
         GameObject go = CreateGameObject();

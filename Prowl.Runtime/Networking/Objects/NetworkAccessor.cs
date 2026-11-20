@@ -49,8 +49,9 @@ public sealed class NetworkAccessor
     }
 
     /// <summary>
-    ///     The object and everything below it never leave the host, as Mirror's serverOnly. It can't be set on an
-    ///     object that is spawned, or part of one.
+    ///     The object and everything below it never leave the host, as Mirror's serverOnly. Like Mirror's, it is for a
+    ///     whole networked object or anything outside one: on a part of a networked object it does nothing, since
+    ///     every peer builds the whole object. It can't be set on an object that is spawned, or part of one.
     /// </summary>
     public bool ServerOnly
     {
@@ -347,7 +348,9 @@ public sealed class NetworkAccessor
 
     internal static bool IsExcludedFromNetwork(GameObject go)
     {
-        for (GameObject? current = go; current.IsValid(); current = current.Parent)
+        // Looked for from the networked object up: on a part of one it means nothing.
+        GameObject? root = RootOf(go);
+        for (GameObject? current = root.IsValid() ? root : go; current.IsValid(); current = current.Parent)
         {
             if (ServerOnlyOf(current))
             {
