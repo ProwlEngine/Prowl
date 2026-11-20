@@ -15,6 +15,13 @@ using Prowl.PaperUI;
 
 namespace Prowl.Editor.Build;
 
+/// <summary> How the built desktop application window is presented on startup. </summary>
+public enum DesktopWindowMode
+{
+    Windowed,
+    Fullscreen,
+}
+
 /// <summary>
 /// Desktop specific build profile. This is used for builds targeting Windows, MacOSX and Linux.
 /// Other platforms should inherit from PlatformBuildProfile and implement their own profile details.
@@ -37,6 +44,12 @@ public class DesktopBuildProfile : PlatformBuildProfile
     public bool PublishTrimmed = false;
     /// <summary> Whether to compile the game ahead of time into one native executable. Needs the platform's native toolchain and builds for the host OS only. </summary>
     public bool PublishAot = false;
+    /// <summary> Whether to open a console window alongside the application. </summary>
+    public bool ShowConsole = false;
+    /// <summary> Whether the application starts in windowed or fullscreen mode. </summary>
+    public DesktopWindowMode WindowMode = DesktopWindowMode.Windowed;
+    /// <summary> Whether a windowed application starts maximized. </summary>
+    public bool WindowMaximized = false;
     /// <summary> Default width of the application window in pixels. </summary>
     public int WindowWidth = 1280;
     /// <summary> Default height of the application window in pixels. </summary>
@@ -91,6 +104,9 @@ public class DesktopBuildProfile : PlatformBuildProfile
         SelfContained = false;
         PublishTrimmed = false;
         PublishAot = false;
+        ShowConsole = false;
+        WindowMode = DesktopWindowMode.Windowed;
+        WindowMaximized = false;
         WindowWidth = 1280;
         WindowHeight = 720;
     }
@@ -128,17 +144,30 @@ public sealed class DesktopBuildProfileDrawer : IBuildProfileDrawer
         EditorGUI.SettingsToggle(paper, "bld_aot", "Native AOT", desktop.PublishAot,
             v => { Record(desktop, "Toggle Native AOT"); desktop.PublishAot = v; EditorRegistries.SaveSettings(); }, separator: false);
 
+        EditorGUI.SettingsToggle(paper, "bld_console", "Show Console", desktop.ShowConsole,
+            v => { Record(desktop, "Toggle Show Console"); desktop.ShowConsole = v; EditorRegistries.SaveSettings(); }, separator: false);
+
         EditorGUI.SectionHeader(paper, "bld_window_h", "Window");
 
-        EditorGUI.SettingsRow(paper, "bld_width", "Width", () =>
-            Origami.NumericField<int>(paper, "bld_width_v", desktop.WindowWidth,
-                v => { Record(desktop, "Change Window Width"); desktop.WindowWidth = Math.Max(320, v); })
-                .OnCommit(EditorRegistries.SaveSettings).Min(320).Show(), separator: false);
+        EditorGUI.SettingsRow(paper, "bld_winmode", "Mode", () =>
+            Origami.EnumDropdown(paper, "bld_winmode_v", desktop.WindowMode,
+                v => { Record(desktop, "Change Window Mode"); desktop.WindowMode = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
-        EditorGUI.SettingsRow(paper, "bld_height", "Height", () =>
-            Origami.NumericField<int>(paper, "bld_height_v", desktop.WindowHeight,
-                v => { Record(desktop, "Change Window Height"); desktop.WindowHeight = Math.Max(240, v); })
-                .OnCommit(EditorRegistries.SaveSettings).Min(240).Show(), separator: false);
+        if (desktop.WindowMode == DesktopWindowMode.Windowed)
+        {
+            EditorGUI.SettingsToggle(paper, "bld_maximized", "Maximized", desktop.WindowMaximized,
+                v => { Record(desktop, "Toggle Window Maximized"); desktop.WindowMaximized = v; EditorRegistries.SaveSettings(); }, separator: false);
+
+            EditorGUI.SettingsRow(paper, "bld_width", "Width", () =>
+                Origami.NumericField<int>(paper, "bld_width_v", desktop.WindowWidth,
+                    v => { Record(desktop, "Change Window Width"); desktop.WindowWidth = Math.Max(320, v); })
+                    .OnCommit(EditorRegistries.SaveSettings).Min(320).Show(), separator: false);
+
+            EditorGUI.SettingsRow(paper, "bld_height", "Height", () =>
+                Origami.NumericField<int>(paper, "bld_height_v", desktop.WindowHeight,
+                    v => { Record(desktop, "Change Window Height"); desktop.WindowHeight = Math.Max(240, v); })
+                    .OnCommit(EditorRegistries.SaveSettings).Min(240).Show(), separator: false);
+        }
     }
 
     // Found again through the build settings, which a settings reload refills with new profiles.

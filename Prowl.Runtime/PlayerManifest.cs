@@ -55,6 +55,8 @@ public sealed class PlayerManifest
 
     public int WindowWidth = 1280;
     public int WindowHeight = 720;
+    public bool Fullscreen = false;
+    public bool WindowMaximized = false;
 
     /// <summary>
     /// Per target additions the engine has no business knowing about, such as an Android orientation.

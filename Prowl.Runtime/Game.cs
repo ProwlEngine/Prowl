@@ -148,7 +148,8 @@ public abstract class Game
                 if (Debug.LogToConsole && (frameCounter++ % 60 == 0))
                 {
                     double fps = delta > 0 ? 1.0 / delta : 0; // real (unscaled) frame rate
-                    Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
+                    try { Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}"; }
+                    catch { /* no console in WinExe / non-console hosts */ }
                 }
 
             }
@@ -238,7 +239,7 @@ public abstract class Game
 
         Window.FramebufferResize += (size) =>
         {
-            _paperRenderer.UpdateProjection(size.X, size.Y);
+            _paperRenderer?.UpdateProjection(size.X, size.Y);
         };
 
         Window.Closing += () =>
