@@ -86,9 +86,17 @@ public class HierarchyPanel : DockPanel
     // "below" drop on an expanded node into a "first child" drop (where its first child visually sits).
     private readonly Dictionary<string, bool> _expandState = [];
 
-    // Rebuilt every frame from the scene. Nodes are kept per GameObject so their id string is only made once.
+    // Rebuilt every frame from the scene. A row is kept per GameObject, so its id string is only made again
+    // when the scene key or identifier it was made from changes.
     private readonly List<TreeNode> _treeNodes = [];
-    private readonly ConditionalWeakTable<GameObject, TreeNode> _nodeCache = [];
+    private readonly ConditionalWeakTable<GameObject, Row> _rowCache = [];
+
+    private sealed class Row(GameObject go)
+    {
+        public readonly TreeNode Node = new() { UserData = go };
+        public string? SectionKey;
+        public Guid Identifier;
+    }
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -327,7 +335,7 @@ public class HierarchyPanel : DockPanel
                             }
                             if (n.UserData is not GameObject go) return;
                             _dragHoverTargetNext = go;
-                            _dragHoverTargetIdNext = NodeId(go);
+                            _dragHoverTargetIdNext = n.Id;
                             _dragHoverNormalizedYNext = normY;
                         }
                         else if (DragDrop.Payload is AssetDragPayload assetPayload
@@ -335,7 +343,7 @@ public class HierarchyPanel : DockPanel
                             && ScriptComponentResolver.IsScriptAsset(assetPayload))
                         {
                             _dragHoverTargetNext = targetGo;
-                            _dragHoverTargetIdNext = NodeId(targetGo);
+                            _dragHoverTargetIdNext = n.Id;
                             _dragHoverNormalizedYNext = 0.5f;
                         }
                     })
@@ -523,12 +531,16 @@ public class HierarchyPanel : DockPanel
 
     // One header per open scene in the edit world, per section in the play world (Persistent once it holds anything),
     // and none in the prefab world, which is one prefab.
-    private void BuildSceneNodes(SceneInstance world, List<TreeNode> nodes)
+    internal void BuildSceneNodes(SceneInstance world, List<TreeNode> nodes)
     {
         if (PrefabEditingMode.IsEditing)
         {
-            foreach (GameObject root in GetDisplayRoots(world.Roots))
-                BuildNodeList(root, 0, nodes);
+            foreach (SceneSection section in world.Sections)
+            {
+                string sectionKey = SectionKey(section);
+                foreach (GameObject root in section.Roots)
+                    BuildNodeList(root, sectionKey, 0, nodes);
+            }
             return;
         }
 
@@ -548,18 +560,23 @@ public class HierarchyPanel : DockPanel
         void AddScene(SceneHeader header, SceneSection? section)
         {
             header.Section = section is { IsLoaded: true } ? section : null;
-            List<GameObject> roots = header.Section != null ? GetDisplayRoots(header.Section.Roots) : [];
             TreeNode node = header.Node;
             node.Id = HeaderId(header.Open is { } open ? SceneKey(open) : SectionKey(section));
             node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) || !string.IsNullOrEmpty(_searchText) ? true : null;
             node.UserData = header;
             node.Label = HeaderName(header);
             node.Depth = 0;
-            node.HasChildren = roots.Count > 0;
+            node.HasChildren = false;
             node.DropIndicator = DragDrop.IsDragging && ReferenceEquals(_dragHoverHeader, header) ? TreeDropPosition.Into : null;
             nodes.Add(node);
-            foreach (GameObject root in roots)
-                BuildNodeList(root, 1, nodes);
+            if (header.Section == null) return;
+
+            string sectionKey = SectionKey(header.Section);
+            foreach (GameObject root in header.Section.Roots)
+            {
+                node.HasChildren |= !IsHidden(root);
+                BuildNodeList(root, sectionKey, 1, nodes);
+            }
         }
     }
 
@@ -576,7 +593,11 @@ public class HierarchyPanel : DockPanel
     private static string HeaderId(string sceneKey) => $"hier_scene_{sceneKey}";
 
     // Unique per scene, so rows of duplicated scenes never share state.
-    private static string NodeId(GameObject go) => $"{SectionKey(go.Section)}/{go.Identifier}";
+    internal static string NodeId(GameObject go) => NodeId(SectionKey(go.Section), go.Identifier);
+
+    private static string NodeId(string sectionKey, Guid identifier) => $"{sectionKey}/{identifier}";
+
+    private static bool IsHidden(GameObject go) => (go.HideFlags & (HideFlags.Hide | HideFlags.HideAndDontSave)) != 0;
 
     // The row a node shows on, counting only rows whose parents are expanded. -1 when none matches.
     private int VisibleRowOf(List<TreeNode> nodes, Func<TreeNode, bool> match)
@@ -801,9 +822,9 @@ public class HierarchyPanel : DockPanel
     }
 
     // Adds the rows for go and its children. Returns whether any row was added for its subtree.
-    private bool BuildNodeList(GameObject go, int depth, List<TreeNode> nodes)
+    private bool BuildNodeList(GameObject go, string sectionKey, int depth, List<TreeNode> nodes)
     {
-        if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
+        if (IsHidden(go))
             return false;
 
         bool searching = !string.IsNullOrEmpty(_searchText);
@@ -814,34 +835,35 @@ public class HierarchyPanel : DockPanel
             bool any = MatchesSearch(go);
             if (any)
             {
-                TreeNode match = AddNode(go, depth, nodes);
+                TreeNode match = AddNode(go, sectionKey, depth, nodes);
                 match.HasChildren = false;
                 SetDropIndicator(go, match);
             }
             foreach (GameObject child in go.Children)
-                any |= BuildNodeList(child, depth, nodes);
+                any |= BuildNodeList(child, sectionKey, depth, nodes);
             return any;
         }
 
-        // Children are built first so one pass over the scene tells whether anything below matched.
+        // Children are built first so one pass over the scene tells whether any row was added below:
+        // a child that is not hidden, and in a search one that matched or has a match under it.
         // The tree widget handles skipping collapsed children internally.
         int index = nodes.Count;
-        TreeNode node = AddNode(go, depth, nodes);
-        bool matchBelow = false;
+        TreeNode node = AddNode(go, sectionKey, depth, nodes);
+        bool rowsBelow = false;
         foreach (GameObject child in go.Children)
-            matchBelow |= BuildNodeList(child, depth + 1, nodes);
+            rowsBelow |= BuildNodeList(child, sectionKey, depth + 1, nodes);
+        node.HasChildren = rowsBelow;
 
         if (searching)
         {
             // A tree search keeps the parents of every match, opened so all the matches show.
             // With nothing below matching, this node is the last row added, so removing it is cheap.
-            if (!matchBelow && !MatchesSearch(go))
+            if (!rowsBelow && !MatchesSearch(go))
             {
                 nodes.RemoveAt(index);
                 return false;
             }
-            node.HasChildren = matchBelow;
-            if (matchBelow)
+            if (rowsBelow)
                 node.OverrideExpanded = true;
         }
 
@@ -849,13 +871,17 @@ public class HierarchyPanel : DockPanel
         return true;
     }
 
-    private TreeNode AddNode(GameObject go, int depth, List<TreeNode> nodes)
+    private TreeNode AddNode(GameObject go, string sectionKey, int depth, List<TreeNode> nodes)
     {
-        TreeNode node = _nodeCache.GetValue(go, static g => new TreeNode { UserData = g });
-        node.Id = NodeId(go);
+        Row row = _rowCache.GetValue(go, static g => new Row(g));
+        TreeNode node = row.Node;
+        if (row.Identifier != go.Identifier || row.SectionKey != sectionKey)
+        {
+            row.Identifier = go.Identifier;
+            row.SectionKey = sectionKey;
+            node.Id = NodeId(sectionKey, go.Identifier);
+        }
         node.Label = go.Name;
-        node.HasChildren = go.Children.Count > 0
-            && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
         node.Depth = depth;
         node.TrailingIcon = go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash;
         node.TrailingIconColor = go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300;
@@ -885,7 +911,7 @@ public class HierarchyPanel : DockPanel
     // True when the target's row shows children under it (its first-child slot is visible).
     // Reads the row as drawn, so flat search rows and rows forced open by search or a ping are right.
     private bool IsTargetExpanded(GameObject target, string targetId)
-        => _nodeCache.TryGetValue(target, out TreeNode? node) && node.HasChildren
+        => _rowCache.TryGetValue(target, out Row? row) && row.Node is { HasChildren: true } node
             && (node.OverrideExpanded ?? (_expandState.TryGetValue(targetId, out bool e) ? e : node.DefaultExpanded));
 
     private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
@@ -1405,13 +1431,6 @@ public class HierarchyPanel : DockPanel
     // ================================================================
     //  Helpers
     // ================================================================
-
-    private static List<GameObject> GetDisplayRoots(IEnumerable<GameObject> roots)
-    {
-        return [.. roots
-            .Where(go => !go.HideFlags.HasFlag(HideFlags.Hide)
-                      && !go.HideFlags.HasFlag(HideFlags.HideAndDontSave))];
-    }
 
     private static Color GetPrefabTextColor(GameObject go)
     {
