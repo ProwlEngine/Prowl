@@ -24,7 +24,7 @@ public partial class NetworkingTests
         Networking.Networking.Host(new LocalTransport(network, "host"));
         FakePeer alice = FakePeer.Join(network, "alice");
         Pump(() => alice.IsReady, alice);
-        go.Network.SpawnSerialized();
+        go.SpawnBuilt();
         Pump(() => alice.Has(FakePeer.Spawn), alice);
         return (alice, target, previous);
     }

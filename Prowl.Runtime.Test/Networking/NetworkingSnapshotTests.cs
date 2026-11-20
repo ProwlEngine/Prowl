@@ -35,7 +35,7 @@ public partial class NetworkingTests
         GameObject crate = CreateGameObject("Crate");
         NetTestComponent component = crate.AddComponent<NetTestComponent>();
         scene.Add(crate);
-        crate.Network.SpawnSerialized(owner);
+        crate.SpawnBuilt(owner);
         Pump(() => peers.All(p => p.Has(FakePeer.Spawn)), peers);
         return (scene, crate, component);
     }

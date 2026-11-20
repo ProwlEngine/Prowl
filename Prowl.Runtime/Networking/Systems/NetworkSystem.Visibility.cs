@@ -341,7 +341,7 @@ internal sealed partial class NetworkSystem
     {
         GameObject go = entry.GameObject;
         using NetWriter message = new(4096);
-        WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation, entry.NetId, entering);
+        WriteSpawn(entry, message, entering);
         _lastSpawnBytes = message.Length;
         foreach (NetPeer peer in peers)
         {

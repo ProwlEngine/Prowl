@@ -1525,8 +1525,6 @@ public partial class GameObject : EngineObject, ISerializable
         EchoObject children = EchoObject.NewList();
         foreach (GameObject child in Children)
         {
-            if (!NetworkSerialization.Include(child))
-                continue;
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
         }
         compoundTag.Add("Children", children);

@@ -24,7 +24,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => alice.IsReady, alice);
-            target.Network.SpawnSerialized();
+            target.SpawnBuilt();
             List<(double Time, float X)> seen = new();
             for (int i = 0; i < 30; i++)
             {

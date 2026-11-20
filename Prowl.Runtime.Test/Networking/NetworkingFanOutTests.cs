@@ -51,7 +51,7 @@ public partial class NetworkingTests
         crate.AddComponent<CountedWritesTestComponent>();
         crate.Transform.Position = new Float3(100, 0, 0);
         session.World.Add(crate);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         PumpFor(10, session.Alice, session.Bob);
         Assert.Equal(0, SpawnsOf(session.Alice, crate));
 

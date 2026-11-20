@@ -32,7 +32,7 @@ public partial class NetworkingTests
             GameObject crate = CreateGameObject("Crate");
             crate.AddComponent<NetworkTransform>();
             scene.Add(crate);
-            crate.Network.SpawnSerialized();
+            crate.SpawnBuilt();
             uint netId = NetworkTestScene.Current.NetIdOf(crate);
             PumpFor(10, alice);
 

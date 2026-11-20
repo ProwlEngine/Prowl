@@ -31,9 +31,9 @@ public partial class NetworkingTests
             Assert.False(crate.Network.Active);
 
             alice.WireReceived.Clear();
-            Networking.Networking.SpawnGameObject(crate);
+            Networking.Networking.Spawn(crate);
             Pump(() => alice.WireReceived.Any(m => m.Id == FakePeer.Spawn), alice);
-            ReadTemplateSpawn(alice.WireReceived.Last(m => m.Id == FakePeer.Spawn).Data);
+            Assert.Equal(prefab.AssetID, ReadTemplateSpawn(alice.WireReceived.Last(m => m.Id == FakePeer.Spawn).Data).Prefab);
         }
         finally { Networking.Networking.Shutdown(); }
     }

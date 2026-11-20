@@ -12,11 +12,6 @@ namespace Prowl.Runtime.Networking;
 
 internal static class NetworkSerialization
 {
-    [ThreadStatic] internal static bool WritingSpawnTree;
-
-    internal static bool Include(GameObject go) =>
-        !WritingSpawnTree || !NetworkAccessor.ServerOnlyOf(go);
-
     internal static void Write(GameObject go, EchoObject output)
     {
         NetworkAccessor? network = go._network;
@@ -122,37 +117,5 @@ internal static class NetworkSerialization
 
             network.SetStoredIntervals(pending);
         }
-    }
-
-    /// <summary>
-    ///     For writing a tree clients receive: a reference to anything server only is written as nothing, so a field
-    ///     pointing at it can't carry it along. Everything else goes to <paramref name="inner" />, or is written as
-    ///     usual without one.
-    /// </summary>
-    internal sealed class SpawnTreeReferences(IExternalReferenceResolver? inner = null) : IExternalReferenceResolver
-    {
-        public object? GetReferenceKey(object value)
-        {
-            GameObject? owner = value switch
-            {
-                GameObject go => go,
-                Component component => component.GameObject,
-                Transform transform => transform.GameObject,
-                _ => null
-            };
-
-            if (owner.IsValid())
-            {
-                // Guid.Empty names no object, so it reads back as null without revealing which one it was.
-                if (NetworkAccessor.IsExcludedFromNetwork(owner!))
-                {
-                    return Guid.Empty;
-                }
-            }
-
-            return inner?.GetReferenceKey(value);
-        }
-
-        public object? ResolveReference(object key, Type targetType) => inner?.ResolveReference(key, targetType);
     }
 }

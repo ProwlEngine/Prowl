@@ -51,7 +51,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => alice.IsReady, alice);
-            door.Network.SpawnSerialized();
+            door.SpawnBuilt();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(open.Identifier); w.WriteUInt32(OpenDoorTestComponent.RingId); w.WriteVarInt32(1); });
@@ -82,7 +82,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => alice.IsReady, alice);
-            ship.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
+            ship.SpawnBuilt(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             alice.SendSync(component.Identifier, NetTestComponent.ScoreSlot, 7);

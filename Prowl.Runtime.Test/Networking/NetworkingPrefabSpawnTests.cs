@@ -37,7 +37,6 @@ public partial class NetworkingTests
     {
         NetReader reader = new(spawn);
         SpawnMessage message = SpawnMessage.Read(ref reader);
-        Assert.True(message.Template);
         NetReader payload = new(message.Payload);
         return TemplateSpawn.Read(ref payload);
     }
@@ -122,19 +121,29 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void APrefabInstanceWhoseTreeChangedIsSentWhole()
+    public void OnlyWhatEveryPeerCanBuildSpawns()
     {
         PrefabAsset prefab = RegisterCratePrefab();
         SceneInstance scene = CreateScene();
         MakeCurrent(scene);
-        Networking.Networking.Host(new LocalTransport(new(), "host"));
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            GameObject crate = Networking.Networking.SpawnPrefab(prefab, Float3.Zero, Quaternion.Identity);
-            Assert.True(SpawnIsPrefab(crate));
+            Pump(() => alice.IsReady, alice);
+            GameObject handBuilt = CreateGameObject("Hand built");
+            scene.Add(handBuilt);
+            Assert.Throws<InvalidOperationException>(() => Networking.Networking.Spawn(handBuilt));
+            Assert.False(handBuilt.Network.Active);
 
-            crate.AddComponent<SyncPairTestComponent>();
-            Assert.False(SpawnIsPrefab(crate));
+            // An instance of a prefab made outside networking is one clients build from the prefab, as in Mirror.
+            GameObject instance = GameObject.Instantiate(prefab, scene, Float3.Zero, Quaternion.Identity)!;
+            Networking.Networking.Spawn(instance);
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+            TemplateSpawn spawn = ReadPrefabSpawn(alice.WireReceived.Last(m => m.Id == FakePeer.Spawn).Data);
+            Assert.Equal(prefab.AssetID, spawn.Prefab);
+            Assert.Equal(TreeIdentifiers(instance), spawn.Identifiers);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -157,23 +166,15 @@ public partial class NetworkingTests
             Pump(() => late.WireReceived.Count(m => m.Id == FakePeer.Spawn) == 2, late);
             List<byte[]> spawns = [.. late.WireReceived.Where(m => m.Id == FakePeer.Spawn).Select(m => m.Data)];
 
-            // One whose tree changed since it was built goes whole instead.
-            NetReader whole = new(spawns.Single(d => SpawnedId(d) == changed.Identifier));
-            Assert.False(SpawnMessage.Read(ref whole).Template);
+            // One that gained a component since it was built still goes as the prefab's own tree.
+            Assert.DoesNotContain(changed.GetComponent<SyncPairTestComponent>()!.Identifier,
+                ReadPrefabSpawn(spawns.Single(d => SpawnedId(d) == changed.Identifier)).Identifiers);
 
             TemplateSpawn spawn = ReadPrefabSpawn(spawns.Single(d => SpawnedId(d) == crate.Identifier));
             Assert.Equal(TreeIdentifiers(crate), spawn.Identifiers);
             Assert.Equal(new Float3(1, 2, 3), spawn.Position);
         }
         finally { Networking.Networking.Shutdown(); }
-    }
-
-    private static bool SpawnIsPrefab(GameObject go)
-    {
-        using NetWriter output = new();
-        NetworkTestScene.Current.WriteSpawn(go, -1, NetworkOrphaned.Destroy, output, 1, 1);
-        NetReader reader = new(output.WrittenSpan);
-        return SpawnMessage.Read(ref reader).Template;
     }
 
     [Fact]

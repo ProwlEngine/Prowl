@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
-using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -153,6 +152,14 @@ internal sealed partial class NetworkSystem
             }
         }
 
+        bool spawned = IsActive && Entries.TryGetValue(go.Identifier, out NetworkObject? existing) && existing.GameObject == go;
+        if (IsActive && !spawned && (template ??= BuiltTemplateOf(go)) == null)
+        {
+            throw new InvalidOperationException(
+                $"'{go.Name}' is not a prefab instance, was not built by a factory and is not stored in a scene asset, " +
+                "so clients have nothing to build it from. Spawn it with SpawnPrefab or SpawnFactory.");
+        }
+
         Component[] components = template?.Components ?? NetworkComponents.Gather(go);
         if (components.Length > NetworkComponents.MaxPerObject)
         {
@@ -169,7 +176,7 @@ internal sealed partial class NetworkSystem
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        if (Entries.TryGetValue(go.Identifier, out NetworkObject? existing) && existing.GameObject == go)
+        if (spawned)
         {
             SetOwner(go, owner);
             return;
@@ -177,7 +184,7 @@ internal sealed partial class NetworkSystem
 
         NetworkObject entry = new(this, go)
         {
-            Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template,
+            Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template!,
             Components = components
         };
         Entries.Add(entry);
@@ -319,32 +326,33 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>
-    ///     The spawn of <paramref name="go" /> by prefab or factory, or null when it was built neither way or its tree
-    ///     has changed since.
+    ///     A template for an object built outside a session: by a factory, or as an instance of a prefab, which
+    ///     GameObject.Instantiate gives too. Null for anything else.
     /// </summary>
-    private TemplateSpawn? TemplateSpawnOf(GameObject go)
+    private static SpawnTemplate? BuiltTemplateOf(GameObject go)
     {
-        if (FindEntry(go) is not { Template: { } template } entry || entry.GameObject != go)
+        if (s_builtOffline.TryGetValue(go, out SpawnTemplate? built))
+        {
+            return built;
+        }
+
+        if (!go.IsPrefabInstance)
         {
             return null;
         }
 
-        // Only a peer that just loaded the scene holds its objects: any other gets the object whole.
-        if (template.Scene && !_sceneSpawns)
-        {
-            return null;
-        }
+        List<Guid> identifiers = new();
+        CollectIdentifiers(go, identifiers);
+        return new SpawnTemplate(go.PrefabAssetId, null, [], [.. identifiers], NetworkComponents.Gather(go));
+    }
 
-        List<Guid> current = new(template.Identifiers.Length);
-        CollectIdentifiers(go, current);
-        if (!current.SequenceEqual(template.Identifiers))
-        {
-            return null;
-        }
-
-        Transform t = go.Transform;
+    /// <summary>The spawn of <paramref name="entry" />: what every peer builds it from, and its root's state now.</summary>
+    private static TemplateSpawn TemplateSpawnOf(NetworkObject entry)
+    {
+        SpawnTemplate template = entry.Template;
+        Transform t = entry.GameObject.Transform;
         return new TemplateSpawn(template.Prefab, template.Factory, template.Data, template.Identifiers, t.LocalPosition,
-            t.LocalRotation, t.LocalScale, go.Enabled,
+            t.LocalRotation, t.LocalScale, entry.GameObject.Enabled,
             (byte)template.Components.Length, NetworkComponents.Hash(template.Components),
             template.Scene);
     }
@@ -430,59 +438,18 @@ internal sealed partial class NetworkSystem
         return go;
     }
 
-    /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
-    internal void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output,
-        uint generation = 0, uint netId = 0, bool replace = false)
+    /// <summary>A Spawn message: where the object goes, who owns it, what builds it and its [Sync] values.</summary>
+    internal void WriteSpawn(NetworkObject entry, NetWriter output, bool replace = false)
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
+        GameObject go = entry.GameObject;
         Guid parent = go.Parent.IsValid() ? go.Parent!.Identifier : Guid.Empty;
-        if (TemplateSpawnOf(go) is { } built)
-        {
-            using NetWriter payload = new(64 + built.Identifiers.Length * 16 + built.Data.Length);
-            built.Write(payload);
-            new SpawnMessage(go.Identifier, parent, SectionSlot(go), owner, orphaned, generation,
-                netId == 0 ? NextNetId() : netId, payload.WrittenSpan, replace, Tick, true).Write(output);
-            Sync.WriteSpawnState(output, FindEntry(go)?.Components ?? NetworkComponents.Gather(go));
-            return;
-        }
-
-        EchoObject echo;
-        NetworkSerialization.WritingSpawnTree = true;
-        try
-        {
-            // References out of the tree go by identifier and land on the client's own objects.
-            echo = Serializer.Serialize(typeof(GameObject), go,
-                new SerializationContext
-                {
-                    ExternalReferences =
-                        new NetworkSerialization.SpawnTreeReferences(SceneReferenceResolver.ForTree(go))
-                });
-        }
-        finally
-        {
-            NetworkSerialization.WritingSpawnTree = false;
-        }
-
-        new SpawnMessage(go.Identifier, parent, SectionSlot(go), owner, orphaned, generation, netId == 0 ? NextNetId() : netId, Compress(echo), replace, Tick).Write(output);
-
-        // The tree may have gained networked components since it spawned, which are not networked. So a spawn that
-        // carries the tree names the ones that are, for the receiver to find in its copy.
-        Component[] components = FindEntry(go)?.Components ?? NetworkComponents.Gather(go);
-        output.WriteByte((byte)components.Length);
-        foreach (Component component in components)
-        {
-            output.WriteGuid(component.Identifier);
-        }
-
-        // The same for its transforms, whose place in the list is their index on the wire.
-        NetworkTransform[] transforms = FindEntry(go)?.Transforms ?? NetworkComponents.GatherTransforms(go);
-        output.WriteByte((byte)transforms.Length);
-        foreach (NetworkTransform transform in transforms)
-        {
-            output.WriteGuid(transform.Identifier);
-        }
-
-        Sync.WriteSpawnState(output, components);
+        TemplateSpawn built = TemplateSpawnOf(entry);
+        using NetWriter payload = new(64 + built.Identifiers.Length * 16 + built.Data.Length);
+        built.Write(payload);
+        new SpawnMessage(go.Identifier, parent, SectionSlot(go), entry.Owner, entry.Orphaned, entry.Generation,
+            entry.NetId, payload.WrittenSpan, replace, Tick).Write(output);
+        Sync.WriteSpawnState(output, entry.Components);
     }
 
     internal void OnSpawn(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -500,20 +467,9 @@ internal sealed partial class NetworkSystem
         int owner = message.OwnerId;
         NetworkOrphaned orphaned = message.Orphaned;
         uint generation = message.Generation, netId = message.NetId;
-        EchoObject? echo = message.Template ? null : Decompress(message.Payload);
-        SerializationContext context = SceneReferenceResolver.ContextForLinking(scene);
-        SpawnTemplate? template = null;
-        GameObject? go = echo == null
-            ? BuildTemplate(id, message.Payload, out template)
-            : GameObject.DeserializePreservingIdentifiers(echo, context);
-        if (go.IsNotValid())
-        {
-            throw new InvalidDataException("The host sent a networked object that could not be read.");
-        }
-
+        GameObject go = BuildTemplate(id, message.Payload, out SpawnTemplate template);
         bool attached = false, adopted = false;
         Component[] components = [];
-        NetworkTransform[]? transforms = null;
         try
         {
             if (Session != session || ReplicatedWorld != scene)
@@ -521,14 +477,14 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
-            if (go!.Identifier != id)
+            if (go.Identifier != id)
             {
                 throw new InvalidDataException("A spawned object's identifier doesn't match its message.");
             }
 
             if (message.Replace)
             {
-                ReplaceCopy(id);
+                ReplaceCopy(id, go);
                 if (Session != session || ReplicatedWorld != scene)
                 {
                     return;
@@ -537,7 +493,7 @@ internal sealed partial class NetworkSystem
 
             // An object this peer holds already stays the same instance, so references to it keep working. One on its
             // way out, despawned this frame, makes room for the new copy instead.
-            if (!Entries.Contains(id) && FindByIdentifier(id) is GameObject existing)
+            if (!Entries.Contains(id) && FindByIdentifier(id) is GameObject existing && existing != go)
             {
                 if (existing.IsDestroyQueued)
                 {
@@ -552,7 +508,7 @@ internal sealed partial class NetworkSystem
                 }
             }
 
-            // What the new tree holds, by identifier: the components and transforms the spawn names are found here.
+            // What the new tree holds, by identifier, for the references its state names.
             Spawning = new Dictionary<Guid, EngineObject>();
             try
             {
@@ -565,10 +521,7 @@ internal sealed partial class NetworkSystem
                     }
                 }
 
-                components = template != null
-                    ? adopted ? NetworkComponents.Gather(go) : template.Components
-                    : ReadSpawnComponents(ref reader);
-                transforms = template != null ? null : ReadSpawnTransforms(ref reader);
+                components = adopted ? NetworkComponents.Gather(go) : template.Components;
                 Sync.ApplySpawnState(sender, components, ref reader);
             }
             finally
@@ -583,13 +536,9 @@ internal sealed partial class NetworkSystem
 
             NetworkObject entry = new(this, go)
             {
-                Owner = owner, Generation = generation, NetId = netId, Template = adopted ? null : template,
-                Components = components
+                Owner = owner, Generation = generation, NetId = netId,
+                Template = adopted ? template with { Components = components } : template, Components = components
             };
-            if (transforms != null)
-            {
-                entry.SetTransforms(transforms);
-            }
 
             go.Network.ApplyOrphaned(orphaned);
             Entries.Add(entry);
@@ -609,7 +558,7 @@ internal sealed partial class NetworkSystem
                     go.SetParent(parent, false);
                 }
             }
-            else if (!adopted)
+            else if (!adopted && go.Scene.IsNotValid())
             {
                 scene.Add(go, message.SectionSlot == 0 ? null : SectionOf(message.SectionSlot - 1));
             }
@@ -628,7 +577,7 @@ internal sealed partial class NetworkSystem
             // Sync state, or attachment must release components and any resources they own.
             if (!attached)
             {
-                if (Entries.TryGetValue(go!.Identifier, out NetworkObject? pending) && pending.GameObject == go)
+                if (Entries.TryGetValue(go.Identifier, out NetworkObject? pending) && pending.GameObject == go)
                 {
                     Entries.Remove(go.Identifier);
                 }
@@ -641,57 +590,15 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    // The transforms a spawn that carries its tree names, in the host's order, found in the tree being spawned.
-    private NetworkTransform[] ReadSpawnTransforms(ref NetReader reader)
-    {
-        NetworkTransform[] transforms = new NetworkTransform[reader.ReadByte()];
-        for (int i = 0; i < transforms.Length; i++)
-        {
-            Guid id = reader.ReadGuid();
-            if (Spawning == null || !Spawning.TryGetValue(id, out EngineObject? found) || found is not NetworkTransform transform)
-            {
-                throw new InvalidDataException("A spawn names a NetworkTransform its tree doesn't hold.");
-            }
-
-            transforms[i] = transform;
-        }
-
-        return transforms;
-    }
-
-    // The networked components a spawn that carries its tree names, found in the tree being spawned.
-    private Component[] ReadSpawnComponents(ref NetReader reader)
-    {
-        int count = reader.ReadByte();
-        if (count > NetworkComponents.MaxPerObject)
-        {
-            throw new InvalidDataException("A spawn names too many networked components.");
-        }
-
-        Component[] components = new Component[count];
-        for (int i = 0; i < count; i++)
-        {
-            Guid id = reader.ReadGuid();
-            if (Spawning == null || !Spawning.TryGetValue(id, out EngineObject? found) || found is not Component component)
-            {
-                throw new InvalidDataException("A spawn names a networked component its tree doesn't hold.");
-            }
-
-            components[i] = component;
-        }
-
-        return components;
-    }
-
     /// <summary>Removes the copy of an object the host is sending again, even one still being destroyed.</summary>
-    private void ReplaceCopy(Guid id)
+    private void ReplaceCopy(Guid id, GameObject incoming)
     {
         if (Entries.Remove(id, out NetworkObject? stale))
         {
             stale.NotifyDespawn(NetworkDespawnReason.OutOfInterest);
         }
 
-        if (FindByIdentifier(id) is GameObject copy)
+        if (FindByIdentifier(id) is GameObject copy && copy != incoming)
         {
             copy.Dispose();
         }
@@ -741,6 +648,18 @@ internal sealed partial class NetworkSystem
     // What despawned objects were built from, so spawning one again sends it the same way.
     private readonly ConditionalWeakTable<GameObject, SpawnTemplate> _despawnedTemplates = new();
 
+    // The factory behind each object built outside a session, for the session that later hosts it.
+    private static readonly ConditionalWeakTable<GameObject, SpawnTemplate> s_builtOffline = new();
+
+    /// <summary>Notes the factory that built <paramref name="go" /> outside a session, as built, before the scene runs anything on it.</summary>
+    internal static void RememberFactory(GameObject go, string factory, byte[] data)
+    {
+        List<Guid> identifiers = new();
+        CollectIdentifiers(go, identifiers);
+        s_builtOffline.AddOrUpdate(go,
+            new SpawnTemplate(Guid.Empty, factory, data, [.. identifiers], NetworkComponents.Gather(go)));
+    }
+
     /// <summary>Host: takes a spawned object out of the network everywhere, leaving this peer's object as it is.</summary>
     internal void Despawn(GameObject go)
     {
@@ -760,10 +679,7 @@ internal sealed partial class NetworkSystem
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        if (entry.Template != null)
-        {
-            _despawnedTemplates.AddOrUpdate(go, entry.Template);
-        }
+        _despawnedTemplates.AddOrUpdate(go, entry.Template);
 
         NetSession session = Session!;
         entry.NotifyDespawn();
@@ -800,7 +716,11 @@ internal sealed partial class NetworkSystem
         if (Entries.Remove(message.Identifier, out NetworkObject? entry) && entry.GameObject.IsValid())
         {
             entry.NotifyDespawn(message.Reason);
-            if (entry.Template?.Factory is { } factory && NetworkFactories.TryGet(factory, out _, out Action<GameObject>? destroy) &&
+            if (entry.Template.Scene)
+            {
+                Hold(entry.GameObject);
+            }
+            else if (entry.Template.Factory is { } factory && NetworkFactories.TryGet(factory, out _, out Action<GameObject>? destroy) &&
                 destroy != null && entry.GameObject.IsValid())
             {
                 destroy(entry.GameObject);

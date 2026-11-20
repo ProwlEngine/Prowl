@@ -118,7 +118,7 @@ public partial class NetworkingTests
             SceneSection late = world.CreateSection("Late");
             GameObject crate = CreateGameObject("Crate");
             world.Add(crate, late);
-            crate.Network.SpawnSerialized();
+            crate.SpawnBuilt();
 
             Pump(() => alice.Has(FakePeer.Spawn), alice);
             int added = alice.Received.FindIndex(m => m.Id == FakePeer.SectionAdd);

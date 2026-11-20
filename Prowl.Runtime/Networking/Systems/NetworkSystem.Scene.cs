@@ -4,11 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 
-
-using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Courier;
@@ -387,32 +384,4 @@ internal sealed partial class NetworkSystem
             _applyingSections = false;
         }
     }
-
-    internal byte[] Compress(EchoObject echo)
-    {
-        using MemoryStream compressed = new();
-        using (ZLibStream zlib = new(compressed, CompressionLevel.Fastest, true))
-        using (BinaryWriter writer = new(zlib))
-        {
-            // SpawnTreeDecoder validates this fixed-width wire layout before Echo reads it.
-            echo.WriteToBinary(writer,
-                new BinarySerializationOptions { EncodingMode = BinaryEncodingMode.Performance });
-        }
-
-        return compressed.ToArray();
-    }
-
-    internal EchoObject Decompress(ReadOnlySpan<byte> data)
-    {
-        try
-        {
-            return SpawnTreeDecoder.Decode(data, Configuration);
-        }
-        catch (Exception e) when (e is not InvalidDataException)
-        {
-            // Reported to the session as malformed data, which ends it, rather than escaping into the game loop.
-            throw new InvalidDataException($"Network data could not be read: {e.Message}", e);
-        }
-    }
-
 }

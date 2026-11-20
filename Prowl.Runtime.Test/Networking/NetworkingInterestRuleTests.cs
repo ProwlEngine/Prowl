@@ -22,8 +22,8 @@ public partial class NetworkingTests
             GameObject secret = CreateGameObject("Secret"), plain = CreateGameObject("Plain");
             scene.Add(secret);
             scene.Add(plain);
-            secret.Network.SpawnSerialized();
-            plain.Network.SpawnSerialized();
+            secret.SpawnBuilt();
+            plain.SpawnBuilt();
             Pump(() => alice.Received.Any(m => m.Id == FakePeer.Spawn && ReadSpawn(m.Data, Guid.Empty).Id == plain.Identifier), alice);
             Assert.DoesNotContain(alice.Received, m => m.Id == FakePeer.Spawn && ReadSpawn(m.Data, Guid.Empty).Id == secret.Identifier);
 

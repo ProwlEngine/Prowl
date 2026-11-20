@@ -25,7 +25,6 @@ public partial class NetworkingTests
     {
         NetReader reader = new(spawn);
         SpawnMessage message = SpawnMessage.Read(ref reader);
-        Assert.True(message.Template);
         NetReader payload = new(message.Payload);
         return TemplateSpawn.Read(ref payload);
     }
@@ -58,6 +57,27 @@ public partial class NetworkingTests
             Networking.Networking.Shutdown();
             Networking.Networking.UnregisterFactory("crate");
         }
+    }
+
+    [Fact]
+    public void AnObjectAFactoryBuiltBeforeHostingSpawnsWhenTheSessionStarts()
+    {
+        Networking.Networking.RegisterFactory("crate", BuildCrate);
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        GameObject crate = Networking.Networking.SpawnFactory("crate", new Float3(1, 2, 3), Quaternion.Identity);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            Assert.True(crate.Network.Active);
+            TemplateSpawn spawn = ReadTemplateSpawn(alice.WireReceived.Single(m => m.Id == FakePeer.Spawn).Data);
+            Assert.Equal("crate", spawn.Factory);
+            Assert.Equal(TreeIdentifiers(crate), spawn.Identifiers);
+        }
+        finally { Networking.Networking.Shutdown(); }
     }
 
     [Fact]

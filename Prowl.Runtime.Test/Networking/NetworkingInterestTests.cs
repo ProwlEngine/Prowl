@@ -174,7 +174,7 @@ public partial class NetworkingTests
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Default);
         crate.Transform.Position = new Float3(100000, 0, 0);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         Networking.Networking.Interest!.For(session.AliceHere).SetViewpoints([Float3.Zero]);
         Networking.Networking.Interest.Refresh();
         Pump(() => session.Alice.Has(FakePeer.Spawn) && session.Bob.Has(FakePeer.Spawn), session.Alice, session.Bob);
@@ -193,7 +193,7 @@ public partial class NetworkingTests
         using InterestSession session = InterestHost();
         session.AliceSees.SetViewpoints([Float3.Zero]);
         GameObject crate = CrateAt(session.World, 5);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         Assert.True(crate.Network.IsVisibleTo(session.AliceHere));
         Assert.False(crate.Network.IsVisibleTo(session.BobHere));
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
@@ -230,7 +230,7 @@ public partial class NetworkingTests
         });
         session.AliceSees.SetViewpoints([Float3.Zero]);
         GameObject crate = CrateAt(session.World, 50);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         crate.Transform.Position = new Float3(5, 0, 0);
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
         Stopwatch entered = Stopwatch.StartNew();
@@ -250,9 +250,9 @@ public partial class NetworkingTests
         GameObject big = CrateAt(session.World, 30, name: "Big");
         big.Network.CullDistance = 50;
         GameObject plain = CrateAt(session.World, 30, name: "Plain");
-        small.Network.SpawnSerialized();
-        big.Network.SpawnSerialized();
-        plain.Network.SpawnSerialized();
+        small.SpawnBuilt();
+        big.SpawnBuilt();
+        plain.SpawnBuilt();
 
         PumpFor(150, session.Alice, session.Bob);
         Assert.False(small.Network.IsVisibleTo(session.AliceHere));
@@ -270,10 +270,10 @@ public partial class NetworkingTests
         eye.Radius = 10;
         avatar.Transform.Position = new Float3(100, 0, 0);
         session.World.Add(avatar);
-        avatar.Network.SpawnSerialized(session.AliceHere);
+        avatar.SpawnBuilt(session.AliceHere);
         GameObject near = CrateAt(session.World, 105, name: "Near"), far = CrateAt(session.World, 0, name: "Far");
-        near.Network.SpawnSerialized();
-        far.Network.SpawnSerialized();
+        near.SpawnBuilt();
+        far.SpawnBuilt();
         Assert.True(near.Network.IsVisibleTo(session.AliceHere));
         Assert.False(far.Network.IsVisibleTo(session.AliceHere));
         Assert.False(near.Network.IsVisibleTo(session.BobHere));
@@ -304,8 +304,8 @@ public partial class NetworkingTests
         });
         listener!.Connected = peer => Networking.Networking.Interest!.For(peer).SetViewpoints([Float3.Zero]);
         GameObject near = CrateAt(session.World, 3, name: "Near"), far = CrateAt(session.World, 50, name: "Far");
-        near.Network.SpawnSerialized();
-        far.Network.SpawnSerialized();
+        near.SpawnBuilt();
+        far.SpawnBuilt();
 
         using FakePeer carol = FakePeer.Join(session.Network, "carol");
         Pump(() => carol.IsReady, carol, session.Alice, session.Bob);
@@ -322,13 +322,13 @@ public partial class NetworkingTests
     {
         using InterestSession session = InterestHost();
         GameObject owned = CrateAt(session.World, 500, name: "Owned");
-        owned.Network.SpawnSerialized(session.AliceHere);
+        owned.SpawnBuilt(session.AliceHere);
         GameObject always = CrateAt(session.World, 500, NetworkVisibility.Always, "Always");
-        always.Network.SpawnSerialized();
+        always.SpawnBuilt();
         GameObject plain = CrateAt(session.World, 500, name: "Plain");
-        plain.Network.SpawnSerialized();
+        plain.SpawnBuilt();
         GameObject shown = CrateAt(session.World, 500, name: "Shown");
-        shown.Network.SpawnSerialized();
+        shown.SpawnBuilt();
         shown.Network.ShowTo(session.BobHere);
         PumpFor(150, session.Alice, session.Bob);
 
@@ -348,9 +348,9 @@ public partial class NetworkingTests
     {
         using InterestSession session = InterestHost();
         GameObject plain = CrateAt(session.World, 500, name: "Plain");
-        plain.Network.SpawnSerialized();
+        plain.SpawnBuilt();
         GameObject secret = CrateAt(session.World, 500, NetworkVisibility.Manual, "Secret");
-        secret.Network.SpawnSerialized();
+        secret.SpawnBuilt();
 
         session.BobSees.SeesEverything = true;
         Assert.True(plain.Network.IsVisibleTo(session.BobHere));
@@ -372,10 +372,10 @@ public partial class NetworkingTests
         using InterestSession session = InterestHost();
         session.AliceSees.SetViewpoints([Float3.Zero]);
         GameObject crate = CrateAt(session.World, 3);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         GameObject holder = CrateAt(session.World, 0, NetworkVisibility.Always, "Holder");
         BeaconTestComponent beacon = holder.AddComponent<BeaconTestComponent>();
-        holder.Network.SpawnSerialized();
+        holder.SpawnBuilt();
         Pump(() => SpawnsOf(session.Bob, holder) == 1 && SpawnsOf(session.Alice, crate) == 1, session.Alice, session.Bob);
 
         beacon.Mark(crate);
@@ -397,7 +397,7 @@ public partial class NetworkingTests
         session.AliceSees.SetViewpoints([Float3.Zero]);
         GameObject crate = CrateAt(session.World, 5);
         NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         Pump(() => SpawnsOf(session.Alice, crate) == 1, session.Alice, session.Bob);
 
         for (int i = 0; i < 16; i++)
@@ -422,13 +422,6 @@ public partial class NetworkingTests
         Assert.False(Mentions(session.Bob, crate.Identifier));
     }
 
-    private static string SpawnJson(FakePeer peer, GameObject go)
-    {
-        byte[] payload = peer.Received.Last(m => m.Id == FakePeer.Spawn && ReadSpawn(m.Data, Guid.Empty).Id == go.Identifier).Data;
-        NetReader reader = new(payload);
-        return NetworkTestScene.Current.Decompress(SpawnMessage.Read(ref reader).Payload).WriteToJson();
-    }
-
     private static int NoViewpointWarnings(NetPeer peer)
     {
         int count = 0;
@@ -447,7 +440,7 @@ public partial class NetworkingTests
         using InterestSession session = InterestHost();
         session.AliceSees.SetViewpoints([Float3.Zero]);
         GameObject far = CrateAt(session.World, 500);
-        far.Network.SpawnSerialized();
+        far.SpawnBuilt();
         PumpFor(100, session.Alice, session.Bob);
         Assert.False(far.Network.IsVisibleTo(session.AliceHere));
 
@@ -468,7 +461,7 @@ public partial class NetworkingTests
         });
         session.AliceSees.SetViewpoints([Float3.Zero]);
         GameObject crate = CrateAt(session.World, 5);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
         PumpFor(800, session.Alice, session.Bob);
 
@@ -497,7 +490,7 @@ public partial class NetworkingTests
                 GameObject avatar = CreateGameObject("Avatar");
                 avatar.AddComponent<NetworkObserver>();
                 session.World.Add(avatar);
-                avatar.Network.SpawnSerialized(peer);
+                avatar.SpawnBuilt(peer);
             };
 
             using FakePeer carol = FakePeer.Join(session.Network, "carol");
@@ -538,9 +531,9 @@ public partial class NetworkingTests
         eye.Offset = new Float3(float.NaN, 0, 0);
         avatar.Transform.Position = new Float3(100, 0, 0);
         session.World.Add(avatar);
-        avatar.Network.SpawnSerialized(session.AliceHere);
+        avatar.SpawnBuilt(session.AliceHere);
         GameObject near = CrateAt(session.World, 105, name: "Near");
-        near.Network.SpawnSerialized();
+        near.SpawnBuilt();
         Assert.True(near.Network.IsVisibleTo(session.AliceHere));
 
         eye.Radius = float.NaN;
@@ -561,14 +554,14 @@ public partial class NetworkingTests
     {
         using InterestSession session = InterestHost();
         GameObject crate = CrateAt(session.World, 50000);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         PumpFor(50, session.Alice, session.Bob);
         Assert.False(crate.Network.IsVisibleTo(session.AliceHere));
 
         GameObject avatar = CreateGameObject("Avatar");
         avatar.AddComponent<NetworkObserver>().Radius = float.PositiveInfinity;
         session.World.Add(avatar);
-        avatar.Network.SpawnSerialized(session.AliceHere);
+        avatar.SpawnBuilt(session.AliceHere);
         Pump(() => crate.Network.IsVisibleTo(session.AliceHere), session.Alice, session.Bob);
     }
 
@@ -593,7 +586,7 @@ public partial class NetworkingTests
         using InterestSession session = InterestHost();
         session.AliceSees.SetViewpoints([Float3.Zero]);
         GameObject far = CrateAt(session.World, 500, NetworkVisibility.Manual);
-        far.Network.SpawnSerialized();
+        far.SpawnBuilt();
         PumpFor(50, session.Alice, session.Bob);
 
         NetworkConfiguration configuration = Networking.Networking.Configuration;

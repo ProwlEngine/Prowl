@@ -20,7 +20,7 @@ public partial class NetworkingTests
         {
             Assert.Equal(Networking.Networking.Session!.LocalPeer!.Id, foreign.LocalPeer!.Id);
             Assert.Throws<ArgumentException>(() => root.Network.AssignOwnership(foreign.LocalPeer));
-            Assert.Throws<ArgumentException>(() => root.Network.SpawnSerialized(foreign.LocalPeer, NetworkOrphaned.ClearOwner));
+            Assert.Throws<ArgumentException>(() => root.SpawnBuilt(foreign.LocalPeer, NetworkOrphaned.ClearOwner));
             Assert.Null(root.Network.Owner);
             Assert.Equal(generation, NetworkTestScene.Current.GenerationOf(root));
             Assert.Equal(NetworkOrphaned.Destroy, root.Network.Orphaned);
@@ -41,7 +41,7 @@ public partial class NetworkingTests
         SceneInstance.Main.Add(root);
         try
         {
-            Assert.Throws<ArgumentException>(() => root.Network.SpawnSerialized(foreign.LocalPeer, NetworkOrphaned.ClearOwner));
+            Assert.Throws<ArgumentException>(() => root.SpawnBuilt(foreign.LocalPeer, NetworkOrphaned.ClearOwner));
             Assert.False(root.Network.Networked);
             Assert.Equal(NetworkOrphaned.Destroy, root.Network.Orphaned);
             Assert.False(root.Network.Active);
@@ -59,12 +59,12 @@ public partial class NetworkingTests
         {
             Pump(() => client.IsReady, client);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            root.Network.SpawnSerialized(owner, NetworkOrphaned.ClearOwner);
+            root.SpawnBuilt(owner, NetworkOrphaned.ClearOwner);
             client.Session.Shutdown();
             Pump(() => root.Network.Owner == null, client);
             uint generation = NetworkTestScene.Current.GenerationOf(root);
             Assert.Throws<ArgumentException>(() => root.Network.AssignOwnership(owner));
-            Assert.Throws<ArgumentException>(() => root.Network.SpawnSerialized(owner, NetworkOrphaned.Destroy));
+            Assert.Throws<ArgumentException>(() => root.SpawnBuilt(owner, NetworkOrphaned.Destroy));
             Assert.Equal(NetworkOrphaned.ClearOwner, root.Network.Orphaned);
             Assert.Equal(generation, NetworkTestScene.Current.GenerationOf(root));
             Assert.False(root.IsProxy);
@@ -85,7 +85,7 @@ public partial class NetworkingTests
         {
             Pump(() => ownerClient.IsReady, ownerClient);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            root.Network.SpawnSerialized(owner, initial);
+            root.SpawnBuilt(owner, initial);
             Pump(() => ownerClient.Has(FakePeer.Owner), ownerClient);
             ownerClient.Received.RemoveAll(m => m.Id == FakePeer.Orphaned);
             uint generation = NetworkTestScene.Current.GenerationOf(root);
@@ -167,7 +167,7 @@ public partial class NetworkingTests
         try
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => root.Network.Orphaned = (NetworkOrphaned)255);
-            Assert.Throws<ArgumentOutOfRangeException>(() => root.Network.SpawnSerialized(orphaned: (NetworkOrphaned)255));
+            Assert.Throws<ArgumentOutOfRangeException>(() => root.SpawnBuilt(orphaned: (NetworkOrphaned)255));
             Assert.Equal(NetworkOrphaned.Destroy, root.Network.Orphaned);
             Assert.False(root.Network.Networked);
         }

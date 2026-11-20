@@ -1132,13 +1132,11 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary>
     /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
     /// and for anything under one: a child written out without its parent would load back as a stray root.
-    /// While writing a networked object for clients, also false for anything server only.
     /// </summary>
     private static bool IsSaveable(GameObject obj)
     {
         for (GameObject? go = obj; go.IsValid(); go = go.Parent)
-            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0
-                || !NetworkSerialization.Include(go))
+            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0)
                 return false;
         return true;
     }

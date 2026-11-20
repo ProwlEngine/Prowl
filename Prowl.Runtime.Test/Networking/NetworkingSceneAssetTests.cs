@@ -82,6 +82,22 @@ public partial class NetworkingTests
                 Assert.Equal(doorNetId, NetworkTestScene.Current.NetIdOf(doorHere));
                 Assert.Equal(7, doorHere.GetComponent<NetTestComponent>()!.Score);
                 Assert.Equal("Arena", doorHere.Section!.Name);
+
+                // Despawned, a scene object is switched off and kept, and the next spawn brings the same one back.
+                NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+                using NetWriter despawn = new();
+                new DespawnMessage(doorId, NetworkDespawnReason.OutOfInterest).Write(despawn);
+                byte[] despawned = despawn.ToArray();
+                host.Send(FakePeer.Despawn, w => w.WriteBytes(despawned), client);
+                Pump(() => !doorHere.Network.Active, host);
+                Assert.True(doorHere.IsValid());
+                Assert.False(doorHere.Enabled);
+
+                byte[] again = spawns.Single(s => SpawnedId(s) == doorId);
+                host.Send(FakePeer.Spawn, w => w.WriteBytes(again), client);
+                Pump(() => doorHere.Network.Active, host);
+                Assert.True(doorHere.Enabled);
+                Assert.Same(doorHere, Find(mine, doorId));
             }
             finally { Networking.Networking.Shutdown(); }
         }

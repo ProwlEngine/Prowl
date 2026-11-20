@@ -11,10 +11,8 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     Spawn header followed by the state of each networked component. A spawn that carries its tree first names its
-///     networked components and its transforms by identifier, in the host's order. A root goes into section
-///     SectionSlot minus one, or the active one for 0. Payload holds the compressed tree, or a
-///     <see cref="TemplateSpawn" /> when Template is set.
+///     Spawn header followed by the state of each networked component. A root goes into section SectionSlot minus
+///     one, or the active one for 0. Payload holds a <see cref="TemplateSpawn" />.
 /// </summary>
 internal readonly ref struct SpawnMessage(
     Guid identifier,
@@ -26,12 +24,10 @@ internal readonly ref struct SpawnMessage(
     uint netId,
     ReadOnlySpan<byte> payload,
     bool replace = false,
-    uint tick = 0,
-    bool template = false)
+    uint tick = 0)
 {
     // Set in the orphaned byte when the object replaces any copy the client still has. The host tick then follows NetId.
     private const byte ReplaceBit = 0x80;
-    private const byte TemplateBit = 0x40;
 
     internal readonly Guid Identifier = identifier;
     internal readonly Guid ParentId = parentId;
@@ -43,7 +39,6 @@ internal readonly ref struct SpawnMessage(
     [ReloadIgnore] internal readonly ReadOnlySpan<byte> Payload = payload;
     internal readonly bool Replace = replace;
     internal readonly uint Tick = tick;
-    internal readonly bool Template = template;
 
     internal void Write(NetWriter writer)
     {
@@ -51,7 +46,7 @@ internal readonly ref struct SpawnMessage(
         writer.WriteGuid(ParentId);
         writer.WriteVarUInt32(SectionSlot);
         writer.WriteVarUInt32((uint)(OwnerId + 1));
-        writer.WriteByte((byte)((byte)Orphaned | (Replace ? ReplaceBit : 0) | (Template ? TemplateBit : 0)));
+        writer.WriteByte((byte)((byte)Orphaned | (Replace ? ReplaceBit : 0)));
         writer.WriteUInt32(Generation);
         writer.WriteVarUInt32(NetId);
         if (Replace)
@@ -73,8 +68,8 @@ internal readonly ref struct SpawnMessage(
         bool replace = (policy & ReplaceBit) != 0;
         uint tick = replace ? reader.ReadVarUInt32() : 0;
         return new SpawnMessage(identifier, parentId, sectionSlot, ownerId,
-            NetworkValidation.Orphaned((NetworkOrphaned)(policy & ~(ReplaceBit | TemplateBit))), generation, netId,
-            reader.ReadBytesWithLength(), replace, tick, (policy & TemplateBit) != 0);
+            NetworkValidation.Orphaned((NetworkOrphaned)(policy & ~ReplaceBit)), generation, netId,
+            reader.ReadBytesWithLength(), replace, tick);
     }
 }
 

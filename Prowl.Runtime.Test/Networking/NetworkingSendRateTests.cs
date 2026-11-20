@@ -54,7 +54,7 @@ public partial class NetworkingTests
             slow.AddComponent<NetworkTransform>().SendInterval = 3;
             fast.AddComponent<NetworkTransform>();
             scene.Add(slow); scene.Add(fast);
-            slow.Network.SpawnSerialized(); fast.Network.SpawnSerialized();
+            slow.SpawnBuilt(); fast.SpawnBuilt();
             uint slowId = NetworkTestScene.Current.NetIdOf(slow), fastId = NetworkTestScene.Current.NetIdOf(fast);
 
             float x = 0;
@@ -109,7 +109,7 @@ public partial class NetworkingTests
             crate.Network.SetSendInterval(component, 4);
             Assert.Equal(4, crate.Network.GetSendInterval(component));
             scene.Add(crate);
-            crate.Network.SpawnSerialized();
+            crate.SpawnBuilt();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             // Changing every tick, it still goes out only every fourth, so three more sends take twelve ticks or more.
@@ -128,27 +128,6 @@ public partial class NetworkingTests
             }, alice);
             Assert.True(Networking.Networking.Tick - first >= 12, $"Three more sends took {Networking.Networking.Tick - first} ticks");
             Pump(() => alice.SyncInt(component.Identifier, NetTestComponent.HealthSlot) == component.Health, alice);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
-    public void ClientsLearnATransformsSendIntervalWithItsSpawn()
-    {
-        SceneInstance scene = CreateScene();
-        MakeCurrent(scene);
-        LocalNetwork shared = new();
-        Networking.Networking.Host(new LocalTransport(shared, "host"));
-        using FakePeer alice = FakePeer.Join(shared, "alice");
-        try
-        {
-            Pump(() => alice.Has(FakePeer.Scene), alice);
-            GameObject crate = CreateGameObject("Crate");
-            crate.AddComponent<NetworkTransform>().SendInterval = 5;
-            scene.Add(crate);
-            crate.Network.SpawnSerialized();
-            Pump(() => alice.Has(FakePeer.Spawn), alice);
-            Assert.Contains("SendInterval", SpawnJson(alice, crate));
         }
         finally { Networking.Networking.Shutdown(); }
     }

@@ -95,12 +95,6 @@ public sealed class NetworkingSettings : ProjectSettingsBase
             Origami.Label(paper, "netsettings_interest_note", "Clients receive the objects near their NetworkObservers or the viewpoints set through Networking.Interest.").Show();
         }
 
-        Header(paper, "snapshots", "Serialized Spawn Limits");
-        Integer(paper, "snapshotbytes", "Maximum Decompressed Bytes", Configuration.MaxSnapshotDecompressedBytes, v => Configuration.MaxSnapshotDecompressedBytes = v, 1, 1073741824);
-        Integer(paper, "snapshotdepth", "Maximum Nesting Depth", Configuration.MaxSnapshotDepth, v => Configuration.MaxSnapshotDepth = v, 1, 256);
-        Integer(paper, "snapshotnodes", "Maximum Values", Configuration.MaxSnapshotNodes, v => Configuration.MaxSnapshotNodes = v, 1, 1000000);
-        Origami.Label(paper, "netsettings_snapshot_note", "Limits apply to an object spawned with its whole tree, before it is created. Prefab and factory spawns carry no tree.").Show();
-
         if (Configuration.Transport != NetworkTransport.Kcp) return;
         Header(paper, "reliability", "KCP Reliability");
         Origami.Label(paper, "netsettings_agreement", "Peers must use matching batching settings, protocol IDs, MTUs, and send/receive windows.").Show();

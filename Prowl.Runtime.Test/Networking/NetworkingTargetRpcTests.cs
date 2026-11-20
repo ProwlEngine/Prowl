@@ -63,7 +63,7 @@ public partial class NetworkingTests
         {
             Pump(() => alice.IsReady && bob.IsReady, alice, bob);
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
-            go.Network.SpawnSerialized(aliceHere);
+            go.SpawnBuilt(aliceHere);
             Pump(() => alice.Has(FakePeer.Spawn) && bob.Has(FakePeer.Spawn), alice, bob);
 
             speaker.Whisper(aliceHere, "psst");

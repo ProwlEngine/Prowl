@@ -24,8 +24,8 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     /// <summary>The host-assigned number messages use for this object in place of its identifier.</summary>
     public uint NetId;
 
-    /// <summary>What it was built from, for peers to build their own copy, or null when it goes serialized.</summary>
-    public SpawnTemplate? Template;
+    /// <summary>What it was built from, for peers to build their own copy.</summary>
+    public required SpawnTemplate Template;
 
     public int NotifiedOwnerId = NoOwner;
     public int Owner = NoOwner;
@@ -56,7 +56,7 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
         }
     }
 
-    /// <summary>Takes the object's transforms as given, in wire order: the ones the host named in a spawn of its tree.</summary>
+    /// <summary>Takes the object's transforms as given, in wire order.</summary>
     public void SetTransforms(NetworkTransform[] transforms)
     {
         _transforms = transforms;

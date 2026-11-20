@@ -45,6 +45,18 @@ public class MultiplayerPlayTests : EditorTestHarness
             public void Ping(string text) => Debug.Log($"beacon {text} level {Level} from {Rpc.Caller?.Name}");
         }
 
+        // Every instance registers the factory the host spawns beacons from.
+        public static class Beacons
+        {
+            [System.Runtime.CompilerServices.ModuleInitializer]
+            public static void Register() => Networking.RegisterFactory("beacon", (in NetworkSpawn spawn) =>
+            {
+                GameObject beacon = new("Beacon");
+                beacon.AddComponent<Beacon>();
+                return beacon;
+            });
+        }
+
         public static class GlobalEvents
         {
             [Rpc.Broadcast]
@@ -95,11 +107,10 @@ public class MultiplayerPlayTests : EditorTestHarness
             Pump(() => Networking.Session!.Peers.Count == 2 && Networking.Session.Peers.All(Networking.IsPeerReady),
                 "the instance to become ready", output, instance);
 
-            beaconObject = new GameObject("Beacon");
-            Component beacon = beaconObject.AddComponent(beaconType)!;
-            scene.Add(beaconObject);
+            System.Runtime.CompilerServices.RuntimeHelpers.RunModuleConstructor(scripts.ManifestModule.ModuleHandle);
+            beaconObject = Networking.SpawnFactory("beacon", default, Prowl.Vector.Quaternion.Identity);
+            Component beacon = beaconObject.GetComponent(beaconType)!;
             beaconType.GetProperty("Level")!.SetValue(beacon, 7);
-            beaconObject.Network.SpawnSerialized();
 
             using (Rpc.FilterInclude(peer => peer.Name == "Bot"))
                 beaconType.GetMethod("Ping")!.Invoke(beacon, ["hello"]);

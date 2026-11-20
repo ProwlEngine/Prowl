@@ -132,7 +132,7 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Host(new LocalTransport(new(), "host"));
-            root.Network.SpawnSerialized();
+            root.SpawnBuilt();
             Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
             Assert.Null(Networking.Networking.Session);
         }
@@ -206,7 +206,7 @@ public partial class NetworkingTests
             child.SetParent(root);
             NetworkLifecycleListener listener = child.AddComponent<NetworkLifecycleListener>();
             scene.Add(root);
-            root.Network.SpawnSerialized();
+            root.SpawnBuilt();
             Assert.Equal(new[] { "spawn", "authority gained" }, listener.Events);
             Assert.NotNull(child.AddComponent<NetTestComponent>());
             root.Destroy(); EngineObject.ProcessDestroyed();
@@ -293,8 +293,11 @@ public partial class NetworkingTests
         {
             Networking.Networking.Host(new LocalTransport(source, "host"));
             listener.EndSessionOnSpawn = true;
-            (snapshot, spawns) = RecordJoin(source);
-            Assert.Single(spawns);
+            (snapshot, _) = RecordJoin(source);
+            using NetWriter written = new();
+            NetworkTestScene.Current.WriteSpawn(root, -1, NetworkOrphaned.Destroy, written, NetworkGeneration(root),
+                NetworkTestScene.Current.NetIdOf(root));
+            spawns = [written.ToArray()];
         }
         finally { Networking.Networking.Shutdown(); }
 

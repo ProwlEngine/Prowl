@@ -32,14 +32,15 @@ internal readonly record struct SectionHeader(uint Id, string Name, bool Active,
 
 // Joining and changing scenes, as Mirror does it. The host names the scene assets its sections came from, each
 // client loads them itself and says it is ready, and the host then spawns every networked object the client may
-// have between a started and a finished message. No scene content travels: a section built in code is empty on
-// clients, and its networked objects reach them as spawns like any other.
+// have between a started and a finished message. No scene content travels: a section built in code is built by
+// every peer itself, and what is networked in it is spawned from a prefab or a factory.
 internal sealed partial class NetworkSystem
 {
     internal const byte SceneMessageFormat = 13;
     private const uint MaxSections = 4096;
 
-    // Networked objects of the scenes this client loaded, kept out of the world until the host spawns them.
+    // The scenes' own networked objects this client has that are not spawned: never sent to it, or despawned since.
+    // As Mirror keeps its scene objects, they stay for the host to spawn until the scene changes.
     private readonly Dictionary<Guid, GameObject> _held = new();
 
     // Objects spawned before this client was ready, whose callbacks wait for the host's finished message.
@@ -47,9 +48,6 @@ internal sealed partial class NetworkSystem
 
     // The trees of the networked objects stored in each scene asset, by root, read once a session.
     private readonly Dictionary<Scene, Dictionary<Guid, Guid[]>> _assetTrees = new(ReferenceEqualityComparer.Instance);
-
-    // Set while the host writes spawns for peers that just loaded the scenes, which hold the scene's own objects.
-    private bool _sceneSpawns;
 
     /// <summary>Starts <paramref name="peers" /> loading the host's scenes.</summary>
     internal void SendScene(params NetPeer[] peers)
@@ -314,7 +312,13 @@ internal sealed partial class NetworkSystem
     /// <summary>A held scene object, taken for the spawn that names it, or null.</summary>
     private GameObject? TakeHeld(Guid id) => _held.Remove(id, out GameObject? go) && go.IsValid() ? go : null;
 
-    // Scene objects the host never spawned for this peer: destroyed there, hidden from it, or not in its copy.
+    /// <summary>A scene object the host despawned is switched off and kept, since the host may spawn it again.</summary>
+    private void Hold(GameObject go)
+    {
+        go.Enabled = false;
+        _held[go.Identifier] = go;
+    }
+
     private void DisposeHeld()
     {
         foreach (GameObject go in _held.Values.ToArray())
@@ -474,26 +478,18 @@ internal sealed partial class NetworkSystem
                 joining.Run = [.. run, .. entries];
             }
         }
-        _sceneSpawns = true;
-        try
+        foreach (NetworkObject entry in entries)
         {
-            foreach (NetworkObject entry in entries)
+            NetPeer[] seeing = [.. ready.Where(p => Sees(entry, p))];
+            if (Session != session)
             {
-                NetPeer[] seeing = [.. ready.Where(p => Sees(entry, p))];
-                if (Session != session)
-                {
-                    return;
-                }
-
-                if (seeing.Length > 0 && entry.GameObject.IsValid())
-                {
-                    SendSpawn(entry, seeing, true);
-                }
+                return;
             }
-        }
-        finally
-        {
-            _sceneSpawns = false;
+
+            if (seeing.Length > 0 && entry.GameObject.IsValid())
+            {
+                SendSpawn(entry, seeing, true);
+            }
         }
 
         if (Session != session)
@@ -581,6 +577,9 @@ internal sealed partial class NetworkSystem
         }
     }
 
+    /// <summary>For tests, which build their scenes in code: what clients build a scene object from that no asset stores.</summary>
+    internal static Func<GameObject, SpawnTemplate?>? UnstoredSceneObjects;
+
     /// <summary>Registers networked objects the host's world holds, which belong to the host until it spawns or hands them out.</summary>
     internal void RegisterSceneObjects(SceneInstance world, IEnumerable<GameObject> objects)
     {
@@ -615,12 +614,23 @@ internal sealed partial class NetworkSystem
                 continue;
             }
 
-            // An object its scene asset stores is one clients hold too, so a spawn can name it instead of carrying it.
+            // An object its scene asset stores is one clients hold too, so its spawn only names it.
             Guid[]? stored = go.Section is { } section ? AssetTrees(section.Source)?.GetValueOrDefault(go.Identifier) : null;
+            SpawnTemplate? template = stored != null
+                ? new SpawnTemplate(Guid.Empty, null, [], stored, components, true)
+                : BuiltTemplateOf(go) ?? UnstoredSceneObjects?.Invoke(go);
+            if (template == null)
+            {
+                Debug.LogWarning(
+                    $"'{go.Name}' is marked networked but is not stored in a scene asset, a prefab instance or built by " +
+                    "a factory, so clients have nothing to build it from and it is not networked. Spawn it with " +
+                    "SpawnPrefab or SpawnFactory instead.");
+                continue;
+            }
+
             NetworkObject entry = new(this, go)
             {
-                Generation = NextGeneration(), NetId = NextNetId(), Components = components,
-                Template = stored == null ? null : new SpawnTemplate(Guid.Empty, null, [], stored, components, true)
+                Generation = NextGeneration(), NetId = NextNetId(), Components = components, Template = template
             };
             Entries.Add(entry);
             InitVisibility(entry);
@@ -655,38 +665,30 @@ internal sealed partial class NetworkSystem
         int budget = Configuration.JoinSpawnBytesPerTick;
         int sent = 0;
         bool any = false;
-        _sceneSpawns = true;
-        try
+        while (state.Next < run.Length)
         {
-            while (state.Next < run.Length)
+            if (any && ((budget > 0 && sent >= budget) || SendQueueIsFilling(peer)))
             {
-                if (any && ((budget > 0 && sent >= budget) || SendQueueIsFilling(peer)))
-                {
-                    // Still making progress, so the load is not what is timing out.
-                    state.Deadline = Now + Configuration.SceneLoadTimeoutSeconds;
-                    return;
-                }
-
-                NetworkObject entry = run[state.Next++];
-                if (!entry.GameObject.IsValid() || entry.TearingDown || FindEntry(entry.GameObject) != entry ||
-                    !Sees(entry, peer))
-                {
-                    continue;
-                }
-
-                _lastSpawnBytes = 0;
-                SendSpawn(entry, [peer], true);
-                sent += _lastSpawnBytes;
-                any = true;
-                if (Session != session || !StillLoading(peer, state))
-                {
-                    return;
-                }
+                // Still making progress, so the load is not what is timing out.
+                state.Deadline = Now + Configuration.SceneLoadTimeoutSeconds;
+                return;
             }
-        }
-        finally
-        {
-            _sceneSpawns = false;
+
+            NetworkObject entry = run[state.Next++];
+            if (!entry.GameObject.IsValid() || entry.TearingDown || FindEntry(entry.GameObject) != entry ||
+                !Sees(entry, peer))
+            {
+                continue;
+            }
+
+            _lastSpawnBytes = 0;
+            SendSpawn(entry, [peer], true);
+            sent += _lastSpawnBytes;
+            any = true;
+            if (Session != session || !StillLoading(peer, state))
+            {
+                return;
+            }
         }
 
         state.Run = null;
@@ -729,7 +731,7 @@ internal sealed partial class NetworkSystem
     internal void OnSpawnStarted(NetPeer peer, ref NetReader reader, Delivery delivery) =>
         ReadSceneGeneration(ref reader, delivery);
 
-    /// <summary>The host has sent every object of a run: callbacks held back run now, and scene objects it left out go.</summary>
+    /// <summary>The host has sent every object of a run: callbacks held back run now.</summary>
     internal void OnSpawnFinished(NetPeer peer, ref NetReader reader, Delivery delivery)
     {
         ulong generation = ReadSceneGeneration(ref reader, delivery);
@@ -737,8 +739,6 @@ internal sealed partial class NetworkSystem
         {
             return;
         }
-
-        DisposeHeld();
 
         // An added section's run, on a peer already playing, held nothing back.
         if (LocalJoinState != NetworkJoinState.Synchronizing)

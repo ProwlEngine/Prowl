@@ -72,11 +72,12 @@ public partial class NetworkingTests
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
             GameObject avatar = CreateGameObject("Alice avatar");
             scene.Add(avatar);
+            avatar.SpawnBuilt();
             Networking.Networking.AddPlayer(aliceHere, avatar);
 
-            Assert.Throws<InvalidOperationException>(() => Networking.Networking.SpawnGameObject(avatar));
+            Assert.Throws<InvalidOperationException>(() => avatar.SpawnBuilt());
             Assert.Same(aliceHere, avatar.Network.Owner);
-            Networking.Networking.SpawnGameObject(avatar, aliceHere);
+            avatar.SpawnBuilt(aliceHere);
             Assert.Same(aliceHere, avatar.Network.Owner);
         }
         finally { Networking.Networking.Shutdown(); }

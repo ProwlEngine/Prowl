@@ -46,7 +46,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => alice.Has(FakePeer.Scene), alice);
-            ship.Network.SpawnSerialized();
+            ship.SpawnBuilt();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             component.Shout("hi");
@@ -75,7 +75,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => alice.Has(FakePeer.Scene), alice);
-            ship.Network.SpawnSerialized();
+            ship.SpawnBuilt();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             using NetWriter call = new(), arguments = new();

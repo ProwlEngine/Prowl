@@ -61,9 +61,9 @@ public partial class NetworkingTests
         GameObject blue = Crate(session.World, NetworkVisibility.Default, "Blue");
         blue.Network.Groups = NetworkGroups.Of(2);
         GameObject plain = Crate(session.World, NetworkVisibility.Default, "Plain");
-        red.Network.SpawnSerialized();
-        blue.Network.SpawnSerialized();
-        plain.Network.SpawnSerialized();
+        red.SpawnBuilt();
+        blue.SpawnBuilt();
+        plain.SpawnBuilt();
 
         Assert.True(red.Network.IsVisibleTo(session.AliceHere));
         Assert.False(blue.Network.IsVisibleTo(session.AliceHere));
@@ -96,7 +96,7 @@ public partial class NetworkingTests
         NetworkInterest interest = Networking.Networking.Interest!;
         GameObject flag = Crate(session.World, NetworkVisibility.Default, "Flag");
         flag.Network.Groups = NetworkGroups.Of(4);
-        flag.Network.SpawnSerialized(session.AliceHere);
+        flag.SpawnBuilt(session.AliceHere);
         Assert.True(flag.Network.IsVisibleTo(session.AliceHere));
         Assert.False(flag.Network.IsVisibleTo(session.BobHere));
 
@@ -112,7 +112,7 @@ public partial class NetworkingTests
 
         GameObject secret = Crate(session.World, NetworkVisibility.Manual, "Secret");
         secret.Network.Groups = NetworkGroups.Of(4);
-        secret.Network.SpawnSerialized();
+        secret.SpawnBuilt();
         interest.For(session.BobHere).Groups = NetworkGroups.Of(4);
         Assert.False(secret.Network.IsVisibleTo(session.BobHere));
         Assert.True(flag.Network.IsVisibleTo(session.BobHere));
@@ -130,9 +130,9 @@ public partial class NetworkingTests
         ours.Network.Groups = NetworkGroups.Of(1);
         GameObject far = CrateAt(session.World, 500, name: "Far");
         far.Network.Groups = NetworkGroups.Of(1);
-        near.Network.SpawnSerialized();
-        ours.Network.SpawnSerialized();
-        far.Network.SpawnSerialized();
+        near.SpawnBuilt();
+        ours.SpawnBuilt();
+        far.SpawnBuilt();
 
         PumpFor(100, session.Alice, session.Bob);
         Assert.False(near.Network.IsVisibleTo(session.AliceHere));
@@ -166,7 +166,7 @@ public partial class NetworkingTests
         crates.Add(distant);
         foreach (GameObject crate in crates)
         {
-            crate.Network.SpawnSerialized();
+            crate.SpawnBuilt();
         }
 
         Float3 RandomPoint() => new((float)(random.NextDouble() * 120 - 60), (float)(random.NextDouble() * 40 - 20),

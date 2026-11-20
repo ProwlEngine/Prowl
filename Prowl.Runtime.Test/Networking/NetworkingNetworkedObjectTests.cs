@@ -73,7 +73,7 @@ public partial class NetworkingTests
             NetTestComponent third = grandchild.AddComponent<NetTestComponent>();
             scene.Add(root);
 
-            root.Network.SpawnSerialized();
+            root.SpawnBuilt();
             NetworkObject entry = NetworkTestScene.Current.FindEntry(root)!;
             Assert.Equal(new Component[] { first, second, third }, entry.Components);
             Assert.Equal(0, entry.IndexOf(first));
@@ -100,7 +100,7 @@ public partial class NetworkingTests
             }
 
             scene.Add(root);
-            InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => root.Network.SpawnSerialized());
+            InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => root.SpawnBuilt());
             Assert.Contains("64", error.Message);
             Assert.False(root.Network.Active);
         }

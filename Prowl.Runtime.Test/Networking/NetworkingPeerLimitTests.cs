@@ -9,6 +9,13 @@ namespace Prowl.Runtime.Test;
 
 public partial class NetworkingTests
 {
+    // A spawn carries the bytes its factory is given, which is what makes this one large.
+    private static void SpawnBulky(int bytes)
+    {
+        Networking.Networking.RegisterFactory("bulky", (in NetworkSpawn _) => new GameObject("Bulky"));
+        Networking.Networking.SpawnFactory("bulky", default, Prowl.Vector.Quaternion.Identity, new byte[bytes]);
+    }
+
     private static string Incompressible(int length) =>
         string.Concat(Enumerable.Range(0, length / 32 + 1).Select(_ => Guid.NewGuid().ToString("N")))[..length];
 
@@ -34,13 +41,10 @@ public partial class NetworkingTests
     [Fact]
     public void HostKicksAPeerThatCannotReceiveAJoinSpawn()
     {
-        SceneInstance scene = CreateScene();
-        GameObject big = CreateGameObject(Incompressible(2000));
-        big.Network.Networked = true;
-        scene.Add(big);
-        MakeCurrent(scene);
+        MakeCurrent(CreateScene());
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
+        SpawnBulky(2000);
         using FakePeer small = FakePeer.Join(network, "small", FakePeer.SchemaOptions with { MaxMessageSize = 256 });
         SessionEndReason? reason = null;
         small.Session.Ended += (r, _) => reason = r;
@@ -69,9 +73,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => small.IsReady && wide.IsReady, small, wide);
-            GameObject big = CreateGameObject(Incompressible(8000));
-            scene.Add(big);
-            big.Network.SpawnSerialized();
+            SpawnBulky(8000);
             Pump(() => wide.Has(FakePeer.Spawn) && small.Session.State == SessionState.Ended, small, wide);
             Assert.Equal(SessionEndReason.Kicked, reason);
             Assert.Equal(SessionState.Active, wide.Session.State);
@@ -95,7 +97,7 @@ public partial class NetworkingTests
                 GameObject go = CreateGameObject($"Object {i}");
                 go.AddComponent<NetworkTransform>();
                 scene.Add(go);
-                go.Network.SpawnSerialized();
+                go.SpawnBuilt();
                 return go;
             }).ToArray();
             Pump(() => TransformIds(small).Count == objects.Length, small);

@@ -47,7 +47,7 @@ public partial class NetworkingTests
             GameObject mover = CreateGameObject("Mover");
             mover.AddComponent<NetworkTransform>();
             scene.Add(mover);
-            mover.Network.SpawnSerialized();
+            mover.SpawnBuilt();
             uint netId = NetworkTestScene.Current.NetIdOf(mover);
 
             float x = 1000;
@@ -115,7 +115,7 @@ public partial class NetworkingTests
             GameObject mover = CreateGameObject("Mover");
             mover.AddComponent<NetworkTransform>();
             scene.Add(mover);
-            mover.Network.SpawnSerialized();
+            mover.SpawnBuilt();
             uint netId = NetworkTestScene.Current.NetIdOf(mover);
 
             float x = 1000;
@@ -154,7 +154,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => owner.IsReady, owner);
-            root.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
+            root.SpawnBuilt(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
             uint netId = NetworkTestScene.Current.NetIdOf(root), generation = NetworkGeneration(root);
             owner.WireReceived.Clear();
             owner.Send(FakePeer.Transform, w =>

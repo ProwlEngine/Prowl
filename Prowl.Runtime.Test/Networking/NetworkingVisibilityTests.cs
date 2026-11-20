@@ -137,7 +137,7 @@ public partial class NetworkingTests
         NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
         NetCollectionTestComponent bag = crate.AddComponent<NetCollectionTestComponent>();
         crate.AddComponent<NetworkTransform>().Interpolate = false;
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         crate.Network.ShowTo(session.AliceHere);
 
         stats.Health = 7;
@@ -168,7 +168,7 @@ public partial class NetworkingTests
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Manual);
         NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         stats.Health = 7;
         PumpFor(30, session.Alice, session.Bob);
         Assert.False(session.Alice.Has(FakePeer.Spawn));
@@ -191,7 +191,7 @@ public partial class NetworkingTests
     {
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Default);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         Pump(() => session.Alice.Has(FakePeer.Spawn) && session.Bob.Has(FakePeer.Spawn), session.Alice, session.Bob);
 
         crate.Network.HideFrom(session.AliceHere);
@@ -216,7 +216,7 @@ public partial class NetworkingTests
     {
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Default);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
         Assert.False(ReadSpawn(session.Alice.Last(FakePeer.Spawn), Guid.Empty).Replace);
         crate.Destroy();
@@ -229,7 +229,7 @@ public partial class NetworkingTests
     {
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Manual);
-        crate.Network.SpawnSerialized(session.AliceHere);
+        crate.SpawnBuilt(session.AliceHere);
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
         Assert.False(ReadSpawn(session.Alice.Last(FakePeer.Spawn), Guid.Empty).Replace);
         Assert.True(crate.Network.IsVisibleTo(session.AliceHere));
@@ -252,7 +252,7 @@ public partial class NetworkingTests
     {
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Default);
-        crate.Network.SpawnSerialized(session.AliceHere);
+        crate.SpawnBuilt(session.AliceHere);
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
 
         crate.Network.HideFrom(session.AliceHere);
@@ -266,7 +266,7 @@ public partial class NetworkingTests
     {
         using VisibilitySession session = VisibilityHost();
         GameObject always = Crate(session.World, NetworkVisibility.Always, "Always");
-        always.Network.SpawnSerialized();
+        always.SpawnBuilt();
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
         always.Network.HideFrom(session.AliceHere);
         Pump(() => session.Alice.Has(FakePeer.Despawn), session.Alice, session.Bob);
@@ -274,7 +274,7 @@ public partial class NetworkingTests
         Assert.True(always.Network.IsVisibleTo(session.BobHere));
 
         GameObject secret = Crate(session.World, NetworkVisibility.OwnerOnly, "Secret");
-        secret.Network.SpawnSerialized(session.AliceHere);
+        secret.SpawnBuilt(session.AliceHere);
         Assert.False(secret.Network.IsVisibleTo(session.BobHere));
         secret.Network.ShowTo(session.BobHere);
         Assert.True(secret.Network.IsVisibleTo(session.BobHere));
@@ -294,7 +294,7 @@ public partial class NetworkingTests
     {
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Default);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
 
         crate.Network.HideFrom(session.AliceHere);
@@ -356,7 +356,7 @@ public partial class NetworkingTests
         using VisibilitySession session = VisibilityHost();
         GameObject crate = Crate(session.World, NetworkVisibility.Manual);
         NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         crate.Network.ShowTo(session.AliceHere);
 
         session.Bob.Send(FakePeer.RpcToHost, w => { w.WriteGuid(stats.Identifier); w.WriteUInt32(NetTestComponent.AskHostId); w.WriteVarInt32(1); });
@@ -402,8 +402,8 @@ public partial class NetworkingTests
         using VisibilitySession session = VisibilityHost();
         GameObject shown = Crate(session.World, NetworkVisibility.Manual, "Shown");
         GameObject hidden = Crate(session.World, NetworkVisibility.Default, "Hidden");
-        shown.Network.SpawnSerialized();
-        hidden.Network.SpawnSerialized();
+        shown.SpawnBuilt();
+        hidden.SpawnBuilt();
         shown.Network.ShowTo(session.AliceHere);
         hidden.Network.HideFrom(session.AliceHere);
         Pump(() => session.Alice.Has(FakePeer.Despawn), session.Alice, session.Bob);
@@ -524,9 +524,9 @@ public partial class NetworkingTests
         PointerTestComponent pointer = lever.AddComponent<PointerTestComponent>();
         SyncReferenceTestComponent holder = lever.AddComponent<SyncReferenceTestComponent>();
         session.World.Add(lever);
-        lever.Network.SpawnSerialized(session.BobHere);
+        lever.SpawnBuilt(session.BobHere);
         GameObject crate = Crate(session.World, NetworkVisibility.Manual);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         crate.Network.ShowTo(session.AliceHere);
         Pump(() => session.Bob.Has(FakePeer.Spawn), session.Alice, session.Bob);
 
@@ -564,7 +564,7 @@ public partial class NetworkingTests
             world.Add(rules);
         });
         GameObject crate = Crate(session.World, NetworkVisibility.Default);
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         crate.Network.HideFrom(session.AliceHere);
         Exception? failure = null;
         void Touch(NetPeer peer)
@@ -601,7 +601,7 @@ public partial class NetworkingTests
         });
         GameObject crate = Crate(session.World, NetworkVisibility.Manual);
         NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
-        crate.Network.SpawnSerialized();
+        crate.SpawnBuilt();
         bool? visible = null;
         listener!.Connected = peer =>
         {
@@ -622,7 +622,7 @@ public partial class NetworkingTests
         using VisibilitySession session = VisibilityHost();
         session.World.Add(pooled);
         pooled.Network.Visibility = NetworkVisibility.Manual;
-        pooled.Network.SpawnSerialized();
+        pooled.SpawnBuilt();
         Assert.True(pooled.Network.Active);
         PumpFor(10, session.Alice, session.Bob);
         Assert.False(Mentions(session.Alice, pooled.Identifier));

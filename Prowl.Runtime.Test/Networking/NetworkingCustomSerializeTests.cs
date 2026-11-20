@@ -47,7 +47,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => alice.IsReady, alice);
-            board.Network.SpawnSerialized();
+            board.SpawnBuilt();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
             Assert.True(SpawnCarries(alice, NetworkSerializeMember.CustomSlot));
 

@@ -37,7 +37,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => alice.IsReady && bob.IsReady, alice, bob);
-            gun.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
+            gun.SpawnBuilt(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
             Pump(() => alice.Has(FakePeer.Spawn) && bob.Has(FakePeer.Spawn), alice, bob);
             Assert.False(SpawnCarries(bob, AmmoTestComponent.AmmoSlot));
             Pump(() => alice.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 30, alice, bob);
@@ -68,7 +68,7 @@ public partial class NetworkingTests
             Pump(() => alice.IsReady && bob.IsReady, alice, bob);
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
             NetPeer bobHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "bob");
-            gun.Network.SpawnSerialized(aliceHere);
+            gun.SpawnBuilt(aliceHere);
             Pump(() => alice.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 30, alice, bob);
             Assert.Null(bob.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot));
 

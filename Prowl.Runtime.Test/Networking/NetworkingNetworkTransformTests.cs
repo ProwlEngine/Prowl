@@ -140,59 +140,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ALateSpawnNamesTheTransformsTheHostUsesAndNotOnesAddedSince()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject root = CreateGameObject("Tank"), turret = CreateGameObject("Turret");
-        turret.SetParent(root);
-        root.Network.Networked = true;
-        NetworkTransform turning = root.AddComponent<NetworkTransform>();
-        turning.Target = turret;
-        scene.Add(root); MakeCurrent(scene);
-        byte[] snapshot, spawn;
-        LocalNetwork source = new();
-        Networking.Networking.Host(new LocalTransport(source, "host"));
-        using (FakePeer recorder = FakePeer.Join(source, "recorder"))
-        {
-            try
-            {
-                Pump(() => recorder.IsReady, recorder);
-                Assert.Single(Networking.Networking.System!.FindEntry(root)!.Transforms);
-
-                // Added once it is spawned, and ahead of the first in the tree: the host never sends it.
-                GameObject hatch = CreateGameObject("Hatch");
-                hatch.SetParent(root);
-                hatch.SetSiblingIndex(0);
-                hatch.AddComponent<NetworkTransform>();
-                using NetWriter written = new();
-                NetworkTestScene.Current.WriteSpawn(root, -1, NetworkOrphaned.Destroy, written,
-                    NetworkGeneration(root), NetworkTestScene.Current.NetIdOf(root));
-                spawn = written.ToArray();
-                snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.Scene).Data;
-            }
-            finally { Networking.Networking.Shutdown(); }
-        }
-
-        MakeCurrent(CreateScene());
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer =>
-        {
-            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), peer);
-            host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
-        };
-        try
-        {
-            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == root.Identifier), host);
-            GameObject copy = Find(SceneInstance.Main, root.Identifier);
-            NetworkTransform only = Assert.Single(Networking.Networking.System!.FindEntry(copy)!.Transforms);
-            Assert.Equal(turning.Identifier, only.Identifier);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
     public void ANetworkTransformWithoutInterpolationAppliesTheNewestPoseAtOnce()
     {
         TimeSpan previous = Networking.Networking.InterpolationDelay;

@@ -277,8 +277,8 @@ public sealed class NetworkAccessor
         _object.Transform.Rotation = rotation;
     }
 
-    /// <summary>Host: spawns the tree for all peers, or assigns ownership if already spawned. Behind Networking.SpawnGameObject.</summary>
-    internal void SpawnSerialized(NetPeer? owner = null, NetworkOrphaned? orphaned = null)
+    /// <summary>What a spawn outside a session leaves on the object: it is networked, with its orphaned policy.</summary>
+    internal void MarkSpawned(NetworkOrphaned? orphaned)
     {
         NetworkOrphaned policy = orphaned ?? Orphaned;
         if (!Enum.IsDefined(policy))
@@ -286,15 +286,8 @@ public sealed class NetworkAccessor
             throw new ArgumentOutOfRangeException(nameof(orphaned));
         }
 
-        if (Networking.System is { } system)
-        {
-            system.Spawn(_object, owner, policy);
-        }
-        else
-        {
-            Networked = true;
-            Orphaned = policy;
-        }
+        Networked = true;
+        Orphaned = policy;
     }
 
     /// <summary>

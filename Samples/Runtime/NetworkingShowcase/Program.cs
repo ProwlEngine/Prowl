@@ -163,18 +163,10 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         CameraObject.GetComponent<PhysicsGrabber>()!.UnheldClicked +=
             body => body.GetComponent<Grabbable>()?.TakeControl();
 
-        // Every window builds the level itself: only networked objects travel, and those are the host's to spawn.
+        // Every window builds the level itself and registers how each networked object in it is built. Only the
+        // host spawns those, and each client builds its copies when the host's spawns arrive.
         BuildWorld();
-        foreach (GameObject hostOnly in _hostOnly)
-        {
-            hostOnly.Dispose();
-        }
-
-        _hostOnly.Clear();
     }
-
-    // Networked objects a client window built along with the level, dropped once it is built: its own come from the host.
-    private readonly List<GameObject> _hostOnly = [];
 
     private void BuildWorld()
     {
@@ -189,55 +181,61 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         float length = StationSpacing * Stations.Count + 20f;
         Add(Block("Floor", new Float3(length, 1f, 30f), Floor(length, 30f),
             new Float3(StationSpacing * (Stations.Count - 1) * 0.5f, -0.5f, 0f)));
-        Networked(new GameObject("Tour")).AddComponent<Tour>();
+        Networked("Tour", () => With<Tour>(new GameObject("Tour")));
 
         Pedestal(StationCenter(0));
-        GameObject lamp = Networked(Model("Lamp", Mesh.CreateSphere(0.6f, 16, 24), Lit(SyncLamp.Colors[0]),
-            StationCenter(0) + new Float3(0f, 1.5f, 0f)));
-        lamp.AddComponent<SyncLamp>();
+        Networked("Lamp", () => With<SyncLamp>(Model("Lamp", Mesh.CreateSphere(0.6f, 16, 24), Lit(SyncLamp.Colors[0]),
+            StationCenter(0) + new Float3(0f, 1.5f, 0f))));
 
         Add(Block("Track", new Float3(6.6f, 0.05f, 6.6f), _stone, StationCenter(1) + new Float3(0f, 0.03f, 0f)));
-        GameObject rover = Networked(Model("Rover", Mesh.CreateCube(new Float3(1f, 0.6f, 1.4f)),
-            Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), StationCenter(1) + new Float3(3f, 0.6f, 0f)));
-        rover.AddComponent<NetworkTransform>();
-        rover.AddComponent<Rover>().Center = StationCenter(1);
+        Networked("Rover", () =>
+        {
+            GameObject rover = Model("Rover", Mesh.CreateCube(new Float3(1f, 0.6f, 1.4f)),
+                Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), StationCenter(1) + new Float3(3f, 0.6f, 0f));
+            rover.AddComponent<NetworkTransform>();
+            rover.AddComponent<Rover>().Center = StationCenter(1);
+            return rover;
+        });
         for (int i = 0; i < 4; i++)
         {
             Float3 at = StationCenter(1) + new Float3(-1.5f + i, PuckHeight, -1.2f + i % 2 * 2.4f);
-            GameObject puck = Networked(Model($"Puck {i + 1}", Mesh.CreateCylinder(0.4f, 0.2f, 24),
-                Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at));
-            puck.AddComponent<NetworkTransform>();
-            puck.AddComponent<Grabbable>().Home = at;
+            string name = $"Puck {i + 1}";
+            Networked(name, () =>
+            {
+                GameObject puck = Model(name, Mesh.CreateCylinder(0.4f, 0.2f, 24),
+                    Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at);
+                puck.AddComponent<NetworkTransform>();
+                puck.AddComponent<Grabbable>().Home = at;
+                return puck;
+            });
         }
 
         Pedestal(StationCenter(2));
-        Networked(Model("Bell", Mesh.CreateCone(0.7f, 1.2f), Lit(new Color(0.6f, 0.6f, 0.65f, 1f), 0.8f, 0.3f),
-                StationCenter(2) + new Float3(0f, 1.8f, 0f), new Float3(180f, 0f, 0f)))
-            .AddComponent<Bell>();
+        Networked("Bell", () => With<Bell>(Model("Bell", Mesh.CreateCone(0.7f, 1.2f),
+            Lit(new Color(0.6f, 0.6f, 0.65f, 1f), 0.8f, 0.3f), StationCenter(2) + new Float3(0f, 1.8f, 0f),
+            new Float3(180f, 0f, 0f))));
 
         Pedestal(StationCenter(3));
-        Networked(Model("Reactor", Mesh.CreateCylinder(0.6f, 1.4f, 24), Lit(new Color(0.1f, 0.35f, 1f, 1f)),
-                StationCenter(3) + new Float3(0f, 1.7f, 0f)))
-            .AddComponent<Reactor>();
+        Networked("Reactor", () => With<Reactor>(Model("Reactor", Mesh.CreateCylinder(0.6f, 1.4f, 24),
+            Lit(new Color(0.1f, 0.35f, 1f, 1f)), StationCenter(3) + new Float3(0f, 1.7f, 0f))));
 
-        Networked(new GameObject("Board") { Transform = { Position = StationCenter(4) } }).AddComponent<Board>();
+        Networked("Board", () => With<Board>(new GameObject("Board") { Transform = { Position = StationCenter(4) } }));
 
         Pedestal(StationCenter(5));
-        Networked(Model("Loadout", Mesh.CreateCube(new Float3(0.8f, 1f, 0.8f)), Lit(Armory.Weapons[0].Tint),
-                StationCenter(5) + new Float3(0f, 1.5f, 0f)))
-            .AddComponent<Armory>();
+        Networked("Loadout", () => With<Armory>(Model("Loadout", Mesh.CreateCube(new Float3(0.8f, 1f, 0.8f)),
+            Lit(Armory.Weapons[0].Tint), StationCenter(5) + new Float3(0f, 1.5f, 0f))));
 
         Add(Block("Hangar Floor", new Float3(7f, 0.05f, 5f), _stone, StationCenter(6) + new Float3(0f, 0.03f, 0f)));
-        Networked(new GameObject("Hangar") { Transform = { Position = StationCenter(6) } }).AddComponent<Hangar>();
+        Networked("Hangar", () => With<Hangar>(new GameObject("Hangar") { Transform = { Position = StationCenter(6) } }));
 
         BuildPhysics(StationCenter(7));
 
         Add(Block("Swarm Floor", new Float3(13f, 0.05f, 9f), _stone, StationCenter(8) + new Float3(0f, 0.03f, 0f)));
-        Networked(new GameObject("Swarm") { Transform = { Position = StationCenter(8) } }).AddComponent<Swarm>();
+        Networked("Swarm", () => With<Swarm>(new GameObject("Swarm") { Transform = { Position = StationCenter(8) } }));
 
         Pedestal(StationCenter(9));
-        Networked(new GameObject("Guestbook") { Transform = { Position = StationCenter(9) } })
-            .AddComponent<Guestbook>();
+        Networked("Guestbook",
+            () => With<Guestbook>(new GameObject("Guestbook") { Transform = { Position = StationCenter(9) } }));
     }
 
     /// <summary>A walled pen of boxes and balls, each a networked rigidbody anyone can grab.</summary>
@@ -252,22 +250,26 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         {
             bool ball = i % 3 == 2;
             Float3 at = c + new Float3(-3f + i % 4 * 2f, 0.5f + i / 4 * 0.9f, -1.5f + i / 4 % 2 * 1.5f);
-            GameObject body = Networked(ball
-                ? Model($"Ball {i + 1}", Mesh.CreateSphere(0.4f, 12, 18), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at)
-                : Model($"Box {i + 1}", Mesh.CreateCube(new Float3(0.8f, 0.8f, 0.8f)),
-                    Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at));
-            body.AddComponent<NetworkTransform>();
-            body.AddComponent<Rigidbody3D>().Mass = ball ? 1f : 2f;
-            if (ball)
+            string name = ball ? $"Ball {i + 1}" : $"Box {i + 1}";
+            Networked(name, () =>
             {
-                body.AddComponent<SphereCollider>().Radius = 0.4f;
-            }
-            else
-            {
-                body.AddComponent<BoxCollider>().Size = new Float3(0.8f, 0.8f, 0.8f);
-            }
+                GameObject body = ball
+                    ? Model(name, Mesh.CreateSphere(0.4f, 12, 18), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at)
+                    : Model(name, Mesh.CreateCube(new Float3(0.8f, 0.8f, 0.8f)), Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), at);
+                body.AddComponent<NetworkTransform>();
+                body.AddComponent<Rigidbody3D>().Mass = ball ? 1f : 2f;
+                if (ball)
+                {
+                    body.AddComponent<SphereCollider>().Radius = 0.4f;
+                }
+                else
+                {
+                    body.AddComponent<BoxCollider>().Size = new Float3(0.8f, 0.8f, 0.8f);
+                }
 
-            body.AddComponent<Grabbable>().Home = at;
+                body.AddComponent<Grabbable>().Home = at;
+                return body;
+            });
         }
     }
 
@@ -292,17 +294,23 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     private void Pedestal(Float3 center) =>
         Add(Block("Pedestal", new Float3(1.6f, 1f, 1.6f), _stone, center + new Float3(0f, 0.5f, 0f)));
 
-    /// <summary>Placed in the scene as a networked object, which belongs to the host until it hands it out.</summary>
-    private GameObject Networked(GameObject go)
+    /// <summary>
+    ///     A networked object of the level. Every window registers how it is built, under its name, and the host
+    ///     spawns it: it belongs to the host until the host hands it out.
+    /// </summary>
+    private void Networked(string name, Func<GameObject> build)
     {
-        go.Network.Networked = true;
-        if (IsClientWindow)
+        Networking.RegisterFactory(name, (in NetworkSpawn _) => build());
+        if (!IsClientWindow)
         {
-            _hostOnly.Add(go);
-            return go;
+            Networking.SpawnFactory(name, Float3.Zero, Quaternion.Identity);
         }
+    }
 
-        return Add(go);
+    private static GameObject With<T>(GameObject go) where T : Component, new()
+    {
+        go.AddComponent<T>();
+        return go;
     }
 
     // --------------------------------------------------------------------

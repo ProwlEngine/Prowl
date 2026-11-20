@@ -91,18 +91,6 @@ public sealed class NetworkConfiguration
     /// <summary>Most bytes per second each KCP connection sends, or 0 for no limit.</summary>
     public int MaxSendRate;
 
-    /// <summary>
-    ///     Maximum decompressed bytes of one object spawned with its whole tree, as
-    ///     <see cref="Networking.SpawnGameObject" /> sends it. Prefab and factory spawns carry no tree.
-    /// </summary>
-    public int MaxSnapshotDecompressedBytes = 64 * 1024 * 1024;
-
-    /// <summary>Maximum value nesting in such a tree, including the root, before engine objects are created.</summary>
-    public int MaxSnapshotDepth = 128;
-
-    /// <summary>Maximum values in such a tree, containers and scalars together.</summary>
-    public int MaxSnapshotNodes = 250_000;
-
     /// <summary>KCP: largest packet sent, in bytes.</summary>
     public int Mtu = 1200;
 
@@ -208,9 +196,6 @@ public sealed class NetworkConfiguration
         copy.MaxClientMessageSize = Math.Clamp(copy.MaxClientMessageSize, 1024, copy.MaxMessageSize);
         copy.MaxClientMessagesPerSecond = Math.Max(0, copy.MaxClientMessagesPerSecond);
         copy.JoinSpawnBytesPerTick = Math.Max(0, copy.JoinSpawnBytesPerTick);
-        copy.MaxSnapshotDecompressedBytes = Math.Clamp(copy.MaxSnapshotDecompressedBytes, 1, 1024 * 1024 * 1024);
-        copy.MaxSnapshotDepth = Math.Clamp(copy.MaxSnapshotDepth, 1, 256);
-        copy.MaxSnapshotNodes = Math.Clamp(copy.MaxSnapshotNodes, 1, 1_000_000);
         copy.SceneLoadTimeoutSeconds = Limit(copy.SceneLoadTimeoutSeconds, 0.1f, 600, 60);
         copy.JoinTimeoutSeconds = Limit(copy.JoinTimeoutSeconds, 0.1f, 300, 10);
         copy.ConnectTimeoutSeconds = Limit(copy.ConnectTimeoutSeconds, 0.1f, 300, 5);

@@ -61,7 +61,7 @@ public partial class NetworkingTests
             GameObject radio = CreateGameObject("Radio");
             RpcChannelTestComponent component = radio.AddComponent<RpcChannelTestComponent>();
             scene.Add(radio);
-            radio.Network.SpawnSerialized();
+            radio.SpawnBuilt();
             Pump(() => bob.Has(FakePeer.Spawn), alice, bob);
 
             // A channel 0 call would send the pending collection change first; this one leaves it for the next tick.
@@ -89,7 +89,7 @@ public partial class NetworkingTests
             GameObject radio = CreateGameObject("Radio");
             RpcChannelTestComponent component = radio.AddComponent<RpcChannelTestComponent>();
             scene.Add(radio);
-            radio.Network.SpawnSerialized();
+            radio.SpawnBuilt();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             // Unreliable messages have no order to keep, so they go on channel 0 whatever the RPC asks.
@@ -115,7 +115,7 @@ public partial class NetworkingTests
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
-            crate.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
+            crate.SpawnBuilt(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             alice.Send(FakePeer.Sync, w =>
@@ -153,7 +153,7 @@ public partial class NetworkingTests
             GameObject radio = CreateGameObject("Radio");
             RpcChannelTestComponent component = radio.AddComponent<RpcChannelTestComponent>();
             scene.Add(radio);
-            radio.Network.SpawnSerialized();
+            radio.SpawnBuilt();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
             component.Talk();

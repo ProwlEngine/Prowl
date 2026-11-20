@@ -111,7 +111,8 @@ public static partial class Networking
     /// <summary>
     ///     Host: builds <paramref name="prefab" /> into SceneInstance.Main at a pose and spawns it. Clients build it from
     ///     their own copy of the prefab, so only [Sync] values, the root's transform and its network settings carry
-    ///     over; other fields changed on the host don't. Without a session it is only instantiated.
+    ///     over; other fields changed on the host don't. Without a session it is instantiated, and spawned once this
+    ///     peer hosts with it in the world.
     /// </summary>
     public static GameObject SpawnPrefab(PrefabAsset prefab, Float3 position, Quaternion rotation, NetPeer? owner = null,
         NetworkOrphaned? orphaned = null)
@@ -128,7 +129,7 @@ public static partial class Networking
             throw new ArgumentException($"'{prefab.Name}' could not be instantiated.", nameof(prefab));
         }
 
-        go!.Network.SpawnSerialized(owner, orphaned);
+        go!.Network.MarkSpawned(orphaned);
         return go;
     }
 
@@ -136,7 +137,7 @@ public static partial class Networking
     ///     Host: builds an object with the factory registered as <paramref name="factory" />, adds it to
     ///     SceneInstance.Main and spawns it. Clients build theirs with their own factory of that name, given the same
     ///     <paramref name="data" />, so as with prefabs only [Sync] values, the root's transform and its network settings
-    ///     carry over. Without a session it is only built.
+    ///     carry over. Without a session it is built, and spawned once this peer hosts with it in the world.
     /// </summary>
     public static GameObject SpawnFactory(string factory, Float3 position, Quaternion rotation, byte[]? data = null,
         NetPeer? owner = null, NetworkOrphaned? orphaned = null)
@@ -149,20 +150,28 @@ public static partial class Networking
         }
 
         GameObject go = NetworkSystem.BuildWithFactory(factory, position, rotation, data);
+        NetworkSystem.RememberFactory(go, factory, data);
         SceneInstance.Main.Add(go);
-        go.Network.SpawnSerialized(owner, orphaned);
+        go.Network.MarkSpawned(orphaned);
         return go;
     }
 
     /// <summary>
-    ///     Host: spawns an object already in the networked world by serializing its whole tree for each peer. Slow, and
-    ///     not recommended: prefer <see cref="SpawnPrefab" /> or <see cref="SpawnFactory" />, which send only what
-    ///     changed from what every peer can build itself. Spawning an object already spawned assigns its owner.
+    ///     Host: spawns an object every peer can build itself, as Mirror's NetworkServer.Spawn: an instance of a prefab
+    ///     that is in SceneInstance.Main, or an object despawned before. Anything else throws, since clients would
+    ///     have nothing to build it from. Without a session it is only marked networked.
     /// </summary>
-    public static void SpawnGameObject(GameObject go, NetPeer? owner = null, NetworkOrphaned? orphaned = null)
+    public static void Spawn(GameObject go, NetPeer? owner = null, NetworkOrphaned? orphaned = null)
     {
         ArgumentNullException.ThrowIfNull(go);
-        go.Network.SpawnSerialized(owner, orphaned);
+        if (System is { } system)
+        {
+            system.Spawn(go, owner, orphaned ?? go.Network.Orphaned);
+        }
+        else
+        {
+            go.Network.MarkSpawned(orphaned);
+        }
     }
 
     /// <summary>
@@ -231,7 +240,7 @@ public static partial class Networking
 
     /// <summary>
     ///     Host: takes a spawned object out of the network, as Mirror's UnSpawn does. Clients despawn it, and this peer
-    ///     keeps it, to pool or spawn again later; one built from a prefab or factory spawns again the same way.
+    ///     keeps it, to pool or to spawn again with <see cref="Spawn" />, which sends it the way it was built.
     /// </summary>
     public static void Despawn(GameObject go)
     {
