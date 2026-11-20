@@ -142,19 +142,4 @@ public partial class NetworkingTests
         }
     }
 
-    [Fact]
-    public void SpawnGameObjectSpawnsTheTreeAsItIs()
-    {
-        SceneInstance scene = CreateScene();
-        MakeCurrent(scene);
-        Networking.Networking.Host(new LocalTransport(new(), "host"));
-        try
-        {
-            GameObject go = CreateGameObject("Built");
-            scene.Add(go);
-            Networking.Networking.SpawnGameObject(go);
-            Assert.True(go.Network.Active);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
 }

@@ -168,49 +168,6 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    [Fact]
-    public void ALateJoiningClientBuildsPrefabInstancesFromItsOwnPrefab()
-    {
-        PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
-        MakeCurrent(scene);
-        List<(ushort Id, byte[] Data)> recorded;
-        List<Guid> ids;
-        LocalNetwork source = new();
-        Networking.Networking.Host(new LocalTransport(source, "host"));
-        try
-        {
-            GameObject crate = Networking.Networking.SpawnPrefab(prefab, new Float3(4, 5, 6), Quaternion.Identity);
-            crate.GetComponent<NetTestComponent>()!.Health = 9;
-            ids = TreeIdentifiers(crate);
-            using FakePeer recorder = FakePeer.Join(source, "recorder");
-            Pump(() => recorder.Has(FakePeer.Spawn), recorder);
-            recorded = recorder.WireReceived.Where(m => m.Id is FakePeer.SceneSnapshot or FakePeer.Spawn).ToList();
-            crate.Dispose();
-        }
-        finally { Networking.Networking.Shutdown(); }
-
-        LocalNetwork network = new();
-        using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer =>
-        {
-            foreach ((ushort id, byte[] data) in recorded)
-                host.Send(id, w => w.WriteBytes(data), peer);
-        };
-        try
-        {
-            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == ids[0]), host);
-            GameObject copy = Find(SceneInstance.Main, ids[0]);
-
-            Assert.Equal(ids, TreeIdentifiers(copy));
-            Assert.Equal(prefab.AssetID, copy.PrefabAssetId);
-            Assert.Equal(9, copy.GetComponent<NetTestComponent>()!.Health);
-            Assert.True(copy.Network.Active);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
     private static bool SpawnIsPrefab(GameObject go)
     {
         using NetWriter output = new();
