@@ -19,7 +19,9 @@ namespace Prowl.Runtime.Networking;
 // to call, and carry its id in front.
 //
 // A call carries no state. A reliable one sends the caller's pending Sync changes first, on the same ordered
-// channel, so it arrives after them. An unreliable one promises no ordering with anything.
+// channel, so it arrives after them. An unreliable one promises no ordering with anything, and can arrive before
+// the spawn of the object it names, where it is dropped. A client holds what arrives during a spawn run until the
+// run's spawn callbacks have run.
 internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 {
     internal readonly HashSet<string> _rpcWarnings = new();
@@ -135,10 +137,10 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        // Only channel 0 keeps the call behind the Sync changes made before it.
+        // Only channel 0 keeps the call behind the Sync changes made before it, its own object's whatever their interval.
         if (delivery == Delivery.Reliable && rpc.Channel == 0)
         {
-            scene.Sync.SendSyncChanges();
+            scene.Sync.SendSyncChanges(networked);
         }
 
         using NetWriter envelope = new(writer.Length + 32);

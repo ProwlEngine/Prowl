@@ -292,8 +292,11 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
     // --- Sending --------------------------------------------------------------------------------------
 
-    /// <summary>Sends every [Sync] change made since the last time, and whatever was queued to pass on.</summary>
-    internal void SendSyncChanges()
+    /// <summary>
+    ///     Sends every [Sync] change made since the last time, and whatever was queued to pass on. Changes to
+    ///     <paramref name="urgent" /> go whatever its components' send intervals, for a call that must arrive after them.
+    /// </summary>
+    internal void SendSyncChanges(NetworkObject? urgent = null)
     {
         if (_dirty.Count == 0 && _batches.Count == 0)
         {
@@ -324,7 +327,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 continue;
             }
 
-            if (WriteChanged(entry, masks, tick, session))
+            if (WriteChanged(entry, masks, tick, session, entry == urgent))
             {
                 // Members whose send interval hasn't come round stay marked.
                 entry.StateDirty = true;
@@ -340,7 +343,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     ///     Writes the dirty members of <paramref name="entry" /> that are due and queues them for whoever gets them.
     ///     True if some stay dirty for a later tick.
     /// </summary>
-    private bool WriteChanged(NetworkObject entry, ulong[] masks, uint tick, NetSession session)
+    private bool WriteChanged(NetworkObject entry, ulong[] masks, uint tick, NetSession session, bool urgent)
     {
         bool host = scene.IsHost, waiting = false;
         ulong observerComponents = 0, ownerComponents = 0;
@@ -361,7 +364,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 continue;
             }
 
-            if (!scene.SendsStateOn(entry, component, tick))
+            if (!urgent && !scene.SendsStateOn(entry, component, tick))
             {
                 waiting = true;
                 continue;
