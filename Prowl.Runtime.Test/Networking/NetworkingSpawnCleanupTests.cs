@@ -67,7 +67,7 @@ public partial class NetworkingTests
         LocalNetwork network = new(); using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
             host.Session.SendRaw(peer, FakePeer.Spawn, bytes);
         };
         NetworkSpawnCleanupComponent.Decoded.Clear();
@@ -131,7 +131,7 @@ public partial class NetworkingTests
         original.Health = 100;
         LocalNetwork network = new();
         FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");

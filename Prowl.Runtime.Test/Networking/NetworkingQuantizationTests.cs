@@ -43,7 +43,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject mover = CreateGameObject("Mover");
             mover.AddComponent<NetworkTransform>();
             scene.Add(mover);
@@ -55,15 +55,15 @@ public partial class NetworkingTests
             {
                 x += 0.25f;
                 mover.Transform.LocalPosition = new Float3(x, 0, 0);
-                return alice.WireReceived.Count(m => m.Id == FakePeer.Snapshot && RawRecords(m.Data).Any(r => r.NetId == netId && r.BaselineAge != 0)) >= 3;
+                return alice.WireReceived.Count(m => m.Id == FakePeer.Transform && RawRecords(m.Data).Any(r => r.NetId == netId && r.BaselineAge != 0)) >= 3;
             }, alice);
 
-            List<(int Size, uint BaselineAge)> raw = alice.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
+            List<(int Size, uint BaselineAge)> raw = alice.WireReceived.Where(m => m.Id == FakePeer.Transform)
                 .SelectMany(m => RawRecords(m.Data)).Where(r => r.NetId == netId && (r.Channels & PositionChannel) != 0)
                 .Select(r => (r.Size, r.BaselineAge)).ToList();
             Assert.Equal(0u, raw[0].BaselineAge);
             Assert.All(raw.Where(r => r.BaselineAge != 0), r => Assert.True(r.Size < 12, $"delta position of {r.Size} bytes"));
-            Pump(() => ReadTransforms(alice.WireReceived.Last(m => m.Id == FakePeer.Snapshot && ReadTransforms(m.Data).Any(r => r.NetId == netId)).Data)
+            Pump(() => ReadTransforms(alice.WireReceived.Last(m => m.Id == FakePeer.Transform && ReadTransforms(m.Data).Any(r => r.NetId == netId)).Data)
                 .Single(r => r.NetId == netId).Position == new Float3(x, 0, 0), alice);
         }
         finally { Networking.Networking.Shutdown(); }
@@ -85,7 +85,7 @@ public partial class NetworkingTests
         {
             Pump(() => alice.IsReady, alice);
             uint netId = NetworkTestScene.Current.NetIdOf(root), generation = NetworkGeneration(root);
-            alice.Send(FakePeer.Snapshot, w =>
+            alice.Send(FakePeer.Transform, w =>
             {
                 w.WriteVarUInt32(0); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(50);
                 w.WriteDouble(1); w.WriteVarUInt32(1);
@@ -94,7 +94,7 @@ public partial class NetworkingTests
             });
             PumpFor(20, alice);
             Assert.Equal(SessionState.Active, alice.Session.State);
-            Assert.Equal(0, Networking.Networking.System!.Snapshots.ReceivedHistoryCount);
+            Assert.Equal(0, Networking.Networking.System!.Transforms.ReceivedHistoryCount);
             Assert.Equal(Float3.Zero, root.Transform.LocalPosition);
         }
         finally { Networking.Networking.Shutdown(); }
@@ -126,7 +126,7 @@ public partial class NetworkingTests
                 return until();
             }
 
-            List<uint> Ages() => alice.WireReceived.Where(m => m.Id == FakePeer.Snapshot).SelectMany(m => RawRecords(m.Data))
+            List<uint> Ages() => alice.WireReceived.Where(m => m.Id == FakePeer.Transform).SelectMany(m => RawRecords(m.Data))
                 .Where(r => r.NetId == netId && (r.Channels & PositionChannel) != 0 && (r.Channels & ExactChannel) == 0)
                 .Select(r => r.BaselineAge).ToList();
             Pump(() => Moving(() => Ages().Count(age => age != 0) >= 3), alice, bob);
@@ -157,7 +157,7 @@ public partial class NetworkingTests
             root.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
             uint netId = NetworkTestScene.Current.NetIdOf(root), generation = NetworkGeneration(root);
             owner.WireReceived.Clear();
-            owner.Send(FakePeer.Snapshot, w =>
+            owner.Send(FakePeer.Transform, w =>
             {
                 w.WriteVarUInt32(9); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(50);
                 w.WriteDouble(1); w.WriteVarUInt32(1);
@@ -165,8 +165,8 @@ public partial class NetworkingTests
                 w.WriteVarUInt32(5); w.WriteVarInt64(100); w.WriteVarInt64(0); w.WriteVarInt64(0);
             });
 
-            Pump(() => owner.Has(FakePeer.SnapshotAck), owner);
-            NetReader ack = new(owner.Last(FakePeer.SnapshotAck));
+            Pump(() => owner.Has(FakePeer.TransformAck), owner);
+            NetReader ack = new(owner.Last(FakePeer.TransformAck));
             Assert.Equal(1u, ack.ReadVarUInt32());
             Assert.Equal(9u, ack.ReadVarUInt32());
             Assert.Equal(1u, ack.ReadVarUInt32());
@@ -176,7 +176,7 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    /// <summary>Each transform record of a Snapshot as sent: its channels, its position's byte size and the age of that position's baseline.</summary>
+    /// <summary>Each transform record of a Transform as sent: its channels, its position's byte size and the age of that position's baseline.</summary>
     private static List<(uint NetId, byte Channels, int Size, uint BaselineAge)> RawRecords(byte[] message)
     {
         NetReader r = new(message);

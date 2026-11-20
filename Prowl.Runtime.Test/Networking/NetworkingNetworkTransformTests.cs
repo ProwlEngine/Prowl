@@ -38,7 +38,7 @@ public partial class NetworkingTests
             // A transform its owner sends for it has nowhere to go either.
             plain.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
             Float3 kept = plain.Transform.LocalPosition;
-            owner.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
+            owner.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
                 (plainId, NetworkGeneration(plain), new Float3(50, 60, 70), Quaternion.Identity, Float3.One)));
             PumpFor(15, owner);
             Assert.True(Networking.Networking.IsActive);
@@ -72,10 +72,10 @@ public partial class NetworkingTests
             {
                 x += 0.5f;
                 turret.Transform.LocalPosition = wheel.Transform.LocalPosition = new Float3(x, 0, 0);
-                return observer.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
+                return observer.WireReceived.Where(m => m.Id == FakePeer.Transform)
                     .SelectMany(m => ReadTransforms(m.Data)).Count(r => r.NetId == netId && r.Index == 1) >= 3;
             }, owner, observer);
-            List<TransformRecord> sent = observer.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
+            List<TransformRecord> sent = observer.WireReceived.Where(m => m.Id == FakePeer.Transform)
                 .SelectMany(m => ReadTransforms(m.Data)).Where(r => r.NetId == netId).ToList();
             Assert.DoesNotContain(sent, r => r.Index > 1);
             Assert.DoesNotContain(sent, r => r.Index == 0 && r.Position != null && r.Position.Value.X != 0);
@@ -83,14 +83,14 @@ public partial class NetworkingTests
             // An owner's record for the second transform moves the turret, and leaves the root where it is.
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => p.Name == "owner"));
             Float3 rootPosition = root.Transform.LocalPosition, wheelPosition = wheel.Transform.LocalPosition;
-            owner.Send(FakePeer.Snapshot, w => WriteIndexedTransforms(w, 1, 1, 1,
+            owner.Send(FakePeer.Transform, w => WriteIndexedTransforms(w, 1, 1, 1,
                 (netId, NetworkGeneration(root), new Float3(7, 8, 9), Quaternion.Identity, Float3.One)));
             Pump(() => turret.Transform.LocalPosition == new Float3(7, 8, 9), owner, observer);
             Assert.Equal(rootPosition, root.Transform.LocalPosition);
             Assert.Equal(wheelPosition, wheel.Transform.LocalPosition);
 
             // An index the object has no transform for is dropped.
-            owner.Send(FakePeer.Snapshot, w => WriteIndexedTransforms(w, 2, 2, 5,
+            owner.Send(FakePeer.Transform, w => WriteIndexedTransforms(w, 2, 2, 5,
                 (netId, NetworkGeneration(root), new Float3(1, 1, 1), Quaternion.Identity, Float3.One)));
             PumpFor(15, owner, observer);
             Assert.True(Networking.Networking.IsActive);
@@ -116,7 +116,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
             host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
         try
@@ -131,7 +131,7 @@ public partial class NetworkingTests
             Assert.Same(proxyTurret, transforms[1].Target);
 
             uint netId = NetworkTestScene.Current.NetIdOf(proxy);
-            host.Send(FakePeer.Snapshot, w => WriteIndexedTransforms(w, 1, 1, 1,
+            host.Send(FakePeer.Transform, w => WriteIndexedTransforms(w, 1, 1, 1,
                 (netId, 0, new Float3(4, 5, 6), Quaternion.Identity, Float3.One)), client);
             Pump(() => proxyTurret.Transform.LocalPosition == new Float3(4, 5, 6), host);
             Assert.Equal(Float3.Zero, proxy.Transform.LocalPosition);
@@ -168,7 +168,7 @@ public partial class NetworkingTests
                 NetworkTestScene.Current.WriteSpawn(root, -1, NetworkOrphaned.Destroy, written,
                     NetworkGeneration(root), NetworkTestScene.Current.NetIdOf(root));
                 spawn = written.ToArray();
-                snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data;
+                snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.Scene).Data;
             }
             finally { Networking.Networking.Shutdown(); }
         }
@@ -178,7 +178,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
+            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), peer);
             host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
         };
         try

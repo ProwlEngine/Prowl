@@ -59,7 +59,7 @@ public partial class NetworkingTests
         byte[] payload = snapshot.WrittenSpan.ToArray();
         LocalNetwork network = new();
         FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, payload);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, payload);
         Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
         return host;
     }

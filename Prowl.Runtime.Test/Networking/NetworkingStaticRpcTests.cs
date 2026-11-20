@@ -200,7 +200,7 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.IsActive, host);
             StaticRpcProbe.Call(901, 9); // Admitted, but still waiting for a scene.
             Assert.Empty(StaticRpcProbe.Calls);
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan),
+            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot.WrittenSpan),
                 host.Session.Peers.Single(p => !p.IsLocal));
             Pump(() => Networking.Networking.IsReady, host);
             StaticRpcProbe.Call(902, 10);
@@ -234,7 +234,7 @@ public partial class NetworkingTests
         ClearStaticProbe();
         try
         {
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
+            Pump(() => client.Has(FakePeer.Scene), client);
             client.Send(FakePeer.StaticRpcToHost, w => WriteStaticRpc(w, 901, a => NetSerializer<int>.Write(a, 1)));
             StaticRpcProbe.Call(901, 2);
             PumpFor(20, client);

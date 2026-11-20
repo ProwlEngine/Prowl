@@ -99,7 +99,7 @@ internal sealed partial class NetworkSystem
         uint generation = message.Generation;
         Float3 velocity = message.Velocity;
         ReadOnlySpan<byte> poses = message.Poses;
-        if (!reader.IsAtEnd || delivery != Delivery.Reliable || !Finite(velocity))
+        if (!reader.IsAtEnd || delivery != Delivery.Reliable || !NetworkValidation.Finite(velocity))
         {
             throw new InvalidDataException("Invalid ownership handoff state.");
         }

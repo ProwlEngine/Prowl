@@ -7,8 +7,8 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Bounds compressed scene/spawn decoding before Echo allocates or recursively reads the tree.</summary>
-internal static class SnapshotDecoder
+/// <summary>Bounds the decoding of a spawn's compressed tree before Echo allocates or recursively reads it.</summary>
+internal static class SpawnTreeDecoder
 {
     internal static EchoObject Decode(ReadOnlySpan<byte> compressed, NetworkConfiguration limits)
     {
@@ -24,7 +24,7 @@ internal static class SnapshotDecoder
         {
             if (read > limits.MaxSnapshotDecompressedBytes - decoded.Length)
             {
-                throw new InvalidDataException("Snapshot decompressed byte limit exceeded.");
+                throw new InvalidDataException("Spawn tree decompressed byte limit exceeded.");
             }
 
             decoded.Write(buffer[..read]);
@@ -35,7 +35,7 @@ internal static class SnapshotDecoder
         ValidateValue(ref reader, 1, limits.MaxSnapshotDepth, ref remainingNodes);
         if (!reader.IsAtEnd)
         {
-            throw new InvalidDataException("Snapshot contains trailing Echo bytes.");
+            throw new InvalidDataException("Spawn tree contains trailing Echo bytes.");
         }
 
         // Echo's general-purpose reader trusts lengths and container counts. Only give it a
@@ -50,12 +50,12 @@ internal static class SnapshotDecoder
     {
         if (depth > maxDepth)
         {
-            throw new InvalidDataException("Snapshot nesting depth limit exceeded.");
+            throw new InvalidDataException("Spawn tree nesting depth limit exceeded.");
         }
 
         if (remainingNodes-- <= 0)
         {
-            throw new InvalidDataException("Snapshot node limit exceeded.");
+            throw new InvalidDataException("Spawn tree node limit exceeded.");
         }
 
         EchoType type = (EchoType)reader.ReadByte();
@@ -93,14 +93,14 @@ internal static class SnapshotDecoder
                 int count = reader.ReadInt32();
                 if (count < 0 || count > remainingNodes)
                 {
-                    throw new InvalidDataException("Snapshot container exceeds the node limit.");
+                    throw new InvalidDataException("Spawn tree container exceeds the node limit.");
                 }
 
                 // Each list value needs a type byte; each compound value also needs a key length.
                 int minimumBytes = type == EchoType.Compound ? 5 : 1;
                 if (count > reader.Remaining / minimumBytes)
                 {
-                    throw new InvalidDataException("Snapshot container count exceeds the remaining data.");
+                    throw new InvalidDataException("Spawn tree container count exceeds the remaining data.");
                 }
 
                 for (int i = 0; i < count; i++)
@@ -114,7 +114,7 @@ internal static class SnapshotDecoder
                 }
 
                 return;
-            default: throw new InvalidDataException($"Unknown snapshot Echo type {(byte)type}.");
+            default: throw new InvalidDataException($"Unknown spawn tree Echo type {(byte)type}.");
         }
     }
 
@@ -123,7 +123,7 @@ internal static class SnapshotDecoder
         int length = reader.ReadInt32();
         if (length < 0 || length > reader.Remaining)
         {
-            throw new InvalidDataException("Snapshot byte/string length exceeds the remaining data.");
+            throw new InvalidDataException("Spawn tree byte/string length exceeds the remaining data.");
         }
 
         reader.ReadBytes(length);

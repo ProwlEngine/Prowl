@@ -133,7 +133,7 @@ internal sealed partial class NetworkSystem
             throw new InvalidDataException("Scene messages must be reliable.");
         }
 
-        NetworkValidation.SnapshotFormat(reader.ReadByte());
+        NetworkValidation.SceneMessageFormat(reader.ReadByte());
         ulong sceneGeneration = reader.ReadUInt64();
         NetworkValidation.SceneGeneration(sceneGeneration);
         uint count = reader.ReadVarUInt32();
@@ -182,7 +182,7 @@ internal sealed partial class NetworkSystem
         ReplicatedWorld = world;
         Entries.Clear();
         Sync.Clear();
-        Snapshots.Clear();
+        Transforms.Clear();
         ForgetSections();
         DisposeHeld();
         _pendingSpawns.Clear();
@@ -638,7 +638,7 @@ internal sealed partial class NetworkSystem
         }
 
         state!.Stage = NetworkJoinState.Synchronizing;
-        Snapshots.Delivered(peer);
+        Transforms.Restart(peer);
         SendSceneGeneration(peer, EngineMessage.SpawnStarted);
         state.Run = [.. Entries.Values];
         ContinueJoin(peer, state);

@@ -116,7 +116,7 @@ public partial class NetworkingTests
                     system.Sync.SendSyncChanges();
                     state.Stop();
                     transforms.Start();
-                    system.Snapshots.Send();
+                    system.Transforms.Send();
                     transforms.Stop();
                     Networking.Networking.Flush();
                     DrainPeers(peers);
@@ -168,7 +168,7 @@ public partial class NetworkingTests
                     int owner = p;
                     uint tick = sent;
                     // Moving positions, whole and on the grid, as a client sends an object it is driving.
-                    peers[p].Send(FakePeer.Snapshot, w =>
+                    peers[p].Send(FakePeer.Transform, w =>
                     {
                         int count = (objects.Count - owner + peerCount - 1) / peerCount;
                         w.WriteVarUInt32(0); w.WriteVarUInt32((uint)system.SceneGeneration); w.WriteVarUInt32(tick);

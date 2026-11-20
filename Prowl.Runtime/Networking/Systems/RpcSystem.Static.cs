@@ -37,6 +37,12 @@ internal sealed partial class RpcSystem
     {
         if (!scene.IsHost && (!scene.IsReady || (rpc.Flags & RpcFlags.HostOnly) != 0))
         {
+            if (!scene.IsReady && _rpcWarnings.Add($"static:{rpc.Signature}:early"))
+            {
+                Debug.LogWarning(
+                    $"[Network] The static RPC {rpc.Signature} was called before this client finished joining, so this call was dropped. Call it from OnNetworkReady or later.");
+            }
+
             return false;
         }
 

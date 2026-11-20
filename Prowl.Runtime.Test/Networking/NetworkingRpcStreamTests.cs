@@ -112,7 +112,7 @@ public partial class NetworkingTests
             ushort[] order = client.WireReceived.Where(m => m.Id is FakePeer.Sync or FakePeer.RpcFromHost)
                 .Select(m => m.Id).ToArray();
             Assert.Equal(new[] { FakePeer.Sync, FakePeer.RpcFromHost }, order);
-            Assert.Equal(5, client.SnapshotInt(component.Identifier, 799));
+            Assert.Equal(5, client.SyncInt(component.Identifier, 799));
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -185,7 +185,7 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.AutoReady = false;
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");

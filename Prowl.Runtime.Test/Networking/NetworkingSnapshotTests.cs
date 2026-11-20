@@ -55,15 +55,15 @@ public partial class NetworkingTests
             (_, GameObject crate, NetTestComponent component) = SpawnCrate(network, aliceHere, alice, bob);
             uint generation = NetworkGeneration(crate);
 
-            alice.SendSnapshotValues(null, 1, 1, (component.Identifier, NetTestComponent.HealthSlot, generation, IntValue(42)));
-            Pump(() => bob.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == 42, alice, bob);
+            alice.SendSyncValues(null, 1, 1, (component.Identifier, NetTestComponent.HealthSlot, generation, IntValue(42)));
+            Pump(() => bob.SyncInt(component.Identifier, NetTestComponent.HealthSlot) == 42, alice, bob);
             Assert.Equal(42, component.Health);
 
             // Only the host writes Score, so it goes to the owner too.
             component.Score = 9;
-            Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.ScoreSlot) == 9 &&
-                       bob.SnapshotInt(component.Identifier, NetTestComponent.ScoreSlot) == 9, alice, bob);
-            Assert.Null(alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot));
+            Pump(() => alice.SyncInt(component.Identifier, NetTestComponent.ScoreSlot) == 9 &&
+                       bob.SyncInt(component.Identifier, NetTestComponent.ScoreSlot) == 9, alice, bob);
+            Assert.Null(alice.SyncInt(component.Identifier, NetTestComponent.HealthSlot));
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -80,8 +80,8 @@ public partial class NetworkingTests
         {
             (_, _, NetTestComponent component) = SpawnCrate(network, null, alice);
             component.Health = 3;
-            Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == 3, alice);
-            Assert.All(alice.Deliveries.Where(m => m.Id == FakePeer.Snapshot), m => Assert.Equal(Delivery.Reliable, m.Delivery));
+            Pump(() => alice.SyncInt(component.Identifier, NetTestComponent.HealthSlot) == 3, alice);
+            Assert.All(alice.Deliveries.Where(m => m.Id == FakePeer.Transform), m => Assert.Equal(Delivery.Reliable, m.Delivery));
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -112,7 +112,7 @@ public partial class NetworkingTests
                 NetSerializers.WriteFloat3(snapshot, new Float3(5, 6, 7));
                 NetSerializers.WriteQuaternion(snapshot, Quaternion.Identity);
                 NetSerializers.WriteFloat3(snapshot, Float3.One);
-                alice.Session.SendRaw(alice.Session.HostPeer!, FakePeer.Snapshot, snapshot.WrittenSpan, Delivery.Unreliable);
+                alice.Session.SendRaw(alice.Session.HostPeer!, FakePeer.Transform, snapshot.WrittenSpan, Delivery.Unreliable);
                 alice.Session.Flush();
             }
 
@@ -120,12 +120,12 @@ public partial class NetworkingTests
             Send((uint)NetworkTestScene.Current.SceneGeneration + 1);
             PumpFor(100, alice);
             Assert.Equal(before, crate.Transform.LocalPosition);
-            Assert.False(alice.Has(FakePeer.SnapshotAck));
+            Assert.False(alice.Has(FakePeer.TransformAck));
             Assert.Equal(SessionState.Active, alice.Session.State);
 
             // The same snapshot under this scene is taken, and acknowledged.
             Send((uint)NetworkTestScene.Current.SceneGeneration);
-            Pump(() => alice.Has(FakePeer.SnapshotAck), alice);
+            Pump(() => alice.Has(FakePeer.TransformAck), alice);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -140,7 +140,7 @@ public partial class NetworkingTests
         try
         {
             (_, GameObject crate, NetTestComponent component) = SpawnCrate(network, null, alice);
-            Action send = Networking.Networking.System!.Snapshots.Send;
+            Action send = Networking.Networking.System!.Transforms.Send;
             long Tick(int i)
             {
                 // A moving object and a changing value, acknowledged in between as they would be.

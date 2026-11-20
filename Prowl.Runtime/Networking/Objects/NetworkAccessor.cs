@@ -30,20 +30,48 @@ public sealed class NetworkAccessor
 
     /// <summary>
     ///     Makes the object a networked object, as Mirror's NetworkIdentity: kept in sync for its whole life, with
-    ///     everything below it part of it. Spawning sets it. Configure before the session starts for scene objects.
+    ///     everything below it part of it. Spawning sets it. Configure before the session starts for scene objects:
+    ///     setting it during one spawns nothing, and it can't be cleared while the object is spawned.
     /// </summary>
     public bool Networked
     {
         get => _networked;
-        set => _networked = value;
+        set
+        {
+            if (!value && _networked && IsSpawnedRoot)
+            {
+                throw new InvalidOperationException(
+                    $"'{_object.Name}' is spawned. Despawn it before taking it off the network.");
+            }
+
+            _networked = value;
+        }
     }
 
-    /// <summary>The object and everything below it never leave the host, as Mirror's serverOnly.</summary>
+    /// <summary>
+    ///     The object and everything below it never leave the host, as Mirror's serverOnly. It can't be set on an
+    ///     object that is spawned, or part of one.
+    /// </summary>
     public bool ServerOnly
     {
         get => _serverOnly;
-        set => _serverOnly = value;
+        set
+        {
+            if (value && !_serverOnly && Active)
+            {
+                throw new InvalidOperationException(
+                    $"'{_object.Name}' is spawned, or part of an object that is. Despawn it before making it server only.");
+            }
+
+            _serverOnly = value;
+        }
     }
+
+    private bool IsSpawnedRoot =>
+        Networking.System is { IsActive: true } system && system.FindEntry(_object) is { } entry && entry.GameObject == _object;
+
+    /// <summary>What a saved object holds, taken as it is.</summary>
+    internal void LoadSharing(bool networked, bool serverOnly) => (_networked, _serverOnly) = (networked, serverOnly);
 
     /// <summary>What happens when the owner leaves. Only the host may change this after spawning.</summary>
     public NetworkOrphaned Orphaned
@@ -67,8 +95,9 @@ public sealed class NetworkAccessor
     }
 
     /// <summary>
-    ///     How many ticks apart a component of this object sends its changed [Sync] values, from 1 (every tick) to 255,
-    ///     as Mirror's syncInterval. It is this peer's own setting for the state it writes, and is never sent.
+    ///     How many ticks apart a component on this object sends its changed state, [Sync] values and its own
+    ///     <see cref="INetworkSerialize" /> state alike, from 1 (every tick) to 255, as Mirror's syncInterval. It is this
+    ///     peer's own setting for the state it writes, and is never sent. Call it on the object the component is on.
     /// </summary>
     public void SetSendInterval(Component component, int ticks)
     {
@@ -122,14 +151,18 @@ public sealed class NetworkAccessor
         return _componentIntervals;
     }
 
-    /// <summary>The ticks between sends of a component's changed [Sync] values. See <see cref="SetSendInterval" />.</summary>
+    /// <summary>The ticks between sends of a component's changed state. See <see cref="SetSendInterval" />.</summary>
     public int GetSendInterval(Component component)
     {
         ArgumentNullException.ThrowIfNull(component);
         return SendIntervalOf(component);
     }
 
-    /// <summary>Which clients receive this object. Only the host may change this after spawning.</summary>
+    /// <summary>
+    ///     Which clients receive this object. Only the host may change this after spawning. It is read from the
+    ///     networked object itself, not from the objects under it, as are <see cref="Groups" /> and
+    ///     <see cref="CullDistance" />.
+    /// </summary>
     public NetworkVisibility Visibility
     {
         get => _visibility;
@@ -216,7 +249,9 @@ public sealed class NetworkAccessor
 
     /// <summary>
     ///     Moves the object to a world pose at once, so peers jump there instead of blending across. Only the peer
-    ///     that controls it may, while it is networked. It tags what the object's <see cref="NetworkTransform" /> sends.
+    ///     that controls it may, while it is networked. It tags what the <see cref="NetworkTransform" /> that moves the
+    ///     networked object itself sends. For a child with a transform of its own, use
+    ///     <see cref="NetworkTransform.Teleport" /> on that one.
     /// </summary>
     public void Teleport(Float3 position, Quaternion rotation)
     {
@@ -242,8 +277,8 @@ public sealed class NetworkAccessor
         _object.Transform.Rotation = rotation;
     }
 
-    /// <summary>Host: spawns the tree for all peers, or assigns ownership if already spawned.</summary>
-    public void SpawnSerialized(NetPeer? owner = null, NetworkOrphaned? orphaned = null)
+    /// <summary>Host: spawns the tree for all peers, or assigns ownership if already spawned. Behind Networking.SpawnGameObject.</summary>
+    internal void SpawnSerialized(NetPeer? owner = null, NetworkOrphaned? orphaned = null)
     {
         NetworkOrphaned policy = orphaned ?? Orphaned;
         if (!Enum.IsDefined(policy))
@@ -264,11 +299,16 @@ public sealed class NetworkAccessor
 
     /// <summary>
     ///     Host: assigns ownership to a peer, or to the host's simulation with null, as Mirror's AssignClientAuthority.
-    ///     Only the host changes ownership: a client that wants an object asks with a host RPC.
+    ///     Only the host changes ownership: a client that wants an object asks with a host RPC. It throws on a client,
+    ///     for an object that is not a spawned networked object, and for a player object given to anyone but the peer
+    ///     it is the player of. Outside a session it does nothing.
     /// </summary>
     public void AssignOwnership(NetPeer? owner) => Networking.System?.SetOwner(_object, owner);
 
-    /// <summary>Host: the object goes back to the host's simulation, as Mirror's RemoveClientAuthority.</summary>
+    /// <summary>
+    ///     Host: the object goes back to the host's simulation, as Mirror's RemoveClientAuthority. The same as
+    ///     <see cref="AssignOwnership" /> with null.
+    /// </summary>
     public void RemoveOwnership() => Networking.System?.SetOwner(_object, null);
 
     /// <summary>Host: true if <paramref name="peer" /> has this object. Outside a session, always true.</summary>

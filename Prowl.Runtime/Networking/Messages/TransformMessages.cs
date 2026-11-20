@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     A moving position goes as a grid position, or with <see cref="BaselineAge" /> as the step from the one this
-///     receiver had for the object that many snapshot ticks before. A settled pose goes exact.
+///     receiver had for the object that many batch ticks before. A settled pose goes exact.
 /// </summary>
 internal readonly record struct TransformRecord(
     uint NetId,
@@ -25,11 +25,11 @@ internal readonly record struct TransformRecord(
     // Set in the channels byte when the record is for a transform of its object other than the first.
     private const byte IndexedBit = 64;
 
-    // Set when the pose was taken before the snapshot that carries it: a client's passed on by the host, or a rest
+    // Set when the pose was taken before the batch that carries it: a client's passed on by the host, or a rest
     // pose sent again. [varuint milliseconds * 2 + 1 if ticks follow][varuint ticks].
     private const byte StampedBit = 128;
 
-    /// <summary>The longest a record says it was taken before its snapshot.</summary>
+    /// <summary>The longest a record says it was taken before its batch.</summary>
     internal const uint MaxAgeMilliseconds = 600_000;
 
     // A moving position takes at most 1 + 3 * 7 bytes, so with the compact rotation it fits in an exact pose's 12 + 16.

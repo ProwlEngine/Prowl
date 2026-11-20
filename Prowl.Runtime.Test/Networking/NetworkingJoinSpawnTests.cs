@@ -32,8 +32,8 @@ public partial class NetworkingTests
             stats.Score = 9;
             netId = NetworkTestScene.Current.NetIdOf(ship);
             using FakePeer recorder = FakePeer.Join(source, "recorder");
-            Pump(() => recorder.Has(FakePeer.SceneSnapshot) && recorder.Has(FakePeer.Spawn), recorder);
-            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data;
+            Pump(() => recorder.Has(FakePeer.Scene) && recorder.Has(FakePeer.Spawn), recorder);
+            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.Scene).Data;
             spawns = [.. recorder.WireReceived.Where(m => m.Id == FakePeer.Spawn).Select(m => m.Data)];
             NetReader spawn = new(Assert.Single(spawns));
             Assert.Equal(shipId, spawn.ReadGuid());
@@ -46,7 +46,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
+            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), peer);
             foreach (byte[] spawn in spawns)
             {
                 host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
@@ -92,7 +92,7 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.AutoReady = false;
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -107,7 +107,7 @@ public partial class NetworkingTests
             // The value changes on the host while the run is still going.
             using NetWriter value = new();
             NetSerializer<int>.Write(value, 55);
-            host.SendSnapshotValues(peer, 0, 1, (component.Identifier, NetCollectionTestComponent.HealthSlot, entryGeneration, value.ToArray()));
+            host.SendSyncValues(peer, 0, 1, (component.Identifier, NetCollectionTestComponent.HealthSlot, entryGeneration, value.ToArray()));
             Pump(() => here.Health == 55, host);
             Assert.False(Networking.Networking.IsReady);
             Assert.Empty(here.HealthChanges);
@@ -143,7 +143,7 @@ public partial class NetworkingTests
             // One sent before the gun's spawn names an object the peer does not have yet, so it must follow the spawn.
             int spawned = order.IndexOf(FakePeer.Spawn);
             int values = alice.WireReceived.FindIndex(spawned, m => m.Id == FakePeer.Sync &&
-                FakePeer.SnapshotValues(m.Data).Any(v => v.Component == ammo.Identifier && v.Slot == AmmoTestComponent.AmmoSlot));
+                FakePeer.SyncValues(m.Data).Any(v => v.Component == ammo.Identifier && v.Slot == AmmoTestComponent.AmmoSlot));
             Assert.True(values >= 0, "The owner only value never arrived after the spawn.");
             Assert.True(values < order.IndexOf(FakePeer.SpawnFinished), "The owner only value came after the spawns finished.");
         }

@@ -266,13 +266,7 @@ public class NetworkDiagnosticsPanel : DockPanel
                 .CellContent((i, col) =>
                 {
                     NetworkDiagnostics.Entry e = _filtered[i];
-                    string eventName = e.Kind switch
-                    {
-                        "Sync" => "SyncVar",
-                        "Snapshot" => "Transform",
-                        "SnapshotAck" => "TransformAck",
-                        _ => e.Kind,
-                    };
+                    string eventName = EventName(e.Kind);
                     bool warning = e.Direction is "Rejected" or "Failed";
                     if (col == 1)
                     {
@@ -328,7 +322,7 @@ public class NetworkDiagnosticsPanel : DockPanel
                 using (paper.Row("net_detail_heading").Height(28).Gap(4).Enter())
                 {
                     paper.Box("net_detail_toggle").Width(UnitValue.Stretch()).Height(28).Clip()
-                        .Text($"{(expanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight)}  {selected.Kind} details", font)
+                        .Text($"{(expanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight)}  {EventName(selected.Kind)} details", font)
                         .FontSize(EditorTheme.FontSizeSmall).TextColor(EditorTheme.Ink500)
                         .Alignment(TextAlignment.MiddleLeft).Cursor(PaperCursor.Pointer)
                         .OnClick(_ =>
@@ -376,12 +370,12 @@ public class NetworkDiagnosticsPanel : DockPanel
             if (!_showInternalEvents && IsInternalEvent(entry)) continue;
             if (_kind > 0 && !(Kinds[_kind] switch
             {
-                "RPC" => entry.Kind.StartsWith("Rpc", StringComparison.OrdinalIgnoreCase),
+                "RPC" => entry.Kind.Contains("Rpc", StringComparison.OrdinalIgnoreCase),
                 "SyncVar" => entry.Kind is "Sync" or "SyncVar",
-                "Transform" => entry.Kind is "Snapshot" or "SnapshotAck",
+                "Transform" => entry.Kind is "Transform" or "TransformAck",
                 "Scene" => entry.Kind is "Scene" or "Ready" || entry.Kind.StartsWith("Section", StringComparison.Ordinal),
                 "Spawn" => entry.Kind.StartsWith("Spawn", StringComparison.Ordinal),
-                "Owner" => entry.Kind is "Owner" or "OwnershipState" or "Orphaned",
+                "Owner" => entry.Kind is "Owner" or "OwnershipState" or "Orphaned" or "Player",
                 _ => entry.Kind == Kinds[_kind],
             })) continue;
             if (_direction > 0 && TrafficDirection(entry) != Directions[_direction]) continue;
@@ -469,6 +463,9 @@ public class NetworkDiagnosticsPanel : DockPanel
                 Label(paper, font, $"net_o_{i}_{col}", text, EditorTheme.RowHeight, tooltip: tooltip);
             }).Show();
     }
+
+    /// <summary>What the list calls an event kind.</summary>
+    private static string EventName(string kind) => kind == "Sync" ? "SyncVar" : kind;
 
     private string OwnerName(int id) => id < 0 ? "Host" : _peers.Find(p => p.Id == id)?.Name ?? $"#{id}";
 

@@ -24,7 +24,8 @@ namespace Prowl.Runtime.Networking;
 // [bytes, length prefixed]: [varuint64 member mask] and the value of each member in it, in member order.
 // A spawn carries the same per component blocks for every component, with every member.
 //
-// The length lets a receiver skip a component it lacks. A record for an object it doesn't have is skipped whole.
+// The length lets a receiver skip a component that is gone there, or a block it may not apply. A record for an
+// object it doesn't have is skipped whole.
 // A record from a peer that doesn't own the object, or from an earlier ownership, is dropped.
 //
 // A network collection's value is its changes since they were last sent, or all of it in a spawn. It carries its
@@ -225,7 +226,6 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
     }
 
-    /// <summary>Runs the hooks held for the values <paramref name="root" />'s tree was spawned with, in order.</summary>
     /// <summary>Runs the change notifications held during a spawn run, in the order their state arrived.</summary>
     internal void RunHeldChanges()
     {
@@ -249,6 +249,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
     }
 
+    /// <summary>Runs the hooks held for the values <paramref name="root" />'s tree was spawned with, in order.</summary>
     internal void RunSpawnHooks(GameObject root)
     {
         if (_spawnHooks.Count == 0)

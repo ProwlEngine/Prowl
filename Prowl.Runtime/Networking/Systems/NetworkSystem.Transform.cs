@@ -8,20 +8,20 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-// Networked objects' transforms. Each object's TransformSync decides what its controller sends and what everyone else
-// shows; SnapshotSystem carries the records. Whoever controls an object sends the channels (position, rotation, scale)
-// that changed while it moves, and once it is still, its full pose, owed until acknowledged. Static GameObjects are
-// never synced.
+// Networked objects' transforms. Each NetworkTransform has a TransformSync that decides what the object's controller
+// sends and what everyone else shows; TransformSystem carries the records. Whoever controls an object sends the
+// channels (position, rotation, scale) that changed while it moves, and once it is still, its full pose, owed until
+// acknowledged. An object without a NetworkTransform, and a static GameObject, send nothing.
 internal sealed partial class NetworkSystem
 {
 
-    internal static void ValidateSceneMessageLimit(NetSessionOptions? options)
+    internal static void ValidateMessageLimit(NetSessionOptions? options)
     {
         if ((options ?? Networking.Configuration.CreateSessionOptions()).MaxMessageSize <
-            SnapshotMessage.MinMessageSize)
+            TransformBatchMessage.MinMessageSize)
         {
             throw new NotSupportedException(
-                $"Scene replication requires a message limit of at least {SnapshotMessage.MinMessageSize} bytes.");
+                $"Networking requires a message limit of at least {TransformBatchMessage.MinMessageSize} bytes.");
         }
     }
 
@@ -46,7 +46,4 @@ internal sealed partial class NetworkSystem
             }
         }
     }
-
-    internal static bool Finite(Float3 value) =>
-        float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
 }

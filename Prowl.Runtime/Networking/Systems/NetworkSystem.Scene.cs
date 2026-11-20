@@ -7,7 +7,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 
-using Jitter2.Dynamics;
 
 using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
@@ -280,7 +279,7 @@ internal sealed partial class NetworkSystem
         ClearViewpoints();
         LocalJoinState = NetworkJoinState.Loading;
         Sync.Clear();
-        Snapshots.Clear();
+        Transforms.Clear();
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
             if (!entry.GameObject.IsValid() || entry.GameObject.Scene != world)
@@ -395,7 +394,7 @@ internal sealed partial class NetworkSystem
         using (ZLibStream zlib = new(compressed, CompressionLevel.Fastest, true))
         using (BinaryWriter writer = new(zlib))
         {
-            // SnapshotDecoder validates this fixed-width wire layout before Echo reads it.
+            // SpawnTreeDecoder validates this fixed-width wire layout before Echo reads it.
             echo.WriteToBinary(writer,
                 new BinarySerializationOptions { EncodingMode = BinaryEncodingMode.Performance });
         }
@@ -407,7 +406,7 @@ internal sealed partial class NetworkSystem
     {
         try
         {
-            return SnapshotDecoder.Decode(data, Configuration);
+            return SpawnTreeDecoder.Decode(data, Configuration);
         }
         catch (Exception e) when (e is not InvalidDataException)
         {

@@ -59,7 +59,7 @@ public partial class NetworkingTests
         client.AutoReady = false;
         try
         {
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
+            Pump(() => client.Has(FakePeer.Scene), client);
             NetPeer peer = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
             client.Session.Shutdown();
             Pump(() => listener.Events.Contains($"disconnected {peer.Id}"), client);
@@ -149,7 +149,7 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.JoinState == NetworkJoinState.WaitingForScene, host);
 
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), client);
+            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), client);
             Pump(() => host.Has(FakePeer.Ready), host);
             Assert.Same(local, SceneInstance.Main);
             Assert.Equal(NetworkJoinState.Synchronizing, Networking.Networking.JoinState);
@@ -183,7 +183,7 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.AutoReady = false;
-        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
+        host.Session.PeerJoined += peer => host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot.WrittenSpan), peer);
         string? failure = null;
         try
         {

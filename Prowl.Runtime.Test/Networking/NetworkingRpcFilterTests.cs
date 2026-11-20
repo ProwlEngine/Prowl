@@ -199,7 +199,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network), garry = FakePeer.Join(network, "Garry");
         host.Session.PeerJoined += peer =>
         {
-            if (peer.Name == "caller") host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
+            if (peer.Name == "caller") host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot.WrittenSpan), peer);
         };
         ClearStaticProbe();
         try

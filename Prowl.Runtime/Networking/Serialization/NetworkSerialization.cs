@@ -12,10 +12,10 @@ namespace Prowl.Runtime.Networking;
 
 internal static class NetworkSerialization
 {
-    [ThreadStatic] internal static bool WritingSnapshot;
+    [ThreadStatic] internal static bool WritingSpawnTree;
 
     internal static bool Include(GameObject go) =>
-        !WritingSnapshot || !NetworkAccessor.ServerOnlyOf(go);
+        !WritingSpawnTree || !NetworkAccessor.ServerOnlyOf(go);
 
     internal static void Write(GameObject go, EchoObject output)
     {
@@ -87,8 +87,7 @@ internal static class NetworkSerialization
                 return;
             }
 
-            existing.Networked = false;
-            existing.ServerOnly = false;
+            existing.LoadSharing(false, false);
             existing.ClearComponentIntervals();
             existing.Orphaned = NetworkOrphaned.Destroy;
             existing.Visibility = NetworkVisibility.Default;
@@ -100,8 +99,7 @@ internal static class NetworkSerialization
         NetworkAccessor network = go.Network;
         // Scenes and prefabs saved before Networked and ServerOnly hold the old mode: 1 was Never, 2 was Object.
         byte stored = settings["Mode"]?.ByteValue ?? 0;
-        network.Networked = settings["Networked"]?.BoolValue ?? stored == 2;
-        network.ServerOnly = settings["ServerOnly"]?.BoolValue ?? stored == 1;
+        network.LoadSharing(settings["Networked"]?.BoolValue ?? stored == 2, settings["ServerOnly"]?.BoolValue ?? stored == 1);
         network.Orphaned = (NetworkOrphaned)(settings["Orphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
         network.Visibility = (NetworkVisibility)(settings["Visibility"]?.ByteValue ?? (byte)NetworkVisibility.Default);
         float cullDistance = settings["CullDistance"]?.FloatValue ?? 0;
@@ -131,7 +129,7 @@ internal static class NetworkSerialization
     ///     pointing at it can't carry it along. Everything else goes to <paramref name="inner" />, or is written as
     ///     usual without one.
     /// </summary>
-    internal sealed class SnapshotReferences(IExternalReferenceResolver? inner = null) : IExternalReferenceResolver
+    internal sealed class SpawnTreeReferences(IExternalReferenceResolver? inner = null) : IExternalReferenceResolver
     {
         public object? GetReferenceKey(object value)
         {

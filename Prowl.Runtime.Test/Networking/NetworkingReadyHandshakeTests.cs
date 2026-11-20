@@ -19,14 +19,14 @@ public partial class NetworkingTests
         client.AutoReady = false;
         try
         {
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
+            Pump(() => client.Has(FakePeer.Scene), client);
             NetPeer peer = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
             PumpFor(30, client);
             Assert.False(Networking.Networking.IsPeerReady(peer));
             Assert.DoesNotContain($"peer ready {peer.Id}", listener.Events);
             Assert.DoesNotContain(client.Received, m => IsSpawnRun(m.Id));
 
-            SendGeneration(client, FakePeer.Ready, SceneGenerationOf(client.Last(FakePeer.SceneSnapshot)));
+            SendGeneration(client, FakePeer.Ready, SceneGenerationOf(client.Last(FakePeer.Scene)));
             Pump(() => client.Has(FakePeer.SpawnFinished), client);
             Assert.Equal(new[] { FakePeer.SpawnStarted, FakePeer.Spawn, FakePeer.SpawnFinished },
                 client.Received.Select(m => m.Id).Where(IsSpawnRun));
@@ -144,7 +144,7 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.AutoReady = false;
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");

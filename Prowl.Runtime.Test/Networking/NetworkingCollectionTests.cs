@@ -291,7 +291,7 @@ public partial class NetworkingTests
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
 
             GameObject crate = CreateGameObject("Crate");
             NetCollectionTestComponent component = crate.AddComponent<NetCollectionTestComponent>();
@@ -379,7 +379,7 @@ public partial class NetworkingTests
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
 
             GameObject ship = CreateGameObject("Ship");
@@ -517,7 +517,7 @@ public partial class NetworkingTests
         {
             using NetWriter spawn = new();
             NetworkTestScene.Current.WriteSpawn(ship, owner: peer.Id, NetworkOrphaned.Destroy, spawn, generation: 5, netId: 7);
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshotBytes);
+            host.Session.SendRaw(peer, FakePeer.Scene, snapshotBytes);
             host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
 
@@ -568,7 +568,7 @@ public partial class NetworkingTests
             try
             {
                 Pump(() => observer.IsReady, observer);
-                snapshot = observer.Last(FakePeer.SceneSnapshot);
+                snapshot = observer.Last(FakePeer.Scene);
                 spawns = RecordedSpawns(observer);
                 ship.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
                 Pump(() => observer.Has(FakePeer.Owner), observer);

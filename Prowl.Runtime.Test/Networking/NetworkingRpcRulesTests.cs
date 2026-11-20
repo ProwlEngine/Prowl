@@ -23,7 +23,7 @@ public partial class NetworkingTests
         using FakePeer bob = FakePeer.Join(network, "bob");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot) && bob.Has(FakePeer.SceneSnapshot), alice, bob);
+            Pump(() => alice.Has(FakePeer.Scene) && bob.Has(FakePeer.Scene), alice, bob);
             ship.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "bob"));
             Pump(() => alice.Has(FakePeer.Spawn) && bob.Has(FakePeer.Spawn), alice, bob);
 

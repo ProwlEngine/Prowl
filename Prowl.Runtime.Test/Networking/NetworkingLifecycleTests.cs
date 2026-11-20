@@ -95,7 +95,7 @@ public partial class NetworkingTests
             Assert.Equal(new[] { "spawn", "authority gained" }, listener.Events);
             listener.Enabled = false;
             using FakePeer client = FakePeer.Join(network, "client");
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
+            Pump(() => client.Has(FakePeer.Scene), client);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
             root.Network.AssignOwnership(owner);
             root.Network.AssignOwnership(owner); // No-op.
@@ -186,8 +186,8 @@ public partial class NetworkingTests
             SceneInstance scene = root.Scene!;
             scene.Remove(root);
             scene.Add(root);
-            root.Network.ServerOnly = true;
-            Assert.True(root.Network.ServerOnly);
+            Assert.Throws<InvalidOperationException>(() => root.Network.ServerOnly = true);
+            Assert.False(root.Network.ServerOnly);
             root.Dispose();
             Assert.Equal(0, NetworkDiagnostics.NetworkObjectCount);
         }
@@ -222,7 +222,7 @@ public partial class NetworkingTests
         try
         {
             using FakePeer client = FakePeer.Join(network, "client");
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
+            Pump(() => client.Has(FakePeer.Scene), client);
             listener.LostAction = () => Networking.Networking.Shutdown();
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
             Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
@@ -385,7 +385,7 @@ public partial class NetworkingTests
         HashSet<SceneInstance> liveBefore = SceneInstance.All.ToHashSet();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(malformed.WrittenSpan), peer);
+        host.Session.PeerJoined += peer => host.Send(FakePeer.Scene, w => w.WriteBytes(malformed.WrittenSpan), peer);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -431,7 +431,7 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == managerId), host);
             Assert.Contains(SceneInstance.Main.Persistent.Roots, p => p.Identifier == managerId);
 
-            host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.SceneSnapshot, SceneNaming(2));
+            host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Scene, SceneNaming(2));
             Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
             PumpFor(50, host);
 

@@ -83,21 +83,21 @@ public class NetTestComponent : Component
 /// </summary>
 public sealed class FakePeer : IDisposable
 {
-    // SceneSnapshot is the scene message: which scenes to load. Ready is the client's answer, and the host's spawns
+    // Scene is the scene message: which scenes to load. Ready is the client's answer, and the host's spawns
     // for it sit between SpawnStarted and SpawnFinished.
-    public const ushort SceneSnapshot = Networking.Networking.EngineMessageIds, Spawn = SceneSnapshot + 1, Despawn = SceneSnapshot + 2,
-        Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Snapshot = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7,
-        Ready = SceneSnapshot + 8, SpawnStarted = SceneSnapshot + 9, SpawnFinished = SceneSnapshot + 10,
-        StaticRpcToHost = SceneSnapshot + 11, StaticRpcFromHost = SceneSnapshot + 12,
-        Orphaned = SceneSnapshot + 13, OwnershipState = SceneSnapshot + 14,
-        SnapshotAck = SceneSnapshot + 15,
-        SectionAdd = SceneSnapshot + 16, SectionRemove = SceneSnapshot + 17, SectionMove = SceneSnapshot + 18, Time = SceneSnapshot + 19,
-        Player = SceneSnapshot + 20;
+    public const ushort Scene = Networking.Networking.EngineMessageIds, Spawn = Scene + 1, Despawn = Scene + 2,
+        Owner = Scene + 3, Sync = Scene + 4, Transform = Scene + 5, RpcToHost = Scene + 6, RpcFromHost = Scene + 7,
+        Ready = Scene + 8, SpawnStarted = Scene + 9, SpawnFinished = Scene + 10,
+        StaticRpcToHost = Scene + 11, StaticRpcFromHost = Scene + 12,
+        Orphaned = Scene + 13, OwnershipState = Scene + 14,
+        TransformAck = Scene + 15,
+        SectionAdd = Scene + 16, SectionRemove = Scene + 17, SectionMove = Scene + 18, Time = Scene + 19,
+        Player = Scene + 20;
 
     private FakePeer(NetSession session)
     {
         Session = session;
-        foreach (ushort id in Enumerable.Range(SceneSnapshot, SectionMove - SceneSnapshot + 1).Select(i => (ushort)i).Append(Player))
+        foreach (ushort id in Enumerable.Range(Scene, SectionMove - Scene + 1).Select(i => (ushort)i).Append(Player))
         {
             ushort captured = id;
             session.OnRaw(id, (NetPeer sender, ref NetReader reader, Delivery delivery, byte channel) =>
@@ -107,12 +107,12 @@ public sealed class FakePeer : IDisposable
                 Deliveries.Add((captured, delivery));
                 Channels.Add((captured, channel));
                 Received.Add((captured, ReadEnginePayload(captured, ref reader)));
-                if (captured == Snapshot)
+                if (captured == Transform)
                 {
                     NetworkingTests.Decoded.AddOrUpdate(WireReceived[^1].Data, NetworkingTests.DecodeTransforms(WireReceived[^1].Data, _positions));
                 }
                 if (AutoReady) HandleReadiness(sender, captured, WireReceived[^1].Data);
-                if (AutoAck && captured == Snapshot) Acknowledge(sender, WireReceived[^1].Data);
+                if (AutoAck && captured == Transform) Acknowledge(sender, WireReceived[^1].Data);
             });
         }
 
@@ -128,7 +128,7 @@ public sealed class FakePeer : IDisposable
     // Positions received by object and snapshot tick, to resolve the deltas that name them.
     private readonly Dictionary<(uint NetId, uint Generation, byte Index), Dictionary<uint, (long X, long Y, long Z)>> _positions = new();
 
-    /// <summary>Acknowledges every Snapshot that asks for it, as a real peer would.</summary>
+    /// <summary>Acknowledges every Transform that asks for it, as a real peer would.</summary>
     public bool AutoAck { get; set; } = true;
 
     private void Acknowledge(NetPeer sender, byte[] snapshot)
@@ -139,14 +139,14 @@ public sealed class FakePeer : IDisposable
         using NetWriter ack = new();
         ack.WriteVarUInt32(1); ack.WriteVarUInt32(id);
         ack.WriteVarUInt32(0);
-        Session.SendRaw(sender, SnapshotAck, ack.WrittenSpan, Delivery.Unreliable);
+        Session.SendRaw(sender, TransformAck, ack.WrittenSpan, Delivery.Unreliable);
     }
 
     /// <summary>
     ///     The [Sync] values in a state message, as (component, slot, value bytes). The engine side's own objects say
     ///     which component and member each bit is, so a record for an object it doesn't have is skipped.
     /// </summary>
-    public static List<(Guid Component, uint Slot, byte[] Value)> SnapshotValues(byte[] state)
+    public static List<(Guid Component, uint Slot, byte[] Value)> SyncValues(byte[] state)
     {
         List<(Guid, uint, byte[])> values = new();
         NetReader r = new(state);
@@ -183,9 +183,9 @@ public sealed class FakePeer : IDisposable
     }
 
     /// <summary>The latest int value of a [Sync] slot received, or null if none came.</summary>
-    public int? SnapshotInt(Guid component, uint slot)
+    public int? SyncInt(Guid component, uint slot)
     {
-        foreach ((Guid id, uint s, byte[] value) in Enumerable.Reverse(SnapshotValues()))
+        foreach ((Guid id, uint s, byte[] value) in Enumerable.Reverse(SyncValues()))
         {
             if (id == component && s == slot)
             {
@@ -198,8 +198,8 @@ public sealed class FakePeer : IDisposable
     }
 
     /// <summary>Every [Sync] value received in state messages so far, latest last.</summary>
-    public List<(Guid Component, uint Slot, byte[] Value)> SnapshotValues() =>
-        WireReceived.Where(m => m.Id == Sync).SelectMany(m => SnapshotValues(m.Data)).ToList();
+    public List<(Guid Component, uint Slot, byte[] Value)> SyncValues() =>
+        WireReceived.Where(m => m.Id == Sync).SelectMany(m => SyncValues(m.Data)).ToList();
 
     internal static void SkipTransformGroups(ref NetReader r)
     {
@@ -288,7 +288,7 @@ public sealed class FakePeer : IDisposable
     }
 
     /// <summary>Sends [Sync] values the way a peer does: as state records, reliably. The id and tick are no longer sent.</summary>
-    public void SendSnapshotValues(NetPeer? to, uint id, uint tick, params (Guid Component, uint Slot, uint Generation, byte[] Value)[] values)
+    public void SendSyncValues(NetPeer? to, uint id, uint tick, params (Guid Component, uint Slot, uint Generation, byte[] Value)[] values)
     {
         using NetWriter w = new();
         WriteStateRecords(w, values);
@@ -302,7 +302,7 @@ public sealed class FakePeer : IDisposable
     private void HandleReadiness(NetPeer sender, ushort kind, byte[] payload)
     {
         NetReader reader = new(payload);
-        if (kind == SceneSnapshot && !Session.IsHost)
+        if (kind == Scene && !Session.IsHost)
         {
             reader.ReadByte();
             SceneGeneration = reader.ReadUInt64();
@@ -352,7 +352,7 @@ public sealed class FakePeer : IDisposable
         if (id == Sync)
         {
             // Tests read state as a count, then per value its component, slot and bytes.
-            List<(Guid Component, uint Slot, byte[] Value)> values = SnapshotValues(reader.ReadBytes(reader.Remaining).ToArray());
+            List<(Guid Component, uint Slot, byte[] Value)> values = SyncValues(reader.ReadBytes(reader.Remaining).ToArray());
             using NetWriter logical = new();
             logical.WriteVarUInt32((uint)values.Count);
             foreach ((Guid component, uint slot, byte[] value) in values)
@@ -406,7 +406,7 @@ public sealed class FakePeer : IDisposable
     }
 
     public bool Has(ushort id) => Received.Any(m => m.Id == id) &&
-        (id != SceneSnapshot || Session.IsHost || !AutoReady || IsReady);
+        (id != Scene || Session.IsHost || !AutoReady || IsReady);
 
     public byte[] Last(ushort id) => Received.Last(m => m.Id == id).Data;
 
@@ -528,7 +528,7 @@ public partial class NetworkingTests : RuntimeTestBase
     {
         using FakePeer recorder = FakePeer.Join(network, "recorder");
         Pump(() => recorder.IsReady, recorder);
-        return (recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data, RecordedSpawns(recorder));
+        return (recorder.WireReceived.First(m => m.Id == FakePeer.Scene).Data, RecordedSpawns(recorder));
     }
 
     /// <summary>The generation a scene message names.</summary>
@@ -543,7 +543,7 @@ public partial class NetworkingTests : RuntimeTestBase
     private static void SendJoin(FakePeer host, byte[] scene, params byte[][] spawns)
     {
         host.JoinSpawns.AddRange(spawns);
-        host.Session.PeerJoined += peer => host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(scene), peer);
+        host.Session.PeerJoined += peer => host.Send(FakePeer.Scene, w => w.WriteBytes(scene), peer);
     }
 
     /// <summary>Runs frames, the way the game loop does, until <paramref name="condition"/> holds.</summary>
@@ -662,7 +662,7 @@ public partial class NetworkingTests : RuntimeTestBase
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
 
             GameObject ship = CreateGameObject("Ship");
@@ -681,7 +681,7 @@ public partial class NetworkingTests : RuntimeTestBase
             Assert.Equal(100, component.Health);
             Assert.Equal(5, component.Score);
 
-            Pump(() => alice.Has(FakePeer.Spawn) && alice.SnapshotInt(component.Identifier, NetTestComponent.ScoreSlot) == 5, alice);
+            Pump(() => alice.Has(FakePeer.Spawn) && alice.SyncInt(component.Identifier, NetTestComponent.ScoreSlot) == 5, alice);
             NetReader spawn = new(alice.Last(FakePeer.Spawn));
             Assert.Equal(ship.Identifier, spawn.ReadGuid());
 
@@ -693,7 +693,7 @@ public partial class NetworkingTests : RuntimeTestBase
             Assert.Equal(5, component.Score);
 
             // Her transform updates move it on the host, smoothed.
-            alice.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
+            alice.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
                 (NetworkTestScene.Current.NetIdOf(ship), NetworkTestScene.Current.GenerationOf(ship), new Float3(3, 4, 5),
                     Quaternion.Identity, Float3.One)));
             Pump(() => ship.Transform.LocalPosition.Equals(new Float3(3, 4, 5)), alice);
@@ -729,7 +729,7 @@ public partial class NetworkingTests : RuntimeTestBase
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
 
             GameObject crate = CreateGameObject("Crate");
             crate.AddComponent<NetworkTransform>();
@@ -742,7 +742,7 @@ public partial class NetworkingTests : RuntimeTestBase
             component.Health = 7;
             crate.Transform.LocalPosition = new Float3(1, 2, 3);
             // Both travel in snapshots.
-            Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == 7 &&
+            Pump(() => alice.SyncInt(component.Identifier, NetTestComponent.HealthSlot) == 7 &&
                        TransformIds(alice).Contains(NetworkTestScene.Current.NetIdOf(crate)), alice);
 
             // A client can't change what it doesn't own, nor call host-only things through a broadcast.
@@ -778,7 +778,7 @@ public partial class NetworkingTests : RuntimeTestBase
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
 
             ship.Network.SpawnSerialized(aliceHere, NetworkOrphaned.ClearOwner);
@@ -832,7 +832,7 @@ public partial class NetworkingTests : RuntimeTestBase
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
@@ -863,7 +863,7 @@ public partial class NetworkingTests : RuntimeTestBase
         using FakePeer bob = FakePeer.Join(network, "bob");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot) && bob.Has(FakePeer.SceneSnapshot), alice, bob);
+            Pump(() => alice.Has(FakePeer.Scene) && bob.Has(FakePeer.Scene), alice, bob);
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
@@ -898,7 +898,7 @@ public partial class NetworkingTests : RuntimeTestBase
         FakePeer remote = host;
         host.Session.PeerJoined += peer =>
         {
-            remote.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            remote.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
             remote.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
         Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -910,7 +910,7 @@ public partial class NetworkingTests : RuntimeTestBase
     private static void SendProxyTransform(FakePeer host, NetPeer client, Guid id, uint tick, float position, uint generation = 0)
     {
         uint netId = NetworkTestScene.Current.NetIdOf(Find(SceneInstance.Main, id));
-        host.Send(FakePeer.Snapshot, w => WriteTransforms(w, tick, tick / 30.0,
+        host.Send(FakePeer.Transform, w => WriteTransforms(w, tick, tick / 30.0,
             (netId, generation, new Float3(position, 0, 0), Quaternion.Identity, Float3.One)), client);
     }
 
@@ -930,7 +930,7 @@ public partial class NetworkingTests : RuntimeTestBase
         return transform;
     }
 
-    /// <summary>A Snapshot holding one transform group, at one tick and time, of a full, exact pose for each object.</summary>
+    /// <summary>A Transform holding one transform group, at one tick and time, of a full, exact pose for each object.</summary>
     private static void WriteTransforms(NetWriter w, uint tick, double time,
         params (uint NetId, uint Generation, Float3 Position, Quaternion Rotation, Float3 Scale)[] records) =>
         WriteIndexedTransforms(w, tick, time, 0, records);
@@ -958,7 +958,7 @@ public partial class NetworkingTests : RuntimeTestBase
     internal static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], List<TransformRecord>> Decoded = new();
 
     /// <summary>
-    ///     Decodes a Snapshot message's transform records, from every group; a channel left out is null. A delta
+    ///     Decodes a Transform message's transform records, from every group; a channel left out is null. A delta
     ///     position resolves only for a message a FakePeer received, against the positions it had.
     /// </summary>
     private static List<TransformRecord> ReadTransforms(byte[] message) =>
@@ -1052,7 +1052,7 @@ public partial class NetworkingTests : RuntimeTestBase
         try
         {
             Networking.Networking.InterpolationDelay = TimeSpan.Zero;
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject ship = CreateGameObject("Ship");
             ship.AddComponent<NetworkTransform>();
             scene.Add(ship);
@@ -1111,7 +1111,7 @@ public partial class NetworkingTests : RuntimeTestBase
         using (host)
         try
         {
-            host.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
+            host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
                 (NetworkTestScene.Current.NetIdOf(proxy), 0, new Float3(position, 0, 0),
                     zeroRotation ? new Quaternion(0, 0, 0, 0) : Quaternion.Identity, Float3.One)), client);
             Frame([host]);
@@ -1179,7 +1179,7 @@ public partial class NetworkingTests : RuntimeTestBase
             shipComponent.Health = 10;
             levelHere.Health = 50;
             Assert.Equal(3, levelHere.Health);
-            Pump(() => host.SnapshotInt(shipComponent.Identifier, NetTestComponent.HealthSlot) == 10, host);
+            Pump(() => host.SyncInt(shipComponent.Identifier, NetTestComponent.HealthSlot) == 10, host);
 
             // A host RPC goes to the host instead of running here.
             shipComponent.AskHost(7);
@@ -1189,7 +1189,7 @@ public partial class NetworkingTests : RuntimeTestBase
             // The host moves the crate; it follows, smoothed.
             NetPeer bob = host.Session.Peers.Single(p => !p.IsLocal);
             uint crateNetId = NetworkTestScene.Current.NetIdOf(Find(SceneInstance.Main, crateId));
-            host.Send(FakePeer.Snapshot, w => WriteTransforms(w, 1, 1,
+            host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
                 (crateNetId, 0, new Float3(7, 8, 9), Quaternion.Identity, Float3.One)), to: bob);
             Pump(() => crateHere.Transform.LocalPosition.Equals(new Float3(7, 8, 9)), host);
 

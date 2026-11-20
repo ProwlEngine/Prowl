@@ -5,6 +5,7 @@ using System;
 
 using Prowl.Vector;
 using Prowl.Courier;
+using Prowl.Ember;
 
 namespace Prowl.Runtime.Networking;
 
@@ -17,7 +18,7 @@ internal readonly ref struct OwnershipStateMessage(
     internal readonly Guid Identifier = identifier;
     internal readonly uint Generation = generation;
     internal readonly Float3 Velocity = velocity;
-    internal readonly ReadOnlySpan<byte> Poses = poses;
+    [ReloadIgnore] internal readonly ReadOnlySpan<byte> Poses = poses;
 
     internal void Write(NetWriter writer)
     {

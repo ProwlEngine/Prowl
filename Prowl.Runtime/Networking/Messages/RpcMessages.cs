@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Courier;
+using Prowl.Ember;
 
 namespace Prowl.Runtime.Networking;
 
@@ -18,7 +19,7 @@ internal readonly ref struct RpcCallMessage(uint netId, byte component, uint met
     internal readonly uint NetId = netId;
     internal readonly byte Component = component;
     internal readonly uint Method = method;
-    internal readonly ReadOnlySpan<byte> Arguments = arguments;
+    [ReloadIgnore] internal readonly ReadOnlySpan<byte> Arguments = arguments;
 
     internal void Write(NetWriter writer)
     {
@@ -48,7 +49,7 @@ internal readonly ref struct StaticRpcMessage(uint typeHash, uint methodId, Read
 {
     internal readonly uint TypeHash = typeHash;
     internal readonly uint MethodId = methodId;
-    internal readonly ReadOnlySpan<byte> Arguments = arguments;
+    [ReloadIgnore] internal readonly ReadOnlySpan<byte> Arguments = arguments;
 
     internal void Write(NetWriter writer)
     {

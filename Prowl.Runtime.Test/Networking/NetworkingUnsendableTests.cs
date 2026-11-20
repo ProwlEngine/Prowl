@@ -59,9 +59,9 @@ public partial class NetworkingTests
             (_, ShapeHolderTestComponent holder) = SpawnShapeHolder(alice);
             holder.Shape = new TestTriangle();
             holder.Health = 7;
-            Pump(() => alice.SnapshotInt(holder.Identifier, ShapeHolderTestComponent.HealthSlot) == 7, alice);
+            Pump(() => alice.SyncInt(holder.Identifier, ShapeHolderTestComponent.HealthSlot) == 7, alice);
             holder.Health = 8;
-            Pump(() => alice.SnapshotInt(holder.Identifier, ShapeHolderTestComponent.HealthSlot) == 8, alice);
+            Pump(() => alice.SyncInt(holder.Identifier, ShapeHolderTestComponent.HealthSlot) == 8, alice);
         }
         finally { Networking.Networking.Shutdown(); }
     }

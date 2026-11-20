@@ -63,7 +63,7 @@ public static partial class Networking
     public static NetSession Host(string name = "Host")
     {
         BeginSession();
-        NetworkSystem.ValidateSceneMessageLimit(null);
+        NetworkSystem.ValidateMessageLimit(null);
         return Host(CreateTransport(true), name);
     }
 
@@ -71,7 +71,7 @@ public static partial class Networking
     public static NetSession Join(string address, string name, ReadOnlySpan<byte> token = default)
     {
         BeginSession();
-        NetworkSystem.ValidateSceneMessageLimit(null);
+        NetworkSystem.ValidateMessageLimit(null);
         return Join(CreateTransport(false), address, name, token);
     }
 }

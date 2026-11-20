@@ -40,12 +40,12 @@ public partial class NetworkingTests
             gun.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
             Pump(() => alice.Has(FakePeer.Spawn) && bob.Has(FakePeer.Spawn), alice, bob);
             Assert.False(SpawnCarries(bob, AmmoTestComponent.AmmoSlot));
-            Pump(() => alice.SnapshotInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 30, alice, bob);
+            Pump(() => alice.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 30, alice, bob);
 
             ammo.Ammo = 12;
-            Pump(() => alice.SnapshotInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 12, alice, bob);
+            Pump(() => alice.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 12, alice, bob);
             PumpFor(5, alice, bob);
-            Assert.Null(bob.SnapshotInt(ammo.Identifier, AmmoTestComponent.AmmoSlot));
+            Assert.Null(bob.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot));
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -69,17 +69,17 @@ public partial class NetworkingTests
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
             NetPeer bobHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "bob");
             gun.Network.SpawnSerialized(aliceHere);
-            Pump(() => alice.SnapshotInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 30, alice, bob);
-            Assert.Null(bob.SnapshotInt(ammo.Identifier, AmmoTestComponent.AmmoSlot));
+            Pump(() => alice.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 30, alice, bob);
+            Assert.Null(bob.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot));
 
             // Alice wrote Health as the owner. The host has it, and bob, but nobody sends it back to her.
             alice.SendSync(stats.Identifier, NetTestComponent.HealthSlot, 42);
-            Pump(() => stats.Health == 42 && bob.SnapshotInt(stats.Identifier, NetTestComponent.HealthSlot) == 42, alice, bob);
-            Assert.Null(alice.SnapshotInt(stats.Identifier, NetTestComponent.HealthSlot));
+            Pump(() => stats.Health == 42 && bob.SyncInt(stats.Identifier, NetTestComponent.HealthSlot) == 42, alice, bob);
+            Assert.Null(alice.SyncInt(stats.Identifier, NetTestComponent.HealthSlot));
 
             gun.Network.AssignOwnership(bobHere);
-            Pump(() => bob.SnapshotInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 30 &&
-                       alice.SnapshotInt(stats.Identifier, NetTestComponent.HealthSlot) == 42, alice, bob);
+            Pump(() => bob.SyncInt(ammo.Identifier, AmmoTestComponent.AmmoSlot) == 30 &&
+                       alice.SyncInt(stats.Identifier, NetTestComponent.HealthSlot) == 42, alice, bob);
         }
         finally { Networking.Networking.Shutdown(); }
     }

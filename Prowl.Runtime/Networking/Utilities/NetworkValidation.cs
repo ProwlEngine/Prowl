@@ -24,7 +24,7 @@ internal static class NetworkValidation
         ? reason
         : throw new InvalidDataException("Invalid despawn reason.");
 
-    internal static void SnapshotFormat(byte format)
+    internal static void SceneMessageFormat(byte format)
     {
         if (format != NetworkSystem.SceneMessageFormat)
         {

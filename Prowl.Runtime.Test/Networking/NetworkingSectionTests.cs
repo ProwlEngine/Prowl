@@ -17,7 +17,7 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
         FakePeer alice = FakePeer.Join(network, "alice");
-        Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+        Pump(() => alice.Has(FakePeer.Scene), alice);
         return (world, alice);
     }
 
@@ -90,7 +90,7 @@ public partial class NetworkingTests
 
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -146,7 +146,7 @@ public partial class NetworkingTests
             next.Add(CreateGameObject("Arena"));
             Bind(next);
 
-            Pump(() => alice.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2, alice);
+            Pump(() => alice.Received.Count(m => m.Id == FakePeer.Scene) == 2, alice);
         }
         finally
         {
@@ -166,7 +166,7 @@ public partial class NetworkingTests
 
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
         string? failure = null;
         try
         {
@@ -294,7 +294,7 @@ public partial class NetworkingTests
 
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
         string? failure = null;
         try
         {

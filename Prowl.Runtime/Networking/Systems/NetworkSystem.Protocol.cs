@@ -252,7 +252,7 @@ internal sealed partial class NetworkSystem
             if (Session is { IsHost: true, State: SessionState.Active } session &&
                 session.TryGetPeer(peer.Id, out NetPeer? current) && current == peer)
             {
-                session.Kick(peer, "Your message limit is too small for scene replication.");
+                session.Kick(peer, "Your message limit is too small for networking.");
             }
         }
     }

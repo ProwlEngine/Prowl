@@ -73,7 +73,7 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
         {
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
+            Pump(() => client.Has(FakePeer.Scene), client);
             client.SendSync(component.Identifier, NetTestComponent.HealthSlot, 1);
             client.Send(FakePeer.RpcToHost, w =>
             {

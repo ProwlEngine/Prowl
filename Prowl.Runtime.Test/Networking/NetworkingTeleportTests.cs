@@ -28,7 +28,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = CreateGameObject("Crate");
             crate.AddComponent<NetworkTransform>();
             scene.Add(crate);
@@ -37,9 +37,9 @@ public partial class NetworkingTests
             PumpFor(10, alice);
 
             crate.Network.Teleport(new Float3(500, 0, 0), Quaternion.Identity);
-            Pump(() => alice.WireReceived.Any(m => m.Id == FakePeer.Snapshot &&
+            Pump(() => alice.WireReceived.Any(m => m.Id == FakePeer.Transform &&
                 ReadTransforms(m.Data).Any(r => r.NetId == netId && (r.Channels & TeleportChannel) != 0)), alice);
-            TransformRecord jumped = alice.WireReceived.Where(m => m.Id == FakePeer.Snapshot).SelectMany(m => ReadTransforms(m.Data))
+            TransformRecord jumped = alice.WireReceived.Where(m => m.Id == FakePeer.Transform).SelectMany(m => ReadTransforms(m.Data))
                 .First(r => r.NetId == netId && (r.Channels & TeleportChannel) != 0);
             Assert.Equal(new Float3(500, 0, 0), jumped.Position);
             Assert.Equal(0, jumped.Channels & ResumedChannel);
@@ -56,7 +56,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(other);
         host.Session.PeerJoined += peer =>
         {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
             host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
         try

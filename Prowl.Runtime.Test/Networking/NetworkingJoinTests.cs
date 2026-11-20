@@ -27,10 +27,10 @@ public partial class NetworkingTests
             NetworkTestScene.Current.NetworkTick += 5;
             alice.WireReceived.Clear();
             go.Transform.Position = new Prowl.Vector.Float3(1, 2, 3);
-            Networking.Networking.System!.Snapshots.Send();
+            Networking.Networking.System!.Transforms.Send();
             uint tick = Networking.Networking.Tick;
-            Pump(() => alice.Has(FakePeer.Snapshot), alice);
-            Assert.Equal(tick, SnapshotTick(alice.WireReceived.First(m => m.Id == FakePeer.Snapshot).Data));
+            Pump(() => alice.Has(FakePeer.Transform), alice);
+            Assert.Equal(tick, TransformTick(alice.WireReceived.First(m => m.Id == FakePeer.Transform).Data));
         }
         finally { Networking.Networking.Shutdown(); }
     }

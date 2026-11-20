@@ -56,9 +56,9 @@ public partial class NetworkingTests
             grid.WrittenInitial.Clear();
             grid.Cells[0] = true;
             Networking.Networking.SetDirty(grid);
-            Pump(() => alice.SnapshotValues().Any(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot), alice);
+            Pump(() => alice.SyncValues().Any(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot), alice);
             Assert.Equal([false], grid.WrittenInitial);
-            byte[] bytes = alice.SnapshotValues().Last(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot).Value;
+            byte[] bytes = alice.SyncValues().Last(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot).Value;
             NetReader sent = new(bytes);
             Assert.False(sent.ReadBool());
             Assert.Equal(0b1001, sent.ReadUInt16());

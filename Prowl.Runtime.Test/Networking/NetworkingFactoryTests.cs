@@ -26,7 +26,7 @@ public partial class NetworkingTests
         NetReader reader = new(spawn);
         SpawnMessage message = SpawnMessage.Read(ref reader);
         Assert.True(message.Template);
-        NetReader payload = new(message.Snapshot);
+        NetReader payload = new(message.Payload);
         return TemplateSpawn.Read(ref payload);
     }
 
@@ -41,7 +41,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = Networking.Networking.SpawnFactory("crate", new Float3(1, 2, 3), Quaternion.Identity, [1, 2, 3]);
             Assert.True(crate.Network.Active);
             Assert.Same(scene, crate.Scene);
@@ -74,8 +74,8 @@ public partial class NetworkingTests
         try
         {
             using FakePeer recorder = FakePeer.Join(source, "recorder");
-            Pump(() => recorder.Has(FakePeer.SceneSnapshot), recorder);
-            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data;
+            Pump(() => recorder.Has(FakePeer.Scene), recorder);
+            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.Scene).Data;
             GameObject crate = Networking.Networking.SpawnFactory("crate", new Float3(4, 5, 6), Quaternion.Identity);
             crate.GetComponent<NetTestComponent>()!.Health = 9;
             ids = TreeIdentifiers(crate);
@@ -91,7 +91,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
+            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), peer);
             host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
         };
         try

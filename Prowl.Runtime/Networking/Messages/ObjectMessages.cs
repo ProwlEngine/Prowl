@@ -5,13 +5,16 @@ using System;
 using System.IO;
 
 using Prowl.Courier;
+using Prowl.Ember;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     Spawn header followed by the state of each networked component. A root goes into section SectionSlot minus one,
-///     or the active one for 0. Snapshot holds the compressed tree, or a <see cref="TemplateSpawn" /> when Template is set.
+///     Spawn header followed by the state of each networked component. A spawn that carries its tree first names its
+///     networked components and its transforms by identifier, in the host's order. A root goes into section
+///     SectionSlot minus one, or the active one for 0. Payload holds the compressed tree, or a
+///     <see cref="TemplateSpawn" /> when Template is set.
 /// </summary>
 internal readonly ref struct SpawnMessage(
     Guid identifier,
@@ -21,7 +24,7 @@ internal readonly ref struct SpawnMessage(
     NetworkOrphaned orphaned,
     uint generation,
     uint netId,
-    ReadOnlySpan<byte> snapshot,
+    ReadOnlySpan<byte> payload,
     bool replace = false,
     uint tick = 0,
     bool template = false)
@@ -37,7 +40,7 @@ internal readonly ref struct SpawnMessage(
     internal readonly NetworkOrphaned Orphaned = orphaned;
     internal readonly uint Generation = generation;
     internal readonly uint NetId = netId;
-    internal readonly ReadOnlySpan<byte> Snapshot = snapshot;
+    [ReloadIgnore] internal readonly ReadOnlySpan<byte> Payload = payload;
     internal readonly bool Replace = replace;
     internal readonly uint Tick = tick;
     internal readonly bool Template = template;
@@ -56,7 +59,7 @@ internal readonly ref struct SpawnMessage(
             writer.WriteVarUInt32(Tick);
         }
 
-        writer.WriteBytesWithLength(Snapshot);
+        writer.WriteBytesWithLength(Payload);
     }
 
     internal static SpawnMessage Read(ref NetReader reader)
@@ -221,7 +224,7 @@ internal readonly record struct TemplateSpawn(
         NetworkValidation.Transform(0, position, rotation, scale);
         if (componentCount > NetworkComponents.MaxPerObject)
         {
-            throw new InvalidDataException("A template spawn has invalid network settings.");
+            throw new InvalidDataException("A template spawn names too many networked components.");
         }
 
         return new TemplateSpawn(prefab, factory, data, identifiers, position, rotation, scale, enabled,

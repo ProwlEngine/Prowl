@@ -11,7 +11,10 @@ namespace Prowl.Runtime.Networking;
 ///     Keeps a networked object's transform in sync, as Mirror's NetworkTransform: whoever controls the object sends
 ///     its position, rotation and scale, and everyone else follows, smoothed. A networked object without one keeps its
 ///     transform to itself. Put a second one on the object with a <see cref="Target" /> for a child that moves on its own.
+///     Add it before the object spawns: one added later is not networked. A static object, or one with every channel
+///     off, sends nothing.
 /// </summary>
+[AddComponentMenu("Networking/Network Transform")]
 public sealed class NetworkTransform : Component
 {
     /// <summary>Send the position.</summary>
@@ -32,7 +35,10 @@ public sealed class NetworkTransform : Component
     /// <summary>The object whose transform this sends: its own when not set, or a child of the networked object.</summary>
     public GameObject? Target;
 
-    internal readonly TransformSync Sync;
+    private TransformSync? _sync;
+
+    /// <summary>What it last sent, and what it received and shows of it.</summary>
+    internal TransformSync Sync => _sync ??= new TransformSync(this);
 
     /// <summary>The networked object it belongs to while spawned, and its place among that object's transforms.</summary>
     internal NetworkObject? Entry;
@@ -44,17 +50,15 @@ public sealed class NetworkTransform : Component
     internal uint LastSendTick;
     internal bool HasSendTick;
 
-    // Its place in what the snapshot system keeps for each peer, and a stamp that outdates what that place held before.
-    internal int SnapshotSlot = -1;
-    internal uint SnapshotStamp;
+    // Its place in what the transform system keeps for each peer, and a stamp that outdates what that place held before.
+    internal int SendSlot = -1;
+    internal uint SendStamp;
 
     // Its place among the moving transforms waiting to be passed on at the next tick, or -1.
     internal int RelayIndex = -1;
 
     // True once a rest pose of it may be owed to some peer.
     internal bool PoseOwed;
-
-    public NetworkTransform() => Sync = new TransformSync(this);
 
     /// <summary>The object it moves.</summary>
     internal GameObject Moved => Target.IsValid() ? Target! : GameObject;

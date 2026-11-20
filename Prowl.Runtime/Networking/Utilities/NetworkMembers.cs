@@ -29,10 +29,7 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 
     public SyncFlags Flags { get; } = flags;
 
-    /// <summary>A network collection, whose changes travel reliably rather than in snapshots.</summary>
-    internal virtual bool IsCollection => false;
-
-    /// <summary>Writes the whole value, for a snapshot or spawn.</summary>
+    /// <summary>Writes the whole value, for a spawn or a new owner.</summary>
     internal abstract void Write(Component component, NetWriter writer);
 
     /// <summary>Writes what changed since the last send. For most values, that's the value.</summary>
@@ -44,8 +41,8 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
     }
 
     /// <summary>
-    ///     Applies a value that came over the network; <paramref name="initial" /> when it came with a snapshot
-    ///     or spawn, which runs no [Change] hook.
+    ///     Applies a value that came over the network; <paramref name="initial" /> when it came with a spawn, whose
+    ///     [Change] hook waits for the object's spawn callbacks.
     /// </summary>
     internal abstract void Read(Component component, ref NetReader reader, bool initial);
 
@@ -66,7 +63,7 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : SyncMember(slot, name, flags)
 {
     /// <summary>True when the value is a reference to a networked object or component, which travels by NetId.</summary>
-    internal static readonly bool IsReference =
+    [ReloadIgnore] internal static readonly bool IsReference =
         typeof(GameObject).IsAssignableFrom(typeof(T)) || typeof(Component).IsAssignableFrom(typeof(T));
 
     /// <summary>Generated setter: applies an authorized local change and queues it for replication.</summary>
@@ -191,7 +188,6 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
     /// <summary>Generated getter: binds the component's collection to this property.</summary>
     public TCollection Bind(TComponent component) => Bound(component);
 
-    internal override bool IsCollection => true;
 
     internal override void Write(Component component, NetWriter writer) => Bound(component).WriteAll(writer);
 

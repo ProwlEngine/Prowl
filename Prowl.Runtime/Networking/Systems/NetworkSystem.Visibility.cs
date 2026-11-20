@@ -71,8 +71,6 @@ internal sealed partial class NetworkSystem
         return groups.IsEmpty || interest?.Groups.Overlaps(groups) == true ? null : false;
     }
 
-    private bool ShouldSee(GameObject go, int owner, NetPeer peer) => Rule(go, owner, peer) ?? true;
-
     private bool ShouldSee(NetworkObject entry, NetPeer peer, bool wasVisible = false, PeerInterest? gathered = null)
     {
         if (Rule(entry.GameObject, entry.Owner, peer) is { } decided)
@@ -87,9 +85,6 @@ internal sealed partial class NetworkSystem
 
         return InRange(entry, gathered ?? ViewpointsOf(peer), wasVisible);
     }
-
-    internal bool IsForcedHidden(GameObject go) =>
-        VisibilityOverrides.TryGetValue(go, out Dictionary<int, bool>? forced) && forced.ContainsValue(false);
 
     private bool HasCurrentWorld(NetPeer peer) =>
         LoadingPeers.TryGetValue(peer.Id, out PeerReadiness? state) && state.Generation == SceneGeneration;
@@ -321,7 +316,7 @@ internal sealed partial class NetworkSystem
             foreach (NetPeer peer in leaving)
             {
                 SendEngine(peer, EngineMessage.Despawn, despawn.WrittenSpan);
-                Snapshots.Withdraw(peer, go);
+                Transforms.Withdraw(peer, go);
             }
         }
 
@@ -355,7 +350,7 @@ internal sealed partial class NetworkSystem
 
         foreach (NetPeer peer in peers)
         {
-            Snapshots.Delivered(peer, go);
+            Transforms.Delivered(peer, go);
 
             // A spawn is written for everyone, so what only the owner gets follows to it.
             if (peer.Id == entry.Owner)

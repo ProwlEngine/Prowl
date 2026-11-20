@@ -410,7 +410,7 @@ public partial class NetworkingTests
         crate.Transform.Position = new Float3(5, 0, 0);
         stats.Health = 999;
         Pump(() => crate.Network.IsVisibleTo(session.AliceHere) &&
-                   (session.Alice.SnapshotInt(stats.Identifier, NetTestComponent.HealthSlot) == 999 ||
+                   (session.Alice.SyncInt(stats.Identifier, NetTestComponent.HealthSlot) == 999 ||
                     ReadSpawn(session.Alice.Last(FakePeer.Spawn), stats.Identifier).Health == 999), session.Alice, session.Bob);
 
         int spawns = SpawnsOf(session.Alice, crate), despawns = DespawnsOf(session.Alice, crate);
@@ -426,7 +426,7 @@ public partial class NetworkingTests
     {
         byte[] payload = peer.Received.Last(m => m.Id == FakePeer.Spawn && ReadSpawn(m.Data, Guid.Empty).Id == go.Identifier).Data;
         NetReader reader = new(payload);
-        return NetworkTestScene.Current.Decompress(SpawnMessage.Read(ref reader).Snapshot).WriteToJson();
+        return NetworkTestScene.Current.Decompress(SpawnMessage.Read(ref reader).Payload).WriteToJson();
     }
 
     private static int NoViewpointWarnings(NetPeer peer)
@@ -521,7 +521,7 @@ public partial class NetworkingTests
         using InterestSession session = InterestHost();
         session.AliceSees.SetViewpoints([Float3.Zero]);
         session.World.ReplaceContent(new SceneContent { Objects = [new GameObject("Next")] }, "Next", null);
-        Pump(() => Count(session.Alice, FakePeer.SceneSnapshot) == 2 && Count(session.Bob, FakePeer.SceneSnapshot) == 2,
+        Pump(() => Count(session.Alice, FakePeer.Scene) == 2 && Count(session.Bob, FakePeer.Scene) == 2,
             session.Alice, session.Bob);
 
         Assert.False(session.AliceSees.HasExplicit);

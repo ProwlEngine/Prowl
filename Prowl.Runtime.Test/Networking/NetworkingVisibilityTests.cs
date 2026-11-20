@@ -145,7 +145,7 @@ public partial class NetworkingTests
         crate.Transform.LocalPosition = new Float3(1, 2, 3);
         stats.Shout("hello");
         crate.Network.Orphaned = NetworkOrphaned.ClearOwner;
-        Pump(() => session.Alice.SnapshotInt(stats.Identifier, NetTestComponent.HealthSlot) == 7 &&
+        Pump(() => session.Alice.SyncInt(stats.Identifier, NetTestComponent.HealthSlot) == 7 &&
                    session.Alice.Has(FakePeer.Sync) && session.Alice.Has(FakePeer.RpcFromHost), session.Alice, session.Bob);
         crate.Network.AssignOwnership(session.AliceHere);
         crate.Network.AssignOwnership(null);
@@ -154,9 +154,9 @@ public partial class NetworkingTests
 
         uint netId = NetworkTestScene.Current.NetIdOf(crate);
         Assert.False(Mentions(session.Bob, crate.Identifier, stats.Identifier, bag.Identifier));
-        Assert.DoesNotContain(session.Bob.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
+        Assert.DoesNotContain(session.Bob.WireReceived.Where(m => m.Id == FakePeer.Transform)
             .SelectMany(m => ReadTransforms(m.Data)), r => r.NetId == netId);
-        Assert.Contains(session.Alice.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
+        Assert.Contains(session.Alice.WireReceived.Where(m => m.Id == FakePeer.Transform)
             .SelectMany(m => ReadTransforms(m.Data)), r => r.NetId == netId);
         Assert.False(crate.Network.IsVisibleTo(session.BobHere));
         Assert.True(crate.Network.IsVisibleTo(session.AliceHere));
@@ -322,7 +322,7 @@ public partial class NetworkingTests
 
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -387,7 +387,7 @@ public partial class NetworkingTests
         Pump(() => session.Alice.Has(FakePeer.Spawn), session.Alice, session.Bob);
 
         session.World.ReplaceContent(new SceneContent { Objects = [new GameObject("Next")] }, "Next", null);
-        Pump(() => Count(session.Alice, FakePeer.SceneSnapshot) == 2 && Count(session.Bob, FakePeer.SceneSnapshot) == 2,
+        Pump(() => Count(session.Alice, FakePeer.Scene) == 2 && Count(session.Bob, FakePeer.Scene) == 2,
             session.Alice, session.Bob);
         Assert.Contains(chest.Identifier, SpawnedIds(session.Alice));
         Assert.DoesNotContain(chest.Identifier, SpawnedIds(session.Bob));
@@ -505,7 +505,7 @@ public partial class NetworkingTests
             chest.Network.Visibility = NetworkVisibility.Manual;
             chest.AddComponent<ShowOnSpawn>();
             session.World.ReplaceContent(new SceneContent { Objects = [chest] }, "Next", null);
-            Pump(() => Count(session.Alice, FakePeer.SceneSnapshot) == 2 && Count(session.Bob, FakePeer.SceneSnapshot) == 2,
+            Pump(() => Count(session.Alice, FakePeer.Scene) == 2 && Count(session.Bob, FakePeer.Scene) == 2,
                 session.Alice, session.Bob);
             Pump(() => session.Alice.IsReady && session.Bob.IsReady, session.Alice, session.Bob);
             PumpFor(10, session.Alice, session.Bob);

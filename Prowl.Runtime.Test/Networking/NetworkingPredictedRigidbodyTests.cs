@@ -107,9 +107,9 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.IsReady, client);
-            int Sent() => client.SnapshotValues().Count(v => v.Component == predicted.Identifier);
+            int Sent() => client.SyncValues().Count(v => v.Component == predicted.Identifier);
             (double Time, Float3 Position) Last() =>
-                ReadPredictedState(client.SnapshotValues().Last(v => v.Component == predicted.Identifier).Value);
+                ReadPredictedState(client.SyncValues().Last(v => v.Component == predicted.Identifier).Value);
 
             predicted.Step(10);
             Pump(() => Sent() == 1, client);
@@ -177,7 +177,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
             host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
         try
@@ -207,12 +207,12 @@ public partial class NetworkingTests
             }
 
             // The host had it where the client did at 5.0: nothing moves.
-            host.SendSnapshotValues(client, 0, 1, (predicted.Identifier, NetworkSerializeMember.CustomSlot, 0, State(5.0, new Float3(1, 2, 3))));
+            host.SendSyncValues(client, 0, 1, (predicted.Identifier, NetworkSerializeMember.CustomSlot, 0, State(5.0, new Float3(1, 2, 3))));
             PumpFor(15, host);
             Assert.Equal(0, predicted.Corrections);
 
             // Five units higher at 5.0: the client goes there, plus the unit it moved since.
-            host.SendSnapshotValues(client, 0, 2, (predicted.Identifier, NetworkSerializeMember.CustomSlot, 0, State(5.0, new Float3(1, 7, 3))));
+            host.SendSyncValues(client, 0, 2, (predicted.Identifier, NetworkSerializeMember.CustomSlot, 0, State(5.0, new Float3(1, 7, 3))));
             Pump(() => predicted.Corrections == 1, host);
             Assert.Equal(new Float3(2, 7, 3), proxy.Transform.Position);
         }
@@ -235,7 +235,7 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.IsReady, client);
-            int Sent() => client.SnapshotValues().Count(v => v.Component == predicted.Identifier);
+            int Sent() => client.SyncValues().Count(v => v.Component == predicted.Identifier);
             predicted.Step(10);
             Pump(() => Sent() == 1, client);
 
@@ -246,7 +246,7 @@ public partial class NetworkingTests
 
             predicted.Step(10.1);
             Pump(() => Sent() == 2, client, late);
-            Assert.Equal(new Float3(3, 0, 0), ReadPredictedState(client.SnapshotValues().Last(v => v.Component == predicted.Identifier).Value).Position);
+            Assert.Equal(new Float3(3, 0, 0), ReadPredictedState(client.SyncValues().Last(v => v.Component == predicted.Identifier).Value).Position);
         }
         finally { Networking.Networking.Shutdown(); }
     }

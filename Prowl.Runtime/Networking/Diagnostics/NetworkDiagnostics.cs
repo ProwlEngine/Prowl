@@ -52,6 +52,7 @@ public static class NetworkDiagnostics
     }
 
     /// <summary>Formats a generated SyncVar diagnostic without allowing user ToString failures to affect replication.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public static string FormatValue(object? value)
     {
         try
@@ -155,7 +156,7 @@ public static class NetworkDiagnostics
         ReadOnlySpan<byte> payload, NetPeer? peer = null, bool outgoing = false)
     {
         if (kind is not (EngineMessage.Sync or EngineMessage.RpcToHost or EngineMessage.RpcFromHost
-            or EngineMessage.Snapshot or EngineMessage.SnapshotAck))
+            or EngineMessage.Transform or EngineMessage.TransformAck))
         {
             return (null, null);
         }
@@ -163,12 +164,12 @@ public static class NetworkDiagnostics
         try
         {
             NetReader reader = new(payload);
-            if (kind == EngineMessage.Snapshot)
+            if (kind == EngineMessage.Transform)
             {
-                return DescribeSnapshot(scene, ref reader, peer, outgoing);
+                return DescribeTransforms(scene, ref reader, peer, outgoing);
             }
 
-            if (kind == EngineMessage.SnapshotAck)
+            if (kind == EngineMessage.TransformAck)
             {
                 return DescribeAck(ref reader);
             }
@@ -200,16 +201,16 @@ public static class NetworkDiagnostics
         }
     }
 
-    private static (string Context, string Name) DescribeSnapshot(NetworkSystem scene, ref NetReader reader,
+    private static (string Context, string Name) DescribeTransforms(NetworkSystem scene, ref NetReader reader,
         NetPeer? peer, bool outgoing)
     {
-        SnapshotMessage header = SnapshotMessage.Read(ref reader);
-        StringBuilder context = new($"Snapshot #{header.Id}, tick {header.Tick}, scene epoch {header.Epoch}"
+        TransformBatchMessage header = TransformBatchMessage.Read(ref reader);
+        StringBuilder context = new($"Transform batch #{header.Id}, tick {header.Tick}, scene epoch {header.Epoch}"
             + (header.Id == 0 ? " (no acknowledgement)" : ""));
         List<string> names = new();
 
         int transforms = 0;
-        uint records = SnapshotMessage.ReadRecordCount(ref reader);
+        uint records = TransformBatchMessage.ReadRecordCount(ref reader);
         {
             for (uint i = 0; i < records; i++, transforms++)
             {
@@ -293,15 +294,15 @@ public static class NetworkDiagnostics
 
     private static (string Context, string Name) DescribeAck(ref NetReader reader)
     {
-        uint ids = SnapshotAckMessage.ReadCount(ref reader, 1);
+        uint ids = TransformAckMessage.ReadCount(ref reader);
         List<uint> acknowledged = new();
         for (uint i = 0; i < ids; i++)
         {
             acknowledged.Add(reader.ReadVarUInt32());
         }
 
-        uint objects = SnapshotAckMessage.ReadCount(ref reader, 1);
-        string name = ids == 1 ? $"Snapshot #{acknowledged[0]}" : $"{ids} snapshots";
+        uint objects = TransformAckMessage.ReadCount(ref reader);
+        string name = ids == 1 ? $"Transform batch #{acknowledged[0]}" : $"{ids} transform batches";
         if (objects > 0)
         {
             name += $", {objects} rejected";

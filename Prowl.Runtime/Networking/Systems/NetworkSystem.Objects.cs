@@ -59,7 +59,8 @@ internal sealed partial class NetworkSystem
 
     internal bool IsNetworked(GameObject go) => IsActive && FindEntry(go) is { TearingDown: false };
 
-    internal bool IsProxy(GameObject go) => IsActive && !HasControl(go);
+    // An object that is not networked is nobody else's to drive.
+    internal bool IsProxy(GameObject go) => IsActive && FindEntry(go) is { } entry && !HasControl(entry);
 
     /// <summary>True if this peer drives <paramref name="go" />: it owns it, or it is the host and nobody does.</summary>
     internal bool HasControl(GameObject go)
@@ -77,9 +78,11 @@ internal sealed partial class NetworkSystem
     internal bool HasControl(NetworkObject entry) =>
         !IsActive || (entry.Owner == NoOwner ? IsHost : entry.Owner == Session!.LocalPeer!.Id);
 
+    /// <summary>Whether this peer may set a [Sync] member with these flags. One on an object nobody else has is always its own.</summary>
     internal bool HasControl(Component component, SyncFlags flags) =>
-        NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
-        ((flags & SyncFlags.FromOwner) == 0 ? !IsActive || IsHost : HasControl(component.GameObject));
+        !IsActive || NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
+        FindEntry(component.GameObject) is not { } entry ||
+        ((flags & SyncFlags.FromOwner) == 0 ? IsHost : HasControl(entry));
 
     internal NetPeer? GetOwner(GameObject go)
     {
@@ -168,7 +171,7 @@ internal sealed partial class NetworkSystem
         using FrameStatScope stats = FrameStats.Network.Scope();
         if (Entries.TryGetValue(go.Identifier, out NetworkObject? existing) && existing.GameObject == go)
         {
-            existing.ChangeOwner(owner?.Id ?? NoOwner);
+            SetOwner(go, owner);
             return;
         }
 
@@ -444,7 +447,7 @@ internal sealed partial class NetworkSystem
         }
 
         EchoObject echo;
-        NetworkSerialization.WritingSnapshot = true;
+        NetworkSerialization.WritingSpawnTree = true;
         try
         {
             // References out of the tree go by identifier and land on the client's own objects.
@@ -452,12 +455,12 @@ internal sealed partial class NetworkSystem
                 new SerializationContext
                 {
                     ExternalReferences =
-                        new NetworkSerialization.SnapshotReferences(SceneReferenceResolver.ForTree(go))
+                        new NetworkSerialization.SpawnTreeReferences(SceneReferenceResolver.ForTree(go))
                 });
         }
         finally
         {
-            NetworkSerialization.WritingSnapshot = false;
+            NetworkSerialization.WritingSpawnTree = false;
         }
 
         new SpawnMessage(go.Identifier, parent, SectionSlot(go), owner, orphaned, generation, netId == 0 ? NextNetId() : netId, Compress(echo), replace, Tick).Write(output);
@@ -497,11 +500,11 @@ internal sealed partial class NetworkSystem
         int owner = message.OwnerId;
         NetworkOrphaned orphaned = message.Orphaned;
         uint generation = message.Generation, netId = message.NetId;
-        EchoObject? echo = message.Template ? null : Decompress(message.Snapshot);
+        EchoObject? echo = message.Template ? null : Decompress(message.Payload);
         SerializationContext context = SceneReferenceResolver.ContextForLinking(scene);
         SpawnTemplate? template = null;
         GameObject? go = echo == null
-            ? BuildTemplate(id, message.Snapshot, out template)
+            ? BuildTemplate(id, message.Payload, out template)
             : GameObject.DeserializePreservingIdentifiers(echo, context);
         if (go.IsNotValid())
         {
@@ -549,7 +552,7 @@ internal sealed partial class NetworkSystem
                 }
             }
 
-            // Resolve initial Sync references within the new tree before enabling its components.
+            // What the new tree holds, by identifier: the components and transforms the spawn names are found here.
             Spawning = new Dictionary<Guid, EngineObject>();
             try
             {
@@ -776,7 +779,7 @@ internal sealed partial class NetworkSystem
         {
             if (!peer.IsLocal)
             {
-                Snapshots.Withdraw(peer, go);
+                Transforms.Withdraw(peer, go);
             }
         }
 
@@ -917,7 +920,7 @@ internal sealed partial class NetworkSystem
     {
         NetSession? session = Session;
         LoadingPeers.Remove(peer.Id);
-        Snapshots.RemovePeer(peer.Id);
+        Transforms.RemovePeer(peer.Id);
         ForgetPeerVisibility(peer.Id);
         ForgetPeerLimits(peer.Id);
         ForgetPlayerOf(peer.Id);

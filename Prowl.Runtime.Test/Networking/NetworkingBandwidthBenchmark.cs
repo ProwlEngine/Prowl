@@ -27,8 +27,8 @@ public partial class NetworkingTests
     }
 
     /// <summary>
-    ///     Transform bytes per tick with every client driving one player in a 500 m square, with and without
-    ///     acknowledged baselines, at two round trip times. Runs only with PROWL_NET_BENCH set, as the other benchmark.
+    ///     Transform bytes per tick with every client driving one player in a 500 m square, at three round trip times.
+    ///     Runs only with PROWL_NET_BENCH set, as the other benchmark.
     /// </summary>
     [Fact]
     public void BenchmarkTransformBandwidth()
@@ -41,17 +41,9 @@ public partial class NetworkingTests
         int peerCount = Math.Min(63, BenchSize("PROWL_NET_BENCH_PEERS", 50)), ticks = BenchSize("PROWL_NET_BENCH_TICKS", 600);
         List<string> lines = [$"--- {DateTime.Now:yyyy-MM-dd HH:mm:ss}  transform bandwidth, {peerCount} clients each driving a player in 500 m x 500 m, " +
                               $"5 m/s, {ticks} ticks at 30 a second, payload bytes without transport headers"];
-        foreach (bool baselines in new[] { true, false })
+        foreach (int roundTrip in new[] { 0, 3, 6 })
         {
-            foreach (int roundTrip in new[] { 0, 3, 6 })
-            {
-                if (!baselines && roundTrip != 0)
-                {
-                    continue;
-                }
-
-                lines.Add(MeasureTransformBandwidth(peerCount, ticks, baselines, roundTrip));
-            }
+            lines.Add(MeasureTransformBandwidth(peerCount, ticks, true, roundTrip));
         }
 
         File.AppendAllLines(output, lines);
@@ -76,7 +68,6 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { MaxClientMessagesPerSecond = 0 });
-        SnapshotSystem.AcknowledgedBaselines = baselines;
         Networking.Networking.Host(new LocalTransport(network, "host"));
         List<BandwidthClient> clients = [];
         try
@@ -130,7 +121,7 @@ public partial class NetworkingTests
                 }
 
                 Networking.Networking.Receive();
-                system.Snapshots.Send();
+                system.Transforms.Send();
                 Networking.Networking.Flush();
 
                 foreach (BandwidthClient client in clients)
@@ -139,12 +130,12 @@ public partial class NetworkingTests
                     foreach ((ushort id, byte[] data) in client.Peer.WireReceived)
                     {
                         NetReader reader = new(data);
-                        if (id == FakePeer.Snapshot)
+                        if (id == FakePeer.Transform)
                         {
                             uint snapshot = reader.ReadVarUInt32();
                             if (snapshot != 0) client.ToHost.Enqueue((tick + roundTrip / 2, snapshot));
                         }
-                        else if (id == FakePeer.SnapshotAck)
+                        else if (id == FakePeer.TransformAck)
                         {
                             uint count = reader.ReadVarUInt32();
                             for (uint i = 0; i < count; i++) client.FromHost.Enqueue((tick + roundTrip - roundTrip / 2, reader.ReadVarUInt32()));
@@ -165,7 +156,7 @@ public partial class NetworkingTests
                         ack.WriteVarUInt32((uint)ids.Count);
                         foreach (uint id in ids) ack.WriteVarUInt32(id);
                         ack.WriteVarUInt32(0);
-                        client.Peer.Session.SendRaw(client.Peer.Session.HostPeer!, FakePeer.SnapshotAck, ack.WrittenSpan, Delivery.Unreliable);
+                        client.Peer.Session.SendRaw(client.Peer.Session.HostPeer!, FakePeer.TransformAck, ack.WrittenSpan, Delivery.Unreliable);
                         client.Peer.Session.Flush();
                     }
 
@@ -184,8 +175,8 @@ public partial class NetworkingTests
             (string Kind, NetworkTraffic Received, NetworkTraffic Sent)[] kinds = [.. NetworkStatistics.ByKind()];
             NetworkTraffic Of(string kind, bool sent) => kinds.Where(k => k.Kind == kind).Select(k => sent ? k.Sent : k.Received)
                 .FirstOrDefault();
-            NetworkTraffic down = Of("Snapshot", true), downAcks = Of("SnapshotAck", true);
-            NetworkTraffic up = Of("Snapshot", false), upAcks = Of("SnapshotAck", false);
+            NetworkTraffic down = Of("Transform", true), downAcks = Of("TransformAck", true);
+            NetworkTraffic up = Of("Transform", false), upAcks = Of("TransformAck", false);
             double perTick = 1.0 / ticks, perClientSecond = 30.0 / ticks / peerCount / 1000.0;
             long hostOut = down.Bytes + downAcks.Bytes, hostIn = up.Bytes + upAcks.Bytes;
             return $"{(baselines ? $"acknowledged, round trip {roundTrip} ticks" : "no acknowledgements         "),-34}" +
@@ -197,7 +188,6 @@ public partial class NetworkingTests
         {
             Networking.Networking.Shutdown();
             Networking.Networking.Configure(previous);
-            SnapshotSystem.AcknowledgedBaselines = true;
             foreach (BandwidthClient client in clients) client.Peer.Dispose();
         }
     }
@@ -229,7 +219,7 @@ public partial class NetworkingTests
         w.WriteVarUInt32(age);
         w.WriteVarInt64(step.X); w.WriteVarInt64(step.Y); w.WriteVarInt64(step.Z);
         NetSerializers.WriteCompactQuaternion(w, facing);
-        client.Peer.Session.SendRaw(client.Peer.Session.HostPeer!, FakePeer.Snapshot, w.WrittenSpan, Delivery.Unreliable);
+        client.Peer.Session.SendRaw(client.Peer.Session.HostPeer!, FakePeer.Transform, w.WrittenSpan, Delivery.Unreliable);
         client.Peer.Session.Flush();
     }
 }

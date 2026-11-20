@@ -88,12 +88,13 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         NetSession session = scene.Session!;
+        (uint id, RpcMode mode, RpcFlags flags) = (rpc.Id, rpc.Mode, rpc.Flags);
         if (!scene.IsHost && !scene.IsReady)
         {
+            WarnOnce(component, id, "was called before this client finished joining. Call it from OnNetworkReady or later");
             return false;
         }
 
-        (uint id, RpcMode mode, RpcFlags flags) = (rpc.Id, rpc.Mode, rpc.Flags);
         Delivery delivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
 
         if (scene.FindEntry(component.GameObject) is not { } networked || networked.IndexOf(component) < 0)
@@ -114,7 +115,12 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        if (mode == RpcMode.Target && (target == null || target.IsLocal))
+        if (mode == RpcMode.Target && target == null)
+        {
+            throw new ArgumentNullException(nameof(target), "A target RPC needs the peer to run on.");
+        }
+
+        if (mode == RpcMode.Target && target!.IsLocal)
         {
             return true;
         }

@@ -71,7 +71,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
             host.Session.SendRaw(peer, FakePeer.Player, player.WrittenSpan);
             host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };

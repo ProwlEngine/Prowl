@@ -9,12 +9,12 @@ using Prowl.Courier;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     A Snapshot message: this header, then [varuint count] TransformRecord values. The id is the sender's own count
+///     A Batch message: this header, then [varuint count] TransformRecord values. The id is the sender's own count
 ///     for this receiver, which acknowledges it; zero asks for no acknowledgement. The epoch is the scene generation
 ///     it was sent in; one from another scene is dropped. <see cref="Tick" /> and <see cref="Time" /> are the
 ///     sender's tick and clock as it sends, which each record counts back from.
 /// </summary>
-internal readonly record struct SnapshotMessage(uint Id, uint Epoch, uint Tick, double Time)
+internal readonly record struct TransformBatchMessage(uint Id, uint Epoch, uint Tick, double Time)
 {
     internal const int HeaderSize = 5 + 5 + 5 + 8;
 
@@ -29,13 +29,13 @@ internal readonly record struct SnapshotMessage(uint Id, uint Epoch, uint Tick, 
         writer.WriteDouble(Time);
     }
 
-    internal static SnapshotMessage Read(ref NetReader reader)
+    internal static TransformBatchMessage Read(ref NetReader reader)
     {
-        SnapshotMessage message = new(reader.ReadVarUInt32(), reader.ReadVarUInt32(), reader.ReadVarUInt32(),
+        TransformBatchMessage message = new(reader.ReadVarUInt32(), reader.ReadVarUInt32(), reader.ReadVarUInt32(),
             reader.ReadDouble());
         if (!double.IsFinite(message.Time) || message.Time < 0)
         {
-            throw new InvalidDataException("A snapshot has an invalid time.");
+            throw new InvalidDataException("A batch has an invalid time.");
         }
 
         return message;
@@ -55,10 +55,10 @@ internal readonly record struct SnapshotMessage(uint Id, uint Epoch, uint Tick, 
 }
 
 /// <summary>
-///     Acknowledges Snapshot ids: [varuint count] ids, then the components ([varuint count] guids) and objects
-///     ([varuint count] net ids) whose state in them couldn't be applied, so the sender keeps it pending.
+///     Acknowledges Batch ids: [varuint count] ids, then [varuint count] net ids of the objects whose transforms
+///     in them couldn't be placed, so the sender keeps their rest poses owed and sends their next positions whole.
 /// </summary>
-internal static class SnapshotAckMessage
+internal static class TransformAckMessage
 {
     internal static void WriteIds(NetWriter writer, ReadOnlySpan<uint> ids)
     {
@@ -69,12 +69,12 @@ internal static class SnapshotAckMessage
         }
     }
 
-    internal static uint ReadCount(ref NetReader reader, int minimumItemSize)
+    internal static uint ReadCount(ref NetReader reader)
     {
         uint count = reader.ReadVarUInt32();
-        if (count > (uint)reader.Remaining / (uint)minimumItemSize)
+        if (count > (uint)reader.Remaining)
         {
-            throw new InvalidDataException("Snapshot acknowledgement count exceeds the remaining data.");
+            throw new InvalidDataException("Batch acknowledgement count exceeds the remaining data.");
         }
 
         return count;

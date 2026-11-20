@@ -11,7 +11,10 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Scene replication for one engine session. All processing runs on the game thread.</summary>
+/// <summary>
+///     One engine session's networked objects, their state, transforms and RPCs, and which scenes its peers load.
+///     All processing runs on the game thread.
+/// </summary>
 internal sealed partial class NetworkSystem : IDisposable
 {
     internal readonly NetworkObjectTable Entries = new();
@@ -20,7 +23,7 @@ internal sealed partial class NetworkSystem : IDisposable
     internal readonly Dictionary<int, PeerReadiness> LoadingPeers = new();
     private readonly List<NetPeer> _overLimitPeers = new();
     internal readonly RpcSystem Rpcs;
-    internal readonly SnapshotSystem Snapshots;
+    internal readonly TransformSystem Transforms;
     internal readonly SyncSystem Sync;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     internal int Frame;
@@ -39,7 +42,7 @@ internal sealed partial class NetworkSystem : IDisposable
         Configuration = configuration.ValidatedCopy();
         Session = session;
         Sync = new SyncSystem(this);
-        Snapshots = new SnapshotSystem(this);
+        Transforms = new TransformSystem(this);
         Rpcs = new RpcSystem(this);
     }
 
@@ -83,8 +86,8 @@ internal sealed partial class NetworkSystem : IDisposable
         EarlyRpcs.Clear();
         Sync.Clear();
         Sync.Dispose();
-        Snapshots.Clear();
-        Snapshots.Dispose();
+        Transforms.Clear();
+        Transforms.Dispose();
         Rpcs.Dispose();
     }
 
@@ -113,8 +116,8 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.Despawn, OnDespawn);
         RegisterEngineMessage(session, EngineMessage.Owner, OnOwner);
         RegisterEngineMessage(session, EngineMessage.Sync, Sync.OnSync);
-        RegisterEngineMessage(session, EngineMessage.Snapshot, Snapshots.OnSnapshot);
-        RegisterEngineMessage(session, EngineMessage.SnapshotAck, Snapshots.OnAck);
+        RegisterEngineMessage(session, EngineMessage.Transform, Transforms.OnTransforms);
+        RegisterEngineMessage(session, EngineMessage.TransformAck, Transforms.OnAck);
         RegisterEngineMessage(session, EngineMessage.RpcToHost, Rpcs.OnRpcToHost);
         RegisterEngineMessage(session, EngineMessage.RpcFromHost, Rpcs.OnRpcFromHost);
 
@@ -179,7 +182,7 @@ internal sealed partial class NetworkSystem : IDisposable
             if (IsActive)
             {
                 Sync.SendSyncChanges();
-                Snapshots.Send();
+                Transforms.Send();
             }
         }
 
@@ -188,7 +191,7 @@ internal sealed partial class NetworkSystem : IDisposable
         // Acknowledged every frame, not every tick, so the sender learns as soon as it can.
         if (IsActive)
         {
-            Snapshots.SendAcks();
+            Transforms.SendAcks();
         }
 
         KickOverLimitPeers();

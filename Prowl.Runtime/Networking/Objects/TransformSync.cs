@@ -13,8 +13,8 @@ namespace Prowl.Runtime.Networking;
 internal readonly record struct TransformSample(double Time, Float3 Position, Quaternion Rotation, Float3 Scale);
 
 /// <summary>
-///     One networked object's transform: what its controller last sent, and what everyone else has received and
-///     shows from it. The messages that carry it belong to <see cref="NetworkSystem" />; this decides what goes in them.
+///     What one <see cref="NetworkTransform" /> syncs: what the object's controller last sent of it, and what everyone
+///     else has received and shows. <see cref="TransformSystem" /> carries the records; this decides what goes in them.
 /// </summary>
 internal sealed class TransformSync(NetworkTransform? settings = null)
 {
@@ -51,7 +51,7 @@ internal sealed class TransformSync(NetworkTransform? settings = null)
         }
     }
 
-    // Quiet ticks before the final pose goes out reliably.
+    // Quiet ticks before the final pose goes out, exact, and is owed until acknowledged.
     private const int SettleTicks = 3;
 
     // Ticks a channel is still sent after it stops changing, while the rest of the object moves on.
@@ -90,7 +90,7 @@ internal sealed class TransformSync(NetworkTransform? settings = null)
 
     public uint LastReceivedTick { get; private set; }
 
-    /// <summary>True once the object has come to rest and its exact pose has gone out reliably.</summary>
+    /// <summary>True once the object has come to rest and its exact pose has gone out.</summary>
     public bool Settled { get; private set; }
 
     /// <summary>Starts over, as for a new controller.</summary>

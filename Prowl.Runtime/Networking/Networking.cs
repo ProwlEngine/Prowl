@@ -10,7 +10,10 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Hosts or joins the engine's replicated scene session. Additional service connections use Courier directly.</summary>
+/// <summary>
+///     Hosts or joins the engine's session: every peer loads the same scenes itself, and networked objects, their
+///     [Sync] state and RPCs travel between them. Additional service connections use Courier directly.
+/// </summary>
 public static partial class Networking
 {
     /// <summary>Message IDs from here up are reserved for engine replication.</summary>
@@ -30,15 +33,23 @@ public static partial class Networking
     /// <summary>Session admission completed. Use IsReady to check scene readiness.</summary>
     public static bool IsActive => Session?.State == SessionState.Active;
 
+    /// <summary>True while this peer hosts the session: it is the authority, and plays in it too.</summary>
     public static bool IsHost => Session?.IsHost == true;
+
+    /// <summary>True while this peer is in a session someone else hosts.</summary>
     public static bool IsClient => Session is { IsHost: false };
 
-    /// <summary>Sync and transform ticks per second, rounded to a whole number of fixed steps. RPCs flush every frame.</summary>
+    /// <summary>
+    ///     Sync and transform ticks per second, rounded to a whole number of fixed steps. RPCs flush every frame.
+    ///     <see cref="Configure" /> sets it from <see cref="NetworkConfiguration.TickRate" />. Set it before the session
+    ///     starts, the same on every peer.
+    /// </summary>
     public static float TickRate { get; set; } = 30;
 
     /// <summary>
     ///     The least delay proxies show buffered transforms at. The buffer grows past it with the send interval and
-    ///     the measured jitter.
+    ///     the measured jitter. <see cref="Configure" /> sets it from
+    ///     <see cref="NetworkConfiguration.InterpolationMilliseconds" />.
     /// </summary>
     public static TimeSpan InterpolationDelay { get; set; } = TimeSpan.FromMilliseconds(100);
 
@@ -54,6 +65,7 @@ public static partial class Networking
     /// <summary>Seconds per network tick: <see cref="TickRate" /> rounded to a whole number of fixed steps.</summary>
     public static double TickInterval => NetworkSystem.TickInterval;
 
+    /// <summary>How far this peer is towards playing. Gameplay starts at <see cref="NetworkJoinState.Ready" />.</summary>
     public static NetworkJoinState JoinState => System?.JoinState ?? NetworkJoinState.Disconnected;
 
     /// <summary>True once the scene is loaded and the host finished sending its spawns. Repeats for each host scene change.</summary>
@@ -62,15 +74,18 @@ public static partial class Networking
     /// <summary>Remote readiness is known on the host; clients know only their own readiness.</summary>
     public static bool IsPeerReady(NetPeer peer) => System?.IsPeerReady(peer) == true;
 
-    /// <summary>Hosts a session and shares the current scene with joining peers.</summary>
+    /// <summary>
+    ///     Hosts a session in the current scenes. Joining peers are told which scenes to load, load them from their own
+    ///     assets, and receive the networked objects in them.
+    /// </summary>
     public static NetSession Host(Transport transport, string name = "Host", NetSessionOptions? options = null)
     {
         BeginSession();
-        NetworkSystem.ValidateSceneMessageLimit(options);
+        NetworkSystem.ValidateMessageLimit(options);
         if (options is { SharePeerList: false })
         {
             throw new NotSupportedException(
-                "Scene replication relays RPCs and changes from one client to the others, so clients need the peer list.");
+                "The host passes RPCs and changes from one client on to the others, so clients need the peer list.");
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
@@ -189,7 +204,9 @@ public static partial class Networking
 
     /// <summary>
     ///     Host: makes <paramref name="player" /> the player of <paramref name="peer" />, as Mirror's
-    ///     AddPlayerForConnection: spawned owned by them, or handed to them if already spawned. Replaces any player they had.
+    ///     AddPlayerForConnection: spawned owned by them, or handed to them if already spawned. It replaces any player
+    ///     they had, which stays spawned and theirs. Throws on a client, and for an object that is another peer's
+    ///     player. While it is their player, the object can't be given to anyone else.
     /// </summary>
     public static void AddPlayer(NetPeer peer, GameObject player)
     {
@@ -223,9 +240,10 @@ public static partial class Networking
     }
 
     /// <summary>
-    ///     Builds this peer's instances of <paramref name="prefab" /> with <paramref name="spawn" /> and takes them back
-    ///     with <paramref name="unspawn" /> when they leave the network, instead of instantiating and destroying them, so
-    ///     they can be pooled. The tree <paramref name="spawn" /> returns must be the prefab's, in no scene yet.
+    ///     On a client, builds the instances of <paramref name="prefab" /> the host spawns with <paramref name="spawn" />
+    ///     and takes them back with <paramref name="unspawn" /> when the host despawns them, instead of instantiating
+    ///     and destroying them, so they can be pooled. The host builds its own instances itself, and neither runs when
+    ///     the session ends. The tree <paramref name="spawn" /> returns must be the prefab's, in no scene yet.
     /// </summary>
     public static void RegisterPrefab(PrefabAsset prefab, Func<PrefabAsset, GameObject>? spawn = null,
         Action<GameObject>? unspawn = null)
@@ -249,7 +267,7 @@ public static partial class Networking
         NetSessionOptions? options = null)
     {
         BeginSession();
-        NetworkSystem.ValidateSceneMessageLimit(options);
+        NetworkSystem.ValidateMessageLimit(options);
         using FrameStatScope stats = FrameStats.Network.Scope();
         NetSessionOptions session = WithSchema(options);
         PrepareTransport(transport);

@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Test;
 
 public partial class NetworkingTests
 {
-    /// <summary>A Snapshot of one moving record: a whole grid position, and a compact rotation when given.</summary>
+    /// <summary>A Transform of one moving record: a whole grid position, and a compact rotation when given.</summary>
     private static void WriteMoving(NetWriter w, uint tick, uint netId, uint generation, Float3 position, Quaternion? rotation = null)
     {
         w.WriteVarUInt32(0); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(tick);
@@ -23,7 +23,7 @@ public partial class NetworkingTests
         if (rotation is { } turned) NetSerializers.WriteCompactQuaternion(w, turned);
     }
 
-    /// <summary>A Snapshot of one moving record that resumes from rest or teleports.</summary>
+    /// <summary>A Transform of one moving record that resumes from rest or teleports.</summary>
     private static void WriteMovingFlagged(NetWriter w, uint tick, uint netId, uint generation, Float3 position,
         float? stillFor, byte? teleport)
     {
@@ -38,12 +38,12 @@ public partial class NetworkingTests
         w.WriteVarInt64((long)MathF.Round(position.Z * 100));
     }
 
-    /// <summary>The records of a Snapshot, read the way a client reads them.</summary>
+    /// <summary>The records of a Transform, read the way a client reads them.</summary>
     private static List<Networking.TransformRecord> ReadAsAClient(byte[] snapshot)
     {
         NetReader reader = new(snapshot);
-        SnapshotMessage.Read(ref reader);
-        uint count = SnapshotMessage.ReadRecordCount(ref reader);
+        TransformBatchMessage.Read(ref reader);
+        uint count = TransformBatchMessage.ReadRecordCount(ref reader);
         List<Networking.TransformRecord> records = [];
         for (uint i = 0; i < count; i++) records.Add(Networking.TransformRecord.Read(ref reader));
         Assert.True(reader.IsAtEnd);
@@ -74,14 +74,14 @@ public partial class NetworkingTests
 
             // Both between two host ticks: starting to move again, and a teleport.
             uint netId = NetworkTestScene.Current.NetIdOf(root), generation = NetworkGeneration(root);
-            owner.Send(FakePeer.Snapshot, w => WriteMovingFlagged(w, 1, netId, generation, new Float3(1, 0, 0),
+            owner.Send(FakePeer.Transform, w => WriteMovingFlagged(w, 1, netId, generation, new Float3(1, 0, 0),
                 teleportLast ? 2f : null, teleportLast ? null : (byte)7));
-            owner.Send(FakePeer.Snapshot, w => WriteMovingFlagged(w, 2, netId, generation, new Float3(2, 0, 0),
+            owner.Send(FakePeer.Transform, w => WriteMovingFlagged(w, 2, netId, generation, new Float3(2, 0, 0),
                 teleportLast ? null : 2f, teleportLast ? (byte)7 : null));
 
-            List<Networking.TransformRecord> Relayed() => observer.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
+            List<Networking.TransformRecord> Relayed() => observer.WireReceived.Where(m => m.Id == FakePeer.Transform)
                 .SelectMany(m => ReadAsAClient(m.Data)).Where(r => r.NetId == netId).ToList();
-            Pump(() => observer.WireReceived.Any(m => m.Id == FakePeer.Snapshot), owner, observer);
+            Pump(() => observer.WireReceived.Any(m => m.Id == FakePeer.Transform), owner, observer);
             PumpFor(20, owner, observer);
 
             // The teleport wins, with the sequence number its sender gave it.
@@ -142,10 +142,10 @@ public partial class NetworkingTests
             // Two updates between two host ticks: turning and moving, then only moving on.
             uint netId = NetworkTestScene.Current.NetIdOf(root), generation = NetworkGeneration(root);
             Quaternion turned = Quaternion.AxisAngle(Float3.UnitY, 1f);
-            owner.Send(FakePeer.Snapshot, w => WriteMoving(w, 1, netId, generation, new Float3(1, 0, 0), turned));
-            owner.Send(FakePeer.Snapshot, w => WriteMoving(w, 2, netId, generation, new Float3(2, 0, 0)));
+            owner.Send(FakePeer.Transform, w => WriteMoving(w, 1, netId, generation, new Float3(1, 0, 0), turned));
+            owner.Send(FakePeer.Transform, w => WriteMoving(w, 2, netId, generation, new Float3(2, 0, 0)));
 
-            List<TransformRecord> Relayed(FakePeer peer) => peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
+            List<TransformRecord> Relayed(FakePeer peer) => peer.WireReceived.Where(m => m.Id == FakePeer.Transform)
                 .SelectMany(m => ReadTransforms(m.Data)).Where(r => r.NetId == netId).ToList();
             Pump(() => Relayed(observer).Count > 0, owner, observer);
             PumpFor(20, owner, observer);

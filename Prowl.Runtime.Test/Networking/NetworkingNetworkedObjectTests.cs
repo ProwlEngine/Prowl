@@ -118,7 +118,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = Networking.Networking.SpawnFactory("crate", Float3.Zero, Quaternion.Identity);
             Pump(() => alice.Has(FakePeer.Spawn), alice);
             TemplateSpawn spawn = ReadTemplateSpawn(alice.WireReceived.Last(m => m.Id == FakePeer.Spawn).Data);
@@ -147,8 +147,8 @@ public partial class NetworkingTests
         try
         {
             using FakePeer recorder = FakePeer.Join(source, "recorder");
-            Pump(() => recorder.Has(FakePeer.SceneSnapshot), recorder);
-            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data;
+            Pump(() => recorder.Has(FakePeer.Scene), recorder);
+            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.Scene).Data;
             GameObject built = Networking.Networking.SpawnFactory("swappable", Float3.Zero, Quaternion.Identity);
             id = built.Identifier;
             using NetWriter written = new();
@@ -164,7 +164,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
+            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), peer);
             host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
         };
         try

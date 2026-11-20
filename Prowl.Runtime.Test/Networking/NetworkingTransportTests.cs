@@ -35,12 +35,12 @@ public partial class NetworkingTests
     }
 
     [Theory]
-    [InlineData(false, NetworkExecution.Inline, SnapshotMessage.MinMessageSize, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.Inline, SnapshotMessage.MinMessageSize, DeliverySupport.All)]
-    [InlineData(false, NetworkExecution.DedicatedThread, SnapshotMessage.MinMessageSize, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.DedicatedThread, SnapshotMessage.MinMessageSize, DeliverySupport.All)]
-    [InlineData(false, NetworkExecution.Inline, SnapshotMessage.MinMessageSize - 1, DeliverySupport.All)]
-    [InlineData(true, NetworkExecution.DedicatedThread, SnapshotMessage.MinMessageSize - 1, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.Inline, TransformBatchMessage.MinMessageSize, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.Inline, TransformBatchMessage.MinMessageSize, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.DedicatedThread, TransformBatchMessage.MinMessageSize, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.DedicatedThread, TransformBatchMessage.MinMessageSize, DeliverySupport.All)]
+    [InlineData(false, NetworkExecution.Inline, TransformBatchMessage.MinMessageSize - 1, DeliverySupport.All)]
+    [InlineData(true, NetworkExecution.DedicatedThread, TransformBatchMessage.MinMessageSize - 1, DeliverySupport.All)]
     [InlineData(false, NetworkExecution.Inline, 0, DeliverySupport.Reliable)]
     [InlineData(true, NetworkExecution.DedicatedThread, 0, DeliverySupport.Reliable)]
     public void TransformBatchesAndRelaysRespectEachConnectionsLimit(bool batching, NetworkExecution execution, int smallLimit, DeliverySupport deliveries)
@@ -66,13 +66,13 @@ public partial class NetworkingTests
                 return go;
             }).ToArray();
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
-            // Under SnapshotMessage.MinMessageSize a datagram can't hold one whole record, so transforms fall back to reliable delivery.
-            int smallMax = smallLimit >= SnapshotMessage.MinMessageSize ? smallLimit - 2 : 1000;
+            // Under TransformBatchMessage.MinMessageSize a datagram can't hold one whole record, so transforms fall back to reliable delivery.
+            int smallMax = smallLimit >= TransformBatchMessage.MinMessageSize ? smallLimit - 2 : 1000;
             int wideMax = deliveries == DeliverySupport.Reliable ? 1000 : 155 - 2;
             AssertTransformBatches(small, smallMax, objects);
             AssertTransformBatches(wide, wideMax, objects);
-            Assert.All(small.Deliveries.Where(m => m.Id == FakePeer.Snapshot), m =>
-                Assert.Equal(smallLimit < SnapshotMessage.MinMessageSize ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
+            Assert.All(small.Deliveries.Where(m => m.Id == FakePeer.Transform), m =>
+                Assert.Equal(smallLimit < TransformBatchMessage.MinMessageSize ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
 
             StaticRpcMember rpc = new(typeof(NetworkingTests), 998, "Broadcast", RpcMode.Broadcast, RpcFlags.Unreliable,
                 static (ref NetReader reader, bool execute) => { });
@@ -93,7 +93,7 @@ public partial class NetworkingTests
             using NetWriter message = new();
             WriteTransforms(message, 500, 10, objects.Select(go => (NetworkTestScene.Current.NetIdOf(go),
                 NetworkTestScene.Current.GenerationOf(go), new Float3(42, 0, 0), Quaternion.Identity, Float3.One)).ToArray());
-            sender.Session.SendRaw(sender.Session.HostPeer!, FakePeer.Snapshot, message.WrittenSpan,
+            sender.Session.SendRaw(sender.Session.HostPeer!, FakePeer.Transform, message.WrittenSpan,
                 deliveries == DeliverySupport.Reliable ? Delivery.Reliable : Delivery.Unreliable);
             Pump(() => TransformIds(small).Count == 5 && TransformIds(wide).Count == 5, peers);
             AssertTransformBatches(small, smallMax, objects);
@@ -123,22 +123,22 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
             host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
         using LimitedTransport transport = new(network, _ => 0, DeliverySupport.Reliable, "client");
         Networking.Networking.Join(transport, "host", "client");
         try
         {
-            Pump(() => Networking.Networking.IsReady && host.Has(FakePeer.Snapshot), host);
+            Pump(() => Networking.Networking.IsReady && host.Has(FakePeer.Transform), host);
             GameObject local = Find(SceneInstance.Main, ship.Identifier);
             host.WireReceived.Clear();
             local.Transform.LocalPosition = new Float3(42, 0, 0);
-            Pump(() => host.Has(FakePeer.Snapshot) && host.WireReceived.Any(m => m.Id == FakePeer.Snapshot), host);
-            Assert.All(host.Deliveries.Where(m => m.Id == FakePeer.Snapshot), m => Assert.Equal(Delivery.Reliable, m.Delivery));
+            Pump(() => host.Has(FakePeer.Transform) && host.WireReceived.Any(m => m.Id == FakePeer.Transform), host);
+            Assert.All(host.Deliveries.Where(m => m.Id == FakePeer.Transform), m => Assert.Equal(Delivery.Reliable, m.Delivery));
             uint shipNetId = NetworkTestScene.Current.NetIdOf(local);
             Assert.Contains(shipNetId, TransformIds(host));
-            TransformRecord moved = ReadTransforms(host.WireReceived.Last(m => m.Id == FakePeer.Snapshot).Data)
+            TransformRecord moved = ReadTransforms(host.WireReceived.Last(m => m.Id == FakePeer.Transform).Data)
                 .Single(r => r.NetId == shipNetId);
             Assert.Equal(new Float3(42, 0, 0), moved.Position);
 
@@ -154,14 +154,14 @@ public partial class NetworkingTests
     }
 
     private static HashSet<uint> TransformIds(FakePeer peer) =>
-        peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot)
+        peer.WireReceived.Where(m => m.Id == FakePeer.Transform)
             .SelectMany(m => ReadTransforms(m.Data)).Select(r => r.NetId).ToHashSet();
 
     private static void AssertTransformBatches(FakePeer peer, int maxPayload, GameObject[] objects)
     {
         Assert.True(TransformIds(peer).SetEquals(objects.Select(NetworkTestScene.Current.NetIdOf)));
         // Every message fits the connection, and holds whole records.
-        Assert.All(peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot), m =>
+        Assert.All(peer.WireReceived.Where(m => m.Id == FakePeer.Transform), m =>
         {
             Assert.InRange(m.Data.Length, 1, maxPayload);
             Assert.NotEmpty(ReadTransforms(m.Data));

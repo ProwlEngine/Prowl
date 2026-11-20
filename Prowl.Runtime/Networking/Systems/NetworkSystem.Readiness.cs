@@ -14,10 +14,10 @@ namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkSystem
 {
-    /// <summary>Current connection, admission, scene loading, or gameplay readiness stage.</summary>
     private readonly List<(int Peer, NetworkJoinState Stage)> _timedOut = new();
     private readonly List<(int Peer, PeerReadiness State)> _continuing = new();
 
+    /// <summary>Current connection, admission, scene loading, or gameplay readiness stage.</summary>
     internal NetworkJoinState JoinState
     {
         get
@@ -61,7 +61,7 @@ internal sealed partial class NetworkSystem
 
     internal void OnPeerConnected(NetPeer peer)
     {
-        if (!FitsPeer(peer, EngineMessage.Snapshot, SnapshotMessage.MinMessageSize - sizeof(ushort)))
+        if (!FitsPeer(peer, EngineMessage.Transform, TransformBatchMessage.MinMessageSize - sizeof(ushort)))
         {
             return;
         }
@@ -84,7 +84,7 @@ internal sealed partial class NetworkSystem
     internal void BeginPeerLoad(NetPeer peer)
     {
         LoadingPeers[peer.Id] = new PeerReadiness(SceneGeneration, Now + Configuration.SceneLoadTimeoutSeconds);
-        Snapshots.Delivered(peer);
+        Transforms.Restart(peer);
         ResetVisibility(peer);
     }
 
@@ -192,7 +192,7 @@ internal sealed partial class NetworkSystem
 
     internal bool CanReceiveEngineMessage(NetPeer peer, EngineMessage kind)
     {
-        if (IsHost && !peer.IsLocal && kind is EngineMessage.Sync or EngineMessage.Snapshot or EngineMessage.SnapshotAck
+        if (IsHost && !peer.IsLocal && kind is EngineMessage.Sync or EngineMessage.Transform or EngineMessage.TransformAck
                 or EngineMessage.RpcToHost or EngineMessage.StaticRpcToHost)
         {
             return IsPeerReady(peer);

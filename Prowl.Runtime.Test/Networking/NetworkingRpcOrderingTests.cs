@@ -57,7 +57,7 @@ public partial class NetworkingTests
         using FakePeer bob = FakePeer.Join(network, "bob");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot) && bob.Has(FakePeer.SceneSnapshot), alice, bob);
+            Pump(() => alice.Has(FakePeer.Scene) && bob.Has(FakePeer.Scene), alice, bob);
             GameObject radio = CreateGameObject("Radio");
             RpcChannelTestComponent component = radio.AddComponent<RpcChannelTestComponent>();
             scene.Add(radio);
@@ -111,7 +111,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             scene.Add(crate);
@@ -183,7 +183,7 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.IsReady, client);
-            snapshot = client.Last(FakePeer.SceneSnapshot);
+            snapshot = client.Last(FakePeer.Scene);
             spawns = RecordedSpawns(client);
             component.Health = 0;
             component.Scores.Add(7);
@@ -203,7 +203,7 @@ public partial class NetworkingTests
             }
 
             SendSyncChanges();
-            Pump(() => client.SnapshotInt(component.Identifier, NetCollectionTestComponent.HealthSlot) == 0, client);
+            Pump(() => client.SyncInt(component.Identifier, NetCollectionTestComponent.HealthSlot) == 0, client);
             nextSync = client.WireReceived.Last(m => m.Id == FakePeer.Sync).Data;
         }
         finally { Networking.Networking.Shutdown(); }
@@ -367,7 +367,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
-            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
+            Pump(() => client.Has(FakePeer.Scene), client);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
             root.Network.AssignOwnership(owner);
             uint generation = NetworkGeneration(root);
@@ -412,7 +412,7 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.AutoReady = false;
-        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot);
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");

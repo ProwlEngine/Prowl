@@ -51,8 +51,8 @@ public partial class NetworkingTests
         try
         {
             using FakePeer recorder = FakePeer.Join(source, "recorder");
-            Pump(() => recorder.Has(FakePeer.SceneSnapshot), recorder);
-            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.SceneSnapshot).Data;
+            Pump(() => recorder.Has(FakePeer.Scene), recorder);
+            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.Scene).Data;
             GameObject crate = Networking.Networking.SpawnPrefab(prefab, Float3.Zero, Quaternion.Identity);
             id = crate.Identifier;
             using NetWriter written = new();
@@ -70,7 +70,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot), peer);
+            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), peer);
             host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
         };
         try
@@ -110,7 +110,7 @@ public partial class NetworkingTests
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer =>
         {
-            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Scene, snapshot.WrittenSpan);
             host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
         try

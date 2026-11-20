@@ -24,8 +24,7 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     /// <summary>The host-assigned number messages use for this object in place of its identifier.</summary>
     public uint NetId;
 
-    /// <summary>The prefab it was spawned from and its tree's identifiers then, or empty for one sent whole.</summary>
-    // What it was built from, for peers to build their own copy, or null when it goes serialized.
+    /// <summary>What it was built from, for peers to build their own copy, or null when it goes serialized.</summary>
     public SpawnTemplate? Template;
 
     public int NotifiedOwnerId = NoOwner;
@@ -65,7 +64,7 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
         {
             transforms[i].Entry = this;
             transforms[i].Index = (byte)i;
-            transforms[i].SnapshotSlot = -1;
+            transforms[i].SendSlot = -1;
             transforms[i].HasSendTick = false;
         }
     }

@@ -59,7 +59,7 @@ internal sealed partial class NetworkObject
             }
 
             float rotationLength = Quaternion.LengthSquared(rotation);
-            if (!Finite(position) || !Finite(scale) || !float.IsFinite(rotationLength) || rotationLength < 1e-12f)
+            if (!NetworkValidation.Finite(position) || !NetworkValidation.Finite(scale) || !float.IsFinite(rotationLength) || rotationLength < 1e-12f)
             {
                 throw new InvalidDataException("A handoff contains an invalid transform.");
             }
@@ -93,24 +93,6 @@ internal sealed partial class NetworkObject
         }
     }
 
-    internal bool InHandoffTree(GameObject go)
-    {
-        if (System.FindEntry(go) != this)
-        {
-            return false;
-        }
-
-        for (GameObject? ancestor = go; ancestor.IsValid(); ancestor = ancestor.Parent)
-        {
-            if (ancestor == GameObject)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     internal Float3 OwnershipVelocity() => System.HasControl(GameObject) &&
                                            GameObject.GetComponent<Rigidbody3D>() is { } body
         ? body.LinearVelocity
@@ -141,7 +123,7 @@ internal sealed partial class NetworkObject
         {
             if (!peer.IsLocal && Sees(this, peer))
             {
-                System.Snapshots.Delivered(peer, GameObject);
+                System.Transforms.Delivered(peer, GameObject);
             }
         }
     }

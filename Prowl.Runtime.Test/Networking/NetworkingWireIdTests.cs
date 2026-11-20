@@ -45,7 +45,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             ship.Network.SpawnSerialized();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
@@ -74,7 +74,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             ship.Network.SpawnSerialized();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
@@ -104,7 +104,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             component.Shout("nobody hears");
             PumpFor(30, alice);
             Assert.Empty(component.Shouts);

@@ -12,10 +12,10 @@ namespace Prowl.Runtime.Test;
 public partial class NetworkingTests
 {
     private static List<uint> TicksCarrying(FakePeer peer, uint netId) =>
-        peer.WireReceived.Where(m => m.Id == FakePeer.Snapshot && ReadTransforms(m.Data).Any(r => r.NetId == netId))
-            .Select(m => SnapshotTick(m.Data)).ToList();
+        peer.WireReceived.Where(m => m.Id == FakePeer.Transform && ReadTransforms(m.Data).Any(r => r.NetId == netId))
+            .Select(m => TransformTick(m.Data)).ToList();
 
-    private static uint SnapshotTick(byte[] snapshot)
+    private static uint TransformTick(byte[] snapshot)
     {
         NetReader r = new(snapshot);
         r.ReadVarUInt32(); r.ReadVarUInt32();
@@ -49,7 +49,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject slow = CreateGameObject("Slow"), fast = CreateGameObject("Fast");
             slow.AddComponent<NetworkTransform>().SendInterval = 3;
             fast.AddComponent<NetworkTransform>();
@@ -103,7 +103,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
             crate.Network.SetSendInterval(component, 4);
@@ -114,7 +114,7 @@ public partial class NetworkingTests
 
             // Changing every tick, it still goes out only every fourth, so three more sends take twelve ticks or more.
             int Sends() => alice.WireReceived.Count(m => m.Id == FakePeer.Sync &&
-                FakePeer.SnapshotValues(m.Data).Any(v => v.Component == component.Identifier && v.Slot == NetTestComponent.HealthSlot));
+                FakePeer.SyncValues(m.Data).Any(v => v.Component == component.Identifier && v.Slot == NetTestComponent.HealthSlot));
             Pump(() =>
             {
                 component.Health++;
@@ -127,7 +127,7 @@ public partial class NetworkingTests
                 return Sends() >= 4;
             }, alice);
             Assert.True(Networking.Networking.Tick - first >= 12, $"Three more sends took {Networking.Networking.Tick - first} ticks");
-            Pump(() => alice.SnapshotInt(component.Identifier, NetTestComponent.HealthSlot) == component.Health, alice);
+            Pump(() => alice.SyncInt(component.Identifier, NetTestComponent.HealthSlot) == component.Health, alice);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -142,7 +142,7 @@ public partial class NetworkingTests
         using FakePeer alice = FakePeer.Join(shared, "alice");
         try
         {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = CreateGameObject("Crate");
             crate.AddComponent<NetworkTransform>().SendInterval = 5;
             scene.Add(crate);
@@ -191,7 +191,7 @@ public partial class NetworkingTests
 
                 system.NetworkTick = system.Tick + 2;
                 system.Sync.SendSyncChanges();
-                system.Snapshots.Send();
+                system.Transforms.Send();
                 Networking.Networking.Session!.Flush();
                 alice.Session.Update();
                 Networking.Networking.Receive();
@@ -201,8 +201,8 @@ public partial class NetworkingTests
             {
                 uint netId = NetworkTestScene.Current.NetIdOf(objects[i]);
                 Assert.True(TicksCarrying(alice, netId).Count >= 10, $"Object {i} sent {TicksCarrying(alice, netId).Count} transforms");
-                Assert.True(alice.SnapshotInt(components[i].Identifier, NetTestComponent.HealthSlot) >= 38,
-                    $"Object {i} last sent health {alice.SnapshotInt(components[i].Identifier, NetTestComponent.HealthSlot)}");
+                Assert.True(alice.SyncInt(components[i].Identifier, NetTestComponent.HealthSlot) >= 38,
+                    $"Object {i} last sent health {alice.SyncInt(components[i].Identifier, NetTestComponent.HealthSlot)}");
             }
         }
         finally { Networking.Networking.Shutdown(); }

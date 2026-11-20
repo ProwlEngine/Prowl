@@ -34,9 +34,9 @@ public partial class NetworkingTests
         NetworkConfiguration limits = new() { MaxSnapshotDecompressedBytes = (int)binary.Length,
             MaxSnapshotDepth = 2, MaxSnapshotNodes = values.Length + 1 };
         byte[] compressed = NetworkTestScene.Current.Compress(root);
-        Assert.Equal(root, SnapshotDecoder.Decode(compressed, limits));
+        Assert.Equal(root, SpawnTreeDecoder.Decode(compressed, limits));
         limits.MaxSnapshotDecompressedBytes--;
-        Assert.Throws<InvalidDataException>(() => SnapshotDecoder.Decode(compressed, limits));
+        Assert.Throws<InvalidDataException>(() => SpawnTreeDecoder.Decode(compressed, limits));
     }
 
     [Theory]
@@ -51,7 +51,7 @@ public partial class NetworkingTests
     public void SnapshotDecoderRejectsInvalidLengthsBeforeAllocating(EchoType type, int length)
     {
         byte[] compressed = CompressedEcho(w => { w.Write((byte)type); w.Write(length); });
-        Assert.Throws<InvalidDataException>(() => SnapshotDecoder.Decode(compressed, new()));
+        Assert.Throws<InvalidDataException>(() => SpawnTreeDecoder.Decode(compressed, new()));
     }
 
     [Fact]
@@ -66,8 +66,8 @@ public partial class NetworkingTests
                 w.Write((byte)EchoType.Null); w.Write((byte)EchoType.Null);
             }
         });
-        Assert.Equal(2, SnapshotDecoder.Decode(compressed, new() { MaxSnapshotNodes = 7 }).Count);
-        Assert.Throws<InvalidDataException>(() => SnapshotDecoder.Decode(compressed, new() { MaxSnapshotNodes = 6 }));
+        Assert.Equal(2, SpawnTreeDecoder.Decode(compressed, new() { MaxSnapshotNodes = 7 }).Count);
+        Assert.Throws<InvalidDataException>(() => SpawnTreeDecoder.Decode(compressed, new() { MaxSnapshotNodes = 6 }));
     }
 
     [Theory]
@@ -114,8 +114,8 @@ public partial class NetworkingTests
         SessionEndReason? ended = null;
         host.Session.PeerJoined += peer =>
         {
-            if (spawn) host.Send(FakePeer.SceneSnapshot, w => w.WriteBytes(snapshot.WrittenSpan), peer);
-            host.Send(spawn ? FakePeer.Spawn : FakePeer.SceneSnapshot, w =>
+            if (spawn) host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot.WrittenSpan), peer);
+            host.Send(spawn ? FakePeer.Spawn : FakePeer.Scene, w =>
             {
                 if (spawn)
                 {

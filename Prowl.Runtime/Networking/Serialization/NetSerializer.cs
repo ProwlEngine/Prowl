@@ -22,7 +22,8 @@ namespace Prowl.Runtime.Networking;
 ///     Supported: <see cref="bool" />, the integer types, <see cref="float" />, <see cref="double" />,
 ///     <see cref="string" />, <see cref="Guid" />, enums, the <c>Float</c>/<c>Double</c>/<c>Int</c> vectors,
 ///     <see cref="Quaternion" />, <see cref="Color" />, and references to a <see cref="GameObject" /> or
-///     <see cref="Component" /> (sent by identifier, null if the receiver doesn't have it). A game script's
+///     <see cref="Component" /> (a networked object or one of its networked components, sent by NetId, and null
+///     for anything else or when the receiver doesn't have it). A game script's
 ///     own structs and classes get serializers from the script compiler when its [Sync] values and RPCs use
 ///     them: member by member (public fields, [SerializeField] fields and public auto-properties), or through
 ///     <see cref="INetSerializable{TSelf}" /> if they implement it. Classes and interfaces are sent as what the
@@ -56,9 +57,9 @@ public static class NetSerializer<T>
 
     /// <summary>
     ///     Gives <typeparamref name="T" /> a serializer, for a type the engine doesn't know. Register before the
-    ///     first value is sent, from a <see cref="InvalidOperationException" /> say; registering again replaces it.
+    ///     first value is sent, from a static constructor say; registering again replaces it.
     /// </summary>
-    /// <exception cref="T"><typeparamref name="T" /> already has a built-in serializer.</exception>
+    /// <exception cref="InvalidOperationException"><typeparamref name="T" /> already has a built-in serializer.</exception>
     public static void Register(Writer write, Reader read)
     {
         ArgumentNullException.ThrowIfNull(write);
@@ -362,7 +363,7 @@ internal static class NetSerializers
             return ((w, v) => w.WriteVarInt64(EnumToInt64(v)), (ref r) => Int64ToEnum<T>(r.ReadVarInt64()));
         }
 
-        // Engine objects travel as their identifier, and come out as whatever the receiver has under it.
+        // Engine objects travel as their networked object's NetId, and come out as whatever the receiver has under it.
         if (typeof(GameObject).IsAssignableFrom(t) || typeof(Component).IsAssignableFrom(t))
         {
             return ((w, v) => WriteReference(w, v), static (ref r) => ReadReference<T>(ref r));
