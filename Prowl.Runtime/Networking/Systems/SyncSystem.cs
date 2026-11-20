@@ -599,6 +599,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     private bool WriteMember(Component component, SyncMember sync, bool whole)
     {
         _value.Reset();
+        _writing++;
         try
         {
             if (whole)
@@ -616,6 +617,10 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             WarnSyncOnce(component, sync, $"could not be serialized ({e.Message})");
             return false;
         }
+        finally
+        {
+            _writing--;
+        }
 
         if (NetworkDiagnostics.Enabled)
         {
@@ -624,6 +629,22 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
 
         return true;
+    }
+
+    // Above zero while game code is writing a value, as in OnSerialize.
+    private int _writing;
+
+    /// <summary>
+    ///     Refuses a change that writes state of its own while a component is writing its state: the two would share
+    ///     the same buffers.
+    /// </summary>
+    internal void RefuseWhileWriting(string what)
+    {
+        if (_writing > 0)
+        {
+            throw new InvalidOperationException(
+                $"{what} while a component is writing its state, as in OnSerialize. Do it before or after.");
+        }
     }
 
     private void Queue(int peerId, NetworkObject entry, ulong components, ReadOnlySpan<byte> blocks)

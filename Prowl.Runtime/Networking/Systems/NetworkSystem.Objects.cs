@@ -120,6 +120,7 @@ internal sealed partial class NetworkSystem
                 throw new InvalidOperationException("Only the host can spawn networked objects.");
             }
 
+            Sync.RefuseWhileWriting("An object can't be spawned");
             ValidateOwner(owner);
 
             if (FindEntry(go) is { TearingDown: true })
@@ -264,6 +265,7 @@ internal sealed partial class NetworkSystem
                 throw new InvalidOperationException("Only the host can spawn networked objects.");
             }
 
+            Sync.RefuseWhileWriting("An object can't be spawned");
             ValidateOwner(owner);
         }
     }
@@ -840,6 +842,7 @@ internal sealed partial class NetworkSystem
             throw new InvalidOperationException("Only the host can change who owns a networked object.");
         }
 
+        Sync.RefuseWhileWriting("An object's owner can't be changed");
         ValidateOwner(owner);
 
         if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go ||

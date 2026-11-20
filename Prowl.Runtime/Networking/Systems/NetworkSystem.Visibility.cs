@@ -204,12 +204,18 @@ internal sealed partial class NetworkSystem
         {
             throw new InvalidOperationException("Only the host can change a spawned object's visibility.");
         }
+
+        if (IsActive)
+        {
+            Sync.RefuseWhileWriting("Who receives an object can't be changed");
+        }
     }
 
     internal void RefreshVisibility(GameObject go)
     {
         if (IsActive && IsHost && FindEntry(go) is { TearingDown: false } entry && entry.GameObject == go)
         {
+            Sync.RefuseWhileWriting("Who receives an object can't be changed");
             RefreshVisibility(entry);
         }
     }
@@ -230,6 +236,8 @@ internal sealed partial class NetworkSystem
         {
             throw new InvalidOperationException("Only the host can change who receives a networked object.");
         }
+
+        Sync.RefuseWhileWriting("Who receives an object can't be changed");
 
         if (peer.IsLocal || !Session!.TryGetPeer(peer.Id, out NetPeer? current) || !ReferenceEquals(current, peer))
         {

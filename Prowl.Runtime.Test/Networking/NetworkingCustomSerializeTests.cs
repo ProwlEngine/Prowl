@@ -43,8 +43,71 @@ public class FailingStateTestComponent : Component, INetworkSerialize
     }
 }
 
+/// <summary>Game code that changes the network while it is asked for its state.</summary>
+public class MeddlingStateTestComponent : Component, INetworkSerialize
+{
+    [Prowl.Echo.SerializeIgnore] public Action? WhileWriting;
+    [Prowl.Echo.SerializeIgnore] public Exception? Thrown;
+
+    public void OnSerialize(NetWriter writer, bool initial)
+    {
+        writer.WriteByte(1);
+        if (initial || WhileWriting == null) return;
+        try { WhileWriting(); }
+        catch (Exception e) { Thrown = e; }
+    }
+
+    public void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
+}
+
 public partial class NetworkingTests
 {
+    [Fact]
+    public void SpawningOrHandingOverWhileStateIsWrittenIsRefused()
+    {
+        Networking.Networking.RegisterFactory("crate", BuildCrate);
+        SceneInstance scene = CreateScene();
+        GameObject root = CreateGameObject("Meddler"), other = CreateGameObject("Other");
+        root.Network.Networked = true;
+        other.Network.Networked = true;
+        MeddlingStateTestComponent meddler = root.AddComponent<MeddlingStateTestComponent>();
+        scene.Add(root); scene.Add(other);
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
+            alice.WireReceived.Clear();
+
+            // Each of these writes state of its own, into the buffers the state being written is using.
+            foreach (Action change in new Action[]
+                     {
+                         () => Networking.Networking.SpawnFactory("crate", default, Prowl.Vector.Quaternion.Identity),
+                         () => other.Network.AssignOwnership(aliceHere),
+                         () => other.Network.HideFrom(aliceHere),
+                     })
+            {
+                meddler.Thrown = null;
+                meddler.WhileWriting = change;
+                Networking.Networking.SetDirty(meddler);
+                Pump(() => meddler.Thrown != null, alice);
+                Assert.IsType<InvalidOperationException>(meddler.Thrown);
+            }
+
+            meddler.WhileWriting = null;
+            PumpFor(30, alice);
+            Assert.DoesNotContain(scene.Objects, o => o.Name == "Crate");
+            Assert.Null(other.Network.Owner);
+            Assert.True(other.Network.IsVisibleTo(aliceHere));
+            Assert.DoesNotContain(alice.WireReceived, m => m.Id is FakePeer.Spawn or FakePeer.Despawn or FakePeer.Owner);
+            Assert.True(Networking.Networking.IsActive);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
