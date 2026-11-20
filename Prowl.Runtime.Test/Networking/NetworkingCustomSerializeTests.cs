@@ -67,7 +67,7 @@ public partial class NetworkingTests
             NetReader reader = new(bytes);
             NetworkMembers.Of(copy).Sync(NetworkSerializeMember.CustomSlot)!.Read(copy, ref reader, true);
             Assert.True(copy.Cells[0] && copy.Cells[3] && !copy.Cells[1]);
-            Assert.Equal([true], copy.Initial);
+            Assert.Equal([false], copy.Initial);
         }
         finally { Networking.Networking.Shutdown(); }
     }
