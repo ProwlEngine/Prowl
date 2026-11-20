@@ -298,6 +298,15 @@ internal sealed partial class NetworkSystem
 
         Entries.RemoveWhere(e => !e.GameObject.IsValid() || e.GameObject.Scene != world);
         Restricted.RemoveWhere(e => !Entries.TryGetValue(e.GameObject.Identifier, out NetworkObject? kept) || kept != e);
+
+        // Clients are told of the scene before any game code runs here, so what that code spawns reaches them after
+        // it, with the rest of the new scene's objects.
+        SendScene(session.Peers.Where(peer => !peer.IsLocal).ToArray());
+        if (Session != session)
+        {
+            return;
+        }
+
         RegisterSceneObjects(world, world.Objects);
 
         if (Session != session)
@@ -312,12 +321,6 @@ internal sealed partial class NetworkSystem
         }
 
         SetLocalReady();
-        if (Session != session)
-        {
-            return;
-        }
-
-        SendScene(session.Peers.Where(peer => !peer.IsLocal).ToArray());
     }
 
     /// <summary>

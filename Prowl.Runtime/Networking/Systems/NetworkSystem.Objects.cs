@@ -191,9 +191,10 @@ internal sealed partial class NetworkSystem
         InitVisibility(entry);
 
         List<NetPeer> observers = new();
+        // A peer still loading the scene gets it with the rest, once it has loaded.
         foreach (NetPeer peer in Session!.Peers)
         {
-            if (!peer.IsLocal && Sees(entry, peer))
+            if (!peer.IsLocal && Sees(entry, peer) && ReceivesRpcs(peer))
             {
                 observers.Add(peer);
             }

@@ -81,6 +81,41 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void ASpawnMadeAsTheHostChangesSceneReachesClientsOnceAndAfterTheSceneMessage()
+    {
+        Networking.Networking.RegisterFactory("crate", BuildCrate);
+        SceneInstance scene = CreateScene();
+        GameObject manager = CreateGameObject("Manager");
+        NetworkReadinessListener listener = manager.AddComponent<NetworkReadinessListener>();
+        scene.Add(manager);
+        manager.Persistent = true;
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            alice.Received.Clear();
+
+            // The level's start spawns its objects as soon as the host has the new scene.
+            GameObject? crate = null;
+            listener.ReadyAction = () => crate = Networking.Networking.SpawnFactory("crate", Float3.Zero, Quaternion.Identity);
+            scene.ReplaceContent(new SceneContent { Objects = [new GameObject("Next")] }, "Next", null);
+            Pump(() => alice.Has(FakePeer.Scene) && alice.IsReady, alice);
+            PumpFor(30, alice);
+
+            List<ushort> kinds = [.. alice.Received.Select(m => m.Id)];
+            int sceneAt = kinds.IndexOf(FakePeer.Scene);
+            List<int> spawnsAt = [.. Enumerable.Range(0, kinds.Count).Where(i =>
+                kinds[i] == FakePeer.Spawn && SpawnedId(alice.Received[i].Data) == crate!.Identifier)];
+            Assert.Single(spawnsAt);
+            Assert.True(spawnsAt[0] > sceneAt);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void AClientBuildsAFactorySpawnAndHandsItToTheDestroyDelegateOnDespawn()
     {
         List<GameObject> returned = new();
