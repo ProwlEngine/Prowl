@@ -139,6 +139,62 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
+    private static GameObject BuildTank(in NetworkSpawn spawn)
+    {
+        GameObject tank = new("Tank"), turret = new("Turret");
+        turret.SetParent(tank);
+        tank.Transform.Position = spawn.Position;
+        tank.AddComponent<NetworkTransform>();
+        tank.AddComponent<NetworkTransform>().Target = turret;
+        return tank;
+    }
+
+    [Fact]
+    public void ASpawnCarriesThePoseOfAChildATransformMoves()
+    {
+        Networking.Networking.RegisterFactory("tank", BuildTank);
+        MakeCurrent(CreateScene());
+        byte[] snapshot, spawn;
+        Guid id;
+        LocalNetwork source = new();
+        Networking.Networking.Host(new LocalTransport(source, "host"));
+        try
+        {
+            using FakePeer recorder = FakePeer.Join(source, "recorder");
+            Pump(() => recorder.Has(FakePeer.Scene), recorder);
+            snapshot = recorder.WireReceived.First(m => m.Id == FakePeer.Scene).Data;
+            GameObject tank = Networking.Networking.SpawnFactory("tank", new Float3(1, 0, 0), Quaternion.Identity);
+            id = tank.Identifier;
+            tank.Children[0].Transform.LocalPosition = new Float3(0, 2, 0);
+            tank.Children[0].Transform.LocalScale = new Float3(2, 2, 2);
+            using NetWriter written = new();
+            NetworkTestScene.Current.WriteSpawn(tank, -1, NetworkOrphaned.Destroy, written, NetworkGeneration(tank),
+                NetworkTestScene.Current.NetIdOf(tank));
+            spawn = written.ToArray();
+        }
+        finally { Networking.Networking.Shutdown(); }
+
+        // The joiner builds the turret where its factory puts it, so where the host has it comes with the spawn.
+        MakeCurrent(CreateScene());
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.Session.PeerJoined += peer =>
+        {
+            host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), peer);
+            host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
+        };
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == id), host);
+            GameObject copy = Find(SceneInstance.Main, id);
+            Assert.Equal(new Float3(1, 0, 0), copy.Transform.LocalPosition);
+            Assert.Equal(new Float3(0, 2, 0), copy.Children[0].Transform.LocalPosition);
+            Assert.Equal(new Float3(2, 2, 2), copy.Children[0].Transform.LocalScale);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     [Fact]
     public void ANetworkTransformWithoutInterpolationAppliesTheNewestPoseAtOnce()
     {

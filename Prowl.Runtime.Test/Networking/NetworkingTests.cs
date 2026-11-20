@@ -481,6 +481,13 @@ public partial class NetworkingTests : RuntimeTestBase
         Guid id = message.Identifier;
         if (!NetworkTestScene.Current.Entries.TryGetValue(id, out NetworkObject? entry)) return values;
 
+        // The pose of each child a transform moves comes ahead of the state.
+        int transforms = reader.ReadByte();
+        for (int t = 0; t < transforms; t++)
+        {
+            if (reader.ReadBool()) reader.ReadBytes(40);
+        }
+
         int count = reader.ReadByte();
         for (int c = 0; c < count && c < entry.Components.Length; c++)
         {

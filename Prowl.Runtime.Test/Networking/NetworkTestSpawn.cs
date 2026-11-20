@@ -39,17 +39,30 @@ internal static class NetworkTestSpawn
     {
         NetworkOrphaned kept = go.Network.Orphaned;
         go.Network.ApplyOrphaned(orphaned);
+        NetworkObject? live = system.FindEntry(go) is { } found && found.GameObject == go ? found : null;
+        (int Owner, uint Generation, uint NetId, SpawnTemplate? Template) was =
+            (live?.Owner ?? 0, live?.Generation ?? 0, live?.NetId ?? 0, live?.Template);
         try
         {
-            system.WriteSpawn(new NetworkObject(system, go)
+            // A spawned object is written as itself, so what the system keeps for its transforms stays as it is.
+            NetworkObject entry = live ?? new NetworkObject(system, go) { Template = TemplateOf(go) };
+            entry.Owner = owner;
+            entry.Generation = generation;
+            entry.NetId = netId == 0 ? system.NextNetId() : netId;
+            if (live != null && IsCopy(live.Template))
             {
-                Owner = owner, Generation = generation, NetId = netId == 0 ? system.NextNetId() : netId,
-                Template = system.FindEntry(go) is { Template: { } built } && !IsCopy(built) ? built : TemplateOf(go)
-            }, output, replace);
+                live.Template = TemplateOf(go);
+            }
+
+            system.WriteSpawn(entry, output, replace);
         }
         finally
         {
             go.Network.ApplyOrphaned(kept);
+            if (live != null)
+            {
+                (live.Owner, live.Generation, live.NetId, live.Template) = (was.Owner, was.Generation, was.NetId, was.Template!);
+            }
         }
     }
 

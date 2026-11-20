@@ -448,7 +448,51 @@ internal sealed partial class NetworkSystem
         built.Write(payload);
         new SpawnMessage(go.Identifier, parent, SectionSlot(go), entry.Owner, entry.Orphaned, entry.Generation,
             entry.NetId, payload.WrittenSpan, replace, Tick).Write(output);
+        WriteChildPoses(entry, output);
         Sync.WriteSpawnState(output, entry.Components);
+    }
+
+    // Each transform that moves a child sends where that child is, as Mirror's NetworkTransform writes its target
+    // into a spawn. The root's own pose is in the template spawn.
+    private static void WriteChildPoses(NetworkObject entry, NetWriter output)
+    {
+        NetworkTransform[] transforms = entry.Transforms;
+        output.WriteByte((byte)transforms.Length);
+        foreach (NetworkTransform transform in transforms)
+        {
+            bool child = transform.IsValid() && !ReferenceEquals(transform.Moved, entry.GameObject);
+            output.WriteBool(child);
+            if (child)
+            {
+                Transform t = transform.Moved.Transform;
+                NetSerializers.WriteFloat3(output, t.LocalPosition);
+                NetSerializers.WriteQuaternion(output, t.LocalRotation);
+                NetSerializers.WriteFloat3(output, t.LocalScale);
+            }
+        }
+    }
+
+    private static void ReadChildPoses(ref NetReader reader, NetworkTransform[] transforms)
+    {
+        int count = reader.ReadByte();
+        if (count != transforms.Length)
+        {
+            throw new InvalidDataException(
+                $"A spawn names {count} NetworkTransforms and this peer's object has {transforms.Length}. Every peer " +
+                "has to build the same ones.");
+        }
+
+        foreach (NetworkTransform transform in transforms)
+        {
+            if (reader.ReadBool())
+            {
+                Float3 position = NetSerializers.ReadFloat3(ref reader);
+                Quaternion rotation = NetSerializers.ReadQuaternion(ref reader);
+                Float3 scale = NetSerializers.ReadFloat3(ref reader);
+                NetworkValidation.Transform(0, position, rotation, scale);
+                transform.Apply(position, rotation, scale);
+            }
+        }
     }
 
     internal void OnSpawn(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -469,6 +513,7 @@ internal sealed partial class NetworkSystem
         GameObject go = BuildTemplate(id, message.Payload, out SpawnTemplate template);
         bool attached = false, adopted = false;
         Component[] components = [];
+        NetworkTransform[] transforms = [];
         try
         {
             if (Session != session || ReplicatedWorld != scene)
@@ -521,6 +566,8 @@ internal sealed partial class NetworkSystem
                 }
 
                 components = adopted ? NetworkComponents.Gather(go) : template.Components;
+                transforms = NetworkComponents.GatherTransforms(go);
+                ReadChildPoses(ref reader, transforms);
                 Sync.ApplySpawnState(sender, components, ref reader);
             }
             finally
@@ -538,6 +585,7 @@ internal sealed partial class NetworkSystem
                 Owner = owner, Generation = generation, NetId = netId,
                 Template = adopted ? template with { Components = components } : template, Components = components
             };
+            entry.SetTransforms(transforms);
 
             go.Network.ApplyOrphaned(orphaned);
             Entries.Add(entry);
