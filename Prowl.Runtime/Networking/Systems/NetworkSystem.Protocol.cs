@@ -77,13 +77,21 @@ internal sealed partial class NetworkSystem
             }
         });
 
-    // Failures a client's messages may cause before it is kicked, and how many of them are logged.
+    // Failures a client's messages may cause before it is kicked, and how many of them are logged. A client that
+    // has caused none for a while starts over.
     private const int MaxFailures = 10, LoggedFailures = 3;
+    private const double FailureMemorySeconds = 60;
 
-    private readonly Dictionary<int, int> _failures = new();
+    private readonly Dictionary<int, (int Count, double At)> _failures = new();
     private readonly Dictionary<int, (double Tokens, double At)> _messageBudgets = new();
 
-    private int CountFailure(NetPeer peer) => _failures[peer.Id] = _failures.GetValueOrDefault(peer.Id) + 1;
+    private int CountFailure(NetPeer peer)
+    {
+        (int count, double at) = _failures.GetValueOrDefault(peer.Id);
+        count = Now - at > FailureMemorySeconds ? 1 : count + 1;
+        _failures[peer.Id] = (count, Now);
+        return count;
+    }
 
     /// <summary>
     ///     False, kicking or dropping the client, when its message is over the client size limit or it has sent faster

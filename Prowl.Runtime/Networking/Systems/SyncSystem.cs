@@ -358,6 +358,18 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
     }
 
+    // Game code threw while taking a value. Reported once for each member and kind of failure.
+    private void FailedToApply(Component component, SyncMember sync, Exception e)
+    {
+        NetworkDiagnostics.TraceMember("SyncVar", "Failed", scene.Session?.LocalPeer, component, sync.Slot, false,
+            e.Message, default);
+        if (_syncWarnings.Add((component.GetType(), sync.Slot, e.GetType().Name)))
+        {
+            Debug.LogError(
+                $"[Network] Applying {component.GetType().Name}.{sync.Name} failed, so that component's state was dropped: {e}");
+        }
+    }
+
     /// <summary>Whether <paramref name="sender" /> may change a [Sync] member of an object.</summary>
     internal bool AcceptSync(NetPeer sender, NetworkObject entry, SyncFlags flags) =>
         // The host is the authority over everything; a client only over the FromOwner members of what it owns.
@@ -930,6 +942,13 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 {
                     sync.Validate(component, ref block, initial);
                 }
+            }
+            catch (Exception e) when (apply && take && e is not InvalidDataException)
+            {
+                // It checked out a moment ago, so this is the game's own code failing, as in OnDeserialize. As Mirror
+                // does, the rest of this component's state is dropped and reading goes on at the next component.
+                FailedToApply(component, sync, e);
+                return accepted;
             }
             catch (Exception e) when (e is ArgumentException or OverflowException or FormatException
                                           or IndexOutOfRangeException)

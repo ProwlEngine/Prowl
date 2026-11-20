@@ -30,8 +30,66 @@ public class PackedGridTestComponent : Component, INetworkSerialize
     }
 }
 
+/// <summary>Game code that fails while reading its own state.</summary>
+public class FailingStateTestComponent : Component, INetworkSerialize
+{
+    public static Func<Exception>? Failure;
+    public void OnSerialize(NetWriter writer, bool initial) => writer.WriteByte(1);
+
+    public void OnDeserialize(ref NetReader reader, bool initial)
+    {
+        if (Failure != null) throw Failure();
+        reader.ReadByte();
+    }
+}
+
 public partial class NetworkingTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GameCodeFailingToReadItsStateLosesOnlyThatComponentsState(bool argument)
+    {
+        SceneInstance hostScene = CreateScene();
+        using NetWriter snapshot = new();
+        NetworkTestScene.Current.WriteScene(hostScene, snapshot);
+        GameObject original = CreateGameObject("Fragile");
+        original.AddComponent<FailingStateTestComponent>();
+        original.AddComponent<NetTestComponent>().Health = 9;
+        original.Network.Networked = true;
+        using NetWriter spawn = new();
+        NetworkTestScene.Current.WriteSpawn(original, -1, NetworkOrphaned.Destroy, spawn, 1, 4);
+
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        SendJoin(host, snapshot.ToArray(), spawn.ToArray());
+        FailingStateTestComponent.Failure = argument
+            ? () => new ArgumentException("bad cell")
+            : () => new InvalidOperationException("not ready");
+        try
+        {
+            // As Mirror catches what OnDeserialize throws and reads on at the next component: the spawn still
+            // arrives with the rest of its state, and the session goes on.
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == original.Identifier), host);
+            GameObject copy = Find(SceneInstance.Main, original.Identifier);
+            NetTestComponent stats = copy.GetComponent<NetTestComponent>()!;
+            Assert.Equal(9, stats.Health);
+
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            host.SendSyncValues(client, 0, 1,
+                (copy.GetComponent<FailingStateTestComponent>()!.Identifier, NetworkSerializeMember.CustomSlot, 1, new byte[] { 0, 1 }),
+                (stats.Identifier, NetTestComponent.HealthSlot, 1, IntValue(42)));
+            Pump(() => stats.Health == 42, host);
+            Assert.True(Networking.Networking.IsActive);
+        }
+        finally
+        {
+            FailingStateTestComponent.Failure = null;
+            Networking.Networking.Shutdown();
+        }
+    }
+
     [Fact]
     public void AComponentWritesItsOwnStateAndSendsItWhenMarkedDirty()
     {
