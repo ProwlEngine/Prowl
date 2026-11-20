@@ -10,8 +10,14 @@ public sealed class NetworkConfiguration
 {
     /// <summary>The game's version. Sessions mix in a hash of every networked member, so builds that differ there can't join either.</summary>
     public uint AppVersion;
+
+    /// <summary>Packs the messages for a peer within a frame into as few packets as fit.</summary>
     public bool BatchMessages = true;
+
+    /// <summary>KCP: slows sending down when packets are lost. Off, it sends as fast as the windows allow.</summary>
     public bool CongestionControl;
+
+    /// <summary>Seconds a connection attempt may take before it fails.</summary>
     public float ConnectTimeoutSeconds = 5;
 
     /// <summary>Encrypts and authenticates KCP traffic. Hosts and clients must agree.</summary>
@@ -22,7 +28,11 @@ public sealed class NetworkConfiguration
     ///     a host that can't prove it holds that key.
     /// </summary>
     public string TrustedHostKey = "";
+
+    /// <summary>Whether the transport runs on the game thread or on a thread of its own.</summary>
     public NetworkExecution Execution = NetworkExecution.Auto;
+
+    /// <summary>KCP: how many later packets must be acknowledged before a missing one is sent again without waiting.</summary>
     public int FastResend = 2;
 
     /// <summary>The least interpolation delay. The buffer grows past it with the send interval and the measured jitter.</summary>
@@ -45,10 +55,19 @@ public sealed class NetworkConfiguration
     /// <summary>Seconds a client keeps an object after it was last in range, before distance takes it away.</summary>
     public float InterestLingerSeconds = 1;
 
+    /// <summary>With <see cref="SimulateNetwork" />: random extra delay added to each packet, up to this much.</summary>
     public float JitterMilliseconds;
+
+    /// <summary>Seconds the session's join handshake may take once connected.</summary>
     public float JoinTimeoutSeconds = 10;
+
+    /// <summary>With <see cref="SimulateNetwork" />: delay added to every packet.</summary>
     public float LatencyMilliseconds;
+
+    /// <summary>The address a <see cref="NetworkTransport.Local" /> host listens on.</summary>
     public string LocalAddress = "host";
+
+    /// <summary>Largest message a session sends or takes. Larger ones are split and put back together below this.</summary>
     public int MaxMessageSize = 16 * 1024 * 1024;
 
     /// <summary>Largest message the host takes from a client. A client sending more is dropped.</summary>
@@ -62,31 +81,65 @@ public sealed class NetworkConfiguration
     ///     at once. A join always moves at least one object a tick. 0 sends them all in one.
     /// </summary>
     public int JoinSpawnBytesPerTick = 256 * 1024;
+
+    /// <summary>The most peers a session holds, the host included.</summary>
     public int MaxPeers = 64;
+
+    /// <summary>KCP: how many times a packet is sent again before the connection is given up.</summary>
     public int MaxRetransmits = 40;
 
     /// <summary>Most bytes per second each KCP connection sends, or 0 for no limit.</summary>
     public int MaxSendRate;
 
-    /// <summary>Maximum decompressed Echo bytes in one scene snapshot or spawned object.</summary>
+    /// <summary>
+    ///     Maximum decompressed bytes of one object spawned with its whole tree, as
+    ///     <see cref="Networking.SpawnGameObject" /> sends it. Prefab and factory spawns carry no tree.
+    /// </summary>
     public int MaxSnapshotDecompressedBytes = 64 * 1024 * 1024;
 
-    /// <summary>Maximum Echo value nesting, including the root, before engine objects are created.</summary>
+    /// <summary>Maximum value nesting in such a tree, including the root, before engine objects are created.</summary>
     public int MaxSnapshotDepth = 128;
 
-    /// <summary>Maximum Echo values, including container and scalar values, in one snapshot or spawn.</summary>
+    /// <summary>Maximum values in such a tree, containers and scalars together.</summary>
     public int MaxSnapshotNodes = 250_000;
 
+    /// <summary>KCP: largest packet sent, in bytes.</summary>
     public int Mtu = 1200;
+
+    /// <summary>KCP: sends and acknowledges without waiting for the next update. Lower latency for more packets.</summary>
     public bool NoDelay = true;
+
+    /// <summary>With <see cref="SimulateNetwork" />: the share of packets dropped.</summary>
     public float PacketLossPercent;
+
+    /// <summary>Seconds between keepalives on a quiet connection.</summary>
     public float PingIntervalSeconds = 1;
+
+    /// <summary>The UDP port a KCP host listens on.</summary>
     public int Port = 7777;
+
+    /// <summary>KCP: marks this game's packets. Peers with another value can't connect.</summary>
     public uint ProtocolId = 0x50524157;
+
+    /// <summary>KCP: how many packets can wait to be received in order.</summary>
     public int ReceiveWindow = 4096;
+
+    /// <summary>
+    ///     Seconds a client may take to load the host's scenes and receive its spawns. One that takes longer is
+    ///     dropped. The time starts again while its spawns keep arriving.
+    /// </summary>
     public float SceneLoadTimeoutSeconds = 60;
+
+    /// <summary>KCP: how many packets can be in flight unacknowledged.</summary>
     public int SendWindow = 4096;
+
+    /// <summary>
+    ///     KCP: adds <see cref="LatencyMilliseconds" />, <see cref="JitterMilliseconds" /> and
+    ///     <see cref="PacketLossPercent" /> to this peer's traffic, for testing against a bad connection.
+    /// </summary>
     public bool SimulateNetwork;
+
+    /// <summary>Sync and transform ticks per second, rounded to a whole number of fixed steps. The same on every peer.</summary>
     public float TickRate = 30;
 
     internal const float DefaultPositionPrecision = 0.01f;
@@ -102,9 +155,14 @@ public sealed class NetworkConfiguration
 
     /// <summary>Local scale change from the last sent pose required to resume transform updates.</summary>
     public float TransformScaleThreshold = 0.0001f;
+
+    /// <summary>Seconds without hearing from a peer before its connection is dropped.</summary>
     public float TimeoutSeconds = 10;
+
+    /// <summary>What carries the session when none is passed to Host or Join.</summary>
     public NetworkTransport Transport = NetworkTransport.Kcp;
 
+    /// <summary>KCP: milliseconds between its internal updates.</summary>
     public int UpdateIntervalMilliseconds = 10;
 
     /// <summary>Returns an independent, normalized copy so editing project defaults cannot mutate a running session.</summary>

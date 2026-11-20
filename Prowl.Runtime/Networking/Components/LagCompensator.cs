@@ -13,10 +13,12 @@ namespace Prowl.Runtime.Networking;
 ///     Host: where this object was over the last <see cref="HistorySeconds" />, recorded each network tick, so a
 ///     client's hit can be checked against where the object was when that client saw it, as Mirror's LagCompensator.
 /// </summary>
+[AddComponentMenu("Networking/Lag Compensator")]
 public sealed class LagCompensator : Component, INetworkTick
 {
     private readonly List<(double Time, Float3 Position, Quaternion Rotation)> _history = new();
 
+    /// <summary>How far back, in seconds, it remembers where the object was.</summary>
     public float HistorySeconds = 1;
 
     public void OnNetworkTick(uint tick)

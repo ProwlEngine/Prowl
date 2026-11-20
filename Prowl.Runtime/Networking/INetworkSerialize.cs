@@ -17,8 +17,9 @@ namespace Prowl.Runtime.Networking;
 public interface INetworkSerialize
 {
     /// <summary>
-    ///     Writes the state. <paramref name="initial" /> is true for a spawn, which needs all of it. Otherwise it follows
-    ///     a <see cref="Networking.SetDirty" /> and may write only what changed.
+    ///     Writes the state. <paramref name="initial" /> is true whenever all of it is needed: for a spawn, and for an
+    ///     owner written or owner only state when ownership changes. Otherwise it follows a
+    ///     <see cref="Networking.SetDirty" /> and may write only what changed.
     /// </summary>
     void OnSerialize(NetWriter writer, bool initial);
 

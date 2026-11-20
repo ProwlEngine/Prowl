@@ -104,7 +104,7 @@ internal readonly struct AnimatorParameterValue(ParameterValue value) : IEquatab
 }
 
 /// <summary>
-///     An animator's graph parameters by their index in the graph. One plain sync value, so it rides in snapshots and
+///     An animator's graph parameters by their index in the graph. One plain [Sync] value, sent whole each time it changes, so
 ///     the newest wins. Immutable: a change is a new value, which is how the sync member sees it changed.
 /// </summary>
 internal readonly struct AnimatorParameters(AnimatorParameterValue[] values) : IEquatable<AnimatorParameters>

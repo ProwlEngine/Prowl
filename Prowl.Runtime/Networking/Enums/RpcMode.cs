@@ -6,7 +6,7 @@ namespace Prowl.Runtime.Networking;
 /// <summary>Who runs an RPC.</summary>
 public enum RpcMode : byte
 {
-    /// <summary>Everyone who has the object, the host included. Only the host calls it.</summary>
+    /// <summary>Everyone who has the object, the host included. Only the host calls it on an object. A static one may come from a client.</summary>
     Broadcast,
 
     /// <summary>The host only. The one kind a client calls.</summary>

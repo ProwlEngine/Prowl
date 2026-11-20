@@ -50,7 +50,7 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
         set => Set(key, value, false);
     }
 
-    /// <exception cref="key">There's already a value under <paramref name="key" />.</exception>
+    /// <exception cref="ArgumentException">There's already a value under <paramref name="key" />.</exception>
     public void Add(TKey key, TValue value)
     {
         ArgumentNullException.ThrowIfNull(key);

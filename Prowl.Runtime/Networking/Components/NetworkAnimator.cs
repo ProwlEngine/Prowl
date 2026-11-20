@@ -28,7 +28,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     private readonly Dictionary<int, uint> _seenTriggers = new();
     private readonly Dictionary<int, uint> _pendingTriggers = new();
     private readonly Dictionary<string, bool> _triggerLevels = new();
-    // Plain values rather than network collections, so they ride in snapshots: only the newest state matters.
+    // Plain values rather than network collections, so each send is the whole value: only the newest state matters.
     private AnimatorParameters _parameters;
     private AnimatorTriggers _triggers;
     private float _speed = 1f;

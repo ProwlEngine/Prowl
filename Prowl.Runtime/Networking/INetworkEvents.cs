@@ -12,7 +12,11 @@ namespace Prowl.Runtime.Networking;
 /// </summary>
 public interface INetworkEvents : ISceneEvent<INetworkEvents>
 {
-    /// <summary>Initial network state and proxy physics are installed; the scene may not yet be active.</summary>
+    /// <summary>
+    ///     Initial network state and proxy physics are installed. On a joining client it runs once every object of the
+    ///     join has arrived, while <see cref="Networking.IsReady" /> is still false, so an RPC to the host from here is
+    ///     dropped: send it from <see cref="INetworkListener.OnNetworkReady" />.
+    /// </summary>
     void OnNetworkSpawn()
     {
     }

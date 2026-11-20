@@ -5,6 +5,9 @@ namespace Prowl.Runtime.Networking;
 
 public enum NetworkTransport
 {
+    /// <summary>Reliable UDP, for play across machines.</summary>
     Kcp,
+
+    /// <summary>In process, for sessions between instances in one program, as in tests.</summary>
     Local
 }

@@ -13,7 +13,8 @@ namespace Prowl.Runtime.Networking;
 ///     Lets clients simulate a rigidbody the host controls instead of following it, as Mirror's PredictedRigidbody in
 ///     its Fast mode. The host sends the body's state while it moves and once a second while it rests. A client
 ///     compares each state with where it had the body at that time, and past a threshold snaps the body to the host's
-///     state plus the movement it made since. Use it in place of a <see cref="NetworkTransform" />, not with one.
+///     state plus the movement it made since. Use it in place of a <see cref="NetworkTransform" />, not with one. It is for
+///     objects the host controls: while a client owns the object nobody sends the body, and peers drift apart.
 /// </summary>
 [AddComponentMenu("Networking/Predicted Rigidbody")]
 [DisallowMultipleComponent]

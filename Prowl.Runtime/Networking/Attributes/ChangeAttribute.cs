@@ -13,9 +13,10 @@ namespace Prowl.Runtime.Networking;
 /// </summary>
 /// <remarks>
 ///     It runs where the change happens: on the peer that set it, right away, and on every peer that receives
-///     it, once the whole update it came in is applied, so it sees the other values that changed with it. It
-///     doesn't run for values that come with a scene snapshot or spawn. Those are in place before the component
-///     starts, so read them in <c>OnEnable</c> or <c>Start</c>. Setting the value it already has calls nothing. For
+///     it, once the whole update it came in is applied, so it sees the other values that changed with it. A
+///     value that comes with a spawn and differs from what the object was built with runs it too, just before the
+///     object's spawn callbacks. A joining client holds every hook until its spawns have finished. Setting the value
+///     it already has calls nothing. For
 ///     <see cref="NetList{T}" />, <see cref="NetDictionary{TKey,TValue}" /> and <see cref="NetSet{T}" />,
 ///     use their <c>Changed</c> event instead.
 /// </remarks>

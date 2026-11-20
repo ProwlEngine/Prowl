@@ -15,14 +15,15 @@ namespace Prowl.Runtime.Networking;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         Declare one get-only, as in <c>[Sync] public NetList&lt;int&gt; Scores { get; } = new();</c>. Whoever
-///         controls the object changes it; anywhere else, changes are ignored (with a warning, once). Changes
+///         Declare one get-only, as in <c>[Sync] public NetList&lt;int&gt; Scores { get; } = new();</c>. The host
+///         changes it, or the object's owner with <see cref="SyncFlags.FromOwner" />; anywhere else, changes are
+///         ignored (with a warning, once). Changes
 ///         are sent at the next network tick, in order, and late joiners get the whole collection. Without a
 ///         network session, or before it belongs to a component, it's an ordinary collection.
 ///     </para>
 ///     <para>
-///         <c>Changed</c> fires for each change, both where it's made and where it's received, but not for the
-///         contents that come with a scene snapshot or spawn: those are in place before the component starts.
+///         <c>Changed</c> fires for each change, both where it's made and where it's received, but not when the
+///         whole contents arrive at once: with a spawn, or back to the last owner when ownership changes.
 ///         Received changes are raised once the whole update they came in is applied, one after another, like
 ///         [Change] hooks. Items are sent as they were when added, so changing an item object afterwards isn't
 ///         sent. Replace it.

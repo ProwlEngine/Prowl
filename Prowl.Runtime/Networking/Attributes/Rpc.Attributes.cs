@@ -33,7 +33,11 @@ public static partial class Rpc
         public byte Channel { get; set; }
     }
 
-    /// <summary>Runs on everyone who has the object, the host included, as Mirror's ClientRpc. Only the host calls it.</summary>
+    /// <summary>
+    ///     Runs on everyone who has the object, the host included, as Mirror's ClientRpc. Only the host calls it on an
+    ///     object. A static one may be called by a client, which the host passes on, unless it takes
+    ///     <see cref="RpcFlags.HostOnly" />.
+    /// </summary>
     public sealed class BroadcastAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Broadcast, flags);
 
     /// <summary>

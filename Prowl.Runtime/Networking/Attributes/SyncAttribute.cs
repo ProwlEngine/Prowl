@@ -7,14 +7,15 @@ using System;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     Keeps a property of a <see cref="Component" /> the same on every peer. Whoever controls the object
-///     (its owner, or the host) sets it; everyone else receives the new value at the next network tick,
-///     and setting it there is ignored. Late joiners get the current value.
+///     Keeps a property of a <see cref="Component" /> the same on every peer. The host sets it, or the object's
+///     owner with <see cref="SyncFlags.FromOwner" />. Everyone else receives the new value at the next network
+///     tick, and setting it there is ignored, with a warning the first time. Late joiners get the current value.
 /// </summary>
 /// <remarks>
 ///     Write it on an auto-property, as in <c>[Sync] public int Health { get; set; } = 100;</c>. Prowl's
 ///     script compiler generates the networking around it, so it only works in game scripts. Without a
-///     network session the property behaves like any other. The value must be a type
+///     network session the property behaves like any other. During one, it only travels once its object is
+///     spawned, and a client can't set it on an object that is not. The value must be a type
 ///     <see cref="NetSerializer{T}" /> supports, which includes your own structs and classes: they're sent
 ///     by their public fields and auto-properties. For a collection, use a get-only <see cref="NetList{T}" />,
 ///     <see cref="NetDictionary{TKey,TValue}" /> or <see cref="NetSet{T}" />, as in

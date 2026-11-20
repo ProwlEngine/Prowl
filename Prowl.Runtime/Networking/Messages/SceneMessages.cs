@@ -32,7 +32,7 @@ internal readonly record struct SectionMoveMessage(Guid Identifier, uint Section
     internal static SectionMoveMessage Read(ref NetReader reader) => new(reader.ReadGuid(), reader.ReadVarUInt32());
 }
 
-/// <summary>SceneLoaded, SceneReady and SceneActivate acknowledgements carry only this generation.</summary>
+/// <summary>Ready, SpawnStarted and SpawnFinished carry only this generation.</summary>
 internal readonly record struct SceneGenerationMessage(ulong Generation)
 {
     internal void Write(NetWriter writer) => writer.WriteUInt64(Generation);

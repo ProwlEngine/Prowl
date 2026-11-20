@@ -8,7 +8,7 @@ namespace Prowl.Runtime.Networking;
 /// <summary>Scene-wide session notifications, including disabled components. Exceptions are logged.</summary>
 public interface INetworkListener : ISceneEvent<INetworkListener>
 {
-    /// <summary>The local scene has its initial network state and is about to load. Gameplay is not ready.</summary>
+    /// <summary>The scenes are loaded here and the host's networked objects have not arrived yet. Gameplay is not ready.</summary>
     void OnNetworkLoading()
     {
     }
@@ -18,7 +18,7 @@ public interface INetworkListener : ISceneEvent<INetworkListener>
     {
     }
 
-    /// <summary>Host only: a remote peer passed session admission, before its scene snapshot is sent.</summary>
+    /// <summary>Host only: a remote peer passed session admission, before it is told which scenes to load.</summary>
     void OnPeerConnected(NetPeer peer)
     {
     }
