@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -107,6 +108,9 @@ public sealed class GizmoBatch
 
     public bool Visible = true;
 
+    /// <summary>The world whose views draw the batch, every view the feature is in when null.</summary>
+    public RenderWorld? World;
+
     public HiddenStyle Hidden = HiddenStyle.Dashed;
 
     /// <summary>How much of a hidden part shows when it is dashed or faded.</summary>
@@ -125,14 +129,32 @@ public sealed class GizmoBatch
 
     internal static double Now => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
+    /// <summary>Removes everything, and ends any transform or duration scope left open.</summary>
     public void Clear()
     {
+        _matrices.Clear();
+        _matrix = Float4x4.Identity;
+        _durations.Clear();
+        _duration = 0;
         if (Count == 0)
             return;
         Count = 0;
         _timed = 0;
         _textures.Clear();
         Version++;
+    }
+
+    /// <summary>The ends of a primitive drawn as a line, after its transform, false for the other kinds.</summary>
+    public bool TryGetLine(int index, out Float3 a, out Float3 b)
+    {
+        a = b = default;
+        if ((uint)index >= (uint)Count)
+            return false;
+        ref GizmoVertex vertex = ref Vertices[index];
+        int kind = (int)vertex.Shape.Y;
+        a = vertex.A;
+        b = vertex.B;
+        return kind == (int)GizmoKind.Line || kind == (int)GizmoKind.ArrowShaft;
     }
 
     /// <summary>Makes room for this many more primitives at once, so adding them does not grow the batch step by step.</summary>
@@ -155,8 +177,11 @@ public sealed class GizmoBatch
 
     public GizmoScope Push(Float3 position, Quaternion rotation, Float3 scale) => Push(Float4x4.CreateTRS(position, rotation, scale));
 
-    internal void Pop()
+    /// <summary>Ends the transform pushed last, as disposing its scope does.</summary>
+    public void Pop()
     {
+        if (_matrices.Count == 0)
+            return;
         _matrix = _matrices[^1];
         _matrices.RemoveAt(_matrices.Count - 1);
     }
@@ -174,6 +199,8 @@ public sealed class GizmoBatch
 
     internal void PopDuration()
     {
+        if (_durations.Count == 0)
+            return;
         _duration = _durations[^1];
         _durations.RemoveAt(_durations.Count - 1);
     }
@@ -488,7 +515,12 @@ public sealed class GizmoBatch
         => Add(position, position, position, color, halfPixels * 2, GizmoKind.ScreenSquare, width);
 
     /// <summary>A texture facing the camera that keeps its size in pixels, tinted by a colour.</summary>
-    public void Icon(Float3 position, Texture icon, float sizePixels, Color32 tint)
+    public void Icon(Float3 position, Texture icon, float sizePixels, Color32 tint) => AddIcon(position, icon, sizePixels, tint, false);
+
+    /// <summary>A texture facing the camera, this many world units across, tinted by a colour.</summary>
+    public void WorldIcon(Float3 position, Texture icon, float size, Color32 tint) => AddIcon(position, icon, size, tint, true);
+
+    private void AddIcon(Float3 position, Texture icon, float size, Color32 tint, bool world)
     {
         int index = _textures.IndexOf(icon);
         if (index < 0)
@@ -496,7 +528,7 @@ public sealed class GizmoBatch
             index = _textures.Count;
             _textures.Add(icon);
         }
-        Add(position, position, position, tint, sizePixels, GizmoKind.Icon, 0, index);
+        Add(position, position, position, tint, size, GizmoKind.Icon, world ? 1 : 0, index);
     }
 
     public void Icon(Float3 position, Texture icon, float sizePixels = 32f) => Icon(position, icon, sizePixels, new Color32(255, 255, 255, 255));
@@ -683,10 +715,13 @@ public sealed class GizmoBatch
         Version++;
     }
 
-    /// <summary>The records with icons grouped by texture after everything else, and the runs to draw them in.</summary>
+    /// <summary>
+    /// The records with icons grouped by texture after everything else, in an array rented from the shared pool that
+    /// holds at least <see cref="Count"/> of them, and the runs to draw them in.
+    /// </summary>
     internal GizmoVertex[] Build(out Run[] runs)
     {
-        GizmoVertex[] built = new GizmoVertex[Count];
+        GizmoVertex[] built = ArrayPool<GizmoVertex>.Shared.Rent(Count);
         if (_textures.Count == 0)
         {
             Vertices.AsSpan(0, Count).CopyTo(built);
@@ -771,9 +806,12 @@ public sealed class Gizmos : RenderFeature, IDisposable
                 else if ((kind > 0.5 && kind < 2.5) || kind > 4.5)
                 {
                     // Points, screen shapes and icons: a square of pixels around the position
+                    clip = _GizmoViewProjection * vec4(POSITION0 + _GizmoOffset.xyz, 1.0);
+                    // A world sized icon: its size in pixels at its distance
+                    if (kind > 6.5 && extra > 0.5)
+                        halfWidth *= _GizmoStyle.w / max(clip.w, 1e-4);
                     float pad = halfWidth + 1.0;
                     local = vec2(corner.x * 2.0 - 1.0, corner.y) * pad;
-                    clip = _GizmoViewProjection * vec4(POSITION0 + _GizmoOffset.xyz, 1.0);
                     pixels = local;
                     extent = extra;
                 }
@@ -912,17 +950,15 @@ public sealed class Gizmos : RenderFeature, IDisposable
     private readonly struct Draw
     {
         public readonly GizmoBatch Batch;
-        public readonly GizmoVertex[]? Immediate;
-        public readonly GizmoBatch.Run[]? Runs;
+        public readonly RenderWorld? World;
         public readonly Double3 Origin;
         public readonly Float2 Depth;
         public readonly Float4 Style;
 
-        public Draw(GizmoBatch batch, GizmoVertex[]? immediate, GizmoBatch.Run[]? runs)
+        public Draw(GizmoBatch batch)
         {
             Batch = batch;
-            Immediate = immediate;
-            Runs = runs;
+            World = batch.World;
             Origin = batch.Origin;
             float hiddenAlpha = batch.Hidden switch
             {
@@ -935,16 +971,26 @@ public sealed class Gizmos : RenderFeature, IDisposable
         }
     }
 
+    private readonly struct Upload(GizmoBatch batch, GizmoVertex[]? vertices, int count, GizmoBatch.Run[] runs)
+    {
+        public readonly GizmoBatch Batch = batch;
+        public readonly GizmoVertex[]? Vertices = vertices;
+        public readonly int Count = count;
+        public readonly GizmoBatch.Run[] Runs = runs;
+    }
+
     private sealed class GpuBatch
     {
         public DeviceBuffer? Buffer;
         public GizmoBatch.Run[] Runs = [];
         public GizmoVertex[]? Pending;
+        public int PendingCount;
         public GizmoBatch.Run[] PendingRuns = [];
     }
 
     private readonly GraphicsDevice _device;
     private readonly GraphicsProgram _program;
+    private readonly FullscreenProgram _copy;
     private readonly Sampler _point;
     private readonly Sampler _linear;
     private readonly Texture _white;
@@ -952,7 +998,8 @@ public sealed class Gizmos : RenderFeature, IDisposable
     // Host thread
     private readonly List<GizmoBatch> _batches = new();
     private readonly Dictionary<GizmoBatch, int> _sent = new();
-    private readonly ConcurrentQueue<(GizmoBatch Batch, GizmoVertex[]? Vertices, GizmoBatch.Run[] Runs)> _uploads = new();
+    private readonly List<Draw> _drawing = new();
+    private readonly ConcurrentQueue<Upload> _uploads = new();
     private volatile Draw[] _frame = [];
 
     // Render thread
@@ -967,6 +1014,7 @@ public sealed class Gizmos : RenderFeature, IDisposable
         _white = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         _white.Name = "Gizmo white";
         _device.UpdateTexture<byte>(_white, [255, 255, 255, 255], TextureRegion.Whole(_white));
+        _copy = renderer.CreateFullscreenProgram("void main() { outColor = Graphite_SampleSource(vUV); }", "Graphite/GizmoCopy");
 
         ShaderPass pass = new() { State = new PassState(), Source = Source, SourceName = "Graphite/Gizmos" };
         ShaderDescription description = pass.Variants(renderer.Compiler, _device.BackendType).Require();
@@ -984,12 +1032,16 @@ public sealed class Gizmos : RenderFeature, IDisposable
         description.RasterizerState = RasterizerStateDescription.CullNone;
         _program = _device.ResourceFactory.CreateGraphicsProgram(description);
         _program.Name = "Graphite/Gizmos";
+        Add(Immediate);
     }
 
     /// <summary>Gizmos for the next frame only, cleared when it is submitted, except what was added in a <see cref="GizmoBatch.For"/> scope.</summary>
     public GizmoBatch Immediate { get; } = new();
 
-    /// <summary>Draws a batch every frame until it is removed. Host thread.</summary>
+    /// <summary>
+    /// Draws a batch every frame until it is removed. Host thread. A batch is uploaded again only when it changed and is
+    /// visible, so refilling a hidden batch costs the render thread nothing.
+    /// </summary>
     public void Add(GizmoBatch batch)
     {
         if (!_batches.Contains(batch))
@@ -998,59 +1050,65 @@ public sealed class Gizmos : RenderFeature, IDisposable
 
     public void Remove(GizmoBatch batch)
     {
-        if (!_batches.Remove(batch))
+        if (batch == Immediate || !_batches.Remove(batch))
             return;
         _sent.Remove(batch);
-        _uploads.Enqueue((batch, null, []));
+        _uploads.Enqueue(new Upload(batch, null, 0, []));
     }
 
     public override void Extract()
     {
         double now = GizmoBatch.Now;
-        List<Draw> draws = new(_batches.Count + 1);
+        _drawing.Clear();
         foreach (GizmoBatch batch in _batches)
         {
             batch.Expire(now, false);
+            if (!batch.Visible || batch.Count == 0)
+                continue;
             if (!_sent.TryGetValue(batch, out int version) || version != batch.Version)
             {
                 _sent[batch] = batch.Version;
                 GizmoVertex[] vertices = batch.Build(out GizmoBatch.Run[] runs);
-                _uploads.Enqueue((batch, vertices, runs));
+                _uploads.Enqueue(new Upload(batch, vertices, batch.Count, runs));
             }
-            if (batch.Visible && batch.Count > 0)
-                draws.Add(new Draw(batch, null, null));
-        }
-        Immediate.Expire(now, false);
-        if (Immediate.Count > 0 && Immediate.Visible)
-        {
-            GizmoVertex[] vertices = Immediate.Build(out GizmoBatch.Run[] runs);
-            draws.Add(new Draw(Immediate, vertices, runs));
+            _drawing.Add(new Draw(batch));
         }
         Immediate.Expire(now, true);
-        _frame = draws.ToArray();
+        _frame = _drawing.Count == 0 ? [] : _drawing.ToArray();
     }
 
     public override bool IsActive(in FeatureView view) => view.LayerCount == 1;
 
-    public override bool HasWork(in FeatureView view) => _frame.Length > 0 || !_uploads.IsEmpty;
+    public override bool HasWork(in FeatureView view)
+    {
+        foreach (Draw draw in _frame)
+        {
+            if (draw.World == null || draw.World == view.World)
+                return true;
+        }
+        return false;
+    }
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.ReadScene();
-        builder.DrawToColor();
+        // Without a colour of its own yet, as with no tonemapper, the view's colour is copied out of the scene first
+        if (builder.ColorIsScene)
+            builder.WriteColor();
+        else
+            builder.DrawToColor();
     }
 
     public override void Render(FeatureContext context)
     {
-        context.BeginOutput();
+        if (context.Color != null)
+            context.Fullscreen(_copy);
+        else
+            context.BeginOutput();
         CommandBuffer cmd = context.Command;
         ulong frameIndex = context.Time.FrameIndex;
         Retire(frameIndex, false);
         TakeUploads();
-
-        Draw[] frame = _frame;
-        if (frame.Length == 0)
-            return;
 
         ViewBlock block = context.Block;
         Double3 camera = new((double)block.CameraHigh.X + block.CameraLow.X, (double)block.CameraHigh.Y + block.CameraLow.Y, (double)block.CameraHigh.Z + block.CameraLow.Z);
@@ -1059,38 +1117,29 @@ public sealed class Gizmos : RenderFeature, IDisposable
         FeatureView view = context.View;
         Float4 screen = new(view.Width, view.Height, 1f / view.Width, 1f / view.Height);
         Float2 depthScale = new((float)depth.Width / view.Width, (float)depth.Height / view.Height);
+        float pixelsPerUnit = 0.5f * view.Height * block.Projection.c1.Y;
 
-        foreach (Draw draw in frame)
+        foreach (Draw draw in _frame)
         {
-            DeviceBuffer? vertices;
-            GizmoBatch.Run[] runs;
-            if (draw.Immediate != null)
-            {
-                vertices = Transient(context, cmd, draw.Immediate);
-                runs = draw.Runs!;
-            }
-            else
-            {
-                vertices = Resident(cmd, draw.Batch, frameIndex, out runs);
-            }
+            if (draw.World != null && draw.World != view.World)
+                continue;
+            DeviceBuffer? vertices = Resident(cmd, draw.Batch, frameIndex, out GizmoBatch.Run[] runs);
             if (vertices == null)
                 continue;
 
             Double3 offset = draw.Origin - camera;
-            VertexSource source = new VertexSource().SetBuffer("POSITION0", vertices);
+            PropertySet properties = new();
+            properties.SetMatrix(s_viewProjection, viewProjection);
+            properties.SetFloat4(s_offset, new Float4((float)offset.X, (float)offset.Y, (float)offset.Z, 0));
+            properties.SetFloat4(s_screen, screen);
+            properties.SetFloat4(s_depth, new Float4(draw.Depth.X, draw.Depth.Y, depthScale.X, depthScale.Y));
+            properties.SetFloat4(s_style, new Float4(draw.Style.X, draw.Style.Y, draw.Style.Z, pixelsPerUnit));
+            properties.SetTexture(s_sceneDepth, depth, _point);
+            cmd.SetShader(_program);
+            cmd.SetVertexSource(new VertexSource().SetBuffer("POSITION0", vertices));
             foreach (GizmoBatch.Run run in runs)
             {
-                PropertySet properties = new();
-                properties.SetMatrix(s_viewProjection, viewProjection);
-                properties.SetFloat4(s_offset, new Float4((float)offset.X, (float)offset.Y, (float)offset.Z, 0));
-                properties.SetFloat4(s_screen, screen);
-                properties.SetFloat4(s_depth, new Float4(draw.Depth.X, draw.Depth.Y, depthScale.X, depthScale.Y));
-                properties.SetFloat4(s_style, draw.Style);
-                properties.SetTexture(s_sceneDepth, depth, _point);
                 properties.SetTexture(s_icon, run.Texture ?? _white, _linear);
-
-                cmd.SetShader(_program);
-                cmd.SetVertexSource(source);
                 cmd.SetProperties(properties);
                 cmd.Draw(6, (uint)run.Count, 0, (uint)run.Start);
             }
@@ -1110,21 +1159,30 @@ public sealed class Gizmos : RenderFeature, IDisposable
 
     private void TakeUploads()
     {
-        while (_uploads.TryDequeue(out var upload))
+        while (_uploads.TryDequeue(out Upload upload))
         {
             if (upload.Vertices == null)
             {
-                if (_gpu.Remove(upload.Batch, out GpuBatch? removed) && removed.Buffer != null)
-                    _retired.Add((removed.Buffer, ulong.MaxValue));
+                if (_gpu.Remove(upload.Batch, out GpuBatch? removed))
+                {
+                    if (removed.Buffer != null)
+                        _retired.Add((removed.Buffer, ulong.MaxValue));
+                    if (removed.Pending != null)
+                        ArrayPool<GizmoVertex>.Shared.Return(removed.Pending);
+                }
                 continue;
             }
             if (!_gpu.TryGetValue(upload.Batch, out GpuBatch? gpu))
                 _gpu[upload.Batch] = gpu = new GpuBatch();
+            if (gpu.Pending != null)
+                ArrayPool<GizmoVertex>.Shared.Return(gpu.Pending);
             gpu.Pending = upload.Vertices;
+            gpu.PendingCount = upload.Count;
             gpu.PendingRuns = upload.Runs;
         }
     }
 
+    // Uploads a batch's new records on the first view that draws it, later views of the frame reusing them
     private DeviceBuffer? Resident(CommandBuffer cmd, GizmoBatch batch, ulong frameIndex, out GizmoBatch.Run[] runs)
     {
         runs = [];
@@ -1132,7 +1190,7 @@ public sealed class Gizmos : RenderFeature, IDisposable
             return null;
         if (gpu.Pending != null)
         {
-            uint size = (uint)Math.Max(gpu.Pending.Length, 16) * GizmoVertex.SizeInBytes;
+            uint size = (uint)Math.Max(gpu.PendingCount, 64) * GizmoVertex.SizeInBytes;
             if (gpu.Buffer == null || gpu.Buffer.SizeInBytes < size)
             {
                 if (gpu.Buffer != null)
@@ -1140,20 +1198,13 @@ public sealed class Gizmos : RenderFeature, IDisposable
                 gpu.Buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(size + size / 2, BufferUsage.VertexBuffer));
                 gpu.Buffer.Name = "Gizmo batch";
             }
-            if (gpu.Pending.Length > 0)
-                cmd.UpdateBuffer<GizmoVertex>(gpu.Buffer, 0, gpu.Pending);
+            cmd.UpdateBuffer<GizmoVertex>(gpu.Buffer, 0, gpu.Pending.AsSpan(0, gpu.PendingCount));
+            ArrayPool<GizmoVertex>.Shared.Return(gpu.Pending);
             gpu.Runs = gpu.PendingRuns;
             gpu.Pending = null;
         }
         runs = gpu.Runs;
         return gpu.Buffer;
-    }
-
-    private DeviceBuffer Transient(FeatureContext context, CommandBuffer cmd, GizmoVertex[] vertices)
-    {
-        DeviceBuffer buffer = _device.RentTransientBuffer(context.Graph.Task, new BufferDescription((uint)vertices.Length * GizmoVertex.SizeInBytes, BufferUsage.VertexBuffer));
-        cmd.UpdateBuffer<GizmoVertex>(buffer, 0, vertices);
-        return buffer;
     }
 
     // Buffers a frame still in flight may read are freed a few frames after they were replaced
@@ -1179,9 +1230,14 @@ public sealed class Gizmos : RenderFeature, IDisposable
     {
         Retire(0, true);
         foreach (GpuBatch gpu in _gpu.Values)
+        {
             gpu.Buffer?.Dispose();
+            if (gpu.Pending != null)
+                ArrayPool<GizmoVertex>.Shared.Return(gpu.Pending);
+        }
         _gpu.Clear();
         _program.Dispose();
+        _copy.Dispose();
         _white.Dispose();
     }
 }

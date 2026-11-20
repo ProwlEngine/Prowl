@@ -699,6 +699,9 @@ public sealed class FeatureBuilder
         _pass.Input = _pass.SceneRead is { } scene && View.CurrentIsScene ? scene : _graph.Read(View.Current);
     }
 
+    /// <summary>Whether the current colour is the scene's, as before a tonemapper or any feature wrote a colour of its own.</summary>
+    public bool ColorIsScene => View.CurrentIsScene;
+
     /// <summary>Draws onto the current colour: the scene with its depth and G-buffer, or the last colour a feature wrote.</summary>
     public void DrawToColor()
     {
