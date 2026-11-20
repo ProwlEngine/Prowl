@@ -55,6 +55,7 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
                 {
                     _transforms[i].Entry = this;
                     _transforms[i].Index = (byte)i;
+                    _transforms[i].SnapshotSlot = -1;
                 }
             }
 

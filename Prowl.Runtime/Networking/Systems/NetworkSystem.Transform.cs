@@ -32,7 +32,7 @@ internal sealed partial class NetworkSystem
         foreach (NetworkObject entry in Entries.Values)
         {
             NetworkTransform[] transforms = entry.Transforms;
-            if (transforms.Length == 0 || !entry.GameObject.IsValid() || HasControl(entry.GameObject))
+            if (transforms.Length == 0 || !entry.GameObject.IsValid() || HasControl(entry))
             {
                 continue;
             }

@@ -73,6 +73,10 @@ internal sealed partial class NetworkSystem
         return owner == NoOwner ? IsHost : owner == Session!.LocalPeer!.Id;
     }
 
+    /// <summary>The same for a networked object this peer has, without looking it up.</summary>
+    internal bool HasControl(NetworkObject entry) =>
+        !IsActive || (entry.Owner == NoOwner ? IsHost : entry.Owner == Session!.LocalPeer!.Id);
+
     internal bool HasControl(Component component, SyncFlags flags) =>
         NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
         ((flags & SyncFlags.FromOwner) == 0 ? !IsActive || IsHost : HasControl(component.GameObject));

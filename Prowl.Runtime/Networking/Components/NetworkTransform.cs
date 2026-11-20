@@ -40,6 +40,13 @@ public sealed class NetworkTransform : Component
     internal byte Index;
     internal double LastCaptureTime;
 
+    // Its place in what the snapshot system keeps for each peer, and a stamp that outdates what that place held before.
+    internal int SnapshotSlot = -1;
+    internal uint SnapshotStamp;
+
+    // True once a rest pose of it may be owed to some peer.
+    internal bool PoseOwed;
+
     public NetworkTransform() => Sync = new TransformSync(this);
 
     /// <summary>The object it moves.</summary>

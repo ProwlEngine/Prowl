@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Courier;
@@ -40,7 +39,13 @@ internal sealed class SnapshotSystem : IDisposable
     private readonly List<Item> _items = new();
     private readonly NetWriter _itemBytes = new(4096);
     private readonly NetWriter _message = new(4096);
-    private readonly List<(NetworkTransform Transform, TransformUpdate Update)> _moving = new();
+    private readonly List<Moving> _moving = new();
+    private readonly List<TransformUpdate> _movingUpdates = new();
+
+    // Each moving transform's record as last written this tick, and the baseline age it was written for: peers that
+    // acknowledged the same tick get the same bytes.
+    private readonly List<(uint Age, int Offset, int Length)> _movingRecords = new();
+    private readonly NetWriter _movingBytes = new(4096);
     private readonly Dictionary<int, PeerState> _peers = new();
     private readonly HashSet<uint> _rejectedObjects = new();
     private readonly List<(TransformGroup Group, NetworkTransform Transform, TransformUpdate Update)> _relay = new();
@@ -55,7 +60,29 @@ internal sealed class SnapshotSystem : IDisposable
     // Never reset with the scene, so a late acknowledgement can't match a later scene's snapshot.
     private uint _nextSnapshotId = 1;
 
-    private double PositionStep => GridPosition.Step(_scene.Configuration.PositionPrecision);
+    // Each transform has a slot in every peer's sent positions, kept side by side so a peer's are walked in order.
+    private readonly List<NetworkTransform?> _slotOwners = new();
+    private readonly Stack<int> _freeSlots = new();
+    private uint _stamp;
+
+    // The grid step is a decimal conversion, so it is worked out once for each precision and not for each record.
+    private float _stepPrecision = float.NaN;
+    private double _step;
+
+    private double PositionStep
+    {
+        get
+        {
+            float precision = _scene.Configuration.PositionPrecision;
+            if (precision != _stepPrecision)
+            {
+                _stepPrecision = precision;
+                _step = GridPosition.Step(precision);
+            }
+
+            return _step;
+        }
+    }
 
     public SnapshotSystem(NetworkSystem scene) => _scene = scene;
 
@@ -63,6 +90,7 @@ internal sealed class SnapshotSystem : IDisposable
     {
         _itemBytes.Dispose();
         _message.Dispose();
+        _movingBytes.Dispose();
     }
 
     /// <summary>Forgets everything owed and received, as when the scene changes.</summary>
@@ -90,8 +118,8 @@ internal sealed class SnapshotSystem : IDisposable
         if (_peers.TryGetValue(peer.Id, out PeerState? state))
         {
             state.Poses.Clear();
-            state.Baselines.Clear();
-            state.SentPositions.Clear();
+            Array.Clear(state.Positions);
+            state.Ambiguous.Clear();
             Forget(state);
         }
     }
@@ -124,9 +152,57 @@ internal sealed class SnapshotSystem : IDisposable
         foreach (NetworkTransform transform in entry.Transforms)
         {
             state.Poses.Remove(transform);
-            state.SentPositions.Remove(transform);
-            state.Baselines.Remove(transform);
+            int slot = transform.SnapshotSlot;
+            if (slot >= 0 && slot < state.Positions.Length)
+            {
+                state.Positions[slot] = default;
+            }
         }
+    }
+
+    /// <summary>The transform's slot, given one the first time it is asked for.</summary>
+    private int SlotOf(NetworkTransform transform)
+    {
+        int slot = transform.SnapshotSlot;
+        if (slot >= 0 && slot < _slotOwners.Count && ReferenceEquals(_slotOwners[slot], transform))
+        {
+            return slot;
+        }
+
+        if (_freeSlots.Count > 0)
+        {
+            slot = _freeSlots.Pop();
+            _slotOwners[slot] = transform;
+        }
+        else
+        {
+            slot = _slotOwners.Count;
+            _slotOwners.Add(transform);
+        }
+
+        transform.SnapshotSlot = slot;
+        transform.SnapshotStamp = ++_stamp;
+        return slot;
+    }
+
+    /// <summary>What <paramref name="state" />'s peer was last sent of a transform's position, empty if nothing yet.</summary>
+    private ref SentPosition PositionFor(NetworkTransform transform, PeerState state) =>
+        ref PositionAt(SlotOf(transform), transform.SnapshotStamp, state);
+
+    private ref SentPosition PositionAt(int slot, uint stamp, PeerState state)
+    {
+        if (state.Positions.Length <= slot)
+        {
+            Array.Resize(ref state.Positions, Math.Max(_slotOwners.Count, state.Positions.Length * 2));
+        }
+
+        ref SentPosition position = ref state.Positions[slot];
+        if (position.Stamp != stamp)
+        {
+            position = new SentPosition { Stamp = stamp };
+        }
+
+        return ref position;
     }
 
     /// <summary>Hands every remembered sent snapshot back to the pool.</summary>
@@ -143,11 +219,7 @@ internal sealed class SnapshotSystem : IDisposable
 
     // --- Changes --------------------------------------------------------------------------------
 
-    private int ControllerOf(GameObject go)
-    {
-        int owner = _scene.OwnerOf(go);
-        return owner == NoOwner ? NetPeer.HostId : owner;
-    }
+    private static int ControllerOf(NetworkObject entry) => entry.Owner == NoOwner ? NetPeer.HostId : entry.Owner;
 
     /// <summary>The peers this one sends snapshots to: every client from the host, the host from a client.</summary>
     private List<NetPeer> Targets()
@@ -212,6 +284,9 @@ internal sealed class SnapshotSystem : IDisposable
         }
 
         _moving.Clear();
+        _movingUpdates.Clear();
+        _movingRecords.Clear();
+        _movingBytes.Reset();
         _scene.LastTransformTime = now;
 
         // Every so often, forget what was kept about components that are gone.
@@ -223,15 +298,19 @@ internal sealed class SnapshotSystem : IDisposable
 
     private void Prune()
     {
+        for (int slot = 0; slot < _slotOwners.Count; slot++)
+        {
+            if (_slotOwners[slot] is { } owner && (owner.SnapshotSlot != slot || !IsCurrent(owner)))
+            {
+                _slotOwners[slot] = null;
+                _freeSlots.Push(slot);
+            }
+        }
+
         foreach (PeerState state in _peers.Values)
         {
-            _scratchTransforms.Clear();
-            _scratchTransforms.AddRange(state.SentPositions.Keys.Where(transform => !IsCurrent(transform)));
-            foreach (NetworkTransform transform in _scratchTransforms)
-            {
-                state.SentPositions.Remove(transform);
-                state.Baselines.Remove(transform);
-            }
+            uint now = _scene.Tick;
+            state.Ambiguous.RemoveWhere(sent => now - sent.Tick >= PositionHistoryTicks);
 
             _scratchPositions.Clear();
             foreach ((uint NetId, uint Generation, byte Index) key in state.ReceivedPositions.Keys)
@@ -255,7 +334,7 @@ internal sealed class SnapshotSystem : IDisposable
         foreach (NetworkObject entry in _scene.Entries.Values)
         {
             NetworkTransform[] transforms = entry.Transforms;
-            if (transforms.Length == 0 || !entry.GameObject.IsValid() || !_scene.HasControl(entry.GameObject))
+            if (transforms.Length == 0 || !entry.GameObject.IsValid() || !_scene.HasControl(entry))
             {
                 continue;
             }
@@ -281,7 +360,12 @@ internal sealed class SnapshotSystem : IDisposable
                 }
                 else
                 {
-                    _moving.Add((transform, update));
+                    bool gridded = (update.Channels & (TransformChannels.Position | TransformChannels.Exact)) ==
+                                   TransformChannels.Position;
+                    _moving.Add(new Moving(transform, entry.HiddenFrom, SlotOf(transform), transform.SnapshotStamp, gridded,
+                        gridded ? GridPosition.Of(update.Position, PositionStep) : default));
+                    _movingUpdates.Add(update);
+                    _movingRecords.Add(default);
                     ClearPose(transform);
                 }
             }
@@ -295,6 +379,7 @@ internal sealed class SnapshotSystem : IDisposable
             if (peer.Id != except && Sees(transform.Entry, peer))
             {
                 State(peer).Poses[transform] = pose;
+                transform.PoseOwed = true;
             }
         }
     }
@@ -302,6 +387,12 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>It's moving again: nobody needs the pose it rested at any more.</summary>
     private void ClearPose(NetworkTransform transform)
     {
+        if (!transform.PoseOwed)
+        {
+            return;
+        }
+
+        transform.PoseOwed = false;
         foreach (PeerState state in _peers.Values)
         {
             state.Poses.Remove(transform);
@@ -319,18 +410,20 @@ internal sealed class SnapshotSystem : IDisposable
         uint resend = ResendTicks(peer);
         _items.Clear();
         _itemBytes.Reset();
-        foreach ((NetworkTransform transform, TransformUpdate update) in _moving)
+        Span<Moving> moving = CollectionsMarshal.AsSpan(_moving);
+        Span<(uint Age, int Offset, int Length)> written = CollectionsMarshal.AsSpan(_movingRecords);
+        for (int i = 0; i < moving.Length; i++)
         {
-            if (Sees(transform.Entry, peer))
+            if (moving[i].Hidden is not { } hidden || !hidden.Contains(peer.Id))
             {
-                AddRecord(tick, now, transform, update, null, state, tick);
+                AddMoving(tick, now, i, in moving[i], ref written[i], state);
             }
         }
 
         _scratchTransforms.Clear();
         foreach ((NetworkTransform transform, PendingPose pose) in state.Poses)
         {
-            if (!IsCurrent(transform) || ControllerOf(transform.Entry!.GameObject) != pose.Controller ||
+            if (!IsCurrent(transform) || ControllerOf(transform.Entry!) != pose.Controller ||
                 !Sees(transform.Entry, peer))
             {
                 _scratchTransforms.Add(transform);
@@ -352,34 +445,88 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
+    /// <summary>Adds one of this tick's moving transforms, reusing the record written for another peer with the same baseline.</summary>
+    private void AddMoving(uint tick, double now, int index, in Moving moving,
+        ref (uint Age, int Offset, int Length) written, PeerState state)
+    {
+        NetworkTransform transform = moving.Transform;
+        GridPosition grid = moving.Grid, step = grid;
+        uint age = 0;
+        bool gridded = moving.Gridded;
+        if (gridded)
+        {
+            ref SentPosition sent = ref PositionAt(moving.Slot, moving.Stamp, state);
+            if (sent.HasBaseline && tick - sent.BaselineTick is > 0 and < MaxBaselineAge)
+            {
+                age = tick - sent.BaselineTick;
+                step = grid - sent.Baseline;
+            }
+
+            NoteSent(ref sent, transform, tick, grid, state);
+        }
+
+        int offset = _itemBytes.Length;
+        if (written.Length != 0 && written.Age == age)
+        {
+            _itemBytes.WriteBytes(_movingBytes.WrittenSpan.Slice(written.Offset, written.Length));
+        }
+        else
+        {
+            NetworkObject entry = transform.Entry!;
+            new TransformRecord(entry.NetId, entry.Generation, _movingUpdates[index], age, step, transform.Index).Write(_itemBytes);
+            written = (age, _movingBytes.Length, _itemBytes.Length - offset);
+            _movingBytes.WriteBytes(_itemBytes.WrittenSpan.Slice(offset));
+        }
+
+        _items.Add(new Item(tick, now, offset, _itemBytes.Length - offset, null, gridded ? transform : null, grid));
+    }
+
+    /// <summary>Remembers the position a peer is being sent. A tick that carries a transform at two positions is no baseline: the peer may hold either.</summary>
+    private static void NoteSent(ref SentPosition sent, NetworkTransform transform, uint tick, GridPosition grid, PeerState state)
+    {
+        if (sent.HasLast && sent.LastTick == tick)
+        {
+            if (sent.Last != grid)
+            {
+                state.Ambiguous.Add((transform, tick));
+            }
+        }
+        else
+        {
+            sent.HasLast = true;
+            sent.LastTick = tick;
+            sent.Last = grid;
+        }
+    }
+
     /// <summary>Adds a transform record, its moving position as a step from the latest one the peer acknowledged.</summary>
-    private void AddRecord(uint groupTick, double sentAt, NetworkTransform transform, TransformUpdate update,
-        NetworkTransform? pose, PeerState state, uint tick)
+    private void AddRecord(uint groupTick, double sentAt, NetworkTransform transform, in TransformUpdate update,
+        NetworkTransform? pose, PeerState state, uint tick, GridPosition? known = null)
     {
         NetworkObject entry = transform.Entry!;
         int offset = _itemBytes.Length;
-        TransformRecord record = new(entry.NetId, entry.Generation, update, Index: transform.Index);
-        GridPosition grid = default;
-        if (record.HasGridPosition)
+        GridPosition grid = default, step = default;
+        uint age = 0;
+        bool gridded = (update.Channels & (TransformChannels.Position | TransformChannels.Exact)) == TransformChannels.Position;
+        if (gridded)
         {
-            grid = GridPosition.Of(update.Position, PositionStep);
-            record = record with { Grid = grid };
-            if (state.Baselines.TryGetValue(transform, out (uint Tick, GridPosition Grid) baseline) &&
-                tick - baseline.Tick is > 0 and < MaxBaselineAge)
+            step = grid = known ?? GridPosition.Of(update.Position, PositionStep);
+            ref SentPosition sent = ref PositionFor(transform, state);
+            if (sent.HasBaseline && tick - sent.BaselineTick is > 0 and < MaxBaselineAge)
             {
-                record = record with { BaselineAge = tick - baseline.Tick, Grid = grid - baseline.Grid };
+                age = tick - sent.BaselineTick;
+                step = grid - sent.Baseline;
             }
 
-            PositionsOf(state.SentPositions, transform).Add(tick, grid);
+            NoteSent(ref sent, transform, tick, grid, state);
         }
 
-        record.Write(_itemBytes);
-        _items.Add(new Item(groupTick, sentAt, offset, _itemBytes.Length - offset, pose,
-            record.HasGridPosition ? transform : null, grid));
+        new TransformRecord(entry.NetId, entry.Generation, update, age, step, transform.Index).Write(_itemBytes);
+        _items.Add(new Item(groupTick, sentAt, offset, _itemBytes.Length - offset, pose, gridded ? transform : null, grid));
     }
 
-    private static PositionHistory PositionsOf<TKey>(Dictionary<TKey, PositionHistory> histories, TKey key)
-        where TKey : notnull
+    private static PositionHistory PositionsOf((uint NetId, uint Generation, byte Index) key,
+        Dictionary<(uint NetId, uint Generation, byte Index), PositionHistory> histories)
     {
         if (!histories.TryGetValue(key, out PositionHistory? history))
         {
@@ -482,11 +629,11 @@ internal sealed class SnapshotSystem : IDisposable
                 runEnd++;
             }
 
-            new TransformGroup(_items[i].GroupTick, _items[i].GroupSentAt, (uint)(runEnd - i)).Write(_message);
-            for (; i < runEnd; i++)
-            {
-                _message.WriteBytes(_itemBytes.WrittenSpan.Slice(_items[i].Offset, _items[i].Length));
-            }
+            // Items are written one after another, so a run's records are one stretch of the item buffer.
+            Item first = _items[i], last = _items[runEnd - 1];
+            new TransformGroup(first.GroupTick, first.GroupSentAt, (uint)(runEnd - i)).Write(_message);
+            _message.WriteBytes(_itemBytes.WrittenSpan.Slice(first.Offset, last.Offset + last.Length - first.Offset));
+            i = runEnd;
         }
 
         _scene.SendEngine(peer, EngineMessage.Snapshot, _message.WrittenSpan, delivery);
@@ -624,7 +771,7 @@ internal sealed class SnapshotSystem : IDisposable
                 }
 
                 // From a client, only for what it owns.
-                if (transform.Syncs && !_scene.HasControl(entry.GameObject) &&
+                if (transform.Syncs && !_scene.HasControl(entry) &&
                     (sender.IsHost || entry.Owner == sender.Id) &&
                     transform.Sync.Receive(transform.Moved, group.Tick, group.SentAt, now, update) is
                         { } accepted && _scene.IsHost)
@@ -653,7 +800,7 @@ internal sealed class SnapshotSystem : IDisposable
     /// <summary>The position a record carries, or null when it steps from a position this peer doesn't have.</summary>
     private Float3? ResolvePosition(PeerState state, uint tick, TransformRecord record)
     {
-        PositionHistory history = PositionsOf(state.ReceivedPositions, (record.NetId, record.Generation, record.Index));
+        PositionHistory history = PositionsOf((record.NetId, record.Generation, record.Index), state.ReceivedPositions);
         GridPosition grid = record.Grid;
         if (record.BaselineAge != 0)
         {
@@ -776,16 +923,21 @@ internal sealed class SnapshotSystem : IDisposable
                 }
             }
 
-            // A tick that carried the object twice is no baseline: the peer may hold either.
+            bool ambiguous = state.Ambiguous.Count > 0, rejected = _rejectedObjects.Count > 0;
             foreach ((NetworkTransform transform, uint tick, GridPosition grid) in sent.Positions)
             {
-                if (transform.Entry is { } owner && !_rejectedObjects.Contains(owner.NetId) &&
-                    state.SentPositions.TryGetValue(transform, out PositionHistory? history) &&
-                    history.TryGet(tick, out GridPosition latest) && latest == grid &&
-                    (!state.Baselines.TryGetValue(transform, out (uint Tick, GridPosition Grid) baseline) ||
-                     (int)(tick - baseline.Tick) > 0))
+                if (transform.Entry is not { } owner || (rejected && _rejectedObjects.Contains(owner.NetId)) ||
+                    (ambiguous && state.Ambiguous.Contains((transform, tick))))
                 {
-                    state.Baselines[transform] = (tick, grid);
+                    continue;
+                }
+
+                ref SentPosition position = ref PositionFor(transform, state);
+                if (position.HasLast && (!position.HasBaseline || (int)(tick - position.BaselineTick) > 0))
+                {
+                    position.HasBaseline = true;
+                    position.BaselineTick = tick;
+                    position.Baseline = grid;
                 }
             }
 
@@ -799,7 +951,7 @@ internal sealed class SnapshotSystem : IDisposable
             {
                 foreach (NetworkTransform transform in entry.Transforms)
                 {
-                    state.Baselines.Remove(transform);
+                    PositionFor(transform, state).HasBaseline = false;
                 }
             }
         }
@@ -815,6 +967,15 @@ internal sealed class SnapshotSystem : IDisposable
         uint ControllerTick,
         double SentAt,
         TransformUpdate Update);
+
+    /// <summary>One of this tick's moving transforms, as much of it as sending it to each peer reads.</summary>
+    private readonly record struct Moving(
+        NetworkTransform Transform,
+        HashSet<int>? Hidden,
+        int Slot,
+        uint Stamp,
+        bool Gridded,
+        GridPosition Grid);
 
     /// <summary>The poses and positions one sent snapshot carried that wait on its acknowledgement. Pooled.</summary>
     private sealed class SentSnapshot
@@ -846,22 +1007,28 @@ internal sealed class SnapshotSystem : IDisposable
         public readonly Dictionary<uint, SentSnapshot> Sent = new();
         public readonly Queue<uint> SentOrder = new();
 
-        // Positions sent the other by snapshot tick and the latest it acknowledged, and positions received from it.
-        public readonly Dictionary<NetworkTransform, PositionHistory> SentPositions = new();
-        public readonly Dictionary<NetworkTransform, (uint Tick, GridPosition Grid)> Baselines = new();
+        // What it was last sent of each transform's position, by the transform's slot.
+        public SentPosition[] Positions = [];
+
+        // The ticks that carried a transform at two positions, and positions received from the peer.
+        public readonly HashSet<(NetworkTransform Transform, uint Tick)> Ambiguous = new();
         public readonly Dictionary<(uint NetId, uint Generation, byte Index), PositionHistory> ReceivedPositions = new();
     }
 
-    /// <summary>Recent grid positions of one object by snapshot tick. A tick that carried two different ones is no baseline.</summary>
+
+    /// <summary>Recent grid positions of one transform by snapshot tick. A tick that carried two different ones is no baseline.</summary>
     private sealed class PositionHistory
     {
-        private readonly List<(uint Tick, GridPosition Grid, bool Ambiguous)> _positions = new();
+        private const byte Empty = 0, Held = 1, Ambiguous = 2;
+        private readonly (uint Tick, GridPosition Grid, byte State)[] _slots = new (uint, GridPosition, byte)[PositionHistoryTicks];
+        private bool _any;
         private uint _newest;
 
         public void Add(uint tick, GridPosition grid)
         {
-            if (_positions.Count == 0 || (int)(tick - _newest) > 0)
+            if (!_any || (int)(tick - _newest) > 0)
             {
+                _any = true;
                 _newest = tick;
             }
 
@@ -870,36 +1037,40 @@ internal sealed class SnapshotSystem : IDisposable
                 return;
             }
 
-            for (int i = _positions.Count - 1; i >= 0; i--)
+            ref (uint Tick, GridPosition Grid, byte State) slot = ref _slots[tick % PositionHistoryTicks];
+            if (slot.State != Empty && slot.Tick == tick)
             {
-                (uint at, GridPosition held, bool ambiguous) = _positions[i];
-                if (_newest - at >= PositionHistoryTicks)
+                if (slot.Grid != grid)
                 {
-                    _positions.RemoveAt(i);
-                }
-                else if (at == tick)
-                {
-                    _positions[i] = (at, held, ambiguous || held != grid);
-                    return;
+                    slot.State = Ambiguous;
                 }
             }
-
-            _positions.Add((tick, grid, false));
+            else
+            {
+                slot = (tick, grid, Held);
+            }
         }
 
         public bool TryGet(uint tick, out GridPosition grid)
         {
-            foreach ((uint at, GridPosition held, bool ambiguous) in _positions)
+            ref (uint Tick, GridPosition Grid, byte State) slot = ref _slots[tick % PositionHistoryTicks];
+            if (slot.State == Held && slot.Tick == tick && _newest - tick < PositionHistoryTicks)
             {
-                if (at == tick && !ambiguous)
-                {
-                    grid = held;
-                    return true;
-                }
+                grid = slot.Grid;
+                return true;
             }
 
             grid = default;
             return false;
         }
     }
+}
+
+/// <summary>A transform's position as last sent a peer, and the latest one that peer acknowledged.</summary>
+internal struct SentPosition
+{
+    public uint Stamp;
+    public bool HasLast, HasBaseline;
+    public uint LastTick, BaselineTick;
+    public GridPosition Last, Baseline;
 }
