@@ -99,6 +99,11 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         "RPC '{0}' is unreliable, so its Channel is ignored: unreliable calls have no order to keep and go on channel 0",
         "Networking", DiagnosticSeverity.Warning, true);
 
+    private static readonly DiagnosticDescriptor s_uselessFlag = new(
+        "PROWLNET014", "RPC flag has no effect",
+        "RpcFlags.{1} does nothing on RPC '{0}': {2}",
+        "Networking", DiagnosticSeverity.Warning, true);
+
     private static readonly DiagnosticDescriptor s_tooManySyncs = new(
         "PROWLNET012", "Too many [Sync] values",
         "'{0}' has {1} [Sync] values counting its base types, and a component can hold " + MaxSyncMembersText +

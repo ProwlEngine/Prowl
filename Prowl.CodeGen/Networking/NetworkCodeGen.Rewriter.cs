@@ -432,7 +432,8 @@ internal sealed partial class NetworkCodeGen
             if (node.Parent is not ClassDeclarationSyntax ||
                 (!method.IsStatic && !DerivesFrom(method.ContainingType, context.Symbols.Component)))
             {
-                context.Report(s_notInClass, location, method.Name);
+                // A static RPC needs a class, any class. Only the others need a Component.
+                context.Report(method.IsStatic ? s_staticRpc : s_notInClass, location, method.Name);
                 return null;
             }
 
@@ -450,6 +451,28 @@ internal sealed partial class NetworkCodeGen
             if (channel != 0 && (flags & 1u) != 0)
             {
                 context.Report(s_unreliableChannel, location, method.Name);
+            }
+
+            // Flags that only mean something for another kind of RPC, which compile and then do nothing.
+            bool hostRpc = kind.Name == "HostAttribute", broadcast = kind.Name == "BroadcastAttribute";
+            if ((flags & 4u) != 0 && (method.IsStatic || !hostRpc))
+            {
+                context.Report(s_uselessFlag, location, method.Name, "AnyCaller", method.IsStatic
+                    ? "any client may call a static RPC already"
+                    : broadcast
+                        ? "only the host calls a broadcast. For a client to reach everyone, have it call a host RPC that calls the broadcast"
+                        : "only the host calls it");
+            }
+
+            if ((flags & 8u) != 0 && (method.IsStatic || !broadcast))
+            {
+                context.Report(s_uselessFlag, location, method.Name, "ExcludeOwner",
+                    "it skips the owner of the object a broadcast is called on");
+            }
+
+            if ((flags & 2u) != 0 && !hostRpc && !(method.IsStatic && broadcast))
+            {
+                context.Report(s_uselessFlag, location, method.Name, "HostOnly", "only the host calls it already");
             }
 
             if (method.IsStatic && (kind.Name == "OwnerAttribute" ||

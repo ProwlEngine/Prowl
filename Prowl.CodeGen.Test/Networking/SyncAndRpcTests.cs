@@ -289,17 +289,17 @@ public class SyncAndRpcTests
 
                                             public class Gun : Component
                                             {
-                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public virtual void Fire(int power) { }
+                                                [Rpc.Broadcast] public virtual void Fire(int power) { }
                                             }
 
                                             public class Cannon : Gun
                                             {
-                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public override void Fire(Int32 power) { base.Fire(power); }
+                                                [Rpc.Broadcast] public override void Fire(Int32 power) { base.Fire(power); }
                                             }
 
                                             public class Mortar : Cannon
                                             {
-                                                [Rpc.Broadcast(RpcFlags.AnyCaller)] public override void Fire(System.Int32 power) { base.Fire(power); }
+                                                [Rpc.Broadcast] public override void Fire(System.Int32 power) { base.Fire(power); }
                                             }
                                             """);
         Scripts.WithComponent(assembly.GetType("Mortar")!, component =>
@@ -357,12 +357,12 @@ public class SyncAndRpcTests
                                               public class Gun : Component
                                               {
                                                   public int Fired, Extra;
-                                                  [Rpc.Broadcast(RpcFlags.AnyCaller)] public virtual void Fire(int power) => Fired++;
+                                                  [Rpc.Broadcast] public virtual void Fire(int power) => Fired++;
                                               }
 
                                               public class Cannon : Gun
                                               {
-                                                  [Rpc.Broadcast(RpcFlags.AnyCaller)] public override void Fire(int power) { {{overrideBody}} }
+                                                  [Rpc.Broadcast] public override void Fire(int power) { {{overrideBody}} }
                                               }
                                               """);
         using HostedComponent hosted = new(assembly.GetType("Cannon")!);
@@ -377,9 +377,7 @@ public class SyncAndRpcTests
     /// <summary>A script component on the host of a running session, with a raw client that gets ready and counts the calls it is sent.</summary>
     private sealed class HostedComponent : IDisposable
     {
-        public const ushort SceneSnapshot = Net.EngineMessageIds, RpcToHost = SceneSnapshot + 6,
-            RpcFromHost = SceneSnapshot + 7, SceneLoaded = SceneSnapshot + 8, SceneCatchUp = SceneSnapshot + 9,
-            SceneReady = SceneSnapshot + 10;
+        public const ushort Scene = Net.EngineMessageIds, RpcToHost = Scene + 6, RpcFromHost = Scene + 7, Ready = Scene + 8;
 
         private readonly SceneInstance _scene = SceneInstance.Create("Hosted");
 
@@ -395,12 +393,12 @@ public class SyncAndRpcTests
             Net.Host(new LocalTransport(network, "host"));
             Client = NetSession.Join(new LocalTransport(network, "client"), "host", "client",
                 options: new NetSessionOptions { AppVersion = NetworkSchema.AppVersion(0) });
-            Client.OnRaw(SceneSnapshot, (NetPeer _, ref NetReader r, Delivery _, byte _) =>
+            // Told which scenes to load, it answers that it has them, and the host spawns for it.
+            Client.OnRaw(Scene, (NetPeer _, ref NetReader r, Delivery _, byte _) =>
             {
                 r.ReadByte();
-                Reply(SceneLoaded, r.ReadUInt64());
+                Reply(Ready, r.ReadUInt64());
             });
-            Client.OnRaw(SceneCatchUp, (NetPeer _, ref NetReader r, Delivery _, byte _) => Reply(SceneReady, r.ReadUInt64()));
             Client.OnRaw(RpcFromHost, (NetPeer _, ref NetReader _, Delivery _, byte _) => CallsAtClient++);
             for (int i = 0; i < 1000 && !ClientReady; i++)
             {
