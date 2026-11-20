@@ -108,6 +108,7 @@ internal sealed partial class NetworkObject
 
     internal void NotifyDespawn(NetworkDespawnReason reason = NetworkDespawnReason.Destroyed)
     {
+        System.Sync.ForgetReferencesOf(this);
         if (!SpawnNotified)
         {
             return;

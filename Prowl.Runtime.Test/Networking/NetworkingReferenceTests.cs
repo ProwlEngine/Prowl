@@ -102,4 +102,29 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void ADespawnedObjectsReferencesAreForgotten()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject bullet = CreateGameObject("Bullet");
+        bullet.Network.Networked = true;
+        NetTestComponent component = bullet.AddComponent<NetTestComponent>();
+        scene.Add(bullet); MakeCurrent(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            SyncSystem sync = Networking.Networking.System!.Sync;
+            SyncMember member = NetworkMembers.Of(component).Sync(NetTestComponent.HealthSlot)!;
+
+            // As when a reference value arrives naming an object that is not here yet.
+            sync.NoteReference(component, member, (99, 0));
+            Assert.Equal(1, sync.ReferenceCount);
+
+            bullet.Dispose();
+            Assert.Equal(0, sync.ReferenceCount);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

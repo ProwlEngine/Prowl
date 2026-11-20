@@ -117,6 +117,32 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     private readonly Dictionary<uint, List<(Component Component, SyncMember Sync, byte Index)>> _references = new();
     private readonly Dictionary<(Component Component, uint Slot), uint> _referenceOf = new();
 
+    /// <summary>How many reference members are remembered as naming an object.</summary>
+    internal int ReferenceCount => _referenceOf.Count;
+
+    /// <summary>Forgets what the reference members of an object leaving the network named, so nothing keeps it alive.</summary>
+    internal void ForgetReferencesOf(NetworkObject entry)
+    {
+        if (_referenceOf.Count == 0)
+        {
+            return;
+        }
+
+        foreach (Component component in entry.Components)
+        {
+            if (ReferenceEquals(component, null))
+            {
+                continue;
+            }
+
+            NetworkMembers members = NetworkMembers.Of(component);
+            for (int m = 0; m < members.SyncCount; m++)
+            {
+                NoteReference(component, members.SyncAt(m)!, default);
+            }
+        }
+    }
+
     /// <summary>Remembers what a reference member was just told to name, or forgets it for a null or local value.</summary>
     internal void NoteReference(Component component, SyncMember sync, (uint NetId, byte Index) reference)
     {
