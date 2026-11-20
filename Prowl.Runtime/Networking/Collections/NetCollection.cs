@@ -245,9 +245,15 @@ public abstract class NetCollection
         uint count = reader.ReadVarUInt32();
         if (sequence > _sequence)
         {
-            // Changes this peer never had. The channel is reliable and ordered, so this means a bug, not loss.
-            Debug.LogWarning(
-                $"[Network] {Describe()} missed {sequence - _sequence} change(s); it may now differ from the sender's.");
+            // Changes this peer never had. The channel is reliable and ordered, so this means a bug, not loss. Said
+            // once: the sender picks the number, and could have it said with every message.
+            if (!_warnedMissed)
+            {
+                _warnedMissed = true;
+                Debug.LogWarning(
+                    $"[Network] {Describe()} missed {sequence - _sequence} change(s); it may now differ from the sender's.");
+            }
+
             _sequence = sequence;
         }
 
@@ -290,9 +296,24 @@ public abstract class NetCollection
         }
     }
 
-    /// <summary>A received change that doesn't fit this peer's contents is skipped, with a warning.</summary>
-    private protected void Mismatch(string change) =>
-        Debug.LogWarning($"[Network] {Describe()} received {change}, which doesn't fit its contents; skipped.");
+    // One warning of each kind for a collection: a sender can put thousands of bad changes in one message.
+    private bool _warnedMissed, _warnedMismatch;
+
+    /// <summary>How many warnings this collection has given about what it received.</summary>
+    internal int WarningsGiven => (_warnedMissed ? 1 : 0) + (_warnedMismatch ? 1 : 0);
+
+    /// <summary>A received change that doesn't fit this peer's contents is skipped, with a warning the first time.</summary>
+    private protected void Mismatch(string change)
+    {
+        if (_warnedMismatch)
+        {
+            return;
+        }
+
+        _warnedMismatch = true;
+        Debug.LogWarning(
+            $"[Network] {Describe()} received {change}, which doesn't fit its contents; skipped, as later ones will be without a warning.");
+    }
 
     internal string Describe()
     {
