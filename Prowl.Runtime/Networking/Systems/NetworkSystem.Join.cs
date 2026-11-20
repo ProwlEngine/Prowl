@@ -501,6 +501,8 @@ internal sealed partial class NetworkSystem
             return;
         }
 
+        // What only an owner gets follows its spawn as state, and has to be there before the spawns finish.
+        Sync.SendSyncChanges();
         foreach (NetPeer peer in ready)
         {
             SendSceneGeneration(peer, EngineMessage.SpawnFinished);
@@ -688,6 +690,13 @@ internal sealed partial class NetworkSystem
         }
 
         state.Run = null;
+
+        // What only an owner gets follows its spawn as state, and has to be there before the spawns finish.
+        Sync.SendSyncChanges();
+        if (Session != session || !StillLoading(peer, state))
+        {
+            return;
+        }
 
         // Queued first, so RPCs from ready callbacks here arrive after the client's own ready notification.
         state.Stage = NetworkJoinState.Ready;
