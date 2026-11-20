@@ -150,7 +150,11 @@ public class SceneViewPanel : DockPanel
                     .Text(EditorIcons.CaretDown, font).TextColor(EditorTheme.Ink300).FontSize(10f).Alignment(TextAlignment.MiddleCenter)
                     .Tooltip(Loc.Get("scene.gizmos"))
                     .IsNotFocusable()
-                    .OnClick(_ => _gizmoListOpen = !_gizmoListOpen);
+                    .OnClick(_ =>
+                    {
+                        _gizmoListOpen = !_gizmoListOpen;
+                        if (_gizmoListOpen) GizmoTypesPopover.ResetSearch();
+                    });
 
                 if (_gizmoListOpen)
                 {
