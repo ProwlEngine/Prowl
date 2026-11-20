@@ -159,7 +159,8 @@ public static partial class Networking
     /// <summary>
     ///     Host: spawns an object every peer can build itself, as Mirror's NetworkServer.Spawn: an instance of a prefab
     ///     that is in SceneInstance.Main, or an object despawned before. Anything else throws, since clients would
-    ///     have nothing to build it from. Without a session it is only marked networked.
+    ///     have nothing to build it from, and one that is spawned already is left as it is, with a warning. Without
+    ///     a session it is only marked networked.
     /// </summary>
     public static void Spawn(GameObject go, NetPeer? owner = null, NetworkOrphaned? orphaned = null)
     {
@@ -213,15 +214,26 @@ public static partial class Networking
 
     /// <summary>
     ///     Host: makes <paramref name="player" /> the player of <paramref name="peer" />, as Mirror's
-    ///     AddPlayerForConnection: spawned owned by them, or handed to them if already spawned. It replaces any player
-    ///     they had, which stays spawned and theirs. Throws on a client, and for an object that is another peer's
-    ///     player. While it is their player, the object can't be given to anyone else.
+    ///     AddPlayerForConnection: spawned owned by them, or handed to them if already spawned. Throws on a client,
+    ///     for a peer that has a player already, and for an object that is another peer's player. While it is their
+    ///     player, the object can't be given to anyone else.
     /// </summary>
     public static void AddPlayer(NetPeer peer, GameObject player)
     {
         ArgumentNullException.ThrowIfNull(peer);
         ArgumentNullException.ThrowIfNull(player);
-        System?.AddPlayer(peer, player);
+        System?.AddPlayer(peer, player, false);
+    }
+
+    /// <summary>
+    ///     Host: gives <paramref name="peer" /> another player in place of the one they have, as Mirror's
+    ///     ReplacePlayerForConnection. The old one stays spawned and theirs, as an ordinary object.
+    /// </summary>
+    public static void ReplacePlayer(NetPeer peer, GameObject player)
+    {
+        ArgumentNullException.ThrowIfNull(peer);
+        ArgumentNullException.ThrowIfNull(player);
+        System?.AddPlayer(peer, player, true);
     }
 
     /// <summary>Host: <paramref name="peer" /> no longer has a player. Its old player stays spawned.</summary>

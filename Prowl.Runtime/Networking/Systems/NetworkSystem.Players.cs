@@ -38,8 +38,11 @@ internal sealed partial class NetworkSystem
         return null;
     }
 
-    /// <summary>Host: makes <paramref name="go" /> the player of <paramref name="peer" />, spawning it owned by them.</summary>
-    internal void AddPlayer(NetPeer peer, GameObject go)
+    /// <summary>
+    ///     Host: makes <paramref name="go" /> the player of <paramref name="peer" />, spawning it owned by them. A peer
+    ///     that has a player is refused another unless <paramref name="replace" /> is set.
+    /// </summary>
+    internal void AddPlayer(NetPeer peer, GameObject go, bool replace)
     {
         if (!IsHost)
         {
@@ -47,6 +50,12 @@ internal sealed partial class NetworkSystem
         }
 
         ValidateOwner(peer);
+        if (!replace && PlayerOf(peer).IsValid())
+        {
+            throw new InvalidOperationException(
+                $"'{peer.Name}' has a player already. ReplacePlayer gives them another.");
+        }
+
         if (FindEntry(go) is { } spawned && spawned.GameObject == go)
         {
             SetOwner(go, peer);
