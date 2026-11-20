@@ -400,6 +400,74 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void ANetworkedObjectKeptAcrossLoadsStaysTheSameObjectWhenTheHostChangesScene()
+    {
+        // As Mirror finds the object a spawn names by its net id, a spawn for one this peer still has updates it.
+        byte[] SceneNaming(ulong generation)
+        {
+            using NetWriter writer = new();
+            writer.WriteByte(NetworkSystem.SceneMessageFormat);
+            writer.WriteUInt64(generation);
+            writer.WriteVarUInt32(1);
+            new SectionHeader(1, "Level", true, Guid.Empty).Write(writer);
+            return writer.ToArray();
+        }
+
+        byte[] SpawnWith(GameObject go, int health)
+        {
+            go.GetComponent<NetTestComponent>()!.Health = health;
+            using NetWriter writer = new();
+            NetworkTestScene.Current.WriteSpawn(go, -1, NetworkOrphaned.Destroy, writer, 1, 5, true);
+            return writer.ToArray();
+        }
+
+        GameObject kept = CreateGameObject("Kept");
+        kept.AddComponent<KeptAcrossLoadsComponent>();
+        kept.AddComponent<NetTestComponent>();
+        kept.AddComponent<NetworkLifecycleListener>();
+        kept.Network.Networked = true;
+        Guid id = kept.Identifier;
+
+        MakeCurrent(CreateScene());
+        LocalNetwork network = new();
+        FakePeer host = FakePeer.Host(network);
+        SendJoin(host, SceneNaming(1), SpawnWith(kept, 3));
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == id), host);
+            GameObject copy = Find(SceneInstance.Main, id);
+            NetworkLifecycleListener listener = copy.GetComponent<NetworkLifecycleListener>()!;
+            Assert.True(copy.Persistent);
+            Assert.Equal(new[] { "spawn" }, listener.Events);
+
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            host.JoinSpawns.Clear();
+            host.JoinSpawns.Add(SpawnWith(kept, 9));
+            host.Session.SendRaw(client, FakePeer.Scene, SceneNaming(2));
+            Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
+            Assert.Same(copy, Find(SceneInstance.Main, id));
+            Assert.False(copy.IsDisposed);
+            Assert.True(copy.Network.Active);
+            Assert.Equal(9, copy.GetComponent<NetTestComponent>()!.Health);
+            Assert.Equal(new[] { "spawn" }, listener.Events);
+
+            // One the host does not spawn again after a scene change is gone there, so it goes here too.
+            host.JoinSpawns.Clear();
+            host.Session.SendRaw(client, FakePeer.Scene, SceneNaming(3));
+            Pump(() => NetworkTestScene.Current.SceneGeneration == 3 && Networking.Networking.IsReady, host);
+            PumpFor(30, host);
+            Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
+            Assert.DoesNotContain(SceneInstance.Main.Objects, o => o.Identifier == id);
+        }
+        finally
+        {
+            Networking.Networking.Shutdown();
+            host.Dispose();
+        }
+    }
+
+    [Fact]
     public void AnObjectKeptAcrossLoadsIsNotDuplicatedWhenTheHostChangesScene()
     {
         AssetBackend? previous = AssetDatabase.Backend;

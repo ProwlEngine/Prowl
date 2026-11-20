@@ -31,6 +31,9 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     public int Owner = NoOwner;
     public bool SpawnNotified;
     public bool TearingDown;
+
+    /// <summary>Client: kept through a scene change, until the host spawns it again or finishes its spawns without it.</summary>
+    public bool AwaitingRespawn;
     public Float3? TransferVelocity;
     public NetworkOrphaned Orphaned => GameObject.Network.Orphaned;
 

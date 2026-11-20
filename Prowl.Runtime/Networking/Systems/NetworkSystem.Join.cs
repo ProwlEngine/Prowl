@@ -168,8 +168,16 @@ internal sealed partial class NetworkSystem
         LocalJoinState = NetworkJoinState.Loading;
         EarlyRpcs.Clear();
         ReadyDeadline = Now + Configuration.SceneLoadTimeoutSeconds;
+        // Objects in the persistent section stay through the change, as they do on the host, which spawns them again.
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
+            entry.AwaitingRespawn = ReplicatedWorld == world && entry.GameObject.IsValid() &&
+                                    entry.GameObject.Section is { IsPersistent: true };
+            if (entry.AwaitingRespawn)
+            {
+                continue;
+            }
+
             entry.NotifyDespawn(NetworkDespawnReason.SceneChanged);
             if (Session != session)
             {
@@ -178,7 +186,7 @@ internal sealed partial class NetworkSystem
         }
 
         ReplicatedWorld = world;
-        Entries.Clear();
+        Entries.RemoveWhere(e => !e.AwaitingRespawn);
         Sync.Clear();
         Transforms.Clear();
         ForgetSections();
@@ -748,6 +756,25 @@ internal sealed partial class NetworkSystem
         }
 
         NetSession? session = Session;
+
+        // What was kept through the scene change and not spawned again is gone on the host, or hidden from this peer.
+        foreach (NetworkObject entry in Entries.Values.Where(e => e.AwaitingRespawn).ToArray())
+        {
+            if (Entries.Remove(entry.GameObject.Identifier))
+            {
+                entry.NotifyDespawn(NetworkDespawnReason.SceneChanged);
+                if (Session != session)
+                {
+                    return;
+                }
+
+                if (entry.GameObject.IsValid())
+                {
+                    entry.GameObject.Destroy();
+                }
+            }
+        }
+
         NetworkObject[] pending = [.. _pendingSpawns];
         _pendingSpawns.Clear();
         foreach (NetworkObject entry in pending)

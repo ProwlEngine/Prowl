@@ -474,6 +474,40 @@ internal sealed partial class NetworkSystem
         }
     }
 
+    /// <summary>
+    ///     A spawn for an object this peer has already, as Mirror's FindOrSpawnObject finds one by its net id: it keeps
+    ///     the object and takes the spawn's pose, owner and state, with no spawn callbacks.
+    /// </summary>
+    private void Respawn(NetworkObject entry, scoped SpawnMessage message, NetPeer sender, ref NetReader reader)
+    {
+        NetReader payload = new(message.Payload);
+        TemplateSpawn spawn = TemplateSpawn.Read(ref payload);
+        GameObject go = entry.GameObject;
+        go.Transform.LocalPosition = spawn.Position;
+        go.Transform.LocalRotation = spawn.Rotation;
+        go.Transform.LocalScale = spawn.Scale;
+        go.Enabled = spawn.Enabled;
+        ReadChildPoses(ref reader, entry.Transforms);
+        Sync.ApplySpawnState(sender, entry.Components, ref reader);
+        entry.AwaitingRespawn = false;
+        go.Network.ApplyOrphaned(message.Orphaned);
+        foreach (NetworkTransform transform in entry.Transforms)
+        {
+            transform.Sync.ClearHistory();
+            transform.Sync.ReceivedAt(message.Tick);
+        }
+
+        if (entry.Owner != message.OwnerId)
+        {
+            entry.ApplyOwner(message.OwnerId, message.Generation, entry.SampledVelocity());
+            entry.NotifyOwnership();
+        }
+        else
+        {
+            entry.Generation = message.Generation;
+        }
+    }
+
     private static void ReadChildPoses(ref NetReader reader, NetworkTransform[] transforms)
     {
         int count = reader.ReadByte();
@@ -512,6 +546,12 @@ internal sealed partial class NetworkSystem
         int owner = message.OwnerId;
         NetworkOrphaned orphaned = message.Orphaned;
         uint generation = message.Generation, netId = message.NetId;
+        if (Entries.TryGetValue(id, out NetworkObject? current) && current.NetId == netId && current.GameObject.IsValid())
+        {
+            Respawn(current, message, sender, ref reader);
+            return;
+        }
+
         GameObject go = BuildTemplate(id, message.Payload, out SpawnTemplate template);
         bool attached = false, adopted = false;
         Component[] components = [];
