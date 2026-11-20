@@ -16,7 +16,6 @@
 #include "Graphite/Shadows.glsl"
 #include "Graphite/Textures.glsl"
 #include "Graphite/Directional.glsl"
-#include "Graphite/CloudShadow.glsl"
 #include "Graphite/FarShadow.glsl"
 #include "Graphite/Ltc.glsl"
 
@@ -598,16 +597,15 @@ float graphite_DirectionalMapShadow(Graphite_DirectionalLight d, uint index, vec
 }
 
 // How much of a directional light reaches a surface past its shadow, 1 lit. index is its place in the world's buffer,
-// the sun first, which the clouds and the far shadow shade too, the far shadow and the cascades taking the darker.
+// the sun first, which the far shadow shades too, the far shadow and the cascades taking the darker.
 float Graphite_DirectionalLightShadow(Graphite_DirectionalLight d, uint index, vec3 relativePos, vec3 geomNormal)
 {
     if (!Graphite_ReceivesShadows())
         return 1.0;
-    float clouds = index == 0u ? Graphite_CloudShadow(relativePos) : 1.0;
     float far = index == 0u ? Graphite_FarShadow(relativePos) : 1.0;
-    if (!d.shadow || clouds * far <= 0.0)
-        return clouds * far;
-    return clouds * min(far, graphite_DirectionalMapShadow(d, index, relativePos, geomNormal));
+    if (!d.shadow || far <= 0.0)
+        return far;
+    return min(far, graphite_DirectionalMapShadow(d, index, relativePos, geomNormal));
 }
 
 // The sun's shadow, 1 lit

@@ -22,7 +22,7 @@ struct Graphite_VoxelHeader
 };
 
 #if defined(GRAPHITE_VOXEL_WRITER)
-layout(set = 1, binding = 47, std430) buffer Graphite_Voxels
+layout(set = 1, binding = 45, std430) buffer Graphite_Voxels
 #elif defined(GRAPHITE_VOXEL_WRITE)
 layout(std430) buffer Graphite_Voxels
 #else

@@ -6,7 +6,7 @@
 #include "Graphite/Core.glsl"
 #include "Graphite/Tables.glsl"
 
-layout(set = 1, binding = 48) uniform texture2D Graphite_FarShadowMap;
+layout(set = 1, binding = 46) uniform texture2D Graphite_FarShadowMap;
 
 struct Graphite_FarShadowRecord
 {
@@ -14,7 +14,7 @@ struct Graphite_FarShadowRecord
     vec4 params;    // the softness and bias in metres, the distance it fades in from, 0 for everywhere
 };
 
-layout(set = 1, binding = 49, std430) readonly buffer Graphite_FarShadowData { Graphite_FarShadowRecord graphite_FarShadow; };
+layout(set = 1, binding = 47, std430) readonly buffer Graphite_FarShadowData { Graphite_FarShadowRecord graphite_FarShadow; };
 
 // How much of the sun reaches a camera relative point past the far shadow, 1 lit or where the map does not reach
 float Graphite_FarShadow(vec3 relativePos)

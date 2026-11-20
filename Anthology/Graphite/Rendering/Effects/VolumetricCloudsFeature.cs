@@ -79,7 +79,6 @@ public sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     private int _scale = 1;
     private Shadows? _shadows;
     private bool _shadowsClaimed;
-    private readonly DeviceBuffer _shadowData;
 
     // The settings the history was started with, so changing them enough starts it again
     private readonly List<float> _values = [], _tolerances = [];
@@ -100,15 +99,12 @@ public sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _linearClamp = renderer.Resources.LinearClamp;
         _pointClamp = renderer.Resources.PointClamp;
         _linearRepeat = renderer.Resources.LinearRepeat;
-        _shadowData = _device.ResourceFactory.CreateBuffer(new BufferDescription(CloudShadowRecord.Size, BufferUsage.StructuredBufferReadOnly));
-        _shadowData.Name = "Cloud Shadow Record";
         ShadowPass = new ShadowFeature(this);
     }
 
     /// <summary>
-    /// Draws the cloud shadow map and the weather around it for the first camera each frame, before any view's surfaces,
-    /// so every view's sun is shaded by the clouds, its volumetric fog and water included. Add it to the world's features
-    /// beside this one.
+    /// Draws the cloud shadow map the clouds are lit from and the weather around it for the first camera each frame, before
+    /// any view draws its clouds. Add it to the world's features beside this one.
     /// </summary>
     public RenderFeature ShadowPass { get; }
 
@@ -395,8 +391,6 @@ public sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
             state.ShadowMap = builder.Import(_shadows.Map);
             state.ShadowBlur = builder.Import(_shadows.Blur);
         }
-        if (state.UsesShadows || _shadows.Epoch >= 0)
-            builder.UseCloudShadow(_shadows.Map, _shadowData, state.UsesShadows);
     }
 
     private void RenderShadows(FeatureContext context)
@@ -409,28 +403,6 @@ public sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         DrawMaps(context, state, camera);
         _properties.SetFloat3("_CloudCamera", new Float3((float)camera.X, (float)camera.Y, (float)camera.Z));
         DrawShadows(context, state, camera, shadows);
-        context.Command.UpdateBuffer(_shadowData, 0, ShadowRecord(shadows));
-    }
-
-    private CloudShadowRecord ShadowRecord(Shadows shadows)
-    {
-        CloudSettings s = _settings;
-        Float2 w0 = s.Wind - shadows.Winds[0], w1 = s.Wind - shadows.Winds[1], w2 = s.Wind - shadows.Winds[2], w3 = s.Wind - shadows.Winds[3];
-        return new CloudShadowRecord
-        {
-            Cascade0 = shadows.Cascades[0],
-            Cascade1 = shadows.Cascades[1],
-            Cascade2 = shadows.Cascades[2],
-            Cascade3 = shadows.Cascades[3],
-            Heights = shadows.Heights,
-            WindA = new Float4(w0.X, w0.Y, w1.X, w1.Y),
-            WindB = new Float4(w2.X, w2.Y, w3.X, w3.Y),
-            Right0 = new Float4(shadows.Rights[0], 0f), Right1 = new Float4(shadows.Rights[1], 0f), Right2 = new Float4(shadows.Rights[2], 0f), Right3 = new Float4(shadows.Rights[3], 0f),
-            Up0 = new Float4(shadows.Ups[0], 0f), Up1 = new Float4(shadows.Ups[1], 0f), Up2 = new Float4(shadows.Ups[2], 0f), Up3 = new Float4(shadows.Ups[3], 0f),
-            ToSun0 = new Float4(shadows.ToSuns[0], 0f), ToSun1 = new Float4(shadows.ToSuns[1], 0f), ToSun2 = new Float4(shadows.ToSuns[2], 0f), ToSun3 = new Float4(shadows.ToSuns[3], 0f),
-            Params = new Float4(shadows.Resolution, s.HasSun ? 1f : 0f, s.Lighting.X * 40f, 0f),
-            Scatter = new Float4(s.Scatter.X, s.Scatter.Y, 0f, 0f),
-        };
     }
 
     private void SetShape()
@@ -652,23 +624,7 @@ public sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     public void Dispose()
     {
         DisposeShadows();
-        _shadowData.Dispose();
     }
-}
-
-/// <summary>The cloud shadow as shaders read it, 336 bytes, matching Graphite_CloudShadowRecord.</summary>
-[StructLayout(LayoutKind.Sequential)]
-internal struct CloudShadowRecord
-{
-    public const uint Size = 336;
-
-    public Float4 Cascade0, Cascade1, Cascade2, Cascade3;
-    public Float4 Heights;
-    public Float4 WindA, WindB;
-    public Float4 Right0, Right1, Right2, Right3;
-    public Float4 Up0, Up1, Up2, Up3;
-    public Float4 ToSun0, ToSun1, ToSun2, ToSun3;
-    public Float4 Params, Scatter;
 }
 
 /// <summary>The built in noise of <see cref="VolumetricCloudsFeature"/>: the high layer's 2D noise and the 3D noise's channels apart, each in the smallest format holding it.</summary>
