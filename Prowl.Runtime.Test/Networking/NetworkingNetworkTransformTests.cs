@@ -327,5 +327,14 @@ public partial class NetworkingTests
 /// <summary>Adds a NetworkTransform when it first runs, after the object was built.</summary>
 public sealed class SproutsATransform : Component
 {
-    public override void OnEnable() => GameObject.AddComponent<NetworkTransform>();
+    public override void OnEnable()
+    {
+        if (!AddedOne)
+        {
+            AddedOne = true;
+            GameObject.AddComponent<NetworkTransform>();
+        }
+    }
+
+    [Prowl.Echo.SerializeIgnore] public bool AddedOne;
 }

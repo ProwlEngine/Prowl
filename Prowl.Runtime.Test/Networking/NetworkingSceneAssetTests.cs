@@ -239,4 +239,89 @@ public partial class NetworkingTests
             AssetDatabase.ClearForTests();
         }
     }
+
+    [Fact]
+    public void WhatASceneObjectAddsOnceItRunsIsNotNetworkedOnAnyPeer()
+    {
+        AssetBackend? previous = AssetDatabase.Backend;
+        MemoryAssetBackend backend = new();
+        AssetDatabase.ClearForTests();
+        AssetDatabase.Backend = backend;
+        try
+        {
+            SceneInstance authoring = new();
+            GameObject authoredDoor = authoring.Create("Door");
+            authoredDoor.Network.Networked = true;
+            authoredDoor.AddComponent<NetTestComponent>();
+            authoredDoor.AddComponent<SproutsATransform>();
+            authoredDoor.AddComponent<SproutsState>();
+            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            authoring.Dispose();
+
+            MakeCurrent(CreateScene());
+            byte[] scene;
+            byte[][] spawns;
+            Guid doorId;
+            LocalNetwork source = new();
+            Networking.Networking.Host(new LocalTransport(source, "host"));
+            try
+            {
+                arena.LoadAdditive(SceneInstance.Main).Wait();
+                GameObject door = SceneInstance.Main.Objects.Single(o => o.Name == "Door");
+                doorId = door.Identifier;
+                Assert.NotNull(door.GetComponent<NetworkTransform>());
+                Assert.NotNull(door.GetComponent<SyncPairTestComponent>());
+
+                // The host's door has run and grown, and a client's copy has not yet when it is spawned: what is
+                // networked is the door as the scene asset stores it.
+                NetworkObject entry = Networking.Networking.System!.FindEntry(door)!;
+                Assert.Empty(entry.Transforms);
+                Assert.Equal([door.GetComponent<NetTestComponent>()!], entry.Components);
+                (scene, spawns) = RecordJoin(source);
+            }
+            finally { Networking.Networking.Shutdown(); }
+
+            MakeCurrent(CreateScene());
+            LocalNetwork network = new();
+            using FakePeer host = FakePeer.Host(network);
+            SendJoin(host, scene, spawns);
+            try
+            {
+                Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+                Pump(() => Networking.Networking.IsReady, host);
+                GameObject door = Find(SceneInstance.Main, doorId);
+                Assert.True(door.Network.Active);
+                NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+
+                // Despawned and spawned again, the grown door on this peer is still the same networked object.
+                using NetWriter despawn = new();
+                new DespawnMessage(doorId, NetworkDespawnReason.OutOfInterest).Write(despawn);
+                host.Session.SendRaw(client, FakePeer.Despawn, despawn.WrittenSpan);
+                Pump(() => !door.Network.Active, host);
+                host.Session.SendRaw(client, FakePeer.Spawn, spawns.Single(s => SpawnedId(s) == doorId));
+                Pump(() => door.Network.Active, host);
+                Assert.True(door.IsValid());
+                Assert.True(Networking.Networking.IsActive);
+                Assert.Empty(Networking.Networking.System!.FindEntry(door)!.Transforms);
+            }
+            finally { Networking.Networking.Shutdown(); }
+        }
+        finally
+        {
+            AssetDatabase.Backend = previous;
+            AssetDatabase.ClearForTests();
+        }
+    }
+}
+
+/// <summary>Adds a component with [Sync] values when it first runs, after the object was built.</summary>
+public sealed class SproutsState : Component
+{
+    public override void OnEnable()
+    {
+        if (GameObject.GetComponent<SyncPairTestComponent>().IsNotValid())
+        {
+            GameObject.AddComponent<SyncPairTestComponent>();
+        }
+    }
 }

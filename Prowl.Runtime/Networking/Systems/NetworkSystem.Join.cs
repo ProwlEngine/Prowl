@@ -593,6 +593,14 @@ internal sealed partial class NetworkSystem
         }
     }
 
+    /// <summary>The networked components and transforms of a scene object's tree that its scene asset stores, by identifier.</summary>
+    private static (Component[] Components, NetworkTransform[] Transforms) AsStored(GameObject go, Guid[] stored)
+    {
+        HashSet<Guid> identifiers = [.. stored];
+        return ([.. NetworkComponents.Gather(go).Where(c => identifiers.Contains(c.Identifier))],
+            [.. NetworkComponents.GatherTransforms(go).Where(t => identifiers.Contains(t.Identifier))]);
+    }
+
     /// <summary>For tests, which build their scenes in code: what clients build a scene object from that no asset stores.</summary>
     internal static Func<GameObject, SpawnTemplate?>? UnstoredSceneObjects;
 
@@ -621,7 +629,16 @@ internal sealed partial class NetworkSystem
                 continue;
             }
 
+            // An object its scene asset stores is one clients hold too, so its spawn only names it. What is networked
+            // of it is what the asset stores: it may have run and added to itself here, and no client's copy has.
+            Guid[]? stored = go.Section is { } section ? AssetTrees(section.Source)?.GetValueOrDefault(go.Identifier) : null;
             Component[] components = NetworkComponents.Gather(go);
+            NetworkTransform[]? transforms = null;
+            if (stored != null)
+            {
+                (components, transforms) = AsStored(go, stored);
+            }
+
             if (components.Length > NetworkComponents.MaxPerObject)
             {
                 Debug.LogError(
@@ -630,13 +647,11 @@ internal sealed partial class NetworkSystem
                 continue;
             }
 
-            // An object its scene asset stores is one clients hold too, so its spawn only names it.
-            Guid[]? stored = go.Section is { } section ? AssetTrees(section.Source)?.GetValueOrDefault(go.Identifier) : null;
             SpawnTemplate? template;
             try
             {
                 template = stored != null
-                    ? new SpawnTemplate(Guid.Empty, null, [], stored, components, true)
+                    ? new SpawnTemplate(Guid.Empty, null, [], stored, components, true, transforms)
                     : BuiltTemplateOf(go) ?? UnstoredSceneObjects?.Invoke(go);
             }
             catch (InvalidOperationException e)

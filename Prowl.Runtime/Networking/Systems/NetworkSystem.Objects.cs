@@ -478,14 +478,16 @@ internal sealed partial class NetworkSystem
             go = built;
         }
 
+        // A scene object despawned earlier is in the world with its identifiers, and may have added to itself since.
         int next = 0;
-        if (!AssignIdentifiers(go, spawn.Identifiers, ref next) || next != spawn.Identifiers.Length)
+        bool live = go.Scene.IsValid();
+        if (!live && (!AssignIdentifiers(go, spawn.Identifiers, ref next) || next != spawn.Identifiers.Length))
         {
             go.Dispose();
             throw new InvalidDataException($"The host's {source} builds a different tree than this peer's.");
         }
 
-        Component[] components = NetworkComponents.Gather(go);
+        Component[] components = live ? AsStored(go, spawn.Identifiers).Components : NetworkComponents.Gather(go);
         if (components.Length != spawn.ComponentCount || NetworkComponents.Hash(components) != spawn.ComponentHash)
         {
             string mine = NetworkComponents.Describe(components);
@@ -495,7 +497,8 @@ internal sealed partial class NetworkSystem
                 $"{components.Length} that don't match them ({mine}). Every peer has to build the same components.");
         }
 
-        template = new SpawnTemplate(spawn.Prefab, spawn.Factory, spawn.Data, spawn.Identifiers, components, spawn.Scene);
+        template = new SpawnTemplate(spawn.Prefab, spawn.Factory, spawn.Data, spawn.Identifiers, components, spawn.Scene,
+            live ? AsStored(go, spawn.Identifiers).Transforms : NetworkComponents.GatherTransforms(go));
 
         go.Transform.LocalPosition = spawn.Position;
         go.Transform.LocalRotation = spawn.Rotation;
@@ -702,7 +705,7 @@ internal sealed partial class NetworkSystem
                 }
 
                 components = adopted ? NetworkComponents.Gather(go) : template.Components;
-                transforms = NetworkComponents.GatherTransforms(go);
+                transforms = adopted ? NetworkComponents.GatherTransforms(go) : template.Transforms!;
                 ReadChildPoses(ref reader, transforms);
                 Sync.ApplySpawnState(sender, components, ref reader);
             }
