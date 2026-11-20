@@ -32,7 +32,10 @@ public sealed class NetworkTransform : Component
     /// <summary>How many ticks apart the transform goes out while it moves, from 1 (every tick) to 255.</summary>
     [Range(1, 255)] public int SendInterval = 1;
 
-    /// <summary>The object whose transform this sends: its own when not set, or a child of the networked object.</summary>
+    /// <summary>
+    ///     The object whose transform this sends: its own when not set, or a child of the networked object. As in
+    ///     Mirror it is part of how the object is built and is never sent, so every peer has to set the same one.
+    /// </summary>
     public GameObject? Target;
 
     private TransformSync? _sync;
