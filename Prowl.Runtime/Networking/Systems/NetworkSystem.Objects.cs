@@ -186,6 +186,7 @@ internal sealed partial class NetworkSystem
             Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template!,
             Components = components
         };
+        entry.SetTransforms(template!.Transforms ?? NetworkComponents.GatherTransforms(go));
         Entries.Add(entry);
         ForgetViewpoints(entry.Owner);
         InitVisibility(entry);
@@ -274,9 +275,10 @@ internal sealed partial class NetworkSystem
         CollectIdentifiers(go, identifiers);
         // Gathered as built, before the scene runs anything on it, which is the tree clients build too.
         Component[] components = NetworkComponents.Gather(go);
+        NetworkTransform[] transforms = NetworkComponents.GatherTransforms(go);
         SceneInstance.Main.Add(go);
         Spawn(go, owner, orphaned ?? go.Network.Orphaned,
-            new SpawnTemplate(prefab, factory, data, [.. identifiers], components));
+            new SpawnTemplate(prefab, factory, data, [.. identifiers], components, false, transforms));
         return go;
     }
 
@@ -703,8 +705,8 @@ internal sealed partial class NetworkSystem
     {
         List<Guid> identifiers = new();
         CollectIdentifiers(go, identifiers);
-        s_builtOffline.AddOrUpdate(go,
-            new SpawnTemplate(Guid.Empty, factory, data, [.. identifiers], NetworkComponents.Gather(go)));
+        s_builtOffline.AddOrUpdate(go, new SpawnTemplate(Guid.Empty, factory, data, [.. identifiers],
+            NetworkComponents.Gather(go), false, NetworkComponents.GatherTransforms(go)));
     }
 
     /// <summary>Host: takes a spawned object out of the network everywhere, leaving this peer's object as it is.</summary>

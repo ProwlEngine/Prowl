@@ -632,6 +632,7 @@ internal sealed partial class NetworkSystem
             {
                 Generation = NextGeneration(), NetId = NextNetId(), Components = components, Template = template
             };
+            entry.SetTransforms(template.Transforms ?? NetworkComponents.GatherTransforms(go));
             Entries.Add(entry);
             InitVisibility(entry);
             entry.NotifySpawn();

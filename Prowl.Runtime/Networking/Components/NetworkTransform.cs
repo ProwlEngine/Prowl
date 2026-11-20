@@ -11,8 +11,8 @@ namespace Prowl.Runtime.Networking;
 ///     Keeps a networked object's transform in sync, as Mirror's NetworkTransform: whoever controls the object sends
 ///     its position, rotation and scale, and everyone else follows, smoothed. A networked object without one keeps its
 ///     transform to itself. Put a second one on the object with a <see cref="Target" /> for a child that moves on its own.
-///     Add it before the object spawns: one added later is not networked. A static object, or one with every channel
-///     off, sends nothing.
+///     It has to be part of the object as its prefab, factory or scene builds it: one added later, by game code once
+///     the object runs, is not networked. A static object, or one with every channel off, sends nothing.
 /// </summary>
 [AddComponentMenu("Networking/Network Transform")]
 public sealed class NetworkTransform : Component

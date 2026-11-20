@@ -40,8 +40,8 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
     private NetworkTransform[]? _transforms;
 
     /// <summary>
-    ///     The NetworkTransform components in its tree, in tree order, fixed from the first time they are asked for. A
-    ///     transform's place here is its index on the wire.
+    ///     The NetworkTransform components in its tree, in tree order, fixed when it spawns to the ones it was built
+    ///     with, as Mirror gathers its behaviours once in Awake. A transform's place here is its index on the wire.
     /// </summary>
     public NetworkTransform[] Transforms
     {

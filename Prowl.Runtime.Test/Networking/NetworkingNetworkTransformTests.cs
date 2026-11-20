@@ -149,6 +149,51 @@ public partial class NetworkingTests
         return tank;
     }
 
+    private static GameObject BuildSprouting(in NetworkSpawn spawn)
+    {
+        GameObject go = new("Sprouting");
+        go.AddComponent<NetworkTransform>();
+        go.AddComponent<SproutsATransform>();
+        return go;
+    }
+
+    [Fact]
+    public void ATransformGameCodeAddsOnceTheObjectRunsIsNotNetworkedOnAnyPeer()
+    {
+        Networking.Networking.RegisterFactory("sprouting", BuildSprouting);
+        MakeCurrent(CreateScene());
+        byte[] snapshot, spawn;
+        Guid id;
+        LocalNetwork source = new();
+        Networking.Networking.Host(new LocalTransport(source, "host"));
+        try
+        {
+            GameObject sprouting = Networking.Networking.SpawnFactory("sprouting", Float3.Zero, Quaternion.Identity);
+            id = sprouting.Identifier;
+            Assert.Equal(2, sprouting.GetComponents<NetworkTransform>().Count());
+
+            // The list is the object's as built, which is what every peer's factory gives, as Mirror gathers in Awake.
+            Assert.Single(Networking.Networking.System!.FindEntry(sprouting)!.Transforms);
+            (snapshot, byte[][] spawns) = RecordJoin(source);
+            spawn = spawns.Single();
+        }
+        finally { Networking.Networking.Shutdown(); }
+
+        MakeCurrent(CreateScene());
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        SendJoin(host, snapshot, spawn);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady, host);
+            GameObject copy = Find(SceneInstance.Main, id);
+            Assert.Equal(2, copy.GetComponents<NetworkTransform>().Count());
+            Assert.Single(Networking.Networking.System!.FindEntry(copy)!.Transforms);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     [Fact]
     public void ASpawnCarriesThePoseOfAChildATransformMoves()
     {
@@ -277,4 +322,10 @@ public partial class NetworkingTests
         _ = go.Network;
         Assert.False(Serializer.Serialize(go).TryGet("Network", out _));
     }
+}
+
+/// <summary>Adds a NetworkTransform when it first runs, after the object was built.</summary>
+public sealed class SproutsATransform : Component
+{
+    public override void OnEnable() => GameObject.AddComponent<NetworkTransform>();
 }
