@@ -506,6 +506,16 @@ internal sealed partial class NetworkSystem
         {
             entry.Generation = message.Generation;
         }
+
+        // The hooks of what changed run with the run's other callbacks, or now on a peer that is playing.
+        if (IsReady)
+        {
+            Sync.RunSpawnHooks(go);
+        }
+        else if (!_pendingSpawns.Contains(entry))
+        {
+            _pendingSpawns.Add(entry);
+        }
     }
 
     private static void ReadChildPoses(ref NetReader reader, NetworkTransform[] transforms)
