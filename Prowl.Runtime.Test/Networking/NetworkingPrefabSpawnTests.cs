@@ -149,6 +149,45 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void APrefabInstanceIsSpawnedAsItsPrefabBuildsItOrRefusedOnTheHost()
+    {
+        PrefabAsset prefab = RegisterCratePrefab();
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+
+            // A part of an instance is not the prefab: clients would build the whole crate for it.
+            GameObject whole = GameObject.Instantiate(prefab, scene, Float3.Zero, Quaternion.Identity)!;
+            Assert.Throws<InvalidOperationException>(() => Networking.Networking.Spawn(whole.Children[0]));
+            Assert.False(whole.Children[0].Network.Active);
+
+            // One that gained a component and a child since it was built spawns as the prefab builds it.
+            GameObject grown = GameObject.Instantiate(prefab, scene, Float3.Zero, Quaternion.Identity)!;
+            List<Guid> asBuilt = TreeIdentifiers(grown);
+            SyncPairTestComponent added = grown.AddComponent<SyncPairTestComponent>();
+            CreateGameObject("Extra").SetParent(grown);
+            Networking.Networking.Spawn(grown);
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+            TemplateSpawn spawn = ReadPrefabSpawn(alice.WireReceived.Last(m => m.Id == FakePeer.Spawn).Data);
+            Assert.Equal(asBuilt, spawn.Identifiers);
+            Assert.DoesNotContain(added, Networking.Networking.System!.FindEntry(grown)!.Components);
+            Assert.Equal(2, spawn.ComponentCount);
+
+            // One that lost what its prefab builds can't be built by clients, and the host is told so.
+            GameObject cut = GameObject.Instantiate(prefab, scene, Float3.Zero, Quaternion.Identity)!;
+            cut.Children[0].Dispose();
+            Assert.Throws<InvalidOperationException>(() => Networking.Networking.Spawn(cut));
+            Assert.Equal(1, alice.WireReceived.Count(m => m.Id == FakePeer.Spawn));
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void ALateJoinerGetsPrefabInstancesAsPrefabSpawns()
     {
         PrefabAsset prefab = RegisterCratePrefab();

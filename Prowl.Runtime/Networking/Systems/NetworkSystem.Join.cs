@@ -632,9 +632,19 @@ internal sealed partial class NetworkSystem
 
             // An object its scene asset stores is one clients hold too, so its spawn only names it.
             Guid[]? stored = go.Section is { } section ? AssetTrees(section.Source)?.GetValueOrDefault(go.Identifier) : null;
-            SpawnTemplate? template = stored != null
-                ? new SpawnTemplate(Guid.Empty, null, [], stored, components, true)
-                : BuiltTemplateOf(go) ?? UnstoredSceneObjects?.Invoke(go);
+            SpawnTemplate? template;
+            try
+            {
+                template = stored != null
+                    ? new SpawnTemplate(Guid.Empty, null, [], stored, components, true)
+                    : BuiltTemplateOf(go) ?? UnstoredSceneObjects?.Invoke(go);
+            }
+            catch (InvalidOperationException e)
+            {
+                Debug.LogError($"{e.Message} It is not networked.");
+                continue;
+            }
+
             if (template == null)
             {
                 Debug.LogWarning(
@@ -646,7 +656,7 @@ internal sealed partial class NetworkSystem
 
             NetworkObject entry = new(this, go)
             {
-                Generation = NextGeneration(), NetId = NextNetId(), Components = components, Template = template
+                Generation = NextGeneration(), NetId = NextNetId(), Components = template.Components, Template = template
             };
             entry.SetTransforms(template.Transforms ?? NetworkComponents.GatherTransforms(go));
             Entries.Add(entry);

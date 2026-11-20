@@ -332,19 +332,85 @@ internal sealed partial class NetworkSystem
     /// </summary>
     private static SpawnTemplate? BuiltTemplateOf(GameObject go)
     {
-        if (s_builtOffline.TryGetValue(go, out SpawnTemplate? built))
+        if (s_builtOffline.TryGetValue(go, out SpawnTemplate? remembered))
         {
-            return built;
+            return remembered;
         }
 
-        if (!go.IsPrefabInstance)
+        // A part of an instance carries its prefab's id too, and is not what that prefab builds.
+        if (!go.IsPrefabInstance || (go.Parent.IsValid() && go.Parent!.PrefabAssetId == go.PrefabAssetId))
         {
             return null;
         }
 
-        List<Guid> identifiers = new();
-        CollectIdentifiers(go, identifiers);
-        return new SpawnTemplate(go.PrefabAssetId, null, [], [.. identifiers], NetworkComponents.Gather(go));
+        PrefabAsset? prefab = AssetDatabase.Load<PrefabAsset>(go.PrefabAssetId);
+        GameObject? built = prefab.IsValid() && prefab!.GameObjectData != null ? GameObject.InstantiateDetached(prefab) : null;
+        if (built.IsNotValid())
+        {
+            return null;
+        }
+
+        // The instance may have gained objects and components since: what clients build is the prefab's own tree,
+        // so that part of the instance is the networked object.
+        try
+        {
+            List<Guid> identifiers = new();
+            List<Component> components = new();
+            List<NetworkTransform> transforms = new();
+            if (!MatchBuilt(go, built!, identifiers, components, transforms))
+            {
+                throw new InvalidOperationException(
+                    $"'{go.Name}' no longer has the objects and components its prefab builds, so clients can't build " +
+                    "it. Spawn it before changing it.");
+            }
+
+            return new SpawnTemplate(go.PrefabAssetId, null, [], [.. identifiers], [.. components], false, [.. transforms]);
+        }
+        finally
+        {
+            built!.Dispose();
+        }
+    }
+
+    // Walks an instance alongside a fresh build of its prefab, taking from the instance what the build has too.
+    private static bool MatchBuilt(GameObject live, GameObject built, List<Guid> identifiers, List<Component> components,
+        List<NetworkTransform> transforms)
+    {
+        identifiers.Add(live.Identifier);
+        List<Component> mine = [.. live.GetComponents<Component>()], theirs = [.. built.GetComponents<Component>()];
+        if (mine.Count < theirs.Count || live.Children.Count < built.Children.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < theirs.Count; i++)
+        {
+            if (mine[i].GetType() != theirs[i].GetType())
+            {
+                return false;
+            }
+
+            identifiers.Add(mine[i].Identifier);
+            if (NetworkMembers.Of(mine[i]).Any)
+            {
+                components.Add(mine[i]);
+            }
+
+            if (mine[i] is NetworkTransform transform)
+            {
+                transforms.Add(transform);
+            }
+        }
+
+        for (int i = 0; i < built.Children.Count; i++)
+        {
+            if (!MatchBuilt(live.Children[i], built.Children[i], identifiers, components, transforms))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>The spawn of <paramref name="entry" />: what every peer builds it from, and its root's state now.</summary>
