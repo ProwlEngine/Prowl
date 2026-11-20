@@ -53,6 +53,17 @@ internal sealed partial class NetworkSystem
                                                      state.Generation == SceneGeneration &&
                                                      state.Stage == NetworkJoinState.Ready);
 
+    /// <summary>
+    ///     Host: whether calls go to <paramref name="peer" />. One that is ready gets them, and so does one whose spawns
+    ///     are still on their way, which holds them until the last has arrived. One still loading the scene gets none.
+    /// </summary>
+    internal bool ReceivesRpcs(NetPeer peer) => peer.IsLocal
+        ? IsReady
+        : Session is { IsHost: true } session && session.TryGetPeer(peer.Id, out NetPeer? current) &&
+          ReferenceEquals(current, peer) && LoadingPeers.TryGetValue(peer.Id, out PeerReadiness? state) &&
+          state.Generation == SceneGeneration &&
+          state.Stage is NetworkJoinState.Ready or NetworkJoinState.Synchronizing;
+
     internal void OnSessionAdmitted()
     {
         LocalJoinState = NetworkJoinState.WaitingForScene;

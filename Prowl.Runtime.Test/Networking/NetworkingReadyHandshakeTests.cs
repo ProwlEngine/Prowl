@@ -79,6 +79,53 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void AnRpcCalledDuringAPeersJoinRunReachesThatPeer()
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        NetworkConfiguration paced = Networking.Networking.Configuration;
+        paced.JoinSpawnBytesPerTick = 1;
+        Networking.Networking.Configure(paced);
+        SceneInstance scene = CreateScene();
+        List<NetTestComponent> actors = new();
+        for (int i = 0; i < 6; i++)
+        {
+            GameObject actor = CreateGameObject($"Actor {i}");
+            actor.Network.Networked = true;
+            actors.Add(actor.AddComponent<NetTestComponent>());
+            scene.Add(actor);
+        }
+
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer client = FakePeer.Join(network, "client");
+        try
+        {
+            // The run is under way: the client has some of the objects and is not ready yet. In Mirror every spawn
+            // goes at once, so there is no such window, and here a call made in it must not be lost.
+            Pump(() => client.Has(FakePeer.Spawn), client);
+            Assert.False(client.Has(FakePeer.SpawnFinished));
+            actors[0].Shout("during the run");
+            Pump(() => client.Has(FakePeer.SpawnFinished), client);
+            PumpFor(20, client);
+            Assert.Single(client.Received, m => m.Id == FakePeer.RpcFromHost);
+
+            // A peer that is still loading the scene gets none.
+            using FakePeer loading = FakePeer.Join(network, "loading");
+            loading.AutoReady = false;
+            Pump(() => loading.Has(FakePeer.Scene), loading);
+            actors[0].Shout("while loading");
+            PumpFor(30, client, loading);
+            Assert.False(loading.Has(FakePeer.RpcFromHost));
+        }
+        finally
+        {
+            Networking.Networking.Shutdown();
+            Networking.Networking.Configure(previous);
+        }
+    }
+
+    [Fact]
     public void AJoinsSpawnsAreSpreadOverTicksByTheBudgetAndFinishAfterTheLast()
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;

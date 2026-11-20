@@ -821,7 +821,7 @@ internal sealed partial class NetworkSystem
         ClaimPendingPlayer(entry);
     }
 
-    /// <summary>A call the host sent once this peer was ready, arriving on another channel ahead of the finished message.</summary>
+    /// <summary>A call the host sent while this peer's spawns were still arriving, held until the last one has.</summary>
     internal bool AwaitsActivation(EngineMessage kind) =>
         IsClient && LocalJoinState == NetworkJoinState.Synchronizing &&
         kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost;
