@@ -50,7 +50,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void DisconnectedOwnersCannotBeReassignedOrChangeThePolicyThroughSpawn()
+    public void DisconnectedOwnersCannotBeReassigned()
     {
         var (_, state, network) = ReadinessHost();
         using FakePeer client = FakePeer.Join(network, "client");
@@ -59,12 +59,12 @@ public partial class NetworkingTests
         {
             Pump(() => client.IsReady, client);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            root.SpawnBuilt(owner, NetworkOrphaned.ClearOwner);
+            root.Network.Orphaned = NetworkOrphaned.ClearOwner;
+            root.Network.AssignOwnership(owner);
             client.Session.Shutdown();
             Pump(() => root.Network.Owner == null, client);
             uint generation = NetworkTestScene.Current.GenerationOf(root);
             Assert.Throws<ArgumentException>(() => root.Network.AssignOwnership(owner));
-            Assert.Throws<ArgumentException>(() => root.SpawnBuilt(owner, NetworkOrphaned.Destroy));
             Assert.Equal(NetworkOrphaned.ClearOwner, root.Network.Orphaned);
             Assert.Equal(generation, NetworkTestScene.Current.GenerationOf(root));
             Assert.False(root.IsProxy);
@@ -85,7 +85,8 @@ public partial class NetworkingTests
         {
             Pump(() => ownerClient.IsReady, ownerClient);
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-            root.SpawnBuilt(owner, initial);
+            root.Network.Orphaned = initial;
+            root.Network.AssignOwnership(owner);
             Pump(() => ownerClient.Has(FakePeer.Owner), ownerClient);
             ownerClient.Received.RemoveAll(m => m.Id == FakePeer.Orphaned);
             uint generation = NetworkTestScene.Current.GenerationOf(root);

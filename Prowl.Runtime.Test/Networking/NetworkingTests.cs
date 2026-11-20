@@ -732,36 +732,6 @@ public partial class NetworkingTests : RuntimeTestBase
     }
 
     [Fact]
-    public void SpawningASceneObjectHandsItToTheOwner()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject ship = CreateGameObject("Ship");
-        ship.Network.Networked = true;
-        scene.Add(ship);
-        MakeCurrent(scene);
-
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            Pump(() => alice.Has(FakePeer.Scene), alice);
-            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
-
-            ship.SpawnBuilt(aliceHere, NetworkOrphaned.ClearOwner);
-
-            Assert.Same(aliceHere, ship.Network.Owner);
-            Assert.Equal(NetworkOrphaned.ClearOwner, ship.Network.Orphaned);
-            Pump(() => alice.Has(FakePeer.Owner), alice);
-        }
-        finally
-        {
-            Networking.Networking.Shutdown();
-            alice.Dispose();
-        }
-    }
-
-    [Fact]
     public void SpawningInsideANetworkedObjectThrowsAndChangesNothing()
     {
         SceneInstance scene = CreateScene();

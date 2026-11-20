@@ -59,7 +59,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SpawningAPlayerObjectAgainCannotTakeItFromItsPeer()
+    public void SpawningASpawnedObjectAgainChangesNothing()
     {
         SceneInstance scene = CreateScene();
         MakeCurrent(scene);
@@ -75,10 +75,21 @@ public partial class NetworkingTests
             avatar.SpawnBuilt();
             Networking.Networking.AddPlayer(aliceHere, avatar);
 
-            Assert.Throws<InvalidOperationException>(() => avatar.SpawnBuilt());
+            // As Mirror's Spawn, which warns and leaves a spawned object alone: its owner is AssignOwnership's to change.
+            uint netId = avatar.Network.NetId;
+            Pump(() => alice.Has(FakePeer.Owner), alice);
+            alice.WireReceived.Clear();
+            Networking.Networking.Spawn(avatar);
             Assert.Same(aliceHere, avatar.Network.Owner);
-            avatar.SpawnBuilt(aliceHere);
-            Assert.Same(aliceHere, avatar.Network.Owner);
+
+            GameObject crate = CreateGameObject("Crate");
+            scene.Add(crate);
+            crate.SpawnBuilt();
+            Networking.Networking.Spawn(crate, aliceHere);
+            Assert.Null(crate.Network.Owner);
+            Assert.Equal(netId, avatar.Network.NetId);
+            PumpFor(100, alice);
+            Assert.DoesNotContain(alice.WireReceived, m => m.Id == FakePeer.Owner);
         }
         finally { Networking.Networking.Shutdown(); }
     }

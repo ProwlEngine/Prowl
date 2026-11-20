@@ -98,8 +98,8 @@ internal sealed partial class NetworkSystem
 
     /// <summary>
     ///     Makes <paramref name="go" /> a networked object and, in a session, creates it on every client. Everything
-    ///     is checked before anything changes. Spawning one that already is networked (a scene-placed one, say)
-    ///     hands it to <paramref name="owner" /> instead.
+    ///     is checked before anything changes. One that is spawned already is left as it is, with a warning, as
+    ///     Mirror's Spawn does.
     /// </summary>
     internal void Spawn(GameObject go, NetPeer? owner, NetworkOrphaned orphaned, SpawnTemplate? template = null)
     {
@@ -152,8 +152,13 @@ internal sealed partial class NetworkSystem
             }
         }
 
-        bool spawned = IsActive && Entries.TryGetValue(go.Identifier, out NetworkObject? existing) && existing.GameObject == go;
-        if (IsActive && !spawned && (template ??= BuiltTemplateOf(go)) == null)
+        if (IsActive && Entries.TryGetValue(go.Identifier, out NetworkObject? existing) && existing.GameObject == go)
+        {
+            Debug.LogWarning($"'{go.Name}' is spawned already. AssignOwnership changes who owns it.");
+            return;
+        }
+
+        if (IsActive && (template ??= BuiltTemplateOf(go)) == null)
         {
             throw new InvalidOperationException(
                 $"'{go.Name}' is not a prefab instance, was not built by a factory and is not stored in a scene asset, " +
@@ -176,12 +181,6 @@ internal sealed partial class NetworkSystem
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        if (spawned)
-        {
-            SetOwner(go, owner);
-            return;
-        }
-
         NetworkObject entry = new(this, go)
         {
             Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template!,
