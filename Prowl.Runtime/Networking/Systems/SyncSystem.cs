@@ -234,10 +234,16 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             return;
         }
 
-        Action[] held = [.. _heldChanges];
+        (Component? Owner, Action Notification)[] held = [.. _heldChanges];
         _heldChanges.Clear();
-        foreach (Action notification in held)
+        foreach ((Component? owner, Action notification) in held)
         {
+            // Its component went before the run ended, so there is nobody to tell.
+            if (!ReferenceEquals(owner, null) && owner.IsNotValid())
+            {
+                continue;
+            }
+
             try
             {
                 notification();
@@ -301,13 +307,14 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
     // Change notifications for state that arrived while this client's spawns were still coming, held until they
     // finished and their spawn callbacks ran.
-    private readonly List<Action> _heldChanges = new();
+    private readonly List<(Component? Owner, Action Notification)> _heldChanges = new();
 
-    internal static void NotifyChange(Action notification)
+    /// <summary>Tells the game a value of <paramref name="owner" /> changed, once it is time to.</summary>
+    internal static void NotifyChange(Component? owner, Action notification)
     {
         if (Networking.System is { IsClient: true, IsReady: false } joining)
         {
-            joining.Sync._heldChanges.Add(notification);
+            joining.Sync._heldChanges.Add((owner, notification));
         }
         else if (Networking.System is { } system)
         {

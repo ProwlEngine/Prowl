@@ -280,7 +280,7 @@ public abstract class NetCollection
     private protected abstract void ReadChange(ref NetReader reader, bool apply);
 
     /// <summary>Raises a <c>Changed</c> event: right away for a change made here, after the update for a received one.</summary>
-    private protected static void Notify<TChange>(Action<TChange>? handler, TChange change, bool received)
+    private protected void Notify<TChange>(Action<TChange>? handler, TChange change, bool received)
     {
         if (handler == null)
         {
@@ -289,7 +289,7 @@ public abstract class NetCollection
 
         if (received)
         {
-            SyncSystem.NotifyChange(() => handler(change));
+            SyncSystem.NotifyChange(_owner, () => handler(change));
         }
         else
         {

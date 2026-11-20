@@ -120,6 +120,67 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void AHeldHookDoesNotRunForAComponentDestroyedBeforeTheRunEnds()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject go = CreateGameObject("Changing");
+        go.Network.Networked = true;
+        NetCollectionTestComponent component = go.AddComponent<NetCollectionTestComponent>();
+        scene.Add(go);
+        MakeCurrent(scene);
+
+        byte[] snapshot;
+        byte[][] spawns;
+        uint entryGeneration;
+        LocalNetwork source = new();
+        Networking.Networking.Host(new LocalTransport(source, "host"));
+        try
+        {
+            entryGeneration = NetworkGeneration(go);
+            (snapshot, spawns) = RecordJoin(source);
+        }
+        finally { Networking.Networking.Shutdown(); }
+
+        MakeCurrent(CreateScene());
+        ulong generation = SceneGenerationOf(snapshot);
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.AutoReady = false;
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, snapshot);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => host.Has(FakePeer.Ready), host);
+            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(generation), peer);
+            foreach (byte[] spawn in spawns) host.Session.SendRaw(peer, FakePeer.Spawn, spawn);
+            host.Session.Flush();
+            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
+            NetCollectionTestComponent here = Find(SceneInstance.Main, go.Identifier).GetComponent<NetCollectionTestComponent>()!;
+
+            // The value changes on the host while the run is still going.
+            using NetWriter value = new();
+            NetSerializer<int>.Write(value, 55);
+            host.SendSyncValues(peer, 0, 1, (component.Identifier, NetCollectionTestComponent.HealthSlot, entryGeneration, value.ToArray()));
+            Pump(() => here.Health == 55, host);
+            Assert.False(Networking.Networking.IsReady);
+            Assert.Empty(here.HealthChanges);
+
+            // The host destroys the object before the run ends, so there is nothing left to tell.
+            using NetWriter despawn = new();
+            new DespawnMessage(go.Identifier).Write(despawn);
+            byte[] despawned = despawn.ToArray();
+            host.Send(FakePeer.Despawn, w => w.WriteBytes(despawned), peer);
+            Pump(() => here.IsNotValid(), host);
+
+            host.Send(FakePeer.SpawnFinished, w => w.WriteUInt64(generation), peer);
+            Pump(() => Networking.Networking.IsReady, host);
+            Assert.Empty(here.HealthChanges);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void AJoiningOwnerHasItsOwnerOnlyValuesBeforeItsSpawnsFinish()
     {
         SceneInstance scene = CreateScene();

@@ -151,7 +151,7 @@ public sealed class SyncMember<TComponent, T>(
         }
         else
         {
-            SyncSystem.NotifyChange(() => changed(c, old, value));
+            SyncSystem.NotifyChange(c, () => changed(c, old, value));
         }
     }
 
