@@ -26,6 +26,7 @@ public partial class NetworkingTests
     private static (double Time, Float3 Position) ReadPredictedState(byte[] bytes)
     {
         NetReader reader = new(bytes);
+        reader.ReadBool();
         return (reader.ReadDouble(), NetSerializers.ReadFloat3(ref reader));
     }
 
@@ -196,6 +197,7 @@ public partial class NetworkingTests
             byte[] State(double time, Float3 position)
             {
                 using NetWriter w = new();
+                w.WriteBool(false);
                 w.WriteDouble(time);
                 NetSerializers.WriteFloat3(w, position);
                 NetSerializers.WriteQuaternion(w, Quaternion.Identity);

@@ -59,7 +59,9 @@ public partial class NetworkingTests
             Pump(() => alice.SnapshotValues().Any(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot), alice);
             Assert.Equal([false], grid.WrittenInitial);
             byte[] bytes = alice.SnapshotValues().Last(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot).Value;
-            Assert.Equal(0b1001, new NetReader(bytes).ReadUInt16());
+            NetReader sent = new(bytes);
+            Assert.False(sent.ReadBool());
+            Assert.Equal(0b1001, sent.ReadUInt16());
 
             PackedGridTestComponent copy = CreateGameObject("Copy").AddComponent<PackedGridTestComponent>();
             NetReader reader = new(bytes);
@@ -68,6 +70,29 @@ public partial class NetworkingTests
             Assert.Equal([true], copy.Initial);
         }
         finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void WholeStateIsReadAsInitialWhateverMessageCarriesIt()
+    {
+        PackedGridTestComponent source = CreateGameObject("Source").AddComponent<PackedGridTestComponent>();
+        source.Cells[5] = true;
+        SyncMember member = NetworkMembers.Of(source).Sync(NetworkSerializeMember.CustomSlot)!;
+
+        // Written whole, as for a new owner, but arriving in a state record that reads as a change.
+        using NetWriter whole = new();
+        member.Write(source, whole);
+        PackedGridTestComponent copy = CreateGameObject("Copy").AddComponent<PackedGridTestComponent>();
+        NetReader reader = new(whole.WrittenSpan);
+        member.Read(copy, ref reader, false);
+        Assert.True(copy.Cells[5]);
+        Assert.Equal([true], copy.Initial);
+
+        using NetWriter changes = new();
+        member.WriteChanges(source, changes);
+        reader = new(changes.WrittenSpan);
+        member.Read(copy, ref reader, true);
+        Assert.Equal([true, false], copy.Initial);
     }
 
     [Fact]
