@@ -3,9 +3,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
+using Prowl.Courier.Transports.Kcp;
 using Prowl.Courier.Transports.Local;
 
 using Xunit;
@@ -167,6 +169,249 @@ public sealed class ThreadedTransportTests
         Assert.Equal(64L * 1024 * 1024, transport.MaxQueuedSendBytes);
         Assert.Throws<ArgumentOutOfRangeException>(() => transport.MaxQueuedSendsPerConnection = 0);
         Assert.Throws<ArgumentOutOfRangeException>(() => transport.MaxQueuedSendBytes = 0);
+    }
+
+    [Fact]
+    public void AShutdownLeavesNothingPendingAndTheTransportCanBeUsedAgain()
+    {
+        LocalNetwork network = new();
+        ThreadedTransport host = new(new LocalTransport(network, "host"));
+        ThreadedTransport client = new(new LocalTransport(network, "client"));
+        Connection? last = null;
+        for (int round = 0; round < 3; round++)
+        {
+            host.Listen();
+            Connection connection = client.Connect("host");
+            last = connection;
+            Pump pump = new(host, client);
+            pump.Until(() => connection.IsConnected);
+            for (int i = 0; i < 32; i++)
+            {
+                connection.Send(new byte[1024], Delivery.Reliable);
+            }
+
+            client.Shutdown(TimeSpan.FromSeconds(5));
+            host.Shutdown(TimeSpan.FromSeconds(5));
+
+            // Whatever the worker last saw queued on the inner connection went with it.
+            Assert.Equal(0, connection.PendingSendBytes);
+            Assert.False(host.IsListening);
+            Assert.Empty(host.Connections);
+            Assert.Empty(client.Connections);
+            while (host.Poll(out _))
+            {
+            }
+
+            while (client.Poll(out _))
+            {
+            }
+        }
+
+        host.Dispose();
+        client.Dispose();
+
+        // A connection handle may outlive its transport, and disconnecting it again does nothing.
+        last!.Disconnect();
+        Assert.Throws<ObjectDisposedException>(host.Listen);
+        Assert.Throws<ObjectDisposedException>(() => host.Connect("host"));
+    }
+
+    [Fact]
+    public void KeepalivesGoOutWhileTheMainThreadIsStalled()
+    {
+        KcpTransportOptions Options() => new()
+        {
+            Port = 0, Timeout = TimeSpan.FromMilliseconds(300), PingInterval = TimeSpan.FromMilliseconds(20)
+        };
+        using ThreadedTransport host = new(new KcpTransport(Options()));
+        using ThreadedTransport client = new(new KcpTransport(Options()));
+        host.Listen();
+        Assert.NotEqual(0, host.LocalPort);
+        Connection connection = client.Connect($"127.0.0.1:{host.LocalPort}");
+        Pump pump = new(host, client);
+        pump.Until(() => connection.IsConnected && pump.EventsOf(host).Any(e => e.Type == TransportEventType.Connected));
+
+        // Longer than the timeout with nobody pumping: only the worker's pings keep it alive.
+        long sent = connection.Stats.PacketsSent;
+        Thread.Sleep(700);
+        Assert.True(connection.Stats.PacketsSent > sent + 3, "the worker sent no keepalives while the main thread slept");
+        pump.For(30);
+        Assert.True(connection.IsConnected);
+        Assert.DoesNotContain(pump.EventsOf(host), e => e.Type == TransportEventType.Disconnected);
+    }
+
+    [Fact]
+    public void ASessionOnAWorkerCopiesWhatItSendsAndRunsHandlersOnTheCallingThread()
+    {
+        LocalNetwork network = new();
+        using NetSession host = NetSession.Host(new ThreadedTransport(new LocalTransport(network, "host")));
+        using NetSession client = NetSession.Join(new ThreadedTransport(new LocalTransport(network, "client")), "host", "client");
+        UpdateUntil(() => client.State == SessionState.Active, host, client);
+        int callerThread = Environment.CurrentManagedThreadId, handlerThread = 0;
+        byte[]? received = null;
+        host.OnRaw(20, (NetPeer peer, ref NetReader reader, Delivery delivery, byte channel) =>
+        {
+            handlerThread = Environment.CurrentManagedThreadId;
+            received = reader.ReadBytes(reader.Remaining).ToArray();
+        });
+
+        // The caller's buffer is its own again as soon as the send returns.
+        byte[] data = [1, 2, 3];
+        client.SendRaw(client.HostPeer!, 20, data);
+        data.AsSpan().Fill(99);
+
+        // Nothing is handled until the host is updated, however long the worker has had the message.
+        Thread.Sleep(30);
+        Assert.Null(received);
+        UpdateUntil(() => received != null, host, client);
+        Assert.Equal(callerThread, handlerThread);
+        Assert.Equal(new byte[] { 1, 2, 3 }, received);
+    }
+
+    [Fact]
+    public void TheWorkerDrivesTheInnerTransportAndItsFailureReachesTheCaller()
+    {
+        ProbeTransport inner = new();
+        using ThreadedTransport transport = new(inner);
+        int caller = Environment.CurrentManagedThreadId;
+        transport.Listen();
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref inner.ReceiveThread) != 0, 1000));
+        Assert.NotEqual(caller, inner.ReceiveThread);
+
+        inner.Fail = true;
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref inner.Failed), 1000));
+        Thread.Sleep(20);
+        Assert.Throws<InvalidOperationException>(transport.Receive);
+
+        // A shutdown clears the failure, and listening again starts a new worker.
+        transport.Shutdown(TimeSpan.FromSeconds(5));
+        inner.Fail = false;
+        Volatile.Write(ref inner.ReceiveThread, 0);
+        transport.Listen();
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref inner.ReceiveThread) != 0, 1000));
+    }
+
+    [Fact]
+    public void SendsFlushesTrustAndBacklogGoThroughTheWorker()
+    {
+        ProbeTransport inner = new();
+        using ThreadedTransport transport = new(inner);
+        transport.Listen();
+        Connection connection = transport.Connect("probe");
+        Pump pump = new(transport);
+        pump.Until(() => connection.IsConnected);
+        Assert.Same(transport, connection.Transport);
+        Assert.Equal(64, connection.GetBatchThreshold(Delivery.Reliable));
+
+        // The probe throws if anything but the worker touches it.
+        connection.Send(new byte[] { 42 }, Delivery.Reliable, SendFlags.Immediate);
+        connection.Flush();
+        pump.Until(() => Volatile.Read(ref inner.SendThread) != 0);
+        Assert.Equal(inner.ReceiveThread, inner.SendThread);
+        Assert.NotEqual(Environment.CurrentManagedThreadId, inner.SendThread);
+
+        connection.MarkTrusted();
+        pump.Until(() => Volatile.Read(ref inner.Trusted));
+        Volatile.Write(ref inner.Backlog, 1234);
+        pump.Until(() => connection.PendingSendBytes >= 1234);
+    }
+
+    private static void UpdateUntil(Func<bool> condition, params NetSession[] sessions)
+    {
+        Stopwatch watch = Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (watch.ElapsedMilliseconds > 5000)
+            {
+                throw new TimeoutException("The sessions did not reach the expected state.");
+            }
+
+            foreach (NetSession session in sessions)
+            {
+                session.Update();
+            }
+
+            Thread.Sleep(1);
+        }
+    }
+
+    /// <summary>Records which thread drives it, and throws when a later call comes from another one.</summary>
+    private sealed class ProbeTransport : Transport
+    {
+        public int ReceiveThread, SendThread;
+        public long Backlog;
+        public volatile bool Fail, Failed;
+        public bool Trusted;
+
+        public override bool IsListening => true;
+
+        public override void Listen()
+        {
+        }
+
+        public override Connection Connect(string address)
+        {
+            AssertWorkerThread();
+            ProbeConnection connection = new(this, NextConnectionId());
+            AddConnection(connection);
+            RaiseConnected(connection);
+            return connection;
+        }
+
+        public override void Receive()
+        {
+            Interlocked.CompareExchange(ref ReceiveThread, Environment.CurrentManagedThreadId, 0);
+            AssertWorkerThread();
+            if (!Fail)
+            {
+                return;
+            }
+
+            Failed = true;
+            throw new InvalidOperationException("Injected worker failure.");
+        }
+
+        public override void Flush() => AssertWorkerThread();
+
+        public override void Shutdown()
+        {
+        }
+
+        private void AssertWorkerThread()
+        {
+            int worker = Volatile.Read(ref ReceiveThread);
+            if (worker != 0 && worker != Environment.CurrentManagedThreadId)
+            {
+                throw new InvalidOperationException("Transport I/O left the worker thread.");
+            }
+        }
+
+        private sealed class ProbeConnection(ProbeTransport owner, int id) : Connection(owner, id, "probe", true)
+        {
+            public override TimeSpan RoundTripTime => TimeSpan.Zero;
+
+            public override long PendingSendBytes => Volatile.Read(ref owner.Backlog);
+
+            public override int GetMaxMessageSize(Delivery delivery) => 128;
+
+            public override int GetBatchThreshold(Delivery delivery) => 64;
+
+            protected override void SendCore(ReadOnlySpan<byte> data, Delivery delivery, byte channel)
+            {
+                owner.AssertWorkerThread();
+                Volatile.Write(ref owner.SendThread, Environment.CurrentManagedThreadId);
+            }
+
+            protected override void OnTrusted()
+            {
+                owner.AssertWorkerThread();
+                Volatile.Write(ref owner.Trusted, true);
+            }
+
+            public override void Disconnect()
+            {
+            }
+        }
     }
 
     private sealed class BlockingTransport : Transport

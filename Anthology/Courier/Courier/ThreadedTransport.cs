@@ -196,6 +196,7 @@ public sealed class ThreadedTransport : Transport
         DrainWorkerEvents();
         foreach (Connection connection in new List<Connection>(Connections))
         {
+            ((ThreadedConnection)connection).ClearInnerPending();
             RaiseDisconnected(connection, DisconnectReason.Requested);
         }
 
@@ -542,6 +543,7 @@ public sealed class ThreadedTransport : Transport
 
                 case TransportEventType.Disconnected:
                     _proxies.Remove(ev.Connection);
+                    proxy.ClearInnerPending();
                     if (!proxy.ClosedByMain)
                     {
                         _toMain.Enqueue(new Item(TransportEventType.Disconnected, proxy, null, 0, default, ev.Reason, 0));
@@ -711,6 +713,9 @@ public sealed class ThreadedConnection : Connection
     internal void Attach(Connection inner) => _inner = inner;
 
     internal void ReleasePending(int bytes) => Interlocked.Add(ref _pending, -bytes);
+
+    /// <summary>The inner connection is gone, so nothing of its last snapshot is still queued.</summary>
+    internal void ClearInnerPending() => Interlocked.Exchange(ref _innerPending, 0);
 
     internal bool TryStage(int bytes, long limit)
     {
