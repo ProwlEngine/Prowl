@@ -193,4 +193,21 @@ public class TransformSyncTests : RuntimeTestBase
         Assert.Equal(10f, go.Transform.LocalPosition.X);
         Assert.False(sync.HasPendingInterpolation);
     }
+
+    [Fact]
+    public void ARestPoseStampedEarlierThanTheLastUpdateIsStillTaken()
+    {
+        GameObject go = CreateGameObject();
+        TransformSync sync = new();
+        sync.Receive(go, 1, 1.0, 10, Pose(10));
+
+        // Its tick says it is newer. Only its time, put on another clock, fell behind.
+        TransformUpdate rest = Pose(20) with { Channels = TransformChannels.Pose | TransformChannels.Exact };
+        Assert.NotNull(sync.Receive(go, 2, 0.9, 10.1, rest));
+        Assert.Equal(20f, sync.Samples[^1].Position.X);
+        Assert.True(sync.Samples[^1].Time >= sync.Samples[0].Time);
+
+        // A moving update in the same state is still dropped, as before.
+        Assert.Null(sync.Receive(go, 3, 0.8, 10.2, Pose(30)));
+    }
 }

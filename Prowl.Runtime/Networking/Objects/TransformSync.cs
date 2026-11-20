@@ -229,7 +229,14 @@ internal sealed class TransformSync(NetworkTransform? settings = null)
 
         if (!_timeline.Observe(sentAt, now))
         {
-            return null;
+            // A moving update out of time order is dropped. The pose it came to rest at is sent once and must be
+            // taken: its tick already says it is the newer one, so it goes in at the latest time held.
+            if ((update.Channels & TransformChannels.Exact) == 0)
+            {
+                return null;
+            }
+
+            sentAt = Samples.Count > 0 ? Math.Max(sentAt, Samples[^1].Time) : sentAt;
         }
 
         // Use this peer's own component settings, never channels chosen by the sender.
