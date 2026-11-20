@@ -1140,18 +1140,54 @@ public class SceneInstance : EngineObject, ISerializable
         }
     }
 
-    // One index per component type or interface ever queried, kept as components join. Leaving is lazy: a query drops
-    // what was destroyed or left, so no removal path has to know about the indices.
+    // One index per component type or interface ever queried, kept as components join. A query drops what left or is
+    // queued for destroy, so those paths need not know about the indices. Flush drops what was disposed, since a type
+    // that is never queried again would otherwise keep every destroyed instance alive.
     private readonly Dictionary<Type, TypeIndex> _typeIndices = [];
 
     private sealed class TypeIndex
     {
-        public readonly List<Component> Items = [];
-        public readonly HashSet<Component> Members = new(ReferenceEqualityComparer.Instance);
+        // In join order, with a null where a component was dropped. Readers skip the nulls: closing a gap moves
+        // everything after it, which would cost the list's length on every flush or query that follows a destroy.
+        public readonly List<Component?> Items = [];
+        private readonly Dictionary<Component, int> _slots = new(ReferenceEqualityComparer.Instance);
 
         public void Add(Component component)
         {
-            if (Members.Add(component)) Items.Add(component);
+            if (_slots.TryAdd(component, Items.Count)) Items.Add(component);
+        }
+
+        public void Drop(Component component)
+        {
+            if (_slots.Remove(component, out int slot)) Items[slot] = null;
+        }
+
+        /// <summary>Drops what was destroyed, is queued for it, or left <paramref name="world"/>, before a query reads the list.</summary>
+        public void DropDeparted(SceneInstance world)
+        {
+            for (int i = 0; i < Items.Count; i++)
+            {
+                Component? component = Items[i];
+                if (ReferenceEquals(component, null)) continue;
+                if (component.IsDisposed || component.IsDestroyQueued || !ReferenceEquals(component.GameObject.Scene, world))
+                    Drop(component);
+            }
+            CloseGaps();
+        }
+
+        // Only once the list is more than half empty, so the rewrite is paid for by the drops that made the gaps.
+        public void CloseGaps()
+        {
+            if (Items.Count - _slots.Count <= Items.Count / 2) return;
+            int kept = 0;
+            for (int i = 0; i < Items.Count; i++)
+            {
+                Component? component = Items[i];
+                if (ReferenceEquals(component, null)) continue;
+                Items[kept] = component;
+                _slots[component] = kept++;
+            }
+            Items.RemoveRange(kept, Items.Count - kept);
         }
     }
 
@@ -1199,19 +1235,7 @@ public class SceneInstance : EngineObject, ISerializable
     {
         if (_typeIndices.TryGetValue(type, out TypeIndex? index))
         {
-            List<Component> items = index.Items;
-            int kept = 0;
-            for (int i = 0; i < items.Count; i++)
-            {
-                Component component = items[i];
-                if (component.IsDisposed || component.IsDestroyQueued || !ReferenceEquals(component.GameObject.Scene, this))
-                {
-                    index.Members.Remove(component);
-                    continue;
-                }
-                items[kept++] = component;
-            }
-            items.RemoveRange(kept, items.Count - kept);
+            index.DropDeparted(this);
             return index;
         }
 
@@ -1232,8 +1256,8 @@ public class SceneInstance : EngineObject, ISerializable
     {
         EnsureLive();
         if (!_isActive) return null;
-        foreach (Component component in IndexFor(typeof(T)).Items)
-            if (component.EnabledInHierarchy)
+        foreach (Component? component in IndexFor(typeof(T)).Items)
+            if (!ReferenceEquals(component, null) && component.EnabledInHierarchy)
                 return component as T;
         return null;
     }
@@ -1242,10 +1266,10 @@ public class SceneInstance : EngineObject, ISerializable
     public T[] GetAll<T>(bool includeDisabled = false) where T : class
     {
         EnsureLive();
-        List<Component> items = IndexFor(typeof(T)).Items;
+        List<Component?> items = IndexFor(typeof(T)).Items;
         var results = new List<T>(items.Count);
-        foreach (Component component in items)
-            if (includeDisabled || (_isActive && component.EnabledInHierarchy))
+        foreach (Component? component in items)
+            if (!ReferenceEquals(component, null) && (includeDisabled || (_isActive && component.EnabledInHierarchy)))
                 results.Add((component as T)!);
         return [.. results];
     }
@@ -1255,8 +1279,8 @@ public class SceneInstance : EngineObject, ISerializable
     {
         EnsureLive();
         results.Clear();
-        foreach (Component component in IndexFor(typeof(T)).Items)
-            if (includeDisabled || (_isActive && component.EnabledInHierarchy))
+        foreach (Component? component in IndexFor(typeof(T)).Items)
+            if (!ReferenceEquals(component, null) && (includeDisabled || (_isActive && component.EnabledInHierarchy)))
                 results.Add((component as T)!);
     }
 
@@ -1670,8 +1694,13 @@ public class SceneInstance : EngineObject, ISerializable
         while (_disposedComponents.TryDequeue(out Component? component))
         {
             Forget(component.Identifier, component);
+            foreach (TypeIndex index in _typeIndices.Values)
+                index.Drop(component);
             forgot = true;
         }
+        if (forgot)
+            foreach (TypeIndex index in _typeIndices.Values)
+                index.CloseGaps();
         if (!_hasDisposedObjects)
         {
             if (forgot) PruneSectionHits();
