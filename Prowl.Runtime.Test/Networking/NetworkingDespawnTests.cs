@@ -94,4 +94,43 @@ public partial class NetworkingTests
             Networking.Networking.UnregisterPrefab(prefab);
         }
     }
+
+    [Fact]
+    public void AClientKeepsAnObjectDespawnedAndSpawnedAgainInOneFrame()
+    {
+        SceneInstance scene = CreateScene();
+        using NetWriter snapshot = new();
+        NetworkTestScene.Current.WriteScene(scene, snapshot);
+        GameObject original = CreateGameObject("Crate");
+        original.Network.Networked = true;
+        using NetWriter spawn = new();
+        NetworkTestScene.Current.WriteSpawn(original, -1, NetworkOrphaned.ClearOwner, spawn);
+        Guid id = original.Identifier;
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.Session.PeerJoined += peer =>
+        {
+            host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            host.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
+        };
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == id), host);
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+
+            // As the host sends for a Despawn and a Spawn of the same object in one frame.
+            using NetWriter despawn = new();
+            despawn.WriteGuid(id);
+            host.Session.SendRaw(client, FakePeer.Despawn, despawn.WrittenSpan);
+            host.Session.SendRaw(client, FakePeer.Spawn, spawn.WrittenSpan);
+            host.Session.Flush();
+            PumpFor(40, host);
+
+            GameObject here = Assert.Single(SceneInstance.Main.Objects, o => o.Identifier == id);
+            Assert.True(here.IsValid());
+            Assert.True(here.Network.Active);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

@@ -523,13 +523,21 @@ internal sealed partial class NetworkSystem
                 }
             }
 
-            // An object this peer holds already stays the same instance, so references to it keep working.
+            // An object this peer holds already stays the same instance, so references to it keep working. One on its
+            // way out, despawned this frame, makes room for the new copy instead.
             if (!Entries.Contains(id) && FindByIdentifier(id) is GameObject existing)
             {
-                existing.Network.Networked = true;
-                go.Dispose();
-                go = existing;
-                adopted = true;
+                if (existing.IsDestroyQueued)
+                {
+                    existing.Dispose();
+                }
+                else
+                {
+                    existing.Network.Networked = true;
+                    go.Dispose();
+                    go = existing;
+                    adopted = true;
+                }
             }
 
             // Resolve initial Sync references within the new tree before enabling its components.
