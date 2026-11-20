@@ -764,9 +764,7 @@ internal sealed class TransformSystem : IDisposable
         double now = _scene.Now;
         _taken.Clear();
         // What the host passes on is put on its own clock: the sender's, moved by the least delay seen from it.
-        double delay = now - header.Time;
-        state.ClockOffset = state.HasClock ? Math.Min(delay, state.ClockOffset + ClockRelax) : delay;
-        state.HasClock = true;
+        double clockOffset = state.Clock.Take(now, header.Time);
 
         uint records = TransformBatchMessage.ReadRecordCount(ref reader);
         for (uint i = 0; i < records; i++)
@@ -821,7 +819,7 @@ internal sealed class TransformSystem : IDisposable
 
         if (_taken.Count > 0)
         {
-            PassOn(sender, state.ClockOffset, now);
+            PassOn(sender, clockOffset, now);
         }
     }
 
@@ -908,9 +906,6 @@ internal sealed class TransformSystem : IDisposable
 
     // A waiting transform nobody sent any more: its rest pose took its place.
     private const int NoSender = int.MinValue;
-
-    // How far a peer's clock offset may rise with each batch, so it follows drift without following jitter.
-    private const double ClockRelax = 0.0002;
 
     /// <summary>Lists the clients' moving transforms taken since the last tick, each for everyone but who sent it.</summary>
     private void AddPassedOn()
@@ -1073,8 +1068,7 @@ internal sealed class TransformSystem : IDisposable
         public SentPosition[] Positions = [];
 
         // How far behind this peer's clock the other's runs, for putting what it sends on this one.
-        public double ClockOffset;
-        public bool HasClock;
+        public ClockOffset Clock;
 
         // Positions received from the peer, for the steps it sends from them.
         public readonly Dictionary<(uint NetId, uint Generation, byte Index), PositionHistory> ReceivedPositions = new();
