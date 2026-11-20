@@ -41,6 +41,10 @@ internal sealed class SnapshotSystem : IDisposable
     private readonly NetWriter _message = new(4096);
     private readonly List<Moving> _moving = new();
     private readonly List<TransformUpdate> _movingUpdates = new();
+    private readonly List<(uint Tick, double SentAt)> _movingGroups = new();
+
+    // Clients' moving transforms taken since the last tick, the latest of each, to pass on with the next one.
+    private readonly List<(NetworkTransform Transform, TransformUpdate Update, uint Tick, double SentAt, int Sender)> _relayed = new();
 
     // Each moving transform's record as last written this tick, and the baseline age it was written for: peers that
     // acknowledged the same tick get the same bytes.
@@ -102,6 +106,17 @@ internal sealed class SnapshotSystem : IDisposable
         }
 
         _peers.Clear();
+        ForgetRelayed();
+    }
+
+    private void ForgetRelayed()
+    {
+        foreach ((NetworkTransform transform, _, _, _, _) in _relayed)
+        {
+            transform.RelayIndex = -1;
+        }
+
+        _relayed.Clear();
     }
 
     internal void RemovePeer(int peerId)
@@ -273,6 +288,7 @@ internal sealed class SnapshotSystem : IDisposable
         uint tick = _scene.Tick = Math.Max(_scene.Tick + 1, _scene.NetworkTick);
         double now = _scene.Now;
         CaptureTransforms(tick, now);
+        AddRelayed();
         _sendTargets.Clear();
         _sendTargets.AddRange(Targets());
         foreach (NetPeer peer in _sendTargets)
@@ -283,10 +299,7 @@ internal sealed class SnapshotSystem : IDisposable
             }
         }
 
-        _moving.Clear();
-        _movingUpdates.Clear();
-        _movingRecords.Clear();
-        _movingBytes.Reset();
+        ClearMoving();
         _scene.LastTransformTime = now;
 
         // Every so often, forget what was kept about components that are gone.
@@ -362,10 +375,7 @@ internal sealed class SnapshotSystem : IDisposable
                 {
                     bool gridded = (update.Channels & (TransformChannels.Position | TransformChannels.Exact)) ==
                                    TransformChannels.Position;
-                    _moving.Add(new Moving(transform, entry.HiddenFrom, SlotOf(transform), transform.SnapshotStamp, gridded,
-                        gridded ? GridPosition.Of(update.Position, PositionStep) : default));
-                    _movingUpdates.Add(update);
-                    _movingRecords.Add(default);
+                    AddMoving(transform, update, tick, now);
                     ClearPose(transform);
                 }
             }
@@ -410,15 +420,7 @@ internal sealed class SnapshotSystem : IDisposable
         uint resend = ResendTicks(peer);
         _items.Clear();
         _itemBytes.Reset();
-        Span<Moving> moving = CollectionsMarshal.AsSpan(_moving);
-        Span<(uint Age, int Offset, int Length)> written = CollectionsMarshal.AsSpan(_movingRecords);
-        for (int i = 0; i < moving.Length; i++)
-        {
-            if (moving[i].Hidden is not { } hidden || !hidden.Contains(peer.Id))
-            {
-                AddMoving(tick, now, i, in moving[i], ref written[i], state);
-            }
-        }
+        AddMovingRecords(peer, state, tick);
 
         _scratchTransforms.Clear();
         foreach ((NetworkTransform transform, PendingPose pose) in state.Poses)
@@ -445,8 +447,45 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
-    /// <summary>Adds one of this tick's moving transforms, reusing the record written for another peer with the same baseline.</summary>
-    private void AddMoving(uint tick, double now, int index, in Moving moving,
+    /// <summary>
+    ///     Lists a moving transform to go to every peer that has it but <paramref name="except" />, under its
+    ///     controller's tick and clock.
+    /// </summary>
+    private void AddMoving(NetworkTransform transform, in TransformUpdate update, uint groupTick, double sentAt, int except = -1)
+    {
+        bool gridded = (update.Channels & (TransformChannels.Position | TransformChannels.Exact)) == TransformChannels.Position;
+        _moving.Add(new Moving(transform, transform.Entry!.HiddenFrom, SlotOf(transform), transform.SnapshotStamp, gridded,
+            gridded ? GridPosition.Of(update.Position, PositionStep) : default, except));
+        _movingUpdates.Add(update);
+        _movingGroups.Add((groupTick, sentAt));
+        _movingRecords.Add(default);
+    }
+
+    private void ClearMoving()
+    {
+        _moving.Clear();
+        _movingUpdates.Clear();
+        _movingGroups.Clear();
+        _movingRecords.Clear();
+        _movingBytes.Reset();
+    }
+
+    /// <summary>Adds the listed moving transforms that <paramref name="peer" /> has to the items being sent it.</summary>
+    private void AddMovingRecords(NetPeer peer, PeerState state, uint tick)
+    {
+        Span<Moving> moving = CollectionsMarshal.AsSpan(_moving);
+        Span<(uint Age, int Offset, int Length)> written = CollectionsMarshal.AsSpan(_movingRecords);
+        for (int i = 0; i < moving.Length; i++)
+        {
+            if (moving[i].Except != peer.Id && (moving[i].Hidden is not { } hidden || !hidden.Contains(peer.Id)))
+            {
+                AddMovingRecord(tick, i, in moving[i], ref written[i], state);
+            }
+        }
+    }
+
+    /// <summary>Adds one listed moving transform, reusing the record written for another peer with the same baseline.</summary>
+    private void AddMovingRecord(uint tick, int index, in Moving moving,
         ref (uint Age, int Offset, int Length) written, PeerState state)
     {
         NetworkTransform transform = moving.Transform;
@@ -478,7 +517,8 @@ internal sealed class SnapshotSystem : IDisposable
             _movingBytes.WriteBytes(_itemBytes.WrittenSpan.Slice(offset));
         }
 
-        _items.Add(new Item(tick, now, offset, _itemBytes.Length - offset, null, gridded ? transform : null, grid));
+        (uint groupTick, double sentAt) = _movingGroups[index];
+        _items.Add(new Item(groupTick, sentAt, offset, _itemBytes.Length - offset, null, gridded ? transform : null, grid));
     }
 
     /// <summary>Remembers the position a peer is being sent. A tick that carries a transform at two positions is no baseline: the peer may hold either.</summary>
@@ -817,59 +857,57 @@ internal sealed class SnapshotSystem : IDisposable
     }
 
     /// <summary>
-    ///     Passes a client's transforms on. Moving ones go straight out, as before; the pose it came to rest at is
-    ///     owed to everyone else until they acknowledge it.
+    ///     Passes a client's transforms on. Moving ones go out with the host's next tick, the latest of each, as
+    ///     Mirror's server sends at its own interval. The pose one came to rest at is owed to everyone else until they
+    ///     acknowledge it.
     /// </summary>
     private void Relay(NetPeer sender)
     {
-        bool moving = false;
         foreach ((TransformGroup group, NetworkTransform transform, TransformUpdate update) in _relay)
         {
             if ((update.Channels & TransformChannels.Exact) != 0)
             {
                 Pend(transform, new PendingPose(_scene.Tick + 1, 0, sender.Id, group.Tick, group.SentAt, update),
                     sender.Id);
+                continue;
+            }
+
+            ClearPose(transform);
+            int index = transform.RelayIndex;
+            if (index >= 0 && index < _relayed.Count && ReferenceEquals(_relayed[index].Transform, transform) &&
+                _relayed[index].Sender == sender.Id)
+            {
+                // What an update takes fills in the channels it left out, so the newer one carries the older one's too.
+                TransformUpdate earlier = _relayed[index].Update;
+                bool resumed = (update.Channels & TransformChannels.Resumed) == 0 &&
+                               (earlier.Channels & TransformChannels.Resumed) != 0;
+                _relayed[index] = (transform, update with
+                {
+                    Channels = update.Channels | earlier.Channels,
+                    StillFor = resumed ? earlier.StillFor : update.StillFor,
+                }, group.Tick, group.SentAt, sender.Id);
             }
             else
             {
-                ClearPose(transform);
-                moving = true;
-            }
-        }
-
-        if (!moving)
-        {
-            return;
-        }
-
-        _sendTargets.Clear();
-        _sendTargets.AddRange(Targets());
-        foreach (NetPeer peer in _sendTargets)
-        {
-            if (peer != sender && _scene.IsPeerReady(peer) && peer.Connection is { IsConnected: true } connection)
-            {
-                PeerState state = State(peer);
-                AddRelayRecords(peer, state);
-                if (_items.Count > 0)
-                {
-                    SendItems(peer, state, _scene.Tick, connection);
-                }
+                transform.RelayIndex = _relayed.Count;
+                _relayed.Add((transform, update, group.Tick, group.SentAt, sender.Id));
             }
         }
     }
 
-    /// <summary>The moving transforms being relayed that <paramref name="peer" /> has.</summary>
-    private void AddRelayRecords(NetPeer peer, PeerState state)
+    /// <summary>Lists the clients' moving transforms taken since the last tick, each for everyone but who sent it.</summary>
+    private void AddRelayed()
     {
-        _items.Clear();
-        _itemBytes.Reset();
-        foreach ((TransformGroup group, NetworkTransform transform, TransformUpdate update) in _relay)
+        foreach ((NetworkTransform transform, TransformUpdate update, uint tick, double sentAt, int sender) in _relayed)
         {
-            if ((update.Channels & TransformChannels.Exact) == 0 && Sees(transform.Entry, peer))
+            transform.RelayIndex = -1;
+            if (IsCurrent(transform) && ControllerOf(transform.Entry!) == sender)
             {
-                AddRecord(group.Tick, group.SentAt, transform, update, null, state, _scene.Tick);
+                AddMoving(transform, update, tick, sentAt, sender);
             }
         }
+
+        _relayed.Clear();
     }
 
     internal void OnAck(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -975,7 +1013,8 @@ internal sealed class SnapshotSystem : IDisposable
         int Slot,
         uint Stamp,
         bool Gridded,
-        GridPosition Grid);
+        GridPosition Grid,
+        int Except);
 
     /// <summary>The poses and positions one sent snapshot carried that wait on its acknowledgement. Pooled.</summary>
     private sealed class SentSnapshot

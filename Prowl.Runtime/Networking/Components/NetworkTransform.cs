@@ -44,6 +44,9 @@ public sealed class NetworkTransform : Component
     internal int SnapshotSlot = -1;
     internal uint SnapshotStamp;
 
+    // Its place among the moving transforms waiting to be passed on at the next tick, or -1.
+    internal int RelayIndex = -1;
+
     // True once a rest pose of it may be owed to some peer.
     internal bool PoseOwed;
 

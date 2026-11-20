@@ -27,6 +27,9 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     internal readonly HashSet<string> _rpcWarnings = new();
     internal readonly NetWriter _rpcWriter = new();
 
+    // The call as it goes on the wire, built after the caller's state went out, so nothing runs while they are in use.
+    private readonly NetWriter _envelope = new(256), _fromHost = new(256);
+
 
     // The call whose body is running, received or made here, so its prologue runs the body instead of sending it
     // again. It holds for the whole body, so an override calling base.Method() runs the base body here too.
@@ -41,6 +44,8 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     public void Dispose()
     {
         _rpcWriter.Dispose();
+        _envelope.Dispose();
+        _fromHost.Dispose();
         _staticWriter.Dispose();
     }
 
@@ -143,7 +148,8 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             scene.Sync.SendSyncChanges(networked);
         }
 
-        using NetWriter envelope = new(writer.Length + 32);
+        NetWriter envelope = _envelope;
+        envelope.Reset();
         NetReader raw = new(writer.WrittenSpan);
         RpcCallMessage.ReadUnframed(ref raw).Write(envelope);
 
@@ -161,7 +167,8 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        using NetWriter message = new(writer.Length + 8);
+        NetWriter message = _fromHost;
+        message.Reset();
         new RpcCallerMessage(session.LocalPeer!.Id).Write(message);
         message.WriteBytes(envelope.WrittenSpan);
         if (NetworkDiagnostics.Enabled)

@@ -64,8 +64,9 @@ public partial class NetworkingTests
             return;
         }
 
-        int peerCount = BenchSize("PROWL_NET_BENCH_PEERS", 32), objectCount = BenchSize("PROWL_NET_BENCH_OBJECTS", 1000);
-        const int ticks = 120;
+        // The local transport takes 64 connections, so 63 clients is the most a run here can have.
+        int peerCount = Math.Min(63, BenchSize("PROWL_NET_BENCH_PEERS", 32)), objectCount = BenchSize("PROWL_NET_BENCH_OBJECTS", 1000);
+        int ticks = BenchSize("PROWL_NET_BENCH_TICKS", 120);
         SceneInstance scene = CreateScene();
         List<GameObject> objects = [];
         List<RpcStateTestComponent> components = [];
@@ -82,6 +83,9 @@ public partial class NetworkingTests
 
         MakeCurrent(scene);
         LocalNetwork network = new();
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        // Ticks run back to back here, far faster than real time, so the per client message rate limit is off.
+        Networking.Networking.Configure(new() { MaxClientMessagesPerSecond = 0 });
         Networking.Networking.Host(new LocalTransport(network, "host"));
         List<FakePeer> peers = [];
         List<string> lines = [$"--- {DateTime.Now:yyyy-MM-dd HH:mm:ss}  {peerCount} peers, {objectCount} objects, {ticks} ticks, per tick"];
@@ -89,7 +93,7 @@ public partial class NetworkingTests
         {
             Stopwatch join = Stopwatch.StartNew();
             for (int i = 0; i < peerCount; i++) peers.Add(FakePeer.Join(network, $"peer{i}"));
-            for (int i = 0; i < 20000 && !peers.All(p => p.IsReady); i++)
+            for (int i = 0; i < 200000 && !peers.All(p => p.IsReady); i++)
             {
                 Networking.Networking.Receive();
                 Networking.Networking.Flush();
@@ -163,13 +167,20 @@ public partial class NetworkingTests
                 {
                     int owner = p;
                     uint tick = sent;
+                    // Moving positions, whole and on the grid, as a client sends an object it is driving.
                     peers[p].Send(FakePeer.Snapshot, w =>
                     {
-                        List<(uint, uint, Float3, Quaternion, Float3)> records = [];
+                        int count = (objects.Count - owner + peerCount - 1) / peerCount;
+                        w.WriteVarUInt32(0); w.WriteVarUInt32((uint)system.SceneGeneration); w.WriteVarUInt32(tick);
+                        w.WriteVarUInt32(1);
+                        w.WriteVarUInt32(tick); w.WriteDouble(tick / 30.0); w.WriteVarUInt32((uint)count);
                         for (int i = owner; i < objects.Count; i += peerCount)
-                            records.Add((system.NetIdOf(objects[i]), system.GenerationOf(objects[i]),
-                                new Float3(i % 100 + tick * 0.1f, 1, i / 100), Quaternion.Identity, Float3.One));
-                        WriteTransforms(w, tick, tick / 30.0, [.. records]);
+                        {
+                            w.WriteVarUInt32(system.NetIdOf(objects[i])); w.WriteVarUInt32(system.GenerationOf(objects[i]));
+                            w.WriteByte(PositionChannel);
+                            w.WriteVarUInt32(0);
+                            w.WriteVarInt64((i % 100) * 100 + tick * 10); w.WriteVarInt64(100); w.WriteVarInt64(i / 100 * 100);
+                        }
                     });
                 }
             });
@@ -177,6 +188,7 @@ public partial class NetworkingTests
         finally
         {
             Networking.Networking.Shutdown();
+            Networking.Networking.Configure(previous);
             foreach (FakePeer peer in peers) peer.Dispose();
         }
 

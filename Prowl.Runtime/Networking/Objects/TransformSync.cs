@@ -64,6 +64,10 @@ internal sealed class TransformSync(NetworkTransform? settings = null)
 
     // Sending, while this peer controls the object.
     private bool _hasSent;
+
+    // The Transform version and channels it was last found at rest with, so a resting object costs one comparison.
+    private uint _restVersion;
+    private TransformChannels _restSynced;
     private double _lastSentTime;
     private int _lingerPosition, _lingerRotation, _lingerScale;
     private int _quietTicks;
@@ -129,10 +133,18 @@ internal sealed class TransformSync(NetworkTransform? settings = null)
     public TransformUpdate? Capture(GameObject go, double now, double previousTick)
     {
         Transform t = go.Transform;
+        TransformChannels synced = Synced;
+
+        // At rest and untouched since it was last looked at: nothing to compare.
+        uint version = t.Version;
+        if (_hasSent && Settled && _teleportTicks == 0 && version == _restVersion && synced == _restSynced)
+        {
+            return null;
+        }
+
         Float3 position = t.LocalPosition;
         Quaternion rotation = t.LocalRotation;
         Float3 scale = t.LocalScale;
-        TransformChannels synced = Synced;
         TransformChannels changed = _hasSent ? Changes(synced, position, rotation, scale) : synced;
 
         TransformChannels channels;
@@ -158,6 +170,12 @@ internal sealed class TransformSync(NetworkTransform? settings = null)
         }
         else
         {
+            if (Settled)
+            {
+                _restVersion = version;
+                _restSynced = synced;
+            }
+
             return null;
         }
 

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 using Prowl.Courier;
 
@@ -38,9 +39,14 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     private readonly List<NetworkObject> _dirty = new();
     private readonly List<NetworkObject> _flushing = new();
 
-    // Records waiting to go to each peer, by peer id, with how many.
-    private readonly Dictionary<int, (NetWriter Records, int Count)> _batches = new();
+    // Records waiting to go to each peer, by peer id, with how many, and how much of the shared records is in them.
+    private readonly Dictionary<int, (NetWriter Records, int Count, int SharedBytes, int SharedCount)> _batches = new();
     private readonly Stack<NetWriter> _writerPool = new();
+
+    // Records every client gets, written once. A peer with records of its own takes these in between, in order.
+    private readonly NetWriter _shared = new(4096);
+    private readonly List<NetPeer> _sharedPeers = new();
+    private int _sharedCount;
     private readonly NetWriter _value = new(256);
     private readonly NetWriter _observerValues = new(256), _ownerValues = new(256);
     private readonly NetWriter _observerBlocks = new(512), _ownerBlocks = new(512);
@@ -58,7 +64,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         _ownerBlocks.Dispose();
         _record.Dispose();
         _message.Dispose();
-        foreach ((NetWriter records, _) in _batches.Values)
+        _shared.Dispose();
+        foreach ((NetWriter records, _, _, _) in _batches.Values)
         {
             records.Dispose();
         }
@@ -82,13 +89,15 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
 
         _dirty.Clear();
-        foreach ((NetWriter records, _) in _batches.Values)
+        foreach ((NetWriter records, _, _, _) in _batches.Values)
         {
             records.Reset();
             _writerPool.Push(records);
         }
 
         _batches.Clear();
+        _shared.Reset();
+        _sharedCount = 0;
         _spawnHooks.Clear();
         _references.Clear();
         _referenceOf.Clear();
@@ -96,7 +105,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
     internal void RemovePeer(int peerId)
     {
-        if (_batches.Remove(peerId, out (NetWriter Records, int Count) batch))
+        if (_batches.Remove(peerId, out (NetWriter Records, int Count, int SharedBytes, int SharedCount) batch))
         {
             batch.Records.Reset();
             _writerPool.Push(batch.Records);
@@ -298,7 +307,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     /// </summary>
     internal void SendSyncChanges(NetworkObject? urgent = null)
     {
-        if (_dirty.Count == 0 && _batches.Count == 0)
+        if (_dirty.Count == 0 && _batches.Count == 0 && _sharedCount == 0)
         {
             return;
         }
@@ -428,6 +437,18 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             return waiting;
         }
 
+        // The host's own object that nobody is kept from: every client gets the same record.
+        if (entry.Owner == NoOwner && entry.HiddenFrom is not { Count: > 0 })
+        {
+            if (observerComponents != 0)
+            {
+                WriteRecord(_shared, entry, observerComponents, _observerBlocks.WrittenSpan);
+                _sharedCount++;
+            }
+
+            return waiting;
+        }
+
         foreach (NetPeer peer in session.Peers)
         {
             if (peer.IsLocal || !Sees(entry, peer))
@@ -504,40 +525,94 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
     private void Queue(int peerId, NetworkObject entry, ulong components, ReadOnlySpan<byte> blocks)
     {
-        if (!_batches.TryGetValue(peerId, out (NetWriter Records, int Count) batch))
+        ref (NetWriter Records, int Count, int SharedBytes, int SharedCount) batch =
+            ref CollectionsMarshal.GetValueRefOrAddDefault(_batches, peerId, out bool exists);
+        if (!exists)
         {
-            batch = (_writerPool.Count > 0 ? _writerPool.Pop() : new NetWriter(1024), 0);
+            batch = (_writerPool.Count > 0 ? _writerPool.Pop() : new NetWriter(1024), 0, 0, 0);
         }
 
-        batch.Records.WriteVarUInt32(entry.NetId);
-        batch.Records.WriteVarUInt32(entry.Generation);
-        batch.Records.WriteVarUInt64(components);
-        batch.Records.WriteBytes(blocks);
-        _batches[peerId] = (batch.Records, batch.Count + 1);
+        TakeShared(ref batch);
+        WriteRecord(batch.Records, entry, components, blocks);
+        batch.Count++;
+    }
+
+    private static void WriteRecord(NetWriter records, NetworkObject entry, ulong components, ReadOnlySpan<byte> blocks)
+    {
+        records.WriteVarUInt32(entry.NetId);
+        records.WriteVarUInt32(entry.Generation);
+        records.WriteVarUInt64(components);
+        records.WriteBytes(blocks);
+    }
+
+    /// <summary>Brings a peer's own records up to date with the shared ones written so far, keeping their order.</summary>
+    private void TakeShared(ref (NetWriter Records, int Count, int SharedBytes, int SharedCount) batch)
+    {
+        if (batch.SharedBytes < _shared.Length)
+        {
+            batch.Records.WriteBytes(_shared.WrittenSpan.Slice(batch.SharedBytes));
+            batch.Count += _sharedCount - batch.SharedCount;
+            batch.SharedBytes = _shared.Length;
+            batch.SharedCount = _sharedCount;
+        }
     }
 
     private void SendBatches(NetSession session)
     {
-        if (_batches.Count == 0)
+        if (_batches.Count == 0 && _sharedCount == 0)
         {
             return;
         }
 
-        foreach ((int peerId, (NetWriter records, int count)) in _batches)
+        if (_sharedCount > 0)
         {
-            if (count > 0 && session.TryGetPeer(peerId, out NetPeer? peer) && !peer!.IsLocal)
+            // A peer with no records of its own gets the shared ones as they are, in a message built once.
+            _sharedPeers.Clear();
+            foreach (NetPeer peer in session.Peers)
             {
-                _message.Reset();
-                _message.WriteVarUInt32((uint)count);
-                _message.WriteBytes(records.WrittenSpan);
-                scene.SendEngine(peer, EngineMessage.Sync, _message.WrittenSpan);
+                if (!peer.IsLocal && !_batches.ContainsKey(peer.Id))
+                {
+                    _sharedPeers.Add(peer);
+                }
             }
 
-            records.Reset();
-            _writerPool.Push(records);
+            if (_sharedPeers.Count > 0)
+            {
+                _message.Reset();
+                _message.WriteVarUInt32((uint)_sharedCount);
+                _message.WriteBytes(_shared.WrittenSpan);
+                foreach (NetPeer peer in _sharedPeers)
+                {
+                    scene.SendEngine(peer, EngineMessage.Sync, _message.WrittenSpan);
+                }
+            }
+        }
+
+        foreach (int peerId in _batches.Keys)
+        {
+            ref (NetWriter Records, int Count, int SharedBytes, int SharedCount) batch =
+                ref CollectionsMarshal.GetValueRefOrNullRef(_batches, peerId);
+            bool remote = session.TryGetPeer(peerId, out NetPeer? peer) && !peer!.IsLocal;
+            if (remote && peerId != NetPeer.HostId)
+            {
+                TakeShared(ref batch);
+            }
+
+            if (remote && batch.Count > 0)
+            {
+                _message.Reset();
+                _message.WriteVarUInt32((uint)batch.Count);
+                _message.WriteBytes(batch.Records.WrittenSpan);
+                scene.SendEngine(peer!, EngineMessage.Sync, _message.WrittenSpan);
+            }
+
+            batch.Records.Reset();
+            _writerPool.Push(batch.Records);
         }
 
         _batches.Clear();
+        _shared.Reset();
+        _sharedCount = 0;
     }
 
     /// <summary>
