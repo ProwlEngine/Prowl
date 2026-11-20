@@ -24,7 +24,9 @@ internal sealed partial class NetworkObject
         bool proxy = System.IsProxy(GameObject) && Transforms.Length > 0;
         foreach (Rigidbody3D body in GameObject.GetComponentsInChildren<Rigidbody3D>(includeInactive: true))
         {
-            if (proxy && body.MotionType == MotionType.Dynamic && !ProxyBodies.TryGetValue(body, out _))
+            // A predicted body keeps simulating here, corrected from the host's states.
+            if (proxy && body.MotionType == MotionType.Dynamic && !ProxyBodies.TryGetValue(body, out _) &&
+                body.GetComponent<PredictedRigidbody>().IsNotValid())
             {
                 ProxyBodies.Add(body, body.MotionType);
                 body.LinearVelocity = Float3.Zero;
