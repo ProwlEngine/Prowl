@@ -1,6 +1,11 @@
 namespace Prowl.Graphite.Rendering;
 
-internal sealed class PersistentBuffer(RenderResourceID id, BufferUsage usage)
+/// <summary>
+/// A buffer kept across frames that grows or shrinks to the size asked. A resize copies what fits into the new buffer at
+/// the start of the frame, unless keepContents is false, when the old one is only retired, for buffers refilled whole
+/// whenever their size changes.
+/// </summary>
+internal sealed class PersistentBuffer(RenderResourceID id, BufferUsage usage, bool keepContents = true)
 {
     public RenderResourceID Id { get; } = id;
 
@@ -12,8 +17,10 @@ internal sealed class PersistentBuffer(RenderResourceID id, BufferUsage usage)
             return Buffer;
         DeviceBuffer created = device.ResourceFactory.CreateBuffer(new BufferDescription(sizeInBytes, usage));
         created.Name = RenderResourceID.ToString(Id);
-        if (Buffer != null)
+        if (Buffer != null && keepContents)
             store.Resized(Buffer, created);
+        else if (Buffer != null)
+            store.Retire(Buffer);
         Buffer = created;
         return created;
     }

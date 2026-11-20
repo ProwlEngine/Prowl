@@ -280,7 +280,7 @@ public sealed class AutoExposure : PostEffect
         _properties.SetFloat(s_adaptSpeedUp, _settings.Up);
         _properties.SetFloat(s_adaptSpeedDown, _settings.Down);
         _properties.SetFloat(s_historyValid, previous != null ? 1 : 0);
-        _properties.SetFloat(s_deltaTime, context.Time.DeltaTime);
+        _properties.SetFloat(s_deltaTime, context.Time.RealDeltaTime);
         context.Fullscreen(_adapt, adapted, _properties, shared: true);
 
         _properties.SetTexture(s_adaptedTex, adapted.ColorTextures[0], LinearClamp);
@@ -817,9 +817,10 @@ public sealed class DepthOfField : PostEffect
         s_useAutoFocus = "_UseAutoFocus", s_manualFocusPoint = "_ManualFocusPoint", s_focusBlend = "_FocusBlend",
         s_focusHistoryValid = "_FocusHistoryValid", s_focusTex = "_FocusTex", s_focusStrength = "_FocusStrength", s_maxBlurRadius = "_MaxBlurRadius",
         s_resolution = "_Resolution", s_downscale = "_Downscale", s_maxCoc = "_MaxCoC", s_rings = "_Rings", s_cocTex = "_CoCTex",
-        s_mainTex = "_MainTex", s_farTex = "_FarTex", s_nearTex = "_NearTex";
+        s_mainTex = "_MainTex", s_farTex = "_FarTex", s_nearTex = "_NearTex", s_nearMaxTex = "_NearMaxTex", s_direction = "_Direction",
+        s_fromCoc = "_FromCoC";
 
-    private readonly FullscreenProgram _coc, _prefilter, _bokeh, _postfilter, _combine, _focus;
+    private readonly FullscreenProgram _coc, _prefilter, _nearMax, _bokeh, _postfilter, _combine, _focus;
     private readonly PropertySet _properties = new();
     private Settings _settings;
     private int _divisor = 2;
@@ -828,7 +829,7 @@ public sealed class DepthOfField : PostEffect
 
     private sealed class ViewState
     {
-        public TextureHandle CoC, Prefiltered, Bokeh, Smoothed, Focus;
+        public TextureHandle CoC, Prefiltered, NearMaxX, NearMax, Bokeh, Smoothed, Focus;
     }
 
     public DepthOfField(Renderer renderer) : base(renderer, RenderSlot.HdrPost)
@@ -836,6 +837,7 @@ public sealed class DepthOfField : PostEffect
         BlendStateDescription two = new(default, BlendAttachmentDescription.OverrideBlend, BlendAttachmentDescription.OverrideBlend);
         _coc = Program("DepthOfField", "#define DOF_COC 1\n", source: false);
         _prefilter = Program("DepthOfField", "#define DOF_PREFILTER 1\n");
+        _nearMax = Program("DepthOfField", "#define DOF_NEARMAX 1\n", source: false);
         _bokeh = Program("DepthOfField", "#define DOF_BOKEH 1\n", source: false, blend: two);
         _postfilter = Program("DepthOfField", "#define DOF_POSTFILTER 1\n", source: false, blend: two);
         _combine = Program("DepthOfField");
@@ -864,11 +866,7 @@ public sealed class DepthOfField : PostEffect
     {
         int rings = Quality switch { DepthOfFieldQuality.Low => 2, DepthOfFieldQuality.Medium => 3, _ => 4 };
         _settings = new Settings(UseAutoFocus, MathF.Max(ManualFocusPoint, 0.01f), Math.Max(0, FocusStrength), Math.Max(0, MaxBlurRadius), rings, FocusSpeed);
-        int divisor = Math.Max(1, (int)Resolution);
-        if (divisor != _divisor)
-        {
-            _divisor = divisor;
-        }
+        _divisor = Math.Max(1, (int)Resolution);
     }
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -879,6 +877,8 @@ public sealed class DepthOfField : PostEffect
         float blur = 1f / _divisor;
         state.CoC = builder.Temporary("CoC", view.Texture(PixelFormat.R16_Float));
         state.Prefiltered = builder.Temporary("Prefiltered", view.Texture(Hdr, blur));
+        state.NearMaxX = builder.Temporary("NearMaxX", view.Texture(PixelFormat.R16_Float, blur));
+        state.NearMax = builder.Temporary("NearMax", view.Texture(PixelFormat.R16_Float, blur));
         state.Bokeh = builder.Temporary("Bokeh", view.Texture(Hdr, blur) with { ColorFormats = [Hdr, Hdr] });
         state.Smoothed = builder.Temporary("Smoothed", view.Texture(Hdr, blur) with { ColorFormats = [Hdr, Hdr] });
         state.Focus = builder.History("Focus", FeatureView.Shared(1, 1, PixelFormat.R32_Float), usage: TextureState.Attachment | TextureState.Sampled);
@@ -899,7 +899,7 @@ public sealed class DepthOfField : PostEffect
         _properties.SetTexture(s_prevFocusTex, previous?.ColorTextures[0] ?? context.Noise, PointClamp);
         _properties.SetFloat(s_useAutoFocus, _settings.AutoFocus ? 1 : 0);
         _properties.SetFloat(s_manualFocusPoint, _settings.ManualFocus);
-        _properties.SetFloat(s_focusBlend, _settings.Speed > 0 ? 1 - MathF.Exp(-_settings.Speed * context.Time.DeltaTime) : 1);
+        _properties.SetFloat(s_focusBlend, _settings.Speed > 0 ? 1 - MathF.Exp(-_settings.Speed * context.Time.RealDeltaTime) : 1);
         _properties.SetFloat(s_focusHistoryValid, valid ? 1 : 0);
         context.Fullscreen(_focus, focus, _properties, shared: true);
 
@@ -915,7 +915,21 @@ public sealed class DepthOfField : PostEffect
 
         _properties.SetTexture(s_cocTex, coc.ColorTextures[0], PointClamp);
         context.Fullscreen(_prefilter, prefiltered, _properties);
+
+        // The near CoC dilated over the largest blur, across then down
+        RenderTexture nearMaxX = context.Get(state.NearMaxX), nearMax = context.Get(state.NearMax);
+        Float2 texel = new(1f / prefiltered.ColorTextures[0].Width, 1f / prefiltered.ColorTextures[0].Height);
+        _properties.SetTexture(s_mainTex, prefiltered.ColorTextures[0], PointClamp);
+        _properties.SetFloat2(s_direction, new Float2(texel.X, 0));
+        _properties.SetFloat(s_fromCoc, 1);
+        context.Fullscreen(_nearMax, nearMaxX, _properties);
+        _properties.SetTexture(s_mainTex, nearMaxX.ColorTextures[0], PointClamp);
+        _properties.SetFloat2(s_direction, new Float2(0, texel.Y));
+        _properties.SetFloat(s_fromCoc, 0);
+        context.Fullscreen(_nearMax, nearMax, _properties);
+
         _properties.SetTexture(s_mainTex, prefiltered.ColorTextures[0], LinearClamp);
+        _properties.SetTexture(s_nearMaxTex, nearMax.ColorTextures[0], LinearClamp);
         context.Fullscreen(_bokeh, bokeh, _properties);
         _properties.SetTexture(s_farTex, bokeh.ColorTextures[0], LinearClamp);
         _properties.SetTexture(s_nearTex, bokeh.ColorTextures[1], LinearClamp);

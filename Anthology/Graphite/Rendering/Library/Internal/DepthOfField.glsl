@@ -1,10 +1,5 @@
-#pragma variant DOF COMBINE COC PREFILTER BOKEH POSTFILTER FOCUS
-// Bokeh depth of field with separate near and far fields. CoC: a signed circle of confusion in full resolution
-// pixels, negative in front of focus. Prefilter: the colour of the taps sharing the block's strongest CoC, and that CoC,
-// at the blur resolution. Bokeh: the far field from a disk the size of the pixel's own blur, taking samples whose blur
-// reaches back, and the near field from a disk the size of the largest blur, weighted so full coverage sums to 1.
-// Postfilter: a tent over both. Combine: sharp, then far by the pixel's CoC, then near by its coverage. Focus: the focus
-// distance eased toward its target. The disk is the center then rings of 7, 14, 21 and 28 points.
+#pragma variant DOF COMBINE COC PREFILTER NEARMAX BOKEH POSTFILTER FOCUS
+// Bokeh depth of field with separate near and far fields.
 
 #include "Graphite/Internal/PostView.glsl"
 
@@ -74,10 +69,36 @@ void main()
     }
     outColor = vec4(color / max(weightSum, 1e-4), chosen / _Downscale);
 }
+#elif defined(DOF_NEARMAX)
+uniform GRAPHITE_SCREEN_TEXTURE _MainTex;
+uniform float _MaxCoC;
+uniform vec2 _Direction;    // one texel along the pass's axis
+uniform float _FromCoC;     // 1 reading the prefiltered CoC in alpha, 0 the first pass's maximum in red
+
+float NearCoC(vec2 uv)
+{
+    vec4 s = Graphite_Sample(_MainTex, uv);
+    return _FromCoC > 0.5 ? max(-s.a, 0.0) : s.r;
+}
+
+// At most 64 taps a side, spread over the largest blur
+void main()
+{
+    float reach = ceil(_MaxCoC);
+    float step = max(1.0, ceil(reach / 64.0));
+    float largest = NearCoC(vUV);
+    for (float k = step; k <= reach; k += step)
+    {
+        largest = max(largest, NearCoC(vUV + _Direction * k));
+        largest = max(largest, NearCoC(vUV - _Direction * k));
+    }
+    outColor = vec4(largest, 0.0, 0.0, 1.0);
+}
 #elif defined(DOF_BOKEH)
 layout(location = 1) out vec4 outNear;
 
 uniform GRAPHITE_SCREEN_TEXTURE _MainTex;
+uniform GRAPHITE_SCREEN_TEXTURE _NearMaxTex;
 uniform int _Rings;
 uniform float _MaxCoC;
 
@@ -88,9 +109,11 @@ void main()
     int count = 1 + 7 * _Rings * (_Rings + 1) / 2;
     const float margin = 1.0;
 
-    // Far field: a disk the size of this pixel's own blur, taking samples whose own far blur reaches back here
+    // Own field: a disk the size of this pixel's own blur on its side of focus, taking samples on that side whose own
+    // blur reaches back here
     vec4 far = vec4(center.rgb, 1.0);
-    float farRadius = max(center.a, 0.0);
+    float side = center.a < 0.0 ? -1.0 : 1.0;
+    float farRadius = abs(center.a);
     if (farRadius >= 1.0)
     {
         for (int ring = 1; ring <= _Rings; ring++)
@@ -102,23 +125,24 @@ void main()
                 float angle = GRAPHITE_TWO_PI * float(j) / float(points);
                 vec2 disp = vec2(cos(angle), sin(angle)) * radius * farRadius;
                 vec4 s = Graphite_Sample(_MainTex, vUV + disp * texel);
-                far += vec4(s.rgb, 1.0) * clamp((s.a - length(disp) + margin) / margin, 0.0, 1.0);
+                far += vec4(s.rgb, 1.0) * clamp((s.a * side - length(disp) + margin) / margin, 0.0, 1.0);
             }
         }
     }
     far.rgb /= far.a;
 
-    // Near field: a disk the size of the largest blur, each sample covering pi c squared of it
-    float area = _MaxCoC * _MaxCoC / float(count);
+    // Near field: a disk the size of the largest near blur reaching this pixel, each sample covering pi c squared of it
+    float nearRadius = min(Graphite_Sample(_NearMaxTex, vUV).r, _MaxCoC);
+    float area = nearRadius * nearRadius / float(count);
     vec4 near = vec4(0.0);
-    for (int ring = 0; ring <= _Rings; ring++)
+    for (int ring = 0; ring <= _Rings && nearRadius >= 0.5; ring++)
     {
         int points = ring == 0 ? 1 : ring * 7;
         float radius = float(ring) / float(max(_Rings, 1));
         for (int j = 0; j < points; j++)
         {
             float angle = GRAPHITE_TWO_PI * float(j) / float(points);
-            vec2 disp = vec2(cos(angle), sin(angle)) * radius * _MaxCoC;
+            vec2 disp = vec2(cos(angle), sin(angle)) * radius * nearRadius;
             vec4 s = Graphite_Sample(_MainTex, vUV + disp * texel);
             float c = -s.a;
             float reach = clamp((c - length(disp) + margin) / margin, 0.0, 1.0);
@@ -182,7 +206,7 @@ uniform float _Downscale;
 void main()
 {
     vec4 original = Graphite_SampleSource(vUV);
-    float farAlpha = smoothstep(_Downscale, _Downscale * 2.0, Graphite_Sample(_CoCTex, vUV).r);
+    float farAlpha = smoothstep(_Downscale, _Downscale * 2.0, abs(Graphite_Sample(_CoCTex, vUV).r));
     vec3 color = mix(original.rgb, Graphite_Sample(_FarTex, vUV).rgb, farAlpha);
     vec4 near = Graphite_Sample(_NearTex, vUV);
     outColor = vec4(mix(color, near.rgb, near.a), original.a);

@@ -131,9 +131,18 @@ public readonly record struct RendererError(string Code, string Message, Rendere
 
 public struct FrameTime
 {
+    /// <summary>The scene's clock and its step, which stop while the host pauses.</summary>
     public double Time;
     public float DeltaTime;
     public ulong FrameIndex;
+
+    /// <summary>
+    /// Wall clock seconds since the last frame, which keep running while the scene's time is paused, for easing that
+    /// follows the camera rather than the scene: exposure adaptation and focus. 0 falls back to <see cref="DeltaTime"/>.
+    /// </summary>
+    public float UnscaledDeltaTime;
+
+    public readonly float RealDeltaTime => UnscaledDeltaTime > 0 ? UnscaledDeltaTime : DeltaTime;
 }
 
 public struct FrameDesc

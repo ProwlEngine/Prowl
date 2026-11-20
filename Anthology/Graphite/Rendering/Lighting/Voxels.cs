@@ -116,7 +116,7 @@ internal struct VoxelLightingRecord
 /// </summary>
 internal sealed class WorldVoxels(TableHost tables)
 {
-    private readonly PersistentBuffer _buffer = new(RenderResourceID.Intern($"{tables.Prefix}.Voxels"), BufferUsage.StructuredBufferReadWrite);
+    private readonly PersistentBuffer _buffer = new(RenderResourceID.Intern($"{tables.Prefix}.Voxels"), BufferUsage.StructuredBufferReadWrite, keepContents: false);
 
     /// <summary>One <see cref="VoxelLightingRecord"/>, written each frame the world has a box.</summary>
     public GpuArray Lighting { get; } = tables.Array("Lighting");
@@ -124,7 +124,7 @@ internal sealed class WorldVoxels(TableHost tables)
     /// <summary>Slots of the radiance cache, matching GRAPHITE_VOXEL_CACHE_SIZE, 32 bytes each. See Graphite/VoxelCache.glsl.</summary>
     public const uint CacheEntries = 1 << 20;
 
-    private readonly PersistentBuffer _cache = new(RenderResourceID.Intern($"{tables.Prefix}.Cache"), BufferUsage.StructuredBufferReadWrite);
+    private readonly PersistentBuffer _cache = new(RenderResourceID.Intern($"{tables.Prefix}.Cache"), BufferUsage.StructuredBufferReadWrite, keepContents: false);
     private Int3 _cacheResolution;
 
     /// <summary>The radiance cache, null while the world has no box.</summary>
