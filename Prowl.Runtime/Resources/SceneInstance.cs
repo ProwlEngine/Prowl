@@ -1303,19 +1303,17 @@ public class SceneInstance : EngineObject, ISerializable
         return null;
     }
 
-    // Every identifier of a live object or component in the section, gathered in one walk.
-    internal HashSet<Guid> IdentifiersIn(SceneSection section)
+    // One walk of the section's live objects and components. The caller owns both sets, so nothing is allocated here.
+    internal void FindIdentifiersIn(SceneSection section, HashSet<Guid> wanted, HashSet<Guid> found)
     {
-        HashSet<Guid> identifiers = [];
         foreach (GameObject root in section.LiveRoots)
             Gather(root);
-        return identifiers;
 
         void Gather(GameObject go)
         {
-            identifiers.Add(go.Identifier);
+            if (wanted.Contains(go.Identifier)) found.Add(go.Identifier);
             foreach (Component component in go._components)
-                if (!component.IsDisposed) identifiers.Add(component.Identifier);
+                if (!component.IsDisposed && wanted.Contains(component.Identifier)) found.Add(component.Identifier);
             foreach (GameObject child in go.Children)
                 if (!child.IsDisposed) Gather(child);
         }

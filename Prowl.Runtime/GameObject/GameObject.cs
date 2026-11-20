@@ -284,11 +284,36 @@ public partial class GameObject : EngineObject, ISerializable
         return owned;
     }
 
+    // Kept between calls, so joining a section makes no garbage however much the section holds.
+    [ThreadStatic] private static HashSet<Guid>? t_arriving, t_taken;
+
+    // A set that once held a very large tree is dropped: it would keep that memory, and clearing it costs its capacity.
+    private const int MostIdentifiersKept = 1024;
+
     // An object moving into a section that already holds its identifier gets a fresh one, so identifiers stay unique per section.
     private void GiveFreshIdentifiersAgainst(SceneSection section)
     {
-        HashSet<Guid> taken = section.Instance.IdentifiersIn(section);
-        Renew(this);
+        // Taken out while in use, so a call from inside this one gets sets of its own.
+        HashSet<Guid> arriving = t_arriving ?? [], taken = t_taken ?? [];
+        t_arriving = t_taken = null;
+
+        Gather(this);
+        section.Instance.FindIdentifiersIn(section, arriving, taken);
+        if (taken.Count > 0) Renew(this);
+
+        if (arriving.Count > MostIdentifiersKept) return;
+        arriving.Clear();
+        taken.Clear();
+        (t_arriving, t_taken) = (arriving, taken);
+
+        void Gather(GameObject go)
+        {
+            arriving.Add(go.Identifier);
+            foreach (Component component in go._components)
+                arriving.Add(component.Identifier);
+            foreach (GameObject child in go.Children)
+                Gather(child);
+        }
 
         void Renew(GameObject go)
         {
