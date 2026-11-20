@@ -70,6 +70,37 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void TheHostKeepsNoPositionsForTransformsTheSenderDoesNotOwn()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject root = CreateGameObject("Not owned");
+        root.Network.Networked = true;
+        root.AddComponent<NetworkTransform>();
+        scene.Add(root);
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            uint netId = NetworkTestScene.Current.NetIdOf(root), generation = NetworkGeneration(root);
+            alice.Send(FakePeer.Snapshot, w =>
+            {
+                w.WriteVarUInt32(0); w.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration); w.WriteVarUInt32(50);
+                w.WriteDouble(1); w.WriteVarUInt32(1);
+                w.WriteVarUInt32(netId); w.WriteVarUInt32(generation); w.WriteByte(PositionChannel);
+                w.WriteVarUInt32(0); w.WriteVarInt64(100); w.WriteVarInt64(0); w.WriteVarInt64(0);
+            });
+            PumpFor(20, alice);
+            Assert.Equal(SessionState.Active, alice.Session.State);
+            Assert.Equal(0, Networking.Networking.System!.Snapshots.ReceivedHistoryCount);
+            Assert.Equal(Float3.Zero, root.Transform.LocalPosition);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void AnOwnershipChangeStartsPositionsWholeAgain()
     {
         SceneInstance scene = CreateScene();

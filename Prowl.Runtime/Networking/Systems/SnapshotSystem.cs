@@ -206,6 +206,21 @@ internal sealed class SnapshotSystem : IDisposable
         }
     }
 
+    /// <summary>How many transforms this peer keeps received positions of, for every peer together.</summary>
+    internal int ReceivedHistoryCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (PeerState state in _peers.Values)
+            {
+                count += state.ReceivedPositions.Count;
+            }
+
+            return count;
+        }
+    }
+
     /// <summary>The transform's slot, given one the first time it is asked for.</summary>
     private int SlotOf(NetworkTransform transform)
     {
@@ -815,6 +830,12 @@ internal sealed class SnapshotSystem : IDisposable
                     continue;
                 }
 
+                // From a client, only for what it owns, before anything is kept on its word.
+                if (!sender.IsHost && entry.Owner != sender.Id)
+                {
+                    continue;
+                }
+
                 NetworkTransform transform = entry.Transforms[record.Index];
                 if (record.HasGridPosition)
                 {
@@ -827,9 +848,7 @@ internal sealed class SnapshotSystem : IDisposable
                     update = update with { Position = position };
                 }
 
-                // From a client, only for what it owns.
                 if (transform.Syncs && !_scene.HasControl(entry) &&
-                    (sender.IsHost || entry.Owner == sender.Id) &&
                     transform.Sync.Receive(transform.Moved, takenTick, takenAt, now, update) is
                         { } accepted && _scene.IsHost)
                 {
