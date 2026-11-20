@@ -113,7 +113,7 @@ public partial class NetworkingTests
     [InlineData(NetworkExecution.Inline, true)]
     [InlineData(NetworkExecution.DedicatedThread, false)]
     [InlineData(NetworkExecution.DedicatedThread, true)]
-    public void LocalSceneActivationBeforeFirstSnapshotDoesNotEndJoin(NetworkExecution execution, bool admitted)
+    public void LocalSceneActivationBeforeTheFirstSceneMessageDoesNotEndJoin(NetworkExecution execution, bool admitted)
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
@@ -172,7 +172,7 @@ public partial class NetworkingTests
     [InlineData(NetworkExecution.Inline, true)]
     [InlineData(NetworkExecution.DedicatedThread, false)]
     [InlineData(NetworkExecution.DedicatedThread, true)]
-    public void LocalSceneReplacementAfterSnapshotStillEndsJoin(NetworkExecution execution, bool replaceContent)
+    public void LocalSceneReplacementAfterTheSceneMessageStillEndsJoin(NetworkExecution execution, bool replaceContent)
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });

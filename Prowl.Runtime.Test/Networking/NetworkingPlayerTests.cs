@@ -117,7 +117,7 @@ public partial class NetworkingTests
             Assert.Same(aliceHere, avatar.Network.Owner);
             avatar.Network.AssignOwnership(aliceHere);
 
-            // As Mirror's AddPlayerForConnection, a peer that has a player is refused another.
+            // A peer that has a player is refused another.
             spare.SpawnBuilt();
             Assert.Throws<InvalidOperationException>(() => Networking.Networking.AddPlayer(aliceHere, spare));
             Assert.Same(avatar, Networking.Networking.PlayerOf(aliceHere));

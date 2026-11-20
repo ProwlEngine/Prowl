@@ -172,7 +172,7 @@ public partial class NetworkingTests
             id = sprouting.Identifier;
             Assert.Equal(2, sprouting.GetComponents<NetworkTransform>().Count());
 
-            // The list is the object's as built, which is what every peer's factory gives, as Mirror gathers in Awake.
+            // The list is the object's as built, which is what every peer's factory gives.
             Assert.Single(Networking.Networking.System!.FindEntry(sprouting)!.Transforms);
             (snapshot, byte[][] spawns) = RecordJoin(source);
             spawn = spawns.Single();

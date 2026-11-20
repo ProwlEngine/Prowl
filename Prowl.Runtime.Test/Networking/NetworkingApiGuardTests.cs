@@ -75,7 +75,7 @@ public partial class NetworkingTests
             avatar.SpawnBuilt();
             Networking.Networking.AddPlayer(aliceHere, avatar);
 
-            // As Mirror's Spawn, which warns and leaves a spawned object alone: its owner is AssignOwnership's to change.
+            // Spawn warns and leaves a spawned object alone: its owner is AssignOwnership's to change.
             uint netId = avatar.Network.NetId;
             Pump(() => alice.Has(FakePeer.Owner), alice);
             alice.WireReceived.Clear();

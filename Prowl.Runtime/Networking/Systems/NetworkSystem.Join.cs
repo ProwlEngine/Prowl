@@ -30,7 +30,7 @@ internal readonly record struct SectionHeader(uint Id, string Name, bool Active,
         reader.ReadGuid());
 }
 
-// Joining and changing scenes, as Mirror does it. The host names the scene assets its sections came from, each
+// Joining and changing scenes. The host names the scene assets its sections came from, each
 // client loads them itself and says it is ready, and the host then spawns every networked object the client may
 // have between a started and a finished message. No scene content travels: a section built in code is built by
 // every peer itself, and what is networked in it is spawned from a prefab or a factory.
@@ -40,7 +40,7 @@ internal sealed partial class NetworkSystem
     private const uint MaxSections = 4096;
 
     // The scenes' own networked objects this client has that are not spawned: never sent to it, or despawned since.
-    // As Mirror keeps its scene objects, they stay for the host to spawn until the scene changes.
+    // They stay for the host to spawn until the scene changes.
     private readonly Dictionary<Guid, GameObject> _held = new();
 
     // Objects spawned before this client was ready, whose callbacks wait for the host's finished message.
@@ -357,7 +357,7 @@ internal sealed partial class NetworkSystem
             ReleasePreservedCopies(world, incoming);
 
             // A section the host built in code has nothing to load, so this peer keeps its own section of that name:
-            // as in Mirror, a level built in code is built by every peer.
+            // a level built in code is built by every peer.
             SceneSection[] mine = [.. world.Sections.Where(s => !s.IsPersistent)];
             HashSet<SceneSection> kept = new(ReferenceEqualityComparer.Instance);
             SceneSection?[] own = new SceneSection?[sections.Count];

@@ -37,7 +37,7 @@ public partial class NetworkingTests
     [Fact]
     public void ServerOnlyMeansNothingInsideANetworkedObject()
     {
-        // As Mirror's serverOnly, which is the whole identity's: a part of a networked object can't stay behind,
+        // Server only is the whole networked object's: a part of one can't stay behind,
         // since every peer builds the whole object and its networked components have to match.
         GameObject root = CreateGameObject("Root"), part = CreateGameObject("Part"), leaf = CreateGameObject("Leaf");
         part.SetParent(root);

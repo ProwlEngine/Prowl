@@ -82,7 +82,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SnapshotsAreSplitToThePeersOwnMessageLimit()
+    public void TransformBatchesAreSplitToThePeersOwnMessageLimit()
     {
         SceneInstance scene = CreateScene();
         MakeCurrent(scene);

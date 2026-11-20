@@ -148,8 +148,8 @@ internal static class NetSerializers
         _ => null
     };
 
-    // A reference goes as the NetId of its networked object and the index of the component in it, as Mirror names a
-    // NetworkIdentity or NetworkBehaviour. Zero is null. Anything else can't be named, and goes as null.
+    // A reference goes as the NetId of its networked object and the index of the component in it.
+    // Zero is null. Anything else can't be named, and goes as null.
     private static void WriteReference(NetWriter w, object? value)
     {
         if (Networking.System is { IsActive: true } system && OwnerOf(value) is { } owner)

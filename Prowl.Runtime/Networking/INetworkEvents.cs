@@ -26,7 +26,7 @@ public interface INetworkEvents : ISceneEvent<INetworkEvents>
     {
     }
 
-    /// <summary>The object became this peer's player, as Mirror's OnStartLocalPlayer.</summary>
+    /// <summary>The object became this peer's player.</summary>
     void OnStartLocalPlayer()
     {
     }

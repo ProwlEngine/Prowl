@@ -137,7 +137,7 @@ public partial class NetworkingTests
             Assert.Throws<InvalidOperationException>(() => Networking.Networking.Spawn(handBuilt));
             Assert.False(handBuilt.Network.Active);
 
-            // An instance of a prefab made outside networking is one clients build from the prefab, as in Mirror.
+            // An instance of a prefab made outside networking is one clients build from the prefab.
             GameObject instance = GameObject.Instantiate(prefab, scene, Float3.Zero, Quaternion.Identity)!;
             Networking.Networking.Spawn(instance);
             Pump(() => alice.Has(FakePeer.Spawn), alice);
@@ -149,7 +149,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ALateJoinerGetsUnchangedPrefabInstancesAsPrefabSpawnsAfterTheSnapshot()
+    public void ALateJoinerGetsPrefabInstancesAsPrefabSpawns()
     {
         PrefabAsset prefab = RegisterCratePrefab();
         SceneInstance scene = CreateScene();

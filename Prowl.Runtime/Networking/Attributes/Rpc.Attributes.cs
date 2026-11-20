@@ -3,7 +3,6 @@
 
 using System;
 
-
 namespace Prowl.Runtime.Networking;
 
 public static partial class Rpc
@@ -34,14 +33,14 @@ public static partial class Rpc
     }
 
     /// <summary>
-    ///     Runs on everyone who has the object, the host included, as Mirror's ClientRpc. Only the host calls it on an
+    ///     Runs on everyone who has the object, the host included. Only the host calls it on an
     ///     object. A static one may be called by a client, which the host passes on, unless it takes
     ///     <see cref="RpcFlags.HostOnly" />.
     /// </summary>
     public sealed class BroadcastAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Broadcast, flags);
 
     /// <summary>
-    ///     Runs on the host only, as Mirror's Command. The one kind a client calls: on an object it controls, or on any
+    ///     Runs on the host only. The one kind a client calls: on an object it controls, or on any
     ///     it has with <see cref="RpcFlags.AnyCaller" />.
     /// </summary>
     public sealed class HostAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Host, flags);
@@ -50,7 +49,7 @@ public static partial class Rpc
     public sealed class OwnerAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Owner, flags);
 
     /// <summary>
-    ///     Runs on the one peer its first parameter, a <c>NetPeer</c>, names, as Mirror's TargetRpc. Only the host calls
+    ///     Runs on the one peer its first parameter, a <c>NetPeer</c>, names. Only the host calls
     ///     it; on the peer it runs on, that parameter is the peer itself.
     /// </summary>
     public sealed class TargetAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Target, flags);

@@ -20,7 +20,7 @@ public sealed class NetworkInterest
     internal NetworkInterest(NetworkSystem system) => _system = system;
 
     /// <summary>
-    ///     A rule of the game's own, as Mirror's interest managers give: true or false decides whether a client gets an
+    ///     A rule of the game's own: true or false decides whether a client gets an
     ///     object, null leaves it to the built in rules. It runs after ownership, per client overrides and the object's
     ///     <see cref="NetworkVisibility" />, and before groups and distance. Setting it checks every client again; call
     ///     <see cref="Refresh()" /> when what it depends on changes.

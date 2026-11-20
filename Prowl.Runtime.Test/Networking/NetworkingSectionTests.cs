@@ -109,7 +109,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SpawningIntoASectionMadeAfterTheSnapshotSendsTheSectionFirst()
+    public void SpawningIntoASectionMadeAfterTheSceneMessageSendsTheSectionFirst()
     {
         var (world, alice) = SectionHost();
         try

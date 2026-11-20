@@ -97,8 +97,8 @@ public class NetworkAnimatorTests
         source.Animator.SetTrigger("Jump");
         Copy(source.Network, replica.Network, initial: true);
 
-        // The object is in the scene and animating before its spawn callbacks run. As in Mirror, where a trigger is
-        // a call and never state, one fired before this peer had the object is not played.
+        // The object is in the scene and animating before its spawn callbacks run.
+        // A trigger fired before this peer had the object is not played.
         replica.Network.ApplyState();
         Assert.False(replica.Animator.GetBool("Jump"));
         replica.Network.OnNetworkSpawn();
@@ -112,7 +112,7 @@ public class NetworkAnimatorTests
     }
 
     [Fact]
-    public void ParametersApplyToAnAnimatorRebuiltAfterTheInitialSnapshot()
+    public void ParametersApplyToAnAnimatorRebuiltAfterItsSpawn()
     {
         var source = Create();
         var replica = Create();

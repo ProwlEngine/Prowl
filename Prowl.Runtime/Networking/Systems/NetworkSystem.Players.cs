@@ -9,7 +9,7 @@ using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
 
-// Each peer's player object, as Mirror's connection identity and local player.
+// Each peer's player object.
 internal sealed partial class NetworkSystem
 {
     // Host: each peer's player.

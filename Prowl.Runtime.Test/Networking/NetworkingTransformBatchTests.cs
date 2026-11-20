@@ -69,7 +69,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SnapshotsConvergeOverReliableOnlyTransports()
+    public void TransformsConvergeOverReliableOnlyTransports()
     {
         MakeCurrent(CreateScene());
         LocalNetwork network = new();
@@ -87,7 +87,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SnapshotsFromAnotherSceneAreIgnored()
+    public void TransformBatchesFromAnotherSceneAreIgnored()
     {
         MakeCurrent(CreateScene());
         LocalNetwork network = new();
@@ -131,7 +131,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SteadySnapshotsDoNotAllocate()
+    public void SteadyTransformBatchesDoNotAllocate()
     {
         MakeCurrent(CreateScene());
         LocalNetwork network = new();

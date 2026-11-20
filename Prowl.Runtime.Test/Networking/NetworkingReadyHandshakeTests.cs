@@ -101,8 +101,8 @@ public partial class NetworkingTests
         using FakePeer client = FakePeer.Join(network, "client");
         try
         {
-            // The run is under way: the client has some of the objects and is not ready yet. In Mirror every spawn
-            // goes at once, so there is no such window, and here a call made in it must not be lost.
+            // The run is under way: the client has some of the objects and is not ready yet.
+            // A call made in that window must not be lost.
             Pump(() => client.Has(FakePeer.Spawn), client);
             Assert.False(client.Has(FakePeer.SpawnFinished));
             actors[0].Shout("during the run");

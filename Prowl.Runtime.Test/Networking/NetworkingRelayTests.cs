@@ -95,7 +95,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ATransformRecordSaysHowLongBeforeItsSnapshotItWasTaken()
+    public void ATransformRecordSaysHowLongBeforeItsBatchItWasTaken()
     {
         TransformUpdate update = new(TransformChannels.Position | TransformChannels.Exact, 0, new Float3(1, 2, 3),
             Quaternion.Identity, default);

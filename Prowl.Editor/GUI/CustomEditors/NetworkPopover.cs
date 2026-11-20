@@ -269,7 +269,7 @@ internal static class NetworkPopover
         }
     }
 
-    /// <summary>A send interval for each networked component on the object itself, as Mirror's syncInterval.</summary>
+    /// <summary>A send interval for each networked component on the object itself.</summary>
     private static void ComponentIntervals(Paper paper, FontFile font, GameObject go)
     {
         bool any = false;

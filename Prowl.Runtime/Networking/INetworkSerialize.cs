@@ -9,7 +9,7 @@ using Prowl.Courier;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     A component that writes its own network state, as Mirror's OnSerialize and OnDeserialize, for state that packs
+///     A component that writes its own network state, for state that packs
 ///     better by hand than as [Sync] values. It goes with a spawn, and again each time
 ///     <see cref="Networking.SetDirty" /> marks it. State travels reliably and in order, so a later write may hold only
 ///     what changed since the last. The host writes it unless <see cref="NetworkSerializeAttribute" /> says otherwise.

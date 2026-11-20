@@ -143,15 +143,12 @@ internal readonly record struct TemplateSpawn(
     internal void Write(NetWriter writer)
     {
         writer.WriteByte(Scene ? SceneKind : Factory != null ? FactoryKind : PrefabKind);
-        if (Scene)
-        {
-        }
-        else if (Factory != null)
+        if (Factory != null)
         {
             writer.WriteString(Factory);
             writer.WriteBytesWithLength(Data);
         }
-        else
+        else if (!Scene)
         {
             writer.WriteGuid(Prefab);
         }

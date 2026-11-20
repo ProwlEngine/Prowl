@@ -201,27 +201,6 @@ public sealed class FakePeer : IDisposable
     public List<(Guid Component, uint Slot, byte[] Value)> SyncValues() =>
         WireReceived.Where(m => m.Id == Sync).SelectMany(m => SyncValues(m.Data)).ToList();
 
-    internal static void SkipTransformGroups(ref NetReader r)
-    {
-        r.ReadDouble();
-        {
-            uint records = r.ReadVarUInt32();
-            for (uint i = 0; i < records; i++)
-            {
-                r.ReadVarUInt32(); r.ReadVarUInt32();
-                byte channels = r.ReadByte();
-                if ((channels & 64) != 0) r.ReadByte();
-                if ((channels & 128) != 0) { uint stamp = r.ReadVarUInt32(); if ((stamp & 1) != 0) r.ReadVarUInt32(); }
-                if ((channels & 16) != 0) r.ReadSingle();
-                if ((channels & 32) != 0) r.ReadByte();
-                if ((channels & 9) == 9) r.ReadBytes(12);
-                else if ((channels & 1) != 0) { r.ReadVarUInt32(); r.ReadVarInt64(); r.ReadVarInt64(); r.ReadVarInt64(); }
-                if ((channels & 2) != 0) r.ReadBytes((channels & 8) != 0 ? 16 : 4);
-                if ((channels & 4) != 0) r.ReadBytes(12);
-            }
-        }
-    }
-
     /// <summary>
     ///     One state record for each value: its object's NetId, the ownership generation given, and the component and
     ///     member the engine side knows the value by. A value for something it doesn't know gets a NetId nothing has.

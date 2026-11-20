@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Diagnostics;
@@ -98,8 +97,7 @@ internal sealed partial class NetworkSystem
 
     /// <summary>
     ///     Makes <paramref name="go" /> a networked object and, in a session, creates it on every client. Everything
-    ///     is checked before anything changes. One that is spawned already is left as it is, with a warning, as
-    ///     Mirror's Spawn does.
+    ///     is checked before anything changes. One that is spawned already is left as it is, with a warning.
     /// </summary>
     internal void Spawn(GameObject go, NetPeer? owner, NetworkOrphaned orphaned, SpawnTemplate? template = null)
     {
@@ -456,8 +454,8 @@ internal sealed partial class NetworkSystem
         Sync.WriteSpawnState(output, entry.Components);
     }
 
-    // Each transform that moves a child sends where that child is, as Mirror's NetworkTransform writes its target
-    // into a spawn. The root's own pose is in the template spawn.
+    // Each transform that moves a child sends where that child is with the spawn.
+    // The root's own pose is in the template spawn.
     private static void WriteChildPoses(NetworkObject entry, NetWriter output)
     {
         NetworkTransform[] transforms = entry.Transforms;
@@ -477,7 +475,7 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>
-    ///     A spawn for an object this peer has already, as Mirror's FindOrSpawnObject finds one by its net id: it keeps
+    ///     A spawn for an object this peer has already, found by its net id: it keeps
     ///     the object and takes the spawn's pose, owner and state, with no spawn callbacks.
     /// </summary>
     private void Respawn(NetworkObject entry, scoped SpawnMessage message, NetPeer sender, ref NetReader reader)
@@ -713,7 +711,6 @@ internal sealed partial class NetworkSystem
             VisibilityOverrides.Remove(go);
         }
 
-
         if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)
         {
             return;
@@ -885,7 +882,6 @@ internal sealed partial class NetworkSystem
         new OrphanedMessage(go.Identifier, entry.Generation, orphaned).Write(message);
         SendToObservers(entry, EngineMessage.Orphaned, message.WrittenSpan);
     }
-
 
     internal void OnOrphaned(NetPeer sender, ref NetReader reader, Delivery delivery)
     {

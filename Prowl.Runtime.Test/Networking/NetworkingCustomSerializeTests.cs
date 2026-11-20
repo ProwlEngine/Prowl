@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-/// <summary>A grid of cells packed into bits by hand, as Mirror's OnSerialize allows.</summary>
+/// <summary>A grid of cells packed into bits by hand.</summary>
 public class PackedGridTestComponent : Component, INetworkSerialize
 {
     public bool[] Cells = new bool[16];
@@ -131,7 +131,7 @@ public partial class NetworkingTests
             : () => new InvalidOperationException("not ready");
         try
         {
-            // As Mirror catches what OnDeserialize throws and reads on at the next component: the spawn still
+            // What OnDeserialize throws is caught and reading goes on at the next component: the spawn still
             // arrives with the rest of its state, and the session goes on.
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == original.Identifier), host);

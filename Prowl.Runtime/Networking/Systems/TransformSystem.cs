@@ -843,8 +843,8 @@ internal sealed class TransformSystem : IDisposable
     }
 
     /// <summary>
-    ///     Passes a client's transforms on. Moving ones go out with the host's next tick, the latest of each, as
-    ///     Mirror's server sends at its own interval. The pose one came to rest at is owed to everyone else until they
+    ///     Passes a client's transforms on. Moving ones go out with the host's next tick, the latest of each.
+    ///     The pose one came to rest at is owed to everyone else until they
     ///     acknowledge it.
     /// </summary>
     private void PassOn(NetPeer sender, double clockOffset, double now)
@@ -1073,7 +1073,6 @@ internal sealed class TransformSystem : IDisposable
         // Positions received from the peer, for the steps it sends from them.
         public readonly Dictionary<(uint NetId, uint Generation, byte Index), PositionHistory> ReceivedPositions = new();
     }
-
 
     /// <summary>Recent grid positions of one transform by batch tick. A tick that carried two different ones is no baseline.</summary>
     private sealed class PositionHistory

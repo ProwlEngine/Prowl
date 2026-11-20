@@ -50,7 +50,7 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 
     internal abstract string FormatValue(Component component);
 
-    /// <summary>Sets a reference member to the object it named once this peer has it. Runs no hook, as in Mirror.</summary>
+    /// <summary>Sets a reference member to the object it named once this peer has it. Runs no hook.</summary>
     internal virtual void Resolve(Component component, object target)
     {
     }
@@ -144,7 +144,7 @@ public sealed class SyncMember<TComponent, T>(
             return;
         }
 
-        // As in Mirror, a spawn's values run their hooks too, once the object's spawn callbacks are due.
+        // A spawn's values run their hooks too, once the object's spawn callbacks are due.
         if (initial)
         {
             SyncSystem.NotifySpawnChange(c, () => changed(c, old, value));
@@ -187,7 +187,6 @@ public sealed class SyncCollectionMember<TComponent, TCollection>(
 {
     /// <summary>Generated getter: binds the component's collection to this property.</summary>
     public TCollection Bind(TComponent component) => Bound(component);
-
 
     internal override void Write(Component component, NetWriter writer) => Bound(component).WriteAll(writer);
 

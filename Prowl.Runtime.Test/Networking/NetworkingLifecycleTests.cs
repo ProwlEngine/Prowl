@@ -372,7 +372,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void MalformedSnapshotMetadataDisposesTheIncomingScene()
+    public void MalformedSceneMetadataDisposesTheIncomingScene()
     {
         SceneInstance original = CreateScene();
         GameObject marker = CreateGameObject("Marker");
@@ -402,7 +402,7 @@ public partial class NetworkingTests
     [Fact]
     public void ANetworkedObjectKeptAcrossLoadsStaysTheSameObjectWhenTheHostChangesScene()
     {
-        // As Mirror finds the object a spawn names by its net id, a spawn for one this peer still has updates it.
+        // The object a spawn names is found by its net id, so a spawn for one this peer still has updates it.
         byte[] SceneNaming(ulong generation)
         {
             using NetWriter writer = new();

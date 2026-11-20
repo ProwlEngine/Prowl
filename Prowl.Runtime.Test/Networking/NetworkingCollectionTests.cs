@@ -463,7 +463,7 @@ public partial class NetworkingTests
             Assert.Equal([1, 2], shipHere.Scores);
             Assert.Equal((3, 1), (levelHere.HealthWhenEnabled, levelHere.ScoreCountWhenEnabled));
             Assert.Equal((9, 2), (shipHere.HealthWhenEnabled, shipHere.ScoreCountWhenEnabled));
-            // As in Mirror, a value that came with the spawn runs its hook when it differs from what was built.
+            // A value that came with the spawn runs its hook when it differs from what was built.
             Assert.Equal([(100, 3)], levelHere.HealthChanges);
             Assert.Empty(levelHere.ScoreChanges);
             Assert.Equal([(100, 9)], shipHere.HealthChanges);

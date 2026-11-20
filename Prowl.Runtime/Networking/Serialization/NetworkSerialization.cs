@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
-using Prowl.Vector;
 using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;

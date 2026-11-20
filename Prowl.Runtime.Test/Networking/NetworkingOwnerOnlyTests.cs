@@ -51,7 +51,7 @@ public partial class NetworkingTests
             StashTestComponent mine = Find(SceneInstance.Main, purse.Identifier).GetComponent<StashTestComponent>()!;
             Assert.False(mine.IsProxy);
 
-            // As a Mirror owner sends every client to server value, whoever else it is kept from.
+            // An owner sends the host every value it writes, whoever else it is kept from.
             mine.Stash = 5;
             Pump(() => host.SyncInt(mine.Identifier, StashTestComponent.StashSlot) == 5, host);
         }

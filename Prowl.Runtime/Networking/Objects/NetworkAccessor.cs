@@ -20,7 +20,7 @@ public sealed class NetworkAccessor
     private float _cullDistance;
     private NetworkGroups _groups;
 
-    // The send interval of each component of this object that has one set, as Mirror's syncInterval.
+    // The send interval of each component of this object that has one set.
     private Dictionary<Component, int>? _componentIntervals;
 
     // Intervals as stored, by component index, until the object's components are there to take them.
@@ -29,7 +29,7 @@ public sealed class NetworkAccessor
     internal NetworkAccessor(GameObject owner) => _object = owner;
 
     /// <summary>
-    ///     Makes the object a networked object, as Mirror's NetworkIdentity: kept in sync for its whole life, with
+    ///     Makes the object a networked object: kept in sync for its whole life, with
     ///     everything below it part of it. Spawning sets it. Configure before the session starts for scene objects:
     ///     setting it during one spawns nothing, and it can't be cleared while the object is spawned.
     /// </summary>
@@ -49,7 +49,7 @@ public sealed class NetworkAccessor
     }
 
     /// <summary>
-    ///     The object and everything below it never leave the host, as Mirror's serverOnly. Like Mirror's, it is for a
+    ///     The object and everything below it never leave the host. It is for a
     ///     whole networked object or anything outside one: on a part of a networked object it does nothing, since
     ///     every peer builds the whole object. It can't be set on an object that is spawned, or part of one.
     /// </summary>
@@ -97,7 +97,7 @@ public sealed class NetworkAccessor
 
     /// <summary>
     ///     How many ticks apart a component on this object sends its changed state, [Sync] values and its own
-    ///     <see cref="INetworkSerialize" /> state alike, from 1 (every tick) to 255, as Mirror's syncInterval. It is this
+    ///     <see cref="INetworkSerialize" /> state alike, from 1 (every tick) to 255. It is this
     ///     peer's own setting for the state it writes, and is never sent. Call it on the object the component is on.
     /// </summary>
     public void SetSendInterval(Component component, int ticks)
@@ -234,7 +234,7 @@ public sealed class NetworkAccessor
     /// <summary>The id of the networked object this is or is part of, the same on every peer, or 0 while not spawned.</summary>
     public uint NetId => Networking.System?.FindEntry(_object)?.NetId ?? 0;
 
-    /// <summary>True when the object is this peer's player, as Mirror's isLocalPlayer.</summary>
+    /// <summary>True when the object is this peer's player.</summary>
     public bool IsLocalPlayer => Networking.System?.LocalPlayer == _object;
 
     /// <summary>True when this peer receives this object's state from its controller.</summary>
@@ -292,7 +292,7 @@ public sealed class NetworkAccessor
     }
 
     /// <summary>
-    ///     Host: assigns ownership to a peer, or to the host's simulation with null, as Mirror's AssignClientAuthority.
+    ///     Host: assigns ownership to a peer, or to the host's simulation with null.
     ///     Only the host changes ownership: a client that wants an object asks with a host RPC. It throws on a client,
     ///     for an object that is not a spawned networked object, and for a player object given to anyone but the peer
     ///     it is the player of. Outside a session it does nothing.
@@ -300,7 +300,7 @@ public sealed class NetworkAccessor
     public void AssignOwnership(NetPeer? owner) => Networking.System?.SetOwner(_object, owner);
 
     /// <summary>
-    ///     Host: the object goes back to the host's simulation, as Mirror's RemoveClientAuthority. The same as
+    ///     Host: the object goes back to the host's simulation. The same as
     ///     <see cref="AssignOwnership" /> with null.
     /// </summary>
     public void RemoveOwnership() => Networking.System?.SetOwner(_object, null);

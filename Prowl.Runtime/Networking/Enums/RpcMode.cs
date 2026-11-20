@@ -15,6 +15,6 @@ public enum RpcMode : byte
     /// <summary>Whoever controls the object: its owner, or the host when it has none. Only the host calls it.</summary>
     Owner,
 
-    /// <summary>One peer the host names, as Mirror's TargetRpc. Only the host calls it.</summary>
+    /// <summary>One peer the host names. Only the host calls it.</summary>
     Target
 }

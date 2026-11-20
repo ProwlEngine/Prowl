@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     Host: where this object was over the last <see cref="HistorySeconds" />, recorded each network tick, so a
-///     client's hit can be checked against where the object was when that client saw it, as Mirror's LagCompensator.
+///     client's hit can be checked against where the object was when that client saw it.
 /// </summary>
 [AddComponentMenu("Networking/Lag Compensator")]
 public sealed class LagCompensator : Component, INetworkTick

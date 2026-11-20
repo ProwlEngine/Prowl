@@ -157,7 +157,7 @@ public static partial class Networking
     }
 
     /// <summary>
-    ///     Host: spawns an object every peer can build itself, as Mirror's NetworkServer.Spawn: an instance of a prefab
+    ///     Host: spawns an object every peer can build itself: an instance of a prefab
     ///     that is in SceneInstance.Main, or an object despawned before. Anything else throws, since clients would
     ///     have nothing to build it from, and one that is spawned already is left as it is, with a warning. Without
     ///     a session it is only marked networked.
@@ -184,7 +184,7 @@ public static partial class Networking
         NetworkFactories.Register(name, build, destroy);
 
     /// <summary>
-    ///     Sends an <see cref="INetworkSerialize" /> component's state at the next tick, as Mirror's SetDirty. Only the
+    ///     Sends an <see cref="INetworkSerialize" /> component's state at the next tick. Only the
     ///     peer that writes it may; anywhere else the change is dropped with a warning.
     /// </summary>
     public static void SetDirty(Component component)
@@ -213,8 +213,8 @@ public static partial class Networking
     public static GameObject? LocalPlayer => System?.LocalPlayer;
 
     /// <summary>
-    ///     Host: makes <paramref name="player" /> the player of <paramref name="peer" />, as Mirror's
-    ///     AddPlayerForConnection: spawned owned by them, or handed to them if already spawned. Throws on a client,
+    ///     Host: makes <paramref name="player" /> the player of <paramref name="peer" />:
+    ///     spawned owned by them, or handed to them if already spawned. Throws on a client,
     ///     for a peer that has a player already, and for an object that is another peer's player. While it is their
     ///     player, the object can't be given to anyone else.
     /// </summary>
@@ -226,8 +226,8 @@ public static partial class Networking
     }
 
     /// <summary>
-    ///     Host: gives <paramref name="peer" /> another player in place of the one they have, as Mirror's
-    ///     ReplacePlayerForConnection. The old one stays spawned and theirs, as an ordinary object.
+    ///     Host: gives <paramref name="peer" /> another player in place of the one they have.
+    ///     The old one stays spawned and theirs, as an ordinary object.
     /// </summary>
     public static void ReplacePlayer(NetPeer peer, GameObject player)
     {
@@ -251,7 +251,7 @@ public static partial class Networking
     }
 
     /// <summary>
-    ///     Host: takes a spawned object out of the network, as Mirror's UnSpawn does. Clients despawn it, and this peer
+    ///     Host: takes a spawned object out of the network. Clients despawn it, and this peer
     ///     keeps it, to pool or to spawn again with <see cref="Spawn" />, which sends it the way it was built.
     /// </summary>
     public static void Despawn(GameObject go)

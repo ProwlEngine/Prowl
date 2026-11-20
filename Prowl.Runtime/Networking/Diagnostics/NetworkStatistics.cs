@@ -15,8 +15,8 @@ public readonly record struct NetworkTraffic(long Messages, long Bytes);
 public readonly record struct NetworkMessageInfo(string Kind, NetPeer Peer, int Bytes);
 
 /// <summary>
-///     Engine message traffic since the last <see cref="Reset" />, in total and by kind, as Mirror's network statistics
-///     give. Counted on the main thread as messages are handled and sent; payload bytes only, without transport headers.
+///     Engine message traffic since the last <see cref="Reset" />, in total and by kind.
+///     Counted on the main thread as messages are handled and sent; payload bytes only, without transport headers.
 /// </summary>
 public static class NetworkStatistics
 {

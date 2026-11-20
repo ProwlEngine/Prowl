@@ -3,7 +3,6 @@
 
 using System;
 
-
 namespace Prowl.Runtime.Networking;
 
 /// <summary>

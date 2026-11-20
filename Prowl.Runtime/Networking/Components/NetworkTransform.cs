@@ -8,7 +8,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     Keeps a networked object's transform in sync, as Mirror's NetworkTransform: whoever controls the object sends
+///     Keeps a networked object's transform in sync: whoever controls the object sends
 ///     its position, rotation and scale, and everyone else follows, smoothed. A networked object without one keeps its
 ///     transform to itself. Put a second one on the object with a <see cref="Target" /> for a child that moves on its own.
 ///     It has to be part of the object as its prefab, factory or scene builds it: one added later, by game code once
@@ -33,8 +33,8 @@ public sealed class NetworkTransform : Component
     [Range(1, 255)] public int SendInterval = 1;
 
     /// <summary>
-    ///     The object whose transform this sends: its own when not set, or a child of the networked object. As in
-    ///     Mirror it is part of how the object is built and is never sent, so every peer has to set the same one.
+    ///     The object whose transform this sends: its own when not set, or a child of the networked object. It
+    ///     is part of how the object is built and is never sent, so every peer has to set the same one.
     /// </summary>
     public GameObject? Target;
 

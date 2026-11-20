@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Test;
 public partial class NetworkingTests
 {
     [Fact]
-    public void SnapshotsCarryTheNetworkTickTheGameSees()
+    public void TransformBatchesCarryTheNetworkTickTheGameSees()
     {
         SceneInstance scene = CreateScene();
         GameObject go = CreateGameObject("Ticking");

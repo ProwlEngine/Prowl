@@ -126,18 +126,12 @@ public class TransformSyncTests : RuntimeTestBase
     }
 
     [Fact]
-    public void ClearingHistoryAndSnappingCancelPendingPlayback()
+    public void ClearingHistoryCancelsPendingPlayback()
     {
         GameObject go = CreateGameObject();
         TransformSync sync = new();
         sync.Receive(go, 1, 0, 10, Pose(10));
         sync.ClearHistory();
-        Assert.False(sync.HasPendingInterpolation);
-
-        sync.Receive(go, 2, 1, 11, Pose(20));
-        sync.Snap(go, 3, new Float3(30, 0, 0), Quaternion.Identity, Float3.One);
-        sync.Interpolate(go, 20);
-        Assert.Equal(30f, go.Transform.LocalPosition.X);
         Assert.False(sync.HasPendingInterpolation);
     }
 

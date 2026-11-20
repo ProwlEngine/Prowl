@@ -8,7 +8,7 @@ namespace Prowl.Runtime.Networking;
 /// <summary>The networked components of a networked object: those with [Sync] values, RPCs or their own state.</summary>
 internal static class NetworkComponents
 {
-    /// <summary>The most a networked object can hold, as Mirror's limit of 64 behaviours per identity.</summary>
+    /// <summary>The most a networked object can hold.</summary>
     public const int MaxPerObject = 64;
 
     /// <summary>A tree's networked components in build order: each object's own, then its children's. Disabled ones count.</summary>

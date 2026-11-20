@@ -3,7 +3,6 @@
 
 using System;
 
-
 namespace Prowl.Runtime.Networking;
 
 /// <summary>Describes how a <see cref="SyncAttribute" /> property is synchronized.</summary>
@@ -13,13 +12,13 @@ public enum SyncFlags : uint
     None = 0,
 
     /// <summary>
-    ///     Whoever controls the object changes the value: its owner, or the host while nobody owns it. Without this, as
-    ///     with Mirror's default sync direction, only the host changes it, even on an object a client owns.
+    ///     Whoever controls the object changes the value: its owner, or the host while nobody owns it. Without this,
+    ///     only the host changes it, even on an object a client owns.
     /// </summary>
     FromOwner = 1,
 
     /// <summary>
-    ///     Only the host and the object's owner receive the value, as Mirror's owner sync mode, for state such as ammo or
+    ///     Only the host and the object's owner receive the value, for state such as ammo or
     ///     an inventory other players shouldn't see. Plain values only, not network collections.
     /// </summary>
     ToOwner = 2

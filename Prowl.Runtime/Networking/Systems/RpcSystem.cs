@@ -13,8 +13,8 @@ using static Prowl.Runtime.Networking.NetworkSystem;
 
 namespace Prowl.Runtime.Networking;
 
-// RPCs. A call is [NetId][component index][method index][length-prefixed arguments]. As Mirror's commands and client RPCs,
-// a client only calls host RPCs: it sends the call to the host, which checks it against the method's own RpcMode
+// RPCs. A call is [NetId][component index][method index][length-prefixed arguments].
+// A client only calls host RPCs: it sends the call to the host, which checks it against the method's own RpcMode
 // and RpcFlags (never trusting the caller about them) and runs it. Broadcast, owner and target RPCs are the host's
 // to call, and carry its id in front.
 //
@@ -29,7 +29,6 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
     // The call as it goes on the wire, built after the caller's state went out, so nothing runs while they are in use.
     private readonly NetWriter _envelope = new(256), _fromHost = new(256);
-
 
     // The call whose body is running, received or made here, so its prologue runs the body instead of sending it
     // again. It holds for the whole body, so an override calling base.Method() runs the base body here too.
@@ -331,7 +330,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             throw new InvalidDataException("RPC contains trailing bytes.");
         }
 
-        // A call naming an object this peer doesn't have is dropped, as Mirror drops one for an unknown netId.
+        // A call naming an object this peer doesn't have is dropped.
         if (!Resolve(message, out Component? component, out RpcMember? rpc))
         {
             NetworkDiagnostics.Record("RPC", "Rejected", sender, Guid.Empty, $"Unknown {Describe(message)}", arguments);

@@ -13,7 +13,7 @@ using static Prowl.Runtime.Networking.NetworkSystem;
 
 namespace Prowl.Runtime.Networking;
 
-// [Sync] state, as Mirror's SyncVars: each networked component has a dirty bit per [Sync] member, and once a tick
+// [Sync] state: each networked component has a dirty bit per [Sync] member, and once a tick
 // the changed members go out reliably and in order. The host writes each changed object once, into a record for its
 // owner and one for everyone else, and sends each peer the one it gets. A client sends the host the FromOwner
 // members of what it owns, and the host applies them and passes them on to everyone but that owner. A reliable RPC
@@ -119,8 +119,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
     }
 
-    // [Sync] references received, by the object each names, and what each member names. As Mirror's reference SyncVars
-    // look their object up when read, a reference to an object that arrives later starts reading as that object.
+    // [Sync] references received, by the object each names, and what each member names. The object is
+    // looked up when read, so a reference to an object that arrives later starts reading as that object.
     private readonly Dictionary<uint, List<(Component Component, SyncMember Sync, byte Index)>> _references = new();
     private readonly Dictionary<(Component Component, uint Slot), uint> _referenceOf = new();
 
@@ -412,7 +412,6 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
     private void SendDirty(NetworkObject? urgent)
     {
-
         if (scene.Session is not { } session || !scene.IsActive)
         {
             Clear();
@@ -973,8 +972,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             }
             catch (Exception e) when (apply && take && e is not InvalidDataException)
             {
-                // It checked out a moment ago, so this is the game's own code failing, as in OnDeserialize. As Mirror
-                // does, the rest of this component's state is dropped and reading goes on at the next component.
+                // It checked out a moment ago, so this is the game's own code failing, as in OnDeserialize.
+                // The rest of this component's state is dropped and reading goes on at the next component.
                 FailedToApply(component, sync, e);
                 return accepted;
             }

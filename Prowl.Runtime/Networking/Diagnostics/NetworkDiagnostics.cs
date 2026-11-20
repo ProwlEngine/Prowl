@@ -311,35 +311,6 @@ public static class NetworkDiagnostics
         return ($"Acknowledges: {string.Join(", ", acknowledged)}\nRejected objects: {objects}", name);
     }
 
-    private static void AppendValue(StringBuilder context, List<string> names, Component? component, string id,
-        uint slot, ReadOnlySpan<byte> value)
-    {
-        if (ReferenceEquals(component, null))
-        {
-            context.Append($"\n\nComponent: {id}\nUnknown SyncVar #{slot}");
-            if (names.Count < 2)
-            {
-                names.Add($"Unknown SyncVar #{slot}");
-            }
-
-            return;
-        }
-
-        SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
-        string property = $"{component.GetType().Name}.{sync?.Name ?? $"#{slot}"}";
-        if (names.Count < 2)
-        {
-            names.Add(property);
-        }
-
-        context.Append($"\n\nObject: {component.GameObject.Name}\nProperty: {property}");
-        if (sync != null)
-        {
-            NetReader valueReader = new(value);
-            context.Append($"\nValue: {sync.FormatPayload(ref valueReader)}");
-        }
-    }
-
     private static string JoinNames(List<string> names, int count) =>
         string.Join(", ", names) + (count > 2 ? $" (+{count - 2} more)" : "");
 

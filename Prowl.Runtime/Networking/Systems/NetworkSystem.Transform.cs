@@ -3,7 +3,6 @@
 
 using System;
 
-using Prowl.Vector;
 using Prowl.Courier;
 
 namespace Prowl.Runtime.Networking;
@@ -14,7 +13,6 @@ namespace Prowl.Runtime.Networking;
 // acknowledged. An object without a NetworkTransform, and a static GameObject, send nothing.
 internal sealed partial class NetworkSystem
 {
-
     internal static void ValidateMessageLimit(NetSessionOptions? options)
     {
         if ((options ?? Networking.Configuration.CreateSessionOptions()).MaxMessageSize <
