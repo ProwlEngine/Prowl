@@ -77,6 +77,7 @@ public class GameViewPanel : DockPanel
     internal static float LastAspect { get; private set; } = 16f / 9f;
     private int _resolutionIndex = -1; // read from the project on first use, see ResolutionIndex
     private bool _showStats;
+    private bool _showGizmos;
     private GameViewScale _scale = GameViewScale.Fit;
     private float _zoom = 1f;
     private static readonly float[] s_zooms = [0.25f, 0.5f, 1f, 1.5f, 2f, 3f, 4f];
@@ -136,6 +137,7 @@ public class GameViewPanel : DockPanel
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
         state["showStats"] = _showStats;
+        state["showGizmos"] = _showGizmos;
         state["scale"] = _scale.ToString();
         state["zoom"] = _zoom;
         return true;
@@ -144,6 +146,7 @@ public class GameViewPanel : DockPanel
     public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
     {
         _showStats = state["showStats"]?.GetValue<bool>() == true;
+        _showGizmos = state["showGizmos"]?.GetValue<bool>() == true;
         if (Enum.TryParse(state["scale"]?.GetValue<string>(), out GameViewScale scale)) _scale = scale;
         _zoom = state["zoom"]?.GetValue<float>() ?? 1f;
     }
@@ -234,6 +237,7 @@ public class GameViewPanel : DockPanel
                             on: _scale == GameViewScale.Zoom && Math.Abs(_zoom - zoom) < 0.001f);
                 }, EditorIcons.MagnifyingGlass);
                 b.Toggle(Loc.Get("game.show_stats"), () => { _showStats = !_showStats; SaveViewState(); }, () => _showStats);
+                b.Toggle(Loc.Get("scene.show_gizmos"), () => { _showGizmos = !_showGizmos; SaveViewState(); }, () => _showGizmos);
                 b.Toggle(Loc.Get("game.maximize_on_play"), ToggleMaximizeOnPlay,
                     () => Preferences.Get<PlayModePreferences>().GameViewOnPlay == GameViewOnPlay.Maximize);
             }));
@@ -335,12 +339,14 @@ public class GameViewPanel : DockPanel
             {
                 List<Camera> cameras = world.GatherActiveCameras();
                 cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+                if (_showGizmos)
+                    EditorApplication.Instance?.DrawSceneGizmos(world);
 
                 foreach (Camera cam in cameras)
                 {
                     try
                     {
-                        cam.Render(new CameraRenderOptions { FallbackTarget = _rt, Kind = Prowl.Graphite.Rendering.ViewKind.Game });
+                        cam.Render(new CameraRenderOptions { FallbackTarget = _rt, Kind = Prowl.Graphite.Rendering.ViewKind.Game, DisplayGizmos = _showGizmos });
                     }
                     catch (Exception ex)
                     {

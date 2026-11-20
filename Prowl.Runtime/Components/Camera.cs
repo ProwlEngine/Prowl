@@ -438,13 +438,11 @@ public class Camera : Component
         RenderView view = BuildView(world, framebuffer, options.Kind);
         XR.CoverMirror(framebuffer, view.Viewport);
         if (options.DependsOn != null) view.DependsOn.AddRange(options.DependsOn);
-        view.Features = BuildFeatures(options.Features);
+        bool gizmos = options.DisplayGizmos && Application.IsEditor;
+        view.Features = BuildFeatures(gizmos ? WithGizmos(options.Features) : options.Features);
         view.Keywords = options.Keywords;
-        if (options.DisplayGizmos)
-        {
+        if (gizmos)
             Debug.SubmitGizmos(GameObject.Scene, world);
-            view.CullingMask |= Debug.GizmoLayerMask;
-        }
         Graphics.AddView(view);
     }
 
@@ -464,7 +462,7 @@ public class Camera : Component
         Float3 position = Transform.Position;
         view.World = world;
         view.Target = framebuffer;
-        view.CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask;
+        view.CullingMask = (uint)CullingMask.Mask;
         // A preview has no cameras drawn under it, so an overlay camera's clears to black rather than drawing over undefined pixels.
         bool previewOverlay = into != null && Background == CameraBackground.None;
         view.ClearColor = Background == CameraBackground.Skybox ? GameObject.Scene.Environment.SkyColor.ToFloat4()
@@ -574,6 +572,16 @@ public class Camera : Component
 
     // The features of the blended volumes and the anti aliasing, then the render's own
     private ExtensionSet<RenderFeature> BuildFeatures(IReadOnlyList<RenderFeature>? extra) => BuildFeatures(extra, _features);
+
+    private readonly List<RenderFeature> _withGizmos = [];
+
+    private List<RenderFeature> WithGizmos(IReadOnlyList<RenderFeature>? extra)
+    {
+        _withGizmos.Clear();
+        if (extra != null) _withGizmos.AddRange(extra);
+        _withGizmos.Add(Debug.GizmoFeature);
+        return _withGizmos;
+    }
 
     private ExtensionSet<RenderFeature> BuildFeatures(IReadOnlyList<RenderFeature>? extra, ExtensionSet<RenderFeature> set)
     {

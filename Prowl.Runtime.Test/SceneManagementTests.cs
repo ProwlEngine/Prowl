@@ -1041,14 +1041,43 @@ public class SceneManagementTests : RuntimeTestBase
     {
         SceneInstance a = CreateScene(enable: true);
         SceneInstance b = CreateScene(enable: true);
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = true;
+        try
+        {
+            using (b.Enter())
+                Debug.DrawLine(Vector.Float3.Zero, Vector.Float3.One, System.Drawing.Color.Red);
 
-        using (b.Enter())
-            Debug.DrawLine(Vector.Float3.Zero, Vector.Float3.One, System.Drawing.Color.Red);
+            Assert.True(a.Gizmos.IsEmpty);
+            Assert.False(b.Gizmos.IsEmpty);
+            Debug.ClearGizmos();
+            Assert.True(b.Gizmos.IsEmpty);
+        }
+        finally
+        {
+            Application.IsEditor = wasEditor;
+        }
+    }
 
-        Assert.True(a.Gizmos.IsEmpty);
-        Assert.False(b.Gizmos.IsEmpty);
-        Debug.ClearGizmos();
-        Assert.True(b.Gizmos.IsEmpty);
+    [Fact]
+    public void DebugDraws_AreDroppedInABuiltGame()
+    {
+        SceneInstance scene = CreateScene(enable: true);
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = false;
+        try
+        {
+            using (scene.Enter())
+            {
+                Debug.DrawLine(Vector.Float3.Zero, Vector.Float3.One, System.Drawing.Color.Red);
+                Debug.DrawWireSphere(Vector.Float3.Zero, 1f, System.Drawing.Color.Red);
+            }
+            Assert.True(scene.Gizmos.IsEmpty);
+        }
+        finally
+        {
+            Application.IsEditor = wasEditor;
+        }
     }
 
     // ---- Teardown ----

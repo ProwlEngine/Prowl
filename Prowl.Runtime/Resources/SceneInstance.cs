@@ -1696,6 +1696,8 @@ public class SceneInstance : EngineObject, ISerializable
         if (ReferenceEquals(_main, this))
             Bind(null);
 
+        Gizmos.Release();
+
         lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out SceneInstance? scene) || ReferenceEquals(scene, this));
 
 

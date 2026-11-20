@@ -24,8 +24,6 @@ public enum DefaultShader
     Sprite,
     Line,
     Invalid,
-    Gizmos,
-    GizmoIcon,
     Particle,
     Terrain,
     Grass,

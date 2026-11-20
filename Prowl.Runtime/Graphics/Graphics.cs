@@ -491,6 +491,7 @@ public static class Graphics
         s_fallbackBuffers.Clear();
         lock (s_libraryShaders) s_libraryShaders.Clear();
         s_views.Clear();
+        Debug.DisposeGizmoFeature();
         Renderer.Dispose();
         Renderer = null;
         Device.Dispose();
