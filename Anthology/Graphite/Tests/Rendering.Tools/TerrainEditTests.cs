@@ -13,13 +13,26 @@ public sealed class TerrainEditTests
 {
     private const int Size = 300;
 
+    // Layer 0 below 25 m and layer 1 above, two more layers left empty, and one detail prototype grown nowhere
     private static readonly TerrainImportSettings s_settings = new()
     {
         Spacing = 1.0,
         Bottom = -100.0,
         Range = 655.35,
-        Layers = [new TerrainLayerRule { Layer = 0, MaxHeight = 25, HeightFade = 2 }, new TerrainLayerRule { Layer = 1, MinHeight = 25, HeightFade = 2 }],
+        Layers = [Weights((x, z) => Low(x, z) ? (byte)255 : (byte)0), Weights((x, z) => Low(x, z) ? (byte)0 : (byte)255), Weights((x, z) => 0), Weights((x, z) => 0)],
+        Details = [Weights((x, z) => 0)],
     };
+
+    private static bool Low(int x, int z) => Rolling().Samples[z * Size + x] * 0.01 - 100.0 < 25.0;
+
+    private static TerrainWeightMap Weights(Func<int, int, byte> value)
+    {
+        byte[] values = new byte[Size * Size];
+        for (int z = 0; z < Size; z++)
+            for (int x = 0; x < Size; x++)
+                values[z * Size + x] = value(x, z);
+        return new TerrainWeightMap(Size, Size, values);
+    }
 
     private static TerrainHeightmap Map(Func<int, int, ushort> sample)
     {
@@ -137,33 +150,35 @@ public sealed class TerrainEditTests
         Assert.Equal(crater, again);
     }
 
-    // Every sample on layer 0
+    // Every sample on layer 0 of two, and one detail prototype grown nowhere
     private static TerrainData Grassland()
     {
         MemoryStream stream = new();
-        TerrainImporter.Import(Rolling(), new TerrainImportSettings { Spacing = 1.0, Bottom = -100.0, Range = 655.35, Layers = [new TerrainLayerRule { Layer = 0 }] }, stream);
+        TerrainImporter.Import(Rolling(), new TerrainImportSettings { Spacing = 1.0, Bottom = -100.0, Range = 655.35, Layers = [Weights((x, z) => 255), Weights((x, z) => 0)], Details = [Weights((x, z) => 0)] }, stream);
         stream.Position = 0;
         return TerrainData.Load(stream);
     }
 
+    // One layer, no details
     private static TerrainData Plain()
     {
         MemoryStream stream = new();
-        TerrainImporter.Import(Rolling(), new TerrainImportSettings { Spacing = 1.0, Bottom = -100.0, Range = 655.35, ControlMaxSpacing = 4.0 }, stream);
+        TerrainImporter.Import(Rolling(), new TerrainImportSettings { Spacing = 1.0, Bottom = -100.0, Range = 655.35, SplatMaxSpacing = 4.0 }, stream);
         stream.Position = 0;
         return TerrainData.Load(stream);
     }
 
-    // Every level that keeps control holds, at each sample, the control of the finest sample it stands on
+    // Every level that keeps splat weights holds, at each sample, the weights and hole of the finest sample it stands on
     private static void AssertLevelsFollowTheFinest(TerrainData data)
     {
         TerrainHeader header = data.Header;
         foreach (TerrainPageKey key in data.PageKeys)
         {
             TerrainPage page = data.GetPage(key)!;
-            if (key.Level >= header.ControlLevels)
+            if (key.Level >= header.SplatLevels)
             {
-                Assert.Null(page.Control);
+                Assert.Null(page.Splat);
+                Assert.Null(page.Holes);
                 continue;
             }
             for (int z = -1; z <= TerrainPage.Quads + 1; z++)
@@ -172,10 +187,11 @@ public sealed class TerrainEditTests
                     int i = Math.Clamp((key.X * TerrainPage.Quads + x) << key.Level, 0, header.QuadsX);
                     int j = Math.Clamp((key.Z * TerrainPage.Quads + z) << key.Level, 0, header.QuadsZ);
                     int px = Math.Min(i / TerrainPage.Quads, data.PagesAt(0).X - 1), pz = Math.Min(j / TerrainPage.Quads, data.PagesAt(0).Z - 1);
-                    uint[]? finest = data.GetPage(new TerrainPageKey(0, px, pz))!.Control;
-                    uint expected = finest == null ? 0u : finest[TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads)];
-                    uint actual = page.Control == null ? 0u : page.Control[TerrainPage.Index(x, z)];
-                    Assert.True(expected == actual, $"{key} {x} {z}: {expected:X} {actual:X}");
+                    TerrainPage finest = data.GetPage(new TerrainPageKey(0, px, pz))!;
+                    int from = TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads), to = TerrainPage.Index(x, z);
+                    Assert.True(finest.IsHole(from) == page.IsHole(to), $"hole {key} {x} {z}");
+                    for (int layer = 0; layer < header.Layers; layer++)
+                        Assert.True(finest.Weight(layer, from) == page.Weight(layer, to), $"layer {layer} {key} {x} {z}");
                 }
         }
     }
@@ -201,7 +217,7 @@ public sealed class TerrainEditTests
     {
         using TerrainData data = Plain();
         Double2 center = new(100, 100);
-        Assert.Null(data.GetPage(new TerrainPageKey(0, 0, 0))!.Control);
+        Assert.Null(data.GetPage(new TerrainPageKey(0, 0, 0))!.Holes);
         data.Apply(new TerrainEdit(TerrainBrush.Hole, center, 4, 1));
 
         Assert.True(data.IsHole(center));
@@ -219,28 +235,22 @@ public sealed class TerrainEditTests
     }
 
     [Fact]
-    public void GrassAndDetailCuts_GrowAndRegrow()
+    public void Detail_GrowsAndCutsItsPrototype()
     {
         using TerrainData data = Grassland();
         Double2 center = new(150, 150);
-        data.Apply(new TerrainEdit(TerrainBrush.Grass, center, 10, 1));
-        data.Apply(new TerrainEdit(TerrainBrush.Detail, center, 10, 1));
-        uint control = data.GetPage(new TerrainPageKey(0, 1, 1))!.Control![TerrainPage.Index(150 - 128, 150 - 128)];
-        Assert.Equal(TerrainControl.MaxGrassCut, TerrainControl.GrassCut(control));
-        Assert.Equal(TerrainControl.MaxDetailCut, TerrainControl.DetailCut(control));
-        Assert.Equal(0, TerrainControl.BaseLayer(control));
-        Assert.True(data.TryGetDetailCut(center, out float cut) && cut > 0.99f);
-        Assert.True(data.TryGetDetailCut(new Double2(150, 165), out float none) && none == 0f);
+        data.Apply(new TerrainEdit(TerrainBrush.Detail, center, 10, 1, Layer: 0));
+        Assert.True(data.TryGetDetailDensity(center, 0, out float grown) && grown > 0.99f, $"{grown}");
+        Assert.True(data.TryGetDetailDensity(new Double2(150, 165), 0, out float none) && none == 0f);
+        Assert.True(data.TryGetLayerWeight(center, 0, out float ground) && ground > 0.99f);
         AssertLevelsFollowTheFinest(data);
 
-        data.Apply(new TerrainEdit(TerrainBrush.Grass, center, 10, -1));
-        control = data.GetPage(new TerrainPageKey(0, 1, 1))!.Control![TerrainPage.Index(150 - 128, 150 - 128)];
-        Assert.Equal(0, TerrainControl.GrassCut(control));
-        Assert.Equal(TerrainControl.MaxDetailCut, TerrainControl.DetailCut(control));
+        data.Apply(new TerrainEdit(TerrainBrush.Detail, center, 10, -1, Layer: 0));
+        Assert.True(data.TryGetDetailDensity(center, 0, out float cut) && cut == 0f);
     }
 
     [Fact]
-    public void ControlEdits_AreTheSameEveryTime()
+    public void SurfaceEdits_AreTheSameEveryTime()
     {
         using TerrainData a = Load(Rolling()), b = Load(Rolling());
         TerrainEdit[] edits =
@@ -248,7 +258,6 @@ public sealed class TerrainEditTests
             new(TerrainBrush.Paint, new Double2(140, 150), 18, 0.6, Layer: 1),
             new(TerrainBrush.Paint, new Double2(145, 150), 9, 0.8, Layer: 3),
             new(TerrainBrush.Hole, new Double2(290, 290), 6, 1),
-            new(TerrainBrush.Grass, new Double2(150, 140), 12, 0.5),
             new(TerrainBrush.Detail, new Double2(150, 140), 12, 0.4),
         ];
         foreach (TerrainEdit edit in edits)
@@ -257,7 +266,11 @@ public sealed class TerrainEditTests
             b.Apply(edit);
         }
         foreach (TerrainPageKey key in a.PageKeys)
-            Assert.Equal(a.GetPage(key)!.Control, b.GetPage(key)!.Control);
+        {
+            Assert.Equal(a.GetPage(key)!.Splat, b.GetPage(key)!.Splat);
+            Assert.Equal(a.GetPage(key)!.Holes, b.GetPage(key)!.Holes);
+            Assert.Equal(a.GetPage(key)!.Details, b.GetPage(key)!.Details);
+        }
     }
 
     [Fact]

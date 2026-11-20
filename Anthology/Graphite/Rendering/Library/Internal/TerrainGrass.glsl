@@ -1,7 +1,7 @@
-// Grows one grass type around one view slot's camera, see Prowl.Graphite.Rendering.TerrainGrass. One lane per point of
-// a jittered grid anchored in the world, so grass stays put as the camera moves. A point is kept by the weight of the
-// layers growing this type's group under it, thinned toward the type's range with the survivors widened to keep coverage, left
-// out over holes and outside the view, then appended to its slot's instances with its count.
+// Grows one grass detail prototype around one view slot's camera, see Prowl.Graphite.Rendering.TerrainGrass. One lane
+// per point of a jittered grid anchored in the world, so grass stays put as the camera moves. A point is kept by the
+// prototype's density under it, thinned toward its range with the survivors widened to keep coverage, left out over
+// holes and outside the view, then appended to its slot's instances with its count.
 Compute
 {
     layout(local_size_x = 8, local_size_y = 8) in;
@@ -12,13 +12,15 @@ Compute
     layout(std430) buffer Terrain_GrassCounts { uint counts[]; };
     uniform sampler2DArray Terrain_PageTable;
     uniform sampler2DArray _TerrainHeights;
+    uniform sampler2DArray Terrain_Details;     // per detail slot its maps of four prototypes' densities
+    uniform sampler2D Terrain_DetailTable;      // per page slice its finest page's detail slot, -1 for none
 
     #include "Graphite/Terrain/TerrainLayers.glsl"
 
     layout(push_constant) uniform Push
     {
         vec4 grid;      // the first cell along x and z, the cell size in metres, cells a side
-        vec4 place;     // the slot, the type
+        vec4 place;     // the slot, the type, the prototype, the detail maps a page
         vec4 terrain;   // the height of a 0 sample, metres to a 1 sample, the finest spacing, the page levels
         vec4 extra;     // the camera from the terrain's corner along x and z, the type's range
     } push;
@@ -97,39 +99,27 @@ Compute
         if (away > range)
             return;
 
-        // The finest resident page with control under the point
+        // The finest page under the point, which keeps the densities, and its detail slot
         ivec2 tableSize = textureSize(Terrain_PageTable, 0).xy;
-        float slice = -1.0;
-        vec2 at = vec2(0.0);
-        for (int level = 0; level < int(push.terrain.w) && slice < 0.0; level++)
-        {
-            vec2 onLevel = xz / (push.terrain.z * exp2(float(level)));
-            ivec2 page = ivec2(floor(onLevel / 128.0));
-            if (any(lessThan(page, ivec2(0))) || any(greaterThanEqual(page, tableSize)))
-                return;
-            slice = texelFetch(Terrain_PageTable, ivec3(page, level), 0).r;
-            at = onLevel - vec2(page) * 128.0;
-        }
+        vec2 onLevel = xz / push.terrain.z;
+        ivec2 page = ivec2(floor(onLevel / 128.0));
+        if (any(lessThan(page, ivec2(0))) || any(greaterThanEqual(page, tableSize)))
+            return;
+        float slice = texelFetch(Terrain_PageTable, ivec3(page, 0), 0).r;
         if (slice < 0.0)
             return;
+        float detail = texelFetch(Terrain_DetailTable, ivec2(int(slice + 0.5), 0), 0).r;
+        if (detail < 0.0)
+            return;
+        vec2 at = onLevel - vec2(page) * 128.0;
+        vec3 uv = vec3((at + 1.5) / TERRAIN_PAGE_SIZE, slice);
+        if (Terrain_IsHole(uv))
+            return;
 
-        // How much of the point's layers grow this type less what was cut, bilinear over the four control samples around it
-        vec2 t = at + 1.0;
-        vec2 base = floor(t), f = t - base;
-        vec4 shares = vec4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);
-        int group = int(floor(texelFetch(Terrain_GrassTypes, ivec2(4, type), 0).x + 0.5));
-        float density = 0.0;
-        for (int c = 0; c < 4; c++)
-        {
-            uint bits = packUnorm4x8(texelFetch(_TerrainControl, ivec3(ivec2(base) + ivec2(c & 1, c >> 1), int(slice + 0.5)), 0));
-            if (c == 0 && (bits & (1u << 20)) != 0u)
-                return;
-            float blend = float((bits >> 12) & 255u) / 255.0;
-            vec4 under = texelFetch(_TerrainLayerData, ivec2(int(bits & 63u), 1), 0);
-            vec4 over = texelFetch(_TerrainLayerData, ivec2(int((bits >> 6) & 63u), 1), 0);
-            float grown = 1.0 - float((bits >> 21) & 255u) / 255.0;
-            density += shares[c] * grown * ((1.0 - blend) * (int(floor(under.x + 0.5)) == group ? under.y : 0.0) + blend * (int(floor(over.x + 0.5)) == group ? over.y : 0.0));
-        }
+        // The prototype's density, bilinear over the samples around the point
+        int prototype = int(push.place.z + 0.5);
+        float map = floor(detail + 0.5) * push.place.w + float(prototype / 4);
+        float density = textureLod(Terrain_Details, vec3(uv.xy, map), 0.0)[prototype & 3];
 
         // Thinning: past the LOD distance fewer survive by the square of the distance, each wider by as much, and the last
         // three tenths of the range fade out
@@ -145,7 +135,7 @@ Compute
         vec2 field = xz / patches.y;
         float rise = clamp(smoothstep(-0.5, 0.5, Noise(field, uint(type) * 31u + 7u)) + (s.x - 0.5) * 2.0 * patches.z, 0.0, 1.0);
         float height = mix(shape.y, shape.z, rise) * mix(0.85, 1.0, density);
-        float width = shape.w * widen * max(1.0 + patches.w * Noise(field + 41.7, uint(type) * 31u + 11u), 0.05);
+        float width = mix(shape.x, shape.w, rise) * widen * max(1.0 + patches.w * Noise(field + 41.7, uint(type) * 31u + 11u), 0.05);
         float ground = textureLod(_TerrainHeights, vec3((at + 1.5) / 131.0, slice), 0.0).r * push.terrain.y + push.terrain.x;
 
         int slot = int(push.place.x);

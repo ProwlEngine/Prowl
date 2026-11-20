@@ -368,10 +368,19 @@ public sealed class TerrainTests
         Assert.True(data.IsLoaded(far));
     }
 
-    // Grass on flat low ground, rock on the steep wall, snow on the high flat top
+    // Five layers at a quarter of the heightmap's resolution: layer 1 on the left, layer 4 on the right, weighed 3 to 1
+    // with layer 0 in a band between, so the weights normalise per sample and need two splat maps
     [Fact]
-    public void LayerRulesBakeIntoControl()
+    public void SplatMapsImportAtAnyResolution()
     {
+        byte[] Map(Func<int, byte> value)
+        {
+            byte[] values = new byte[50 * 50];
+            for (int z = 0; z < 50; z++)
+                for (int x = 0; x < 50; x++)
+                    values[z * 50 + x] = value(x);
+            return values;
+        }
         TerrainImportSettings settings = new()
         {
             Spacing = 1.0,
@@ -379,16 +388,53 @@ public sealed class TerrainTests
             Range = 655.35,
             Layers =
             [
-                new TerrainLayerRule { Layer = 1 },
-                new TerrainLayerRule { Layer = 2, MinSlope = 40, Weight = 2 },
-                new TerrainLayerRule { Layer = 3, MinHeight = 80, Weight = 3, MaxSlope = 30 },
+                new TerrainWeightMap(50, 50, Map(x => x >= 20 && x < 30 ? (byte)255 : (byte)0)),
+                new TerrainWeightMap(50, 50, Map(x => x < 20 ? (byte)255 : (byte)0)),
+                new TerrainWeightMap(50, 50, Map(x => 0)),
+                new TerrainWeightMap(50, 50, Map(x => 0)),
+                new TerrainWeightMap(50, 50, Map(x => x >= 30 ? (byte)255 : (byte)0)),
             ],
         };
-        using TerrainData data = Build(200, 200, (x, z) => x < 100 ? 0.0 : x < 110 ? (x - 100) * 10.0 : 100.0, settings);
-        uint Base(int x, int z) => data.GetPage(new TerrainPageKey(0, x / 128, z / 128))!.Control![TerrainPage.Index(x % 128, z % 128)];
-        Assert.Equal(1, TerrainControl.BaseLayer(Base(40, 50)));
-        Assert.Equal(2, TerrainControl.BaseLayer(Base(105, 50)));
-        Assert.Equal(3, TerrainControl.BaseLayer(Base(160, 50)));
+        using TerrainData data = Build(200, 200, Bumpy, settings);
+        Assert.Equal(2, data.Header.SplatMaps);
+        Assert.True(data.TryGetLayerWeight(new Double2(30, 100), 1, out float left) && left > 0.99f, $"{left}");
+        Assert.True(data.TryGetLayerWeight(new Double2(100, 100), 0, out float middle) && middle > 0.99f, $"{middle}");
+        Assert.True(data.TryGetLayerWeight(new Double2(170, 100), 4, out float right) && right > 0.99f, $"{right}");
+        for (int x = 0; x < 200; x += 7)
+        {
+            float sum = 0f;
+            for (int layer = 0; layer < data.Header.Layers; layer++)
+            {
+                Assert.True(data.TryGetLayerWeight(new Double2(x + 0.5, 50.5), layer, out float w));
+                sum += w;
+            }
+            Assert.True(MathF.Abs(sum - 1f) < 0.02f, $"{x}: {sum}");
+        }
+        TerrainPage page = data.GetPage(new TerrainPageKey(0, 1, 0))!;
+        Assert.Equal(data.Strongest(page, TerrainPage.Index(160 - 128, 10)), 4);
+    }
+
+    // Details land in the finest pages only, and the trees come back as they went in
+    [Fact]
+    public void DetailsAndTreesImport()
+    {
+        byte[] density = new byte[200 * 200];
+        for (int i = 0; i < density.Length; i++)
+            density[i] = i % 200 < 100 ? (byte)255 : (byte)0;
+        TerrainTree[] trees = [new(3, new Double3(12.5, 40, 80), 1.5f, 1.2f, 0.9f, 0xFF00FF00), new(0, new Double3(150, 41, 20), 0f, 1f, 1f, TerrainTree.White)];
+        TerrainImportSettings settings = new() { Spacing = 1.0, Bottom = -100.0, Range = 655.35, Details = [new TerrainWeightMap(200, 200, density)], Trees = trees };
+        using TerrainData data = Build(200, 200, Bumpy, settings);
+        Assert.Equal(1, data.Header.Details);
+        Assert.True(data.TryGetDetailDensity(new Double2(40, 40), 0, out float grown) && grown > 0.99f);
+        Assert.True(data.TryGetDetailDensity(new Double2(160, 40), 0, out float bare) && bare == 0f);
+        Assert.NotNull(data.GetPage(new TerrainPageKey(0, 0, 0))!.Details);
+        foreach (TerrainPageKey key in data.PageKeys)
+            if (key.Level > 0)
+                Assert.Null(data.GetPage(key)!.Details);
+        Assert.Equal(trees, data.Trees);
+
+        data.RemoveTrees(new Double2(150, 20), 1);
+        Assert.Equal([trees[0]], data.Trees);
     }
 
     [Fact]

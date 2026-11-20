@@ -30,7 +30,7 @@ public static class TerrainDebug
                 int sample = z * size + x;
                 Span<byte> left = pixels.AsSpan((z * size * 2 + x) * 4, 4), right = pixels.AsSpan((z * size * 2 + size + x) * 4, 4);
                 byte grey = (byte)Math.Round((page.Heights[sample] - low) * scale);
-                bool hole = page.Control != null && TerrainControl.IsHole(page.Control[sample]);
+                bool hole = page.IsHole(sample);
                 left[0] = hole ? (byte)255 : grey;
                 left[1] = hole ? (byte)0 : grey;
                 left[2] = hole ? (byte)0 : grey;

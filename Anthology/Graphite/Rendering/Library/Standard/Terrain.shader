@@ -88,7 +88,8 @@ Shader "Graphite/Terrain"
         _TerrainNormals("Terrain Normals", Texture2DArray) = "black" {}
         _TerrainParams("Terrain Params", Vector) = (0, 4096, 128, 128)
         _TerrainSpacing("Terrain Spacing", Vector) = (1, 0, 0, 0)
-        _TerrainControl("Terrain Control", Texture2DArray) = "black" {}
+        _TerrainSplat("Terrain Splat", Texture2DArray) = "black" {}
+        _TerrainHoles("Terrain Holes", Texture2DArray) = "black" {}
         _TerrainAlbedo("Terrain Albedo", Texture2DArray) = "white" {}
         _TerrainSurface("Terrain Surface", Texture2DArray) = "white" {}
         _TerrainLayerData("Terrain Layer Data", Texture2D) = "black" {}

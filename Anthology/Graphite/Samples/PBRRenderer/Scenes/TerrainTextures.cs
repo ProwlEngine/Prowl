@@ -51,26 +51,13 @@ internal static class TerrainTextures
                 return (h, Mix((0.78, 0.82, 0.88), (0.93, 0.95, 0.97), h));
             }),
         ];
-        layers[Grass] = Grows(layers[Grass], 1f);
-        layers[Dirt] = Grows(layers[Dirt], 0.25f);
         return layers;
     }
 
-    private static TerrainLayerDesc Grows(TerrainLayerDesc layer, float density) => new()
-    {
-        Size = layer.Size,
-        Albedo = layer.Albedo,
-        Surface = layer.Surface,
-        TileSize = layer.TileSize,
-        HeightBlend = layer.HeightBlend,
-        Grass = 0,
-        GrassDensity = density,
-    };
-
-    /// <summary>Cards of thin blades out to 100 m.</summary>
-    public static TerrainGrassType[] GrassTypes =>
+    /// <summary>Cards of thin blades out to 100 m, grown by the terrain's one density map.</summary>
+    public static TerrainDetailPrototype[] GrassTypes =>
     [
-        new TerrainGrassType { Density = 16, Range = 100, MinHeight = 0.25f, MaxHeight = 0.6f, Width = 0.7f, Card = 0, NoiseSize = 1.5f },
+        new TerrainDetailPrototype { Density = 16, Range = 100, MinHeight = 0.25f, MaxHeight = 0.6f, MinWidth = 0.7f, MaxWidth = 0.7f, Card = 0, NoiseSize = 1.5f },
     ];
 
     /// <summary>A card of thin tapering blades in light grey, lit and tinted by the grass type, with its mips.</summary>

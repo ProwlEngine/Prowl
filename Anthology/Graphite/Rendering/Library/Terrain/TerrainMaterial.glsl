@@ -1,5 +1,5 @@
 // The terrain's material in the pixel shader. Terrain_EvaluateMaterial blends the layers here, from the node's page and
-// its parent's control by the morph, see Graphite/Terrain/TerrainLayers.glsl. Terrain_CachedMaterial samples the
+// its parent's splat weights by the morph, see Graphite/Terrain/TerrainLayers.glsl. Terrain_CachedMaterial samples the
 // material cache of the pixel's view instead: the finest level whose area holds the pixel, blended into the next over
 // its outer edge, and past every level the layers' average colours. Near the camera the strongest layer's normal map
 // adds detail at four times its tiling, and steep pixels there blend the layers themselves, as the cache only looks

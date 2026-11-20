@@ -1,5 +1,5 @@
-// TerrainSurface's material when it is given none: its layers from the material cache, or blended here by the control
-// pages when the cache is off, see Graphite/Terrain/TerrainMaterial.glsl, or plain grey without layers. _TerrainDebug 1
+// TerrainSurface's material when it is given none: its layers from the material cache, or blended here from the splat
+// maps when the cache is off, see Graphite/Terrain/TerrainMaterial.glsl, or plain grey without layers. _TerrainDebug 1
 // colours each node by its level, brighter as it morphs toward the next, 2 each pixel by its strongest layer, 3 the four
 // blended layer weights. The last two blend the layers here to show them.
 Shader "Graphite/Terrain/Default"

@@ -212,7 +212,7 @@ internal sealed class TerrainCache : IDisposable
     }
 
     /// <summary>Runs the frame's fills and writes the level data. Render thread.</summary>
-    public void Render(CommandBuffer cmd, Frame frame, TerrainPool pool, TerrainData data, TerrainLayers? layers, Texture control)
+    public void Render(CommandBuffer cmd, Frame frame, TerrainPool pool, TerrainData data, TerrainLayers? layers)
     {
         cmd.UpdateTexture<float>(Data, frame.Levels, TextureRegion.Whole(Data, 0, 0));
         if (frame.Fills.Count == 0)
@@ -223,8 +223,9 @@ internal sealed class TerrainCache : IDisposable
         _properties.SetTexture("Terrain_PageTable", pool.PageTable, _point);
         _properties.SetTexture("_TerrainHeights", pool.Heights, _linear);
         _properties.SetTexture("_TerrainNormals", pool.Normals, _linear);
-        _properties.SetTexture("_TerrainControl", control, _point);
-        _properties.SetFloat4("_TerrainSpacing", new Float4((float)header.Spacing, layers?.Count ?? 0, 0, 0));
+        _properties.SetTexture("_TerrainSplat", pool.Splat, _linear);
+        _properties.SetTexture("_TerrainHoles", pool.Holes, _point);
+        _properties.SetFloat4("_TerrainSpacing", new Float4((float)header.Spacing, layers?.Count ?? 0, pool.SplatMaps, 0));
         if (layers != null)
         {
             Sampler sampler = LayerSamplerFor(LayerSampler);

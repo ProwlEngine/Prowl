@@ -15,6 +15,8 @@ public readonly record struct TerrainStreamingStats(int Resident, int Capacity, 
 /// before fine and near before far, starts loading the missing ones on worker threads, and assigns the decoded ones a
 /// slice, evicting the least recently wanted. The top levels stay resident. A frame feature uploads the assigned pages
 /// at the start of the frame, so the frame's draws already see them, see Graphite/Docs/TerrainResearch.md part 2.4.
+/// Once <see cref="EnableDetails"/> is called, resident finest pages also take a slot of the detail pool for their
+/// densities, which the grass grows from.
 /// </summary>
 internal sealed class TerrainPool : IDisposable
 {
@@ -27,15 +29,17 @@ internal sealed class TerrainPool : IDisposable
         public long LastWanted;
         public bool Pinned;
         public bool Holes;
+        public int Detail = -1;
     }
 
     public sealed class Snapshot
     {
         public readonly Dictionary<TerrainPageKey, int> Pages = new();
         public readonly HashSet<TerrainPageKey> Holes = new();
-        public readonly List<(int Slice, TerrainPage Page)> Uploads = new();
+        public readonly List<(int Slice, TerrainPage Page, int Detail)> Uploads = new();
         public readonly List<TerrainPageKey> Arrived = new();
         public float[]? Table;
+        public float[]? DetailTable;
         public volatile bool Uploaded;
     }
 
@@ -47,14 +51,23 @@ internal sealed class TerrainPool : IDisposable
     private readonly List<(TerrainPageKey Key, double Priority)> _wanted = new();
     private readonly HashSet<TerrainPageKey> _wantedSet = new();
     private readonly HashSet<TerrainPageKey> _refresh = new();
-    private readonly uint[] _noControl = new uint[TerrainPage.Samples];
+    private readonly Stack<int> _freeDetails = new();
+    private readonly GraphicsDevice _device;
+    private readonly byte[] _noSplat, _noHoles = new byte[TerrainPage.Samples];
     private long _frame;
     private bool _tableChanged = true;
+    private bool _detailsChanged;
     private Snapshot _current = new();
 
     public TerrainPool(GraphicsDevice device, TerrainData data, int capacity)
     {
         _data = data;
+        _device = device;
+        SplatMaps = Math.Max(data.Header.SplatMaps, 1);
+        DetailMaps = (data.Header.Details + 3) / 4;
+        _noSplat = new byte[TerrainPage.Samples * 4 * SplatMaps];
+        for (int i = 0; i < TerrainPage.Samples; i++)
+            _noSplat[i * 4] = 255;
         int pinned = 0;
         foreach (TerrainPageKey key in data.PageKeys)
             pinned += key.Level >= data.Levels - PinnedLevels ? 1 : 0;
@@ -64,10 +77,14 @@ internal sealed class TerrainPool : IDisposable
         uint slices = (uint)Capacity;
         Heights = factory.CreateTexture(TextureDescription.Texture2D(TerrainPage.Size, TerrainPage.Size, 1, slices, PixelFormat.R16_UNorm, TextureUsage.Sampled));
         Normals = factory.CreateTexture(TextureDescription.Texture2D(TerrainPage.Size, TerrainPage.Size, 1, slices, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
-        Control = factory.CreateTexture(TextureDescription.Texture2D(TerrainPage.Size, TerrainPage.Size, 1, slices, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        Splat = factory.CreateTexture(TextureDescription.Texture2D(TerrainPage.Size, TerrainPage.Size, 1, slices * (uint)SplatMaps, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        Holes = factory.CreateTexture(TextureDescription.Texture2D(TerrainPage.Size, TerrainPage.Size, 1, slices, PixelFormat.R8_UNorm, TextureUsage.Sampled));
+        DetailTable = factory.CreateTexture(TextureDescription.Texture2D((uint)Capacity, 1, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
         Heights.Name = "Graphite Terrain Heights";
         Normals.Name = "Graphite Terrain Normals";
-        Control.Name = "Graphite Terrain Control";
+        Splat.Name = "Graphite Terrain Splat";
+        Holes.Name = "Graphite Terrain Holes";
+        DetailTable.Name = "Graphite Terrain Detail Table";
         (TableX, TableZ) = data.PagesAt(0);
         PageTable = factory.CreateTexture(TextureDescription.Texture2D((uint)TableX, (uint)TableZ, 1, (uint)data.Levels, PixelFormat.R32_Float, TextureUsage.Sampled));
         PageTable.Name = "Graphite Terrain Page Table";
@@ -82,9 +99,12 @@ internal sealed class TerrainPool : IDisposable
             int slice = _free.Pop();
             device.UpdateTexture<ushort>(Heights, page.Heights, TextureRegion.Whole(Heights, 0, (uint)slice));
             device.UpdateTexture<byte>(Normals, page.NormalAo, TextureRegion.Whole(Normals, 0, (uint)slice));
-            device.UpdateTexture<uint>(Control, page.Control ?? _noControl, TextureRegion.Whole(Control, 0, (uint)slice));
+            UploadSurface(page, slice, (data, target) => device.UpdateTexture<byte>(target.Texture, data.Span, target.Area));
             _resident[key] = new Slot { Slice = slice, Pinned = true, Holes = HasHoles(page) };
         }
+        float[] noDetails = new float[Capacity];
+        Array.Fill(noDetails, -1f);
+        device.UpdateTexture<float>(DetailTable, noDetails, TextureRegion.Whole(DetailTable, 0, 0));
         Publish();
         Stats = new TerrainStreamingStats(_resident.Count, Capacity, 0, 0, 0, Count());
     }
@@ -92,7 +112,34 @@ internal sealed class TerrainPool : IDisposable
     public int Capacity { get; }
     public Texture Heights { get; }
     public Texture Normals { get; }
-    public Texture Control { get; }
+
+    /// <summary>Per page <see cref="SplatMaps"/> slices from its slice times that, four layers' weights each.</summary>
+    public Texture Splat { get; }
+    public int SplatMaps { get; }
+
+    /// <summary>Per page a slice, above 0 where the quad whose lowest corner the texel is is cut out.</summary>
+    public Texture Holes { get; }
+
+    /// <summary>Per page slice the finest page's slot of <see cref="Details"/>, -1 for none.</summary>
+    public Texture DetailTable { get; }
+
+    /// <summary>Per detail slot <see cref="DetailMaps"/> slices from its slot times that, four prototypes' densities each, once enabled.</summary>
+    public Texture? Details { get; private set; }
+    public int DetailMaps { get; }
+
+    /// <summary>Makes the detail pool of so many finest pages, filled for the resident ones on the next update. Main thread.</summary>
+    public void EnableDetails(int pages)
+    {
+        if (Details != null || DetailMaps == 0)
+            return;
+        Details = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(TerrainPage.Size, TerrainPage.Size, 1, (uint)(pages * DetailMaps), PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        Details.Name = "Graphite Terrain Details";
+        for (int slot = pages - 1; slot >= 0; slot--)
+            _freeDetails.Push(slot);
+        foreach (TerrainPageKey key in _resident.Keys)
+            if (key.Level == 0)
+                _refresh.Add(key);
+    }
 
     /// <summary>Per level a slice of the finest level's page grid, holding each resident page's pool slice, -1 for none.</summary>
     public Texture PageTable { get; }
@@ -140,10 +187,10 @@ internal sealed class TerrainPool : IDisposable
 
         // Pages a skipped frame never uploaded go again
         Snapshot previous = _current;
-        List<(int Slice, TerrainPage Page)> carried = previous.Uploaded ? [] : previous.Uploads;
+        List<(int Slice, TerrainPage Page, int Detail)> carried = previous.Uploaded ? [] : previous.Uploads;
 
         int assigned = 0;
-        List<(int, TerrainPage)> uploads = new(carried);
+        List<(int, TerrainPage, int)> uploads = new(carried);
         List<TerrainPageKey> arrived = new();
         while (assigned < UploadsPerFrame && _ready.TryDequeue(out (TerrainPageKey Key, TerrainPage? Page) item))
         {
@@ -152,8 +199,9 @@ internal sealed class TerrainPool : IDisposable
                 item.Page = _data.GetPage(item.Key);
             if (item.Page == null || _resident.ContainsKey(item.Key) || !_wantedSet.Contains(item.Key) || !TryTakeSlice(out int slice))
                 continue;
-            _resident[item.Key] = new Slot { Slice = slice, LastWanted = _frame, Holes = HasHoles(item.Page) };
-            uploads.Add((slice, item.Page));
+            Slot added = new() { Slice = slice, LastWanted = _frame, Holes = HasHoles(item.Page) };
+            _resident[item.Key] = added;
+            uploads.Add((slice, item.Page, TakeDetail(item.Key, added)));
             arrived.Add(item.Key);
             _tableChanged = true;
             assigned++;
@@ -164,7 +212,7 @@ internal sealed class TerrainPool : IDisposable
             if (!_resident.TryGetValue(key, out Slot? slot) || arrived.Contains(key) || _data.GetPage(key) is not TerrainPage page)
                 continue;
             slot.Holes = HasHoles(page);
-            uploads.Add((slot.Slice, page));
+            uploads.Add((slot.Slice, page, TakeDetail(key, slot)));
             arrived.Add(key);
         }
         _refresh.Clear();
@@ -176,7 +224,29 @@ internal sealed class TerrainPool : IDisposable
         Stats = new TerrainStreamingStats(_resident.Count, Capacity, _wanted.Count, _loading.Count, assigned, Count());
     }
 
-    private static bool HasHoles(TerrainPage page) => page.Control != null && Array.Exists(page.Control, TerrainControl.IsHole);
+    private static bool HasHoles(TerrainPage page) => page.Holes != null && Array.Exists(page.Holes, h => h != 0);
+
+    // The finest page's detail slot, given one while the pool has room, -1 for pages without one
+    private int TakeDetail(TerrainPageKey key, Slot slot)
+    {
+        if (Details == null || key.Level != 0)
+            return -1;
+        if (slot.Detail < 0 && _freeDetails.TryPop(out int free))
+        {
+            slot.Detail = free;
+            _detailsChanged = true;
+        }
+        return slot.Detail;
+    }
+
+    private void FreeDetail(Slot slot)
+    {
+        if (slot.Detail < 0)
+            return;
+        _freeDetails.Push(slot.Detail);
+        slot.Detail = -1;
+        _detailsChanged = true;
+    }
 
     private int[] Count()
     {
@@ -237,6 +307,7 @@ internal sealed class TerrainPool : IDisposable
         if (when == long.MaxValue)
             return false;
         slice = _resident[oldest].Slice;
+        FreeDetail(_resident[oldest]);
         _resident.Remove(oldest);
         _tableChanged = true;
         return true;
@@ -260,18 +331,37 @@ internal sealed class TerrainPool : IDisposable
             snapshot.Table = table;
             _tableChanged = false;
         }
+        if (_detailsChanged || !_current.Uploaded && _current.DetailTable != null)
+        {
+            float[] details = new float[Capacity];
+            Array.Fill(details, -1f);
+            foreach (Slot slot in _resident.Values)
+                if (slot.Detail >= 0)
+                    details[slot.Slice] = slot.Detail;
+            snapshot.DetailTable = details;
+            _detailsChanged = false;
+        }
         _current = snapshot;
     }
 
     /// <summary>Uploads the frame's assigned pages into their slices. Render thread, at the start of the frame.</summary>
     public void Upload(CommandBuffer cmd, Snapshot snapshot)
     {
-        foreach ((int slice, TerrainPage page) in snapshot.Uploads)
+        foreach ((int slice, TerrainPage page, int detail) in snapshot.Uploads)
         {
             cmd.UpdateTexture<ushort>(Heights, page.Heights, TextureRegion.Whole(Heights, 0, (uint)slice));
             cmd.UpdateTexture<byte>(Normals, page.NormalAo, TextureRegion.Whole(Normals, 0, (uint)slice));
-            cmd.UpdateTexture<uint>(Control, page.Control ?? _noControl, TextureRegion.Whole(Control, 0, (uint)slice));
+            UploadSurface(page, slice, (data, target) => cmd.UpdateTexture<byte>(target.Texture, data.Span, target.Area));
+            if (detail >= 0 && Details != null)
+            {
+                byte[] packed = PackDetails(page);
+                int bytes = TerrainPage.Samples * 4;
+                for (int m = 0; m < DetailMaps; m++)
+                    cmd.UpdateTexture<byte>(Details, packed.AsSpan(m * bytes, bytes), TextureRegion.Whole(Details, 0, (uint)(detail * DetailMaps + m)));
+            }
         }
+        if (snapshot.DetailTable != null)
+            cmd.UpdateTexture<float>(DetailTable, snapshot.DetailTable, TextureRegion.Whole(DetailTable, 0, 0));
         if (snapshot.Table != null)
         {
             int layer = TableX * TableZ;
@@ -281,11 +371,39 @@ internal sealed class TerrainPool : IDisposable
         snapshot.Uploaded = true;
     }
 
+    private readonly record struct SliceTarget(Texture Texture, TextureRegion Area);
+
+    // A page's splat slices and hole slice, the defaults where it keeps none
+    private void UploadSurface(TerrainPage page, int slice, Action<ReadOnlyMemory<byte>, SliceTarget> upload)
+    {
+        byte[] splat = page.Splat ?? _noSplat;
+        int bytes = TerrainPage.Samples * 4;
+        for (int m = 0; m < SplatMaps; m++)
+            upload(splat.AsMemory(m * bytes, bytes), new SliceTarget(Splat, TextureRegion.Whole(Splat, 0, (uint)(slice * SplatMaps + m))));
+        upload(page.Holes ?? _noHoles, new SliceTarget(Holes, TextureRegion.Whole(Holes, 0, (uint)slice)));
+    }
+
+    // The page's planar densities as RGBA slices of four prototypes each
+    private byte[] PackDetails(TerrainPage page)
+    {
+        byte[] packed = new byte[DetailMaps * TerrainPage.Samples * 4];
+        for (int d = 0; d < page.DetailCount; d++)
+        {
+            int map = d >> 2, channel = d & 3;
+            for (int i = 0; i < TerrainPage.Samples; i++)
+                packed[(map * TerrainPage.Samples + i) * 4 + channel] = page.Details![d * TerrainPage.Samples + i];
+        }
+        return packed;
+    }
+
     public void Dispose()
     {
         Heights.Dispose();
         Normals.Dispose();
-        Control.Dispose();
+        Splat.Dispose();
+        Holes.Dispose();
+        DetailTable.Dispose();
+        Details?.Dispose();
         PageTable.Dispose();
     }
 }

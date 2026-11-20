@@ -16,10 +16,11 @@ public sealed class TerrainSurfaceTests : IDisposable
 
     public void Dispose() => _harness.Dispose();
 
-    // A flat package of the given quads a side, every sample at the middle of a 0 to 100 m range, or the finest level at fine
-    private static TerrainData Flat(int quads, ushort fine = 32768, Func<int, int, bool>? hole = null)
+    // A flat package of the given quads a side, every sample at the middle of a 0 to 100 m range, or the finest level at
+    // fine, with one detail prototype of the given density everywhere when there is one
+    private static TerrainData Flat(int quads, ushort fine = 32768, Func<int, int, bool>? hole = null, byte? detail = null)
     {
-        TerrainHeader header = new() { Spacing = 1, Bottom = 0, Range = 100, QuadsX = quads, QuadsZ = quads, Levels = TerrainHeader.LevelsFor(quads, quads), ControlLevels = 1 };
+        TerrainHeader header = new() { Spacing = 1, Bottom = 0, Range = 100, QuadsX = quads, QuadsZ = quads, Levels = TerrainHeader.LevelsFor(quads, quads), SplatLevels = 1, Details = detail != null ? 1 : 0 };
         MemoryStream stream = new();
         TerrainPackage.Writer writer = TerrainPackage.Begin(stream, header);
         for (int level = 0; level < header.Levels; level++)
@@ -31,16 +32,22 @@ public sealed class TerrainSurfaceTests : IDisposable
                     byte[] normals = new byte[TerrainPage.Samples * 4];
                     for (int i = 0; i < TerrainPage.Samples; i++)
                         (normals[i * 4], normals[i * 4 + 1], normals[i * 4 + 2], normals[i * 4 + 3]) = (128, 128, 255, 128);
-                    uint[]? control = null;
+                    byte[]? holes = null;
                     if (level == 0 && hole != null)
                     {
-                        control = new uint[TerrainPage.Samples];
+                        holes = new byte[TerrainPage.Samples];
                         for (int j = -1; j <= TerrainPage.Quads + 1; j++)
                             for (int i = -1; i <= TerrainPage.Quads + 1; i++)
                                 if (hole(x * TerrainPage.Quads + i, z * TerrainPage.Quads + j))
-                                    control[TerrainPage.Index(i, j)] = TerrainControl.Hole;
+                                    holes[TerrainPage.Index(i, j)] = 1;
                     }
-                    writer.Add(new TerrainPage(new TerrainPageKey(level, x, z), heights, normals, control), [32768, 32768, 32768, 32768, 32768, 32768, 32768, 32768]);
+                    byte[]? details = null;
+                    if (level == 0 && detail != null)
+                    {
+                        details = new byte[TerrainPage.Samples];
+                        Array.Fill(details, detail.Value);
+                    }
+                    writer.Add(new TerrainPage(new TerrainPageKey(level, x, z), heights, normals, null, holes, details), [32768, 32768, 32768, 32768, 32768, 32768, 32768, 32768]);
                 }
         writer.Finish();
         stream.Position = 0;
@@ -310,7 +317,7 @@ public sealed class TerrainSurfaceTests : IDisposable
     // A package of the given quads a side shaped by a height in metres over 0 to 100 m at each finest sample
     private static TerrainData Shaped(int quads, Func<int, int, double> metres)
     {
-        TerrainHeader header = new() { Spacing = 1, Bottom = 0, Range = 100, QuadsX = quads, QuadsZ = quads, Levels = TerrainHeader.LevelsFor(quads, quads), ControlLevels = 1 };
+        TerrainHeader header = new() { Spacing = 1, Bottom = 0, Range = 100, QuadsX = quads, QuadsZ = quads, Levels = TerrainHeader.LevelsFor(quads, quads), SplatLevels = 1 };
         MemoryStream stream = new();
         TerrainPackage.Writer writer = TerrainPackage.Begin(stream, header);
         for (int level = 0; level < header.Levels; level++)
@@ -331,7 +338,7 @@ public sealed class TerrainSurfaceTests : IDisposable
                             low = Math.Min(low, h);
                             high = Math.Max(high, h);
                         }
-                    writer.Add(new TerrainPage(new TerrainPageKey(level, x, z), heights, normals, null), [low, high, low, high, low, high, low, high]);
+                    writer.Add(new TerrainPage(new TerrainPageKey(level, x, z), heights, normals), [low, high, low, high, low, high, low, high]);
                 }
         writer.Finish();
         stream.Position = 0;
@@ -375,11 +382,13 @@ public sealed class TerrainSurfaceTests : IDisposable
         }
     }
 
-    // Bright blades grown by the layer cover much of the dark ground seen from above, and none grow without a grass type
+    private static TerrainDetailPrototype BrightGrass => new() { Density = 400, Range = 20, MinHeight = 0.3f, MaxHeight = 0.5f, MinWidth = 0.06f, MaxWidth = 0.06f, RootColor = new Float3(0.6f, 0.9f, 0.3f), TipColor = new Float3(0.6f, 0.9f, 0.3f) };
+
+    // Bright blades grown by the density map cover much of the dark ground seen from above, and none grow without a grass prototype
     [Fact]
-    public void Grass_GrowsWhereItsLayerIs()
+    public void Grass_GrowsWhereItsDensityIs()
     {
-        using TerrainData data = Flat(600);
+        using TerrainData data = Flat(600, detail: 255);
         const int size = 4;
         byte[] dark = new byte[size * size * 4], flat = new byte[size * size * 4];
         for (int i = 0; i < size * size; i++)
@@ -387,7 +396,7 @@ public sealed class TerrainSurfaceTests : IDisposable
             (dark[i * 4], dark[i * 4 + 1], dark[i * 4 + 2], dark[i * 4 + 3]) = (10, 10, 10, 128);
             (flat[i * 4], flat[i * 4 + 1], flat[i * 4 + 2], flat[i * 4 + 3]) = (128, 128, 230, 255);
         }
-        TerrainLayers layers = new(_harness.Renderer, [new TerrainLayerDesc { Size = size, Albedo = dark, Surface = flat, Grass = 0, HexTiling = false, MacroVariation = 0 }]);
+        TerrainLayers layers = new(_harness.Renderer, [new TerrainLayerDesc { Size = size, Albedo = dark, Surface = flat, HexTiling = false, MacroVariation = 0 }]);
         _harness.Owned.Add(layers);
         TerrainSurface surface = new(_harness.Renderer, data) { Layers = layers };
         _harness.Owned.Add(surface);
@@ -401,7 +410,7 @@ public sealed class TerrainSurfaceTests : IDisposable
             _harness.Frame(view);
         float bare = Brightness(view);
 
-        surface.GrassTypes = [new TerrainGrassType { Density = 400, Range = 20, MinHeight = 0.3f, MaxHeight = 0.5f, Width = 0.06f, RootColor = new Float3(0.6f, 0.9f, 0.3f), TipColor = new Float3(0.6f, 0.9f, 0.3f) }];
+        surface.Details = [BrightGrass];
         for (int frame = 0; frame < 4; frame++)
             _harness.Frame(view);
         float grown = Brightness(view);
@@ -410,9 +419,9 @@ public sealed class TerrainSurfaceTests : IDisposable
 
     // Grass cut away by a brush stops growing there on the next frame, and a hole cut at run time shows the clear through it
     [Fact]
-    public void ControlEdits_ReachTheGrassAndTheHoles()
+    public void SurfaceEdits_ReachTheGrassAndTheHoles()
     {
-        using TerrainData data = Flat(600);
+        using TerrainData data = Flat(600, detail: 255);
         const int size = 4;
         byte[] dark = new byte[size * size * 4], flat = new byte[size * size * 4];
         for (int i = 0; i < size * size; i++)
@@ -420,10 +429,10 @@ public sealed class TerrainSurfaceTests : IDisposable
             (dark[i * 4], dark[i * 4 + 1], dark[i * 4 + 2], dark[i * 4 + 3]) = (10, 10, 10, 128);
             (flat[i * 4], flat[i * 4 + 1], flat[i * 4 + 2], flat[i * 4 + 3]) = (128, 128, 230, 255);
         }
-        TerrainLayers layers = new(_harness.Renderer, [new TerrainLayerDesc { Size = size, Albedo = dark, Surface = flat, Grass = 0, HexTiling = false, MacroVariation = 0 }]);
+        TerrainLayers layers = new(_harness.Renderer, [new TerrainLayerDesc { Size = size, Albedo = dark, Surface = flat, HexTiling = false, MacroVariation = 0 }]);
         _harness.Owned.Add(layers);
         TerrainSurface surface = new(_harness.Renderer, data) { Layers = layers };
-        surface.GrassTypes = [new TerrainGrassType { Density = 400, Range = 20, MinHeight = 0.3f, MaxHeight = 0.5f, Width = 0.06f, RootColor = new Float3(0.6f, 0.9f, 0.3f), TipColor = new Float3(0.6f, 0.9f, 0.3f) }];
+        surface.Details = [BrightGrass];
         _harness.Owned.Add(surface);
         _harness.World.Providers.Add(surface);
         _harness.World.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(1, 1, 1, 1), Fog = default };
@@ -435,7 +444,7 @@ public sealed class TerrainSurfaceTests : IDisposable
             _harness.Frame(view);
         float grown = Brightness(view);
 
-        data.Apply(new TerrainEdit(TerrainBrush.Grass, new Double2(300.5, 220.25), 40, 1));
+        data.Apply(new TerrainEdit(TerrainBrush.Detail, new Double2(300.5, 220.25), 40, -1, Layer: 0));
         for (int frame = 0; frame < 2; frame++)
             _harness.Frame(view);
         float cut = Brightness(view);
@@ -464,15 +473,21 @@ public sealed class TerrainSurfaceTests : IDisposable
         Assert.InRange(surface.Drawn, 1, 8);
     }
 
-    // Props fill the cells around the viewer, standing on the ground, and leave the world once it walks away
+    private TerrainPropKind Quad()
+    {
+        Material material = _harness.Renderer.CreateMaterial(_harness.Renderer.Standard.Lit);
+        _harness.Owned.Add(material);
+        return new TerrainPropKind { Mesh = _harness.CreateQuad(), Materials = [material] };
+    }
+
+    // Mesh details fill the cells around the viewer, standing on the ground, and leave the world once it walks away
     [Fact]
     public void Props_FollowTheViewer()
     {
-        using TerrainData data = Flat(600);
-        TerrainScatter scatter = new(data, [new TerrainScatterRule { Id = 1, Density = 0.5f, Footprint = 2f }], seed: 2);
-        Material material = _harness.Renderer.CreateMaterial(_harness.Renderer.Standard.Lit);
-        _harness.Owned.Add(material);
-        using TerrainProps props = new(_harness.World, scatter, [new TerrainPropKind { Mesh = _harness.CreateQuad(), Materials = [material] }]) { Range = 100, CellsPerUpdate = 100 };
+        using TerrainData data = Flat(600, detail: 255);
+        TerrainPropKind quad = Quad();
+        using TerrainDetailInstances details = new(data, [new TerrainDetailPrototype { Mesh = quad, Density = 0.05f }]);
+        using TerrainProps props = new(_harness.World, details, [quad]) { Range = 100, CellsPerUpdate = 100 };
 
         void Settle(Double3 viewer)
         {
@@ -492,15 +507,32 @@ public sealed class TerrainSurfaceTests : IDisposable
         Assert.Equal(before, _harness.World.Count);
     }
 
-    // A raise under placed props moves the ones that stay onto the new ground in the same call, keeping their renderables
+    // The terrain's trees go in and out of the world as they are set and removed
+    [Fact]
+    public void Props_FollowTheTrees()
+    {
+        using TerrainData data = Flat(600);
+        using TerrainTreeInstances trees = new(data);
+        using TerrainProps props = new(_harness.World, trees, [Quad()]) { Range = 100, CellsPerUpdate = 100 };
+        data.SetTrees([new TerrainTree(0, new Double3(300, 50, 300), 0f, 1f, 1f, TerrainTree.White), new TerrainTree(0, new Double3(310, 50, 300), 0f, 1f, 1f, TerrainTree.White)]);
+        Double3 viewer = new(300, 50, 300);
+        props.Update(viewer);
+        props.Settle().Wait();
+        props.Update(viewer);
+        Assert.Equal(2, props.Count);
+
+        data.RemoveTrees(new Double2(310, 300), 1);
+        Assert.Equal(1, props.Count);
+    }
+
+    // A raise under placed details moves the ones that stay onto the new ground in the same call, keeping their renderables
     [Fact]
     public void Props_FollowAnEdit()
     {
-        using TerrainData data = Flat(600);
-        TerrainScatter scatter = new(data, [new TerrainScatterRule { Id = 1, Density = 2f, Footprint = 1f }], seed: 2);
-        Material material = _harness.Renderer.CreateMaterial(_harness.Renderer.Standard.Lit);
-        _harness.Owned.Add(material);
-        using TerrainProps props = new(_harness.World, scatter, [new TerrainPropKind { Mesh = _harness.CreateQuad(), Materials = [material] }]) { Range = 100, CellsPerUpdate = 100 };
+        using TerrainData data = Flat(600, detail: 255);
+        TerrainPropKind quad = Quad();
+        using TerrainDetailInstances details = new(data, [new TerrainDetailPrototype { Mesh = quad, Density = 0.2f }]);
+        using TerrainProps props = new(_harness.World, details, [quad]) { Range = 100, CellsPerUpdate = 100 };
         Double3 viewer = new(300, 50, 300);
         props.Update(viewer);
         props.Settle().Wait();
@@ -511,9 +543,9 @@ public sealed class TerrainSurfaceTests : IDisposable
 
         Assert.Equal(total - count + props.Count, _harness.World.Count);
         int moved = 0;
-        for (int z = 3; z <= 5; z++)
-            for (int x = 3; x <= 5; x++)
-                foreach (TerrainInstance instance in scatter.Cell(x, z))
+        for (int z = 8; z <= 10; z++)
+            for (int x = 8; x <= 10; x++)
+                foreach (TerrainInstance instance in details.Cell(x, z))
                 {
                     Assert.True(data.TryGetHeight(new Double2(instance.Position.X, instance.Position.Z), out double ground));
                     Assert.Equal(ground, instance.Position.Y, 6);

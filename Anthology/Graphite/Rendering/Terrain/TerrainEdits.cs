@@ -20,20 +20,17 @@ public enum TerrainBrush : byte
     /// <summary>A bowl Strength metres deep with a raised rim out to half the radius again.</summary>
     Crater,
 
-    /// <summary>Paints the material Layer over the ground by Strength, 0 to 1, fully inside seven tenths of the radius.</summary>
+    /// <summary>Paints the material Layer over the ground by Strength, 0 to 1, fully inside seven tenths of the radius, the other layers giving way.</summary>
     Paint,
 
     /// <summary>Cuts out the quads whose middles lie in the circle, or with a negative Strength fills them back in.</summary>
     Hole,
 
-    /// <summary>Cuts the grass back by Strength, 0 to 1, fully inside seven tenths of the radius, letting it grow back when negative.</summary>
-    Grass,
-
-    /// <summary>Cuts scattered detail back as Grass cuts grass.</summary>
+    /// <summary>Adds Strength, -1 to 1, to the density of the detail prototype Layer, fully inside seven tenths of the radius.</summary>
     Detail,
 }
 
-/// <summary>One edit: a brush over a circle of world x and z, fading to nothing at its edge. Height is Flatten's target, Layer is Paint's.</summary>
+/// <summary>One edit: a brush over a circle of world x and z, fading to nothing at its edge. Height is Flatten's target, Layer is Paint's layer or Detail's prototype.</summary>
 public readonly record struct TerrainEdit(TerrainBrush Brush, Double2 Center, double Radius, double Strength, double Height = 0, int Layer = 0);
 
 /// <summary>What an edit changed: the world x and z box whose finest samples it changed, normals and occlusion included, and every page of every level it rewrote.</summary>
@@ -53,8 +50,8 @@ public sealed partial class TerrainData
     /// <summary>
     /// Changes the finest samples under a brush, then every level over them. Height brushes rebuild the heights, the
     /// normals, occlusion and cavity they reach and the quarter bounds, exactly as importing the edited heights would.
-    /// Control brushes change the layers, holes and grass and detail cuts, every level that keeps control taking the
-    /// finest sample it stands on, as the importer does. The same edits in the same order give the same bits. Pages are
+    /// Paint, Hole and Detail brushes change the splat weights, holes and detail densities, every level that keeps splat
+    /// weights taking the finest sample it stands on, as the importer does. The same edits in the same order give the same bits. Pages are
     /// replaced rather than changed, so queries on other threads see the old page or the new one whole.
     /// </summary>
     public TerrainEdited Apply(in TerrainEdit edit)
@@ -78,7 +75,7 @@ public sealed partial class TerrainData
         if (!(edit.Radius > 0) || i0 > i1 || j0 > j1)
             return new TerrainEdited(edit.Center, edit.Center, []);
         if (edit.Brush >= TerrainBrush.Paint)
-            return ChangeControl(edit, i0, i1, j0, j1, cx, cz);
+            return ChangeSurface(edit, i0, i1, j0, j1, cx, cz);
 
         Dictionary<TerrainPageKey, TerrainPage> pages = new();
         int width = i1 - i0 + 3, depth = j1 - j0 + 3;
@@ -165,43 +162,40 @@ public sealed partial class TerrainData
         Editable(new TerrainPageKey(0, px, pz), pages).Heights[TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads)] = value;
     }
 
-    // A copy of the page to change, with its control copied too when asked, or made where a level keeping control has none
-    private TerrainPage Editable(TerrainPageKey key, Dictionary<TerrainPageKey, TerrainPage> pages, bool control = false)
+    // A copy of the page to change, given the layers a surface brush writes where its level keeps them and it has none
+    private TerrainPage Editable(TerrainPageKey key, Dictionary<TerrainPageKey, TerrainPage> pages, bool surface = false)
     {
         if (!pages.TryGetValue(key, out TerrainPage? copy))
         {
-            TerrainPage page = GetPage(key)!;
-            uint[]? controls = page.Control;
-            if (control)
-                controls = (uint[]?)page.Control?.Clone() ?? (key.Level < Header.ControlLevels ? new uint[TerrainPage.Samples] : null);
-            copy = new TerrainPage(key, (ushort[])page.Heights.Clone(), (byte[])page.NormalAo.Clone(), controls);
+            copy = GetPage(key)!.Clone();
             pages[key] = copy;
         }
-        else if (control && copy.Control == null && key.Level < Header.ControlLevels)
+        if (!surface)
+            return copy;
+        bool splat = key.Level < Header.SplatLevels;
+        bool missing = splat && Header.SplatMaps > 0 && copy.Splat == null || splat && copy.Holes == null || key.Level == 0 && Header.Details > 0 && copy.Details == null;
+        if (missing)
         {
-            copy = new TerrainPage(key, copy.Heights, copy.NormalAo, new uint[TerrainPage.Samples]);
+            byte[]? weights = copy.Splat;
+            if (splat && Header.SplatMaps > 0 && weights == null)
+            {
+                weights = new byte[TerrainPage.Samples * 4 * Header.SplatMaps];
+                for (int i = 0; i < TerrainPage.Samples; i++)
+                    weights[i * 4] = 255;
+            }
+            byte[]? holes = copy.Holes ?? (splat ? new byte[TerrainPage.Samples] : null);
+            byte[]? details = copy.Details ?? (key.Level == 0 && Header.Details > 0 ? new byte[TerrainPage.Samples * Header.Details] : null);
+            copy = new TerrainPage(key, copy.Heights, copy.NormalAo, weights, holes, details);
             pages[key] = copy;
         }
         return copy;
     }
 
-    /// <summary>How much of the scattered detail is cut at a world x and z, 0 to 1, blended across the quad.</summary>
-    public bool TryGetDetailCut(Double2 xz, out float cut)
+    private TerrainEdited ChangeSurface(in TerrainEdit edit, int i0, int i1, int j0, int j1, double cx, double cz)
     {
-        cut = 0f;
-        if (!TryCell(xz, 0, out Cell cell))
-            return false;
-        uint[]? control = cell.Page.Control;
-        if (control == null)
-            return true;
-        double Cut(int x, int z) => TerrainControl.DetailCut(control[TerrainPage.Index(x, z)]) / (double)TerrainControl.MaxDetailCut;
-        double a = Cut(cell.Lx, cell.Lz), b = Cut(cell.Lx + 1, cell.Lz), c = Cut(cell.Lx, cell.Lz + 1), e = Cut(cell.Lx + 1, cell.Lz + 1);
-        cut = (float)((a + (b - a) * cell.Fx) * (1 - cell.Fz) + (c + (e - c) * cell.Fx) * cell.Fz);
-        return true;
-    }
-
-    private TerrainEdited ChangeControl(in TerrainEdit edit, int i0, int i1, int j0, int j1, double cx, double cz)
-    {
+        if (edit.Brush == TerrainBrush.Paint && (Header.SplatMaps == 0 || (uint)edit.Layer >= (uint)Header.Layers) ||
+            edit.Brush == TerrainBrush.Detail && (uint)edit.Layer >= (uint)Header.Details)
+            return new TerrainEdited(edit.Center, edit.Center, []);
         double spacing = Header.Spacing;
         double middle = edit.Brush == TerrainBrush.Hole ? 0.5 : 0.0;
         (int pagesX, int pagesZ) = PagesAt(0);
@@ -212,19 +206,18 @@ public sealed partial class TerrainData
             {
                 double dx = (i + middle) * spacing - cx, dz = (j + middle) * spacing - cz;
                 double d = Math.Sqrt(dx * dx + dz * dz) / edit.Radius;
-                uint before = FinestControl(i, j, pages);
-                uint after = Control(edit, before, d);
-                if (after == before)
+                if (d >= 1)
                     continue;
                 int px = Math.Min(i / TerrainPage.Quads, pagesX - 1), pz = Math.Min(j / TerrainPage.Quads, pagesZ - 1);
-                Editable(new TerrainPageKey(0, px, pz), pages, control: true).Control![TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads)] = after;
-                changed = true;
+                TerrainPage page = Editable(new TerrainPageKey(0, px, pz), pages, surface: true);
+                changed |= Paint(page, TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads), edit, Soft(d) * edit.Strength);
             }
         if (!changed)
             return new TerrainEdited(edit.Center, edit.Center, []);
 
-        for (int level = 0; level < Math.Min(Header.ControlLevels, Levels); level++)
-            RebuildControl(level, i0, i1, j0, j1, pages);
+        if (edit.Brush != TerrainBrush.Detail)
+            for (int level = 1; level < Math.Min(Header.SplatLevels, Levels); level++)
+                RebuildSurface(level, i0, i1, j0, j1, pages);
 
         List<TerrainPageKey> keys = new(pages.Keys);
         keys.Sort((a, b) => a.Level != b.Level ? a.Level.CompareTo(b.Level) : a.Z != b.Z ? a.Z.CompareTo(b.Z) : a.X.CompareTo(b.X));
@@ -247,71 +240,51 @@ public sealed partial class TerrainData
         return t * t * (3 - 2 * t);
     }
 
-    private static uint Control(in TerrainEdit edit, uint control, double d)
+    // Applies a surface brush to one finest sample, true when it changed. Paint mixes the layer in by the amount, every
+    // other layer giving way in proportion, so the weights still add to 1.
+    private bool Paint(TerrainPage page, int index, in TerrainEdit edit, double amount)
     {
-        double amount = Soft(d) * edit.Strength;
-        return edit.Brush switch
+        switch (edit.Brush)
         {
-            TerrainBrush.Hole => d < 1 && edit.Strength != 0 ? TerrainControl.WithHole(control, edit.Strength > 0) : control,
-            TerrainBrush.Grass => TerrainControl.WithGrassCut(control, (int)Math.Round(TerrainControl.GrassCut(control) + amount * TerrainControl.MaxGrassCut)),
-            TerrainBrush.Detail => TerrainControl.WithDetailCut(control, (int)Math.Round(TerrainControl.DetailCut(control) + amount * TerrainControl.MaxDetailCut)),
-            _ => Paint(control, edit.Layer, Math.Clamp(amount, 0, 1)),
-        };
-    }
-
-    // Mixes the layer into the sample's two by the amount and keeps the strongest two, the base first, ties to the earlier
-    private static uint Paint(uint control, int layer, double amount)
-    {
-        if (amount <= 0 || layer < 0 || layer > 63)
-            return control;
-        double blend = TerrainControl.OverlayBlend(control) / 255.0;
-        Span<int> layers = stackalloc int[3];
-        Span<double> weights = stackalloc double[3];
-        int count = 0;
-        void Add(Span<int> ls, Span<double> ws, int l, double w)
-        {
-            for (int k = 0; k < count; k++)
-                if (ls[k] == l)
+            case TerrainBrush.Hole:
+                byte hole = edit.Strength > 0 ? (byte)1 : (byte)0;
+                if (edit.Strength == 0 || page.Holes![index] == hole)
+                    return false;
+                page.Holes[index] = hole;
+                return true;
+            case TerrainBrush.Detail:
+            {
+                int at = edit.Layer * TerrainPage.Samples + index;
+                byte after = (byte)Math.Clamp((int)Math.Round(page.Details![at] + amount * 255), 0, 255);
+                bool differs = after != page.Details[at];
+                page.Details[at] = after;
+                return differs;
+            }
+            default:
+            {
+                double a = Math.Clamp(amount, 0, 1);
+                if (a <= 0)
+                    return false;
+                byte[] splat = page.Splat!;
+                bool differs = false;
+                for (int layer = 0; layer < Header.Layers; layer++)
                 {
-                    ws[k] += w;
-                    return;
+                    int at = ((layer >> 2) * TerrainPage.Samples + index) * 4 + (layer & 3);
+                    double weight = splat[at] / 255.0 * (1 - a) + (layer == edit.Layer ? a : 0);
+                    byte value = (byte)Math.Round(weight * 255);
+                    differs |= value != splat[at];
+                    splat[at] = value;
                 }
-            ls[count] = l;
-            ws[count++] = w;
+                return differs;
+            }
         }
-        Add(layers, weights, TerrainControl.BaseLayer(control), (1 - blend) * (1 - amount));
-        Add(layers, weights, TerrainControl.OverlayLayer(control), blend * (1 - amount));
-        Add(layers, weights, layer, amount);
-
-        int a = 0;
-        for (int k = 1; k < count; k++)
-            if (weights[k] > weights[a])
-                a = k;
-        int b = -1;
-        for (int k = 0; k < count; k++)
-            if (k != a && (b < 0 || weights[k] > weights[b]))
-                b = k;
-        if (b < 0 || weights[b] <= 0)
-            return TerrainControl.Layers(layers[a], layers[a], 0, control);
-        return TerrainControl.Layers(layers[a], layers[b], (int)Math.Round(weights[b] / (weights[a] + weights[b]) * 255), control);
     }
 
-    // A finest control sample, held at the world's edge, 0 where its page keeps none
-    private uint FinestControl(int i, int j, Dictionary<TerrainPageKey, TerrainPage> pages)
-    {
-        i = Math.Clamp(i, 0, Header.QuadsX);
-        j = Math.Clamp(j, 0, Header.QuadsZ);
-        (int pagesX, int pagesZ) = PagesAt(0);
-        int px = Math.Min(i / TerrainPage.Quads, pagesX - 1), pz = Math.Min(j / TerrainPage.Quads, pagesZ - 1);
-        TerrainPageKey key = new(0, px, pz);
-        TerrainPage page = pages.TryGetValue(key, out TerrainPage? copy) ? copy : GetPage(key)!;
-        return page.Control?[TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads)] ?? 0u;
-    }
-
-    // A control level's samples over the edited finest box, aprons included, each the finest sample it stands on
-    private void RebuildControl(int level, int i0, int i1, int j0, int j1, Dictionary<TerrainPageKey, TerrainPage> pages)
+    // A coarser level's splat weights and holes over the edited finest box, aprons included, each the finest sample it stands on
+    private void RebuildSurface(int level, int i0, int i1, int j0, int j1, Dictionary<TerrainPageKey, TerrainPage> pages)
     {
         (int pagesX, int pagesZ) = PagesAt(level);
+        (int finestX, int finestZ) = PagesAt(0);
         int edgeX = pagesX * TerrainPage.Quads + TerrainPage.Apron, edgeZ = pagesZ * TerrainPage.Quads + TerrainPage.Apron;
         int li0 = Math.Max((i0 >> level) - 1, -TerrainPage.Apron), lj0 = Math.Max((j0 >> level) - 1, -TerrainPage.Apron);
         int li1 = Math.Min(i1 == Header.QuadsX ? edgeX : ((i1 + (1 << level) - 1) >> level) + 1, edgeX);
@@ -329,10 +302,20 @@ public sealed partial class TerrainData
                 int z0 = Math.Max(lj0 - oz, -TerrainPage.Apron), z1 = Math.Min(lj1 - oz, TerrainPage.Quads + TerrainPage.Apron);
                 if (x0 > x1 || z0 > z1)
                     continue;
-                uint[] control = Editable(key, pages, control: true).Control!;
+                TerrainPage page = Editable(key, pages, surface: true);
                 for (int z = z0; z <= z1; z++)
                     for (int x = x0; x <= x1; x++)
-                        control[TerrainPage.Index(x, z)] = FinestControl((ox + x) << level, (oz + z) << level, pages);
+                    {
+                        int i = Math.Clamp((ox + x) << level, 0, Header.QuadsX), j = Math.Clamp((oz + z) << level, 0, Header.QuadsZ);
+                        int fx = Math.Min(i / TerrainPage.Quads, finestX - 1), fz = Math.Min(j / TerrainPage.Quads, finestZ - 1);
+                        TerrainPageKey finestKey = new(0, fx, fz);
+                        TerrainPage finest = pages.TryGetValue(finestKey, out TerrainPage? edited) ? edited : GetPage(finestKey)!;
+                        int from = TerrainPage.Index(i - fx * TerrainPage.Quads, j - fz * TerrainPage.Quads), to = TerrainPage.Index(x, z);
+                        page.Holes![to] = finest.Holes?[from] ?? 0;
+                        for (int map = 0; map < page.SplatMaps; map++)
+                            for (int c = 0; c < 4; c++)
+                                page.Splat![(map * TerrainPage.Samples + to) * 4 + c] = finest.Splat?[(map * TerrainPage.Samples + from) * 4 + c] ?? (byte)(map == 0 && c == 0 ? 255 : 0);
+                    }
             }
     }
 

@@ -1,16 +1,17 @@
-// The terrain's material layers, shared by the pixel shader's direct path and the cache compositor: control samples
+// The terrain's material layers, shared by the pixel shader's direct path and the cache compositor: the splat maps
 // give each layer a weight, the four strongest are sampled in world space, top down on gentle ground and from the sides
-// on steep ground, and blended by their heights, so stones poke through grass instead of fading into it. Control texel
-// bits: base layer 0 to 5, overlay layer 6 to 11, overlay weight 12 to 19.
+// on steep ground, and blended by their heights, so stones poke through grass instead of fading into it. Each page has
+// one splat slice per four layers, layer l in channel l % 4 of slice l / 4.
 #pragma once
 
 #define TERRAIN_PAGE_SIZE 131.0
 
-uniform sampler2DArray _TerrainControl;
+uniform sampler2DArray _TerrainSplat;       // per page its splat slices from its slice times the map count
+uniform sampler2DArray _TerrainHoles;       // per page a slice, above 0 where the quad whose lowest corner it is is cut out
 uniform sampler2DArray _TerrainAlbedo;      // per layer: albedo, and height in alpha
 uniform sampler2DArray _TerrainSurface;     // per layer: normal x and y, roughness, occlusion
 uniform sampler2D _TerrainLayerData;        // per layer a texel: one over its tile size in metres, its height blend, 1 for hex tiling, macro variation
-uniform vec4 _TerrainSpacing;               // the finest level's spacing in metres, the layer count
+uniform vec4 _TerrainSpacing;               // the finest level's spacing in metres, the layer count, the splat maps a page
 
 struct Terrain_Material
 {
@@ -57,23 +58,26 @@ void terrain_AddLayer(inout ivec4 ids, inout vec4 weights, int id, float weight)
     }
 }
 
-// The bilinear share of each of a page's four control samples around a point of its uv in the pools, times scale
+// Every layer's weight at a point of a page's uv in the pools, read bilinear from its splat slices, times scale
 void Terrain_Gather(vec3 page, float scale, inout ivec4 ids, inout vec4 weights)
 {
     if (scale <= 0.0)
         return;
-    vec2 t = page.xy * TERRAIN_PAGE_SIZE - 0.5;
-    vec2 base = floor(t);
-    vec2 f = t - base;
-    vec4 shares = vec4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y) * scale;
-    ivec2 corner = ivec2(base);
-    for (int c = 0; c < 4; c++)
+    int maps = max(int(_TerrainSpacing.z + 0.5), 1);
+    int first = int(page.z + 0.5) * maps;
+    for (int m = 0; m < maps; m++)
     {
-        uint bits = packUnorm4x8(texelFetch(_TerrainControl, ivec3(corner + ivec2(c & 1, c >> 1), int(page.z + 0.5)), 0));
-        float blend = float((bits >> 12) & 255u) / 255.0;
-        terrain_AddLayer(ids, weights, int(bits & 63u), shares[c] * (1.0 - blend));
-        terrain_AddLayer(ids, weights, int((bits >> 6) & 63u), shares[c] * blend);
+        vec4 w = textureLod(_TerrainSplat, vec3(page.xy, float(first + m)), 0.0) * scale;
+        for (int c = 0; c < 4; c++)
+            terrain_AddLayer(ids, weights, m * 4 + c, w[c]);
     }
+}
+
+// Whether the quad under a point of a page's uv in the pools is cut out
+bool Terrain_IsHole(vec3 page)
+{
+    ivec2 quad = ivec2(floor(page.xy * TERRAIN_PAGE_SIZE - 0.5));
+    return texelFetch(_TerrainHoles, ivec3(quad, int(page.z + 0.5)), 0).r > 0.0;
 }
 
 vec2 terrain_Hash(ivec2 p)

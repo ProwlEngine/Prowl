@@ -28,13 +28,9 @@ public sealed class TerrainLayerDesc
 
     /// <summary>How strongly broad light and dark patches vary the albedo, 0 for none.</summary>
     public float MacroVariation { get; init; } = 0.3f;
-
-    /// <summary>The grass group it grows, every <see cref="TerrainGrassType"/> of that group, -1 for none, and how densely at full weight, 0 to 1.</summary>
-    public int Grass { get; init; } = -1;
-    public float GrassDensity { get; init; } = 1f;
 }
 
-/// <summary>The terrain's material layers on the GPU: texture arrays with mips, one layer a slice, a texel of data each, and each one's grass under.</summary>
+/// <summary>The terrain's material layers on the GPU: texture arrays with mips, one layer a slice, and a texel of data each.</summary>
 public sealed class TerrainLayers : IDisposable
 {
     public const int MaxLayers = 64;
@@ -55,13 +51,11 @@ public sealed class TerrainLayers : IDisposable
         uint count = (uint)layers.Count;
         Albedo = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D((uint)size, (uint)size, mips, count, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.Sampled));
         Surface = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D((uint)size, (uint)size, mips, count, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
-        Data = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(MaxLayers, 2, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
+        Data = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(MaxLayers, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
         Albedo.Name = "Graphite Terrain Albedo";
         Surface.Name = "Graphite Terrain Surface";
 
-        float[] data = new float[MaxLayers * 2 * 4];
-        for (int i = 0; i < MaxLayers; i++)
-            data[(MaxLayers + i) * 4] = -1f;
+        float[] data = new float[MaxLayers * 4];
         for (int i = 0; i < layers.Count; i++)
         {
             TerrainLayerDesc layer = layers[i];
@@ -71,8 +65,6 @@ public sealed class TerrainLayers : IDisposable
             data[i * 4 + 1] = MathF.Max(layer.HeightBlend, 0f);
             data[i * 4 + 2] = layer.HexTiling ? 1f : 0f;
             data[i * 4 + 3] = MathF.Max(layer.MacroVariation, 0f);
-            data[(MaxLayers + i) * 4] = layer.Grass;
-            data[(MaxLayers + i) * 4 + 1] = Math.Clamp(layer.GrassDensity, 0f, 1f);
         }
         device.UpdateTexture<float>(Data, data, TextureRegion.Whole(Data, 0, 0));
         Count = layers.Count;

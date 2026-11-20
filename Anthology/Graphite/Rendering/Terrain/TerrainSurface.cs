@@ -32,7 +32,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     private TerrainGrass.Frame? _grassFrame;
     private GpuMesh? _card;
     private Material? _cardMaterial;
-    private IReadOnlyList<TerrainGrassType> _grassTypes = [];
+    private IReadOnlyList<TerrainDetailPrototype> _details = [];
     private bool _grassChanged;
     private TerrainFarShadow? _far;
     private readonly Renderer _owner;
@@ -115,7 +115,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     /// </summary>
     public Double3? Viewer { get; set; }
 
-    /// <summary>The material layers the control pages pick from, or null for plain ground.</summary>
+    /// <summary>The material layers the splat maps weigh, by index, or null for plain ground.</summary>
     public TerrainLayers? Layers
     {
         get => _layers;
@@ -173,18 +173,24 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     public double FarShadowCoverage { get; set; } = 8000;
     public double FarShadowReach { get; set; } = 3000;
 
-    /// <summary>The kinds of grass the layers grow, see <see cref="TerrainLayerDesc.Grass"/>. Needs <see cref="Layers"/>.</summary>
-    public IReadOnlyList<TerrainGrassType> GrassTypes
+    /// <summary>
+    /// The detail prototypes, one per density map of the terrain by index. The surface grows the grass card ones; place
+    /// the mesh ones with a <see cref="TerrainProps"/> over <see cref="TerrainDetailInstances"/>.
+    /// </summary>
+    public IReadOnlyList<TerrainDetailPrototype> Details
     {
-        get => _grassTypes;
+        get => _details;
         set
         {
-            _grassTypes = value ?? [];
+            _details = value ?? [];
             _grassChanged = true;
         }
     }
 
-    /// <summary>The textures grass cards show, a slice each with alpha, sRGB colour multiplied by the type's colours.</summary>
+    /// <summary>The finest pages whose densities the grass can read at once.</summary>
+    public int DetailPages { get; init; } = 64;
+
+    /// <summary>The textures grass cards show, a slice each with alpha, sRGB colour multiplied by the prototype's colours.</summary>
     public Texture? GrassCards { get; set; }
 
     /// <summary>What the default material shows in place of the ground.</summary>
@@ -225,7 +231,8 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         if (Viewer is { } viewer)
             _viewers.Add(viewer);
         double quality = _lodQuality;
-        _pool.Update(_viewers, level => NodeQuads * Data.SpacingAt(level) * quality);
+        double grassRange = GrassRange();
+        _pool.Update(_viewers, level => Math.Max(NodeQuads * Data.SpacingAt(level) * quality, level == 0 ? grassRange : 0));
         _snapshot = _pool.Current;
 
         if (_slotViews.Length == 0)
@@ -253,11 +260,22 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         UpdateFarShadow();
     }
 
+    // The furthest a grass prototype of the terrain reaches, 0 without any
+    private double GrassRange()
+    {
+        double range = 0;
+        for (int i = 0; i < Math.Min(_details.Count, Data.Header.Details); i++)
+            if (_details[i].Mesh == null && _details[i].Density > 0)
+                range = Math.Max(range, _details[i].Range);
+        return range;
+    }
+
     private void UpdateGrass(CullFrustum?[] frustums)
     {
-        bool grow = _grassTypes.Count > 0 && _layers != null;
+        bool grow = GrassRange() > 0;
         if (grow && _grass == null)
         {
+            _pool.EnableDetails(Math.Max(DetailPages, 1));
             _grass = new TerrainGrass(_owner, _slotViews.Length);
             _card = _owner.CreateMesh(CardMesh());
             Shader shader = _owner.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Terrain/Grass.shader")!));
@@ -270,14 +288,14 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
             return;
         if (_grassChanged)
         {
-            _grass.SetTypes(_grassTypes);
+            _grass.SetTypes(_details);
             _grassChanged = false;
         }
         _cardMaterial!.SetTexture("_GrassInstances", _grass.Instances, SamplerDescription.Point);
         _cardMaterial.SetTexture("_GrassTypes", _grass.Types, SamplerDescription.Point);
         if (GrassCards != null)
             _cardMaterial.SetTexture("_GrassCards", GrassCards, SamplerDescription.Aniso4x);
-        _grass.Update(grow ? frustums : new CullFrustum?[frustums.Length], _grassTypes, Data, _position);
+        _grass.Update(grow ? frustums : new CullFrustum?[frustums.Length], _details, Data, _position, _pool.DetailMaps);
         _grassFrame = grow ? _grass.Current : null;
     }
 
@@ -553,8 +571,9 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         material.SetTexture("_TerrainHeights", _pool.Heights);
         material.SetTexture("_TerrainNormals", _pool.Normals);
         material.SetFloat4("_TerrainParams", new Float4((float)header.Bottom, (float)header.Range, header.QuadsX, header.QuadsZ));
-        material.SetFloat4("_TerrainSpacing", new Float4((float)header.Spacing, _layers?.Count ?? 0, 0, 0));
-        material.SetTexture("_TerrainControl", _pool.Control);
+        material.SetFloat4("_TerrainSpacing", new Float4((float)header.Spacing, _layers?.Count ?? 0, _pool.SplatMaps, 0));
+        material.SetTexture("_TerrainSplat", _pool.Splat, SamplerDescription.Linear);
+        material.SetTexture("_TerrainHoles", _pool.Holes, SamplerDescription.Point);
         if (_layers != null)
         {
             material.SetTexture("_TerrainAlbedo", _layers.Albedo, _layerSampler ?? SamplerDescription.Aniso4x);
@@ -617,8 +636,12 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         {
             builder.ExportToDraws(builder.Write(owner._pool.Heights, TextureState.TransferDst));
             builder.ExportToDraws(builder.Write(owner._pool.Normals, TextureState.TransferDst));
-            builder.ExportToDraws(builder.Write(owner._pool.Control, TextureState.TransferDst));
+            builder.ExportToDraws(builder.Write(owner._pool.Splat, TextureState.TransferDst));
+            builder.ExportToDraws(builder.Write(owner._pool.Holes, TextureState.TransferDst));
             builder.Write(owner._pool.PageTable, TextureState.TransferDst);
+            builder.Write(owner._pool.DetailTable, TextureState.TransferDst);
+            if (owner._pool.Details != null)
+                builder.Write(owner._pool.Details, TextureState.TransferDst);
         }
 
         public override void Render(FrameContext context) => owner._pool.Upload(context.Command, owner._snapshot);
@@ -627,20 +650,23 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     // Grows the frame's grass after the frame's pages are in, and hands the instances and counts to the draws
     private sealed class GrassFeature(TerrainSurface owner) : FrameFeature(FrameSlot.BeforeViews, order: 60)
     {
-        public override bool IsActive() => owner._grass != null && owner._layers != null;
+        public override bool IsActive() => owner._grass != null && owner._pool.Details != null;
 
         public override void Setup(FrameBuilder builder)
         {
             builder.Read(owner._pool.Heights);
-            builder.Read(owner._pool.Control);
+            builder.Read(owner._pool.Splat);
+            builder.Read(owner._pool.Holes);
             builder.Read(owner._pool.PageTable);
+            builder.Read(owner._pool.DetailTable);
+            builder.Read(owner._pool.Details!);
             owner._grass!.Setup(builder);
         }
 
         public override void Render(FrameContext context)
         {
             TerrainGrass grass = owner._grass!;
-            grass.Render(context, owner._grassFrame ?? grass.Current, owner._pool, owner._layers!);
+            grass.Render(context, owner._grassFrame ?? grass.Current, owner._pool, owner._layers);
         }
     }
 
@@ -669,7 +695,8 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
             TerrainCache cache = owner._cache!;
             builder.Read(owner._pool.Heights);
             builder.Read(owner._pool.Normals);
-            builder.Read(owner._pool.Control);
+            builder.Read(owner._pool.Splat);
+            builder.Read(owner._pool.Holes);
             builder.Read(owner._pool.PageTable);
             builder.ExportToDraws(builder.Write(cache.Albedo, TextureState.Storage));
             builder.ExportToDraws(builder.Write(cache.Surface, TextureState.Storage));
@@ -677,7 +704,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         }
 
         public override void Render(FrameContext context)
-            => owner._cache!.Render(context.Command, owner._cacheFrame!, owner._pool, owner.Data, owner._layers, owner._pool.Control);
+            => owner._cache!.Render(context.Command, owner._cacheFrame!, owner._pool, owner.Data, owner._layers);
     }
 }
 

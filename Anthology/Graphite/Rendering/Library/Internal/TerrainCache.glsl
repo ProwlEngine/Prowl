@@ -1,5 +1,5 @@
 // Fills a rectangle of one level of the terrain's material cache, see Prowl.Graphite.Rendering.TerrainCache. Each texel
-// finds the finest resident page under it through the page table, gathers that page's control samples and blends the
+// finds the finest resident page under it through the page table, gathers that page's splat weights and blends the
 // layers there, then stores albedo with its square root taken and occlusion times the page's, and the world normal's x
 // and z with roughness and the strongest layer. Texels wrap around the level, so a level that moves only fills the rows
 // and columns it gained.

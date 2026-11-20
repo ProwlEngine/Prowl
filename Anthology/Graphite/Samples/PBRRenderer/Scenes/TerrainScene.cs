@@ -36,27 +36,30 @@ internal sealed class TerrainScene : DemoScene
         for (int z = 0; z < Samples; z++)
             for (int x = 0; x < Samples; x++)
                 map.Holes[z * Samples + x] = (x - Samples / 2) * (x - Samples / 2) + (z - Samples / 2) * (z - Samples / 2) < 12 * 12;
+        TerrainWeightMap[] layers = TerrainPainting.Layers(map, Spacing, Height, 4,
+        [
+            new LayerRule { Layer = TerrainTextures.Grass, MaxHeight = 440, HeightFade = 50, MaxSlope = 30, SlopeFade = 6, NoiseStrength = 0.5, NoiseSize = 60 },
+            new LayerRule { Layer = TerrainTextures.Dirt, Weight = 0.45, MaxSlope = 38, NoiseStrength = 0.9, NoiseSize = 35 },
+            new LayerRule { Layer = TerrainTextures.Rock, MinSlope = 36, SlopeFade = 6, Weight = 1.2, NoiseStrength = 0.3, NoiseSize = 20 },
+            new LayerRule { Layer = TerrainTextures.Snow, MinHeight = 430, HeightFade = 40, MaxSlope = 44, SlopeFade = 8, Weight = 1.5, NoiseStrength = 0.4, NoiseSize = 40 },
+        ]);
         MemoryStream package = new();
         TerrainImporter.Import(map, new TerrainImportSettings
         {
             Spacing = Spacing,
             Bottom = 0,
             Range = Height,
-            ControlMaxSpacing = double.MaxValue,
-            Layers =
-            [
-                new TerrainLayerRule { Layer = TerrainTextures.Grass, MaxHeight = 440, HeightFade = 50, MaxSlope = 30, SlopeFade = 6, NoiseStrength = 0.5, NoiseSize = 60 },
-                new TerrainLayerRule { Layer = TerrainTextures.Dirt, Weight = 0.45, MaxSlope = 38, NoiseStrength = 0.9, NoiseSize = 35 },
-                new TerrainLayerRule { Layer = TerrainTextures.Rock, MinSlope = 36, SlopeFade = 6, Weight = 1.2, NoiseStrength = 0.3, NoiseSize = 20 },
-                new TerrainLayerRule { Layer = TerrainTextures.Snow, MinHeight = 430, HeightFade = 40, MaxSlope = 44, SlopeFade = 8, Weight = 1.5, NoiseStrength = 0.4, NoiseSize = 40 },
-            ],
+            SplatMaxSpacing = double.MaxValue,
+            Layers = layers,
+            Details = [TerrainPainting.Density(layers, (TerrainTextures.Grass, 1f), (TerrainTextures.Dirt, 0.25f))],
+            Trees = TerrainPainting.Trees(map, layers, Spacing, Height, TerrainForest.Rules, Seed),
         }, package);
         package.Position = 0;
         _data = TerrainData.Load(package);
         _data.Position = new Double3(-Samples * Spacing * 0.5, 0, -Samples * Spacing * 0.5);
         _layers = new TerrainLayers(demo.Renderer, TerrainTextures.Generate(512));
         _grassCard = TerrainTextures.GrassCard(demo.Renderer, 256);
-        _surface = new TerrainSurface(demo.Renderer, _data, poolPages: 160) { Layers = _layers, CastFarShadow = true, GrassTypes = TerrainTextures.GrassTypes, GrassCards = _grassCard };
+        _surface = new TerrainSurface(demo.Renderer, _data, poolPages: 160) { Layers = _layers, CastFarShadow = true, Details = TerrainTextures.GrassTypes, GrassCards = _grassCard };
         World.Providers.Add(_surface);
         _forest = new TerrainForest(demo.Renderer, World, _data);
         World.Lod.ShadowOffset = 1;
@@ -91,7 +94,7 @@ internal sealed class TerrainScene : DemoScene
 
     public override string Status => $"{_surface.Drawn} nodes, {(_surface.UseCache ? "cache" : "direct")}, {_surface.DebugView}, quality {_surface.LodQuality:0.0}, pages {_surface.Streaming.Resident}/{_surface.Streaming.Capacity} by level {string.Join(" ", _surface.Streaming.ResidentByLevel)}, loading {_surface.Streaming.Loading}, {_forest.Props.Count} props in {_forest.Props.Cells} cells, last edit {_editMilliseconds:0.0} ms, {View.Camera.Layers[0].Position.Y - Ground(View.Camera.Layers[0].Position.X, View.Camera.Layers[0].Position.Z):0} m up";
 
-    public override string Controls => "L debug view, C cache, H far shadow, [ ] LOD quality, Z crater, N raise, M flatten, J smooth, P paint dirt, O hole, K cut grass, Y regrow grass, U clear props where you look, Ctrl fast";
+    public override string Controls => "L debug view, C cache, H far shadow, [ ] LOD quality, Z crater, N raise, M flatten, J smooth, P paint dirt, O hole, K cut grass, Y regrow grass, U clear trees where you look, Ctrl fast";
 
     public override void Update(float time, float deltaTime)
     {
@@ -114,9 +117,9 @@ internal sealed class TerrainScene : DemoScene
             case Key.J: Edit(TerrainBrush.Smooth, 15, 0.8); break;
             case Key.P: Edit(TerrainBrush.Paint, 8, 1, TerrainTextures.Dirt); break;
             case Key.O: Edit(TerrainBrush.Hole, 3, 1); break;
-            case Key.K: Edit(TerrainBrush.Grass, 6, 1); break;
-            case Key.Y: Edit(TerrainBrush.Grass, 6, -1); break;
-            case Key.U: Edit(TerrainBrush.Detail, 10, 1); break;
+            case Key.K: Edit(TerrainBrush.Detail, 6, -1); break;
+            case Key.Y: Edit(TerrainBrush.Detail, 6, 1); break;
+            case Key.U: ClearTrees(10); break;
         }
     }
 
@@ -128,6 +131,12 @@ internal sealed class TerrainScene : DemoScene
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         _data.Apply(new TerrainEdit(brush, new Double2(hit.Position.X, hit.Position.Z), radius, strength, hit.Position.Y, layer));
         _editMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+    }
+
+    private void ClearTrees(double radius)
+    {
+        if (Camera != null && _data.Raycast(Camera.Position, Camera.Forward, 2000, out TerrainHit hit))
+            _data.RemoveTrees(new Double2(hit.Position.X, hit.Position.Z), radius);
     }
 
     private double Ground(double x, double z) => _data.TryGetHeight(new Double2(x, z), out double h) ? h : 0;

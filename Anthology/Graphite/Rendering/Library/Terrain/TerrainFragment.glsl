@@ -12,9 +12,7 @@
 void Terrain_ClipHoles()
 {
 #ifdef TERRAIN_HOLES
-    ivec2 quad = ivec2(floor(vTerrainHole.xy * TERRAIN_PAGE_SIZE - 0.5));
-    uint bits = packUnorm4x8(texelFetch(_TerrainControl, ivec3(quad, int(vTerrainHole.z + 0.5)), 0));
-    if ((bits & (1u << 20)) != 0u)
+    if (Terrain_IsHole(vTerrainHole))
         discard;
 #endif
 }

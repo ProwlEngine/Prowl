@@ -12,7 +12,7 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>Where a ray met the terrain.</summary>
 public readonly record struct TerrainHit(Double3 Position, Float3 Normal, double Distance);
 
-/// <summary>A collision triangle of the finest level in world space, its corners counter clockwise seen from above, and its quad's base layer.</summary>
+/// <summary>A collision triangle of the finest level in world space, its corners counter clockwise seen from above, and its quad's strongest layer.</summary>
 public readonly record struct TerrainTriangle(Double3 A, Double3 B, Double3 C, int Layer);
 
 /// <summary>
@@ -26,11 +26,12 @@ public sealed partial class TerrainData : IDisposable
     private readonly object _streamLock = new();
     private readonly Dictionary<TerrainPageKey, TerrainPageEntry> _entries;
     private readonly ConcurrentDictionary<TerrainPageKey, TerrainPage?> _pages = new();
+    private readonly List<TerrainTree> _trees;
 
     private TerrainData(Stream stream)
     {
         _stream = stream;
-        (Header, _entries) = TerrainPackage.ReadDirectory(stream);
+        (Header, _entries, _trees) = TerrainPackage.ReadDirectory(stream);
     }
 
     /// <summary>Opens a package file, keeping it open to read pages from.</summary>
@@ -51,6 +52,52 @@ public sealed partial class TerrainData : IDisposable
 
     public double SpacingAt(int level) => Header.Spacing * (1 << level);
     public (int X, int Z) PagesAt(int level) => (Header.PagesX(level), Header.PagesZ(level));
+
+    /// <summary>The trees the package holds and edits since, see <see cref="SetTrees"/>.</summary>
+    public IReadOnlyList<TerrainTree> Trees
+    {
+        get
+        {
+            lock (_trees)
+                return _trees.ToArray();
+        }
+    }
+
+    /// <summary>Raised on the editing thread after the trees change.</summary>
+    public event Action? TreesChanged;
+
+    /// <summary>Replaces every tree.</summary>
+    public void SetTrees(IEnumerable<TerrainTree> trees)
+    {
+        lock (_trees)
+        {
+            _trees.Clear();
+            _trees.AddRange(trees);
+        }
+        TreesChanged?.Invoke();
+    }
+
+    public void AddTree(in TerrainTree tree)
+    {
+        lock (_trees)
+            _trees.Add(tree);
+        TreesChanged?.Invoke();
+    }
+
+    /// <summary>Removes the trees whose base lies within a radius of a world x and z, returning how many.</summary>
+    public int RemoveTrees(Double2 center, double radius)
+    {
+        int removed;
+        lock (_trees)
+            removed = _trees.RemoveAll(t =>
+            {
+                double dx = Position.X + t.Position.X - center.X, dz = Position.Z + t.Position.Z - center.Y;
+                return dx * dx + dz * dz <= radius * radius;
+            });
+        if (removed > 0)
+            TreesChanged?.Invoke();
+        return removed;
+    }
 
     /// <summary>The page, loading it if needed, or null where the package has none.</summary>
     public TerrainPage? GetPage(TerrainPageKey key) => _pages.GetOrAdd(key, Read);
@@ -114,8 +161,8 @@ public sealed partial class TerrainData : IDisposable
                 if (GetPage(new TerrainPageKey(0, px, pz)) is not { } page)
                     continue;
                 int lx = cx - px * TerrainPage.Quads, lz = cz - pz * TerrainPage.Quads;
-                uint control = page.Control?[TerrainPage.Index(lx, lz)] ?? 0;
-                if (TerrainControl.IsHole(control))
+                int index = TerrainPage.Index(lx, lz);
+                if (page.IsHole(index))
                     continue;
                 double h00 = Metres(page.Heights[TerrainPage.Index(lx, lz)]), h10 = Metres(page.Heights[TerrainPage.Index(lx + 1, lz)]);
                 double h01 = Metres(page.Heights[TerrainPage.Index(lx, lz + 1)]), h11 = Metres(page.Heights[TerrainPage.Index(lx + 1, lz + 1)]);
@@ -123,7 +170,7 @@ public sealed partial class TerrainData : IDisposable
                     continue;
                 double x0 = Position.X + cx * spacing, z0 = Position.Z + cz * spacing;
                 Double3 p00 = new(x0, h00, z0), p10 = new(x0 + spacing, h10, z0), p01 = new(x0, h01, z0 + spacing), p11 = new(x0 + spacing, h11, z0 + spacing);
-                int layer = TerrainControl.BaseLayer(control);
+                int layer = Strongest(page, index);
                 triangles.Add(new TerrainTriangle(p00, p11, p10, layer));
                 triangles.Add(new TerrainTriangle(p00, p01, p11, layer));
             }
@@ -197,27 +244,40 @@ public sealed partial class TerrainData : IDisposable
         return true;
     }
 
-    /// <summary>How much of a material layer covers the ground at a world x and z, 0 to 1, blended across the quad. A page without control is all layer 0.</summary>
+    /// <summary>How much of a material layer covers the ground at a world x and z, 0 to 1, blended across the quad. A page without splat weights is all layer 0.</summary>
     public bool TryGetLayerWeight(Double2 xz, int layer, out float weight)
     {
         weight = 0f;
         if (!TryCell(xz, 0, out Cell cell))
             return false;
-        uint[]? control = cell.Page.Control;
-        if (control == null)
-        {
-            weight = layer == 0 ? 1f : 0f;
-            return true;
-        }
-        double Weight(int lx, int lz)
-        {
-            uint c = control[TerrainPage.Index(lx, lz)];
-            double overlay = TerrainControl.OverlayBlend(c) / 255.0;
-            return (TerrainControl.BaseLayer(c) == layer ? 1.0 - overlay : 0.0) + (TerrainControl.OverlayLayer(c) == layer ? overlay : 0.0);
-        }
-        double a = Weight(cell.Lx, cell.Lz), b = Weight(cell.Lx + 1, cell.Lz), c = Weight(cell.Lx, cell.Lz + 1), e = Weight(cell.Lx + 1, cell.Lz + 1);
-        weight = (float)((a + (b - a) * cell.Fx) * (1 - cell.Fz) + (c + (e - c) * cell.Fx) * cell.Fz);
+        TerrainPage page = cell.Page;
+        weight = Blend(cell, (x, z) => page.Weight(layer, TerrainPage.Index(x, z)));
         return true;
+    }
+
+    /// <summary>A detail prototype's density at a world x and z, 0 to 1, blended across the quad.</summary>
+    public bool TryGetDetailDensity(Double2 xz, int prototype, out float density)
+    {
+        density = 0f;
+        if (!TryCell(xz, 0, out Cell cell))
+            return false;
+        TerrainPage page = cell.Page;
+        density = Blend(cell, (x, z) => page.Density(prototype, TerrainPage.Index(x, z)));
+        return true;
+    }
+
+    /// <summary>The layer with the most weight at a sample of a page, the earliest on ties.</summary>
+    public int Strongest(TerrainPage page, int index)
+    {
+        int best = 0;
+        float weight = -1f;
+        for (int layer = 0; layer < Header.Layers; layer++)
+        {
+            float w = page.Weight(layer, index);
+            if (w > weight)
+                (best, weight) = (layer, w);
+        }
+        return best;
     }
 
     /// <summary>Whether the finest quad under a world x and z is cut out.</summary>
@@ -254,7 +314,7 @@ public sealed partial class TerrainData : IDisposable
                 int lx = cx - px * TerrainPage.Quads, lz = cz - pz * TerrainPage.Quads;
                 if (lx < 0 || lz < 0 || lx >= TerrainPage.Quads || lz >= TerrainPage.Quads)
                     continue;
-                if (page.Control != null && TerrainControl.IsHole(page.Control[TerrainPage.Index(lx, lz)]))
+                if (page.IsHole(TerrainPage.Index(lx, lz)))
                     continue;
                 double h00 = Metres(page.Heights[TerrainPage.Index(lx, lz)]) - Position.Y, h10 = Metres(page.Heights[TerrainPage.Index(lx + 1, lz)]) - Position.Y;
                 double h01 = Metres(page.Heights[TerrainPage.Index(lx, lz + 1)]) - Position.Y, h11 = Metres(page.Heights[TerrainPage.Index(lx + 1, lz + 1)]) - Position.Y;
@@ -288,7 +348,7 @@ public sealed partial class TerrainData : IDisposable
     {
         if (!_entries.TryGetValue(key, out TerrainPageEntry entry))
             return null;
-        return TerrainPackage.DecodePage(key, ReadBytes, entry);
+        return TerrainPackage.DecodePage(key, Header, ReadBytes, entry);
     }
 
     private byte[] ReadBytes(long offset, int length)
@@ -343,9 +403,16 @@ public sealed partial class TerrainData : IDisposable
             H11 = page.Heights[TerrainPage.Index(lx + 1, lz + 1)],
             Fx = u - cx,
             Fz = v - cz,
-            Hole = page.Control != null && TerrainControl.IsHole(page.Control[TerrainPage.Index(lx, lz)]),
+            Hole = page.IsHole(TerrainPage.Index(lx, lz)),
         };
         return true;
+    }
+
+    private static float Blend(in Cell cell, Func<int, int, float> value)
+    {
+        float a = value(cell.Lx, cell.Lz), b = value(cell.Lx + 1, cell.Lz), c = value(cell.Lx, cell.Lz + 1), e = value(cell.Lx + 1, cell.Lz + 1);
+        float fx = (float)cell.Fx, fz = (float)cell.Fz;
+        return (a + (b - a) * fx) * (1 - fz) + (c + (e - c) * fx) * fz;
     }
 
     private static double Bilinear(in Cell cell, int channel)

@@ -16,14 +16,17 @@ public sealed class TerrainPage
     public const int Size = Quads + 1 + 2 * Apron;
     public const int Samples = Size * Size;
 
-    public TerrainPage(TerrainPageKey key, ushort[] heights, byte[] normalAo, uint[]? control)
+    public TerrainPage(TerrainPageKey key, ushort[] heights, byte[] normalAo, byte[]? splat = null, byte[]? holes = null, byte[]? details = null)
     {
-        if (heights.Length != Samples || normalAo.Length != Samples * 4 || control != null && control.Length != Samples)
+        if (heights.Length != Samples || normalAo.Length != Samples * 4 || splat != null && (splat.Length == 0 || splat.Length % (Samples * 4) != 0) ||
+            holes != null && holes.Length != Samples || details != null && (details.Length == 0 || details.Length % Samples != 0))
             throw new ArgumentException("Page layers must hold one value per sample.");
         Key = key;
         Heights = heights;
         NormalAo = normalAo;
-        Control = control;
+        Splat = splat;
+        Holes = holes;
+        Details = details;
     }
 
     public TerrainPageKey Key { get; }
@@ -34,37 +37,41 @@ public sealed class TerrainPage
     /// <summary>Four bytes a sample: the smooth normal's x and z from -1 at 0 to 1 at 255, ambient occlusion, cavity.</summary>
     public byte[] NormalAo { get; }
 
-    /// <summary>Material and hole bits a sample, see <see cref="TerrainControl"/>, or null where the level keeps none.</summary>
-    public uint[]? Control { get; }
+    /// <summary>
+    /// The layers' weights, one RGBA map a slice of four layers: layer l of sample i at (l / 4 * Samples + i) * 4 + l % 4,
+    /// 0 to 255. Null where the level keeps none, where the ground is all layer 0.
+    /// </summary>
+    public byte[]? Splat { get; }
+
+    /// <summary>Per sample 1 where the quad whose lowest corner it is is cut out, or null for none.</summary>
+    public byte[]? Holes { get; }
+
+    /// <summary>Each detail prototype's density, a plane each: prototype d of sample i at d * Samples + i, 0 to 255. Finest level only.</summary>
+    public byte[]? Details { get; }
+
+    public int SplatMaps => Splat == null ? 0 : Splat.Length / (Samples * 4);
+    public int DetailCount => Details == null ? 0 : Details.Length / Samples;
 
     /// <summary>The index of the sample at x and z from the page's corner, -1 to 129.</summary>
     public static int Index(int x, int z) => (z + Apron) * Size + x + Apron;
-}
 
-/// <summary>
-/// The bits of a control sample: base layer 0 to 5, overlay layer 6 to 11, overlay weight 12 to 19, hole 20, how much
-/// grass is cut 21 to 28 (0 full, 255 none) and how much detail is cut 29 to 31 (0 full, 7 none).
-/// </summary>
-public static class TerrainControl
-{
-    /// <summary>Set when the quad whose lowest corner is this sample is cut out.</summary>
-    public const uint Hole = 1u << 20;
+    /// <summary>A layer's weight at a sample, 0 to 1.</summary>
+    public float Weight(int layer, int index)
+    {
+        if (Splat == null)
+            return layer == 0 ? 1f : 0f;
+        int map = layer >> 2;
+        return map < SplatMaps ? Splat[(map * Samples + index) * 4 + (layer & 3)] / 255f : 0f;
+    }
 
-    public const int MaxGrassCut = 255, MaxDetailCut = 7;
+    public bool IsHole(int index) => Holes != null && Holes[index] != 0;
 
-    public static int BaseLayer(uint control) => (int)(control & 63);
-    public static int OverlayLayer(uint control) => (int)(control >> 6 & 63);
-    public static int OverlayBlend(uint control) => (int)(control >> 12 & 255);
-    public static bool IsHole(uint control) => (control & Hole) != 0;
-    public static int GrassCut(uint control) => (int)(control >> 21 & 255);
-    public static int DetailCut(uint control) => (int)(control >> 29);
+    /// <summary>A detail prototype's density at a sample, 0 to 1.</summary>
+    public float Density(int prototype, int index) =>
+        Details != null && (uint)prototype < (uint)DetailCount ? Details[prototype * Samples + index] / 255f : 0f;
 
-    public static uint Layers(int baseLayer, int overlayLayer, int blend, uint control) =>
-        control & ~0xFFFFFu | (uint)(baseLayer & 63) | (uint)(overlayLayer & 63) << 6 | (uint)Math.Clamp(blend, 0, 255) << 12;
-
-    public static uint WithHole(uint control, bool hole) => hole ? control | Hole : control & ~Hole;
-    public static uint WithGrassCut(uint control, int cut) => control & ~(255u << 21) | (uint)Math.Clamp(cut, 0, MaxGrassCut) << 21;
-    public static uint WithDetailCut(uint control, int cut) => control & ~(7u << 29) | (uint)Math.Clamp(cut, 0, MaxDetailCut) << 29;
+    /// <summary>A copy whose layers can change without touching this one.</summary>
+    public TerrainPage Clone() => new(Key, (ushort[])Heights.Clone(), (byte[])NormalAo.Clone(), (byte[]?)Splat?.Clone(), (byte[]?)Holes?.Clone(), (byte[]?)Details?.Clone());
 }
 
 /// <summary>

@@ -9,9 +9,9 @@ using Prowl.Vector;
 namespace Prowl.Graphite.Samples.PBRRenderer;
 
 /// <summary>
-/// Generated broadleaf and conifer trees, bushes and rocks scattered over the terrain scene: forests in patches below the
-/// tree line with bushes around their edges, boulders on open ground and steep slopes. Each tree has two coarser
-/// levels and an impostor, each rock two coarser levels.
+/// Generated broadleaf and conifer trees, bushes and rocks over the terrain scene, placed by <see cref="Rules"/> before
+/// import: forests in patches below the tree line with bushes around their edges, boulders on open ground and steep
+/// slopes. Each tree has two coarser levels and an impostor, each rock two coarser levels.
 /// </summary>
 internal sealed class TerrainForest : IDisposable
 {
@@ -19,7 +19,25 @@ internal sealed class TerrainForest : IDisposable
     private readonly List<Texture> _textures = new();
     private readonly List<Material> _materials = new();
     private readonly List<ImpostorAsset> _impostors = new();
-    private readonly TerrainScatter _scatter;
+    private readonly TerrainTreeInstances _trees;
+
+    /// <summary>Where each prototype stands: 0 to 2 broadleaf trees, 3 to 5 conifers, 6 and 7 bushes, 8 to 11 rocks.</summary>
+    public static PlacementRule[] Rules
+    {
+        get
+        {
+            List<PlacementRule> rules = new();
+            for (int i = 0; i < 3; i++)
+                rules.Add(new PlacementRule { Prototype = i, Density = 0.35f, Footprint = 5f, MaxSteepness = 0.55f, MaxHeight = 400, Layer = TerrainTextures.Grass, MinLayerWeight = 0.3f, NoiseSize = 260f, NoiseThreshold = 0.5f, NoiseSeed = 1, MinScale = 0.8f, MaxScale = 1.2f, Sink = 0.2f });
+            for (int i = 0; i < 3; i++)
+                rules.Add(new PlacementRule { Prototype = 3 + i, Density = 0.4f, Footprint = 4f, MaxSteepness = 0.7f, MinHeight = 180, MaxHeight = 425, NoiseSize = 260f, NoiseThreshold = 0.45f, NoiseSeed = 2, MinScale = 0.75f, MaxScale = 1.25f, Sink = 0.2f });
+            for (int i = 0; i < 4; i++)
+                rules.Add(new PlacementRule { Prototype = 8 + i, Density = i < 2 ? 0.25f : 0.08f, Footprint = i < 2 ? 1.5f : 3f, NoiseSize = 90f, NoiseThreshold = 0.55f, NoiseSeed = 3, MinScale = 0.6f, MaxScale = 1.5f, Sink = 0.15f });
+            for (int i = 0; i < 2; i++)
+                rules.Add(new PlacementRule { Prototype = 6 + i, Density = 1.2f, Footprint = 1.8f, MaxSteepness = 0.7f, MaxHeight = 420, Layer = TerrainTextures.Grass, MinLayerWeight = 0.3f, NoiseSize = 260f, NoiseThreshold = 0.36f, NoiseSeed = 1, MinScale = 0.7f, MaxScale = 1.3f });
+            return rules.ToArray();
+        }
+    }
 
     public TerrainForest(Renderer renderer, RenderWorld world, TerrainData data)
     {
@@ -42,41 +60,30 @@ internal sealed class TerrainForest : IDisposable
         Material pine = Leaf(renderer, leafShader, needles, new Float3(0.1f, 0.2f, 0.08f));
         Material shrub = Leaf(renderer, leafShader, leaves, new Float3(0.18f, 0.3f, 0.09f));
 
-        List<TerrainScatterRule> rules = new();
         List<TerrainPropKind?> kinds = new();
-        void Add(TerrainScatterRule rule, TerrainPropKind kind)
-        {
-            rules.Add(rule);
-            kinds.Add(kind);
-        }
-
         for (int i = 0; i < 3; i++)
         {
             TreeDesc broad = new() { Seed = 100 + i, Shape = TreeShape.Broadleaf, Height = 11f + i * 2f, TrunkRadius = 0.24f + i * 0.04f, Branches = 7 + i };
-            Add(new TerrainScatterRule { Id = 1 + i, Priority = 0, Density = 0.35f, Footprint = 5f, MaxSteepness = 0.55f, MaxHeight = 400, Layer = TerrainTextures.Grass, MinLayerWeight = 0.3f, NoiseSize = 260f, NoiseThreshold = 0.5f, NoiseSeed = 1, MinScale = 0.8f, MaxScale = 1.2f, Sink = 0.2f },
-                Tree(renderer, broad, i == 2 ? birch : bark, i == 1 ? beech : oak));
+            kinds.Add(Tree(renderer, broad, i == 2 ? birch : bark, i == 1 ? beech : oak));
         }
         for (int i = 0; i < 3; i++)
         {
             TreeDesc conifer = new() { Seed = 200 + i, Shape = TreeShape.Conifer, Height = 15f + i * 3f, TrunkRadius = 0.25f + i * 0.03f, Levels = 2, Branches = 9, LeafSize = 1.3f, LeafDensity = 2.4f };
-            Add(new TerrainScatterRule { Id = 10 + i, Priority = 0, Density = 0.4f, Footprint = 4f, MaxSteepness = 0.7f, MinHeight = 180, MaxHeight = 425, NoiseSize = 260f, NoiseThreshold = 0.45f, NoiseSeed = 2, MinScale = 0.75f, MaxScale = 1.25f, Sink = 0.2f },
-                Tree(renderer, conifer, bark, pine));
+            kinds.Add(Tree(renderer, conifer, bark, pine));
         }
         for (int i = 0; i < 2; i++)
         {
             TreeDesc bush = new() { Seed = 300 + i, Shape = TreeShape.Bush, Height = 1.6f + i * 0.5f, TrunkRadius = 0.04f, Branches = 8, Levels = 2, BranchAngle = 40f, LeafSize = 0.55f, LeafDensity = 5f, Gnarl = 0.5f };
-            Add(new TerrainScatterRule { Id = 20 + i, Priority = 2, Density = 1.2f, Footprint = 1.8f, MaxSteepness = 0.7f, MaxHeight = 420, Layer = TerrainTextures.Grass, MinLayerWeight = 0.3f, NoiseSize = 260f, NoiseThreshold = 0.36f, NoiseSeed = 1, MinScale = 0.7f, MaxScale = 1.3f },
-                Tree(renderer, bush, bark, shrub, impostor: false));
+            kinds.Add(Tree(renderer, bush, bark, shrub, impostor: false));
         }
         for (int i = 0; i < 4; i++)
         {
             RockDesc boulder = new() { Seed = 400 + i, Size = i < 2 ? 1.2f : 2.6f, Stretch = new Float3(1.2f + i * 0.1f, 0.6f + (i % 2) * 0.25f, 1f), Cuts = 6 + i };
-            Add(new TerrainScatterRule { Id = 30 + i, Priority = 1, Density = i < 2 ? 0.25f : 0.08f, Footprint = i < 2 ? 1.5f : 3f, NoiseSize = 90f, NoiseThreshold = 0.55f, NoiseSeed = 3, MinScale = 0.6f, MaxScale = 1.5f, Align = 0.6f, Sink = 0.15f },
-                Rock(renderer, boulder, rock));
+            kinds.Add(Rock(renderer, boulder, rock));
         }
 
-        _scatter = new TerrainScatter(data, rules, seed: 11);
-        Props = new TerrainProps(world, _scatter, kinds) { Range = 700 };
+        _trees = new TerrainTreeInstances(data);
+        Props = new TerrainProps(world, _trees, kinds) { Range = 700 };
     }
 
     public TerrainProps Props { get; }
@@ -86,6 +93,7 @@ internal sealed class TerrainForest : IDisposable
     public void Dispose()
     {
         Props.Dispose();
+        _trees.Dispose();
         foreach (ImpostorAsset impostor in _impostors)
             impostor.Dispose();
         foreach (Material material in _materials)

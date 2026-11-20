@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Prowl.Graphite.Rendering.Tools;
 
-/// <summary>Where a heightmap sits in the world and how its package is built.</summary>
+/// <summary>Where a heightmap sits in the world and what the package keeps over it.</summary>
 public sealed class TerrainImportSettings
 {
     /// <summary>Metres between finest samples.</summary>
@@ -15,45 +15,55 @@ public sealed class TerrainImportSettings
     public double Bottom { get; init; }
     public double Range { get; init; } = 4096.0;
 
-    /// <summary>Levels keep control samples while their spacing is at most this many metres.</summary>
-    public double ControlMaxSpacing { get; init; } = 4.0;
+    /// <summary>Levels keep splat weights and holes while their spacing is at most this many metres.</summary>
+    public double SplatMaxSpacing { get; init; } = 4.0;
 
+    /// <summary>The seed detail placement hashes with.</summary>
     public ulong Seed { get; init; }
 
-    /// <summary>Rules that bake each sample's two strongest layers into its control, none for every sample on layer 0.</summary>
-    public IReadOnlyList<TerrainLayerRule> Layers { get; init; } = [];
+    /// <summary>Each material layer's weight over the terrain, normalised per sample. None for a world of one layer.</summary>
+    public IReadOnlyList<TerrainWeightMap> Layers { get; init; } = [];
+
+    /// <summary>Each detail prototype's density over the terrain, 0 to 255 of the prototype's full density.</summary>
+    public IReadOnlyList<TerrainWeightMap> Details { get; init; } = [];
+
+    public IReadOnlyList<TerrainTree> Trees { get; init; } = [];
 }
 
 /// <summary>
-/// Where a layer grows: its weight is the product of soft windows over height and slope, varied by noise. A sample takes
-/// its strongest layer as base and the next as overlay, blended by their weights.
+/// A map of bytes stretched over the whole terrain, row by row from z 0, its texel centres spread evenly from corner to
+/// corner, read bilinear at each sample. Any resolution: a Unity alphamap or detail layer goes in as it is.
 /// </summary>
-public sealed class TerrainLayerRule
+public sealed class TerrainWeightMap
 {
-    public required int Layer { get; init; }
+    public TerrainWeightMap(int width, int height, byte[] values)
+    {
+        if (width < 1 || height < 1 || values.Length != width * height)
+            throw new ArgumentException("A weight map needs one value per texel.");
+        Width = width;
+        Height = height;
+        Values = values;
+    }
 
-    /// <summary>The height window in metres and how far beyond it the weight fades out.</summary>
-    public double MinHeight { get; init; } = double.NegativeInfinity;
-    public double MaxHeight { get; init; } = double.PositiveInfinity;
-    public double HeightFade { get; init; } = 10.0;
+    public int Width { get; }
+    public int Height { get; }
+    public byte[] Values { get; }
 
-    /// <summary>The slope window in degrees from flat and how far beyond it the weight fades out.</summary>
-    public double MinSlope { get; init; }
-    public double MaxSlope { get; init; } = 90.0;
-    public double SlopeFade { get; init; } = 5.0;
-
-    /// <summary>The weight before the windows, so a broad rule can sit under narrower ones.</summary>
-    public double Weight { get; init; } = 1.0;
-
-    /// <summary>How much value noise of this many metres varies the weight, 0 to 1.</summary>
-    public double NoiseStrength { get; init; }
-    public double NoiseSize { get; init; } = 20.0;
+    /// <summary>The value at u and v from 0 to 1 across the terrain, 0 to 255.</summary>
+    public double Sample(double u, double v)
+    {
+        double x = Math.Clamp(u * Width - 0.5, 0, Width - 1), z = Math.Clamp(v * Height - 0.5, 0, Height - 1);
+        int x0 = (int)x, z0 = (int)z, x1 = Math.Min(x0 + 1, Width - 1), z1 = Math.Min(z0 + 1, Height - 1);
+        double fx = x - x0, fz = z - z0;
+        double a = Values[z0 * Width + x0], b = Values[z0 * Width + x1], c = Values[z1 * Width + x0], d = Values[z1 * Width + x1];
+        return (a + (b - a) * fx) * (1 - fz) + (c + (d - c) * fx) * fz;
+    }
 }
 
 /// <summary>
-/// Builds a terrain package from a heightmap: every level from the finest up to one page, each level keeping every
-/// other sample of the one under it so parents meet their children exactly, then each page's normals, ambient
-/// occlusion, cavity, holes and quarter bounds.
+/// Builds a terrain package from a heightmap and the maps over it: every level from the finest up to one page, each level
+/// keeping every other sample of the one under it so parents meet their children exactly, then each page's normals,
+/// ambient occlusion, cavity, quarter bounds, splat weights and holes, and the finest pages' detail densities.
 /// </summary>
 public static class TerrainImporter
 {
@@ -65,11 +75,13 @@ public static class TerrainImporter
 
     public static void Import(TerrainHeightmap map, TerrainImportSettings settings, Stream stream)
     {
+        if (settings.Layers.Count > TerrainLayers.MaxLayers)
+            throw new ArgumentException($"A terrain has at most {TerrainLayers.MaxLayers} layers.", nameof(settings));
         int quadsX = map.Width - 1, quadsZ = map.Height - 1;
         int levels = TerrainHeader.LevelsFor(quadsX, quadsZ);
-        int controlLevels = 1;
-        while (controlLevels < levels && settings.Spacing * (1 << controlLevels) <= settings.ControlMaxSpacing)
-            controlLevels++;
+        int splatLevels = 1;
+        while (splatLevels < levels && settings.Spacing * (1 << splatLevels) <= settings.SplatMaxSpacing)
+            splatLevels++;
         TerrainHeader header = new()
         {
             Spacing = settings.Spacing,
@@ -78,9 +90,12 @@ public static class TerrainImporter
             QuadsX = quadsX,
             QuadsZ = quadsZ,
             Levels = levels,
-            ControlLevels = controlLevels,
+            SplatLevels = splatLevels,
+            SplatMaps = settings.Layers.Count > 1 ? (settings.Layers.Count + 3) / 4 : 0,
+            Details = settings.Details.Count,
             Seed = settings.Seed,
         };
+        Surface surface = new(map, settings, header);
 
         TerrainPackage.Writer writer = TerrainPackage.Begin(stream, header);
         ushort[]? below = null;
@@ -89,14 +104,13 @@ public static class TerrainImporter
             int pagesX = header.PagesX(level), pagesZ = header.PagesZ(level);
             ushort[] bounds = new ushort[pagesX * pagesZ * 8];
             Level source = new(map, level, settings.Spacing * (1 << level), settings.Range / 65535.0);
-            bool control = level < controlLevels && (map.Holes != null || settings.Layers.Count > 0);
             for (int pz = 0; pz < pagesZ; pz++)
             {
                 TerrainPage[] row = new TerrainPage[pagesX];
                 int z = pz;
                 Parallel.For(0, pagesX, px =>
                 {
-                    row[px] = BuildPage(source, new TerrainPageKey(level, px, z), control ? settings : null);
+                    row[px] = BuildPage(source, new TerrainPageKey(level, px, z), level < splatLevels ? surface : null);
                     QuarterBounds(row[px], below, header, bounds.AsSpan((z * pagesX + px) * 8, 8));
                 });
                 for (int px = 0; px < pagesX; px++)
@@ -104,7 +118,7 @@ public static class TerrainImporter
             }
             below = bounds;
         }
-        writer.Finish();
+        writer.Finish(settings.Trees);
     }
 
     // A level's view of the finest samples: sample i, j of level n is finest sample i << n, j << n, held at the world's edge
@@ -126,11 +140,67 @@ public static class TerrainImporter
         public double Metres(int i, int j) => this[i, j] * MetresPerUnit;
     }
 
-    private static TerrainPage BuildPage(in Level source, TerrainPageKey key, TerrainImportSettings? control)
+    // The splat weights, holes and detail densities of every finest sample, which coarser levels read at the sample they stand on
+    private sealed class Surface
+    {
+        public readonly byte[]? Splat;
+        public readonly bool[]? Holes;
+        public readonly byte[]? Details;
+        public readonly int Maps, DetailCount, Width;
+
+        public Surface(TerrainHeightmap map, TerrainImportSettings settings, TerrainHeader header)
+        {
+            Width = map.Width;
+            int samples = map.Width * map.Height;
+            Holes = map.Holes;
+            Maps = header.SplatMaps;
+            DetailCount = header.Details;
+            double du = 1.0 / Math.Max(map.Width - 1, 1), dv = 1.0 / Math.Max(map.Height - 1, 1);
+            if (Maps > 0)
+            {
+                byte[] splat = new byte[samples * Maps * 4];
+                int layers = settings.Layers.Count;
+                Parallel.For(0, map.Height, z =>
+                {
+                    Span<double> weights = stackalloc double[layers];
+                    for (int x = 0; x < map.Width; x++)
+                    {
+                        double total = 0;
+                        for (int l = 0; l < layers; l++)
+                            total += weights[l] = settings.Layers[l].Sample(x * du, z * dv);
+                        int i = z * map.Width + x;
+                        for (int l = 0; l < layers; l++)
+                        {
+                            double w = total > 0 ? weights[l] / total : l == 0 ? 1 : 0;
+                            splat[((l >> 2) * samples + i) * 4 + (l & 3)] = (byte)Math.Round(w * 255);
+                        }
+                    }
+                });
+                Splat = splat;
+            }
+            if (DetailCount > 0)
+            {
+                byte[] details = new byte[samples * DetailCount];
+                Parallel.For(0, DetailCount, d =>
+                {
+                    TerrainWeightMap density = settings.Details[d];
+                    for (int z = 0; z < map.Height; z++)
+                        for (int x = 0; x < map.Width; x++)
+                            details[d * samples + z * map.Width + x] = (byte)Math.Round(density.Sample(x * du, z * dv));
+                });
+                Details = details;
+            }
+        }
+    }
+
+    private static TerrainPage BuildPage(in Level source, TerrainPageKey key, Surface? surface)
     {
         ushort[] heights = new ushort[TerrainPage.Samples];
         byte[] normalAo = new byte[TerrainPage.Samples * 4];
-        uint[]? controls = control != null ? new uint[TerrainPage.Samples] : null;
+        byte[]? splat = surface?.Splat != null ? new byte[TerrainPage.Samples * 4 * surface.Maps] : null;
+        byte[]? holes = surface?.Holes != null ? new byte[TerrainPage.Samples] : null;
+        byte[]? details = key.Level == 0 && surface?.Details != null ? new byte[TerrainPage.Samples * surface.DetailCount] : null;
+        int finest = source.Map.Width * source.Map.Height;
         int x0 = key.X * TerrainPage.Quads, z0 = key.Z * TerrainPage.Quads;
         for (int z = -TerrainPage.Apron; z <= TerrainPage.Quads + TerrainPage.Apron; z++)
             for (int x = -TerrainPage.Apron; x <= TerrainPage.Quads + TerrainPage.Apron; x++)
@@ -138,76 +208,20 @@ public static class TerrainImporter
                 int i = x0 + x, j = z0 + z, index = TerrainPage.Index(x, z);
                 heights[index] = source[i, j];
                 TerrainBake.Sample(source, i, j, source.Spacing, normalAo.AsSpan(index * 4, 4));
-                if (controls != null)
-                    controls[index] = Control(source, i, j, control!);
+                if (surface == null)
+                    continue;
+                int from = source.Index(i, j);
+                if (holes != null && surface.Holes![from])
+                    holes[index] = 1;
+                if (splat != null)
+                    for (int m = 0; m < surface.Maps; m++)
+                        for (int c = 0; c < 4; c++)
+                            splat[(m * TerrainPage.Samples + index) * 4 + c] = surface.Splat![(m * finest + from) * 4 + c];
+                if (details != null)
+                    for (int d = 0; d < surface.DetailCount; d++)
+                        details[d * TerrainPage.Samples + index] = surface.Details![d * finest + from];
             }
-        return new TerrainPage(key, heights, normalAo, controls);
-    }
-
-    // The sample's two strongest layers by the rules, read at the finest sample it stands on, and its hole bit
-    private static uint Control(in Level source, int i, int j, TerrainImportSettings settings)
-    {
-        TerrainHeightmap map = source.Map;
-        int index = source.Index(i, j);
-        int x = index % map.Width, z = index / map.Width;
-        uint bits = map.Holes != null && map.Holes[index] ? TerrainControl.Hole : 0u;
-        if (settings.Layers.Count == 0)
-            return bits;
-
-        double unit = settings.Range / 65535.0;
-        double h = settings.Bottom + map.Samples[index] * unit;
-        double dx = (map.Samples[z * map.Width + Math.Min(x + 1, map.Width - 1)] - map.Samples[z * map.Width + Math.Max(x - 1, 0)]) * unit / (2 * settings.Spacing);
-        double dz = (map.Samples[Math.Min(z + 1, map.Height - 1) * map.Width + x] - map.Samples[Math.Max(z - 1, 0) * map.Width + x]) * unit / (2 * settings.Spacing);
-        double slope = Math.Atan(Math.Sqrt(dx * dx + dz * dz)) * 180.0 / Math.PI;
-
-        int first = 0, second = 0;
-        double best = 0, next = 0;
-        foreach (TerrainLayerRule rule in settings.Layers)
-        {
-            double w = rule.Weight * Window(h, rule.MinHeight, rule.MaxHeight, rule.HeightFade) * Window(slope, rule.MinSlope, rule.MaxSlope, rule.SlopeFade);
-            if (rule.NoiseStrength > 0)
-                w *= 1 + rule.NoiseStrength * Noise(x * settings.Spacing / rule.NoiseSize, z * settings.Spacing / rule.NoiseSize, rule.Layer + (int)settings.Seed);
-            if (w > best)
-            {
-                (second, next) = (first, best);
-                (first, best) = (rule.Layer, w);
-            }
-            else if (w > next)
-                (second, next) = (rule.Layer, w);
-        }
-        double blend = best + next > 0 ? next / (best + next) : 0;
-        return bits | (uint)(first & 63) | (uint)(second & 63) << 6 | (uint)Math.Round(blend * 255) << 12;
-    }
-
-    // 1 inside the window, falling smoothly to 0 over fade beyond either end
-    private static double Window(double value, double min, double max, double fade)
-    {
-        double outside = Math.Max(min - value, value - max);
-        if (outside <= 0)
-            return 1;
-        double t = 1 - Math.Min(outside / Math.Max(fade, 1e-6), 1);
-        return t * t * (3 - 2 * t);
-    }
-
-    // Smooth value noise from -1 to 1, the same on every machine
-    private static double Noise(double x, double z, int seed)
-    {
-        double fx = Math.Floor(x), fz = Math.Floor(z);
-        double tx = x - fx, tz = z - fz;
-        tx = tx * tx * (3 - 2 * tx);
-        tz = tz * tz * (3 - 2 * tz);
-        int ix = (int)fx, iz = (int)fz;
-        double a = Hash(ix, iz, seed), b = Hash(ix + 1, iz, seed), c = Hash(ix, iz + 1, seed), d = Hash(ix + 1, iz + 1, seed);
-        return (a + (b - a) * tx) * (1 - tz) + (c + (d - c) * tx) * tz;
-    }
-
-    private static double Hash(int x, int z, int seed)
-    {
-        uint h = (uint)x * 0x8DA6B343u ^ (uint)z * 0xD8163841u ^ (uint)seed * 0xCB1AB31Fu;
-        h ^= h >> 13;
-        h *= 0x85EBCA6Bu;
-        h ^= h >> 16;
-        return h / (double)uint.MaxValue * 2 - 1;
+        return new TerrainPage(key, heights, normalAo, splat, holes, details);
     }
 
     // Each quarter's lowest and highest finest sample: the finest level reads its own samples, every coarser quarter
