@@ -69,10 +69,15 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         Integer(paper, "peers", "Maximum Clients", Configuration.MaxPeers, v => Configuration.MaxPeers = v, 1, 4096);
         Integer(paper, "message", "Maximum Message Size (bytes)", Configuration.MaxMessageSize, v => Configuration.MaxMessageSize = v, 1024, 1073741824);
         Number(paper, "join", "Join Timeout (s)", Configuration.JoinTimeoutSeconds, v => Configuration.JoinTimeoutSeconds = v, 0.1f, 300);
+        Number(paper, "sceneload", "Scene Load Timeout (s)", Configuration.SceneLoadTimeoutSeconds, v => Configuration.SceneLoadTimeoutSeconds = v, 1, 3600);
+        Integer(paper, "joinspawn", "Join Spawn Bytes Per Tick (0 = all at once)", Configuration.JoinSpawnBytesPerTick, v => Configuration.JoinSpawnBytesPerTick = v, 0, 1073741824);
+        Integer(paper, "clientmessage", "Maximum Client Message Size (bytes)", Configuration.MaxClientMessageSize, v => Configuration.MaxClientMessageSize = v, 1024, 1073741824);
+        Integer(paper, "clientrate", "Client Messages Per Second (0 = no limit)", Configuration.MaxClientMessagesPerSecond, v => Configuration.MaxClientMessagesPerSecond = v, 0, 1000000);
 
         Header(paper, "replication", "Replication");
         Number(paper, "tick", "Tick Rate (Hz)", Configuration.TickRate, v => Configuration.TickRate = v, 1, 240);
         Number(paper, "interpolation", "Interpolation Delay (ms)", Configuration.InterpolationMilliseconds, v => Configuration.InterpolationMilliseconds = v, 0, 5000);
+        Number(paper, "positionprecision", "Position Precision (units, same on every peer)", Configuration.PositionPrecision, v => Configuration.PositionPrecision = v, 0.000001f, 1000);
         Number(paper, "positionthreshold", "Position Settle Threshold (units)", Configuration.TransformPositionThreshold, v => Configuration.TransformPositionThreshold = v, 0, float.MaxValue);
         Number(paper, "rotationthreshold", "Rotation Settle Threshold (degrees)", Configuration.TransformRotationThresholdDegrees, v => Configuration.TransformRotationThresholdDegrees = v, 0, 180);
         Number(paper, "scalethreshold", "Scale Settle Threshold", Configuration.TransformScaleThreshold, v => Configuration.TransformScaleThreshold = v, 0, float.MaxValue);
@@ -90,11 +95,11 @@ public sealed class NetworkingSettings : ProjectSettingsBase
             Origami.Label(paper, "netsettings_interest_note", "Clients receive the objects near their NetworkObservers or the viewpoints set through Networking.Interest.").Show();
         }
 
-        Header(paper, "snapshots", "Snapshot Limits");
+        Header(paper, "snapshots", "Serialized Spawn Limits");
         Integer(paper, "snapshotbytes", "Maximum Decompressed Bytes", Configuration.MaxSnapshotDecompressedBytes, v => Configuration.MaxSnapshotDecompressedBytes = v, 1, 1073741824);
         Integer(paper, "snapshotdepth", "Maximum Nesting Depth", Configuration.MaxSnapshotDepth, v => Configuration.MaxSnapshotDepth = v, 1, 256);
         Integer(paper, "snapshotnodes", "Maximum Values", Configuration.MaxSnapshotNodes, v => Configuration.MaxSnapshotNodes = v, 1, 1000000);
-        Origami.Label(paper, "netsettings_snapshot_note", "Limits apply to incoming scenes and spawned objects before they are created.").Show();
+        Origami.Label(paper, "netsettings_snapshot_note", "Limits apply to an object spawned with its whole tree, before it is created. Prefab and factory spawns carry no tree.").Show();
 
         if (Configuration.Transport != NetworkTransport.Kcp) return;
         Header(paper, "reliability", "KCP Reliability");

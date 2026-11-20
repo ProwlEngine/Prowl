@@ -188,8 +188,84 @@ internal static class NetworkPopover
                 OrphanedOption(paper, font, go, NetworkOrphaned.Destroy, EditorIcons.Trash_I, Loc.Get("network.orphaned.destroy"));
                 OrphanedOption(paper, font, go, NetworkOrphaned.ClearOwner, EditorIcons.Server_I, Loc.Get("network.orphaned.host"));
 
+                Spacer(paper, "gi_net_gap_vis");
+                Receivers(paper, font, go);
+
                 ComponentIntervals(paper, font, go);
             });
+        }
+    }
+
+    /// <summary>Who receives the object: its visibility rule, the groups it is in, and how far away it is still sent.</summary>
+    private static void Receivers(Paper paper, FontFile font, GameObject go)
+    {
+        Heading(paper, font, "gi_net_vis", Loc.Get("network.visibility"), Loc.Get("network.visibility.desc"));
+        if (go.Network.Active && !Networking.IsHost)
+        {
+            Note(paper, font, "gi_net_vis_ro", Loc.Get("network.visibility.host_only"), EditorTheme.Ink400);
+            return;
+        }
+
+        string[] rules =
+        [
+            Loc.Get("network.visibility.default"), Loc.Get("network.visibility.always"),
+            Loc.Get("network.visibility.owner_only"), Loc.Get("network.visibility.manual"),
+        ];
+        Origami.Dropdown(paper, "gi_net_vis_v", (int)go.Network.Visibility, v =>
+        {
+            Undo.RecordObject(go, "Change Network Visibility");
+            go.Network.Visibility = (NetworkVisibility)v;
+        }, rules).Show();
+
+        LabeledRow(paper, font, "gi_net_cull", Loc.Get("network.cull_distance"), () =>
+            Origami.NumericField<float>(paper, "gi_net_cull_v", go.Network.CullDistance, v =>
+            {
+                Undo.RecordObject(go, "Change Cull Distance");
+                go.Network.CullDistance = float.IsFinite(v) ? MathF.Max(0f, v) : 0f;
+            }).Min(0).Show());
+
+        LabeledRow(paper, font, "gi_net_groups", Loc.Get("network.groups"), () =>
+            Origami.TextField(paper, "gi_net_groups_v", GroupList(go.Network.Groups), text =>
+            {
+                Undo.RecordObject(go, "Change Network Groups");
+                go.Network.Groups = ParseGroups(text);
+            }).CommitOnEnter().Show());
+        Note(paper, font, "gi_net_groups_desc", Loc.Get("network.groups.desc"), EditorTheme.Ink400);
+    }
+
+    private static string GroupList(NetworkGroups groups)
+    {
+        System.Collections.Generic.List<string> numbers = [];
+        for (int group = 0; group < NetworkGroups.Count; group++)
+        {
+            if (groups.Contains(group))
+                numbers.Add(group.ToString());
+        }
+
+        return string.Join(", ", numbers);
+    }
+
+    /// <summary>The groups a list of numbers names. What is not a number from 0 to 63 is left out.</summary>
+    private static NetworkGroups ParseGroups(string text)
+    {
+        NetworkGroups groups = NetworkGroups.None;
+        foreach (string part in text.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (int.TryParse(part, out int group) && group >= 0 && group < NetworkGroups.Count)
+                groups = groups.With(group);
+        }
+
+        return groups;
+    }
+
+    private static void LabeledRow(Paper paper, FontFile font, string id, string label, Action control)
+    {
+        using (paper.Row(id).Height(EditorTheme.RowHeight).Gap(8).Enter())
+        {
+            paper.Box(id + "_name").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).IsNotInteractable()
+                .Text(label, font).TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            control();
         }
     }
 
