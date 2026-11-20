@@ -99,6 +99,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         _shared.Reset();
         _sharedCount = 0;
         _spawnHooks.Clear();
+        _heldChanges.Clear();
         _references.Clear();
         _referenceOf.Clear();
     }
@@ -220,6 +221,29 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     }
 
     /// <summary>Runs the hooks held for the values <paramref name="root" />'s tree was spawned with, in order.</summary>
+    /// <summary>Runs the change notifications held during a spawn run, in the order their state arrived.</summary>
+    internal void RunHeldChanges()
+    {
+        if (_heldChanges.Count == 0)
+        {
+            return;
+        }
+
+        Action[] held = [.. _heldChanges];
+        _heldChanges.Clear();
+        foreach (Action notification in held)
+        {
+            try
+            {
+                notification();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Network] A change hook threw: {e}");
+            }
+        }
+    }
+
     internal void RunSpawnHooks(GameObject root)
     {
         if (_spawnHooks.Count == 0)
@@ -269,9 +293,17 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         return false;
     }
 
+    // Change notifications for state that arrived while this client's spawns were still coming, held until they
+    // finished and their spawn callbacks ran.
+    private readonly List<Action> _heldChanges = new();
+
     internal static void NotifyChange(Action notification)
     {
-        if (Networking.System is { } system)
+        if (Networking.System is { IsClient: true, IsReady: false } joining)
+        {
+            joining.Sync._heldChanges.Add(notification);
+        }
+        else if (Networking.System is { } system)
         {
             system.Sync.Notify(notification);
         }

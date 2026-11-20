@@ -760,6 +760,12 @@ internal sealed partial class NetworkSystem
             return;
         }
 
+        Sync.RunHeldChanges();
+        if (Session != session)
+        {
+            return;
+        }
+
         SetLocalReady();
         RunEarlyRpcs();
     }

@@ -64,4 +64,89 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void AChangeArrivingDuringAJoinRunHoldsItsHookUntilTheRunEnds()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject go = CreateGameObject("Changing");
+        go.Network.Networked = true;
+        NetCollectionTestComponent component = go.AddComponent<NetCollectionTestComponent>();
+        scene.Add(go);
+        MakeCurrent(scene);
+
+        byte[] snapshot;
+        byte[][] spawns;
+        uint entryGeneration;
+        LocalNetwork source = new();
+        Networking.Networking.Host(new LocalTransport(source, "host"));
+        try
+        {
+            entryGeneration = NetworkGeneration(go);
+            (snapshot, spawns) = RecordJoin(source);
+        }
+        finally { Networking.Networking.Shutdown(); }
+
+        MakeCurrent(CreateScene());
+        ulong generation = SceneGenerationOf(snapshot);
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.AutoReady = false;
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => host.Has(FakePeer.Ready), host);
+            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(generation), peer);
+            foreach (byte[] spawn in spawns) host.Session.SendRaw(peer, FakePeer.Spawn, spawn);
+            host.Session.Flush();
+            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
+            NetCollectionTestComponent here = Find(SceneInstance.Main, go.Identifier).GetComponent<NetCollectionTestComponent>()!;
+
+            // The value changes on the host while the run is still going.
+            using NetWriter value = new();
+            NetSerializer<int>.Write(value, 55);
+            host.SendSnapshotValues(peer, 0, 1, (component.Identifier, NetCollectionTestComponent.HealthSlot, entryGeneration, value.ToArray()));
+            Pump(() => here.Health == 55, host);
+            Assert.False(Networking.Networking.IsReady);
+            Assert.Empty(here.HealthChanges);
+
+            host.Send(FakePeer.SpawnFinished, w => w.WriteUInt64(generation), peer);
+            Pump(() => Networking.Networking.IsReady, host);
+            Assert.Equal([(100, 55)], here.HealthChanges);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void AJoiningOwnerHasItsOwnerOnlyValuesBeforeItsSpawnsFinish()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject gun = CreateGameObject("Gun");
+        gun.Network.Networked = true;
+        AmmoTestComponent ammo = gun.AddComponent<AmmoTestComponent>();
+        ammo.Ammo = 30;
+        scene.Add(gun);
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+
+        // Handed to the peer as it joins, so its join run spawns the gun as its own.
+        Networking.Networking.Session!.PeerJoined += peer => gun.Network.AssignOwnership(peer);
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            PumpFor(20, alice);
+            List<ushort> order = [.. alice.WireReceived.Select(m => m.Id)];
+            // One sent before the gun's spawn names an object the peer does not have yet, so it must follow the spawn.
+            int spawned = order.IndexOf(FakePeer.Spawn);
+            int values = alice.WireReceived.FindIndex(spawned, m => m.Id == FakePeer.Sync &&
+                FakePeer.SnapshotValues(m.Data).Any(v => v.Component == ammo.Identifier && v.Slot == AmmoTestComponent.AmmoSlot));
+            Assert.True(values >= 0, "The owner only value never arrived after the spawn.");
+            Assert.True(values < order.IndexOf(FakePeer.SpawnFinished), "The owner only value came after the spawns finished.");
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }
