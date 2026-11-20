@@ -383,14 +383,19 @@ public class SyncAndRpcTests
 
         public HostedComponent(Type type)
         {
-            GameObject go = new(type.Name);
-            go.Network.Networked = true;
-            Component = go.AddComponent(type)!;
-            _scene.Add(go);
             _scene.Activate();
             SceneInstance.Main = _scene;
             LocalNetwork network = new();
             Net.Host(new LocalTransport(network, "host"));
+
+            // Spawned from a factory, which is how an object built in code is networked.
+            Net.RegisterFactory("hosted", (in NetworkSpawn _) =>
+            {
+                GameObject built = new(type.Name);
+                built.AddComponent(type);
+                return built;
+            });
+            Component = Net.SpawnFactory("hosted", default, Prowl.Vector.Quaternion.Identity).GetComponent(type)!;
             Client = NetSession.Join(new LocalTransport(network, "client"), "host", "client",
                 options: new NetSessionOptions { AppVersion = NetworkSchema.AppVersion(0) });
             // Told which scenes to load, it answers that it has them, and the host spawns for it.
