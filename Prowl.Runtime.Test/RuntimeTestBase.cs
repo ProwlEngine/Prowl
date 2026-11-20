@@ -28,6 +28,7 @@ public abstract class RuntimeTestBase : IDisposable
 
     protected RuntimeTestBase()
     {
+        NetworkTestScene.Reset();
         // Capture and override global state so each test starts from a known, play-mode setup.
         _prevIsPlaying = Application.IsPlaying;
         _prevIsEditor = Application.IsEditor;
@@ -195,6 +196,7 @@ public abstract class RuntimeTestBase : IDisposable
 
     public virtual void Dispose()
     {
+        NetworkTestScene.Reset();
         // Main, a pending load and anything preserved are static state the next test must not see. Immediate
         // teardown: no frame follows to drain a destroy queue.
         SceneInstance.Shutdown();

@@ -1,0 +1,28 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+
+namespace Prowl.Runtime.Networking;
+
+/// <summary>Options for an RPC.</summary>
+[Flags]
+public enum RpcFlags : uint
+{
+    None = 0,
+
+    /// <summary>Send it unreliably: cheaper and lower latency, but it may be lost. Arguments must fit in one packet.</summary>
+    Unreliable = 1,
+
+    /// <summary>Only the host may call it. Calls from clients are dropped. For static RPCs and host RPCs: the other kinds are the host's alone already.</summary>
+    HostOnly = 2,
+
+    /// <summary>
+    ///     Any client that has the object may call a host RPC. Without this, as with Mirror's commands, a client may only
+    ///     call it on an object it controls, and calls from other clients are dropped. The host may always call.
+    /// </summary>
+    AnyCaller = 4,
+
+    /// <summary>A broadcast skips the object's owner, as Mirror's includeOwner = false does.</summary>
+    ExcludeOwner = 8
+}

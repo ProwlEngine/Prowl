@@ -24,11 +24,12 @@ public static class PlayerSettingsFiles
     public const string TagsAndLayers = "TagsAndLayersSettings";
     public const string Navigation = "NavigationSettings";
     public const string XR = "XRSettings";
+    public const string Networking = "NetworkingSettings";
     public const string Quality = "QualitySettings";
 
     /// <summary>
     /// Every file the player looks for. What the build validates against. General settings are absent
     /// on purpose: product name, company and version reach the player through its manifest.
     /// </summary>
-    public static IReadOnlyList<string> All => [Physics, Audio, Time, Assets, TagsAndLayers, Navigation, XR, Quality];
+    public static IReadOnlyList<string> All => [Physics, Audio, Time, Assets, TagsAndLayers, Navigation, XR, Networking, Quality];
 }

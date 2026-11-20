@@ -4,6 +4,7 @@
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Runtime;
+using Prowl.Runtime.Networking;
 
 using Xunit;
 
@@ -104,5 +105,42 @@ public class ProjectSettingsTests : EditorTestHarness
         EditorRegistries.OnProjectOpened();
 
         Assert.Equal("RoundTripped", EditorRegistries.GetSettings<GeneralSettings>().ProductName);
+    }
+
+    [Fact]
+    public void NetworkingSettingsPersistAndExportedValuesApplyInThePlayer()
+    {
+        NetworkConfiguration previous = Networking.Configuration;
+        try
+        {
+            NetworkingSettings settings = EditorRegistries.GetSettings<NetworkingSettings>();
+            settings.Configuration.Port = 9123;
+            settings.Configuration.TickRate = 24;
+            settings.Configuration.ProtocolId = 4567;
+            settings.Configuration.PacketLossPercent = 12;
+            settings.Configuration.BatchMessages = false;
+            settings.Configuration.Execution = NetworkExecution.Inline;
+            settings.Apply();
+            EditorRegistries.SaveSettings();
+            Assert.True(File.Exists(Path.Combine(Project.ProjectSettingsPath, "Networking.yaml")));
+            settings.Configuration.Port = 1;
+            EditorRegistries.OnProjectOpened();
+            Assert.Equal(9123, settings.Configuration.Port);
+            Assert.Equal(24, Networking.TickRate);
+
+            string exported = Path.Combine(Project.RootPath, "NetworkingExportTest");
+            Directory.CreateDirectory(exported);
+            var echo = Prowl.Echo.Serializer.Serialize(settings, Prowl.Echo.TypeMode.Auto);
+            File.WriteAllText(Path.Combine(exported, PlayerSettingsFiles.Networking + ".yaml"), echo.WriteToYaml());
+            Networking.Configure(new());
+            PlayerSettingsLoader.Apply(exported);
+            Assert.Equal(9123, Networking.Configuration.Port);
+            Assert.Equal(4567u, Networking.Configuration.ProtocolId);
+            Assert.Equal(12, Networking.Configuration.PacketLossPercent);
+            Assert.False(Networking.Configuration.BatchMessages);
+            Assert.Equal(NetworkExecution.Inline, Networking.Configuration.Execution);
+            Assert.Equal(24, Networking.TickRate);
+        }
+        finally { Networking.Configure(previous); }
     }
 }

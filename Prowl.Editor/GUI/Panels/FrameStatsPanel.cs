@@ -493,7 +493,7 @@ public class FrameStatsPanel : DockPanel
         canvas.DrawText(Loc.Get("frame_stats.readout", new
         {
             frames = readout.Frames,
-            avg = readout.AvgFrameMs.ToString("0.00"),
+            avg = readout.AvgShownMs.ToString("0.00"),
             peak = readout.PeakMs.ToString("0.00"),
         }), x + 6, y + 4, EditorTheme.Ink500, EditorTheme.FontSizeSmall, EditorTheme.FontMono ?? font);
         // A capture that cannot replay is drawn again next frame.
@@ -1049,6 +1049,7 @@ public class FrameStatsPanel : DockPanel
         [FrameStats.Physics] = "frame_stats.desc_physics",
         [FrameStats.Animation] = "frame_stats.desc_animation",
         [FrameStats.Navigation] = "frame_stats.desc_navigation",
+        [FrameStats.Network] = "frame_stats.desc_network",
         [FrameStats.Audio] = "frame_stats.desc_audio",
         [FrameStats.Render] = "frame_stats.desc_render",
         [FrameStats.UI] = "frame_stats.desc_ui",
@@ -1073,6 +1074,7 @@ public class FrameStatsPanel : DockPanel
         [FrameStats.Physics] = "frame_stats.name_physics",
         [FrameStats.Animation] = "frame_stats.name_animation",
         [FrameStats.Navigation] = "frame_stats.name_navigation",
+        [FrameStats.Network] = "frame_stats.name_network",
         [FrameStats.Audio] = "frame_stats.name_audio",
         [FrameStats.Render] = "frame_stats.name_render",
         [FrameStats.UI] = "frame_stats.name_ui",
@@ -1134,6 +1136,8 @@ public class FrameStatsPanel : DockPanel
         {
             public int Frames;
             public float AvgFrameMs;
+            /// <summary>Average frame time counting only the categories shown when it was gathered, like PeakMs.</summary>
+            public float AvgShownMs;
             /// <summary>The slowest frame, counting only the categories shown when it was gathered.</summary>
             public float PeakMs;
             public float[] AvgMs = [];
@@ -1167,7 +1171,7 @@ public class FrameStatsPanel : DockPanel
         private float[] _sumTreeMs = [], _maxTreeMs = [], _sumTreeCalls = [];
         // One frame's per-category totals with everything under each, while they are added up.
         private float[] _frameTreeMs = [], _frameTreeCalls = [];
-        private float _sumFrameMs, _peakMs;
+        private float _sumFrameMs, _sumShownMs, _peakMs;
         private int _pendingFrames;
         private long _pendingSince = Stopwatch.GetTimestamp();
         private long _framesSeen = FrameStats.FrameCount;
@@ -1250,6 +1254,7 @@ public class FrameStatsPanel : DockPanel
                     }
                 }
                 _sumFrameMs += FrameStats.GetFrameMs(ago);
+                _sumShownMs += shownMs;
                 _peakMs = Math.Max(_peakMs, shownMs);
                 _pendingFrames++;
             }
@@ -1341,6 +1346,7 @@ public class FrameStatsPanel : DockPanel
             }
             column.Frames = _pendingFrames;
             column.AvgFrameMs = _sumFrameMs / n;
+            column.AvgShownMs = _sumShownMs / n;
             column.PeakMs = _peakMs;
             for (int i = 0; i < categoryCount; i++)
             {
@@ -1365,7 +1371,7 @@ public class FrameStatsPanel : DockPanel
             Array.Clear(_sumTreeMs);
             Array.Clear(_maxTreeMs);
             Array.Clear(_sumTreeCalls);
-            _sumFrameMs = _peakMs = 0;
+            _sumFrameMs = _sumShownMs = _peakMs = 0;
             _pendingFrames = 0;
             _pendingSince = Stopwatch.GetTimestamp();
         }

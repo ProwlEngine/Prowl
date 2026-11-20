@@ -1,0 +1,445 @@
+using Prowl.Echo;
+using Prowl.Runtime.Networking;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
+using Prowl.Courier;
+using Prowl.Courier.Transports.Local;
+using Xunit;
+
+namespace Prowl.Runtime.Test;
+
+public class RpcStateTestComponent : NetCollectionTestComponent
+{
+    private int _hostValue;
+    private static readonly SyncMember<RpcStateTestComponent, int> HostState = new(799, "HostValue", SyncFlags.None,
+        static c => c._hostValue, static (c, v) => c._hostValue = v);
+    public int HostValue { get => _hostValue; set => HostState.Set(this, ref _hostValue, value); }
+    [SerializeIgnore] public readonly List<(int Health, int Scores, float Position)> Observed = new();
+    private static readonly RpcMember<RpcStateTestComponent> Broadcast = new(701, "Observe()", RpcMode.Broadcast, RpcFlags.AnyCaller,
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Observe(); } });
+    private static readonly RpcMember<RpcStateTestComponent> Unreliable = new(702, "ObserveUnreliable()", RpcMode.Broadcast, RpcFlags.Unreliable | RpcFlags.AnyCaller,
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveUnreliable(); } });
+    private static readonly RpcMember<RpcStateTestComponent> Host = new(703, "ObserveHost()", RpcMode.Host, RpcFlags.AnyCaller,
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveHost(); } });
+    private static readonly RpcMember<RpcStateTestComponent> Owner = new(704, "ObserveOwner()", RpcMode.Owner, RpcFlags.AnyCaller,
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.ObserveOwner(); } });
+    private void Record() => Observed.Add((Health, Scores.Count, Transform.LocalPosition.X));
+    public void Observe() { if (Broadcast.Begin(this, out var w) && !Broadcast.Send(this, w)) return; Record(); }
+    public void ObserveUnreliable() { if (Unreliable.Begin(this, out var w) && !Unreliable.Send(this, w)) return; Record(); }
+    public void ObserveHost() { if (Host.Begin(this, out var w) && !Host.Send(this, w)) return; Record(); }
+    public void ObserveOwner() { if (Owner.Begin(this, out var w) && !Owner.Send(this, w)) return; Record(); }
+}
+
+/// <summary>A broadcast RPC on channel 1, as the script compiler generates for <c>[Rpc.Broadcast(Channel = 1)]</c>.</summary>
+public class RpcChannelTestComponent : NetCollectionTestComponent
+{
+    public const uint TalkId = 711;
+    [SerializeIgnore] public int Talks;
+    private static readonly RpcMember<RpcChannelTestComponent> Talking = new(TalkId, "Talk()", RpcMode.Broadcast, RpcFlags.AnyCaller,
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Talks++; } }, 1);
+    public void Talk() { if (Talking.Begin(this, out var w) && !Talking.Send(this, w)) return; Talks++; }
+    public const uint ShoutId = 712;
+    private static readonly RpcMember<RpcChannelTestComponent> Shouting = new(ShoutId, "Shout()", RpcMode.Broadcast, RpcFlags.Unreliable | RpcFlags.AnyCaller,
+        static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Talks++; } }, 1);
+    public void Shout() { if (Shouting.Begin(this, out var w) && !Shouting.Send(this, w)) return; Talks++; }
+}
+
+public partial class NetworkingTests
+{
+    [Fact]
+    public void RpcsOnAnotherChannelDoNotPushSyncAhead()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        using FakePeer bob = FakePeer.Join(network, "bob");
+        try
+        {
+            Pump(() => alice.Has(FakePeer.SceneSnapshot) && bob.Has(FakePeer.SceneSnapshot), alice, bob);
+            GameObject radio = CreateGameObject("Radio");
+            RpcChannelTestComponent component = radio.AddComponent<RpcChannelTestComponent>();
+            scene.Add(radio);
+            radio.Network.SpawnSerialized();
+            Pump(() => bob.Has(FakePeer.Spawn), alice, bob);
+
+            // A channel 0 call would send the pending collection change first; this one leaves it for the next tick.
+            component.Scores.Add(5);
+            component.Talk();
+            Assert.Equal(1, component.Talks);
+            Assert.True(NetworkTestScene.Current.Sync.PendingCount > 0);
+            Pump(() => bob.Has(FakePeer.RpcFromHost), alice, bob);
+            Assert.Equal(1, bob.Channels.Single(m => m.Id == FakePeer.RpcFromHost).Channel);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void UnreliableRpcsIgnoreTheirChannel()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            GameObject radio = CreateGameObject("Radio");
+            RpcChannelTestComponent component = radio.AddComponent<RpcChannelTestComponent>();
+            scene.Add(radio);
+            radio.Network.SpawnSerialized();
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+
+            // Unreliable messages have no order to keep, so they go on channel 0 whatever the RPC asks.
+            component.Shout();
+            Pump(() => alice.Has(FakePeer.RpcFromHost), alice);
+            Assert.Equal((Delivery.Unreliable, (byte)0), (alice.Deliveries.Single(m => m.Id == FakePeer.RpcFromHost).Delivery,
+                alice.Channels.Single(m => m.Id == FakePeer.RpcFromHost).Channel));
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void ReplicationMessagesOffChannelZeroAreIgnored()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            GameObject crate = CreateGameObject("Crate");
+            NetTestComponent component = crate.AddComponent<NetTestComponent>();
+            scene.Add(crate);
+            crate.Network.SpawnSerialized(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+
+            alice.Send(FakePeer.Sync, w =>
+            {
+                w.WriteVarUInt32(1);
+                w.WriteGuid(component.Identifier);
+                w.WriteVarUInt32(NetTestComponent.HealthSlot);
+                using NetWriter value = new();
+                NetSerializer<int>.Write(value, 42);
+                w.WriteBytesWithLength(value.WrittenSpan);
+            }, channel: 1);
+            PumpFor(30, alice);
+            Assert.Equal(100, component.Health);
+
+            alice.SendSync(component.Identifier, NetTestComponent.HealthSlot, 42);
+            Pump(() => component.Health == 42, alice);
+            Assert.Equal(SessionState.Active, alice.Session.State);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void RpcChannelsFallBackToChannelZeroOnSmallerTransports()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        using LimitedTransport transport = new(network, _ => 1000);
+        Assert.Equal(1, transport.Capabilities.Channels);
+        Networking.Networking.Host(transport);
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            GameObject radio = CreateGameObject("Radio");
+            RpcChannelTestComponent component = radio.AddComponent<RpcChannelTestComponent>();
+            scene.Add(radio);
+            radio.Network.SpawnSerialized();
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+
+            component.Talk();
+            Pump(() => alice.Has(FakePeer.RpcFromHost), alice);
+            Assert.Equal(0, alice.Channels.Single(m => m.Id == FakePeer.RpcFromHost).Channel);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReliableRpcsFollowTheirCallersSyncAndCarryNoState(bool unreliable)
+    {
+        SceneInstance scene = CreateScene();
+        GameObject root = CreateGameObject("RPC state");
+        root.Network.Networked = true;
+        RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
+        root.AddComponent<NetworkLifecycleListener>().TryEditOnSpawn = true;
+        scene.Add(root); Bind(scene);
+        LocalNetwork network = new();
+        byte[] snapshot, rpc, nextSync;
+        byte[][] spawns;
+        byte[]? stateSync = null;
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.IsReady, client);
+            snapshot = client.Last(FakePeer.SceneSnapshot);
+            spawns = RecordedSpawns(client);
+            component.Health = 0;
+            component.Scores.Add(7);
+            if (unreliable) component.ObserveUnreliable(); else component.Observe();
+            Pump(() => client.Has(FakePeer.RpcFromHost), client);
+            int rpcIndex = client.WireReceived.FindLastIndex(m => m.Id == FakePeer.RpcFromHost);
+            rpc = client.WireReceived[rpcIndex].Data;
+            NetReader call = new(rpc);
+            call.ReadVarUInt32(); call.ReadVarUInt32(); call.ReadByte(); call.ReadVarUInt32(); call.ReadBytesWithLength();
+            Assert.True(call.IsAtEnd);
+            // Nothing goes ahead of an unreliable call; its state follows with the next tick.
+            // A reliable call's state, values and collection changes alike, goes just ahead of it.
+            if (!unreliable)
+            {
+                Assert.Equal(FakePeer.Sync, client.WireReceived[rpcIndex - 1].Id);
+                stateSync = client.WireReceived[rpcIndex - 1].Data;
+            }
+
+            SendSyncChanges();
+            Pump(() => client.SnapshotInt(component.Identifier, NetCollectionTestComponent.HealthSlot) == 0, client);
+            nextSync = client.WireReceived.Last(m => m.Id == FakePeer.Sync).Data;
+        }
+        finally { Networking.Networking.Shutdown(); }
+
+        MakeCurrent(CreateScene());
+        LocalNetwork receiving = new();
+        using FakePeer host = FakePeer.Host(receiving);
+        SendJoin(host, snapshot, spawns);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(receiving, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(go => go.Name == "RPC state" && !ReferenceEquals(go, root)), host);
+            RpcStateTestComponent proxy = SceneInstance.Main.Objects.Single(go => go.Name == "RPC state").GetComponent<RpcStateTestComponent>()!;
+            NetworkLifecycleListener lifecycle = proxy.GameObject.GetComponent<NetworkLifecycleListener>()!;
+            Assert.Equal(new[] { "spawn" }, lifecycle.Events);
+            Assert.Equal(100, lifecycle.HealthAtSpawn);
+            Assert.True(lifecycle.StructuralEditApplied);
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            if (stateSync != null) host.Session.SendRaw(client, FakePeer.Sync, stateSync);
+            host.Session.SendRaw(client, FakePeer.RpcFromHost, rpc, unreliable ? Delivery.Unreliable : Delivery.Reliable);
+            host.Session.Flush();
+            Pump(() => proxy.Observed.Count == 1, host);
+            Assert.Equal(unreliable ? (100, 0, 0f) : (0, 1, 0f), proxy.Observed[0]);
+            // The state follows; collection changes the proxy already has aren't applied twice.
+            host.Session.SendRaw(client, FakePeer.Sync, nextSync);
+            host.Session.Flush(); PumpFor(10, host);
+            Assert.Equal(0, proxy.Health);
+            Assert.Equal(new[] { 7 }, proxy.Scores);
+            Assert.Single(proxy.ScoreChanges);
+            host.Send(FakePeer.Despawn, w => w.WriteGuid(proxy.GameObject.Identifier), client);
+            Pump(() => proxy.IsDisposed, host);
+            Assert.Equal(new[] { "spawn", "despawn" }, lifecycle.Events);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Theory]
+    [InlineData(703)]
+    public void ClientRpcRunsAfterItsSync(int method)
+    {
+        SceneInstance scene = CreateScene();
+        GameObject root = CreateGameObject("Client RPC");
+        root.Network.Networked = true;
+        RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
+        scene.Add(root); Bind(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.IsReady, client);
+            NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
+            root.Network.AssignOwnership(owner);
+            using FakePeer observer = FakePeer.Join(network, "observer");
+            Pump(() => observer.IsReady, client, observer);
+            component.HostValue = 9;
+            uint generation = NetworkGeneration(root);
+            client.Session.SendRaw(client.Session.HostPeer!, FakePeer.Sync,
+                ClientSync(component, owner.Id, generation, 0));
+            client.Session.SendRaw(client.Session.HostPeer!, FakePeer.RpcToHost, Call(component, (uint)method));
+            client.Session.Flush();
+            Pump(() => component.Observed.Count == 1, client);
+            Assert.Equal((0, 0, 0f), component.Observed[0]);
+            Assert.Equal(SessionState.Active, client.Session.State);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void RpcWithTrailingBytesDropsItsCaller()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject root = CreateGameObject(); root.Network.Networked = true;
+        RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
+        scene.Add(root); Bind(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.IsReady, client);
+            using NetWriter message = new();
+            message.WriteBytes(Call(component, 703));
+            message.WriteVarUInt32(0); message.WriteByte(1); // An empty recipient list, then junk.
+            client.Session.SendRaw(client.Session.HostPeer!, FakePeer.RpcToHost, message.WrittenSpan);
+            client.Session.Flush();
+            Pump(() => client.Session.State == SessionState.Ended, client);
+            Assert.Empty(component.Observed);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void EachRpcBetweenTicksFollowsItsOwnSync()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject root = CreateGameObject(); root.Network.Networked = true;
+        RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
+        scene.Add(root); Bind(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.IsReady, client);
+            client.WireReceived.Clear();
+            // Collection changes travel reliably, each just ahead of the call that follows it.
+            for (int i = 0; i < 3; i++)
+            {
+                component.Scores.Add(i);
+                component.Observe();
+            }
+
+            Pump(() => client.WireReceived.Count(m => m.Id == FakePeer.RpcFromHost) == 3, client);
+            ushort[] order = client.WireReceived.Where(m => m.Id is FakePeer.Sync or FakePeer.RpcFromHost)
+                .Select(m => m.Id).ToArray();
+            Assert.Equal(new[] { FakePeer.Sync, FakePeer.RpcFromHost, FakePeer.Sync, FakePeer.RpcFromHost,
+                FakePeer.Sync, FakePeer.RpcFromHost }, order);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    private static void SendSyncChanges() =>
+        Networking.Networking.System!.Sync.SendSyncChanges();
+
+    private static byte[] Call(Component component, uint method)
+    {
+        using NetWriter rpc = new();
+        (uint netId, byte index, uint methodIndex) = FakePeer.RpcTarget(component.Identifier, method);
+        rpc.WriteVarUInt32(netId); rpc.WriteByte(index); rpc.WriteVarUInt32(methodIndex);
+        rpc.WriteBytesWithLength(ReadOnlySpan<byte>.Empty);
+        return rpc.ToArray();
+    }
+
+    private static byte[] ClientSync(Component component, int origin, uint generation, int value,
+        uint slot = NetCollectionTestComponent.HealthSlot)
+    {
+        using NetWriter sync = new(), payload = new();
+        NetSerializer<int>.Write(payload, value);
+        sync.WriteInt32(origin); sync.WriteVarUInt32(1);
+        sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(slot);
+        sync.WriteVarUInt32(generation); sync.WriteBytesWithLength(payload.WrittenSpan);
+        return FakePeer.StateFromOld(sync.WrittenSpan);
+    }
+
+    private static uint NetworkGeneration(GameObject root)
+    {
+        uint generation = NetworkTestScene.Current.GenerationOf(root);
+        return generation != 0 ? generation : throw new Exception("Missing network root");
+    }
+
+    [Fact]
+    public void OldSyncCannotCrossOwnershipGenerationWhenOwnerReturns()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject root = CreateGameObject(); root.Network.Networked = true;
+        RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
+        scene.Add(root); Bind(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.Has(FakePeer.SceneSnapshot), client);
+            NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
+            root.Network.AssignOwnership(owner);
+            uint generation = NetworkGeneration(root);
+            root.Network.AssignOwnership(null); root.Network.AssignOwnership(owner);
+            using NetWriter sync = new(), value = new();
+            sync.WriteInt32(owner.Id); sync.WriteVarUInt32(1);
+            sync.WriteGuid(component.Identifier); sync.WriteVarUInt32(NetCollectionTestComponent.HealthSlot);
+            sync.WriteVarUInt32(generation); NetSerializer<int>.Write(value, 0); sync.WriteBytesWithLength(value.WrittenSpan);
+            client.Session.SendRaw(client.Session.HostPeer!, FakePeer.Sync, FakePeer.StateFromOld(sync.WrittenSpan));
+            client.Session.Flush(); PumpFor(20, client);
+            Assert.Equal(100, component.Health);
+            Assert.Equal(SessionState.Active, client.Session.State);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AReliableRpcOnAnotherChannelThatOvertakesActivationStillRuns(bool rpcFirst)
+    {
+        SceneInstance scene = CreateScene();
+        GameObject go = CreateGameObject("Talker");
+        go.Network.Networked = true;
+        RpcChannelTestComponent component = go.AddComponent<RpcChannelTestComponent>();
+        scene.Add(go);
+        MakeCurrent(scene);
+
+        // Taken from a real host, which is what gives the networked object its NetId.
+        byte[] snapshot;
+        byte[][] spawns;
+        LocalNetwork source = new();
+        Networking.Networking.Host(new LocalTransport(source, "host"));
+        try
+        {
+            (snapshot, spawns) = RecordJoin(source);
+        }
+        finally { Networking.Networking.Shutdown(); }
+
+        MakeCurrent(CreateScene());
+        ulong generation = SceneGenerationOf(snapshot);
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.AutoReady = false;
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => host.Has(FakePeer.Ready), host);
+            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(generation), peer);
+            foreach (byte[] spawn in spawns) host.Session.SendRaw(peer, FakePeer.Spawn, spawn);
+            host.Session.Flush();
+            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
+            Assert.False(Networking.Networking.IsReady);
+
+            void Talk() => host.Send(FakePeer.RpcFromHost, w =>
+            {
+                w.WriteVarUInt32((uint)NetPeer.HostId); w.WriteGuid(component.Identifier);
+                w.WriteUInt32(RpcChannelTestComponent.TalkId);
+            }, peer, channel: 1);
+            void Activate() => host.Send(FakePeer.SpawnFinished, w => w.WriteUInt64(generation), peer);
+
+            // Channels are independent streams, so a call sent after activation can arrive before it.
+            if (rpcFirst) { Talk(); Activate(); }
+            else { Activate(); Talk(); }
+
+            Pump(() => Networking.Networking.IsReady, host);
+            PumpFor(50, host);
+            Assert.Equal(1, Find(SceneInstance.Main, go.Identifier).GetComponent<RpcChannelTestComponent>()!.Talks);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+}

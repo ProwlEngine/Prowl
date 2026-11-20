@@ -25,6 +25,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -841,6 +842,15 @@ public class EditorApplication : Game
                 () => { paper.ClearFocus(); StepOneFrame(); })
                 .Tooltip(Loc.Get("game.step"))
                 .Style(ButtonStyle.Ghost).Show();
+
+            // While the game hosts a session: launch another client instance into it.
+            if (MultiplayerPlay.CanLaunchClient)
+            {
+                Origami.IconButton(paper, "btn_multiplayer", EditorIcons.Users_I,
+                    () => { paper.ClearFocus(); MultiplayerPlay.LaunchClient(); })
+                    .Tooltip(Loc.Get("game.multiplayer.launch"))
+                    .Style(ButtonStyle.Ghost).Show();
+            }
         }
     }
 
@@ -1893,7 +1903,48 @@ public class EditorApplication : Game
 
         if (Held(entering: true)) return;
 
+        if (NeedsSavePrompt())
+        {
+            PromptSaveBeforePlay();
+            return;
+        }
+
         Instance.EnterPlayMode();
+    }
+
+    // Untitled scenes have no file to save to, so they never hold play up.
+    private static bool NeedsSavePrompt() =>
+        !Preferences.Get<PlayModePreferences>().SaveSceneOnPlay && !PrefabEditingMode.IsEditing &&
+        EditorSceneManager.OpenScenes.Any(o => o.IsDirty && o.IsLoaded && o.Path != null);
+
+    private static void PromptSaveBeforePlay()
+    {
+        DialogModal dialog = Origami.Dialog(Loc.Get("dialog.save_before_play"), paper =>
+        {
+            if (Origami.Current.Font is not { } font) return;
+            paper.Box("save_before_play_msg")
+                .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+                .Wrap(Prowl.Scribe.TextWrapMode.Wrap)
+                .Text(Loc.Get("dialog.save_before_play_body"), font);
+        }, 460);
+
+        void SaveAndPlay(bool always)
+        {
+            Modal.Remove(dialog);
+            if (always)
+            {
+                PlayModePreferences prefs = Preferences.Get<PlayModePreferences>();
+                prefs.SaveSceneOnPlay = true;
+                Preferences.Changed(Preferences.SectionOf(prefs));
+            }
+
+            if (Application.IsPlaying || Instance == null) return;
+            if (EditorSceneManager.SaveAll()) Instance.EnterPlayMode();
+        }
+
+        dialog.Button(Loc.Get("dialog.save"), () => SaveAndPlay(false), OrigamiVariant.Primary)
+            .Button(Loc.Get("dialog.save_always"), () => SaveAndPlay(true))
+            .Button(Loc.Get("common.cancel"), () => Modal.Remove(dialog));
     }
 
     /// <summary>Asks to stop play mode. Held if any handler has something outstanding.</summary>
@@ -2085,6 +2136,8 @@ public class EditorApplication : Game
         // handlers its code added, which would otherwise fire into the next play session.
         XR.Stop();
         XR.ForgetHandlers();
+        Networking.Shutdown();
+        MultiplayerPlay.OnPlayStopped();
 
         // Play objects go with the play world. The edit selection comes back once the edit world is bound again.
         Selection.Clear();
@@ -2288,6 +2341,7 @@ public class EditorApplication : Game
     {
         s_closing = true;
         CliServer.Shutdown();
+        MultiplayerPlay.CloseAll();
         base.Closing();
     }
 
