@@ -177,14 +177,7 @@ public abstract class Game
                     PreparePaperFrame();
                     _paper.BeginFrame(delta, -1f); // negative = keep DisplayFramebufferScale set by PreparePaperFrame
 
-                    BeginGui(_paper);
-
-                    if (PresentsWorlds)
-                        foreach (SceneInstance world in PresentedWorlds())
-                            world.OnGui(_paper);
-                    OnGui(_paper);
-
-                    EndGui(_paper);
+                    RunGui(_paper);
 
                     _paper.EndFrame();
                 }
@@ -431,6 +424,26 @@ public abstract class Game
                 s_presented.Add(world);
         s_presented.Sort(static (a, b) => a.RenderOrder.CompareTo(b.RenderOrder));
         return s_presented;
+    }
+
+    /// <summary>The world the GUI phase runs in, so <see cref="Camera.Main"/>, Physics and gizmos there reach it. Null leaves the ambient world as it is.</summary>
+    protected virtual SceneInstance? GuiWorld => null;
+
+    // The editor logs a GUI exception and carries on to the next frame, so the scope has to close even when the phase
+    // throws. Left open, the world stays ambient for every later frame, and once it is destroyed Time and the other
+    // ambient readers throw from code that runs outside any world, such as input action callbacks.
+    internal void RunGui(Paper paper)
+    {
+        using SceneInstance.SceneScope scope = SceneInstance.Enter(GuiWorld);
+
+        BeginGui(paper);
+
+        if (PresentsWorlds)
+            foreach (SceneInstance world in PresentedWorlds())
+                world.OnGui(paper);
+        OnGui(paper);
+
+        EndGui(paper);
     }
 
     private void RenderPresentedWorlds()
