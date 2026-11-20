@@ -606,7 +606,8 @@ public partial class NetworkingTests
             host.Send(FakePeer.OwnershipState, w => w.WriteBytes(handoff), client);
             host.Send(FakePeer.Owner, w => w.WriteBytes(takenBack), client);
             host.Session.SendRaw(client, FakePeer.Sync, hostChange);
-            Pump(() => here.GameObject.IsProxy, host);
+            // Waited for, not timed: the host's change can take longer than any fixed pause on a busy machine.
+            Pump(() => here.GameObject.IsProxy && here.Scores.SequenceEqual([7]), host);
             PumpFor(50, host);
             Assert.Equal([7], here.Scores);
         }
