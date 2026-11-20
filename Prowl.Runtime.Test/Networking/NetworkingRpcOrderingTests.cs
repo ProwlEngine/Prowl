@@ -442,14 +442,4 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    /// <summary>A handoff's poses: just the root's, at <paramref name="x" /> along X.</summary>
-    private static byte[] Poses(GameObject root, float x)
-    {
-        using NetWriter poses = new();
-        poses.WriteVarUInt32(1); poses.WriteGuid(root.Identifier);
-        NetSerializers.WriteFloat3(poses, new Float3(x, 0, 0));
-        NetSerializers.WriteQuaternion(poses, Quaternion.Identity);
-        NetSerializers.WriteFloat3(poses, Float3.One);
-        return poses.ToArray();
-    }
 }

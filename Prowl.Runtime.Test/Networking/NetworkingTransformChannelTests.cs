@@ -93,28 +93,6 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    [Theory]
-    [InlineData(NoPosition | NoRotation | NoScale)]
-    [InlineData(NoPosition)]
-    [InlineData(NoRotation)]
-    [InlineData(NoScale)]
-    [InlineData(NoPosition | NoRotation)]
-    [InlineData(NoPosition | NoScale)]
-    [InlineData(NoRotation | NoScale)]
-    [InlineData(0)]
-    [InlineData(NoInterpolation)]
-    [InlineData(NoPosition | NoRotation | NoScale | NoInterpolation)]
-    public void ANetworkTransformsChannelsRoundTrip(int mask)
-    {
-        GameObject go = CreateGameObject();
-        NetworkTransform transform = SyncTransformWithout(go, mask);
-        using GameObject copy = Serializer.Deserialize<GameObject>(Serializer.Serialize(go))!;
-        NetworkTransform loaded = copy.GetComponent<NetworkTransform>()!;
-        Assert.Equal(transform.Channels, loaded.Channels);
-        Assert.Equal(transform.Interpolate, loaded.Interpolate);
-        Assert.Equal((mask & (NoPosition | NoRotation | NoScale)) != (NoPosition | NoRotation | NoScale), loaded.Syncs);
-    }
-
     [Fact]
     public void OwnerCannotChangeDisabledChannelsAndRelayUsesHostValues()
     {

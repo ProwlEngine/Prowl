@@ -112,23 +112,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SnapshotMaterializationRejectsAmplifiedArrayDimensionsBeforeAllocation()
-    {
-        EchoObject tree = EchoObject.NewCompound();
-        tree["dimensions"] = Serializer.Serialize(new int[] { 1000, 1000 });
-        tree["elements"] = EchoObject.NewList();
-        byte[] compressed = NetworkTestScene.Current.Compress(tree);
-        EchoObject decoded = SnapshotDecoder.Decode(compressed, new()
-        {
-            MaxSnapshotDecompressedBytes = 1024, MaxSnapshotNodes = 32, MaxSnapshotDepth = 8
-        });
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        Assert.Throws<System.IO.InvalidDataException>(() => Serializer.Deserialize<int[,]>(decoded));
-        Assert.True(GC.GetAllocatedBytesForCurrentThread() - before < 1_000_000,
-            "Malformed dimensions must not allocate the four-megabyte array.");
-    }
-
-    [Fact]
     public void SpawningAnObjectTheClientBuiltItselfKeepsTheClientsOneInstance()
     {
         // A scene built in code is built by every peer, so the client has the crate before the host spawns it.

@@ -100,21 +100,32 @@ public partial class NetworkingTests
             (_, GameObject crate, NetTestComponent component) = SpawnCrate(network, aliceHere, alice);
             uint generation = NetworkGeneration(crate);
 
-            using NetWriter stale = new(), value = new();
-            NetSerializer<int>.Write(value, 5);
-            stale.WriteVarUInt32(1); stale.WriteVarUInt32((uint)NetworkTestScene.Current.SceneGeneration + 1); stale.WriteVarUInt32(1);
-            stale.WriteVarUInt32(0);
-            stale.WriteVarUInt32(1);
-            stale.WriteVarUInt32(1 << 1 | 1); stale.WriteGuid(component.Identifier);
-            stale.WriteVarUInt32(NetTestComponent.HealthSlot); stale.WriteVarUInt32(generation);
-            stale.WriteBytesWithLength(value.WrittenSpan);
-            alice.Session.SendRaw(alice.Session.HostPeer!, FakePeer.Snapshot, stale.WrittenSpan, Delivery.Unreliable);
-            alice.Session.Flush();
-            PumpFor(100, alice);
+            // One snapshot asking to be acknowledged, under the scene given.
+            uint netId = NetworkTestScene.Current.NetIdOf(crate);
+            void Send(uint scene)
+            {
+                using NetWriter snapshot = new();
+                snapshot.WriteVarUInt32(1); snapshot.WriteVarUInt32(scene); snapshot.WriteVarUInt32(1);
+                snapshot.WriteDouble(1); snapshot.WriteVarUInt32(1);
+                snapshot.WriteVarUInt32(netId); snapshot.WriteVarUInt32(generation);
+                snapshot.WriteByte(PositionChannel | RotationChannel | ScaleChannel | ExactChannel);
+                NetSerializers.WriteFloat3(snapshot, new Float3(5, 6, 7));
+                NetSerializers.WriteQuaternion(snapshot, Quaternion.Identity);
+                NetSerializers.WriteFloat3(snapshot, Float3.One);
+                alice.Session.SendRaw(alice.Session.HostPeer!, FakePeer.Snapshot, snapshot.WrittenSpan, Delivery.Unreliable);
+                alice.Session.Flush();
+            }
 
-            Assert.Equal(100, component.Health);
+            Float3 before = crate.Transform.LocalPosition;
+            Send((uint)NetworkTestScene.Current.SceneGeneration + 1);
+            PumpFor(100, alice);
+            Assert.Equal(before, crate.Transform.LocalPosition);
             Assert.False(alice.Has(FakePeer.SnapshotAck));
             Assert.Equal(SessionState.Active, alice.Session.State);
+
+            // The same snapshot under this scene is taken, and acknowledged.
+            Send((uint)NetworkTestScene.Current.SceneGeneration);
+            Pump(() => alice.Has(FakePeer.SnapshotAck), alice);
         }
         finally { Networking.Networking.Shutdown(); }
     }

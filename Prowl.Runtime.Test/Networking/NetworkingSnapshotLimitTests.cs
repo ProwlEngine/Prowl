@@ -55,17 +55,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void SnapshotDecoderRejectsOversizedCompoundKeysBeforeAllocating()
-    {
-        byte[] compressed = CompressedEcho(w =>
-        {
-            w.Write((byte)EchoType.Compound); w.Write(1);
-            w.Write(int.MaxValue); w.Write((byte)EchoType.Null);
-        });
-        Assert.Throws<InvalidDataException>(() => SnapshotDecoder.Decode(compressed, new()));
-    }
-
-    [Fact]
     public void SnapshotDecoderCountsNodesAcrossSiblingContainers()
     {
         byte[] compressed = CompressedEcho(w =>

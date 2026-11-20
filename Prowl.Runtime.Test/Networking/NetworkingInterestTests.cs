@@ -123,16 +123,6 @@ public partial class NetworkingTests
     private static int DespawnsOf(FakePeer peer, GameObject go) =>
         peer.Received.Count(m => m.Id == FakePeer.Despawn && FirstGuid(m.Data) == go.Identifier);
 
-    private static bool HoldsReference(FakePeer peer, SyncReferenceTestComponent pointer, Guid target) =>
-        peer.SnapshotValues().Any(v => v.Component == pointer.Identifier && v.Slot == SyncReferenceTestComponent.TargetSlot &&
-                                       v.Value.AsSpan().SequenceEqual(target.ToByteArray()));
-
-    private static int CountReference(FakePeer peer, SyncReferenceTestComponent pointer, Guid target) =>
-        peer.SnapshotValues().Count(v => v.Component == pointer.Identifier && v.Slot == SyncReferenceTestComponent.TargetSlot &&
-                                         v.Value.AsSpan().SequenceEqual(target.ToByteArray()));
-
-    private static Guid LastArgument(FakePeer peer, ushort id) => new(peer.Last(id).AsSpan(^16));
-
     [Fact]
     public void InterestSettingsDefaultToOffAndNormalizeInvalidValues()
     {
@@ -437,13 +427,6 @@ public partial class NetworkingTests
         byte[] payload = peer.Received.Last(m => m.Id == FakePeer.Spawn && ReadSpawn(m.Data, Guid.Empty).Id == go.Identifier).Data;
         NetReader reader = new(payload);
         return NetworkTestScene.Current.Decompress(SpawnMessage.Read(ref reader).Snapshot).WriteToJson();
-    }
-
-    private static int CountPair(FakePeer peer, SyncPairTestComponent pair, GameObject first, GameObject second)
-    {
-        byte[] both = [.. first.Identifier.ToByteArray(), .. second.Identifier.ToByteArray()];
-        return peer.SnapshotValues().Count(v => v.Component == pair.Identifier && v.Slot == SyncPairTestComponent.PairSlot &&
-                                                v.Value.AsSpan().SequenceEqual(both));
     }
 
     private static int NoViewpointWarnings(NetPeer peer)

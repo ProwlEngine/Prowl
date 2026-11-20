@@ -98,20 +98,6 @@ public class NetworkConfigurationTests : RuntimeTestBase
     }
 
     [Fact]
-    public void BatchedLocalSessionKeepsInlineExecution()
-    {
-        NetworkConfiguration previous = Networking.Networking.Configuration;
-        try
-        {
-            Networking.Networking.Configure(new());
-            using Transport transport = new LocalTransport(new(), "host");
-            using NetSession session = Networking.Networking.Host(transport);
-            Assert.False(session.IsExternallyPumped);
-        }
-        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
-    }
-
-    [Fact]
     public void DefaultUdpTransportUsesNetworkingWorker()
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;

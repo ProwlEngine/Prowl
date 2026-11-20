@@ -12,7 +12,7 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
     public void TimedOutWorkerRetainsItsTransportUntilShutdownCanBeRetried()
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
-        using NetworkingWorkerTests.BlockingTransport transport = new();
+        using BlockingTransport transport = new();
         try
         {
             Networking.Networking.Configure(new() { Execution = NetworkExecution.DedicatedThread });
@@ -91,5 +91,19 @@ public sealed class NetworkSessionIsolationTests : RuntimeTestBase
         Assert.Null(NetSerializer<GameObject>.Read(ref reader));
         Assert.Equal(42, reader.ReadInt32());
         Assert.True(reader.IsAtEnd);
+    }
+
+    /// <summary>Holds whoever pumps it inside Receive until released.</summary>
+    private sealed class BlockingTransport : Transport
+    {
+        public readonly ManualResetEventSlim Entered = new(false), Release = new(false);
+        public bool Disposed;
+        public override bool IsListening => true;
+        public override void Listen() { }
+        public override Connection Connect(string address) => throw new NotSupportedException();
+        public override void Receive() { Entered.Set(); Release.Wait(); }
+        public override void Flush() { }
+        public override void Shutdown() { }
+        protected override void DisposeCore() { Disposed = true; Entered.Dispose(); Release.Dispose(); }
     }
 }

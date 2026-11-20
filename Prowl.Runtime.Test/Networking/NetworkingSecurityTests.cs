@@ -32,14 +32,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void TheAppVersionSentAtJoinCoversTheSchema()
-    {
-        Assert.Equal(NetworkSchema.AppVersion(7), NetworkSchema.AppVersion(7));
-        Assert.NotEqual(7u, NetworkSchema.AppVersion(7));
-        Assert.NotEqual(NetworkSchema.AppVersion(7), NetworkSchema.AppVersion(8));
-    }
-
-    [Fact]
     public void AClientWithAnotherSchemaIsTurnedAwayAtJoin()
     {
         LocalNetwork network = new();

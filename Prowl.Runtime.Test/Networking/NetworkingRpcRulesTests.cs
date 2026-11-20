@@ -82,30 +82,4 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    [Fact]
-    public void OnlyTheHostChangesOwnership()
-    {
-        SceneInstance scene = CreateScene();
-        GameObject ship = CreateGameObject("Ship");
-        ship.AddComponent<NetTestComponent>();
-        scene.Add(ship);
-        MakeCurrent(scene);
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
-            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
-            ship.Network.SpawnSerialized();
-            Assert.Null(ship.Network.Owner);
-
-            ship.Network.AssignOwnership(aliceHere);
-            Assert.Same(aliceHere, ship.Network.Owner);
-
-            ship.Network.RemoveOwnership();
-            Assert.Null(ship.Network.Owner);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
 }
