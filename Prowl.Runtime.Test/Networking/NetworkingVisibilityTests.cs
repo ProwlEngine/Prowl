@@ -136,6 +136,7 @@ public partial class NetworkingTests
         GameObject crate = Crate(session.World, NetworkVisibility.Manual);
         NetTestComponent stats = crate.GetComponent<NetTestComponent>()!;
         NetCollectionTestComponent bag = crate.AddComponent<NetCollectionTestComponent>();
+        crate.AddComponent<NetworkTransform>().Interpolate = false;
         crate.Network.SpawnSerialized();
         crate.Network.ShowTo(session.AliceHere);
 
@@ -143,7 +144,6 @@ public partial class NetworkingTests
         bag.Scores.Add(3);
         crate.Transform.LocalPosition = new Float3(1, 2, 3);
         stats.Shout("hello");
-        crate.AddComponent<NetworkTransform>().Interpolate = false;
         crate.Network.Orphaned = NetworkOrphaned.ClearOwner;
         Pump(() => session.Alice.SnapshotInt(stats.Identifier, NetTestComponent.HealthSlot) == 7 &&
                    session.Alice.Has(FakePeer.Sync) && session.Alice.Has(FakePeer.RpcFromHost), session.Alice, session.Bob);

@@ -487,6 +487,8 @@ public partial class NetworkingTests : RuntimeTestBase
         {
             int named = reader.ReadByte();
             for (int i = 0; i < named; i++) reader.ReadGuid();
+            int transforms = reader.ReadByte();
+            for (int i = 0; i < transforms; i++) reader.ReadGuid();
         }
 
         int count = reader.ReadByte();

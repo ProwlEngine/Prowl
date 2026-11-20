@@ -1021,11 +1021,13 @@ internal sealed class SnapshotSystem : IDisposable
                     continue;
                 }
 
+                // A pose the peer couldn't place stays owed and goes again after the usual wait, not every tick.
                 if (transform.Entry is { } owner && _rejectedObjects.Contains(owner.NetId))
                 {
-                    state.Poses[transform] = pose with { LastSent = 0 };
+                    continue;
                 }
-                else if (pose.Changed <= sent.Tick)
+
+                if (pose.Changed <= sent.Tick)
                 {
                     state.Poses.Remove(transform);
                 }

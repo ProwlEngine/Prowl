@@ -50,17 +50,23 @@ internal sealed partial class NetworkObject(NetworkSystem scene, GameObject game
         {
             if (_transforms == null)
             {
-                _transforms = NetworkComponents.GatherTransforms(GameObject);
-                for (int i = 0; i < _transforms.Length; i++)
-                {
-                    _transforms[i].Entry = this;
-                    _transforms[i].Index = (byte)i;
-                    _transforms[i].SnapshotSlot = -1;
-                    _transforms[i].HasSendTick = false;
-                }
+                SetTransforms(NetworkComponents.GatherTransforms(GameObject));
             }
 
-            return _transforms;
+            return _transforms!;
+        }
+    }
+
+    /// <summary>Takes the object's transforms as given, in wire order: the ones the host named in a spawn of its tree.</summary>
+    public void SetTransforms(NetworkTransform[] transforms)
+    {
+        _transforms = transforms;
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            transforms[i].Entry = this;
+            transforms[i].Index = (byte)i;
+            transforms[i].SnapshotSlot = -1;
+            transforms[i].HasSendTick = false;
         }
     }
 

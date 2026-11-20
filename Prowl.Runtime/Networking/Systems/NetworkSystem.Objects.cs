@@ -471,6 +471,14 @@ internal sealed partial class NetworkSystem
             output.WriteGuid(component.Identifier);
         }
 
+        // The same for its transforms, whose place in the list is their index on the wire.
+        NetworkTransform[] transforms = FindEntry(go)?.Transforms ?? NetworkComponents.GatherTransforms(go);
+        output.WriteByte((byte)transforms.Length);
+        foreach (NetworkTransform transform in transforms)
+        {
+            output.WriteGuid(transform.Identifier);
+        }
+
         Sync.WriteSpawnState(output, components);
     }
 
@@ -502,6 +510,7 @@ internal sealed partial class NetworkSystem
 
         bool attached = false, adopted = false;
         Component[] components = [];
+        NetworkTransform[]? transforms = null;
         try
         {
             if (Session != session || ReplicatedWorld != scene)
@@ -556,6 +565,7 @@ internal sealed partial class NetworkSystem
                 components = template != null
                     ? adopted ? NetworkComponents.Gather(go) : template.Components
                     : ReadSpawnComponents(ref reader);
+                transforms = template != null ? null : ReadSpawnTransforms(ref reader);
                 Sync.ApplySpawnState(sender, components, ref reader);
             }
             finally
@@ -573,6 +583,11 @@ internal sealed partial class NetworkSystem
                 Owner = owner, Generation = generation, NetId = netId, Template = adopted ? null : template,
                 Components = components
             };
+            if (transforms != null)
+            {
+                entry.SetTransforms(transforms);
+            }
+
             go.Network.ApplyOrphaned(orphaned);
             Entries.Add(entry);
             Sync.ResolveReferencesTo(entry);
@@ -621,6 +636,24 @@ internal sealed partial class NetworkSystem
                 }
             }
         }
+    }
+
+    // The transforms a spawn that carries its tree names, in the host's order, found in the tree being spawned.
+    private NetworkTransform[] ReadSpawnTransforms(ref NetReader reader)
+    {
+        NetworkTransform[] transforms = new NetworkTransform[reader.ReadByte()];
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            Guid id = reader.ReadGuid();
+            if (Spawning == null || !Spawning.TryGetValue(id, out EngineObject? found) || found is not NetworkTransform transform)
+            {
+                throw new InvalidDataException("A spawn names a NetworkTransform its tree doesn't hold.");
+            }
+
+            transforms[i] = transform;
+        }
+
+        return transforms;
     }
 
     // The networked components a spawn that carries its tree names, found in the tree being spawned.
