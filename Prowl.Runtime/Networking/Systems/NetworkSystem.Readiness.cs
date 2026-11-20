@@ -123,8 +123,18 @@ internal sealed partial class NetworkSystem
                 return;
             }
 
-            NetReader reader = new(payload);
-            handler(peer, ref reader, delivery);
+            // Each call stands alone, as it would have arriving by itself: one that fails here does not cost the rest.
+            try
+            {
+                NetReader reader = new(payload);
+                handler(peer, ref reader, delivery);
+            }
+            catch (Exception e) when (e is not (EndOfStreamException or InvalidDataException or OverflowException
+                                          or NotSupportedException or FormatException or ArgumentException))
+            {
+                NetworkDiagnostics.Record("Rpc", "Failed", peer, Guid.Empty, e.Message);
+                Debug.LogError($"[Network] Handling a call held until the spawns finished failed: {e}");
+            }
         }
     }
 
