@@ -218,4 +218,36 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void SpawningAPredictedBodyForOnePeerDoesNotHideItsMoveFromTheOthers()
+    {
+        SceneInstance scene = CreateScene();
+        GameObject go = CreateGameObject("Predicted");
+        go.Network.Networked = true;
+        go.AddComponent<Rigidbody3D>().AffectedByGravity = false;
+        PredictedRigidbody predicted = go.AddComponent<PredictedRigidbody>();
+        predicted.Enabled = false; // Stepped by hand here, at chosen times.
+        scene.Add(go); MakeCurrent(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.IsReady, client);
+            int Sent() => client.SnapshotValues().Count(v => v.Component == predicted.Identifier);
+            predicted.Step(10);
+            Pump(() => Sent() == 1, client);
+
+            // It moves, and before its next step another peer joins and is spawned it.
+            MoveBody(go, new Float3(3, 0, 0));
+            using FakePeer late = FakePeer.Join(network, "late");
+            Pump(() => late.IsReady, client, late);
+
+            predicted.Step(10.1);
+            Pump(() => Sent() == 2, client, late);
+            Assert.Equal(new Float3(3, 0, 0), ReadPredictedState(client.SnapshotValues().Last(v => v.Component == predicted.Identifier).Value).Position);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

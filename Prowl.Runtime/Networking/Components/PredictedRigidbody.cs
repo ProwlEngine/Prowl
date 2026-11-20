@@ -201,9 +201,14 @@ public sealed class PredictedRigidbody : Component, INetworkSerialize
 
     void INetworkSerialize.OnSerialize(NetWriter writer, bool initial)
     {
+        // A spawn goes to one peer. What everyone was last sent, and when, is only what a send to all carried.
         BodyState state = Current();
-        _sent = state;
-        _sentAt = _now;
+        if (!initial)
+        {
+            _sent = state;
+            _sentAt = _now;
+        }
+
         writer.WriteDouble(initial ? Networking.ServerTime : _now);
         NetSerializers.WriteFloat3(writer, state.Position);
         NetSerializers.WriteQuaternion(writer, state.Rotation);
