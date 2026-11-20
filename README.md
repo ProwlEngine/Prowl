@@ -253,17 +253,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/PaperPrototype">
-                    <img src="https://avatars.githubusercontent.com/u/48071553?v=4" width="100;" alt="PaperPrototype"/>
-                    <br />
-                    <sub><b>Abdiel Lopez</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/dimmerly">
                     <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
                     <br />
                     <sub><b>Dimmer</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/PaperPrototype">
+                    <img src="https://avatars.githubusercontent.com/u/48071553?v=4" width="100;" alt="PaperPrototype"/>
+                    <br />
+                    <sub><b>Abdiel Lopez</b></sub>
                 </a>
             </td>
             <td align="center">
