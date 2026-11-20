@@ -11,24 +11,49 @@ namespace Prowl.Runtime.Test;
 /// <summary>Tests for the GUI phase of a frame, <see cref="Game.RunGui"/>.</summary>
 public class GuiPhaseTests : RuntimeTestBase
 {
-    /// <summary>A host whose GUI runs in a world of its own and throws, as an editor panel can.</summary>
-    private sealed class ThrowingGuiGame(SceneInstance guiWorld) : Game
+    public enum Phase { Begin, Gui, End }
+
+    /// <summary>A host whose GUI runs in a world of its own and throws in one phase, as an editor panel can.</summary>
+    private sealed class ThrowingGuiGame(SceneInstance guiWorld, Phase throwIn) : Game
     {
         protected override SceneInstance? GuiWorld => guiWorld;
         protected override bool PresentsWorlds => false;
-        public override void OnGui(Paper paper) => throw new InvalidOperationException("A panel failed");
+        public override void BeginGui(Paper paper) => ThrowIf(Phase.Begin);
+        public override void OnGui(Paper paper) => ThrowIf(Phase.Gui);
+        public override void EndGui(Paper paper) => ThrowIf(Phase.End);
+
+        private void ThrowIf(Phase phase)
+        {
+            if (phase == throwIn) throw new InvalidOperationException("A panel failed");
+        }
     }
 
     // The editor logs the exception and draws the next frame, so a world left ambient here outlives the frame.
-    [Fact]
-    public void RunGui_ThatThrows_PutsTheAmbientWorldBack()
+    [Theory]
+    [InlineData(Phase.Begin)]
+    [InlineData(Phase.Gui)]
+    [InlineData(Phase.End)]
+    public void RunGui_ThatThrows_PutsTheAmbientWorldBack(Phase throwIn)
     {
         SceneInstance edited = CreateScene(enable: true);
 
-        Assert.Throws<InvalidOperationException>(() => new ThrowingGuiGame(edited).RunGui(null!));
+        Assert.Throws<InvalidOperationException>(() => new ThrowingGuiGame(edited, throwIn).RunGui(null!));
         edited.Dispose();
 
         Assert.Same(SceneInstance.Main, SceneInstance.Active);
         Time.TimeScale = 0.5f; // as an input action callback that pauses the game does
+    }
+
+    [Fact]
+    public void RunGui_ThatThrows_PutsBackAWorldThatWasAlreadyAmbient()
+    {
+        SceneInstance prior = CreateScene(enable: true);
+        SceneInstance edited = CreateScene(enable: true);
+
+        using (prior.Enter())
+        {
+            Assert.Throws<InvalidOperationException>(() => new ThrowingGuiGame(edited, Phase.Gui).RunGui(null!));
+            Assert.Same(prior, SceneInstance.Active);
+        }
     }
 }
