@@ -191,7 +191,9 @@ internal sealed partial class NetworkSystem
         Transforms.Clear();
         ForgetSections();
         DisposeHeld();
-        _pendingSpawns.Clear();
+
+        // One kept through the change that never had its spawn callbacks still waits for them.
+        _pendingSpawns.RemoveAll(e => !e.AwaitingRespawn);
 
         List<(SectionHeader Header, Scene? Source, SceneContent Content)> loaded = new();
         try

@@ -1,6 +1,7 @@
 using Prowl.Echo;
 using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 using Prowl.Courier;
 using Prowl.Courier.Transports.Local;
 using Xunit;
@@ -465,6 +466,135 @@ public partial class NetworkingTests
             Networking.Networking.Shutdown();
             host.Dispose();
         }
+    }
+
+    // A scene message naming one section the host built in code, under a generation.
+    private static byte[] CodeBuiltScene(ulong generation)
+    {
+        using NetWriter writer = new();
+        writer.WriteByte(NetworkSystem.SceneMessageFormat);
+        writer.WriteUInt64(generation);
+        writer.WriteVarUInt32(1);
+        new SectionHeader(1, "Level", true, Guid.Empty).Write(writer);
+        return writer.ToArray();
+    }
+
+    // The spawn a host sends in a join run for an object with net id 5.
+    private static byte[] RunSpawn(GameObject go, int owner = -1)
+    {
+        using NetWriter writer = new();
+        NetworkTestScene.Current.WriteSpawn(go, owner, NetworkOrphaned.Destroy, writer, 1, 5, true);
+        return writer.ToArray();
+    }
+
+    [Fact]
+    public void AKeptObjectStillWaitingForItsSpawnCallbacksGetsThemAfterASceneChange()
+    {
+        GameObject kept = CreateGameObject("Kept");
+        kept.AddComponent<KeptAcrossLoadsComponent>();
+        kept.AddComponent<NetworkLifecycleListener>();
+        kept.Network.Networked = true;
+        byte[] spawn = RunSpawn(kept);
+
+        MakeCurrent(CreateScene());
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        host.AutoReady = false;
+        host.Session.PeerJoined += peer => host.Session.SendRaw(peer, FakePeer.Scene, CodeBuiltScene(1));
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => host.Has(FakePeer.Ready), host);
+            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(1), peer);
+            host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
+            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
+            NetworkLifecycleListener listener = Find(SceneInstance.Main, kept.Identifier).GetComponent<NetworkLifecycleListener>()!;
+            Assert.Empty(listener.Events);
+
+            // The host changes scene before it finished the first run.
+            host.Received.Clear();
+            host.Session.SendRaw(peer, FakePeer.Scene, CodeBuiltScene(2));
+            Pump(() => host.Has(FakePeer.Ready), host);
+            host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(2), peer);
+            host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
+            host.Send(FakePeer.SpawnFinished, w => w.WriteUInt64(2), peer);
+            Pump(() => Networking.Networking.IsReady, host);
+            Assert.Equal(new[] { "spawn" }, listener.Events);
+            Assert.True(listener.GameObject.Network.Active);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void AValueThatChangedAcrossASceneChangeRunsItsHookOnAKeptObject()
+    {
+        GameObject kept = CreateGameObject("Kept");
+        kept.AddComponent<KeptAcrossLoadsComponent>();
+        NetCollectionTestComponent state = kept.AddComponent<NetCollectionTestComponent>();
+        kept.Network.Networked = true;
+        state.Health = 3;
+
+        MakeCurrent(CreateScene());
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        SendJoin(host, CodeBuiltScene(1), RunSpawn(kept));
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
+            NetCollectionTestComponent here = Find(SceneInstance.Main, kept.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            here.HealthChanges.Clear();
+
+            state.Health = 9;
+            host.JoinSpawns.Clear();
+            host.JoinSpawns.Add(RunSpawn(kept));
+            host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Scene, CodeBuiltScene(2));
+            Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
+            Assert.Equal(9, here.Health);
+            Assert.Equal([(3, 9)], here.HealthChanges);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void ASpawnForAKeptObjectLeavesWhatThisPeerWritesAlone()
+    {
+        GameObject kept = CreateGameObject("Kept");
+        kept.AddComponent<KeptAcrossLoadsComponent>();
+        kept.AddComponent<NetworkTransform>();
+        NetTestComponent state = kept.AddComponent<NetTestComponent>();
+        kept.Network.Networked = true;
+        (state.Health, state.Score) = (3, 1);
+        kept.Transform.LocalPosition = new Float3(1, 0, 0);
+
+        MakeCurrent(CreateScene());
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        SendJoin(host, CodeBuiltScene(1), RunSpawn(kept, owner: 1)); // the first client is peer 1
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
+            GameObject copy = Find(SceneInstance.Main, kept.Identifier);
+            NetTestComponent here = copy.GetComponent<NetTestComponent>()!;
+            Assert.False(copy.IsProxy);
+
+            // The owner moved on while the host was loading, and the host's copy of what the owner writes is old.
+            here.Health = 77;
+            copy.Transform.LocalPosition = new Float3(5, 0, 0);
+            (state.Health, state.Score) = (9, 2);
+            kept.Transform.LocalPosition = new Float3(2, 0, 0);
+            host.JoinSpawns.Clear();
+            host.JoinSpawns.Add(RunSpawn(kept, owner: 1));
+            host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Scene, CodeBuiltScene(2));
+            Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
+
+            Assert.Equal(77, here.Health);
+            Assert.Equal(new Float3(5, 0, 0), copy.Transform.LocalPosition);
+            Assert.Equal(2, here.Score);
+        }
+        finally { Networking.Networking.Shutdown(); }
     }
 
     [Fact]
