@@ -116,16 +116,19 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
 
     protected override void Build()
     {
-        // The camera and the HUD are this window's own: never sent, and kept when a client's scene is
-        // replaced by the host's.
+        // The camera and the HUD are this window's own, kept across scene changes. Nothing sends them: only
+        // networked objects travel.
         foreach (GameObject local in new[] { CameraObject, Hud.GameObject })
         {
-            local.Network.ServerOnly = true;
             local.Persistent = true;
         }
 
+        // Every window registers the same factories, so each builds its own copy of what the host spawns.
+        Networking.RegisterFactory(Hangar.Factory, Hangar.BuildCrate);
+        Networking.RegisterFactory(Swarm.Factory, Swarm.BuildDrone);
+
         AddStation("Sync values",
-            "The lamp's color and height are [Sync] properties. The host controls the lamp, so it sets them and every window shows them at the next network tick. On a client, setting them does nothing.",
+            "The lamp's color and height are [Sync] properties. The host sets them and every window shows them at the next network tick. On a client, setting them does nothing.",
             StationCenter(0), new Float3(0f, 4f, -9f));
         AddStation("Ownership",
             "Grab a puck with the left mouse: it asks the host for control, and once it has it, this window moves the puck and the others follow, smoothed. The rover is driven by whoever the host hands it to. Colors are owners.",
@@ -143,7 +146,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
             "The loadout is a struct of the game's own. Nothing marks it for the network: the script compiler sees it used and writes its serializer. It's a [Sync] value, and the argument of a broadcast RPC.",
             StationCenter(5), new Float3(0f, 3f, -7f));
         AddStation("Spawning",
-            "Only the host creates networked objects. Ask for a crate and the host spawns one owned by you, which you then drive: it bobs in your color in every window. Close a client and its crates go with it.",
+            "Only the host creates networked objects. Ask for a crate and the host spawns one from a factory every window registers, owned by you, which you then drive: it bobs in your color in every window. Close a client and its crates go with it.",
             StationCenter(6), new Float3(0f, 6f, -10f));
         AddStation("Physics",
             "Each rigidbody simulates only in the window that controls it; everywhere else it's driven by the transform that window sends. Grab one with the left mouse to take it over, then throw it: it keeps its speed as control changes hands. Bodies other windows control push yours without being pushed back.",
@@ -152,7 +155,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
             "The host spawns drones, each a networked object moving every frame. Churn changes a [Sync] value on every drone every frame too, and spreading hands them out so every window drives its share. Watch the traffic and the frame rate.",
             StationCenter(8), new Float3(0f, 7f, -13f));
         AddStation("Late join",
-            "Launch another client after changing things above. It gets the scene, every [Sync] value, every collection and every spawned object at once, without change hooks firing for any of it. The guestbook is a NetList the host signs for each arrival.",
+            "Launch another client after changing things above. It builds the level itself and receives every networked object with its [Sync] values and collections. Change hooks run once for values that differ from what it built. The guestbook is a NetList the host signs for each arrival.",
             StationCenter(9), new Float3(0f, 3f, -8f));
 
         // A body another window controls is kinematic here; clicking it asks the host for it, and the grab takes
@@ -278,9 +281,9 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
                 continue;
             }
 
+            // A teleport, so the other windows jump with it and don't blend across the pen.
             item.GameObject.Network.AssignOwnership(null);
-            item.Transform.Position = item.Home;
-            item.Transform.Rotation = Quaternion.Identity;
+            item.GameObject.Network.Teleport(item.Home, Quaternion.Identity);
             body.LinearVelocity = Float3.Zero;
             body.AngularVelocity = Float3.Zero;
         }

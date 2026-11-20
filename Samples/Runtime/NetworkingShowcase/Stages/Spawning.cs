@@ -12,9 +12,10 @@ using static Prowl.Samples.Sample;
 namespace NetworkingShowcase;
 
 /// <summary>
-///     Stage 8. Only the host creates networked objects: it makes one, adds it to the scene and spawns it, and every
-///     peer gets it. A client asks for one with a host RPC, and the host spawns it owned by that client, who then
-///     drives it. When its owner leaves, it goes too.
+///     Stage 7. Only the host creates networked objects. Every peer registers the same "crate" factory, the host
+///     spawns from it, and each peer builds its own copy with that factory: only the pose and the [Sync] values
+///     travel. A client asks for one with a host RPC, and the host spawns it owned by that client, who then drives
+///     it. When its owner leaves, it goes too.
 /// </summary>
 public class Hangar : Component
 {
@@ -42,12 +43,19 @@ public class Hangar : Component
         _spawned++;
         Float3 at = Transform.Position +
                     new Float3(Random.Shared.NextSingle() * 6f - 3f, 0.5f, Random.Shared.NextSingle() * 4f - 2f);
-        GameObject crate = Model($"Crate {_spawned}", Mesh.CreateCube(new Float3(0.7f, 0.7f, 0.7f)),
-            Lit(new Color(0.5f, 0.5f, 0.5f, 1f)), at);
+        Networking.SpawnFactory(Factory, at, Quaternion.Identity, owner: owner);
+    }
+
+    public const string Factory = "crate";
+
+    /// <summary>Builds a crate, the same on every peer. Its NetworkTransform is part of it before it spawns.</summary>
+    public static GameObject BuildCrate(in NetworkSpawn spawn)
+    {
+        GameObject crate = Model("Crate", Mesh.CreateCube(new Float3(0.7f, 0.7f, 0.7f)),
+            Lit(new Color(0.5f, 0.5f, 0.5f, 1f)), spawn.Position);
         crate.AddComponent<NetworkTransform>();
-        crate.AddComponent<Crate>().Home = at;
-        crate.MoveTo(GameObject.Scene!);
-        crate.Network.SpawnSerialized(owner);
+        crate.AddComponent<Crate>().Home = spawn.Position;
+        return crate;
     }
 }
 
@@ -73,8 +81,9 @@ public class Crate : Component
 }
 
 /// <summary>
-///     Stage 9. The host writes everyone who joins into a network list. Whoever joins late gets the whole list,
-///     like everything else here: the scene, every [Sync] value, every collection and every spawned object, all at once.
+///     Stage 10. The host writes everyone who joins into a network list. Whoever joins late gets the whole list,
+///     like everything else here: it builds the level itself, and receives every networked object with its [Sync]
+///     values and collections.
 /// </summary>
 public class Guestbook : Component
 {

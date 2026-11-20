@@ -91,7 +91,7 @@ public class Board : Component
 
     public override void Update()
     {
-        // Bars may be in place before this component first runs, from a snapshot, with no events for them.
+        // Bars may be in place before this component first runs, from its spawn, with no events for them.
         if (!_stale && _shown.Count == Bars.Count)
         {
             return;
@@ -113,8 +113,7 @@ public class Board : Component
                 Lit(color).Emissive(color, 1.5f),
                 Transform.Position + new Float3((i - (Bars.Count - 1) * 0.5f) * 0.7f, height * 0.5f, 0f));
 
-            // Only what the bars show is local: the bars themselves are the synced list.
-            bar.Network.ServerOnly = true;
+            // The bars are local, built by each window from the synced list.
             bar.MoveTo(GameObject.Scene!);
             _shown.Add(bar);
         }

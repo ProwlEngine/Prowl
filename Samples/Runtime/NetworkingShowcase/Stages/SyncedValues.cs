@@ -8,7 +8,7 @@ using Prowl.Vector;
 namespace NetworkingShowcase;
 
 /// <summary>
-///     Stage 1. Two [Sync] properties and nothing else: whoever controls the lamp (the host, here) sets them,
+///     Stage 1. Two [Sync] properties and nothing else: the host sets them,
 ///     and every peer's lamp shows them at the next network tick. Setting them on a client does nothing, since
 ///     the next update would undo it anyway. The lamp eases toward its height on every peer by itself, so its
 ///     transform isn't synced: only the two values travel.

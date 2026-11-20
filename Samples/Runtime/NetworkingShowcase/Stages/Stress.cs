@@ -12,7 +12,7 @@ using static Prowl.Samples.Sample;
 namespace NetworkingShowcase;
 
 /// <summary>
-///     Stage 8. A stress test: the host spawns as many drones as asked for, each a networked object moving every
+///     Stage 9. A stress test: the host spawns as many drones as asked for, each a networked object moving every
 ///     frame, so every transform goes out every tick. Churn changes a [Sync] value on every drone every frame too,
 ///     and spreading hands the drones out across every peer, so each window drives its share and sends it on.
 /// </summary>
@@ -24,15 +24,25 @@ public class Swarm : Component
 
     public void Spawn(int count)
     {
-        Mesh mesh = Mesh.CreateCube(new Float3(0.25f, 0.25f, 0.25f));
         for (int i = 0; i < count; i++)
         {
-            GameObject drone = Model("Drone", mesh, Lit(new Color(0.7f, 0.7f, 0.75f, 1f)), Transform.Position);
-            drone.AddComponent<NetworkTransform>();
-            drone.AddComponent<Drone>().Seed = Random.Shared.NextSingle() * 1000f;
-            drone.MoveTo(GameObject.Scene!);
-            drone.Network.SpawnSerialized();
+            // The seed is not a [Sync] value, so it goes along as the factory's data for each peer to build with.
+            Networking.SpawnFactory(Factory, Transform.Position, Quaternion.Identity,
+                BitConverter.GetBytes(Random.Shared.NextSingle() * 1000f));
         }
+    }
+
+    public const string Factory = "drone";
+    private static Mesh? s_mesh;
+
+    /// <summary>Builds a drone, the same on every peer, from the seed the host passed along.</summary>
+    public static GameObject BuildDrone(in NetworkSpawn spawn)
+    {
+        s_mesh ??= Mesh.CreateCube(new Float3(0.25f, 0.25f, 0.25f));
+        GameObject drone = Model("Drone", s_mesh, Lit(new Color(0.7f, 0.7f, 0.75f, 1f)), spawn.Position);
+        drone.AddComponent<NetworkTransform>();
+        drone.AddComponent<Drone>().Seed = spawn.Data.Length >= 4 ? BitConverter.ToSingle(spawn.Data) : 0f;
+        return drone;
     }
 
     public void Clear()

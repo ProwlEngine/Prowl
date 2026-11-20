@@ -10,7 +10,8 @@ namespace NetworkingShowcase;
 /// <summary>
 ///     Stage 4. A [Change] hook runs with the old and new value wherever the value changes: on the host, which
 ///     sets it, and on every client when it arrives. Anyone can ask for more heat with a host RPC; only the host
-///     changes it. A late joiner gets the current heat without the hook running, since nothing changed for it.
+///     changes it. A late joiner gets the current heat with its spawn, and the hook runs once for it there, from the
+///     heat the reactor is built with to the heat it has.
 /// </summary>
 public class Reactor : Component
 {
