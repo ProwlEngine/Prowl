@@ -803,6 +803,12 @@ internal sealed partial class NetworkSystem
             throw new InvalidOperationException($"'{go.Name}' is not a spawned networked object.");
         }
 
+        if (PlayerPeerOf(entry) is { } player && player != (owner ?? Session!.LocalPeer!).Id)
+        {
+            throw new InvalidOperationException(
+                $"'{go.Name}' is a player object, which stays its peer's while it is their player. Give that peer another player first.");
+        }
+
         using FrameStatScope stats = FrameStats.Network.Scope();
         entry.ChangeOwner(owner?.Id ?? NoOwner);
     }

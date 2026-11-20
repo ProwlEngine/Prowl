@@ -25,6 +25,20 @@ internal sealed partial class NetworkSystem
         _players.TryGetValue(peer.Id, out NetworkObject? entry) && FindEntry(entry.GameObject) == entry ? entry.GameObject : null;
 
     /// <summary>Host: makes <paramref name="go" /> the player of <paramref name="peer" />, spawning it owned by them.</summary>
+    /// <summary>The id of the peer <paramref name="entry" /> is the player of, or null.</summary>
+    private int? PlayerPeerOf(NetworkObject entry)
+    {
+        foreach ((int peer, NetworkObject player) in _players)
+        {
+            if (ReferenceEquals(player, entry))
+            {
+                return peer;
+            }
+        }
+
+        return null;
+    }
+
     internal void AddPlayer(NetPeer peer, GameObject go)
     {
         if (!IsHost)

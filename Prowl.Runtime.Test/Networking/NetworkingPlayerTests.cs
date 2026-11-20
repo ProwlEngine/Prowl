@@ -91,4 +91,34 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void APlayerObjectKeepsItsOwnerWhileItIsAPlayer()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice"), bob = FakePeer.Join(network, "bob");
+        try
+        {
+            Pump(() => alice.IsReady && bob.IsReady, alice, bob);
+            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
+            NetPeer bobHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "bob");
+            GameObject avatar = CreateGameObject("Alice avatar"), spare = CreateGameObject("Spare avatar");
+            scene.Add(avatar); scene.Add(spare);
+            Networking.Networking.AddPlayer(aliceHere, avatar);
+
+            Assert.Throws<InvalidOperationException>(() => avatar.Network.RemoveOwnership());
+            Assert.Throws<InvalidOperationException>(() => avatar.Network.AssignOwnership(bobHere));
+            Assert.Same(aliceHere, avatar.Network.Owner);
+            avatar.Network.AssignOwnership(aliceHere);
+
+            // With another player of her own, the first is an ordinary object again.
+            Networking.Networking.AddPlayer(aliceHere, spare);
+            avatar.Network.RemoveOwnership();
+            Assert.Null(avatar.Network.Owner);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }
