@@ -34,6 +34,9 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     private float _speed = 1f;
     private bool _applying;
 
+    // True from its spawn callback on, when the triggers fired before this peer had it are behind it.
+    private bool _triggersBaselined;
+
     // What a proxy last applied, so unchanged state isn't written into the animator again every frame.
     private AnimatorParameters _appliedParameters;
     private float _appliedSpeed = float.NaN;
@@ -166,6 +169,11 @@ public sealed class NetworkAnimator : Component, INetworkEvents
             _appliedParameters = _parameters;
         }
 
+        if (!_triggersBaselined)
+        {
+            return;
+        }
+
         for (int index = 0; index < _triggers.Count; index++)
         {
             uint revision = _triggers[index];
@@ -222,6 +230,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     }
 
     public void OnNetworkSpawn() => ResetTriggerBaseline();
+    public void OnNetworkDespawn() => _triggersBaselined = false;
     public void OnNetworkAuthorityGained()
     {
         ResetTriggerBaseline();
@@ -238,5 +247,6 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         _lastSamples.Clear();
         _nextSample = 0;
         for (int index = 0; index < _triggers.Count; index++) _seenTriggers[index] = _triggers[index];
+        _triggersBaselined = true;
     }
 }
