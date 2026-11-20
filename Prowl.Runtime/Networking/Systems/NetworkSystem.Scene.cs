@@ -277,6 +277,12 @@ internal sealed partial class NetworkSystem
         LocalJoinState = NetworkJoinState.Loading;
         Sync.Clear();
         Transforms.Clear();
+        ReleaseReloadedCopies(world);
+        if (Session != session)
+        {
+            return;
+        }
+
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
             if (!entry.GameObject.IsValid() || entry.GameObject.Scene != world)
@@ -312,6 +318,46 @@ internal sealed partial class NetworkSystem
         }
 
         SendScene(session.Peers.Where(peer => !peer.IsLocal).ToArray());
+    }
+
+    /// <summary>
+    ///     A networked object kept in the persistent section gives way to the copy of it the new scenes bring, as it
+    ///     does on clients, so every peer ends up with the one fresh object.
+    /// </summary>
+    private void ReleaseReloadedCopies(SceneInstance world)
+    {
+        HashSet<Guid> incoming = new();
+        foreach (SceneSection section in world.Sections)
+        {
+            if (section.IsPersistent)
+            {
+                continue;
+            }
+
+            foreach (GameObject root in section.Roots)
+            {
+                incoming.Add(root.Identifier);
+                foreach (GameObject part in root.GetChildrenDeep())
+                {
+                    incoming.Add(part.Identifier);
+                }
+            }
+        }
+
+        NetSession? session = Session;
+        foreach (GameObject kept in world.Persistent.Roots.ToArray())
+        {
+            if (Session != session)
+            {
+                return;
+            }
+
+            if (kept.IsValid() && incoming.Contains(kept.Identifier) &&
+                Entries.TryGetValue(kept.Identifier, out NetworkObject? entry) && entry.GameObject == kept)
+            {
+                kept.Dispose();
+            }
+        }
     }
 
     /// <summary>The objects of a section that may be networked: everything saved that is not under a server only object or a hidden root.</summary>

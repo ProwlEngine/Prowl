@@ -191,4 +191,52 @@ public partial class NetworkingTests
             AssetDatabase.ClearForTests();
         }
     }
+
+    [Fact]
+    public void TheHostKeepsOneCopyOfAPersistentSceneObjectWhenItsSceneLoadsAgain()
+    {
+        AssetBackend? previous = AssetDatabase.Backend;
+        MemoryAssetBackend backend = new();
+        AssetDatabase.ClearForTests();
+        AssetDatabase.Backend = backend;
+        try
+        {
+            SceneInstance authoring = new();
+            GameObject authoredDoor = authoring.Create("Door");
+            authoredDoor.Network.Networked = true;
+            authoredDoor.AddComponent<NetworkLifecycleListener>();
+            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            authoring.Dispose();
+
+            SceneInstance world = CreateScene();
+            MakeCurrent(world);
+            LocalNetwork network = new();
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            try
+            {
+                arena.Load(world).Wait();
+                GameObject door = world.Objects.Single(o => o.Name == "Door");
+                Guid doorId = door.Identifier;
+                NetworkLifecycleListener listener = door.GetComponent<NetworkLifecycleListener>()!;
+                door.Persistent = true;
+                Assert.True(door.Network.Active);
+
+                // The scene brings the door again. As on a client, the copy kept from before gives way to it, so
+                // every peer has the one door and has seen it leave and arrive.
+                arena.Load(world).Wait();
+                GameObject fresh = Assert.Single(world.Objects, o => o.Identifier == doorId);
+                Assert.NotSame(door, fresh);
+                Assert.True(fresh.Network.Active);
+                Assert.False(fresh.Persistent);
+                Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
+                Assert.Equal(new[] { "spawn", "authority gained" }, fresh.GetComponent<NetworkLifecycleListener>()!.Events);
+            }
+            finally { Networking.Networking.Shutdown(); }
+        }
+        finally
+        {
+            AssetDatabase.Backend = previous;
+            AssetDatabase.ClearForTests();
+        }
+    }
 }
