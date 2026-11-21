@@ -126,11 +126,14 @@ public sealed class Shader : Asset, ISerializable
         if (string.IsNullOrEmpty(source))
             return source;
 
-        string rootFile = ReadDeclaredPath(source) ?? sourceName ?? "shader";
-        return new IncludeExpander(resolve).Expand(source, rootFile);
+        string? declaredPath = ReadDeclaredPath(source, StringComparison.OrdinalIgnoreCase);
+        string rootFile = declaredPath ?? sourceName ?? "shader";
+        return new IncludeExpander(resolve).Expand(source, rootFile, declaredPath != null);
     }
 
     private readonly record struct GlslProgramBlock(int Start, int End, bool IsPassProgram, string FileName);
+
+    private readonly record struct SourceSpan(int OutStart, int OutEnd, string FileName, int BaseLine, bool FromInclude);
 
     private static List<GlslProgramBlock> FindGlslPrograms(string source, string shaderName)
     {
@@ -278,23 +281,38 @@ public sealed class Shader : Asset, ISerializable
         private readonly Dictionary<string, int> _pastes = new(StringComparer.Ordinal);
         private readonly HashSet<string> _open = new(StringComparer.Ordinal);
 
-        public string Expand(string source, string rootFile)
+        public string Expand(string source, string rootFile, bool isShaderDef)
         {
-            List<GlslProgramBlock> programs = FindGlslPrograms(source, rootFile);
+            string workingSource = source;
+            StringBuilder? shaderDefOutput = null;
+            List<SourceSpan>? spans = null;
+            bool shaderDefExpanded = false;
+            if (isShaderDef)
+            {
+                spans = [];
+                ExpandShaderDef(source, rootFile, 0, ref shaderDefOutput, spans, ref shaderDefExpanded);
+                if (shaderDefExpanded)
+                    workingSource = shaderDefOutput!.ToString();
+            }
+
+            List<GlslProgramBlock> programs = FindGlslPrograms(workingSource, rootFile);
 
             if (programs.Count == 0)
             {
-                ExpandGlsl(source, 1, rootFile, 0, false);
+                if (isShaderDef)
+                    return workingSource;
+
+                ExpandGlsl(workingSource, 1, rootFile, 0, false);
                 if (_pastes.Count == 0)
                     return source;
 
-                return ExpandGlsl(source, 1, rootFile, 0, true);
+                return ExpandGlsl(workingSource, 1, rootFile, 0, true);
             }
 
             // Walk once to count how often each include is pasted across every GLSL block.
             foreach (GlslProgramBlock block in programs)
             {
-                string blockText = source[block.Start..block.End];
+                string blockText = workingSource[block.Start..block.End];
                 if (block.IsPassProgram)
                 {
                     bool unusedShift = false;
@@ -306,32 +324,206 @@ public sealed class Shader : Asset, ISerializable
                 }
             }
 
-            if (_pastes.Count == 0)
+            if (!shaderDefExpanded && _pastes.Count == 0)
                 return source;
 
-            StringBuilder result = new(source.Length + 256);
+            StringBuilder result = new(workingSource.Length + 256);
             int cursor = 0;
-            bool lineShifted = false;
+            int outLine = 1;
             foreach (GlslProgramBlock block in programs)
             {
-                result.Append(source, cursor, block.Start - cursor);
-                int blockBaseLine = 1 + CountNewlines(source, 0, block.Start);
-                string blockText = source[block.Start..block.End];
-                if (block.IsPassProgram)
+                result.Append(workingSource, cursor, block.Start - cursor);
+                outLine += CountNewlines(workingSource, cursor, block.Start);
+
+                string blockFileName = block.FileName;
+                int blockBaseLine;
+                bool forceBlockLine = false;
+                if (shaderDefExpanded && TryFindSpan(spans!, block.Start - 1, out SourceSpan span))
                 {
-                    result.Append(ExpandPassProgram(blockText, blockBaseLine, block.FileName, 0, true, ref lineShifted, false));
+                    blockBaseLine = span.BaseLine + CountNewlines(workingSource, span.OutStart, block.Start);
+                    if (span.FromInclude)
+                    {
+                        blockFileName = span.FileName;
+                        forceBlockLine = true;
+                    }
                 }
                 else
                 {
-                    string expanded = ExpandGlsl(blockText, blockBaseLine, block.FileName, 0, true);
-                    if (CountNewlines(expanded, 0, expanded.Length) != CountNewlines(blockText, 0, blockText.Length))
-                        lineShifted = true;
+                    blockBaseLine = 1 + CountNewlines(workingSource, 0, block.Start);
+                }
+
+                bool blockLineShifted = outLine != blockBaseLine;
+                string blockText = workingSource[block.Start..block.End];
+                if (block.IsPassProgram)
+                {
+                    string expanded = ExpandPassProgram(blockText, blockBaseLine, blockFileName, 0, true, ref blockLineShifted, forceBlockLine);
                     result.Append(expanded);
+                    outLine += CountNewlines(expanded, 0, expanded.Length);
+                }
+                else
+                {
+                    string expanded = ExpandGlsl(blockText, blockBaseLine, blockFileName, 0, true);
+                    if ((forceBlockLine || blockLineShifted) && !string.IsNullOrWhiteSpace(expanded))
+                    {
+                        result.Append('\n');
+                        AppendLineDirective(result, blockBaseLine, blockFileName);
+                        result.Append('\n');
+                        outLine += 2;
+                    }
+                    result.Append(expanded);
+                    outLine += CountNewlines(expanded, 0, expanded.Length);
                 }
                 cursor = block.End;
             }
-            result.Append(source, cursor, source.Length - cursor);
+            result.Append(workingSource, cursor, workingSource.Length - cursor);
             return result.ToString();
+        }
+
+        private void ExpandShaderDef(
+            string text,
+            string fileName,
+            int depth,
+            ref StringBuilder? output,
+            List<SourceSpan> spans,
+            ref bool expandedAny)
+        {
+            int copiedUpTo = 0;
+            int copiedLine = 1;
+            int i = 0;
+            bool atLineStart = true;
+
+            while (i < text.Length)
+            {
+                char c = text[i];
+                if (c is '\n' or '\r')
+                {
+                    i = c == '\r' && i + 1 < text.Length && text[i + 1] == '\n' ? i + 2 : i + 1;
+                    atLineStart = true;
+                    continue;
+                }
+
+                if (c is ' ' or '\t' || char.IsWhiteSpace(c))
+                {
+                    i++;
+                    continue;
+                }
+
+                if (c == '/' && i + 1 < text.Length && text[i + 1] == '/')
+                {
+                    while (i < text.Length && text[i] != '\n' && text[i] != '\r')
+                        i++;
+                    atLineStart = false;
+                    continue;
+                }
+
+                if (c == '/' && i + 1 < text.Length && text[i + 1] == '*')
+                {
+                    int close = text.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                    i = close < 0 ? text.Length : close + 2;
+                    atLineStart = false;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    i = SkipString(text, i);
+                    atLineStart = false;
+                    continue;
+                }
+
+                if (atLineStart && c == '#')
+                {
+                    int lineStart = i;
+                    while (lineStart > 0 && text[lineStart - 1] is ' ' or '\t')
+                        lineStart--;
+                    int lineEnd = i;
+                    while (lineEnd < text.Length && text[lineEnd] != '\n' && text[lineEnd] != '\r')
+                        lineEnd++;
+                    int nextStart = NextLineStart(text, lineEnd);
+
+                    Match match = s_include.Match(text, lineStart, lineEnd - lineStart);
+                    if (match.Success)
+                    {
+                        string name = match.Groups[1].Value;
+                        if (TryResolve(name, depth, out string included, out string guard))
+                        {
+                            output ??= new StringBuilder(text.Length + 256);
+                            AppendSpan(text, copiedUpTo, lineStart, fileName, copiedLine, depth > 0, output, spans);
+                            expandedAny = true;
+
+                            if (_open.Add(guard))
+                            {
+                                ExpandShaderDef(included, name, depth + 1, ref output, spans, ref expandedAny);
+                                _open.Remove(guard);
+                            }
+
+                            output.Append(text, lineEnd, nextStart - lineEnd);
+                            copiedLine += CountNewlines(text, copiedUpTo, nextStart);
+                            copiedUpTo = nextStart;
+                            i = nextStart;
+                            atLineStart = true;
+                            continue;
+                        }
+                    }
+
+                    i = lineEnd;
+                    atLineStart = false;
+                    continue;
+                }
+
+                if (char.IsLetter(c) || c == '_')
+                {
+                    int start = i;
+                    while (i < text.Length && (char.IsLetterOrDigit(text[i]) || text[i] == '_'))
+                        i++;
+                    if (text.AsSpan(start, i - start) is "GLSLPROGRAM")
+                    {
+                        int end = text.IndexOf("ENDGLSL", i, StringComparison.Ordinal);
+                        i = end < 0 ? text.Length : end + "ENDGLSL".Length;
+                    }
+                    atLineStart = false;
+                    continue;
+                }
+
+                i++;
+                atLineStart = false;
+            }
+
+            if (output != null)
+                AppendSpan(text, copiedUpTo, text.Length, fileName, copiedLine, depth > 0, output, spans);
+        }
+
+        private static void AppendSpan(string text, int start, int end, string fileName, int baseLine, bool fromInclude, StringBuilder output, List<SourceSpan> spans)
+        {
+            if (end <= start)
+                return;
+
+            int outStart = output.Length;
+            output.Append(text, start, end - start);
+            spans.Add(new SourceSpan(outStart, output.Length, fileName, baseLine, fromInclude));
+        }
+
+        private static bool TryFindSpan(List<SourceSpan> spans, int position, out SourceSpan match)
+        {
+            int lo = 0;
+            int hi = spans.Count - 1;
+            while (lo <= hi)
+            {
+                int mid = lo + ((hi - lo) >> 1);
+                SourceSpan span = spans[mid];
+                if (position < span.OutStart)
+                    hi = mid - 1;
+                else if (position >= span.OutEnd)
+                    lo = mid + 1;
+                else
+                {
+                    match = span;
+                    return true;
+                }
+            }
+
+            match = default;
+            return false;
         }
 
         private string ExpandPassProgram(
@@ -604,7 +796,7 @@ public sealed class Shader : Asset, ISerializable
                     if (write)
                         sb!.Append(text, lineStart, nextStart - lineStart);
                     inBlockComment = UpdateBlockComment(text, lineStart, lineEnd, inBlockComment);
-                    if (pendingResume && !EndsWithBackslash(text, lineStart, lineEnd))
+                    if (pendingResume && !inBlockComment && !EndsWithBackslash(text, lineStart, lineEnd))
                     {
                         pendingResume = false;
                         if (write && nextStart < text.Length)
@@ -857,6 +1049,9 @@ public sealed class Shader : Asset, ISerializable
     /// it. Leading comments and blank lines are skipped. Null when no declaration is found.
     /// </summary>
     public static string? ReadDeclaredPath(string source)
+        => ReadDeclaredPath(source, StringComparison.Ordinal);
+
+    private static string? ReadDeclaredPath(string source, StringComparison comparison)
     {
         if (string.IsNullOrEmpty(source)) return null;
 
@@ -884,7 +1079,7 @@ public sealed class Shader : Asset, ISerializable
 
         const string keyword = "Shader";
         if (i + keyword.Length >= source.Length) return null;
-        if (string.CompareOrdinal(source, i, keyword, 0, keyword.Length) != 0) return null;
+        if (string.Compare(source, i, keyword, 0, keyword.Length, comparison) != 0) return null;
         i += keyword.Length;
 
         while (i < source.Length && char.IsWhiteSpace(source[i])) i++;

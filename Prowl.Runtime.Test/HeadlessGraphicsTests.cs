@@ -672,6 +672,199 @@ public class HeadlessGraphicsTests
     }
 
     [Fact]
+    public void ConditionalInclude_WithMultilineCommentOnClosingDirective_PreservesLines()
+    {
+        Shader endifComment = WithMultiLineGridIncludes("""
+            Shader "Test/Endif Block Comment"
+            {
+                Pass
+                {
+                    GLSLPROGRAM
+                    Vertex
+                    {
+                        #if 0
+                        #include "Grid"
+                        #endif /* multiline
+                        comment
+                        */
+                        void main() { gl_Position = vec4(nope); }
+                    }
+                    Fragment { layout(location = 0) out vec4 color; void main() { color = vec4(1.0); } }
+                    ENDGLSL
+                }
+            }
+            """);
+
+        ShaderCompileException endifEx = CompileError(endifComment);
+        Assert.Equal("Test/Endif Block Comment", endifEx.File);
+        Assert.Equal(13, endifEx.Line);
+
+        Shader elseComment = WithMultiLineGridIncludes("""
+            Shader "Test/Else Block Comment"
+            {
+                Pass
+                {
+                    GLSLPROGRAM
+                    Vertex
+                    {
+                        #if 0
+                        #include "Grid"
+                        #else /* multiline
+                        comment
+                        */
+                        void helper() { float bad = nope; }
+                        #endif
+                        void main() { gl_Position = vec4(0.0); }
+                    }
+                    Fragment { layout(location = 0) out vec4 color; void main() { color = vec4(1.0); } }
+                    ENDGLSL
+                }
+            }
+            """);
+
+        ShaderCompileException elseEx = CompileError(elseComment);
+        Assert.Equal("Test/Else Block Comment", elseEx.File);
+        Assert.Equal(13, elseEx.Line);
+    }
+
+    [Fact]
+    public void ShaderDefLevelIncludes_ExpandOutsideGlslProgram_AndPreserveLines()
+    {
+        const string props = """
+            Properties
+            {
+                _Tint("Tint", Float) = 1.0
+                _Scale("Scale", Float) = 2.0
+            }
+            """;
+        Shader withProps = Shader.FromSource(Shader.ExpandIncludes("""
+            Shader "Test/Included Props"
+            {
+                #include "Props.shaderpart"
+                Pass
+                {
+                    GLSLPROGRAM
+                    Vertex
+                    {
+                        void main() { gl_Position = vec4(nope); }
+                    }
+                    Fragment { layout(location = 0) out vec4 color; void main() { color = vec4(1.0); } }
+                    ENDGLSL
+                }
+            }
+            """, name => name == "Props.shaderpart" ? props : null));
+
+        Assert.Null(withProps.Error);
+        Assert.Contains("_Tint", PropertyNames(withProps));
+        ShaderCompileException propsEx = CompileError(withProps);
+        Assert.Equal("Test/Included Props", propsEx.File);
+        Assert.Equal(9, propsEx.Line);
+
+        const string brokenPass = """
+            Pass
+            {
+                Name "IncludedPass"
+                GLSLPROGRAM
+                Vertex
+                {
+                    void main() { gl_Position = vec4(nope); }
+                }
+                Fragment { layout(location = 0) out vec4 color; void main() { color = vec4(1.0); } }
+                ENDGLSL
+            }
+            """;
+        Shader includedBrokenPass = Shader.FromSource(Shader.ExpandIncludes("""
+            Shader "Test/Included Pass Broken"
+            {
+                #include "IncludedPass.shaderpart"
+                Pass
+                {
+                    Name "Explicit"
+                    GLSLPROGRAM
+                    Vertex { void main() { gl_Position = vec4(0.0); } }
+                    Fragment { layout(location = 0) out vec4 color; void main() { color = vec4(1.0); } }
+                    ENDGLSL
+                }
+            }
+            """, name => name == "IncludedPass.shaderpart" ? brokenPass : null));
+
+        Assert.Null(includedBrokenPass.Error);
+        ShaderCompileException includedPassEx = CompileError(includedBrokenPass);
+        Assert.Equal("IncludedPass.shaderpart", includedPassEx.File);
+        Assert.Equal(7, includedPassEx.Line);
+
+        const string validPass = """
+            Pass
+            {
+                Name "IncludedPass"
+                GLSLPROGRAM
+                Vertex
+                {
+                    void main() { gl_Position = vec4(0.0); }
+                }
+                Fragment { layout(location = 0) out vec4 color; void main() { color = vec4(1.0); } }
+                ENDGLSL
+            }
+            """;
+        Shader afterIncludedPass = Shader.FromSource(Shader.ExpandIncludes("""
+            Shader "Test/After Included Pass"
+            {
+                #include "IncludedPass.shaderpart"
+                Pass
+                {
+                    Name "Explicit"
+                    GLSLPROGRAM
+                    Vertex
+                    {
+                        void main() { gl_Position = vec4(nope); }
+                    }
+                    Fragment { layout(location = 0) out vec4 color; void main() { color = vec4(1.0); } }
+                    ENDGLSL
+                }
+            }
+            """, name => name == "IncludedPass.shaderpart" ? validPass : null));
+
+        Assert.Null(afterIncludedPass.Error);
+        ShaderCompileException explicitPassEx = CompileError(afterIncludedPass);
+        Assert.Equal("Test/After Included Pass/Explicit", explicitPassEx.File);
+        Assert.Equal(10, explicitPassEx.Line);
+
+        Shader onlyIncludedPass = Shader.FromSource(Shader.ExpandIncludes("""
+            Shader "Test/Only Included Pass"
+            {
+                #include "IncludedPass.shaderpart"
+            }
+            """, name => name == "IncludedPass.shaderpart" ? brokenPass : null));
+
+        Assert.Null(onlyIncludedPass.Error);
+        ShaderCompileException onlyPassEx = CompileError(onlyIncludedPass);
+        Assert.Equal("IncludedPass.shaderpart", onlyPassEx.File);
+        Assert.Equal(7, onlyPassEx.Line);
+
+        Shader surfaceWithProps = Shader.FromSource(Shader.ExpandIncludes("""
+            Shader "Test/Surface Included Props"
+            {
+                #include "Props.shaderpart"
+                Surface "Lit"
+                {
+                    GLSLPROGRAM
+                    void Surface(inout PBR_Params p, Graphite_SurfaceData i)
+                    {
+                        p.baseColor = vec3(nope);
+                    }
+                    ENDGLSL
+                }
+            }
+            """, name => name == "Props.shaderpart" ? props : null));
+
+        Assert.Null(surfaceWithProps.Error);
+        Assert.Contains("_Tint", PropertyNames(surfaceWithProps));
+        ShaderCompileException surfaceEx = CompileError(surfaceWithProps);
+        Assert.Equal("Test/Surface Included Props", surfaceEx.File);
+        Assert.Equal(9, surfaceEx.Line);
+    }
+
+    [Fact]
     public void CustomTonemapShaders_CompileInsideTheDisplayEncode()
     {
         string shader = Rendering.PostEffect.TonemapShader("void main() { vec4 c = Graphite_SampleSource(vUV); outColor = vec4(c.rgb / (1.0 + c.rgb), c.a); }");
