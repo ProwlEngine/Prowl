@@ -128,8 +128,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         _batches.Clear();
         _shared.Reset();
         _sharedCount = 0;
-        _spawnHooks.Clear();
-        _heldChanges.Clear();
+        _spawnHooks.RemoveAll(h => keepHooksOf == null || !keepHooksOf(h.Component));
+        _heldChanges.RemoveAll(h => keepHooksOf == null || ReferenceEquals(h.Owner, null) || !keepHooksOf(h.Owner));
         _references.Clear();
         _referenceOf.Clear();
     }

@@ -187,7 +187,7 @@ internal sealed partial class NetworkSystem
 
         ReplicatedWorld = world;
         Entries.RemoveWhere(e => !e.AwaitingRespawn);
-        Sync.Clear();
+        Sync.Clear(c => c.IsValid() && FindEntry(c.GameObject) is { AwaitingRespawn: true });
         Transforms.Clear();
         ForgetSections();
         DisposeHeld(world);
