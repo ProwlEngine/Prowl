@@ -361,8 +361,8 @@ internal sealed partial class NetworkSystem
             if (!MatchBuilt(go, built!, identifiers, components, transforms))
             {
                 throw new InvalidOperationException(
-                    $"'{go.Name}' no longer has the objects and components its prefab builds, so clients can't build " +
-                    "it. Spawn it before changing it.");
+                    $"'{go.Name}' no longer has the objects and components its prefab builds, under the names it " +
+                    "builds them with, so clients can't build it. Spawn it before changing it.");
             }
 
             return new SpawnTemplate(go.PrefabAssetId, null, [], [.. identifiers], [.. components], false, [.. transforms]);
@@ -403,15 +403,47 @@ internal sealed partial class NetworkSystem
             }
         }
 
-        for (int i = 0; i < built.Children.Count; i++)
+        // Children may have been added or moved around since, so each of the build's is looked for among them.
+        HashSet<GameObject> taken = new(ReferenceEqualityComparer.Instance);
+        foreach (GameObject child in built.Children)
         {
-            if (!MatchBuilt(live.Children[i], built.Children[i], identifiers, components, transforms))
+            if (BuiltChild(live, child, taken) is not { } mineOf ||
+                !MatchBuilt(mineOf, child, identifiers, components, transforms))
             {
                 return false;
             }
+
+            taken.Add(mineOf);
         }
 
         return true;
+    }
+
+    // The instance's child a fresh build's child stands for: the one that came from the same prefab object where
+    // that is recorded, as in the editor, and otherwise the first of that name not matched yet.
+    private static GameObject? BuiltChild(GameObject live, GameObject builtChild, HashSet<GameObject> taken)
+    {
+        Guid source = builtChild.SourceIdentifier;
+        if (source != Guid.Empty)
+        {
+            foreach (GameObject child in live.Children)
+            {
+                if (!taken.Contains(child) && child.SourceIdentifier == source)
+                {
+                    return child;
+                }
+            }
+        }
+
+        foreach (GameObject child in live.Children)
+        {
+            if (!taken.Contains(child) && child.Name == builtChild.Name)
+            {
+                return child;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The spawn of <paramref name="entry" />: what every peer builds it from, and its root's state now.</summary>

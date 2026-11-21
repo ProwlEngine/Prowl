@@ -188,6 +188,35 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void AChildPutAheadOfThePrefabsOwnIsNotTakenForOneOfThem()
+    {
+        PrefabAsset prefab = RegisterCratePrefab();
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        Networking.Networking.Host(new LocalTransport(new(), "host"));
+        try
+        {
+            GameObject crate = GameObject.Instantiate(prefab, scene, Float3.Zero, Quaternion.Identity)!;
+            GameObject lid = crate.Children[0];
+
+            // It has what the lid has, and sits where the prefab builds the lid.
+            GameObject decoy = CreateGameObject("Decoy");
+            NetTestComponent decoyState = decoy.AddComponent<NetTestComponent>();
+            decoy.SetParent(crate);
+            decoy.SetSiblingIndex(0);
+            Assert.Same(decoy, crate.Children[0]);
+
+            Networking.Networking.Spawn(crate);
+            NetworkObject entry = Networking.Networking.System!.FindEntry(crate)!;
+            Assert.Contains(lid.GetComponent<NetTestComponent>()!, entry.Components);
+            Assert.DoesNotContain(decoyState, entry.Components);
+            Assert.Contains(lid.Identifier, entry.Template.Identifiers);
+            Assert.DoesNotContain(decoy.Identifier, entry.Template.Identifiers);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void ALateJoinerGetsPrefabInstancesAsPrefabSpawns()
     {
         PrefabAsset prefab = RegisterCratePrefab();
