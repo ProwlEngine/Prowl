@@ -1710,8 +1710,9 @@ namespace Prowl.PaperUI
                     }
                     else if (state.CursorPosition > 0)
                     {
-                        state.Value = state.Value.Remove(state.CursorPosition - 1, 1);
-                        state.CursorPosition--;
+                        int from = IsWordModifierPressed() ? FindPreviousWordStart(state.Value, state.CursorPosition) : state.CursorPosition - 1;
+                        state.Value = state.Value.Remove(from, state.CursorPosition - from);
+                        state.CursorPosition = from;
                         valueChanged = true;
                     }
                     break;
@@ -1724,7 +1725,8 @@ namespace Prowl.PaperUI
                     }
                     else if (state.CursorPosition < state.Value.Length)
                     {
-                        state.Value = state.Value.Remove(state.CursorPosition, 1);
+                        int to = IsWordModifierPressed() ? FindNextWordEnd(state.Value, state.CursorPosition) : state.CursorPosition + 1;
+                        state.Value = state.Value.Remove(state.CursorPosition, to - state.CursorPosition);
                         valueChanged = true;
                     }
                     break;
