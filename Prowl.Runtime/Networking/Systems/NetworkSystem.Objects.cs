@@ -577,13 +577,23 @@ internal sealed partial class NetworkSystem
         Sync.ApplySpawnState(sender, entry.Components, ref reader, mine);
         entry.AwaitingRespawn = false;
         go.Network.ApplyOrphaned(message.Orphaned);
-        if (!mine)
+        foreach (NetworkTransform transform in entry.Transforms)
         {
-            foreach (NetworkTransform transform in entry.Transforms)
+            if (mine)
+            {
+                // The host may have missed where this peer had it, so the pose goes out again.
+                transform.Sync.Reset();
+            }
+            else
             {
                 transform.Sync.ClearHistory();
                 transform.Sync.ReceivedAt(message.Tick);
             }
+        }
+
+        if (mine)
+        {
+            Sync.MarkOwnerWrittenDirty(entry);
         }
 
         if (entry.Owner != message.OwnerId)

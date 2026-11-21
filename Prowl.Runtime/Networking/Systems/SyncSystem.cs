@@ -85,8 +85,32 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         _writerPool.Clear();
     }
 
-    /// <summary>Forgets every change not sent yet, as when the scene changes.</summary>
-    internal void Clear()
+    /// <summary>Marks every member the owner writes as changed, so the host gets this peer's values of them again.</summary>
+    internal void MarkOwnerWrittenDirty(NetworkObject entry)
+    {
+        foreach (Component component in entry.Components)
+        {
+            if (component.IsNotValid())
+            {
+                continue;
+            }
+
+            NetworkMembers members = NetworkMembers.Of(component);
+            for (int m = 0; m < members.SyncCount; m++)
+            {
+                if (members.SyncAt(m) is { } sync && (sync.Flags & SyncFlags.FromOwner) != 0)
+                {
+                    MarkSyncDirty(component, sync.Slot);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Forgets every change not sent yet, as when the scene changes. Hooks held for a component
+    ///     <paramref name="keepHooksOf" /> names stay, for an object that is kept through the change.
+    /// </summary>
+    internal void Clear(Func<Component, bool>? keepHooksOf = null)
     {
         foreach (NetworkObject entry in _dirty)
         {
