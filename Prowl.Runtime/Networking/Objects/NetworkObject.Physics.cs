@@ -20,13 +20,14 @@ internal sealed partial class NetworkObject
             return;
         }
 
-        // A body here is only driven from elsewhere when a NetworkTransform brings its poses.
+        // A body here is only driven from elsewhere when a NetworkTransform brings its object's poses. Any other
+        // body in the tree, a loose part say, keeps simulating here.
         bool proxy = System.IsProxy(GameObject) && Transforms.Length > 0;
         foreach (Rigidbody3D body in GameObject.GetComponentsInChildren<Rigidbody3D>(includeInactive: true))
         {
             // A predicted body keeps simulating here, corrected from the host's states.
             if (proxy && body.MotionType == MotionType.Dynamic && !ProxyBodies.TryGetValue(body, out _) &&
-                body.GetComponent<PredictedRigidbody>().IsNotValid())
+                Moves(body.GameObject) && body.GetComponent<PredictedRigidbody>().IsNotValid())
             {
                 ProxyBodies.Add(body, body.MotionType);
                 body.LinearVelocity = Float3.Zero;
@@ -37,9 +38,23 @@ internal sealed partial class NetworkObject
             {
                 ProxyBodies.Remove(body);
                 body.MotionType = authored;
-                body.LinearVelocity = velocity;
+                body.LinearVelocity = ReferenceEquals(body.GameObject, GameObject) ? velocity : Float3.Zero;
             }
         }
+    }
+
+    // True if one of this object's transforms sends where go is.
+    private bool Moves(GameObject go)
+    {
+        foreach (NetworkTransform transform in Transforms)
+        {
+            if (transform.IsValid() && ReferenceEquals(transform.Moved, go))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     internal Float3 SampledVelocity()
