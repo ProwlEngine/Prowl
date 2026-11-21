@@ -1702,7 +1702,7 @@ namespace Prowl.PaperUI
 
             switch (key)
             {
-                case PaperKey.Backspace:
+                case PaperKey.Backspace when !settings.ReadOnly:
                     if (state.HasSelection)
                     {
                         state.DeleteSelection();
@@ -1717,7 +1717,7 @@ namespace Prowl.PaperUI
                     }
                     break;
 
-                case PaperKey.Delete:
+                case PaperKey.Delete when !settings.ReadOnly:
                     if (state.HasSelection)
                     {
                         state.DeleteSelection();
@@ -1841,7 +1841,7 @@ namespace Prowl.PaperUI
                     }
                     break;
 
-                case PaperKey.X when IsControlPressed() && state.HasSelection:
+                case PaperKey.X when IsControlPressed() && state.HasSelection && !settings.ReadOnly:
                     {
                         if (settings.MaskChar.HasValue) break;
                         int start = Maths.Min(state.SelectionStart, state.SelectionEnd);
@@ -1852,7 +1852,7 @@ namespace Prowl.PaperUI
                     }
                     break;
 
-                case PaperKey.V when IsControlPressed():
+                case PaperKey.V when IsControlPressed() && !settings.ReadOnly:
                     {
                         string clipText = _paper.GetClipboard();
                         if (!string.IsNullOrEmpty(clipText))
