@@ -71,7 +71,7 @@ public class ComputeShaderImporter : AssetImporter
     public override bool Import(ImportContext ctx)
     {
         string dir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
-        string source = Shader.ExpandIncludes(File.ReadAllText(ctx.AbsolutePath), path => ShaderImporter.ResolveInclude(dir, path));
+        string source = Shader.ExpandIncludes(File.ReadAllText(ctx.AbsolutePath), path => ShaderImporter.ResolveInclude(dir, path), ctx.FileName);
 
         try
         {
