@@ -41,7 +41,7 @@ internal sealed partial class NetworkSystem
 
     // The scenes' own networked objects this client has that are not spawned: never sent to it, or despawned since.
     // They stay for the host to spawn until the scene changes.
-    private readonly Dictionary<Guid, GameObject> _held = new();
+    internal readonly Dictionary<Guid, GameObject> _held = new();
 
     // Objects spawned before this client was ready, whose callbacks wait for the host's finished message.
     private readonly List<NetworkObject> _pendingSpawns = new();

@@ -493,6 +493,7 @@ public partial class NetworkingTests
         GameObject kept = CreateGameObject("Kept");
         kept.AddComponent<KeptAcrossLoadsComponent>();
         kept.AddComponent<NetworkLifecycleListener>();
+        kept.AddComponent<NetCollectionTestComponent>().Health = 3;
         kept.Network.Networked = true;
         byte[] spawn = RunSpawn(kept);
 
@@ -522,6 +523,9 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.IsReady, host);
             Assert.Equal(new[] { "spawn" }, listener.Events);
             Assert.True(listener.GameObject.Network.Active);
+
+            // The hook for the value it was first spawned with was held, and is not lost with the scene change.
+            Assert.Equal([(100, 3)], listener.GameObject.GetComponent<NetCollectionTestComponent>()!.HealthChanges);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -587,12 +591,16 @@ public partial class NetworkingTests
             kept.Transform.LocalPosition = new Float3(2, 0, 0);
             host.JoinSpawns.Clear();
             host.JoinSpawns.Add(RunSpawn(kept, owner: 1));
+            host.Received.Clear();
             host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Scene, CodeBuiltScene(2));
             Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
 
             Assert.Equal(77, here.Health);
             Assert.Equal(new Float3(5, 0, 0), copy.Transform.LocalPosition);
             Assert.Equal(2, here.Score);
+
+            // The host may have missed what the owner wrote while it was loading, so the owner says it again.
+            Pump(() => host.SyncInt(here.Identifier, NetTestComponent.HealthSlot) == 77 && host.Has(FakePeer.Transform), host);
         }
         finally { Networking.Networking.Shutdown(); }
     }

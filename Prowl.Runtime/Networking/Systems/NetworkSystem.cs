@@ -77,6 +77,18 @@ internal sealed partial class NetworkSystem : IDisposable
         }
 
         Entries.Clear();
+        _pendingSpawns.Clear();
+
+        // Held copies that never entered the world belong to nobody else. The ones in it stay as the game left them.
+        foreach (GameObject held in _held.Values)
+        {
+            if (held.IsValid() && held.Scene.IsNotValid())
+            {
+                held.Dispose();
+            }
+        }
+
+        _held.Clear();
         ForgetVisibility();
         Spawning = null;
         ReplicatedWorld = null;

@@ -98,6 +98,13 @@ public partial class NetworkingTests
                 Pump(() => doorHere.Network.Active, host);
                 Assert.True(doorHere.Enabled);
                 Assert.Same(doorHere, Find(mine, doorId));
+
+                // The copy of the one the host never spawned is still held, out of the world, and goes with the session.
+                GameObject goneHere = NetworkTestScene.Current._held[goneId];
+                Assert.False(goneHere.IsDisposed);
+                Networking.Networking.Shutdown();
+                Assert.True(goneHere.IsDisposed);
+                Assert.False(doorHere.IsDisposed);
             }
             finally { Networking.Networking.Shutdown(); }
         }
