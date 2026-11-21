@@ -158,6 +158,31 @@ public class TransformSyncTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ATeleportsTagEndsOnceTheObjectHasComeToRest()
+    {
+        GameObject go = CreateGameObject();
+        TransformSync sync = new();
+        sync.Capture(go, 0, 0);
+        for (int tick = 1; tick <= 3; tick++) sync.Capture(go, tick, tick - 1);
+
+        go.Transform.LocalPosition = new Float3(50, 0, 0);
+        sync.Teleport();
+        Assert.NotEqual(0, (int)(sync.Capture(go, 4, 3)!.Value.Channels & TransformChannels.Teleport));
+
+        // The pose it rests at carries the tag, and arrives for certain, so nothing after it needs to.
+        TransformUpdate? rest = null;
+        for (int tick = 5; tick <= 12 && !sync.Settled; tick++) rest = sync.Capture(go, tick, tick - 1) ?? rest;
+        Assert.True(sync.Settled);
+        Assert.NotEqual(0, (int)(rest!.Value.Channels & TransformChannels.Teleport));
+        Assert.Null(sync.Capture(go, 13, 12));
+
+        go.Transform.LocalPosition = new Float3(51, 0, 0);
+        TransformUpdate moving = sync.Capture(go, 20, 19)!.Value;
+        Assert.Equal(0, (int)(moving.Channels & TransformChannels.Teleport));
+        Assert.NotEqual(0, (int)(moving.Channels & TransformChannels.Resumed));
+    }
+
+    [Fact]
     public void AReceiverSnapsOnceForEachTeleport()
     {
         GameObject go = CreateGameObject();

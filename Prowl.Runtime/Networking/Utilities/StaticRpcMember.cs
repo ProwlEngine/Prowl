@@ -131,6 +131,7 @@ public sealed class StaticRpcMember
     {
         string runtime = typeof(Component).Assembly.GetName().Name!;
         Dictionary<uint, Type> types = new();
+        HashSet<uint> collided = new();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
         foreach (Assembly assembly in RuntimeUtils.AssemblySource())
         {

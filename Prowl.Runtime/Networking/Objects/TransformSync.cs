@@ -181,7 +181,8 @@ internal sealed class TransformSync(NetworkTransform? settings = null)
 
         if (_teleportTicks > 0)
         {
-            _teleportTicks--;
+            // The pose it comes to rest at arrives for certain, so the tag ends with it.
+            _teleportTicks = Settled ? 0 : _teleportTicks - 1;
             channels = (channels | TransformChannels.Teleport) & ~TransformChannels.Resumed;
             stillFor = 0;
         }
