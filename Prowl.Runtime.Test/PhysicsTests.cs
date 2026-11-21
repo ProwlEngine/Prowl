@@ -70,13 +70,13 @@ public class PhysicsTests : RuntimeTestBase
         SetField(rb, "linearSleepThreshold", 0.25f);
         SetField(rb, "angularSleepThreshold", 0.75f);
         rb.OnValidate();
-        Assert.Equal(0.25f, (float)rb.Native!.DeactivationThreshold.linear, 4);
-        Assert.Equal(0.75f, (float)rb.Native.DeactivationThreshold.angular, 4);
+        Assert.Equal(0.25f, (float)rb.Native!.DeactivationVelocity.linear, 4);
+        Assert.Equal(0.75f, (float)rb.Native.DeactivationVelocity.angular, 4);
 
         rb.LinearSleepThreshold = 0.5f;
         rb.AngularSleepThreshold = 1.5f;
-        Assert.Equal(0.5f, (float)rb.Native.DeactivationThreshold.linear, 4);
-        Assert.Equal(1.5f, (float)rb.Native.DeactivationThreshold.angular, 4);
+        Assert.Equal(0.5f, (float)rb.Native.DeactivationVelocity.linear, 4);
+        Assert.Equal(1.5f, (float)rb.Native.DeactivationVelocity.angular, 4);
     }
 
     public override void Dispose()

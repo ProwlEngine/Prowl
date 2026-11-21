@@ -390,7 +390,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
         {
             AssertOwner();
             linearSleepThreshold = value;
-            if (IsSimulated) _body.DeactivationThreshold = (_body.DeactivationThreshold.angular, value);
+            if (IsSimulated) _body.DeactivationVelocity = (value, _body.DeactivationVelocity.angular);
         }
     }
 
@@ -404,7 +404,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
         {
             AssertOwner();
             angularSleepThreshold = value;
-            if (IsSimulated) _body.DeactivationThreshold = (value, _body.DeactivationThreshold.linear);
+            if (IsSimulated) _body.DeactivationVelocity = (_body.DeactivationVelocity.linear, value);
         }
     }
 
@@ -679,7 +679,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
         rb.Restitution = restitution;
         rb.EnableGyroscopicForces = enableGyroscopicForces;
         rb.DeactivationTime = System.TimeSpan.FromSeconds(deactivationTime);
-        rb.DeactivationThreshold = (angularSleepThreshold, linearSleepThreshold);
+        rb.DeactivationVelocity = (linearSleepThreshold, angularSleepThreshold);
         rb.Tag = new RigidBodyUserData()
         {
             Rigidbody = this,
