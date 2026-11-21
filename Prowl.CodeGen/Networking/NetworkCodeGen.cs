@@ -56,7 +56,7 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
 
     private static readonly DiagnosticDescriptor s_rpcShape = new(
         "PROWLNET002", "RPC shape not supported",
-        "RPC '{0}' must be a non-generic, non-async method returning void, with a body and no ref, out or params parameters",
+        "RPC '{0}' must be a non-generic, non-async method returning void, with a body and no ref, out, in or params parameters",
         "Networking", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor s_notInClass = new(
@@ -204,7 +204,8 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         return hash;
     }
 
-    private static readonly string[] s_networkingWords = ["Sync", "Rpc", "Change", "Broadcast", "Host", "Owner"];
+    private static readonly string[] s_networkingWords =
+        ["Sync", "Rpc", "Change", "Broadcast", "Host", "Owner", "Target", "INetworkSerialize"];
 
     private static bool Mentions(SyntaxTree tree, string word) =>
         tree.GetText().ToString().Contains(word, StringComparison.Ordinal);
@@ -324,7 +325,16 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
                 Report(s_collision, location, key, _ids[id]);
             }
 
-            if (!rpc && _counted.Add(type.OriginalDefinition))
+            if (!rpc)
+            {
+                CountSyncs(type, location);
+            }
+        }
+
+        /// <summary>Checks a type's [Sync] values and own state against the limit, once.</summary>
+        public void CountSyncs(INamedTypeSymbol type, Location location)
+        {
+            if (_counted.Add(type.OriginalDefinition))
             {
                 CheckSyncLimit(type, location);
             }

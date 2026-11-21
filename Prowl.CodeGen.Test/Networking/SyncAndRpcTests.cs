@@ -237,6 +237,80 @@ public class SyncAndRpcTests
     }
 
     [Fact]
+    public void AFileWhoseOnlyNetworkingIsATargetRpcIsNetworked()
+    {
+        Type bell = Scripts.Compile("global using static Prowl.Runtime.Networking.Rpc;",
+                "public class Bell : Prowl.Runtime.Component { [Target] public void Whisper(Prowl.Courier.NetPeer to, int code) { } }")
+            .GetType("Bell")!;
+        Scripts.WithComponent(bell, component => Assert.True(NetworkMembers.Of(component).Any));
+    }
+
+    [Fact]
+    public void ATargetRpcMayNameItsPeerAsNullable()
+    {
+        Type bell = Scripts.Compile("""
+                                    #nullable enable
+                                    using Prowl.Runtime;
+                                    using Prowl.Runtime.Networking;
+                                    using Prowl.Courier;
+
+                                    public class Bell : Component { [Rpc.Target] public void Whisper(NetPeer? to, int code) { } }
+                                    """).GetType("Bell")!;
+        Scripts.WithComponent(bell, component => Assert.True(NetworkMembers.Of(component).Any));
+    }
+
+    [Fact]
+    public void ATypeTheScriptsRegisterASerializerForCanBeSent()
+    {
+        Assembly assembly = Scripts.Compile("""
+                                            using System;
+                                            using Prowl.Runtime;
+                                            using Prowl.Runtime.Networking;
+                                            using Prowl.Courier;
+
+                                            public static class Wire
+                                            {
+                                                public static void Register() => NetSerializer<DateTime>.Register(
+                                                    static (w, v) => w.WriteInt64(v.Ticks), static (ref NetReader r) => new DateTime(r.ReadInt64()));
+                                            }
+
+                                            public class Clock : Component
+                                            {
+                                                [Sync] public DateTime Started { get; set; }
+                                                [Rpc.Broadcast] public void Stamp(DateTime at) { }
+                                            }
+                                            """);
+        Assert.NotNull(assembly.GetType("Clock"));
+
+        // One nobody registers is still refused.
+        Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Clock : Component { [Sync] public System.DateTime Started { get; set; } }").Errors,
+            e => e.Id == "PROWLNET005");
+    }
+
+    [Fact]
+    public void TheValueLimitCountsOwnStateOnATypeWithNoSyncOfItsOwn()
+    {
+        string properties = string.Concat(Enumerable.Range(0, 64).Select(i => $"[Sync] public int V{i} {{ get; set; }} "));
+        Assert.Contains(Scripts.Build($$"""
+                                        using Prowl.Runtime;
+                                        using Prowl.Runtime.Networking;
+                                        using Prowl.Courier;
+
+                                        public class Full : Component { {{properties}} }
+                                        """, """
+                                        using Prowl.Runtime;
+                                        using Prowl.Runtime.Networking;
+                                        using Prowl.Courier;
+
+                                        public class Over : Full, INetworkSerialize
+                                        {
+                                            public void OnSerialize(NetWriter writer, bool initial) { }
+                                            public void OnDeserialize(ref NetReader reader, bool initial) { }
+                                        }
+                                        """).Errors, e => e.Id == "PROWLNET012");
+    }
+
+    [Fact]
     public void RpcChannelsAreCarriedIntoTheDescriptors()
     {
         Assembly assembly = Scripts.Compile("""

@@ -1,12 +1,14 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Prowl.CodeGen.Networking;
 
@@ -48,6 +50,38 @@ internal sealed partial class NetworkCodeGen
         private readonly List<INamedTypeSymbol> _selfWritten = new();
         private readonly List<(INamedTypeSymbol Type, List<IFieldSymbol> Members)> _shapes = new();
         private List<INamedTypeSymbol>? _classes;
+
+        private HashSet<ITypeSymbol>? _registered;
+
+        // The types these scripts register a serializer for themselves, with NetSerializer<T>.Register.
+        private HashSet<ITypeSymbol> Registered()
+        {
+            if (_registered != null)
+            {
+                return _registered;
+            }
+
+            _registered = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+            foreach (SyntaxTree tree in compilation.SyntaxTrees)
+            {
+                if (!tree.GetText().ToString().Contains("NetSerializer", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                SemanticModel model = compilation.GetSemanticModel(tree);
+                foreach (InvocationExpressionSyntax call in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    if (call.Expression is MemberAccessExpressionSyntax { Name.Identifier.Text: "Register" } &&
+                        model.GetSymbolInfo(call).Symbol is IMethodSymbol { ContainingType: { Name: "NetSerializer", TypeArguments.Length: 1 } serializer })
+                    {
+                        _registered.Add(serializer.TypeArguments[0]);
+                    }
+                }
+            }
+
+            return _registered;
+        }
 
         /// <summary>Null if values of the type can be sent; otherwise why not.</summary>
         public Problem? ProblemWith(ITypeSymbol type)
@@ -99,7 +133,7 @@ internal sealed partial class NetworkCodeGen
                 && SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], named));
             if (!own && !writesItself)
             {
-                return symbols.BuiltIns.Contains(named) ? null : unsupported;
+                return symbols.BuiltIns.Contains(named) || Registered().Contains(named) ? null : unsupported;
             }
 
             if (!CanName(named))

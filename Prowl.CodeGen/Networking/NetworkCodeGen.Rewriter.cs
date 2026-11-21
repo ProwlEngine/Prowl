@@ -28,6 +28,16 @@ internal sealed partial class NetworkCodeGen
         public override SyntaxNode? VisitClassDeclaration(ClassDeclarationSyntax node)
         {
             ClassDeclarationSyntax visited = (ClassDeclarationSyntax)base.VisitClassDeclaration(node)!;
+
+            // A component that writes its own state takes one of the values a type may have, with or without a
+            // [Sync] of its own to bring the count up.
+            if (model.GetDeclaredSymbol(node) is INamedTypeSymbol declared &&
+                declared.Interfaces.Any(i => i.Name == "INetworkSerialize") &&
+                DerivesFrom(declared, context.Symbols.Component))
+            {
+                context.CountSyncs(declared, node.Identifier.GetLocation());
+            }
+
             List<string> members = GenerateMembers(node);
             if (members.Count == 0)
             {
@@ -484,7 +494,8 @@ internal sealed partial class NetworkCodeGen
 
             bool targeted = kind.Name == "TargetAttribute";
             if (targeted && (method.IsStatic || method.Parameters.Length == 0 ||
-                             method.Parameters[0].Type.ToDisplayString() != "Prowl.Courier.NetPeer"))
+                             method.Parameters[0].Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+                                 .ToDisplayString() != "Prowl.Courier.NetPeer"))
             {
                 context.Report(s_targetRpc, location, method.Name);
                 return null;
