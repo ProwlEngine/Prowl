@@ -72,6 +72,9 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <summary>True when this peer receives the object's state from its controller.</summary>
     public bool IsProxy => GameObject.IsProxy;
 
+    /// <summary>True when this peer drives the spawned networked object this component is part of.</summary>
+    public bool HasControl => GameObject.Network.HasControl;
+
     [SerializeIgnore]
     private CancellationTokenSource? _destroyCancellation;
 

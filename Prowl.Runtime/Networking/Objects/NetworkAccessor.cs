@@ -247,6 +247,14 @@ public sealed class NetworkAccessor
     /// <summary>True when this peer receives this object's state from its controller.</summary>
     public bool IsProxy => Networking.System?.IsProxy(_object) == true;
 
+    /// <summary>
+    ///     True when this peer drives this spawned object: it owns it, or it is the host and nobody does. False for
+    ///     an object that is not spawned, which is no proxy either.
+    /// </summary>
+    public bool HasControl =>
+        Networking.System is { IsActive: true } system && system.FindEntry(_object) is { TearingDown: false } entry &&
+        system.HasControl(entry);
+
     /// <summary>The owning peer, or null when the host controls the object or it is not networked.</summary>
     public NetPeer? Owner => Networking.System?.GetOwner(_object);
 

@@ -93,4 +93,43 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void ControlAndLookupByNetIdAreAnsweredForSpawnedObjectsOnly()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        GameObject plain = CreateGameObject("Plain");
+        scene.Add(plain);
+        Assert.False(plain.Network.HasControl);
+        Assert.Null(Networking.Networking.Find(1));
+
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        try
+        {
+            Pump(() => alice.IsReady, alice);
+            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
+            GameObject crate = CreateGameObject("Crate");
+            NetTestComponent state = crate.AddComponent<NetTestComponent>();
+            scene.Add(crate);
+
+            // Not spawned, nobody controls it over the network, though it is no proxy either.
+            Assert.False(crate.Network.HasControl);
+            Assert.False(crate.IsProxy);
+
+            crate.SpawnBuilt();
+            Assert.True(crate.Network.HasControl);
+            Assert.True(state.HasControl);
+            Assert.Same(crate, Networking.Networking.Find(crate.Network.NetId));
+            Assert.Null(Networking.Networking.Find(crate.Network.NetId + 1000));
+            Assert.Null(Networking.Networking.Find(0));
+
+            crate.Network.AssignOwnership(aliceHere);
+            Assert.False(crate.Network.HasControl);
+            Assert.True(crate.IsProxy);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

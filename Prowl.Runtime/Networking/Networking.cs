@@ -210,6 +210,16 @@ public static partial class Networking
         System.Sync.MarkSyncDirty(component, member.Slot);
     }
 
+    /// <summary>
+    ///     The spawned networked object with this <see cref="NetworkAccessor.NetId" /> on this peer, or null when it
+    ///     has none: the id is the same on every peer, so it names an object in a message of the game's own.
+    /// </summary>
+    public static GameObject? Find(uint netId) =>
+        netId != 0 && System is { } system && system.Entries.TryGetNet(netId, out NetworkObject? entry) &&
+        !entry.TearingDown && entry.GameObject.IsValid()
+            ? entry.GameObject
+            : null;
+
     /// <summary>This peer's player object, or null. Set by the host with <see cref="AddPlayer" />.</summary>
     public static GameObject? LocalPlayer => System?.LocalPlayer;
 
