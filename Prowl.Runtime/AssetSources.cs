@@ -407,8 +407,9 @@ internal sealed class ComputeShaderRuntimeImporter : RuntimeImporter
     {
         string? Include(string path) => ShaderRuntimeImporter.ReadInclude(context, path);
 
-        string source = Shader.ExpandIncludes(context.ReadAllText(), Include);
-        context.SetMain(ComputeShader.FromSource(System.IO.Path.GetFileNameWithoutExtension(context.Path), source));
+        string name = System.IO.Path.GetFileNameWithoutExtension(context.Path);
+        string source = Shader.ExpandIncludes(context.ReadAllText(), Include, name);
+        context.SetMain(ComputeShader.FromSource(name, source));
     }
 }
 
