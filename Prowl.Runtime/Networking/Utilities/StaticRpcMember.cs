@@ -160,12 +160,21 @@ public sealed class StaticRpcMember
                     continue;
                 }
 
+                // Two types under one id can't be told apart, so neither takes calls.
                 uint hash = HashOf(type);
-                if (!types.TryAdd(hash, type))
+                if (collided.Contains(hash))
+                {
+                    Debug.LogError(
+                        $"[Network] {NameOf(type)} hashes to a static RPC type id other types have too, so calls to " +
+                        "it are dropped. Rename it.");
+                }
+                else if (!types.TryAdd(hash, type))
                 {
                     Debug.LogError(
                         $"[Network] {NameOf(type)} and {NameOf(types[hash])} hash to the same static RPC type id, so " +
-                        $"calls to {type.Name} are dropped. Rename one of them.");
+                        "calls to both are dropped. Rename one of them.");
+                    types.Remove(hash);
+                    collided.Add(hash);
                 }
             }
         }
