@@ -1338,6 +1338,36 @@ public partial class PrefabTests : EditorTestHarness
     }
 
     [Fact]
+    public void RecordGameObjectOverrides_NetworkSettingsSurviveARefresh()
+    {
+        Guid g = MakePrefab(5, 5, "P.prefab");
+        GameObject instance = Instantiate(g);
+        SetSceneCurrent(instance);
+
+        // Marked networked on the instance, where the prefab is not: a refresh, which every scene load and build
+        // runs, must not take it back to the prefab's.
+        instance.Network.Networked = true;
+        instance.Network.Orphaned = Prowl.Runtime.Networking.NetworkOrphaned.ClearOwner;
+        instance.Network.Visibility = Prowl.Runtime.Networking.NetworkVisibility.Manual;
+        instance.Network.CullDistance = 40;
+        instance.Network.Groups = Prowl.Runtime.Networking.NetworkGroups.Of(3);
+        PrefabUtility.RecordGameObjectOverrides(instance);
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, "Network.Networked")));
+
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.True(instance.Network.Networked);
+        Assert.Equal(Prowl.Runtime.Networking.NetworkOrphaned.ClearOwner, instance.Network.Orphaned);
+        Assert.Equal(Prowl.Runtime.Networking.NetworkVisibility.Manual, instance.Network.Visibility);
+        Assert.Equal(40, instance.Network.CullDistance);
+        Assert.True(instance.Network.Groups.Contains(3));
+
+        // Set back to what the prefab has, it is no override any more.
+        instance.Network.Networked = false;
+        PrefabUtility.RecordGameObjectOverrides(instance);
+        Assert.False(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, "Network.Networked")));
+    }
+
+    [Fact]
     public void RecordGameObjectOverrides_IgnoresName()
     {
         Guid g = MakePrefab(5, 5, "P.prefab");

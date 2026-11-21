@@ -225,6 +225,13 @@ public sealed class NetworkAccessor
         }
     }
 
+    /// <summary>The groups as their bits, for the editor to store as a prefab override.</summary>
+    internal ulong GroupMask
+    {
+        get => _groups.Mask;
+        set => Groups = new NetworkGroups(value);
+    }
+
     /// <summary>Why the object left this peer. Read it in <see cref="INetworkEvents.OnNetworkDespawn" />.</summary>
     public NetworkDespawnReason DespawnReason { get; internal set; }
 

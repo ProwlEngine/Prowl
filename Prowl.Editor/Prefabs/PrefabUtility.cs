@@ -11,6 +11,7 @@ using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Ember;
 using Prowl.Runtime;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -1921,6 +1922,16 @@ public static partial class PrefabUtility
         CompareField(pathPrefix, "LayerIndex", instanceGO.LayerIndex, sourceGO.LayerIndex, overrides);
         CompareField(pathPrefix, "Enabled", instanceGO.Enabled, sourceGO.Enabled, overrides);
         CompareField(pathPrefix, "IsStatic", instanceGO.IsStatic, sourceGO.IsStatic, overrides);
+
+        // How the object is networked is set on the object, not on a component, and a refresh copies the prefab's
+        // over it like any other state. Without these an instance marked networked in a scene loses it on load.
+        NetworkAccessor instanceNetwork = instanceGO.Network, sourceNetwork = sourceGO.Network;
+        CompareField(pathPrefix, "Network.Networked", instanceNetwork.Networked, sourceNetwork.Networked, overrides);
+        CompareField(pathPrefix, "Network.ServerOnly", instanceNetwork.ServerOnly, sourceNetwork.ServerOnly, overrides);
+        CompareField(pathPrefix, "Network.Orphaned", instanceNetwork.Orphaned, sourceNetwork.Orphaned, overrides);
+        CompareField(pathPrefix, "Network.Visibility", instanceNetwork.Visibility, sourceNetwork.Visibility, overrides);
+        CompareField(pathPrefix, "Network.CullDistance", instanceNetwork.CullDistance, sourceNetwork.CullDistance, overrides);
+        CompareField(pathPrefix, "Network.GroupMask", instanceNetwork.GroupMask, sourceNetwork.GroupMask, overrides);
 
         // Where the instance root sits and what it is called is the placement of the instance itself,
         // which the prefab has no say in. Below the root it is the prefab's layout, so it is compared
