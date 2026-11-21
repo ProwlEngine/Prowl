@@ -346,12 +346,16 @@ internal sealed class TransformSystem : IDisposable
         ClearMoving();
         _scene.LastTransformTime = now;
 
-        // Every so often, forget what was kept about transforms that are gone.
-        if (tick % 64 == 0)
+        // Every so often, forget what was kept about transforms that are gone. Counted in ticks passed, since the
+        // tick can move on by more than one a send.
+        if (tick - _lastPruneTick >= 64)
         {
+            _lastPruneTick = tick;
             Prune();
         }
     }
+
+    private uint _lastPruneTick;
 
     private void Prune()
     {
