@@ -75,9 +75,26 @@ public sealed class LagCompensator : Component, INetworkTick
         return false;
     }
 
-    /// <summary>The world pose <paramref name="viewer" /> was shown, or false outside what is remembered.</summary>
+    /// <summary>
+    ///     The world pose <paramref name="viewer" /> was shown when it sent what the host is handling now, or false
+    ///     outside what is remembered. Call it as the viewer's hit arrives, as from the RPC that reports it.
+    /// </summary>
     public bool TrySampleSeenBy(NetPeer viewer, out Float3 position, out Quaternion rotation) =>
-        TrySample(ViewTimeOf(viewer), out position, out rotation);
+        TrySample(SentTimeOf(viewer, SendIntervalTicks()), out position, out rotation);
+
+    // How many ticks apart this object's transform goes out, which is what a viewer's buffer is sized by.
+    private int SendIntervalTicks()
+    {
+        foreach (NetworkTransform transform in GameObject.GetComponents<NetworkTransform>())
+        {
+            if (ReferenceEquals(transform.Moved, GameObject))
+            {
+                return transform.Interval;
+            }
+        }
+
+        return 1;
+    }
 
     /// <summary>
     ///     The server time <paramref name="viewer" /> is showing now: its estimate is half a round trip behind, and its
@@ -86,8 +103,23 @@ public sealed class LagCompensator : Component, INetworkTick
     public static double ViewTimeOf(NetPeer viewer)
     {
         ArgumentNullException.ThrowIfNull(viewer);
-        double halfTrip = (viewer.Connection?.RoundTripTime.TotalSeconds ?? 0) / 2;
-        double buffer = Math.Max(Networking.InterpolationDelay.TotalSeconds, 2 * Networking.TickInterval);
-        return Networking.ServerTime - halfTrip - buffer;
+        return Networking.ServerTime - RoundTrip(viewer) / 2 - Buffer(1);
     }
+
+    /// <summary>
+    ///     The server time <paramref name="viewer" /> was showing when it sent a message that arrives now: what it
+    ///     shows now, less the half round trip the message took to get here. <paramref name="sendIntervalTicks" /> is
+    ///     how many ticks apart the object looked at sends its transform.
+    /// </summary>
+    public static double SentTimeOf(NetPeer viewer, int sendIntervalTicks = 1)
+    {
+        ArgumentNullException.ThrowIfNull(viewer);
+        return Networking.ServerTime - RoundTrip(viewer) - Buffer(sendIntervalTicks);
+    }
+
+    private static double RoundTrip(NetPeer viewer) => viewer.Connection?.RoundTripTime.TotalSeconds ?? 0;
+
+    // A viewer's interpolation buffer: two sends of the object, or the interpolation delay when that is longer.
+    private static double Buffer(int sendIntervalTicks) => Math.Max(Networking.InterpolationDelay.TotalSeconds,
+        2 * Networking.TickInterval * Math.Max(1, sendIntervalTicks));
 }

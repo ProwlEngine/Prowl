@@ -42,7 +42,8 @@ public static partial class Networking
     /// <summary>
     ///     Sync and transform ticks per second, rounded to a whole number of fixed steps. RPCs flush every frame.
     ///     <see cref="Configure" /> sets it from <see cref="NetworkConfiguration.TickRate" />. Set it before the session
-    ///     starts, the same on every peer.
+    ///     starts, the same on every peer: a peer whose tick is a different length is refused when it joins, as one
+    ///     with another app version is.
     /// </summary>
     public static float TickRate { get; set; } = 30;
 

@@ -19,12 +19,18 @@ internal static class NetworkSchema
     private const BindingFlags DescriptorFields =
         BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
-    /// <summary>The app version a session sends and expects: <paramref name="appVersion" /> mixed with the schema hash.</summary>
+    /// <summary>
+    ///     The app version a session sends and expects: <paramref name="appVersion" /> mixed with the schema hash, the
+    ///     position precision and the length of a network tick, so peers that differ in any of them don't join.
+    /// </summary>
     internal static uint AppVersion(uint appVersion,
         float positionPrecision = NetworkConfiguration.DefaultPositionPrecision)
     {
         uint hash = Fnv(2166136261, BitConverter.GetBytes(appVersion));
         hash = Fnv(hash, BitConverter.GetBytes(positionPrecision));
+
+        // Ticks stand for times on the wire, so peers have to agree how long one is.
+        hash = Fnv(hash, BitConverter.GetBytes(NetworkSystem.TickInterval));
         foreach (string entry in Entries())
         {
             hash = Fnv(hash, Encoding.UTF8.GetBytes(entry + "\n"));

@@ -19,6 +19,16 @@ public partial class NetworkingTests
         Assert.Equal(0.5f, new NetworkConfiguration { PositionPrecision = 0.5f }.ValidatedCopy().PositionPrecision);
         Assert.Equal(NetworkSchema.AppVersion(3), NetworkSchema.AppVersion(3, 0.01f));
         Assert.NotEqual(NetworkSchema.AppVersion(3, 0.01f), NetworkSchema.AppVersion(3, 0.02f));
+
+        // Peers that tick at different rates would read each other's ticks as the wrong times, so they don't join.
+        float rate = Networking.Networking.TickRate;
+        uint version = NetworkSchema.AppVersion(3);
+        try
+        {
+            Networking.Networking.TickRate = rate / 2;
+            Assert.NotEqual(version, NetworkSchema.AppVersion(3));
+        }
+        finally { Networking.Networking.TickRate = rate; }
     }
 
     [Fact]
