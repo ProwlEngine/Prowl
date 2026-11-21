@@ -28,13 +28,6 @@ namespace Prowl.Runtime.Networking;
 ///         [Change] hooks. Items are sent as they were when added, so changing an item object afterwards isn't
 ///         sent. Replace it.
 ///     </para>
-///     <para>
-///         An item that is a GameObject or Component reads as the object the reference names at the moment it
-///         arrives. Unlike a [Sync] reference property, it is not filled in later: where this peer does not have
-///         that object yet, as with one out of its interest, the item stays null, a set keeps one null for all
-///         of them, and a dictionary leaves out an entry whose key is missing. For objects a peer may not have,
-///         hold their <see cref="NetworkAccessor.NetId" /> and look them up with <c>Networking.Find</c>.
-///     </para>
 /// </remarks>
 public abstract class NetCollection
 {
