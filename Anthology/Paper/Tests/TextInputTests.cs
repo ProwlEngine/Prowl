@@ -198,4 +198,16 @@ public class TextInputTests
         field.Key(PaperKey.Delete);
         Assert.Equal("Xb", field.Value);
     }
+
+    [Fact]
+    public void Down_reaches_the_last_wrapped_line_from_the_left_edge()
+    {
+        string text = string.Join(" ", Enumerable.Repeat("word", 30));
+        var field = new Field(text, multiLine: true);
+        field.Key(PaperKey.Home, PaperKey.LeftControl);
+        for (int i = 0; i < 10; i++) field.Key(PaperKey.Down);
+        field.Type("X");
+
+        Assert.InRange(field.Value.IndexOf('X'), text.Length - 50, text.Length);
+    }
 }

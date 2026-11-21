@@ -1397,6 +1397,8 @@ namespace Prowl.PaperUI
             public bool IsMultiLine;
             /// <summary>The cursor still has to be scrolled into view once the input has been laid out.</summary>
             public bool RevealCursor;
+            /// <summary>Where Up and Down aim for, kept while the cursor only moves vertically.</summary>
+            public float? GoalX;
 
             public readonly bool HasSelection => SelectionStart >= 0 && SelectionEnd >= 0 && SelectionStart != SelectionEnd;
 
@@ -1666,41 +1668,15 @@ namespace Prowl.PaperUI
 
         private void MoveCursorVertical(ref TextInputState state, int direction, TextInputSettings settings)
         {
-            if (!state.IsMultiLine) return;
+            var area = TextInputArea.Size;
+            if (!state.IsMultiLine || area.X <= 0) return;
 
-            var lines = state.GetLines();
-            int currentLine = state.GetCursorLine();
-            int targetLine = Maths.Clamp(currentLine + direction, 0, lines.Length - 1);
+            var text = LayoutInput(state.Value, settings, true, area);
+            int target = text.LineOf(state.CursorPosition) + direction;
+            if (target < 0 || target >= text.Layout.Lines.Count) return;
 
-            if (targetLine == currentLine) return;
-
-            int currentColumn = state.GetCursorColumn();
-
-            // Move to the same column in the target line, or end of line if shorter
-            int targetColumn = Maths.Min(currentColumn, lines[targetLine].Length);
-
-            // Calculate new cursor position
-            int newPosition = 0;
-            for (int i = 0; i < targetLine; i++)
-            {
-                newPosition += lines[i].Length;
-                // Only add +1 for newline if this isn't the last line in the original text
-                if (i < lines.Length - 1 || state.Value.EndsWith('\n'))
-                    newPosition += 1;
-            }
-            newPosition += targetColumn;
-
-            if (IsShiftPressed())
-            {
-                if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
-                state.CursorPosition = newPosition;
-                state.SelectionEnd = newPosition;
-            }
-            else
-            {
-                state.CursorPosition = newPosition;
-                state.ClearSelection();
-            }
+            state.GoalX ??= text.CursorAt(state.CursorPosition).X;
+            MoveCursor(ref state, Maths.Clamp(text.IndexOnLine(target, state.GoalX.Value), 0, state.Value.Length));
         }
 
         private static int LineStart(string text, int position) => position <= 0 ? 0 : text.LastIndexOf('\n', position - 1) + 1;
@@ -1730,6 +1706,7 @@ namespace Prowl.PaperUI
         private bool ProcessKeyCommand(ref TextInputState state, PaperKey key, TextInputSettings settings)
         {
             bool valueChanged = false;
+            int cursorBefore = state.CursorPosition;
 
             switch (key)
             {
@@ -1942,6 +1919,9 @@ namespace Prowl.PaperUI
                     break;
             }
 
+            if (key is not (PaperKey.Up or PaperKey.Down) && (valueChanged || state.CursorPosition != cursorBefore))
+                state.GoalX = null;
+
             return valueChanged;
         }
 
@@ -2125,6 +2105,7 @@ namespace Prowl.PaperUI
                     return;
 
                 var currentState = LoadTextInputState(value, isMultiLine);
+                currentState.GoalX = null;
                 var clickPos = e.RelativePosition.X - TextInputArea.Min.X + currentState.ScrollOffsetX;
                 var clickPosY = isMultiLine ? e.RelativePosition.Y - TextInputArea.Min.Y + currentState.ScrollOffsetY : 0;
                 var newPosition = Maths.Clamp(
@@ -2230,6 +2211,7 @@ namespace Prowl.PaperUI
 
                 currentState.CursorPosition = pos;
                 currentState.SelectionEnd = pos;
+                currentState.GoalX = null;
                 EnsureCursorVisible(ref currentState, settings, isMultiLine);
                 SaveTextInputState(currentState);
             });
@@ -2271,6 +2253,7 @@ namespace Prowl.PaperUI
 
                 currentState.Value = currentState.Value.Insert(currentState.CursorPosition, e.Character.ToString());
                 currentState.CursorPosition++;
+                currentState.GoalX = null;
 
                 EnsureCursorVisible(ref currentState, settings, isMultiLine);
                 SaveTextInputState(currentState);
@@ -2416,6 +2399,17 @@ namespace Prowl.PaperUI
                 if (Layout.Lines.Count == 0) return new Float2(AlignWidth * AlignX, OffsetY);
                 var p = (Float2)Layout.GetCursorPosition(index) * _invFb;
                 return new Float2(p.X + LineOffset(LineOf(index)), p.Y + OffsetY);
+            }
+
+            /// <summary>The character index nearest a horizontal position on a line.</summary>
+            public int IndexOnLine(int line, float x)
+            {
+                var l = Layout.Lines[line];
+                int index = Layout.GetCursorIndex(new Float2((x - LineOffset(line)) / _invFb, l.Position.Y + l.Height * 0.5f));
+
+                // A wrapped line can start on the index the line above ends on, where the cursor shows on the line above.
+                bool onLineAbove = line > 0 && index == l.StartIndex && Layout.Lines[line - 1].EndIndex == index;
+                return onLineAbove && index < l.EndIndex ? index + 1 : index;
             }
 
             public int IndexAt(Float2 point)
