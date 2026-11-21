@@ -842,6 +842,7 @@ public class SceneInstance : EngineObject, ISerializable
         ClearTypeIndices();
         _identifiers.Clear();
         _sectionHits.Clear();
+        _disposedComponents.Clear();
         foreach (GameObject go in _allObj)
             if (!ReferenceEquals(go, null) && !go.IsDisposed)
                 go.OnHotReload();
@@ -1174,6 +1175,21 @@ public class SceneInstance : EngineObject, ISerializable
     {
         if (!_identifiers.TryGetValue(identifier, out EngineObject? known) || !IsHere(known, identifier, null))
             _identifiers[identifier] = obj;
+    }
+
+    // Disposed components waiting for Flush to drop them from the identifier index. A queue any thread can add to,
+    // since a world that is not running can have its objects disposed off the main thread.
+    private readonly System.Collections.Concurrent.ConcurrentQueue<Component> _disposedComponents = new();
+
+    /// <summary>Called by a component of this world when it is disposed.</summary>
+    internal void ComponentDisposed(Component component) => _disposedComponents.Enqueue(component);
+
+    // Without this the index keeps a disposed object alive until something looks its identifier up. A disposed entry
+    // never answers a lookup, so dropping it changes no answer.
+    private void Forget(Guid identifier, EngineObject disposed)
+    {
+        if (_identifiers.TryGetValue(identifier, out EngineObject? known) && ReferenceEquals(known, disposed))
+            _identifiers.Remove(identifier);
     }
 
     /// <summary>Drops every type index, after a script reload changed what the types are.</summary>
@@ -1649,7 +1665,18 @@ public class SceneInstance : EngineObject, ISerializable
     /// <summary> Unregisters all dead / disposed GameObjects </summary>
     internal void Flush()
     {
-        if (IsDisposed || !_hasDisposedObjects) return;
+        if (IsDisposed) return;
+        bool forgot = false;
+        while (_disposedComponents.TryDequeue(out Component? component))
+        {
+            Forget(component.Identifier, component);
+            forgot = true;
+        }
+        if (!_hasDisposedObjects)
+        {
+            if (forgot) PruneSectionHits();
+            return;
+        }
         _hasDisposedObjects = false;
         List<GameObject> removed = [];
         foreach (GameObject obj in _allObj)
@@ -1664,6 +1691,7 @@ public class SceneInstance : EngineObject, ISerializable
         foreach (GameObject obj in removed)
         {
             LeaveSection(obj);
+            Forget(obj.Identifier, obj);
             obj.Scene = null;
         }
         PruneSectionHits();
