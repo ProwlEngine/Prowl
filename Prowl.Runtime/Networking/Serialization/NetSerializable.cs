@@ -179,8 +179,8 @@ public static class NetTypeSerializer
         {
             if (tag == Reference)
             {
-                int index = (int)reader.ReadVarUInt32();
-                return index < t_read!.Count && t_read[index] is T known
+                uint index = reader.ReadVarUInt32();
+                return index < (uint)t_read!.Count && t_read[(int)index] is T known
                     ? known
                     : throw new InvalidDataException(
                         $"A {typeof(T)} referred to an object that wasn't sent, or isn't one.");

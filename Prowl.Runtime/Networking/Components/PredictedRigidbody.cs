@@ -221,8 +221,18 @@ public sealed class PredictedRigidbody : Component, INetworkSerialize
     void INetworkSerialize.OnDeserialize(ref NetReader reader, bool initial)
     {
         double time = reader.ReadDouble();
-        BodyState host = new(NetSerializers.ReadFloat3(ref reader), Quaternion.Normalize(NetSerializers.ReadQuaternion(ref reader)),
-            NetSerializers.ReadFloat3(ref reader), NetSerializers.ReadFloat3(ref reader));
+        Float3 position = NetSerializers.ReadFloat3(ref reader);
+        Quaternion rotation = NetSerializers.ReadQuaternion(ref reader);
+        Float3 velocity = NetSerializers.ReadFloat3(ref reader), angularVelocity = NetSerializers.ReadFloat3(ref reader);
+
+        // What goes into the physics body has to be numbers it can use.
+        NetworkValidation.Transform(0, position, rotation, Float3.One);
+        if (!double.IsFinite(time) || !NetworkValidation.Finite(velocity) || !NetworkValidation.Finite(angularVelocity))
+        {
+            throw new InvalidDataException("A predicted body's state contains an invalid time or velocity.");
+        }
+
+        BodyState host = new(position, Quaternion.Normalize(rotation), velocity, angularVelocity);
         if (initial)
         {
             _history.Clear();

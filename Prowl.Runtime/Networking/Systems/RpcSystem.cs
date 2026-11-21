@@ -317,7 +317,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
     internal void OnRpcFromHost(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (scene.IsHost)
+        if (scene.IsHost || !sender.IsHost)
         {
             return;
         }
