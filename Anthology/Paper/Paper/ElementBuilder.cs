@@ -1399,6 +1399,8 @@ namespace Prowl.PaperUI
             public bool RevealCursor;
             /// <summary>Where Up and Down aim for, kept while the cursor only moves vertically.</summary>
             public float? GoalX;
+            /// <summary>When the cursor last moved, which its blink restarts from.</summary>
+            public float BlinkStart;
 
             public readonly bool HasSelection => SelectionStart >= 0 && SelectionEnd >= 0 && SelectionStart != SelectionEnd;
 
@@ -2330,7 +2332,7 @@ namespace Prowl.PaperUI
                         }
 
                         // Draw blinking cursor
-                        if ((int)(_paper.Time * 2) % 2 == 0)
+                        if ((int)((_paper.Time - renderState.BlinkStart) * 2) % 2 == 0)
                         {
                             var cursorPos = text.CursorAt(renderState.CursorPosition);
                             float cursorX = r.Min.X + cursorPos.X;
@@ -2443,6 +2445,7 @@ namespace Prowl.PaperUI
         private void EnsureCursorVisible(ref TextInputState state, TextInputSettings settings, bool isMultiLine)
         {
             var area = TextInputArea.Size;
+            state.BlinkStart = _paper.Time;
 
             // Focus set from code arrives before layout, when there is no area to scroll within yet.
             state.RevealCursor = area.X <= 0 || area.Y <= 0;
