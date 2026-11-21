@@ -236,6 +236,7 @@ public class EditorCamera
         _camera.FarClipPlane = 1000f;
         _perspectiveFarClip = _camera.FarClipPlane;
         _camera.Background = CameraBackground.Skybox;
+        _defaultEv100 = _camera.EV100;
 
         UpdateTransform();
     }
@@ -302,9 +303,10 @@ public class EditorCamera
     }
 
     private VolumeProfile? _defaultProfile;
+    private float _defaultEv100;
 
-    // The scene view resolves volumes itself; only the main camera's base profile, volume layers, HDR and anti aliasing
-    // are borrowed, a new camera's default profile standing in without one
+    // The scene view resolves volumes itself; only the main camera's base profile, volume layers, exposure, clear, HDR
+    // and anti aliasing are borrowed, a new camera's defaults standing in without one
     private void MirrorSceneCamera(SceneInstance scene)
     {
         _camera.PostProcessing = PostProcessing;
@@ -314,6 +316,8 @@ public class EditorCamera
             if (_defaultProfile.IsNotValid()) _defaultProfile = VolumeProfile.CreateCameraDefault("Scene View Profile");
             _camera.Profile = _defaultProfile;
             _camera.VolumeMask = LayerMask.Everything;
+            _camera.EV100 = _defaultEv100;
+            _camera.Background = CameraBackground.Skybox;
             _camera.HDR = true;
             _camera.AntiAliasing = AntiAliasingMode.None;
             return;
@@ -321,6 +325,9 @@ public class EditorCamera
 
         _camera.Profile = sceneCamera.Profile;
         _camera.VolumeMask = sceneCamera.VolumeMask;
+        _camera.EV100 = sceneCamera.EV100;
+        _camera.Background = sceneCamera.Background == CameraBackground.None ? CameraBackground.Skybox : sceneCamera.Background;
+        _camera.BackgroundColor = sceneCamera.BackgroundColor;
         _camera.HDR = sceneCamera.HDR;
         _camera.AntiAliasing = sceneCamera.AntiAliasing;
         _camera.Fxaa = sceneCamera.Fxaa;
