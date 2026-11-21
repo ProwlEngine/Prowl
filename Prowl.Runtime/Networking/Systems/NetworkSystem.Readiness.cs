@@ -53,11 +53,11 @@ internal sealed partial class NetworkSystem
                                                      state.Stage == NetworkJoinState.Ready);
 
     /// <summary>
-    ///     Host: whether calls and new spawns go to <paramref name="peer" />. One that is ready gets them, and so does
-    ///     one whose spawns are still on their way, which holds calls until the last has arrived. One still loading
-    ///     the scene gets none.
+    ///     Host: whether <paramref name="peer" /> has loaded the current scene, so calls and new spawns go to it: one
+    ///     that is ready, or one whose spawns are still on their way, which holds calls until the last has arrived.
+    ///     One still loading the scene gets neither.
     /// </summary>
-    internal bool ReceivesRpcs(NetPeer peer) => peer.IsLocal
+    internal bool HasLoadedScene(NetPeer peer) => peer.IsLocal
         ? IsReady
         : Session is { IsHost: true } session && session.TryGetPeer(peer.Id, out NetPeer? current) &&
           ReferenceEquals(current, peer) && LoadingPeers.TryGetValue(peer.Id, out PeerReadiness? state) &&

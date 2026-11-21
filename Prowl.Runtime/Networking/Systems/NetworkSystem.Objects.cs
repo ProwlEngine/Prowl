@@ -194,7 +194,7 @@ internal sealed partial class NetworkSystem
         // A peer still loading the scene gets it with the rest, once it has loaded.
         foreach (NetPeer peer in Session!.Peers)
         {
-            if (!peer.IsLocal && Sees(entry, peer) && ReceivesRpcs(peer))
+            if (!peer.IsLocal && Sees(entry, peer) && HasLoadedScene(peer))
             {
                 observers.Add(peer);
             }

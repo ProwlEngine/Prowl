@@ -135,7 +135,7 @@ internal sealed partial class NetworkSystem
     internal void SendEngine(NetPeer peer, EngineMessage kind, ReadOnlySpan<byte> payload,
         Delivery delivery = Delivery.Reliable, byte channel = 0)
     {
-        if (IsHost && kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost && !ReceivesRpcs(peer))
+        if (IsHost && kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost && !HasLoadedScene(peer))
         {
             return;
         }
