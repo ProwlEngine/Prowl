@@ -64,8 +64,9 @@ internal sealed partial class RpcSystem
             return false;
         }
 
+        // The call is written out of the shared argument writer before state goes ahead of it: sending state can
+        // run game code that makes another static call, which writes its own arguments there.
         Delivery delivery = StaticRpcDelivery(rpc);
-        FlushSyncChangesAhead(delivery, rpc.Channel);
         using NetWriter message = new();
         if (scene.IsHost)
         {
@@ -73,6 +74,7 @@ internal sealed partial class RpcSystem
         }
 
         WriteStaticCall(message, rpc, arguments.WrittenSpan);
+        FlushSyncChangesAhead(delivery, rpc.Channel);
         if (scene.IsHost)
         {
             SendRpcRecipients(EngineMessage.StaticRpcFromHost, message.WrittenSpan, delivery, recipients,
