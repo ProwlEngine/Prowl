@@ -1857,9 +1857,11 @@ namespace Prowl.PaperUI
                         string clipText = _paper.GetClipboard();
                         if (!string.IsNullOrEmpty(clipText))
                         {
+                            clipText = clipText.Replace("\r\n", "\n").Replace('\r', '\n');
+
                             // For single-line, replace newlines with spaces
                             if (!state.IsMultiLine)
-                                clipText = clipText.Replace('\n', ' ').Replace('\r', ' ');
+                                clipText = clipText.Replace('\n', ' ');
 
                             // Apply character filter to pasted text
                             if (settings.CharFilter != null)
