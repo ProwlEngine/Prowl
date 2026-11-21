@@ -1587,6 +1587,13 @@ namespace Prowl.PaperUI
             ? _paper.IsKeyDown(PaperKey.LeftAlt) || _paper.IsKeyDown(PaperKey.RightAlt)
             : IsControlPressed();
 
+        // One character back or forward, keeping a surrogate pair whole.
+        private static int StepBack(string text, int position) =>
+            position >= 2 && char.IsLowSurrogate(text[position - 1]) && char.IsHighSurrogate(text[position - 2]) ? position - 2 : Maths.Max(0, position - 1);
+
+        private static int StepForward(string text, int position) =>
+            position + 1 < text.Length && char.IsHighSurrogate(text[position]) && char.IsLowSurrogate(text[position + 1]) ? position + 2 : Maths.Min(text.Length, position + 1);
+
         /// <summary>
         /// Finds the start of the previous word from the current position
         /// </summary>
@@ -1710,7 +1717,7 @@ namespace Prowl.PaperUI
                     }
                     else if (state.CursorPosition > 0)
                     {
-                        int from = IsWordModifierPressed() ? FindPreviousWordStart(state.Value, state.CursorPosition) : state.CursorPosition - 1;
+                        int from = IsWordModifierPressed() ? FindPreviousWordStart(state.Value, state.CursorPosition) : StepBack(state.Value, state.CursorPosition);
                         state.Value = state.Value.Remove(from, state.CursorPosition - from);
                         state.CursorPosition = from;
                         valueChanged = true;
@@ -1725,7 +1732,7 @@ namespace Prowl.PaperUI
                     }
                     else if (state.CursorPosition < state.Value.Length)
                     {
-                        int to = IsWordModifierPressed() ? FindNextWordEnd(state.Value, state.CursorPosition) : state.CursorPosition + 1;
+                        int to = IsWordModifierPressed() ? FindNextWordEnd(state.Value, state.CursorPosition) : StepForward(state.Value, state.CursorPosition);
                         state.Value = state.Value.Remove(state.CursorPosition, to - state.CursorPosition);
                         valueChanged = true;
                     }
@@ -1751,7 +1758,7 @@ namespace Prowl.PaperUI
                     else if (IsShiftPressed())
                     {
                         if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
-                        state.CursorPosition = Maths.Max(0, state.CursorPosition - 1);
+                        state.CursorPosition = StepBack(state.Value, state.CursorPosition);
                         state.SelectionEnd = state.CursorPosition;
                     }
                     else
@@ -1759,7 +1766,7 @@ namespace Prowl.PaperUI
                         if (state.HasSelection)
                             state.CursorPosition = Maths.Min(state.SelectionStart, state.SelectionEnd);
                         else
-                            state.CursorPosition = Maths.Max(0, state.CursorPosition - 1);
+                            state.CursorPosition = StepBack(state.Value, state.CursorPosition);
                         state.ClearSelection();
                     }
                     break;
@@ -1784,7 +1791,7 @@ namespace Prowl.PaperUI
                     else if (IsShiftPressed())
                     {
                         if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
-                        state.CursorPosition = Maths.Min(state.Value.Length, state.CursorPosition + 1);
+                        state.CursorPosition = StepForward(state.Value, state.CursorPosition);
                         state.SelectionEnd = state.CursorPosition;
                     }
                     else
@@ -1792,7 +1799,7 @@ namespace Prowl.PaperUI
                         if (state.HasSelection)
                             state.CursorPosition = Maths.Max(state.SelectionStart, state.SelectionEnd);
                         else
-                            state.CursorPosition = Maths.Min(state.Value.Length, state.CursorPosition + 1);
+                            state.CursorPosition = StepForward(state.Value, state.CursorPosition);
                         state.ClearSelection();
                     }
                     break;
