@@ -5,6 +5,7 @@ using System;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -151,21 +152,33 @@ internal static class NetworkPopover
                 return;
             }
 
+            // A spawned object stays what it is until the session ends.
+            bool locked = go.Network.Active;
             foreach (Sharing sharing in new[] { Sharing.Off, Sharing.Networked, Sharing.ServerOnly })
             {
                 (IOrigamiIcon icon, Color color) = Style(sharing);
                 Sharing chosen = sharing;
                 Option(paper, font, $"gi_net_mode_{sharing}", icon, color, SharingName(sharing), current == sharing, () =>
                 {
+                    if (locked || chosen == current)
+                    {
+                        return;
+                    }
+
                     Undo.RecordObject(go, "Change Networking");
                     go.Network.Networked = chosen == Sharing.Networked;
                     go.Network.ServerOnly = chosen == Sharing.ServerOnly;
                 });
             }
             Note(paper, font, "gi_net_mode_note", SharingDescription(current), EditorTheme.Ink400);
+            if (locked)
+                Note(paper, font, "gi_net_locked", Loc.Get("network.locked"), EditorTheme.Ink400);
+            else if (current == Sharing.Networked && !Application.IsPlaying && !go.IsPrefabInstance &&
+                     EditorSceneManager.SceneOf(go) is { Path: null })
+                Note(paper, font, "gi_net_unsaved", Loc.Get("network.unsaved_scene"), EditorTheme.Amber400);
 
             if (current != Sharing.ServerOnly && parent.IsValid() && parent!.Network.IsExcluded)
-                Note(paper, font, "gi_net_inherited", Loc.Get("network.inherited_never"), EditorTheme.Amber400);
+                Note(paper, font, "gi_net_inherited", Loc.Get("network.inherited_server_only"), EditorTheme.Amber400);
             else if (NeedsNetworking(go))
                 Note(paper, font, "gi_net_needs", Loc.Get("network.needs_networking"), EditorTheme.Amber400);
 
@@ -187,6 +200,8 @@ internal static class NetworkPopover
                 Heading(paper, font, "gi_net_orphaned", Loc.Get("network.orphaned"), Loc.Get("network.orphaned.desc"));
                 OrphanedOption(paper, font, go, NetworkOrphaned.Destroy, EditorIcons.Trash_I, Loc.Get("network.orphaned.destroy"));
                 OrphanedOption(paper, font, go, NetworkOrphaned.ClearOwner, EditorIcons.Server_I, Loc.Get("network.orphaned.host"));
+                if (go.Network.Active && !Networking.IsHost)
+                    Note(paper, font, "gi_net_orph_ro", Loc.Get("network.host_only"), EditorTheme.Ink400);
 
                 Spacer(paper, "gi_net_gap_vis");
                 Receivers(paper, font, go);
@@ -370,6 +385,12 @@ internal static class NetworkPopover
     private static void OrphanedOption(Paper paper, FontFile font, GameObject go, NetworkOrphaned value, IOrigamiIcon icon, string label) =>
         Option(paper, font, $"gi_net_orph_{value}", icon, EditorTheme.Ink400, label, go.Network.Orphaned == value, () =>
         {
+            // On a client a spawned object's policy is the host's to change.
+            if (go.Network.Active && !Networking.IsHost)
+            {
+                return;
+            }
+
             Undo.RecordObject(go, "Change Orphaned Mode");
             go.Network.Orphaned = value;
         });
@@ -377,15 +398,15 @@ internal static class NetworkPopover
     private static string SharingName(Sharing sharing) => sharing switch
     {
         Sharing.Networked => Loc.Get("network.object"),
-        Sharing.ServerOnly => Loc.Get("network.never"),
-        _ => Loc.Get("network.snapshot"),
+        Sharing.ServerOnly => Loc.Get("network.server_only"),
+        _ => Loc.Get("network.off"),
     };
 
     private static string SharingDescription(Sharing sharing) => sharing switch
     {
         Sharing.Networked => Loc.Get("network.object.desc"),
-        Sharing.ServerOnly => Loc.Get("network.never.desc"),
-        _ => Loc.Get("network.snapshot.desc"),
+        Sharing.ServerOnly => Loc.Get("network.server_only.desc"),
+        _ => Loc.Get("network.off.desc"),
     };
 
     // --- Building blocks ---------------------------------------------------------------------------

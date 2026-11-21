@@ -8,6 +8,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Runtime;
@@ -21,7 +22,7 @@ namespace Prowl.Editor.Core;
 
 /// <summary>
 /// Multiplayer testing from the editor. While the game hosts a session in play mode, the play pill offers to
-/// launch client instances, each its own process and window, which join it and get its scene. Leaving play
+/// launch client instances, each its own process and window, which join it and load its scenes themselves. Leaving play
 /// mode closes them.
 /// </summary>
 /// <remarks>
@@ -49,6 +50,17 @@ public static class MultiplayerPlay
     {
         if (!CanLaunchClient || Project.Current is not { } project)
             return;
+
+        // A scene with no file is one a client can't load: it gets an empty section in its place.
+        foreach (OpenScene scene in EditorSceneManager.OpenScenes)
+        {
+            if (scene.IsLoaded && scene.Path == null)
+            {
+                Debug.LogWarning(
+                    $"[Multiplayer] '{scene.Name}' has never been saved, so clients load nothing for it and see only " +
+                    "what the host spawns. Save the scene before playing for clients to get it.");
+            }
+        }
 
         int port = Networking.LocalPort;
         int index = ++s_launched;
