@@ -1703,6 +1703,30 @@ namespace Prowl.PaperUI
             }
         }
 
+        private static int LineStart(string text, int position) => position <= 0 ? 0 : text.LastIndexOf('\n', position - 1) + 1;
+
+        private static int LineEnd(string text, int position)
+        {
+            int end = text.IndexOf('\n', position);
+            return end < 0 ? text.Length : end;
+        }
+
+        // Moves the cursor, extending the selection while Shift is held.
+        private void MoveCursor(ref TextInputState state, int position)
+        {
+            if (IsShiftPressed())
+            {
+                if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                state.CursorPosition = position;
+                state.SelectionEnd = position;
+            }
+            else
+            {
+                state.CursorPosition = position;
+                state.ClearSelection();
+            }
+        }
+
         private bool ProcessKeyCommand(ref TextInputState state, PaperKey key, TextInputSettings settings)
         {
             bool valueChanged = false;
@@ -1805,31 +1829,11 @@ namespace Prowl.PaperUI
                     break;
 
                 case PaperKey.Home:
-                    if (IsShiftPressed())
-                    {
-                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
-                        state.CursorPosition = 0;
-                        state.SelectionEnd = state.CursorPosition;
-                    }
-                    else
-                    {
-                        state.CursorPosition = 0;
-                        state.ClearSelection();
-                    }
+                    MoveCursor(ref state, IsControlPressed() ? 0 : LineStart(state.Value, state.CursorPosition));
                     break;
 
                 case PaperKey.End:
-                    if (IsShiftPressed())
-                    {
-                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
-                        state.CursorPosition = state.Value.Length;
-                        state.SelectionEnd = state.CursorPosition;
-                    }
-                    else
-                    {
-                        state.CursorPosition = state.Value.Length;
-                        state.ClearSelection();
-                    }
+                    MoveCursor(ref state, IsControlPressed() ? state.Value.Length : LineEnd(state.Value, state.CursorPosition));
                     break;
 
                 case PaperKey.A when IsControlPressed():
