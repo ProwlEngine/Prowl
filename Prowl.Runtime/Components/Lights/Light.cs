@@ -23,9 +23,6 @@ public enum ShadowFilter
 
     /// <summary>A smooth tent filter of even width.</summary>
     Tent = 1,
-
-    /// <summary>Penumbrae that widen with the distance from the caster, sharp where objects touch.</summary>
-    ContactHardening = 2,
 }
 
 /// <summary>The largest shadow map tile a light may take. Local lights size theirs from how big they are on screen up to this.</summary>
