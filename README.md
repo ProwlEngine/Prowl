@@ -267,17 +267,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/xZekro51">
-                    <img src="https://avatars.githubusercontent.com/u/28503323?v=4" width="100;" alt="xZekro51"/>
-                    <br />
-                    <sub><b>Paolo</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/Acissathar">
                     <img src="https://avatars.githubusercontent.com/u/10227954?v=4" width="100;" alt="Acissathar"/>
                     <br />
                     <sub><b>Will</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/xZekro51">
+                    <img src="https://avatars.githubusercontent.com/u/28503323?v=4" width="100;" alt="xZekro51"/>
+                    <br />
+                    <sub><b>Paolo</b></sub>
                 </a>
             </td>
 		</tr>
