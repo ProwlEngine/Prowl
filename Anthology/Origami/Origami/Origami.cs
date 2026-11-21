@@ -228,6 +228,16 @@ public static partial class Origami
         pending[scrollViewId] = pending.TryGetValue(scrollViewId, out var existing) ? existing + delta : delta;
     }
 
+    /// <summary>
+    /// Scroll a scroll view on its next render just far enough to show the content between
+    /// <paramref name="top"/> and <paramref name="bottom"/>, measured from the top of its content.
+    /// </summary>
+    public static void ScrollIntoView(string scrollViewId, float top, float bottom)
+    {
+        ArgumentNullException.ThrowIfNull(scrollViewId);
+        ScrollViewBuilder.s_pendingReveal[scrollViewId] = new Prowl.Vector.Float2(top, bottom);
+    }
+
     // ── Dropdown factories ───────────────────────────────────────
 
     /// <summary>

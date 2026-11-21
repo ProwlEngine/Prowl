@@ -68,6 +68,7 @@ public static class NodePicker
     private static bool _isOpen;
     private static float _x, _y;
     private static string _search = "";
+    private static int _highlight = -1;
     private static Action<NodePickerBuilder>? _build;
     private static IModal? _modalHandle;
 
@@ -81,6 +82,7 @@ public static class NodePicker
         _x = x;
         _y = y;
         _search = "";
+        _highlight = -1;
         _build = build;
 
         _modalHandle = new CustomDrawModal((paper, layer, _) => Draw(paper, layer))
@@ -117,6 +119,19 @@ public static class NodePicker
         _build(builder);
         List<NodePickerBuilder.Entry> matches = Filter(builder.Entries);
 
+        // Up and Down move a highlight through the matches and Enter picks it, or the first match.
+        if (_highlight >= matches.Count) _highlight = matches.Count - 1;
+        int step = KeyNav.Step(paper);
+        bool reveal = step != 0 && matches.Count > 0;
+        if (reveal) _highlight = KeyNav.Next(_highlight, matches.Count, step);
+        if (matches.Count > 0 && (paper.IsKeyPressed(PaperKey.Enter) || paper.IsKeyPressed(PaperKey.KeypadEnter)))
+        {
+            NodePickerBuilder.Entry picked = matches[Math.Max(0, _highlight)];
+            Close();
+            picked.OnPick();
+            return;
+        }
+
         using (paper.Column("npick").PositionType(PositionType.SelfDirected).Position(_x, _y)
             .Width(Width).Height(UnitValue.Auto).MaxHeight(MaxHeight).Layer(layer)
             .ClampToScreen()
@@ -126,7 +141,7 @@ public static class NodePicker
             .DropShadow(0, 14, 40, 0, theme.Shadow)
             .StopEventPropagation().Enter())
         {
-            Origami.SearchField(paper, "npick_search", _search, v => _search = v, builder.Hint).AutoFocus().Show();
+            Origami.SearchField(paper, "npick_search", _search, v => { _search = v; _highlight = -1; }, builder.Hint).AutoFocus().Show();
 
             if (matches.Count == 0)
             {
@@ -139,6 +154,7 @@ public static class NodePicker
             Origami.ScrollView(paper, "npick_list", Width - m.Padding * 2f, ListHeight).Body(() =>
             {
                 string? category = null;
+                float y = 0f;
                 for (int i = 0; i < matches.Count; i++)
                 {
                     NodePickerBuilder.Entry entry = matches[i];
@@ -146,14 +162,21 @@ public static class NodePicker
                     {
                         category = entry.Category;
                         if (category.Length > 0)
+                        {
                             paper.Box("npick_cat", i).Width(UnitValue.Stretch()).Height(20).IsNotInteractable()
                                 .Margin(m.Padding, 0, m.Spacing, 0)
                                 .Text(category, font).TextColor(theme.Ink.C200)
                                 .FontSize(m.FontSizeSmall * 0.9f).Alignment(TextAlignment.MiddleLeft);
+                            y += 20f + m.Spacing;
+                        }
                     }
+
+                    if (reveal && i == _highlight) Origami.ScrollIntoView("npick_list", y, y + m.RowHeight);
+                    y += m.RowHeight;
 
                     var row = paper.Box("npick_item", i).Width(UnitValue.Stretch()).Height(m.RowHeight)
                         .Padding(m.Padding, m.Padding, 0, 0).Rounded(m.SmallRounding)
+                        .BackgroundColor(i == _highlight ? theme.Hover : System.Drawing.Color.Transparent)
                         .Hovered.BackgroundColor(theme.Hover).End()
                         .Text(entry.Label, font).TextColor(theme.Ink.C500)
                         .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)

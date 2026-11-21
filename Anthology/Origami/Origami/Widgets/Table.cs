@@ -209,6 +209,53 @@ public sealed class TableBuilder
         return r;
     }
 
+    private const string CursorKey = "table:cursor";
+
+    /// <summary>Up, Down, Home and End move the selection and Enter activates it, while the table holds the keyboard focus.</summary>
+    private void HandleKeys(ElementHandle owner, int count)
+    {
+        if (!KeyNav.TakeFocus(_paper, owner) || count == 0) return;
+
+        int current = CurrentRow(owner, count);
+        if (current >= 0 && _onActivate != null && (_paper.IsKeyPressed(PaperKey.Enter) || _paper.IsKeyPressed(PaperKey.KeypadEnter)))
+        {
+            _onActivate(current);
+            return;
+        }
+
+        int step = KeyNav.Step(_paper);
+        int target = _paper.IsKeyPressed(PaperKey.Home) ? 0
+            : _paper.IsKeyPressed(PaperKey.End) ? count - 1
+            : step != 0 ? KeyNav.Next(current, count, step)
+            : current;
+        if (target < 0 || target == current) return;
+
+        _paper.SetElementStorage(owner, CursorKey, target);
+        if (_multiSelect)
+        {
+            bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
+            _onSelectPreview?.Invoke(target, false, shift);
+            _onSelectModified?.Invoke(target, false, shift);
+        }
+        else _onSelect?.Invoke(target);
+
+        float top = target * (_rowHeight + 1f);
+        if (_scroll) Origami.ScrollIntoView($"{_id}_sv", top, top + _rowHeight);
+    }
+
+    /// <summary>The row the keys move from: the last one pressed or moved to while it is still selected, else the first selected row.</summary>
+    private int CurrentRow(ElementHandle owner, int count)
+    {
+        if (_isSelected == null) return _selected >= 0 && _selected < count ? _selected : -1;
+
+        int cursor = _paper.GetElementStorage(owner, CursorKey, -1);
+        if (cursor >= count) cursor = -1;
+        if (cursor >= 0 && _isSelected(cursor)) return cursor;
+        for (int i = 0; i < count; i++)
+            if (_isSelected(i)) return i;
+        return cursor;
+    }
+
     /// <summary>Render the table.</summary>
     public void Show()
     {
@@ -238,6 +285,9 @@ public sealed class TableBuilder
 
         using (container.Enter())
         {
+            var owner = _paper.CurrentParent;
+            HandleKeys(owner, _cellContent != null ? (_rowCount ?? 0) : _rows.Count);
+
             // ── Header row ──
             var headRow = _paper.Row($"{_id}_head")
                 .Width(UnitValue.Stretch()).Height(hHead)
@@ -370,6 +420,12 @@ public sealed class TableBuilder
                     .BackgroundColor(selected ? accDim : Color.Transparent)
                     .Hovered.BackgroundColor(selected ? accDim : hover).End();
                 if (_bordered && isLast) rowBuilder.RoundedBottom(m.ContainerRounding);
+
+                rowBuilder.OnPress(idx, (ci, _) =>
+                {
+                    KeyNav.MarkPressed(_paper, owner);
+                    _paper.SetElementStorage(owner, CursorKey, ci);
+                });
 
                 if (_multiSelect && _onSelectPreview != null)
                     rowBuilder.OnPress(idx, (ci, e) =>

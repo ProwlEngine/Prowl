@@ -52,6 +52,9 @@ public sealed class ScrollViewBuilder
     // Delta-based scroll nudges (added to current scroll, consumed each frame)
     internal static readonly Dictionary<string, Float2> s_pendingScrollBy = new();
 
+    // Spans of content (top, bottom) to bring into view, keyed by scroll view id.
+    internal static readonly Dictionary<string, Float2> s_pendingReveal = new();
+
     private readonly Paper _paper;
     private readonly string _id;
     private readonly float _width;
@@ -234,6 +237,14 @@ public sealed class ScrollViewBuilder
                 float curY = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
                 _paper.SetElementStorage(outerHandle, "scrollX", MathF.Max(0f, curX + (float)delta.X));
                 _paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0f, curY + (float)delta.Y));
+            }
+
+            if (s_pendingReveal.Remove(_id, out var span))
+            {
+                float curY = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
+                float viewH = _height - _padTop - _padBottom;
+                if (span.X < curY) _paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0f, (float)span.X));
+                else if (span.Y > curY + viewH) _paper.SetElementStorage(outerHandle, "scrollY", (float)span.Y - viewH);
             }
 
             float scrollX = _paper.GetElementStorage(outerHandle, "scrollX", 0f);

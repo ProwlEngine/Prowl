@@ -130,11 +130,13 @@ public sealed class ContextBuilder
         {
             var ink = theme.Ink;
 
+            bool keyOn = Enabled && ContextMenu.IsKeyHighlighted(index);
             var row = paper.Row($"{id}_i_{index}")
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
                 .Rounded(theme.Metrics.Rounding)
+                .BackgroundColor(keyOn ? theme.Hover : Color.Transparent)
                 .Hovered.BackgroundColor(Enabled ? theme.Hover : Color.Transparent).End();
 
             if (Enabled)
@@ -142,7 +144,7 @@ public sealed class ContextBuilder
 
             using (row.Enter())
             {
-                bool hovered = Enabled && paper.IsParentHovered;
+                bool hovered = Enabled && (paper.IsParentHovered || keyOn);
                 Color txt = !Enabled ? ink.C100                     // t-dim (disabled)
                           : Danger ? theme.Red.C500                // .danger
                           : hovered ? ink.C500                      // hover = t-hi
@@ -254,11 +256,13 @@ public sealed class ContextBuilder
         {
             var ink = theme.Ink;
 
+            bool keyOn = Enabled && ContextMenu.IsKeyHighlighted(index);
             var row = paper.Row($"{id}_i_{index}")
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
                 .Rounded(theme.Metrics.Rounding)
+                .BackgroundColor(keyOn ? theme.Hover : Color.Transparent)
                 .Hovered.BackgroundColor(Enabled ? theme.Hover : Color.Transparent).End();
 
             if (Enabled)
@@ -266,7 +270,7 @@ public sealed class ContextBuilder
 
             using (row.Enter())
             {
-                bool hovered = Enabled && paper.IsParentHovered;
+                bool hovered = Enabled && (paper.IsParentHovered || keyOn);
                 Color txt = !Enabled ? ink.C100 : hovered ? ink.C500 : ink.C400;
                 bool on = GetValue?.Invoke() ?? false;
 
@@ -333,14 +337,15 @@ public sealed class ContextBuilder
 
             // Check if the submenu should remain open for a short time, even if not hovering.
             var submenuState = paper.GetElementStorage(paper.CurrentParent, $"{id}_submenu", new OpenSubmenuState {  Index = -1 });
-            bool submenuIsOpen = submenuState.Index == index && submenuState.RemainingTime >= 0;
+            bool submenuIsOpen = submenuState.Index == index && submenuState.RemainingTime >= 0 || ContextMenu.IsKeyOpened(index);
+            bool keyOn = ContextMenu.IsKeyHighlighted(index);
 
             using (paper.Row($"{id}_i_{index}")
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
                 .Rounded(theme.Metrics.Rounding)
-                .BackgroundColor(submenuIsOpen ? theme.Hover : Color.Transparent)
+                .BackgroundColor(submenuIsOpen || keyOn ? theme.Hover : Color.Transparent)
                 .Hovered.BackgroundColor(theme.Hover).End()
                 // Remember this row's on-screen rect so next frame the submenu can decide which side to
                 // open on (this frame's layout isn't available yet at build time).
@@ -348,7 +353,7 @@ public sealed class ContextBuilder
                 .Enter())
             {
                 bool hovered = paper.IsParentHovered;
-                Color txt = hovered || submenuIsOpen ? ink.C500 : ink.C400;
+                Color txt = hovered || submenuIsOpen || keyOn ? ink.C500 : ink.C400;
 
                 if (!string.IsNullOrEmpty(Icon))
                     paper.Box($"{id}_ico_{index}")
@@ -435,10 +440,83 @@ public static class ContextMenu
 
     public static bool IsOpen => _isOpen;
 
+    // Keyboard navigation. The path holds the highlighted item at each open menu depth, so a submenu
+    // is open by keyboard while the path runs deeper than its parent menu.
+    private static readonly List<int> s_keyPath = new();
+    private static string s_keyRoot = "";
+    private static int s_depth;
+    private static bool s_keysOn, s_keyHandled;
+
+    /// <summary>Whether the open menu used a key press this frame.</summary>
+    internal static bool KeyHandled => s_keyHandled;
+
+    /// <summary>Drops the keyboard highlight, for when a different menu takes the place of the open one.</summary>
+    internal static void ResetKeys() => s_keyPath.Clear();
+
+    /// <summary>Whether the keyboard highlight is on this item of the menu being drawn.</summary>
+    internal static bool IsKeyHighlighted(int index) =>
+        s_keysOn && s_depth >= 1 && s_depth <= s_keyPath.Count && s_keyPath[s_depth - 1] == index;
+
+    /// <summary>Whether the keyboard opened the submenu of this item of the menu being drawn.</summary>
+    internal static bool IsKeyOpened(int index) => IsKeyHighlighted(index) && s_keyPath.Count > s_depth;
+
+    private static bool IsNavigable(IContextItem item) =>
+        item is ContextBuilder.CtxItem { Enabled: true } or ContextBuilder.CtxToggle { Enabled: true } or ContextBuilder.CtxSubmenu;
+
+    /// <summary>Up and Down move the highlight, Right or Enter opens a submenu, Left closes it and Enter picks an item.</summary>
+    private static void HandleKeys(Paper paper, ContextBuilder builder, int depth, Action close)
+    {
+        var items = builder.Items;
+        if (depth < s_keyPath.Count && s_keyPath[depth] >= items.Count)
+            s_keyPath.RemoveRange(depth, s_keyPath.Count - depth);
+        int current = depth < s_keyPath.Count ? s_keyPath[depth] : -1;
+
+        int step = KeyNav.Step(paper);
+        if (step != 0)
+        {
+            int next = KeyNav.Next(current, items.Count, step, i => IsNavigable(items[i]));
+            if (next < 0) return;
+            if (current < 0) s_keyPath.Add(next);
+            else s_keyPath[depth] = next;
+            s_keyHandled = true;
+            return;
+        }
+        if (current < 0) return;
+
+        if (depth > 0 && paper.IsKeyPressed(PaperKey.Left))
+        {
+            s_keyPath.RemoveAt(depth);
+            s_keyHandled = true;
+            return;
+        }
+
+        bool enter = paper.IsKeyPressed(PaperKey.Enter) || paper.IsKeyPressed(PaperKey.KeypadEnter) || paper.IsKeyPressed(PaperKey.Space);
+        switch (items[current])
+        {
+            case ContextBuilder.CtxSubmenu { Sub: not null } submenu when enter || paper.IsKeyPressed(PaperKey.Right):
+                var subItems = submenu.Sub.Items;
+                int first = KeyNav.Edge(subItems.Count, last: false, i => IsNavigable(subItems[i]));
+                if (first < 0) break;
+                s_keyPath.Add(first);
+                s_keyHandled = true;
+                break;
+            case ContextBuilder.CtxItem item when enter:
+                s_keyHandled = true;
+                item.OnClick?.Invoke();
+                close();
+                break;
+            case ContextBuilder.CtxToggle toggle when enter:
+                s_keyHandled = true;
+                toggle.OnClick?.Invoke();
+                break;
+        }
+    }
+
     /// <summary>Open a context menu at the given screen position.</summary>
     public static void Show(float x, float y, Action<ContextBuilder> build)
     {
         Close(); // close any existing
+        s_keyPath.Clear();
         _openedThisDraw = true; // an explicit open counts as this frame's open (dedups with RightClickMenu)
         _isOpen = true;
         _x = x;
@@ -544,7 +622,7 @@ public static class ContextMenu
             .DropShadow(0, 14, 40, 0, theme.Shadow);
 
         using (menuBox.Enter())
-            DrawMenuBody(paper, id, builder, font, theme, static () => { }, Layer.Topmost + 500);
+            DrawMenuBody(paper, id, builder, font, theme, static () => { }, Layer.Topmost + 500, keys: false);
     }
 
     /// <summary>
@@ -563,15 +641,39 @@ public static class ContextMenu
 
     /// <summary>Draw the padded item column shared by the popup and inline previews.</summary>
     private static void DrawMenuBody(Paper paper, string id, ContextBuilder builder,
-        Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
+        Scribe.FontFile font, OrigamiTheme theme, Action close, int layer, bool keys = true)
     {
-        using (paper.Column($"{id}_col")
-            .Padding(MenuPad, MenuPad, MenuPad, MenuPad)
-            .Height(UnitValue.Auto)
-            .Enter())
+        int depth = s_depth++;
+        if (depth == 0)
         {
-            for (int i = 0; i < builder.Items.Count; i++)
-                builder.Items[i].Draw(paper, id, i, font, theme, close, layer);
+            // The context menu is modal, so a menu bar's dropdown left open beneath it gets no keys.
+            s_keysOn = keys && (!_isOpen || id == "octx") && !paper.WantsCaptureKeyboard;
+            if (s_keysOn)
+            {
+                s_keyHandled = false;
+                if (s_keyRoot != id || paper.IsPointerMoving) s_keyPath.Clear();
+                s_keyRoot = id;
+            }
+        }
+
+        // Keys go to the deepest menu the keyboard has open.
+        if (s_keysOn && !s_keyHandled && s_keyPath.Count <= depth + 1 && s_keyPath.Count >= depth)
+            HandleKeys(paper, builder, depth, close);
+
+        try
+        {
+            using (paper.Column($"{id}_col")
+                .Padding(MenuPad, MenuPad, MenuPad, MenuPad)
+                .Height(UnitValue.Auto)
+                .Enter())
+            {
+                for (int i = 0; i < builder.Items.Count; i++)
+                    builder.Items[i].Draw(paper, id, i, font, theme, close, layer);
+            }
+        }
+        finally
+        {
+            s_depth--;
         }
     }
 

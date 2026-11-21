@@ -106,6 +106,7 @@ public sealed class TabsBuilder
 
         using (_paper.Row(_id).Width(_width ?? UnitValue.Auto).Height(th).Enter())
         {
+            HandleKeys();
             _paper.Box($"{_id}_bb").PositionType(PositionType.SelfDirected)
                 .Left(0).Top(th - 1).Width(UnitValue.Stretch()).Height(1)
                 .IsNotInteractable().BackgroundColor(_theme.Neutral.C200);
@@ -126,9 +127,23 @@ public sealed class TabsBuilder
             .Rounded(MathF.Min(th * 0.5f, _theme.Metrics.Rounding * 2.5f)).BackgroundColor(_theme.Glass) // glass-in track
             .BorderWidth(1).BorderColor(_theme.Neutral.C200).Padding(3, 3, 3, 3).Enter())
         {
+            HandleKeys();
             for (int i = 0; i < _items.Count; i++)
                 Tab(i, th - 6f, padX, fs, accent, font, pills: true);
         }
+    }
+
+    /// <summary>Left, Right, Home and End switch tabs while the focus is on the strip.</summary>
+    private void HandleKeys()
+    {
+        if (!KeyNav.FocusWithin(_paper, _paper.CurrentParent)) return;
+
+        int step = KeyNav.Step(_paper, vertical: false, horizontal: true);
+        int target = _paper.IsKeyPressed(PaperKey.Home) ? 0
+            : _paper.IsKeyPressed(PaperKey.End) ? _items.Count - 1
+            : step != 0 ? KeyNav.Next(_selectedIndex, _items.Count, step)
+            : _selectedIndex;
+        if (target >= 0 && target != _selectedIndex) _onSelect(target);
     }
 
     // ── Shared tab ────────────────────────────────────────────────────

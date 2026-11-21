@@ -369,6 +369,73 @@ public class TreeTests
         Assert.DoesNotContain($"d{depth - 1}", drawn.Keys);
     }
 
+    [Fact]
+    public void ArrowKeys_MoveTheSelectionFromTheClickedRow()
+    {
+        using var scene = new TreeScene(Flat(20));
+        scene.Frame();
+        Assert.Equal(2, scene.Click(RowCentre(scene, 2)));
+
+        Assert.Equal(3, scene.Key(PaperKey.Down));
+        Assert.Equal(4, scene.Key(PaperKey.Down));
+        Assert.Equal(3, scene.Key(PaperKey.Up));
+        Assert.Equal(19, scene.Key(PaperKey.End));
+        Assert.Equal(0, scene.Key(PaperKey.Home));
+        Assert.Null(scene.Key(PaperKey.Up));
+    }
+
+    [Fact]
+    public void ArrowKeys_DoNothingBeforeTheTreeIsClicked()
+    {
+        using var scene = new TreeScene(Flat(20));
+        scene.Frame();
+
+        Assert.Null(scene.Key(PaperKey.Down));
+    }
+
+    [Fact]
+    public void LeftAndRight_CollapseExpandAndStepBetweenParentAndChild()
+    {
+        var nodes = new List<TreeNode>
+        {
+            Node("a", 0, hasChildren: true),
+            Node("a1", 1),
+            Node("a2", 1),
+            Node("b", 0),
+        };
+        using var scene = new TreeScene(nodes);
+        scene.Frame();
+        scene.Click(RowCentre(scene, 0));
+
+        Assert.Null(scene.Key(PaperKey.Right));
+        scene.Settle();
+        Assert.True(scene.ExpandState["a"]);
+
+        Assert.Equal(1, scene.Key(PaperKey.Right));
+        Assert.Equal(2, scene.Key(PaperKey.Down));
+        Assert.Equal(0, scene.Key(PaperKey.Left));
+
+        Assert.Null(scene.Key(PaperKey.Left));
+        scene.Settle();
+        Assert.False(scene.ExpandState["a"]);
+        Assert.Equal(3, scene.Key(PaperKey.Down));
+    }
+
+    [Fact]
+    public void ArrowKeys_ScrollTheSelectionIntoView()
+    {
+        using var scene = new TreeScene(Flat(200));
+        scene.Frame();
+        scene.Click(RowCentre(scene, 0));
+
+        for (int i = 0; i < 40; i++) scene.Key(PaperKey.Down);
+        var drawn = scene.Settle();
+
+        Assert.InRange(drawn["n40"], 0f, TreeHeight - scene.RowHeight);
+    }
+
+    private static Float2 RowCentre(TreeScene scene, int row) => new(100, PadTop + (row + 0.5f) * scene.RowHeight);
+
     private static List<TreeNode> Flat(int count)
     {
         var nodes = new List<TreeNode>(count);
@@ -458,6 +525,17 @@ public class TreeTests
             _paper.SetPointerState(PaperMouseBtn.Left, (int)pos.X, (int)pos.Y, true, false);
             Frame();
             _paper.SetPointerState(PaperMouseBtn.Left, (int)pos.X, (int)pos.Y, false, false);
+            Frame();
+            return _clicked;
+        }
+
+        /// <summary>Press and release a key. Returns the row the tree selected, if any.</summary>
+        public int? Key(PaperKey key)
+        {
+            _clicked = null;
+            _paper.SetKeyState(key, true);
+            Frame();
+            _paper.SetKeyState(key, false);
             Frame();
             return _clicked;
         }

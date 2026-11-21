@@ -372,6 +372,7 @@ public sealed class TreeBuilder
                     // Pass 1: resolve every reachable node's expand state and measure its subtree.
                     // Cheap - no elements are built.
                     ResolveAll();
+                    HandleKeys(_paper.CurrentParent);
 
                     // Pass 2: build only the rows near the viewport. The content starts padTop below
                     // the scroll view's top edge, and what shows is clipped by the view's full height
@@ -392,6 +393,7 @@ public sealed class TreeBuilder
 
     // Valid only while Show() is building the scroll content.
     private ElementHandle _stateHandle;
+    private ElementHandle _content;
     private NodeState[] _states = null!;
 
     /// <summary>Per-node state resolved in the first pass of <see cref="Show"/>.</summary>
@@ -412,6 +414,88 @@ public sealed class TreeBuilder
         public readonly bool IsOpen => !Expandable || (Expanded && Anim >= 1f);
         /// <summary>Mid expand/collapse: the children are shown in a wrapper that animates their height.</summary>
         public readonly bool IsAnimating => !IsCollapsed && !IsOpen;
+    }
+
+    private const string CursorKey = "tree:cursor";
+
+    /// <summary>Arrow key navigation, live while the tree's content holds the keyboard focus.</summary>
+    private void HandleKeys(ElementHandle content)
+    {
+        var nodes = _nodes!;
+
+        _content = content;
+        if (!KeyNav.TakeFocus(_paper, content)) return;
+
+        int move = _paper.IsKeyPressedOrRepeating(PaperKey.Down) ? 1 : _paper.IsKeyPressedOrRepeating(PaperKey.Up) ? -1 : 0;
+        bool home = _paper.IsKeyPressed(PaperKey.Home), end = _paper.IsKeyPressed(PaperKey.End);
+        bool left = _paper.IsKeyPressedOrRepeating(PaperKey.Left), right = _paper.IsKeyPressedOrRepeating(PaperKey.Right);
+        if (move == 0 && !home && !end && !left && !right) return;
+
+        var visible = new List<int>();
+        for (int i = 0; i < nodes.Count; i = _states[i].Expandable && !_states[i].Expanded ? _states[i].End : i + 1)
+            if (!nodes[i].Disabled) visible.Add(i);
+        if (visible.Count == 0) return;
+
+        int current = CurrentRow(visible);
+        int target = current;
+        if (home) target = 0;
+        else if (end) target = visible.Count - 1;
+        else if (move != 0) target = current < 0 ? (move > 0 ? 0 : visible.Count - 1) : Math.Clamp(current + move, 0, visible.Count - 1);
+        else if (current >= 0)
+        {
+            var node = nodes[visible[current]];
+            NodeState st = _states[visible[current]];
+            if (right)
+            {
+                if (st.Expandable && !st.Expanded) SetExpanded(node, true);
+                else if (current + 1 < visible.Count && nodes[visible[current + 1]].Depth > node.Depth) target = current + 1;
+            }
+            else if (st.Expandable && st.Expanded) SetExpanded(node, false);
+            else
+            {
+                for (int p = current - 1; p >= 0; p--)
+                    if (nodes[visible[p]].Depth < node.Depth) { target = p; break; }
+            }
+        }
+        if (target < 0 || target == current) return;
+
+        int index = visible[target];
+        var evt = new TreeNodeEvent(nodes[index], index);
+        _paper.SetElementStorage(_stateHandle, CursorKey, nodes[index].Id);
+        if (_multiSelect)
+        {
+            bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
+            _onSelectPreview?.Invoke(evt, false, shift);
+            _onSelectModified?.Invoke(evt, false, shift);
+        }
+        else _onSelect?.Invoke(evt);
+
+        Origami.ScrollIntoView($"{_id}_scroll", target * _rowHeight, (target + 1) * _rowHeight);
+    }
+
+    /// <summary>The row the keys move from: the last one pressed or moved to while it is still selected, else the first selected row.</summary>
+    private int CurrentRow(List<int> visible)
+    {
+        string cursor = _paper.GetElementStorage(_stateHandle, CursorKey, "");
+        int cursorRow = -1, selectedRow = -1;
+        for (int v = 0; v < visible.Count; v++)
+        {
+            var node = _nodes![visible[v]];
+            bool selected = _isSelected?.Invoke(node) ?? false;
+            if (node.Id == cursor)
+            {
+                if (selected || _isSelected == null) return v;
+                cursorRow = v;
+            }
+            if (selected && selectedRow < 0) selectedRow = v;
+        }
+        return selectedRow >= 0 ? selectedRow : cursorRow;
+    }
+
+    private void SetExpanded(TreeNode node, bool expanded)
+    {
+        _paper.SetElementStorage(_stateHandle, node.Id, expanded);
+        _onExpandChanged?.Invoke(node, expanded);
     }
 
     /// <summary>
@@ -658,6 +742,13 @@ public sealed class TreeBuilder
         // Click handling
         if (!disabled)
         {
+            var content = _content;
+            row.OnPress(_ =>
+            {
+                KeyNav.MarkPressed(_paper, content);
+                _paper.SetElementStorage(stateHandle, CursorKey, capturedNode.Id);
+            });
+
             if (_multiSelect && _onSelectPreview != null)
             {
                 row.OnPress(e =>

@@ -32,6 +32,7 @@ public sealed class MenuBarBuilder
     private sealed class State
     {
         public int Open = -1;
+        public int KeysFor = -1;
         public readonly float[] AnchorX = new float[MaxMenus];
         public readonly float[] AnchorY = new float[MaxMenus];
     }
@@ -100,9 +101,21 @@ public sealed class MenuBarBuilder
                 .Layer(Layer.Topmost).BackgroundColor(Color.FromArgb(0, 0, 0, 0))
                 .StopEventPropagation().OnClick(0, (_, _) => state.Open = -1);
 
+            if (state.KeysFor != state.Open) ContextMenu.ResetKeys();
+            state.KeysFor = state.Open;
+
             ContextMenu.Panel(_paper, $"{_id}_drop", state.AnchorX[state.Open], state.AnchorY[state.Open],
                 Layer.Topmost + 3, () => state.Open = -1, _menus[state.Open].Build);
+
+            // Left and Right the dropdown had no use for step to the neighbouring menu.
+            if (state.Open >= 0 && !ContextMenu.KeyHandled && !ContextMenu.IsOpen && !_paper.WantsCaptureKeyboard)
+            {
+                int step = KeyNav.Step(_paper, vertical: false, horizontal: true);
+                if (step != 0) state.Open = (state.Open + step + _menus.Count) % _menus.Count;
+                else if (_paper.IsKeyPressed(PaperKey.Escape)) state.Open = -1;
+            }
         }
+        else state.KeysFor = -1;
     }
 
     private void DrawItem(int index, ElementHandle parentH, State state, Scribe.FontFile font, OrigamiRamp ink)

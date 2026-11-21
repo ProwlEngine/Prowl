@@ -98,6 +98,22 @@ public sealed class RadioGroupBuilder<T>
     public RadioGroupBuilder<T> Error(string? message) { _error = message; return this; }
     public RadioGroupBuilder<T> HelperText(string? text) { _helperText = text; return this; }
 
+    /// <summary>The arrow keys pick the previous or next enabled item while the focus is in the group.</summary>
+    private void HandleKeys()
+    {
+        if (_disabled || _readOnly || !KeyNav.FocusWithin(_paper, _paper.CurrentParent)) return;
+
+        int step = KeyNav.Step(_paper, vertical: true, horizontal: true);
+        if (step == 0) return;
+
+        int current = -1;
+        for (int i = 0; i < _items.Count && current < 0; i++)
+            if (_comparer.Equals(_items[i], _value)) current = i;
+
+        int target = KeyNav.Next(current, _items.Count, step, i => _isItemEnabled?.Invoke(_items[i]) ?? true);
+        if (target >= 0 && target != current) _setter(_items[target]);
+    }
+
     // ── Terminator ─────────────────────────────────────────────────────
 
     public void Show()
@@ -117,6 +133,8 @@ public sealed class RadioGroupBuilder<T>
 
             using (container.Enter())
             {
+                HandleKeys();
+
                 for (int i = 0; i < _items.Count; i++)
                 {
                     var item = _items[i];
