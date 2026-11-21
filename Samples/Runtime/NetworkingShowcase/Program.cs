@@ -296,14 +296,15 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
 
     /// <summary>
     ///     A networked object of the level. Every window registers how it is built, under its name, and the host
-    ///     spawns it: it belongs to the host until the host hands it out.
+    ///     spawns it: it belongs to the host until the host hands it out, and goes back to the host when whoever
+    ///     has it leaves.
     /// </summary>
     private void Networked(string name, Func<GameObject> build)
     {
         Networking.RegisterFactory(name, (in NetworkSpawn _) => build());
         if (!IsClientWindow)
         {
-            Networking.SpawnFactory(name, Float3.Zero, Quaternion.Identity);
+            Networking.SpawnFactory(name, Float3.Zero, Quaternion.Identity, orphaned: NetworkOrphaned.ClearOwner);
         }
     }
 
