@@ -606,6 +606,46 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void AKeptObjectTheHostMadeARootIsARootHereToo()
+    {
+        // The host's side: a rig holding the networked object, which the host later takes out of it.
+        GameObject hostRig = CreateGameObject("Rig"), kept = CreateGameObject("Kept");
+        kept.AddComponent<NetTestComponent>();
+        kept.Network.Networked = true;
+        kept.SetParent(hostRig, false);
+        byte[] under = RunSpawn(kept);
+        kept.SetParent(null!, false);
+        byte[] asRoot = RunSpawn(kept);
+
+        // This peer has the same rig, kept across loads.
+        SceneInstance scene = CreateScene();
+        GameObject rig = CreateGameObject("Rig");
+        rig.SetIdentifier(hostRig.Identifier);
+        scene.Add(rig);
+        rig.Persistent = true;
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        SendJoin(host, CodeBuiltScene(1), under);
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
+            GameObject copy = Find(SceneInstance.Main, kept.Identifier);
+            Assert.Same(rig, copy.Parent);
+
+            host.JoinSpawns.Clear();
+            host.JoinSpawns.Add(asRoot);
+            host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Scene, CodeBuiltScene(2));
+            Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
+            Assert.Same(copy, Find(SceneInstance.Main, kept.Identifier));
+            Assert.True(copy.Parent.IsNotValid());
+            Assert.True(copy.Network.Active);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
     public void AnObjectKeptAcrossLoadsIsNotDuplicatedWhenTheHostChangesScene()
     {
         AssetBackend? previous = AssetDatabase.Backend;

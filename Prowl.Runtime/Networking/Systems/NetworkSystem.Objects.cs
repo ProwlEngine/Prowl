@@ -592,9 +592,17 @@ internal sealed partial class NetworkSystem
 
         // What this peer controlled all along is its own to say: the host's copy of it may be older.
         bool mine = Session?.LocalPeer is { } local && entry.Owner == local.Id && message.OwnerId == local.Id;
-        if (FindByIdentifier(message.ParentId) is GameObject parent && go.Parent != parent)
+        if (FindByIdentifier(message.ParentId) is GameObject parent)
         {
-            go.SetParent(parent, false);
+            if (go.Parent != parent)
+            {
+                go.SetParent(parent, false);
+            }
+        }
+        else if (message.ParentId == Guid.Empty && go.Parent.IsValid())
+        {
+            // The host has it as a root now. It stays in the section it was in.
+            go.SetParent(null!, false);
         }
 
         if (!mine)
