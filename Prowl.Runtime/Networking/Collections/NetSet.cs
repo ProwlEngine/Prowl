@@ -167,7 +167,7 @@ public sealed class NetSet<T> : NetCollection, ISet<T>, IReadOnlySet<T>
 
     private protected override void ReadItems(ref NetReader reader)
     {
-        uint count = reader.ReadVarUInt32();
+        uint count = ItemCount(ref reader);
         _items.Clear();
         for (uint i = 0; i < count; i++)
         {

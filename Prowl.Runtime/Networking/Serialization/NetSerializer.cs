@@ -409,6 +409,9 @@ internal static class NetSerializers
         }
     }
 
+    // The most items a sequence makes room for before any of them has been read.
+    private const int MaxPresized = 4096;
+
     private static int? ReadCount(ref NetReader r)
     {
         uint encoded = r.ReadVarUInt32();
@@ -441,6 +444,18 @@ internal static class NetSerializers
                 return null!;
             }
 
+            // Room is made as items arrive, so a count alone can't claim more memory than its message holds.
+            if (count > MaxPresized)
+            {
+                List<TElement> grown = new(MaxPresized);
+                for (int i = 0; i < count; i++)
+                {
+                    grown.Add(NetSerializer<TElement>.Read(ref r));
+                }
+
+                return grown.ToArray();
+            }
+
             TElement[] items = new TElement[count];
             for (int i = 0; i < count; i++)
             {
@@ -465,7 +480,7 @@ internal static class NetSerializers
                 return null!;
             }
 
-            List<TElement> items = new(count);
+            List<TElement> items = new(Math.Min(count, MaxPresized));
             for (int i = 0; i < count; i++)
             {
                 items.Add(NetSerializer<TElement>.Read(ref r));

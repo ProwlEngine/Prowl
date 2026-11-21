@@ -279,6 +279,18 @@ public abstract class NetCollection
     /// <summary>Reads one change written at <see cref="BeginChange" />, and applies it if <paramref name="apply" />.</summary>
     private protected abstract void ReadChange(ref NetReader reader, bool apply);
 
+    /// <summary>An item count from the wire. Every item takes at least a byte, so a longer count can only be malformed.</summary>
+    private protected static uint ItemCount(ref NetReader reader)
+    {
+        uint count = reader.ReadVarUInt32();
+        if (count > (uint)reader.Remaining)
+        {
+            throw new InvalidDataException($"A collection of {count} items is longer than its message.");
+        }
+
+        return count;
+    }
+
     /// <summary>Raises a <c>Changed</c> event: right away for a change made here, after the update for a received one.</summary>
     private protected void Notify<TChange>(Action<TChange>? handler, TChange change, bool received)
     {

@@ -174,7 +174,7 @@ public sealed class NetDictionary<TKey, TValue> : NetCollection, IDictionary<TKe
 
     private protected override void ReadItems(ref NetReader reader)
     {
-        uint count = reader.ReadVarUInt32();
+        uint count = ItemCount(ref reader);
         _items.Clear();
         for (uint i = 0; i < count; i++)
         {
