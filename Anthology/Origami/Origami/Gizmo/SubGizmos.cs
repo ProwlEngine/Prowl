@@ -366,7 +366,16 @@ public class ScaleSubGizmo : ISubGizmo
         this.focused = focused;
     }
 
+    // Scale only exists along the object's own axes, so its handles follow them whatever the gizmo's orientation
     public bool Pick(Ray ray, Float2 screenPos, out float t)
+    {
+        TransformGizmo.GizmoOrientation saved = _gizmo.Orientation;
+        _gizmo.Orientation = TransformGizmo.GizmoOrientation.Local;
+        try { return PickLocal(ray, screenPos, out t); }
+        finally { _gizmo.Orientation = saved; }
+    }
+
+    private bool PickLocal(Ray ray, Float2 screenPos, out float t)
     {
         if (_params.Mode == TransformGizmoMode.ScaleUniform)
         {
@@ -464,6 +473,14 @@ public class ScaleSubGizmo : ISubGizmo
     }
 
     public void Draw(Prowl.Quill.Canvas canvas)
+    {
+        TransformGizmo.GizmoOrientation saved = _gizmo.Orientation;
+        _gizmo.Orientation = TransformGizmo.GizmoOrientation.Local;
+        try { DrawLocal(canvas); }
+        finally { _gizmo.Orientation = saved; }
+    }
+
+    private void DrawLocal(Prowl.Quill.Canvas canvas)
     {
         if (_params.Mode == TransformGizmoMode.ScaleUniform)
         {
