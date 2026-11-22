@@ -317,19 +317,20 @@ public sealed class SceneRendering : IDisposable
     }
 
     private readonly WindZone?[] _windZones = new WindZone?[WindZone.kMaxShaderZones];
+    private readonly Graphite.Rendering.WindZoneDesc[] _windScratch = new Graphite.Rendering.WindZoneDesc[WindZone.kMaxShaderZones];
+    private Graphite.Rendering.WindZoneDesc[] _windSent = [];
 
-    // The wind zones nearest the main camera, or the scene's origin without one
+    // The wind zones nearest the main camera, or the scene's origin without one, the same array while they hold still
     private Graphite.Rendering.WindZoneDesc[] WindZones()
     {
         Camera? camera = _scene.MainCamera;
         Float3 near = camera.IsValid() ? camera.Transform.Position : Float3.Zero;
         int count = WindZone.GetNearest(_scene, near, _windZones);
-        Graphite.Rendering.WindZoneDesc[] zones = new Graphite.Rendering.WindZoneDesc[count];
         for (int i = 0; i < count; i++)
         {
             WindZone zone = _windZones[i]!;
             Float3 centre = zone.Transform.Position;
-            zones[i] = new Graphite.Rendering.WindZoneDesc
+            _windScratch[i] = new Graphite.Rendering.WindZoneDesc
             {
                 Center = new Double3(centre.X, centre.Y, centre.Z),
                 Radius = zone.Radius,
@@ -339,7 +340,9 @@ public sealed class SceneRendering : IDisposable
                 PulseFrequency = zone.PulseFrequency,
             };
         }
-        return zones;
+        if (!_windScratch.AsSpan(0, count).SequenceEqual(_windSent))
+            _windSent = _windScratch.AsSpan(0, count).ToArray();
+        return _windSent;
     }
 
     /// <summary>Whether the scene draws a sky material, which a camera clearing to its sky shows.</summary>
