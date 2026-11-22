@@ -40,6 +40,8 @@ public enum DefaultModel
     Sphere,
     Cylinder,
     Plane,
+    Capsule,
+    Cone,
 }
 
 /// <summary>
@@ -49,6 +51,7 @@ public enum DefaultMaterial
 {
     Standard,
     Particle,
+    Line,
 }
 
 /// <summary>

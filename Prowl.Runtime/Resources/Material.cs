@@ -34,6 +34,9 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     /// <summary>Raw read of a built in material, called by <see cref="BuiltInAssets"/> on its first use.</summary>
     internal static Material ParseDefault(DefaultMaterial material)
     {
+        if (material == Prowl.Runtime.Resources.DefaultMaterial.Line)
+            return new Material(Shader.LoadDefault(DefaultShader.Line)) { Name = "Line" };
+
         string fileName = material switch
         {
             Prowl.Runtime.Resources.DefaultMaterial.Standard => "Standard.mat",

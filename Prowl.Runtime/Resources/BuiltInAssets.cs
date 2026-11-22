@@ -80,15 +80,7 @@ public static class BuiltInAssets
         foreach (DefaultModel m in Enum.GetValues<DefaultModel>())
         {
             DefaultModel model = m;
-            string fileName = model switch
-            {
-                DefaultModel.Cube => "Cube.obj",
-                DefaultModel.Sphere => "Sphere.obj",
-                DefaultModel.Cylinder => "Cylinder.obj",
-                DefaultModel.Plane => "Plane.obj",
-                _ => null
-            };
-            if (fileName == null) continue;
+            string fileName = DefaultModels.FileName(model);
 
             // The model itself, so the ID DefaultModels.Load stamps on it actually resolves. Only its
             // mesh was registered before, leaving every default model carrying a dangling AssetID.

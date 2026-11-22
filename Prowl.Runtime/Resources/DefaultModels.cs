@@ -16,17 +16,22 @@ namespace Prowl.Runtime.Resources;
 /// </summary>
 public static class DefaultModels
 {
+    /// <summary>The embedded file a default model is imported from.</summary>
+    public static string FileName(DefaultModel model) => model switch
+    {
+        DefaultModel.Cube => "Cube.obj",
+        DefaultModel.Sphere => "Sphere.obj",
+        DefaultModel.Cylinder => "Cylinder.obj",
+        DefaultModel.Plane => "Plane.obj",
+        DefaultModel.Capsule => "Capsule.obj",
+        DefaultModel.Cone => "Cone.obj",
+        _ => throw new ArgumentException($"Unknown default model: {model}")
+    };
+
     /// <summary>Loads a default embedded model (Cube, Sphere, etc.) as a prefab.</summary>
     public static PrefabAsset Load(DefaultModel model)
     {
-        string fileName = model switch
-        {
-            DefaultModel.Cube => "Cube.obj",
-            DefaultModel.Sphere => "Sphere.obj",
-            DefaultModel.Cylinder => "Cylinder.obj",
-            DefaultModel.Plane => "Plane.obj",
-            _ => throw new ArgumentException($"Unknown default model: {model}")
-        };
+        string fileName = FileName(model);
 
         string resourcePath = $"Assets/Defaults/{fileName}";
         using Stream stream = EmbeddedResources.GetStream(resourcePath);
