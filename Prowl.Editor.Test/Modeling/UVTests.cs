@@ -234,4 +234,75 @@ public class UVTests
         Assert.Equal(0, Alpha(32, 32));
         Assert.Equal(0, Alpha(4, 4));
     }
+
+    [Fact]
+    public void StitchingJoinsTheUVsOfTheFacesAcrossAnEdge()
+    {
+        GeometryData mesh = Grid(2, 1);
+        UVs.Reset(mesh, [.. mesh.Faces]);
+        GeometryData.Edge middle = mesh.FindEdge(mesh.Vertices[1], mesh.Vertices[4])!;
+        Assert.Equal(2, UVs.Islands(mesh, [.. mesh.Faces]).Count);
+
+        UVs.Stitch(mesh, [middle], [.. mesh.Faces]);
+
+        Assert.Single(UVs.Islands(mesh, [.. mesh.Faces]));
+    }
+
+    [Fact]
+    public void StraighteningAndDistributingLineThePointsUpEvenly()
+    {
+        GeometryData mesh = Grid(3, 1);
+        UVs.Unwrap(mesh, [.. mesh.Faces]);
+        List<GeometryData.Vertex> row = [mesh.Vertices[0], mesh.Vertices[1], mesh.Vertices[2], mesh.Vertices[3]];
+        List<GeometryData.Loop> corners = [.. mesh.Faces.SelectMany(Corners).Where(l => row.Contains(l.Vert))];
+        UVs.Transform(mesh, corners.Where(l => l.Vert == row[1]), uv => uv + new Float2(0.01f, 0.05f));
+
+        UVs.Straighten(mesh, corners);
+        UVs.Distribute(mesh, corners);
+
+        Float2 a = UVOf(corners.First(l => l.Vert == row[0])), d = UVOf(corners.First(l => l.Vert == row[3]));
+        for (int i = 0; i < 4; i++)
+        {
+            Float2 expected = a + (d - a) * (i / 3f);
+            Assert.All(corners.Where(l => l.Vert == row[i]), l => Assert.True(Float2.Distance(UVOf(l), expected) < 1e-4f, $"point {i}"));
+        }
+    }
+
+    [Fact]
+    public void RelaxingPullsAPointTowardItsNeighbours()
+    {
+        GeometryData mesh = Grid(2, 2);
+        UVs.Unwrap(mesh, [.. mesh.Faces]);
+        GeometryData.Vertex middle = mesh.Vertices[4];
+        List<GeometryData.Loop> at = [.. mesh.Faces.SelectMany(Corners).Where(l => l.Vert == middle)];
+        Float2 home = UVOf(at[0]);
+        UVs.Transform(mesh, at, uv => uv + new Float2(0.1f, 0f));
+
+        UVs.Relax(mesh, at, [.. mesh.Faces], 1f);
+
+        Assert.All(at, l => Assert.True(Float2.Distance(UVOf(l), home) < 0.02f));
+    }
+
+    [Fact]
+    public void OverlappingFacesAreFound()
+    {
+        GeometryData mesh = Grid(2, 1);
+        UVs.Reset(mesh, [.. mesh.Faces]);
+        Assert.Equal(2, UVs.OverlappingFaces([.. mesh.Faces]).Count);
+
+        UVs.Transform(mesh, [.. Corners(mesh.Faces[1])], uv => uv + new Float2(2f, 0f));
+        Assert.Empty(UVs.OverlappingFaces([.. mesh.Faces]));
+    }
+
+    [Fact]
+    public void ProjectingByAngleGivesACubeAnIslandPerSideWithoutOverlap()
+    {
+        GeometryData cube = Primitives.Make(PrimitiveKind.Cube);
+
+        UVs.ByAngle(cube, [.. cube.Faces], 60f);
+
+        Assert.Equal(6, UVs.Islands(cube, [.. cube.Faces]).Count);
+        Assert.Empty(UVs.OverlappingFaces([.. cube.Faces]));
+        Assert.All(cube.Faces, f => Assert.True(MathF.Abs(UVArea(f)) > 1e-3f));
+    }
 }

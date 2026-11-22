@@ -501,4 +501,224 @@ public static class UVs
             }
         return pixels;
     }
+
+    /// <summary>For each edge, brings the UVs of the other faces along it onto those of the first face, joining them.</summary>
+    public static void Stitch(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, IReadOnlyCollection<GeometryData.Face> faces)
+    {
+        var inSet = new HashSet<GeometryData.Face>(faces);
+        foreach (GeometryData.Edge edge in edges)
+        {
+            List<GeometryData.Face> around = [.. edge.NeighborFaces().Where(inSet.Contains)];
+            for (int i = 1; i < around.Count; i++)
+                foreach (GeometryData.Vertex end in (GeometryData.Vertex[])[edge.Vert1, edge.Vert2])
+                    if (CornerAt(around[0], end) is { } keep && CornerAt(around[i], end) is { } moved)
+                    {
+                        Float2 from = Get(moved), to = Get(keep);
+                        foreach (GeometryData.Loop corner in Corners(around[i]))
+                            if (corner.Vert == end) Set(corner, to);
+                        // Every corner of that point on the moved face's island goes with it
+                        foreach (GeometryData.Face face in faces)
+                            if (face != around[0] && CornerAt(face, end) is { } other && Float2.Distance(Get(other), from) <= Same) Set(other, to);
+                    }
+        }
+        mesh.MarkChanged();
+    }
+
+    // The distinct UV points of the corners, each with the corners sitting on it
+    private static List<(Float2 UV, List<GeometryData.Loop> Corners)> Points(IEnumerable<GeometryData.Loop> corners)
+    {
+        var points = new List<(Float2, List<GeometryData.Loop>)>();
+        foreach (GeometryData.Loop corner in corners)
+        {
+            Float2 uv = Get(corner);
+            int found = points.FindIndex(p => p.Item2[0].Vert == corner.Vert && Float2.Distance(p.Item1, uv) <= 1e-3f);
+            if (found >= 0) points[found].Item2.Add(corner);
+            else points.Add((uv, [corner]));
+        }
+        return points;
+    }
+
+    // The two points furthest apart, which straighten and distribute keep where they are
+    private static (Float2 A, Float2 B) Ends(List<(Float2 UV, List<GeometryData.Loop> Corners)> points)
+    {
+        (Float2 a, Float2 b) = (points[0].UV, points[0].UV);
+        float best = -1f;
+        foreach ((Float2 p, _) in points)
+            foreach ((Float2 q, _) in points)
+            {
+                float d = Float2.Distance(p, q);
+                if (d <= best) continue;
+                best = d;
+                (a, b) = (p, q);
+            }
+        return (a, b);
+    }
+
+    /// <summary>Puts the UV points on the line through the two furthest apart, each moved straight onto it.</summary>
+    public static void Straighten(GeometryData mesh, IEnumerable<GeometryData.Loop> corners)
+    {
+        var points = Points(corners);
+        if (points.Count < 3) return;
+        (Float2 a, Float2 b) = Ends(points);
+        Float2 line = b - a;
+        float length = Float2.Dot(line, line);
+        if (length < 1e-12f) return;
+        foreach ((Float2 uv, List<GeometryData.Loop> at) in points)
+        {
+            Float2 onto = a + line * (Float2.Dot(uv - a, line) / length);
+            foreach (GeometryData.Loop corner in at) Set(corner, onto);
+        }
+        mesh.MarkChanged();
+    }
+
+    /// <summary>Spaces the UV points evenly between the two furthest apart, keeping their order along that line.</summary>
+    public static void Distribute(GeometryData mesh, IEnumerable<GeometryData.Loop> corners)
+    {
+        var points = Points(corners);
+        if (points.Count < 3) return;
+        (Float2 a, Float2 b) = Ends(points);
+        Float2 line = b - a;
+        List<(Float2 UV, List<GeometryData.Loop> Corners)> ordered = [.. points.OrderBy(p => Float2.Dot(p.UV - a, line))];
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            Float2 to = a + line * ((float)i / (ordered.Count - 1));
+            foreach (GeometryData.Loop corner in ordered[i].Corners) Set(corner, to);
+        }
+        mesh.MarkChanged();
+    }
+
+    /// <summary>
+    /// Moves each UV point toward the middle of the UV points it shares an edge with on the faces, by the strength from
+    /// 0 to 1. Points on a border of the faces stay where they are.
+    /// </summary>
+    public static void Relax(GeometryData mesh, IEnumerable<GeometryData.Loop> corners, IReadOnlyCollection<GeometryData.Face> faces, float strength)
+    {
+        var inSet = new HashSet<GeometryData.Face>(faces);
+        var moves = new List<(List<GeometryData.Loop> Corners, Float2 To)>();
+        foreach ((Float2 uv, List<GeometryData.Loop> at) in Points(corners))
+        {
+            var neighbours = new List<Float2>();
+            bool border = false;
+            foreach (GeometryData.Loop corner in at)
+            {
+                neighbours.Add(Get(corner.Next!));
+                neighbours.Add(Get(corner.Prev!));
+                if (corner.Edge.NeighborFaces().Count(inSet.Contains) < 2 || corner.Prev!.Edge.NeighborFaces().Count(inSet.Contains) < 2) border = true;
+            }
+            if (border || neighbours.Count == 0) continue;
+            List<(Float2 UV, List<GeometryData.Loop> Corners)> distinct = Points(at.SelectMany(c => (GeometryData.Loop[])[c.Next!, c.Prev!]));
+            Float2 sum = Float2.Zero;
+            foreach ((Float2 p, _) in distinct) sum += p;
+            Float2 middle = sum / distinct.Count;
+            moves.Add((at, uv + (middle - uv) * Math.Clamp(strength, 0f, 1f)));
+        }
+        foreach ((List<GeometryData.Loop> at, Float2 to) in moves)
+            foreach (GeometryData.Loop corner in at) Set(corner, to);
+        mesh.MarkChanged();
+    }
+
+    /// <summary>The faces whose UVs overlap another face's, triangle against triangle.</summary>
+    public static HashSet<GeometryData.Face> OverlappingFaces(IReadOnlyCollection<GeometryData.Face> faces)
+    {
+        var triangles = new List<(GeometryData.Face Face, Float2 A, Float2 B, Float2 C, Float2 Min, Float2 Max)>();
+        foreach (GeometryData.Face face in faces)
+            foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in Triangles(face))
+            {
+                Float2 ua = Get(a), ub = Get(b), uc = Get(c);
+                triangles.Add((face, ua, ub, uc, Maths.Min(ua, Maths.Min(ub, uc)), Maths.Max(ua, Maths.Max(ub, uc))));
+            }
+        var overlapping = new HashSet<GeometryData.Face>();
+        for (int i = 0; i < triangles.Count; i++)
+            for (int j = i + 1; j < triangles.Count; j++)
+            {
+                var p = triangles[i];
+                var q = triangles[j];
+                if (p.Face == q.Face) continue;
+                if (p.Max.X <= q.Min.X || q.Max.X <= p.Min.X || p.Max.Y <= q.Min.Y || q.Max.Y <= p.Min.Y) continue;
+                if (!TrianglesOverlap(p.A, p.B, p.C, q.A, q.B, q.C)) continue;
+                overlapping.Add(p.Face);
+                overlapping.Add(q.Face);
+            }
+        return overlapping;
+    }
+
+    // Separating axis test on the triangles' edges, touching along an edge or corner not counting
+    private static bool TrianglesOverlap(Float2 a0, Float2 a1, Float2 a2, Float2 b0, Float2 b1, Float2 b2)
+    {
+        const float Touch = 1e-5f;
+        Float2[] a = [a0, a1, a2], b = [b0, b1, b2];
+        foreach (Float2[] shape in (Float2[][])[a, b])
+            for (int i = 0; i < 3; i++)
+            {
+                Float2 edge = shape[(i + 1) % 3] - shape[i];
+                var axis = new Float2(-edge.Y, edge.X);
+                float minA = float.MaxValue, maxA = float.MinValue, minB = float.MaxValue, maxB = float.MinValue;
+                foreach (Float2 p in a)
+                {
+                    float d = Float2.Dot(p, axis);
+                    minA = MathF.Min(minA, d);
+                    maxA = MathF.Max(maxA, d);
+                }
+                foreach (Float2 p in b)
+                {
+                    float d = Float2.Dot(p, axis);
+                    minB = MathF.Min(minB, d);
+                    maxB = MathF.Max(maxB, d);
+                }
+                float scale = MathF.Max(Float2.Length(axis), 1e-12f);
+                if (maxA - minB <= Touch * scale || maxB - minA <= Touch * scale) return false;
+            }
+        return true;
+    }
+
+    /// <summary>
+    /// Groups joined faces whose normals are within the angle of the group's first face, projects each group flat onto
+    /// the plane of its average normal, and packs the groups into the unit square.
+    /// </summary>
+    public static void ByAngle(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, float degrees)
+    {
+        EnsureUV(mesh);
+        var inSet = new HashSet<GeometryData.Face>(faces);
+        var done = new HashSet<GeometryData.Face>();
+        float limit = MathF.Cos(degrees * MathF.PI / 180f);
+        var corners = new List<List<GeometryData.Loop>>();
+        var layouts = new List<Double2[]>();
+        foreach (GeometryData.Face start in faces)
+        {
+            if (!done.Add(start)) continue;
+            Float3 lead = start.Normal();
+            var group = new List<GeometryData.Face> { start };
+            for (int i = 0; i < group.Count; i++)
+                foreach (GeometryData.Loop corner in Corners(group[i]))
+                    foreach (GeometryData.Face other in corner.Edge.NeighborFaces())
+                        if (inSet.Contains(other) && !done.Contains(other) && Float3.Dot(other.Normal(), lead) >= limit)
+                        {
+                            done.Add(other);
+                            group.Add(other);
+                        }
+
+            Float3 sum = Float3.Zero;
+            foreach (GeometryData.Face face in group) sum += face.Normal() * Areas(face);
+            var frame = new PlaneFrame(Float3.LengthSquared(sum) > 1e-12f ? sum : lead, Float3.Zero);
+            var at = new List<GeometryData.Loop>();
+            foreach (GeometryData.Face face in group)
+                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in Triangles(face))
+                    at.AddRange([a, b, c]);
+            corners.Add(at);
+            layouts.Add([.. at.Select(c => { Float2 p = frame.To2D(c.Vert.Point); return new Double2(p.X, p.Y); })]);
+        }
+        ChartUnwrapper.Pack(layouts, 1.0 / 256.0);
+        for (int i = 0; i < corners.Count; i++)
+            for (int k = 0; k < corners[i].Count; k++)
+                Set(corners[i][k], new Float2((float)layouts[i][k].X, (float)layouts[i][k].Y));
+        mesh.MarkChanged();
+    }
+
+    private static float Areas(GeometryData.Face face)
+    {
+        float area = 0f;
+        foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in Triangles(face))
+            area += 0.5f * Float3.Length(Float3.Cross(b.Vert.Point - a.Vert.Point, c.Vert.Point - a.Vert.Point));
+        return area;
+    }
 }

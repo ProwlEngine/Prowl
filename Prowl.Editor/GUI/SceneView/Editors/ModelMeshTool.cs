@@ -490,6 +490,7 @@ public sealed class ModelMeshTool : SceneTool
         list.Add((Loc.Get("uv.project_cube"), () => Edit("Cube Projection", (mesh, s) => UVs.Cube(mesh, UVFaces(mesh, s)))));
         list.Add((Loc.Get("uv.project_cylinder"), () => Edit("Cylinder Projection", (mesh, s) => UVs.Cylinder(mesh, UVFaces(mesh, s)))));
         list.Add((Loc.Get("uv.project_sphere"), () => Edit("Sphere Projection", (mesh, s) => UVs.Sphere(mesh, UVFaces(mesh, s)))));
+        list.Add((Loc.Get("uv.project_angle"), () => Edit("Project By Angle", (mesh, s) => UVs.ByAngle(mesh, UVFaces(mesh, s), 66f))));
         list.Add((Loc.Get("uv.project_view"), () => Edit("Project From View", (mesh, s) =>
         {
             if (_edited.Find(m => ReferenceEquals(m.Mesh, mesh)) is not { } model) return;

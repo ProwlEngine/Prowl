@@ -37,7 +37,7 @@ public class UVEditorPanel : DockPanel
     public override string Icon => EditorIcons.BorderAll;
 
     private enum Backdrop { Texture, Checker, None }
-    private enum Stretch { Off, Angle, Area }
+    private enum Stretch { Off, Angle, Area, Islands, Overlap }
     private enum Gesture { None, Box, Move, Pan, Grab, Rotate, Scale }
 
     private const float PickRadius = 7f;
@@ -142,7 +142,7 @@ public class UVEditorPanel : DockPanel
             Origami.Dropdown(paper, "uv_backdrop", (int)_backdrop, i => _backdrop = (Backdrop)i,
                 [Loc.Get("uv.backdrop_texture"), Loc.Get("uv.backdrop_checker"), Loc.Get("uv.backdrop_none")]).Width(110).Show();
             Origami.Dropdown(paper, "uv_stretch", (int)_stretch, i => _stretch = (Stretch)i,
-                [Loc.Get("uv.stretch_off"), Loc.Get("uv.stretch_angle"), Loc.Get("uv.stretch_area")]).Width(110).Show();
+                [Loc.Get("uv.stretch_off"), Loc.Get("uv.stretch_angle"), Loc.Get("uv.stretch_area"), Loc.Get("uv.overlay_islands"), Loc.Get("uv.overlay_overlap")]).Width(120).Show();
             Origami.Button(paper, "uv_frame", Loc.Get("uv.frame"), Frame).Show();
             Origami.Button(paper, "uv_export", Loc.Get("uv.export_layout"), () => ExportLayout(tool, faces)).Show();
         }
@@ -161,6 +161,14 @@ public class UVEditorPanel : DockPanel
             Corners("uv_align_u", "uv.align_u", "Align UVs", (m, c) => UVs.Align(m, c, 0));
             Corners("uv_align_v", "uv.align_v", "Align UVs", (m, c) => UVs.Align(m, c, 1));
             Corners("uv_weld", "uv.weld", "Weld UVs", UVs.Weld);
+            Corners("uv_straighten", "uv.straighten", "Straighten UVs", (m, c) => UVs.Straighten(m, c));
+            Corners("uv_distribute", "uv.distribute", "Distribute UVs", (m, c) => UVs.Distribute(m, c));
+            Origami.Button(paper, "uv_relax", Loc.Get("uv.relax"), () => EditCornersOnFaces(tool, faces, "Relax UVs", (m, c, f) => UVs.Relax(m, c, f, 0.5f))).Show();
+            Origami.Button(paper, "uv_stitch", Loc.Get("uv.stitch"), () => EditCornersOnFaces(tool, faces, "Stitch UVs", (m, c, f) =>
+            {
+                var picked = new HashSet<GeometryData.Vertex>(c.Select(l => l.Vert));
+                UVs.Stitch(m, f.SelectMany(UVs.Corners).Select(l => l.Edge).Distinct().Where(e => picked.Contains(e.Vert1) && picked.Contains(e.Vert2)).ToList(), f);
+            })).Show();
             Corners("uv_pixels", "uv.snap_pixels", "Snap UVs To Pixels", (m, c) =>
             {
                 (int w, int h) = TextureSize(tool);
@@ -169,6 +177,7 @@ public class UVEditorPanel : DockPanel
             Faces("uv_unwrap", "uv.unwrap", "Unwrap", UVs.Unwrap);
             Faces("uv_pack", "uv.pack", "Pack UVs", (m, f) => UVs.Pack(m, f));
             Faces("uv_average", "uv.average_scale", "Average Island Scale", UVs.AverageIslandScale);
+            Faces("uv_by_angle", "uv.project_angle", "Project By Angle", (m, f) => UVs.ByAngle(m, f, 66f));
         }
     }
 
@@ -179,6 +188,17 @@ public class UVEditorPanel : DockPanel
         {
             List<GeometryData.Loop> mine = [.. corners.Where(c => c.Model == model).Select(c => c.Corner)];
             if (mine.Count > 0) run(mesh, mine);
+        });
+    }
+
+    private static void EditCornersOnFaces(ModelMeshTool tool, List<Shown> faces, string name, Action<GeometryData, List<GeometryData.Loop>, List<GeometryData.Face>> run)
+    {
+        List<(ModelObject Model, GeometryData.Loop Corner)> corners = SelectedCorners(tool, faces);
+        tool.EditMeshes(name, (model, mesh, _) =>
+        {
+            List<GeometryData.Loop> mine = [.. corners.Where(c => c.Model == model).Select(c => c.Corner)];
+            List<GeometryData.Face> shown = [.. faces.Where(f => f.Model == model).Select(f => f.Face)];
+            if (mine.Count > 0) run(mesh, mine, shown);
         });
     }
 
@@ -269,6 +289,19 @@ public class UVEditorPanel : DockPanel
         canvas.Stroke();
 
         float density = _stretch == Stretch.Area ? Density(faces) : 0f;
+        HashSet<GeometryData.Face> overlapping = _stretch == Stretch.Overlap ? UVs.OverlappingFaces([.. faces.Select(f => f.Face)]) : [];
+        var island = new Dictionary<GeometryData.Face, int>();
+        if (_stretch == Stretch.Islands)
+        {
+            int offset = 0;
+            foreach (IGrouping<ModelObject, Shown> group in faces.GroupBy(f => f.Model))
+            {
+                List<List<GeometryData.Face>> islands = UVs.Islands(group.Key.Mesh, [.. group.Select(f => f.Face)]);
+                for (int i = 0; i < islands.Count; i++)
+                    foreach (GeometryData.Face face in islands[i]) island[face] = offset + i;
+                offset += islands.Count;
+            }
+        }
         foreach (Shown shown in faces)
         {
             List<GeometryData.Loop> corners = [.. UVs.Corners(shown.Face)];
@@ -280,10 +313,20 @@ public class UVEditorPanel : DockPanel
                 else canvas.LineTo(at.X, at.Y);
             }
             canvas.ClosePath();
-            if (_stretch != Stretch.Off)
+            if (_stretch is Stretch.Angle or Stretch.Area)
             {
                 float amount = _stretch == Stretch.Angle ? AngleStretch(corners) : AreaStretch(shown.Face, density);
                 canvas.SetFillColor(StretchColor(amount));
+                canvas.Fill();
+            }
+            else if (_stretch == Stretch.Islands && island.TryGetValue(shown.Face, out int index))
+            {
+                canvas.SetFillColor(IslandColor(index));
+                canvas.Fill();
+            }
+            else if (_stretch == Stretch.Overlap && overlapping.Contains(shown.Face))
+            {
+                canvas.SetFillColor(Color32.FromArgb(140, 235, 60, 50));
                 canvas.Fill();
             }
             else if (shown.Face.NeighborVertices().TrueForAll(v => tool.SelectionOf(shown.Model).Vertices.Contains(v)))
@@ -311,6 +354,14 @@ public class UVEditorPanel : DockPanel
             canvas.RectFilled(MathF.Min(_from.X, now.X), MathF.Min(_from.Y, now.Y), MathF.Abs(now.X - _from.X), MathF.Abs(now.Y - _from.Y), EditorTheme.WithAlpha(EditorTheme.Accent, 40));
         }
         canvas.RestoreState();
+    }
+
+    private static Color32 IslandColor(int index)
+    {
+        float hue = index * 0.618034f % 1f;
+        float r = MathF.Abs(hue * 6f - 3f) - 1f, g = 2f - MathF.Abs(hue * 6f - 2f), b = 2f - MathF.Abs(hue * 6f - 4f);
+        static byte Channel(float c) => (byte)(Math.Clamp(c, 0f, 1f) * 160f + 60f);
+        return Color32.FromArgb(110, Channel(r), Channel(g), Channel(b));
     }
 
     private static Color32 StretchColor(float amount)
