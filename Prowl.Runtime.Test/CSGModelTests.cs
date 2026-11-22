@@ -520,4 +520,22 @@ public class CSGModelTests : RuntimeTestBase
 
         Assert.True(_model.LightmapUVsStale);
     }
+
+    [Fact]
+    public void ReorderingAFolderOfBrushesRebuildsTheModel()
+    {
+        CreateModel();
+        AddBrush(Float3.One * 2f, Float3.Zero);
+        GameObject folder = CreateGameObject("Folder");
+        folder.SetParent(_model.GameObject);
+        AddBrush(Float3.One, Float3.Zero, Operation.Subtractive, folder);
+        Update(_scene);
+        float carved = VolumeOf(_model.GeneratedMesh!);
+
+        folder.SiblingIndex = 0;
+        Update(_scene);
+
+        Assert.True(carved < 7.5f);
+        Assert.Equal(8f, VolumeOf(_model.GeneratedMesh!), 2);
+    }
 }

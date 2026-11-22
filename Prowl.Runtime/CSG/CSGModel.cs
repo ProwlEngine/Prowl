@@ -77,6 +77,7 @@ public sealed class CSGModel : Component
     [SerializeIgnore] private bool _dirty = true;
     [SerializeIgnore] private bool _rebuildFromScratch;
     [SerializeIgnore] private bool _built;
+    [SerializeIgnore] private long _structure;
 
     public int VertexCount { get; private set; }
     public int TriangleCount { get; private set; }
@@ -254,7 +255,6 @@ public sealed class CSGModel : Component
             if (brush.IsNotValid()) return true;
             if (brush.Version != link.Version) return true;
             if (brush.EnabledInHierarchy != link.Enabled) return true;
-            if (!ReferenceEquals(brush.GameObject.Parent, link.ParentObject) || brush.GameObject.SiblingIndex != link.Sibling) return true;
             Float4x4 world = brush.Transform.LocalToWorldMatrix;
             if (!world.Equals(link.WorldMatrix) && !(toModel * world).Equals(link.LocalMatrix)) return true;
         }
@@ -264,29 +264,32 @@ public sealed class CSGModel : Component
             if (group.IsNotValid()) return true;
             if (group.Version != link.Version) return true;
             if (group.EnabledInHierarchy != link.Enabled) return true;
-            if (!ReferenceEquals(group.GameObject.Parent, link.ParentObject) || group.GameObject.SiblingIndex != link.Sibling) return true;
         }
 
-        return CountSynced(GameObject) != _brushes.Count + _groups.Count;
+        return Structure(GameObject) != _structure;
     }
 
-    /// <summary>Counts what <see cref="Walk"/> would sync, so the two agree when nothing changed.</summary>
-    private static int CountSynced(GameObject parentObject)
+    /// <summary>
+    /// A hash of the hierarchy in the order <see cref="Walk"/> visits it, folders and pass through groups included, and of
+    /// which objects it would sync. Any reorder, reparent, added or removed brush changes it.
+    /// </summary>
+    private static long Structure(GameObject parentObject)
     {
-        int count = 0;
+        long hash = 17;
         foreach (GameObject child in parentObject.Children)
         {
             if (!child.EnabledInHierarchy || child.GetComponent<CSGModel>().IsValid()) continue;
 
             CSGGroup group = child.GetComponent<CSGGroup>();
-            if (group.IsValid() && group.EnabledInHierarchy && !group.PassThrough) count++;
-
             CSGBrush brush = child.GetComponent<CSGBrush>();
-            if (brush.IsValid() && brush.EnabledInHierarchy && brush.IsShapeValid) count++;
+            int synced = (group.IsValid() && group.EnabledInHierarchy && !group.PassThrough ? 1 : 0)
+                       | (brush.IsValid() && brush.EnabledInHierarchy && brush.IsShapeValid ? 2 : 0);
 
-            count += CountSynced(child);
+            hash = hash * 31 + child.InstanceID;
+            hash = hash * 31 + synced;
+            hash = hash * 31 + Structure(child);
         }
-        return count;
+        return hash;
     }
 
     private void SyncTree()
@@ -298,6 +301,7 @@ public sealed class CSGModel : Component
 
         Walk(GameObject, null);
         PruneRemoved();
+        _structure = Structure(GameObject);
     }
 
     /// <summary>Depth first, so parents exist before children and hierarchy order becomes CSG group order.</summary>
@@ -351,8 +355,6 @@ public sealed class CSGModel : Component
 
         link.Parent = parent;
         link.Index = index;
-        link.ParentObject = group.GameObject.Parent;
-        link.Sibling = group.GameObject.SiblingIndex;
         link.Version = group.Version;
         link.Enabled = group.EnabledInHierarchy;
     }
@@ -408,8 +410,6 @@ public sealed class CSGModel : Component
 
         link.Parent = parent;
         link.Index = index;
-        link.ParentObject = brush.GameObject.Parent;
-        link.Sibling = brush.GameObject.SiblingIndex;
         link.Version = brush.Version;
         link.Enabled = brush.EnabledInHierarchy;
         link.WorldMatrix = world;
@@ -659,15 +659,11 @@ public sealed class CSGModel : Component
         public int Version = -1;
         public bool Enabled = true;
         public Float4x4 WorldMatrix;
-        public GameObject? ParentObject;
-        public int Sibling = -1;
         public Float4x4 LocalMatrix;
     }
 
     private sealed class GroupLink
     {
-        public GameObject? ParentObject;
-        public int Sibling = -1;
         public CSGGroupHandle Handle = null!;
         public CSGGroup? Parent;
         public int Index = -1;
