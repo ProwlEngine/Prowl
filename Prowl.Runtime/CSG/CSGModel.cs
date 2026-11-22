@@ -210,6 +210,16 @@ public sealed class CSGModel : Component
 
     [SerializeIgnore] private readonly List<Material?> _previewMaterials = new();
 
+    /// <summary>Editor only: builds what the viewport draws again after <see cref="EditorHidden"/> changed. The model itself is not rebuilt.</summary>
+    internal void RefreshHidden()
+    {
+        if (_geometry == null) return;
+        Mesh? preview = BuildPreview(_geometry);
+        if (preview.IsNotValid() && _preview.IsNotValid()) return;
+        _preview = preview;
+        ApplyRenderer();
+    }
+
 
     /// <summary>Records when the geometry last changed so an automatic unwrap can wait for it to settle.</summary>
     private void TrackLightmapUVs()

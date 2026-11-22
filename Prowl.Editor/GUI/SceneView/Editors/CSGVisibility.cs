@@ -14,11 +14,11 @@ public static class CSGVisibility
 {
     private static readonly HashSet<CSGBrush> _hidden = new();
 
-    /// <summary>Hands the hidden set to the models and has them build what the viewport draws again.</summary>
+    /// <summary>Hands the hidden set to the models and has them redraw, without rebuilding them.</summary>
     private static void Changed()
     {
         CSGModel.EditorHidden = _hidden.Count > 0 ? IsHidden : null;
-        foreach (CSGModel model in Models()) model.SetDirty();
+        foreach (CSGModel model in Models()) model.RefreshHidden();
     }
 
     /// <summary>Models in the edit world and in whatever world is being edited now, a prefab or play world included.</summary>

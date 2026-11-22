@@ -489,9 +489,10 @@ public class CSGModelTests : RuntimeTestBase
 
         try
         {
+            int builds = _model.BuildCount;
             CSGModel.EditorHidden = b => ReferenceEquals(b, hidden);
-            _model.SetDirty();
-            Update(_scene);
+            _model.RefreshHidden();
+            Assert.Equal(builds, _model.BuildCount);
 
             MeshRenderer renderer = _model.GetComponent<MeshRenderer>();
             Assert.Equal(8f, VolumeOf(renderer.DrawOverride!), 2);
