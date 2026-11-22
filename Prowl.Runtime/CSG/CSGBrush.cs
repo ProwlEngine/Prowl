@@ -49,10 +49,10 @@ public struct SurfaceData
 public sealed class CSGBrush : Component
 {
     [SerializeField] private CSGOperation operation = CSGOperation.Additive;
-    [SerializeField] private CSGControlMesh controlMesh = CSGControlMesh.FromPlanes(GeometryGenerator.BoxPlanes(Float3.One))!;
+    [SerializeField, HideInInspector] private CSGControlMesh controlMesh = CSGControlMesh.FromPlanes(GeometryGenerator.BoxPlanes(Float3.One))!;
 
     /// <summary>Texture and flag data, one per face of <see cref="controlMesh"/>.</summary>
-    [SerializeField] private SurfaceData[] surfaces = [];
+    [SerializeField, HideInInspector] private SurfaceData[] surfaces = [];
 
     public CSGBrushFlags Flags;
 
