@@ -703,25 +703,6 @@ internal static class CSGSections
         _ => "csg.additive",
     };
 
-    /// <summary>The keys a mode answers to, one per line, with their current bindings.</summary>
-    internal static void DrawKeys(Paper paper, Scribe.FontFile font, string[] shortcuts)
-    {
-        EditorGUI.SectionHeader(paper, "csg_keys_h", Loc.Get("csg.keys"));
-        foreach (string id in shortcuts)
-        {
-            if (ShortcutManager.Find(id) is not { } shortcut) continue;
-            using (paper.Row($"csg_key_{id}").Height(16).Padding(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 0, 0).Enter())
-            {
-                paper.Box($"csg_key_{id}_n").Height(16)
-                    .Text(shortcut.DisplayName, font).TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-                paper.Box($"csg_key_{id}_k").Height(16)
-                    .Text(ShortcutManager.GetDisplayString(shortcut.Binding), font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
-            }
-        }
-    }
-
     private static void LabelledButton(Paper paper, Scribe.FontFile font, string id, string label,
                                        string tooltip, System.Action onClick)
     {
