@@ -871,7 +871,7 @@
   "csg.clip_back_tip": "Keeps what is in front of the plane and removes what is behind.",
   "csg.clip_split": "Both",
   "csg.clip_split_tip": "Keeps both halves, as two separate brushes.",
-  "csg.clip_help": "Drag a line across the brushes. Click again to tilt the plane, or press Enter to cut. Tab cycles which half survives.",
+  "csg.clip_help": "Click to start the cut, move and click again to end it. Click a surface to tilt the cut, then click the half to throw away, or press Enter. Tab swaps the kept side, Ctrl click picks the brushes to cut.",
   "csg.lightmapping": "Lightmapping",
   "csg.lightmap_uvs": "Lightmap UVs",
   "csg.lightmap_off_hint": "Off by default. Unwrapping is slow and CSG geometry changes constantly, so turn this on only for models you intend to bake.",

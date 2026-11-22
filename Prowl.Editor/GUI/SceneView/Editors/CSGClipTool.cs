@@ -215,6 +215,13 @@ public sealed class CSGClipTool : SceneTool
             return;
         }
 
+        // The half clicked on is the half thrown away, unless the cut keeps both
+        if (Mode != CSGClipMode.Split && TryPlane(ctx, out Plane plane) && TrySurfacePoint(ctx, out Float3 clickedAt, out _))
+        {
+            float side = plane.GetSignedDistanceToPoint(clickedAt);
+            if (MathF.Abs(side) > 1e-3f) Mode = side > 0f ? CSGClipMode.RemoveFront : CSGClipMode.RemoveBack;
+        }
+
         Commit(ctx);
     }
 
