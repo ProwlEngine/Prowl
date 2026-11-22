@@ -303,12 +303,45 @@ public sealed class CSGMeshTool : SceneTool
         _faces.Clear();
     }
 
+    /// <summary>Whether the camera sees a point of the brush, rather than one of the brush's own faces in front of it.</summary>
+    private bool Seen(HandleContext handles, Float3 point)
+    {
+        Camera camera = handles.Camera;
+        Transform view = camera.GameObject.Transform;
+        Float3 eye = camera.IsOrthographic
+            ? Float4x4.TransformPoint(point, Target!.Transform.LocalToWorldMatrix) - view.Forward * 10000f
+            : view.Position;
+
+        Float3 origin = Float4x4.TransformPoint(eye, Target!.Transform.WorldToLocalMatrix);
+        Float3 toPoint = point - origin;
+        float length = Float3.Length(toPoint);
+
+        return length < 1e-6f
+            || !_mesh!.Raycast(origin, toPoint / length, out float t, out _, bothSides: true)
+            || t >= length - MathF.Max(1e-3f, length * 1e-4f);
+    }
+
+    private bool[] SeenPoints(HandleContext handles)
+    {
+        var seen = new bool[_mesh!.Points.Count];
+        for (int i = 0; i < seen.Length; i++) seen[i] = Seen(handles, _mesh.Points[i]);
+        return seen;
+    }
+
+    /// <summary>An edge can be picked while either end or its middle is seen.</summary>
+    private bool EdgeSeen(HandleContext handles, bool[] seen, int edge)
+    {
+        (int a, int b) = _edges[edge];
+        return seen[a] || seen[b] || Seen(handles, (_mesh!.Points[a] + _mesh.Points[b]) * 0.5f);
+    }
+
     private void PickElements(SceneToolContext ctx)
     {
         if (_dragging || _action != Action.None) return;
 
         HandleContext handles = ctx.Handles;
         Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
+        bool[] seen = SeenPoints(handles);
 
         // Registered largest first so a vertex, registered last, beats the edge and face under it.
         if (Filter.HasFlag(CSGElementFilter.Face) && TryPickFace(ctx, out int face, out ControlID faceId))
@@ -328,6 +361,7 @@ public sealed class CSGMeshTool : SceneTool
             float endGap = Filter.HasFlag(CSGElementFilter.Vertex) ? PickRadius : 0f;
             for (int i = 0; i < _edges.Count; i++)
             {
+                if (!EdgeSeen(handles, seen, i)) continue;
                 Float3 from = Float4x4.TransformPoint(_mesh!.Points[_edges[i].a], toWorld);
                 Float3 to = Float4x4.TransformPoint(_mesh.Points[_edges[i].b], toWorld);
 
@@ -350,6 +384,7 @@ public sealed class CSGMeshTool : SceneTool
         {
             for (int i = 0; i < _mesh!.Points.Count; i++)
             {
+                if (!seen[i]) continue;
                 ControlID id = handles.GetControlID(VertexControl, i);
                 handles.AddControl(id, Float4x4.TransformPoint(_mesh.Points[i], toWorld), PickRadius);
 
@@ -678,7 +713,7 @@ public sealed class CSGMeshTool : SceneTool
             if (screen is null) continue;
 
             Float2 p = screen.Value;
-            if (p.X < min.X || p.X > max.X || p.Y < min.Y || p.Y > max.Y) continue;
+            if (p.X < min.X || p.X > max.X || p.Y < min.Y || p.Y > max.Y || !Seen(handles, _mesh.Points[i])) continue;
 
             if (handles.Ctrl) _vertices.Remove(i);
             else _vertices.Add(i);
@@ -953,8 +988,10 @@ public sealed class CSGMeshTool : SceneTool
 
         if (!Filter.HasFlag(CSGElementFilter.Vertex)) return;
 
+        bool[] seen = SeenPoints(ctx.Handles);
         for (int i = 0; i < _mesh!.Points.Count; i++)
         {
+            if (!seen[i] && !_vertices.Contains(i)) continue;
             ctx.Draw.Dot(Float4x4.TransformPoint(_mesh.Points[i], toWorld),
                 _vertices.Contains(i) ? PickedColor : IdleColor,
                 _vertices.Contains(i) ? 8f : 6f);
