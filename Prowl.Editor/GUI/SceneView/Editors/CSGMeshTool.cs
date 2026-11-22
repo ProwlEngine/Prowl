@@ -16,17 +16,6 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
-/// <summary>Which parts of a brush the mesh tool will select.</summary>
-[Flags]
-public enum CSGElementFilter
-{
-    None = 0,
-    Vertex = 1 << 0,
-    Edge = 1 << 1,
-    Face = 1 << 2,
-    All = Vertex | Edge | Face,
-}
-
 /// <summary>Vertex, edge and face editing of one brush through its control mesh.</summary>
 [GlobalSceneTool(Group = "CSG")]
 public sealed class CSGMeshTool : SceneTool
@@ -54,8 +43,16 @@ public sealed class CSGMeshTool : SceneTool
     /// <summary>Editing a brush's points: Edit is the tool and the selection is one brush.</summary>
     public bool Active => CSGEditMode.Is(CSGMode.Edit) && CSGSelection.Brushes().Count == 1;
 
-    /// <summary>Which element types a click will pick.</summary>
-    public CSGElementFilter Filter { get; set; } = CSGElementFilter.All;
+    /// <summary>Which elements clicks pick and commands act on.</summary>
+    public SelectMode Mode { get; private set; } = SelectMode.Vertex;
+
+    /// <summary>Changes the mode, converting the selection to it.</summary>
+    public void SetMode(SelectMode mode)
+    {
+        if (mode == Mode) return;
+        if (_target != null) EditSelection(selection => Selecting.ToMode(selection, Mode, mode));
+        Mode = mode;
+    }
 
     /// <summary>The brush being edited, or null when the selection is not a single brush.</summary>
     public CSGBrush? Target { get; private set; }
@@ -105,9 +102,8 @@ public sealed class CSGMeshTool : SceneTool
         CSGControlMesh start = _startMesh!;
         var cuts = new List<Plane>();
 
-        foreach ((int a, int b) in start.Edges())
+        foreach ((int a, int b) in _actionEdges)
         {
-            if (!_actionPoints.Contains(a) || !_actionPoints.Contains(b)) continue;
             var normals = new List<Float3>();
             foreach (int p in start.PolygonsAtEdge(a, b)) normals.Add(start.PolygonNormal(p));
             if (CSGMeshEdit.ChamferPlane(normals, (start.Points[a] + start.Points[b]) * 0.5f, distance, out Plane cut)) cuts.Add(cut);
@@ -155,7 +151,10 @@ public sealed class CSGMeshTool : SceneTool
     /// <summary>A face of the edited brush has been pulled out of its plane, so the shape only approximates the points.</summary>
     public bool NonPlanar { get; private set; }
 
+    // The selection by index: points, edges as point pairs with the lower first, and polygons. All three are kept in
+    // step through Selecting, led by the mode's own set
     private readonly HashSet<int> _vertices = new();
+    private readonly HashSet<(int A, int B)> _selectedEdges = new();
     private readonly List<int> _faces = new();
 
     /// <summary>What a drag in progress is doing.</summary>
@@ -180,8 +179,8 @@ public sealed class CSGMeshTool : SceneTool
     private bool _dragStarted;
     private bool _passedThreshold;
 
-    // Points pressed while already selected, so the press drags the whole selection and a plain click narrows to them
-    private int[]? _clickedPoints;
+    // An element pressed while already selected, so the press drags the whole selection and a plain click narrows to it
+    private int _clicked = -1;
 
     private Action _action;
     private Float2 _dragOrigin;
@@ -191,6 +190,7 @@ public sealed class CSGMeshTool : SceneTool
     private bool _fromMenu;
     private HandleContext? _modalHandles;
     private readonly HashSet<int> _actionPoints = new();
+    private readonly List<(int A, int B)> _actionEdges = new();
     private readonly List<int> _actionFaces = new();
 
     // What a chamfer or extrude started on, captured when it began so later renumbering cannot move it
@@ -242,6 +242,9 @@ public sealed class CSGMeshTool : SceneTool
         // Delete always belongs to the mesh tool here, so it never falls through to deleting the brush
         if (handles.KeyDown(KeyCode.Delete) || handles.KeyDown(KeyCode.Backspace)) DeleteFaces();
         if (handles.IsPressed("CSG/SnapToGrid")) SnapSelection();
+        if (handles.IsPressed("MeshEdit/VertexMode")) SetMode(SelectMode.Vertex);
+        if (handles.IsPressed("MeshEdit/EdgeMode")) SetMode(SelectMode.Edge);
+        if (handles.IsPressed("MeshEdit/FaceMode")) SetMode(SelectMode.Face);
 
         DrawElements(ctx);
 
@@ -285,7 +288,9 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         _mesh = Target.ControlMesh;
-        _vertices.RemoveWhere(i => i >= _mesh.Points.Count);
+        int points = _mesh.Points.Count;
+        _vertices.RemoveWhere(i => i >= points);
+        _selectedEdges.RemoveWhere(e => e.B >= points);
         _faces.RemoveAll(f => f >= _mesh.Polygons.Count);
 
         NonPlanar = !_mesh.IsPlanar();
@@ -305,26 +310,62 @@ public sealed class CSGMeshTool : SceneTool
     {
         _held.Points = [.. _vertices];
         _held.Faces = [.. _faces];
+        _held.Edges = new int[_selectedEdges.Count * 2];
+        int i = 0;
+        foreach ((int a, int b) in _selectedEdges)
+        {
+            _held.Edges[i++] = a;
+            _held.Edges[i++] = b;
+        }
     }
 
     private void RestoreHeldSelection()
     {
-        _vertices.Clear();
+        ClearSelection();
         _vertices.UnionWith(_held.Points);
-        _faces.Clear();
         _faces.AddRange(_held.Faces);
+        for (int i = 0; i + 1 < _held.Edges.Length; i += 2) _selectedEdges.Add(EdgeKey(_held.Edges[i], _held.Edges[i + 1]));
     }
 
-    /// <summary>The selected points and faces as elements of the edit target.</summary>
+    private static (int A, int B) EdgeKey(int a, int b) => a < b ? (a, b) : (b, a);
+
+    /// <summary>The selection as elements of the edit target.</summary>
     private ElementSelection SelectedElements()
     {
         var selected = new ElementSelection();
-        var vertices = _target!.Target.Mesh.Vertices;
+        GeometryData mesh = _target!.Target.Mesh;
         foreach (int i in _vertices)
-            if (i >= 0 && i < vertices.Count) selected.Vertices.Add(vertices[i]);
+            if (i >= 0 && i < mesh.Vertices.Count) selected.Vertices.Add(mesh.Vertices[i]);
+        foreach ((int a, int b) in _selectedEdges)
+            if (b < mesh.Vertices.Count && mesh.FindEdge(mesh.Vertices[a], mesh.Vertices[b]) is { } edge) selected.Edges.Add(edge);
         foreach (GeometryData.Face face in _target.FacesOf(_faces)) selected.Faces.Add(face);
         return selected;
     }
+
+    /// <summary>Takes a selection of the edit target's elements back as indices.</summary>
+    private void TakeSelection(ElementSelection selection)
+    {
+        ClearSelection();
+        foreach (GeometryData.Vertex vertex in selection.Vertices) _vertices.Add(vertex.Index);
+        foreach (GeometryData.Edge edge in selection.Edges) _selectedEdges.Add(EdgeKey(edge.Vert1.Index, edge.Vert2.Index));
+        foreach (GeometryData.Face face in selection.Faces)
+        {
+            int polygon = CSGBrushTarget.PolygonOf(face);
+            if (polygon >= 0 && !_faces.Contains(polygon)) _faces.Add(polygon);
+        }
+    }
+
+    /// <summary>Changes the selection through the edit target's elements, then keeps the three sets in step with the mode.</summary>
+    private void EditSelection(Action<ElementSelection> change)
+    {
+        if (_target == null) return;
+        ElementSelection selection = SelectedElements();
+        change(selection);
+        TakeSelection(selection);
+    }
+
+    /// <summary>Fills the other two sets in from the one the mode leads with.</summary>
+    private void Normalize() => EditSelection(selection => Selecting.Normalize(selection, Mode));
 
     /// <summary>
     /// Runs an edit on the selected elements through the edit target: recorded for undo with the selection, refused with
@@ -348,11 +389,12 @@ public sealed class CSGMeshTool : SceneTool
 
         (CSGControlMesh mesh, SurfaceData[] surfaces) = _target.ToBrush(selected, out HashSet<int> points, out List<int> faces);
         Target!.SetShape(mesh, surfaces);
-        _vertices.Clear();
+        ClearSelection();
         _vertices.UnionWith(points);
-        _faces.Clear();
         _faces.AddRange(faces);
         Reload();
+        SelectMode carried = Mode == SelectMode.Face ? SelectMode.Face : SelectMode.Vertex;
+        EditSelection(selection => Selecting.ToMode(selection, carried, Mode));
         HoldSelection();
         MarkDirty();
         return true;
@@ -382,6 +424,7 @@ public sealed class CSGMeshTool : SceneTool
     private void ClearSelection()
     {
         _vertices.Clear();
+        _selectedEdges.Clear();
         _faces.Clear();
     }
 
@@ -425,8 +468,7 @@ public sealed class CSGMeshTool : SceneTool
         Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
         bool[] seen = SeenPoints(handles);
 
-        // Registered largest first so a vertex, registered last, beats the edge and face under it.
-        if (Filter.HasFlag(CSGElementFilter.Face) && TryPickFace(ctx, out int face, out ControlID faceId))
+        if (Mode == SelectMode.Face && TryPickFace(ctx, out int face, out ControlID faceId))
         {
             if (handles.IsNearest(faceId) && handles.TryBeginDrag(faceId))
             {
@@ -438,9 +480,8 @@ public sealed class CSGMeshTool : SceneTool
             }
         }
 
-        if (Filter.HasFlag(CSGElementFilter.Edge))
+        if (Mode == SelectMode.Edge)
         {
-            float endGap = Filter.HasFlag(CSGElementFilter.Vertex) ? PickRadius : 0f;
             for (int i = 0; i < _edges.Count; i++)
             {
                 if (!EdgeSeen(handles, seen, i)) continue;
@@ -448,21 +489,20 @@ public sealed class CSGMeshTool : SceneTool
                 Float3 to = Float4x4.TransformPoint(_mesh.Points[_edges[i].b], toWorld);
 
                 ControlID id = handles.GetControlID(EdgeControl, i);
-                handles.AddControl(id, from, to, PickRadius, endGap);
+                handles.AddControl(id, from, to, PickRadius, 0f);
 
                 if (handles.IsNearest(id) && handles.TryBeginDrag(id))
                 {
-                    (int a, int b) = _edges[i];
-                    bool keep = !handles.Shift && !handles.Ctrl && _vertices.Contains(a) && _vertices.Contains(b);
+                    bool keep = !handles.Shift && !handles.Ctrl && _selectedEdges.Contains(EdgeKey(_edges[i].a, _edges[i].b));
                     if (!keep) SelectEdge(handles, i);
                     BeginAction(handles, handles.Shift ? Action.Chamfer : Action.Drag, edge: i);
-                    if (keep) _clickedPoints = [a, b];
+                    if (keep) _clicked = i;
                     return;
                 }
             }
         }
 
-        if (Filter.HasFlag(CSGElementFilter.Vertex))
+        if (Mode == SelectMode.Vertex)
         {
             for (int i = 0; i < _mesh!.Points.Count; i++)
             {
@@ -475,7 +515,7 @@ public sealed class CSGMeshTool : SceneTool
                     bool keep = !handles.Shift && !handles.Ctrl && _vertices.Contains(i);
                     if (!keep) SelectVertex(handles, i);
                     BeginAction(handles, handles.Shift ? Action.Chamfer : Action.Drag, point: i);
-                    if (keep) _clickedPoints = [i];
+                    if (keep) _clicked = i;
                     return;
                 }
             }
@@ -550,17 +590,19 @@ public sealed class CSGMeshTool : SceneTool
             _modalHandles = handles;
         }
         _actionPoints.Clear();
+        _actionEdges.Clear();
         _actionFaces.Clear();
         if (fromMenu)
         {
             _actionPoints.UnionWith(_vertices);
+            _actionEdges.AddRange(_selectedEdges);
             _actionFaces.AddRange(_faces);
         }
         _actionView = Context.View;
         _dragOrigin = handles.MousePosition;
         _dragStarted = false;
         _passedThreshold = false;
-        _clickedPoints = null;
+        _clicked = -1;
         _actionBrush = Target;
         _startSurfaces = (SurfaceData[])Target!.Surfaces.Clone();
         _startMesh = Target.ControlMesh.Clone();
@@ -608,30 +650,19 @@ public sealed class CSGMeshTool : SceneTool
         return true;
     }
 
-    private void SelectVertex(HandleContext handles, int index) => Apply(handles, [index], []);
+    private void SelectVertex(HandleContext handles, int index) => Pick(handles, _vertices, index);
 
-    private void SelectEdge(HandleContext handles, int index)
-        => Apply(handles, [_edges[index].a, _edges[index].b], []);
+    private void SelectEdge(HandleContext handles, int index) => Pick(handles, _selectedEdges, EdgeKey(_edges[index].a, _edges[index].b));
 
-    private void SelectFace(HandleContext handles, int polygon)
-        => Apply(handles, _mesh!.PolygonPoints(polygon), [polygon]);
+    private void SelectFace(HandleContext handles, int polygon) => Pick(handles, _faces, polygon);
 
     /// <summary>Shift adds, Ctrl removes, a plain click replaces.</summary>
-    private void Apply(HandleContext handles, IReadOnlyList<int> vertices, IReadOnlyList<int> faces)
+    private void Pick<T>(HandleContext handles, ICollection<T> set, T item)
     {
         if (!handles.Shift && !handles.Ctrl) ClearSelection();
-
-        foreach (int v in vertices)
-        {
-            if (handles.Ctrl) _vertices.Remove(v);
-            else _vertices.Add(v);
-        }
-
-        foreach (int f in faces)
-        {
-            if (handles.Ctrl) _faces.Remove(f);
-            else if (!_faces.Contains(f)) _faces.Add(f);
-        }
+        if (handles.Ctrl) set.Remove(item);
+        else if (!set.Contains(item)) set.Add(item);
+        Normalize();
     }
 
     /// <summary>Runs whichever gesture is in progress, previewing live and committing on release.</summary>
@@ -698,10 +729,12 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         // A click on part of a selection, with no drag, narrows the selection to what was clicked
-        if (_action == Action.Drag && !_passedThreshold && _clickedPoints != null)
+        if (_action == Action.Drag && !_passedThreshold && _clicked >= 0)
         {
             ClearSelection();
-            foreach (int point in _clickedPoints) _vertices.Add(point);
+            if (Mode == SelectMode.Edge) _selectedEdges.Add(EdgeKey(_edges[_clicked].a, _edges[_clicked].b));
+            else _vertices.Add(_clicked);
+            Normalize();
         }
 
         EndAction();
@@ -836,7 +869,7 @@ public sealed class CSGMeshTool : SceneTool
         => ctx.Draw.ScreenRect(_dragOrigin, ctx.Handles.MousePosition,
             Color32.FromArgb(40, 120, 170, 255), Color32.FromArgb(200, 140, 190, 255));
 
-    /// <summary>Selects every point inside the rectangle, then promotes edges and faces whose corners are all in.</summary>
+    /// <summary>Selects what the mode picks inside the rectangle: points, edges with both ends in, faces with their centre in.</summary>
     private void ApplyMarquee(SceneToolContext ctx)
     {
         HandleContext handles = ctx.Handles;
@@ -844,44 +877,44 @@ public sealed class CSGMeshTool : SceneTool
 
         Float2 min = Maths.Min(_dragOrigin, handles.MousePosition);
         Float2 max = Maths.Max(_dragOrigin, handles.MousePosition);
-
         Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
 
-        for (int i = 0; i < _mesh!.Points.Count; i++)
+        bool Inside(Float3 point)
         {
-            Float2? screen = handles.WorldToScreen(Float4x4.TransformPoint(_mesh.Points[i], toWorld));
-            if (screen is null) continue;
-
-            Float2 p = screen.Value;
-            if (p.X < min.X || p.X > max.X || p.Y < min.Y || p.Y > max.Y || !Seen(handles, _mesh.Points[i])) continue;
-
-            if (handles.Ctrl) _vertices.Remove(i);
-            else _vertices.Add(i);
+            if (handles.WorldToScreen(Float4x4.TransformPoint(point, toWorld)) is not { } p) return false;
+            return p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y && Seen(handles, point);
         }
 
-        PromoteToFaces();
+        void Mark<T>(ICollection<T> set, T item)
+        {
+            if (handles.Ctrl) set.Remove(item);
+            else if (!set.Contains(item)) set.Add(item);
+        }
+
+        switch (Mode)
+        {
+            case SelectMode.Vertex:
+                for (int i = 0; i < _mesh!.Points.Count; i++)
+                    if (Inside(_mesh.Points[i])) Mark(_vertices, i);
+                break;
+            case SelectMode.Edge:
+                foreach ((int a, int b) in _edges)
+                    if (Inside(_mesh!.Points[a]) && Inside(_mesh.Points[b])) Mark(_selectedEdges, EdgeKey(a, b));
+                break;
+            case SelectMode.Face:
+                for (int polygon = 0; polygon < _mesh!.Polygons.Count; polygon++)
+                    if (_mesh.PolygonPoints(polygon).Count > 0 && Inside(FaceCentre(polygon))) Mark(_faces, polygon);
+                break;
+        }
+        Normalize();
     }
 
-    /// <summary>A face joins the selection once every one of its corners is in it.</summary>
-    private void PromoteToFaces()
+    private Float3 FaceCentre(int polygon)
     {
-        _faces.Clear();
-
-        for (int polygon = 0; polygon < _mesh!.Polygons.Count; polygon++)
-        {
-            IReadOnlyList<int> ring = _mesh.PolygonPoints(polygon);
-            if (ring.Count == 0) continue;
-
-            bool all = true;
-            foreach (int i in ring)
-            {
-                if (_vertices.Contains(i)) continue;
-                all = false;
-                break;
-            }
-
-            if (all) _faces.Add(polygon);
-        }
+        IReadOnlyList<int> ring = _mesh!.PolygonPoints(polygon);
+        Float3 sum = Float3.Zero;
+        foreach (int i in ring) sum += _mesh.Points[i];
+        return ring.Count > 0 ? sum / ring.Count : sum;
     }
 
     private void EndAction()
@@ -1094,28 +1127,36 @@ public sealed class CSGMeshTool : SceneTool
             CSGGizmos.Polygon(corners, FaceFill);
         }
 
-        if (Filter.HasFlag(CSGElementFilter.Edge))
+        bool[] seen = SeenPoints(ctx.Handles);
+        for (int i = 0; i < _edges.Count; i++)
         {
-            for (int i = 0; i < _edges.Count; i++)
-            {
-                (int a, int b) = _edges[i];
-                bool picked = _vertices.Contains(a) && _vertices.Contains(b);
-                bool hovered = ctx.Handles.IsNearest(ctx.Handles.GetControlID(EdgeControl, i));
-                Float3 from = Float4x4.TransformPoint(_mesh!.Points[a], toWorld);
-                Float3 to = Float4x4.TransformPoint(_mesh.Points[b], toWorld);
-                CSGGizmos.Line(from, to, picked ? PickedColor : hovered ? HoverEdgeColor : IdleColor, picked || hovered ? 2.5f : 1f);
-            }
+            (int a, int b) = _edges[i];
+            bool picked = _selectedEdges.Contains(EdgeKey(a, b));
+            bool hovered = Mode == SelectMode.Edge && ctx.Handles.IsNearest(ctx.Handles.GetControlID(EdgeControl, i));
+            Float3 from = Float4x4.TransformPoint(_mesh!.Points[a], toWorld);
+            Float3 to = Float4x4.TransformPoint(_mesh.Points[b], toWorld);
+            CSGGizmos.Line(from, to, picked ? PickedColor : hovered ? HoverEdgeColor : IdleColor, picked || hovered ? 2.5f : 1f);
         }
 
-        if (!Filter.HasFlag(CSGElementFilter.Vertex)) return;
-
-        bool[] seen = SeenPoints(ctx.Handles);
-        for (int i = 0; i < _mesh!.Points.Count; i++)
+        if (Mode == SelectMode.Vertex)
         {
-            if (!seen[i] && !_vertices.Contains(i)) continue;
-            ctx.Draw.Dot(Float4x4.TransformPoint(_mesh.Points[i], toWorld),
-                _vertices.Contains(i) ? PickedColor : IdleColor,
-                _vertices.Contains(i) ? 8f : 6f);
+            for (int i = 0; i < _mesh!.Points.Count; i++)
+            {
+                bool picked = _vertices.Contains(i);
+                if (!seen[i] && !picked) continue;
+                ctx.Draw.Dot(Float4x4.TransformPoint(_mesh.Points[i], toWorld), picked ? PickedColor : IdleColor, picked ? 8f : 6f);
+            }
+        }
+        else if (Mode == SelectMode.Face)
+        {
+            for (int polygon = 0; polygon < _mesh!.Polygons.Count; polygon++)
+            {
+                if (_mesh.PolygonPoints(polygon).Count < 3) continue;
+                Float3 centre = FaceCentre(polygon);
+                bool picked = _faces.Contains(polygon);
+                if (!picked && !Seen(ctx.Handles, centre)) continue;
+                ctx.Draw.Dot(Float4x4.TransformPoint(centre, toWorld), picked ? PickedColor : IdleColor, picked ? 7f : 5f);
+            }
         }
     }
 
@@ -1125,9 +1166,10 @@ public sealed class CSGMeshTool : SceneTool
     }
 }
 
-/// <summary>The Edit tool's selection as point and polygon indices, recorded with each edit so undo brings it back.</summary>
+/// <summary>The Edit tool's selection as point, edge and polygon indices, recorded with each edit so undo brings it back.</summary>
 internal sealed class CSGEditSelection
 {
     public int[] Points = [];
+    public int[] Edges = [];
     public int[] Faces = [];
 }

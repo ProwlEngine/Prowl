@@ -203,6 +203,9 @@ public sealed class CSGBrushTarget
         return ring.Count == onward.Count ? ring : null;
     }
 
+    /// <summary>The polygon of the brush a face came from, or -1 for a face made from nothing.</summary>
+    public static int PolygonOf(GeometryData.Face face) => Tag(face) - 1;
+
     private static int Tag(GeometryData.Face face)
         => face.Attributes.TryGetValue(SurfaceAttribute, out var value) && value is GeometryData.IntAttributeValue tag && tag.Data.Length > 0 ? tag.Data[0] : 0;
 

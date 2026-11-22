@@ -392,6 +392,9 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("CSG/SetIntersecting", "Set Intersecting", KeyCode.BackSlash);
         ShortcutManager.Register("CSG/SetPassThrough", "Set Pass Through", KeyCode.Slash);
         ShortcutManager.Register("CSG/SnapToGrid", "Snap Selection To Grid", KeyCode.End, ctrl: true);
+        ShortcutManager.Register("MeshEdit/VertexMode", "Vertex Mode", KeyCode.Number1);
+        ShortcutManager.Register("MeshEdit/EdgeMode", "Edge Mode", KeyCode.Number2);
+        ShortcutManager.Register("MeshEdit/FaceMode", "Face Mode", KeyCode.Number3);
         ShortcutManager.Register("CSG/FlipX", "Flip On X", KeyCode.X, ctrl: true, alt: true);
         ShortcutManager.Register("CSG/FlipY", "Flip On Y", KeyCode.Y, ctrl: true, alt: true);
         ShortcutManager.Register("CSG/FlipZ", "Flip On Z", KeyCode.Z, ctrl: true, alt: true);

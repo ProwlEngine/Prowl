@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Modeling;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -66,6 +67,7 @@ internal static class CSGSections
 
         if (CSGEditMode.Is(CSGMode.Select)) AddSelect(columns);
         else if (CSGEditMode.Is(CSGMode.Create)) AddGenerate(columns, SceneToolManager.Get<CSGGenerateTool>());
+        else if (CSGEditMode.Is(CSGMode.Edit) && SceneToolManager.Get<CSGMeshTool>() is { Active: true } mesh) AddEdit(columns, mesh);
         else if (CSGEditMode.IsUV) AddSurface(columns);
         else if (SceneToolManager.Get<CSGClipTool>() is { Active: true } clip) AddClip(columns, clip);
         return columns;
@@ -118,6 +120,18 @@ internal static class CSGSections
         columns.Add(new Column("csg_sel", "", null, (paper, font) =>
             Actions(paper, font, "csg_sel_pivot", 1,
                 new Tile(EditorIcons.Crosshairs, Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot)),
+            NarrowColumnWidth));
+    }
+
+    private static void AddEdit(List<Column> columns, CSGMeshTool tool)
+    {
+        columns.Add(new Column("csg_edit", "", null, (paper, font) =>
+            Segments(paper, font, "csg_edit_mode",
+            [
+                new Tile(EditorIcons.CircleDot, Loc.Get("csg.mode_vertex"), Loc.Get("csg.mode_vertex_tip"), () => tool.SetMode(SelectMode.Vertex), tool.Mode == SelectMode.Vertex),
+                new Tile(EditorIcons.Slash, Loc.Get("csg.mode_edge"), Loc.Get("csg.mode_edge_tip"), () => tool.SetMode(SelectMode.Edge), tool.Mode == SelectMode.Edge),
+                new Tile(EditorIcons.Square, Loc.Get("csg.mode_face"), Loc.Get("csg.mode_face_tip"), () => tool.SetMode(SelectMode.Face), tool.Mode == SelectMode.Face),
+            ], iconsOnly: true),
             NarrowColumnWidth));
     }
 
