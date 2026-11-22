@@ -83,8 +83,8 @@ public sealed class CSGClipTool : SceneTool
         }
 
         // Tab cycles which half survives, so a cut can be reversed without starting over.
-        if (handles.KeyDown(KeyCode.Tab)) Mode = NextMode(Mode);
-        if (handles.KeyDown(KeyCode.Enter) && _stage == Stage.Tilting) { Commit(ctx); return; }
+        if (handles.IsPressed("CSG/ClipSwapSide")) Mode = NextMode(Mode);
+        if (_stage == Stage.Tilting && handles.IsPressed("CSG/Confirm")) { Commit(ctx); return; }
 
         ControlID id = handles.GetControlID(ClipControl);
         handles.AddControl(id, HandleContext.BodyDistance, float.MaxValue - 1f);

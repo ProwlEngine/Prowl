@@ -179,6 +179,9 @@ public static class ShortcutManager
         return Input.IsCtrlPressed;
     }
 
+    /// <summary>The shortcut registered under an id, or null.</summary>
+    public static ShortcutDefinition? Find(string id) => _shortcuts.TryGetValue(id, out ShortcutDefinition? def) ? def : null;
+
     /// <summary>Get the effective binding for a shortcut.</summary>
     public static ShortcutBinding? GetBinding(string id)
         => _shortcuts.TryGetValue(id, out ShortcutDefinition? def) ? def.Binding : null;
@@ -379,9 +382,9 @@ internal static class BuiltInShortcuts
 
         ShortcutManager.Register("CSG/ModeObject", "Object Mode", KeyCode.Number1, alt: true);
         ShortcutManager.Register("CSG/ModeGenerate", "Generate Mode", KeyCode.Number2, alt: true);
-        ShortcutManager.Register("CSG/ModeMesh", "Mesh Mode", KeyCode.Number3, alt: true);
+        ShortcutManager.Register("CSG/ModeSurface", "Surface Mode", KeyCode.Number3, alt: true);
         ShortcutManager.Register("CSG/ModeClip", "Clip Mode", KeyCode.Number4, alt: true);
-        ShortcutManager.Register("CSG/ModeSurface", "Surface Mode", KeyCode.Number5, alt: true);
+        ShortcutManager.Register("CSG/ModeMesh", "Mesh Mode", KeyCode.Number5, alt: true);
         ShortcutManager.Register("CSG/SetAdditive", "Set Additive", KeyCode.Equal);
         ShortcutManager.Register("CSG/SetSubtractive", "Set Subtractive", KeyCode.Minus);
         ShortcutManager.Register("CSG/SetIntersecting", "Set Intersecting", KeyCode.BackSlash);
@@ -398,5 +401,14 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("CSG/UnhideAll", "Unhide All", KeyCode.U);
         ShortcutManager.Register("CSG/HalveGrid", "Halve Grid", KeyCode.LeftBracket);
         ShortcutManager.Register("CSG/DoubleGrid", "Double Grid", KeyCode.RightBracket);
+        ShortcutManager.Register("CSG/NudgeLeft", "Nudge Left", KeyCode.Left, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeRight", "Nudge Right", KeyCode.Right, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeBack", "Nudge Back", KeyCode.Down, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeForward", "Nudge Forward", KeyCode.Up, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeDown", "Nudge Down", KeyCode.PageDown, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeUp", "Nudge Up", KeyCode.PageUp, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/Smear", "Paint Surface Look (hold)", KeyCode.G);
+        ShortcutManager.Register("CSG/ClipSwapSide", "Swap Kept Side", KeyCode.Tab);
+        ShortcutManager.Register("CSG/Confirm", "Confirm Cut or Shape", KeyCode.Enter);
     }
 }

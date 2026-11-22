@@ -133,7 +133,7 @@ public sealed class CSGMeshTool : SceneTool
 
         // Delete always belongs to the mesh tool here, so it never falls through to deleting the brush
         if (handles.KeyDown(KeyCode.Delete) || handles.KeyDown(KeyCode.Backspace)) DeleteFaces();
-        if (handles.Ctrl && handles.KeyDown(KeyCode.End)) SnapSelection();
+        if (handles.IsPressed("CSG/SnapToGrid")) SnapSelection();
 
         DrawElements(ctx);
 

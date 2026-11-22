@@ -28,14 +28,22 @@ public sealed class CSGOverlayTool : SceneTool
 
     private const float PanelWidth = 268f;
 
-    private static readonly (CSGMode mode, string label, string tip)[] Modes =
+    private static readonly (CSGMode mode, string label, string tip, string shortcut)[] Modes =
     {
-        (CSGMode.Object, "csg.mode_object", "csg.mode_object_tip"),
-        (CSGMode.Generate, "csg.mode_generate", "csg.mode_generate_tip"),
-        (CSGMode.Surface, "csg.mode_surface", "csg.mode_surface_tip"),
-        (CSGMode.Clip, "csg.mode_clip", "csg.mode_clip_tip"),
-        (CSGMode.Mesh, "csg.mode_mesh", "csg.mode_mesh_tip"),
+        (CSGMode.Object, "csg.mode_object", "csg.mode_object_tip", "CSG/ModeObject"),
+        (CSGMode.Generate, "csg.mode_generate", "csg.mode_generate_tip", "CSG/ModeGenerate"),
+        (CSGMode.Surface, "csg.mode_surface", "csg.mode_surface_tip", "CSG/ModeSurface"),
+        (CSGMode.Clip, "csg.mode_clip", "csg.mode_clip_tip", "CSG/ModeClip"),
+        (CSGMode.Mesh, "csg.mode_mesh", "csg.mode_mesh_tip", "CSG/ModeMesh"),
     };
+
+    // The keys each mode answers to, shown under its options
+    private static readonly string[] SelectionKeys = ["CSG/Hide", "CSG/UnhideAll", "CSG/SetAdditive", "CSG/SetSubtractive", "Scene/Duplicate"];
+    private static readonly string[] ObjectKeys = [.. SelectionKeys, "CSG/SnapToGrid", "CSG/RotateLeft", "CSG/RotateRight", "CSG/NudgeLeft", "CSG/NudgeUp"];
+    private static readonly string[] GenerateKeys = ["CSG/SetAdditive", "CSG/SetSubtractive", "CSG/SetIntersecting", "CSG/Confirm"];
+    private static readonly string[] SurfaceKeys = ["CSG/Smear", "CSG/Hide", "CSG/UnhideAll"];
+    private static readonly string[] ClipKeys = ["CSG/ClipSwapSide", "CSG/Confirm"];
+    private static readonly string[] MeshKeys = ["CSG/HalveGrid", "CSG/DoubleGrid", "CSG/RotateLeft", "CSG/SnapToGrid"];
 
     private bool _collapsed;
 
@@ -94,7 +102,7 @@ public sealed class CSGOverlayTool : SceneTool
         if (handles.IsPressed("CSG/RotateLeft")) { RotateBySnap(-1f); return; }
         if (handles.IsPressed("CSG/RotateRight")) { RotateBySnap(1f); return; }
 
-        if (handles.Ctrl && handles.Shift) HandleNudge(handles);
+        HandleNudge(handles);
     }
 
     /// <summary>Sets the selection's operation, and while drawing also the operation the next brush gets.</summary>
@@ -110,12 +118,12 @@ public sealed class CSGOverlayTool : SceneTool
         float grid = CSGSnap.Grid;
 
         Float3 step;
-        if (handles.KeyDown(KeyCode.Left)) step = new Float3(-grid, 0, 0);
-        else if (handles.KeyDown(KeyCode.Right)) step = new Float3(grid, 0, 0);
-        else if (handles.KeyDown(KeyCode.Down)) step = new Float3(0, 0, -grid);
-        else if (handles.KeyDown(KeyCode.Up)) step = new Float3(0, 0, grid);
-        else if (handles.KeyDown(KeyCode.PageDown)) step = new Float3(0, -grid, 0);
-        else if (handles.KeyDown(KeyCode.PageUp)) step = new Float3(0, grid, 0);
+        if (handles.IsPressed("CSG/NudgeLeft")) step = new Float3(-grid, 0, 0);
+        else if (handles.IsPressed("CSG/NudgeRight")) step = new Float3(grid, 0, 0);
+        else if (handles.IsPressed("CSG/NudgeBack")) step = new Float3(0, 0, -grid);
+        else if (handles.IsPressed("CSG/NudgeForward")) step = new Float3(0, 0, grid);
+        else if (handles.IsPressed("CSG/NudgeDown")) step = new Float3(0, -grid, 0);
+        else if (handles.IsPressed("CSG/NudgeUp")) step = new Float3(0, grid, 0);
         else return;
 
         CSGSelection.MoveBy(step, clone: false);
@@ -176,7 +184,7 @@ public sealed class CSGOverlayTool : SceneTool
     {
         using (paper.Row($"{id}_modes").Height(24).Padding(6, 6, 0, 6).Gap(3).Enter())
         {
-            foreach ((CSGMode mode, string label, string tip) in Modes)
+            foreach ((CSGMode mode, string label, string tip, string shortcut) in Modes)
             {
                 bool active = CSGEditMode.Is(mode);
 
@@ -187,7 +195,7 @@ public sealed class CSGOverlayTool : SceneTool
                     .Text(Loc.Get(label), font)
                     .TextColor(active ? SColor.White : EditorTheme.Ink400)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                    .Tooltip(Loc.Get(label), Loc.Get(tip))
+                    .Tooltip(ShortcutManager.GetTooltip(Loc.Get(label), shortcut), Loc.Get(tip))
                     .OnClick(mode, (m, _) => CSGEditMode.Current = m);
             }
         }
@@ -222,5 +230,14 @@ public sealed class CSGOverlayTool : SceneTool
                 CSGSections.DrawModelSection(paper, font, model!);
                 break;
         }
+
+        CSGSections.DrawKeys(paper, font, CSGEditMode.Current switch
+        {
+            CSGMode.Generate => GenerateKeys,
+            CSGMode.Surface => SurfaceKeys,
+            CSGMode.Clip => ClipKeys,
+            CSGMode.Mesh => MeshKeys,
+            _ => ObjectKeys,
+        });
     }
 }

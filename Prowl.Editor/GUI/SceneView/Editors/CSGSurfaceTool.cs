@@ -79,7 +79,7 @@ public sealed class CSGSurfaceTool : SceneTool
         DrawSurface(ctx, hit, HoverColor, default, 0f);
 
         // Holding the smear key paints the last picked surface's look onto whatever is under the cursor.
-        if (handles.KeysActive && handles.GetKey(KeyCode.G))
+        if (handles.IsHeld("CSG/Smear"))
         {
             if (handles.PrimaryHeld && !hit.Equals(_lastSmeared))
             {

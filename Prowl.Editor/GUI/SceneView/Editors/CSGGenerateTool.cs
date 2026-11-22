@@ -158,7 +158,7 @@ public sealed class CSGGenerateTool : SceneTool
 
         DrawPreview(ctx);
 
-        if (ctx.Handles.KeyDown(KeyCode.Enter)) { Commit(ctx); return; }
+        if (ctx.Handles.IsPressed("CSG/Confirm")) { Commit(ctx); return; }
 
         // The commit click is a raw press, so check the cursor is on the scene rather than a panel.
         if (ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered) Commit(ctx);

@@ -120,6 +120,10 @@ public sealed class HandleContext
         return true;
     }
 
+    /// <summary>Whether a shortcut's key is held down over this view, for hold to use bindings.</summary>
+    public bool IsHeld(string shortcut)
+        => KeysActive && ShortcutManager.GetBinding(shortcut) is { IsBound: true } binding && Input.GetKey(binding.Key);
+
     /// <summary>A raw key for this view, marked as used when it fires.</summary>
     public bool KeyDown(KeyCode key)
     {
