@@ -28,15 +28,15 @@ public sealed class CSGOverlayTool : SceneTool
     public override string Icon => EditorIcons.Cube;
     public override int Order => -1;
 
-    private const float PanelWidth = 268f;
+    private const float PanelWidth = 320f;
 
-    private static readonly (CSGMode mode, string label, string tip, string shortcut)[] Modes =
+    private static readonly (CSGMode mode, string label, string tip, string shortcut, string icon)[] Modes =
     {
-        (CSGMode.Object, "csg.mode_object", "csg.mode_object_tip", "CSG/ModeObject"),
-        (CSGMode.Generate, "csg.mode_generate", "csg.mode_generate_tip", "CSG/ModeGenerate"),
-        (CSGMode.Surface, "csg.mode_surface", "csg.mode_surface_tip", "CSG/ModeSurface"),
-        (CSGMode.Clip, "csg.mode_clip", "csg.mode_clip_tip", "CSG/ModeClip"),
-        (CSGMode.Mesh, "csg.mode_mesh", "csg.mode_mesh_tip", "CSG/ModeMesh"),
+        (CSGMode.Object, "csg.mode_object", "csg.mode_object_tip", "CSG/ModeObject", EditorIcons.ArrowPointer),
+        (CSGMode.Generate, "csg.mode_generate", "csg.mode_generate_tip", "CSG/ModeGenerate", EditorIcons.SquarePlus),
+        (CSGMode.Surface, "csg.mode_surface", "csg.mode_surface_tip", "CSG/ModeSurface", EditorIcons.PaintRoller),
+        (CSGMode.Clip, "csg.mode_clip", "csg.mode_clip_tip", "CSG/ModeClip", EditorIcons.Scissors),
+        (CSGMode.Mesh, "csg.mode_mesh", "csg.mode_mesh_tip", "CSG/ModeMesh", EditorIcons.DrawPolygon),
     };
 
     private bool _collapsed;
@@ -95,7 +95,7 @@ public sealed class CSGOverlayTool : SceneTool
 
         menu.Submenu(Loc.Get("csg.mode"), sub =>
         {
-            foreach ((CSGMode mode, string label, _, string shortcut) in Modes)
+            foreach ((CSGMode mode, string label, _, string shortcut, _) in Modes)
             {
                 string keys = ShortcutManager.Find(shortcut) is { } def ? ShortcutManager.GetDisplayString(def.Binding) : "";
                 sub.Item(Loc.Get(label), () => CSGEditMode.Current = mode, shortcut: keys, on: CSGEditMode.Is(mode));
@@ -128,13 +128,13 @@ public sealed class CSGOverlayTool : SceneTool
         {
             CSGMode.Generate when generate != null =>
             [
-                ("Box", () => generate.Generator = CSGGeneratorKind.Box),
-                ("Cylinder", () => generate.Generator = CSGGeneratorKind.Cylinder),
-                ("Sphere", () => generate.Generator = CSGGeneratorKind.Sphere),
-                ("Stairs", () => generate.Generator = CSGGeneratorKind.LinearStairs),
-                ("Spiral", () => generate.Generator = CSGGeneratorKind.SpiralStairs),
-                ("Room", () => generate.Generator = CSGGeneratorKind.Room),
-                ("Polygon", () => generate.Generator = CSGGeneratorKind.Polygon),
+                (CSGSections.ShapeName(CSGGeneratorKind.Box), () => generate.Generator = CSGGeneratorKind.Box),
+                (CSGSections.ShapeName(CSGGeneratorKind.Cylinder), () => generate.Generator = CSGGeneratorKind.Cylinder),
+                (CSGSections.ShapeName(CSGGeneratorKind.Sphere), () => generate.Generator = CSGGeneratorKind.Sphere),
+                (CSGSections.ShapeName(CSGGeneratorKind.LinearStairs), () => generate.Generator = CSGGeneratorKind.LinearStairs),
+                (CSGSections.ShapeName(CSGGeneratorKind.SpiralStairs), () => generate.Generator = CSGGeneratorKind.SpiralStairs),
+                (CSGSections.ShapeName(CSGGeneratorKind.Room), () => generate.Generator = CSGGeneratorKind.Room),
+                (CSGSections.ShapeName(CSGGeneratorKind.Polygon), () => generate.Generator = CSGGeneratorKind.Polygon),
                 (Loc.Get("csg.subtractive"), () => generate.Operation = generate.Operation == Operation.Subtractive ? Operation.Additive : Operation.Subtractive),
             ],
             CSGMode.Surface =>
@@ -246,7 +246,7 @@ public sealed class CSGOverlayTool : SceneTool
                    .PositionType(PositionType.SelfDirected)
                    .Position(56, 12)
                    .Width(PanelWidth).Height(UnitValue.Auto)
-                   .Rounded(9).Padding(0, 0, 0, 6)
+                   .Rounded(12).Padding(0, 0, 0, 4)
                    .BackgroundColor(EditorTheme.Glass)
                    .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                    .Enter())
@@ -258,7 +258,7 @@ public sealed class CSGOverlayTool : SceneTool
 
             Origami.ScrollView(paper, $"{id}_scroll", PanelWidth, maxHeight).Body(() =>
             {
-                using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(0, 0, 2, 8).Enter())
+                using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(0, 0, 0, 4).Enter())
                     DrawModeBody(paper, font);
             });
         }
@@ -266,19 +266,26 @@ public sealed class CSGOverlayTool : SceneTool
 
     private void DrawTitleBar(Paper paper, Scribe.FontFile font, string id)
     {
-        using (paper.Row($"{id}_title").Height(22).Padding(8, 6, 0, 0).Enter())
+        using (paper.Row($"{id}_title").Height(34).Padding(12, 8, 0, 0).Gap(8).Enter())
         {
-            string title = _collapsed ? $"{Loc.Get("csg.title")}  {Loc.Get(ModeLabel(CSGEditMode.Current))}" : Loc.Get("csg.title");
-            paper.Box($"{id}_title_t").Height(22)
-                .Text(title, font).TextColor(EditorTheme.Ink400)
+            paper.Box($"{id}_title_i").Width(18).Height(34).IsNotInteractable()
+                .Text(EditorIcons.Cube, font).TextColor(EditorTheme.AccentText)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+
+            paper.Box($"{id}_title_t").Width(UnitValue.Auto).Height(34).IsNotInteractable()
+                .Text(Loc.Get("csg.title"), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+            paper.Box($"{id}_title_m").Height(34).IsNotInteractable()
+                .Text(Loc.Get(ModeLabel(CSGEditMode.Current)), font).TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
             paper.Box($"{id}_title_c")
-                .Width(18).Height(18).Rounded(4)
+                .Width(24).Height(24).Rounded(6).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .BackgroundColor(SColor.Transparent)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Text(_collapsed ? EditorIcons.ChevronDown : EditorIcons.ChevronUp, font)
-                .TextColor(EditorTheme.Ink500).FontSize(9f).Alignment(TextAlignment.MiddleCenter)
+                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall - 4f).Alignment(TextAlignment.MiddleCenter)
                 .Tooltip(Loc.Get("csg.collapse"), Loc.Get("csg.collapse_tip"))
                 .OnClick(_ => _collapsed = !_collapsed);
         }
@@ -286,7 +293,7 @@ public sealed class CSGOverlayTool : SceneTool
 
     private static string ModeLabel(CSGMode mode)
     {
-        foreach ((CSGMode m, string label, _, _) in Modes)
+        foreach ((CSGMode m, string label, _, _, _) in Modes)
             if (m == mode) return label;
         return "csg.title";
     }
@@ -304,7 +311,7 @@ public sealed class CSGOverlayTool : SceneTool
         if (CSGEditMode.Is(CSGMode.Generate) && SceneToolManager.Get<CSGGenerateTool>() is { } generate)
         {
             parts.Add(Loc.Get(CSGSections.OperationLabel(generate.Operation)));
-            parts.Add(generate.Generator.ToString());
+            parts.Add(CSGSections.ShapeName(generate.Generator));
         }
         parts.Add(Loc.Get("csg.status_grid", new { size = SceneTools.MoveSnap.ToString(SceneTools.CurrentMoveSnapFormat) }));
 
@@ -352,26 +359,29 @@ public sealed class CSGOverlayTool : SceneTool
 
     private static readonly SColor InvalidText = SColor.FromArgb(255, 255, 120, 110);
 
+    /// <summary>One icon per mode, the lit one is current. Hovering names the mode and its key.</summary>
     internal static void DrawModeTabs(Paper paper, Scribe.FontFile font, string id)
     {
-        using (paper.Row($"{id}_modes").Height(24).Padding(6, 6, 0, 6).Gap(3).Enter())
+        using (paper.Row($"{id}_modes").Height(36).Padding(8, 8, 0, 8).Gap(4).Enter())
         {
-            foreach ((CSGMode mode, string label, string tip, string shortcut) in Modes)
+            foreach ((CSGMode mode, string label, string tip, string shortcut, string icon) in Modes)
             {
                 bool active = CSGEditMode.Is(mode);
 
                 paper.Box($"{id}_mode_{mode}")
-                    .Height(24).Rounded(5)
-                    .BackgroundColor(active ? EditorTheme.Accent : EditorTheme.Ink100)
+                    .Height(36).Rounded(7)
+                    .BackgroundColor(active ? EditorTheme.Accent : TabColor)
                     .Hovered.BackgroundColor(active ? EditorTheme.AccentBright : EditorTheme.Hover).End()
-                    .Text(Loc.Get(label), font)
+                    .Text(icon, font)
                     .TextColor(active ? SColor.White : EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
                     .Tooltip(ShortcutManager.GetTooltip(Loc.Get(label), shortcut), Loc.Get(tip))
                     .OnClick(mode, (m, _) => CSGEditMode.Current = m);
             }
         }
     }
+
+    private static readonly SColor TabColor = SColor.FromArgb(28, 255, 255, 255);
 
     internal static void DrawModeBody(Paper paper, Scribe.FontFile font)
     {
