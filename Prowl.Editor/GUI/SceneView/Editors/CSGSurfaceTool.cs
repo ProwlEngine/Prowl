@@ -25,6 +25,7 @@ public sealed class CSGSurfaceTool : SceneTool
     public override int Order => 2;
 
     private const string SurfaceControl = "csg_surface";
+    private const string EmptyControl = "csg_surface_empty";
 
     private static readonly Color32 HoverColor = new(255, 240, 160, 60);
     private static readonly Color32 SelectedFill = new(255, 200, 90, 70);
@@ -65,6 +66,15 @@ public sealed class CSGSurfaceTool : SceneTool
     private void PickSurface(SceneToolContext ctx, CSGModel model)
     {
         HandleContext handles = ctx.Handles;
+
+        // A click on nothing clears the surfaces only, rather than falling through to scene picking
+        ControlID empty = handles.GetControlID(EmptyControl);
+        handles.AddControl(empty, HandleContext.BodyDistance, float.MaxValue - 1f);
+        if (handles.IsNearest(empty) && handles.TryBeginDrag(empty))
+        {
+            if (!handles.Shift && !handles.Ctrl) CSGSurfaceSelection.Clear();
+            return;
+        }
 
         if (!model.Raycast(handles.MouseRay, out CSGBrush brush, out int plane, out Float3 point, b => !CSGVisibility.IsHidden(b))) return;
         if (plane < 0) return;

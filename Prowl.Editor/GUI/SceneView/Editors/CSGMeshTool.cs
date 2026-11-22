@@ -303,7 +303,8 @@ public sealed class CSGMeshTool : SceneTool
 
         // Nothing under the cursor, so a press starts a marquee.
         ControlID marquee = handles.GetControlID(MarqueeControl);
-        handles.AddDefaultControl(marquee);
+        // Behind everything else, but ahead of scene picking, so a miss never deselects the brush
+        handles.AddControl(marquee, HandleContext.BodyDistance, float.MaxValue - 1f);
 
         if (handles.IsNearest(marquee) && handles.TryBeginDrag(marquee))
             BeginAction(handles, Action.Marquee);
