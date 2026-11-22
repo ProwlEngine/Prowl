@@ -368,4 +368,112 @@ public static class UVs
         foreach (GeometryData.Loop corner in corners) Set(corner, absolute ? by : Get(corner) + by);
         mesh.MarkChanged();
     }
+
+    /// <summary>Runs each corner's UV through a function.</summary>
+    public static void Transform(GeometryData mesh, IEnumerable<GeometryData.Loop> corners, Func<Float2, Float2> change)
+    {
+        EnsureUV(mesh);
+        foreach (GeometryData.Loop corner in corners) Set(corner, change(Get(corner)));
+        mesh.MarkChanged();
+    }
+
+    /// <summary>The middle of the corners' UVs.</summary>
+    public static Float2 Centre(IReadOnlyCollection<GeometryData.Loop> corners)
+    {
+        Float2 sum = Float2.Zero;
+        foreach (GeometryData.Loop corner in corners) sum += Get(corner);
+        return corners.Count > 0 ? sum / corners.Count : sum;
+    }
+
+    /// <summary>Lines the corners up on their middle along one axis, 0 for U and 1 for V.</summary>
+    public static void Align(GeometryData mesh, IReadOnlyCollection<GeometryData.Loop> corners, int axis)
+    {
+        Float2 centre = Centre(corners);
+        Transform(mesh, corners, uv => axis == 0 ? new Float2(centre.X, uv.Y) : new Float2(uv.X, centre.Y));
+    }
+
+    /// <summary>Mirrors the corners across their middle along one axis, 0 for U and 1 for V.</summary>
+    public static void Flip(GeometryData mesh, IReadOnlyCollection<GeometryData.Loop> corners, int axis)
+    {
+        Float2 centre = Centre(corners);
+        Transform(mesh, corners, uv => axis == 0 ? new Float2(2f * centre.X - uv.X, uv.Y) : new Float2(uv.X, 2f * centre.Y - uv.Y));
+    }
+
+    /// <summary>Turns the corners round their middle.</summary>
+    public static void Rotate(GeometryData mesh, IReadOnlyCollection<GeometryData.Loop> corners, float radians)
+    {
+        Float2 centre = Centre(corners);
+        float cos = MathF.Cos(radians), sin = MathF.Sin(radians);
+        Transform(mesh, corners, uv =>
+        {
+            Float2 d = uv - centre;
+            return centre + new Float2(d.X * cos - d.Y * sin, d.X * sin + d.Y * cos);
+        });
+    }
+
+    /// <summary>Brings every corner to their middle.</summary>
+    public static void Weld(GeometryData mesh, IReadOnlyCollection<GeometryData.Loop> corners)
+    {
+        Float2 centre = Centre(corners);
+        Transform(mesh, corners, _ => centre);
+    }
+
+    /// <summary>Rounds the corners to the nearest texel corner of a texture of the given size.</summary>
+    public static void SnapToPixels(GeometryData mesh, IEnumerable<GeometryData.Loop> corners, int width, int height)
+        => Transform(mesh, corners, uv => new Float2(MathF.Round(uv.X * width) / width, MathF.Round(uv.Y * height) / height));
+
+    /// <summary>Lays the faces' islands out in the unit square, each keeping its turn and its size next to the others.</summary>
+    public static void Pack(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, float margin = 1f / 256f)
+    {
+        List<List<GeometryData.Face>> islands = Islands(mesh, faces);
+        var layouts = new List<Double2[]>(islands.Count);
+        var corners = new List<List<GeometryData.Loop>>(islands.Count);
+        foreach (List<GeometryData.Face> island in islands)
+        {
+            var at = new List<GeometryData.Loop>();
+            foreach (GeometryData.Face face in island)
+                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in Triangles(face))
+                    at.AddRange([a, b, c]);
+            corners.Add(at);
+            layouts.Add([.. at.Select(c => { Float2 uv = Get(c); return new Double2(uv.X, uv.Y); })]);
+        }
+        ChartUnwrapper.Pack(layouts, margin);
+        for (int i = 0; i < islands.Count; i++)
+            for (int k = 0; k < corners[i].Count; k++)
+                Set(corners[i][k], new Float2((float)layouts[i][k].X, (float)layouts[i][k].Y));
+        mesh.MarkChanged();
+    }
+
+    /// <summary>Scales each island round its middle so all of them have as much texture per area of surface as the faces together.</summary>
+    public static void AverageIslandScale(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces)
+    {
+        List<List<GeometryData.Face>> islands = Islands(mesh, faces);
+        var areas = new List<(float Surface, float Texture)>(islands.Count);
+        float surfaceTotal = 0f, textureTotal = 0f;
+        foreach (List<GeometryData.Face> island in islands)
+        {
+            float surface = 0f, texture = 0f;
+            foreach (GeometryData.Face face in island)
+                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in Triangles(face))
+                {
+                    surface += 0.5f * Float3.Length(Float3.Cross(b.Vert.Point - a.Vert.Point, c.Vert.Point - a.Vert.Point));
+                    Float2 ua = Get(a), ub = Get(b), uc = Get(c);
+                    texture += 0.5f * MathF.Abs((ub.X - ua.X) * (uc.Y - ua.Y) - (uc.X - ua.X) * (ub.Y - ua.Y));
+                }
+            areas.Add((surface, texture));
+            surfaceTotal += surface;
+            textureTotal += texture;
+        }
+        if (surfaceTotal <= 0f || textureTotal <= 0f) return;
+        float density = textureTotal / surfaceTotal;
+        for (int i = 0; i < islands.Count; i++)
+        {
+            (float surface, float texture) = areas[i];
+            if (surface <= 0f || texture <= 0f) continue;
+            float scale = MathF.Sqrt(density * surface / texture);
+            List<GeometryData.Loop> corners = [.. islands[i].SelectMany(Corners)];
+            Float2 centre = Centre(corners);
+            Transform(mesh, corners, uv => centre + (uv - centre) * scale);
+        }
+    }
 }

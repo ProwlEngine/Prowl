@@ -156,4 +156,65 @@ public class UVTests
         Assert.Contains(uvs, u => Float2.Distance(u, new Float2(0, 1)) < 1e-5f);
         Assert.True(UVArea(mesh.Faces[0]) > 0f);
     }
+
+    [Fact]
+    public void PackingFitsIslandsIntoTheSquareWithoutOverlap()
+    {
+        GeometryData cube = Primitives.Make(PrimitiveKind.Cube);
+        UVs.SetSeams(cube, [.. cube.Edges], true);
+        UVs.Unwrap(cube, [.. cube.Faces]);
+        UVs.Transform(cube, [.. cube.Faces.SelectMany(Corners)], uv => uv * 5f + new Float2(3f, -2f));
+
+        UVs.Pack(cube, [.. cube.Faces]);
+
+        Assert.All(cube.Faces.SelectMany(Corners).Select(UVOf), uv => Assert.True(uv.X >= -1e-4f && uv.X <= 1.0001f && uv.Y >= -1e-4f && uv.Y <= 1.0001f));
+        Assert.Equal(6, UVs.Islands(cube, [.. cube.Faces]).Count);
+        float area = cube.Faces.Sum(f => MathF.Abs(UVArea(f)));
+        Assert.True(area > 0.2f, $"packed area {area}");
+    }
+
+    [Fact]
+    public void AveragingIslandScaleGivesEveryIslandTheSameTexelDensity()
+    {
+        GeometryData mesh = Grid(2, 1);
+        UVs.SetSeams(mesh, [mesh.FindEdge(mesh.Vertices[1], mesh.Vertices[4])!], true);
+        UVs.Unwrap(mesh, [.. mesh.Faces]);
+        UVs.Transform(mesh, [.. Corners(mesh.Faces[1])], uv => uv * 3f);
+
+        UVs.AverageIslandScale(mesh, [.. mesh.Faces]);
+
+        float a = MathF.Abs(UVArea(mesh.Faces[0])), b = MathF.Abs(UVArea(mesh.Faces[1]));
+        Assert.True(MathF.Abs(a - b) < a * 0.01f, $"{a} and {b}");
+    }
+
+    [Fact]
+    public void AligningFlippingAndWeldingMoveOnlyTheGivenPoints()
+    {
+        GeometryData mesh = Grid(1, 1);
+        UVs.Reset(mesh, [.. mesh.Faces]);
+        List<GeometryData.Loop> corners = [.. Corners(mesh.Faces[0])];
+
+        UVs.Align(mesh, [corners[0], corners[1]], 1);
+        Assert.True(MathF.Abs(UVOf(corners[0]).Y - UVOf(corners[1]).Y) < 1e-6f);
+
+        UVs.Flip(mesh, corners, 0);
+        Assert.Equal(1f, UVOf(corners[0]).X, 4);
+
+        UVs.Weld(mesh, [corners[2], corners[3]]);
+        Assert.True(Float2.Distance(UVOf(corners[2]), UVOf(corners[3])) < 1e-6f);
+        Assert.True(Float2.Distance(UVOf(corners[2]), new Float2(0.5f, 1f)) < 1e-4f);
+    }
+
+    [Fact]
+    public void SnappingToPixelsRoundsToTheTexelGrid()
+    {
+        GeometryData mesh = Grid(1, 1);
+        UVs.Reset(mesh, [.. mesh.Faces]);
+        List<GeometryData.Loop> corners = [.. Corners(mesh.Faces[0])];
+        UVs.MoveUVs(mesh, [corners[2]], new Float2(0.123f, 0.456f), absolute: true);
+
+        UVs.SnapToPixels(mesh, [corners[2]], 10, 4);
+
+        Assert.True(Float2.Distance(UVOf(corners[2]), new Float2(0.1f, 0.5f)) < 1e-5f);
+    }
 }
