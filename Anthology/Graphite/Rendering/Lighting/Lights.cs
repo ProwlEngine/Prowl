@@ -387,13 +387,17 @@ public struct FogVolumeDesc : IEquatable<FogVolumeDesc>
 }
 
 /// <summary>A world's wind: the way it blows across the ground, how hard, and how fast its gusts come and go.</summary>
-public struct WindDesc
+public struct WindDesc : IEquatable<WindDesc>
 {
     public Float2 Direction = new(1f, 0f);
     public float Strength = 0.6f;
     public float GustSpeed = 1.3f;
 
     public WindDesc() { }
+
+    public readonly bool Equals(WindDesc other) => Direction == other.Direction && Strength == other.Strength && GustSpeed == other.GustSpeed;
+    public override readonly bool Equals(object? obj) => obj is WindDesc other && Equals(other);
+    public override readonly int GetHashCode() => HashCode.Combine(Direction, Strength, GustSpeed);
 }
 
 /// <summary>
@@ -401,7 +405,7 @@ public struct WindDesc
 /// ground and dies at the rim, calm at the very centre. Strength is the push where the outflow peaks, Turbulence varies it
 /// by place as a share of Strength, and gusts of PulseMagnitude times Strength roll outward PulseFrequency times a second.
 /// </summary>
-public struct WindZoneDesc
+public struct WindZoneDesc : IEquatable<WindZoneDesc>
 {
     public Double3 Center;
     public float Radius = 10f;
@@ -411,6 +415,11 @@ public struct WindZoneDesc
     public float PulseFrequency = 0.25f;
 
     public WindZoneDesc() { }
+
+    public readonly bool Equals(WindZoneDesc other) => Center == other.Center && Radius == other.Radius && Strength == other.Strength
+        && Turbulence == other.Turbulence && PulseMagnitude == other.PulseMagnitude && PulseFrequency == other.PulseFrequency;
+    public override readonly bool Equals(object? obj) => obj is WindZoneDesc other && Equals(other);
+    public override readonly int GetHashCode() => HashCode.Combine(Center, Radius, Strength, Turbulence, PulseMagnitude, PulseFrequency);
 }
 
 /// <summary>A world's ambient light, fog and sun. Changes to the world's own instance apply at the next frame.</summary>
