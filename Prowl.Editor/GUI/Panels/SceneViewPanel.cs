@@ -394,10 +394,13 @@ public class SceneViewPanel : DockPanel
         using (paper.Column("sv_tools")
             .PositionType(PositionType.SelfDirected)
             .Position(12, 12)
-            .Width(32).Height(UnitValue.Auto)
+            .Width(32)
+            .Height(UnitValue.Auto)
+            .Padding(4)
             .Rounded(Origami.Current.Metrics.ContainerRounding)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Gap(4)
             .Enter())
         {
             // The viewport owns the strip and draws the built-in buttons, so they exist even with no

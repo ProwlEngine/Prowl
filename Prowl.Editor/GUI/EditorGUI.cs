@@ -444,7 +444,7 @@ public static class EditorGUI
     public static void ToolStripButton(Paper paper, string id, IOrigamiIcon icon, string tooltip, bool active, Action onClick)
     {
         ButtonBuilder b = Origami.IconButton(paper, id, icon, onClick)
-            .Small().Width(UnitValue.StretchOne).Height(30).Tooltip(tooltip);
+            .Small().Width(UnitValue.StretchOne).Height(22).Tooltip(tooltip);
         if (active) b.Primary(); else b.Ghost();
         b.Show();
     }
