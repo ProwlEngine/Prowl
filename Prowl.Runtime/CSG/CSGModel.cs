@@ -31,6 +31,13 @@ public sealed class CSGModel : Component
     /// <summary>Texture tiles per world unit, multiplied into every surface's own scale.</summary>
     public float DefaultTexelScale = 1f;
 
+    /// <summary>
+    /// Builds the inside of the solid: the model is endless solid and its brushes are the space carved out of it, seen
+    /// from inside. Additive brushes become rooms and subtractive ones fill them back in. Leave the collider not convex,
+    /// which would fill the rooms.
+    /// </summary>
+    public bool SubtractiveWorkflow;
+
     /// <summary>Keep rebuilding outside the editor when brushes change. Off ships the meshes saved with the scene.</summary>
     public bool RebuildAtRuntime;
 
@@ -260,6 +267,7 @@ public sealed class CSGModel : Component
             SyncTree();
         }
 
+        _scene.InvertOutput = SubtractiveWorkflow;
         GeometryData geometry = _scene.Build();
         BrushCount = _scene.Count;
 

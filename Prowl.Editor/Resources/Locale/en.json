@@ -939,7 +939,7 @@
   "csg.extra_depth": "Landing depth",
   "csg.extra_height": "Lift height",
   "csg.auto": "Auto",
-  "csg.auto_tip": "Adds when pulled out of the surface it was drawn on, subtracts when pushed into it.",
+  "csg.auto_tip": "Adds when pulled out of the surface it was drawn on and subtracts when pushed into it. In a Subtractive Workflow model it is the other way round, and on the open grid it always adds.",
   "csg.from_centre": "From Centre",
   "csg.from_centre_tip": "The first click is the middle of the base rather than a corner.",
   "csg.square_base": "Square Base",

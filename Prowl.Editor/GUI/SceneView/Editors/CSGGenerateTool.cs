@@ -351,11 +351,18 @@ public sealed class CSGGenerateTool : SceneTool
         return model.GameObject;
     }
 
-    /// <summary>The operation the brush will get. In auto, pushing into the surface it was drawn on digs.</summary>
+    /// <summary>
+    /// The operation the brush will get. In auto, pushing into the surface it was drawn on digs and pulling out adds,
+    /// the other way round in a subtractive workflow model, where a brush is space. On the open grid it adds.
+    /// </summary>
     private Operation OperationFor()
     {
         if (!AutoOperation) return Operation;
-        return _onSurface && _stage == Stage.Extrude && _height < 0f ? Operation.Subtractive : Operation.Additive;
+        if (!_onSurface || _stage != Stage.Extrude || _height == 0f) return Operation.Additive;
+
+        CSGModel? model = CSGSelection.ActiveModel();
+        bool workflow = model.IsValid() && model!.SubtractiveWorkflow;
+        return _height < 0f != workflow ? Operation.Subtractive : Operation.Additive;
     }
 
     private (Color32 Color, string Label) Tint()

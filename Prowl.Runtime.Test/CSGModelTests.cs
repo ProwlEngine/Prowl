@@ -606,4 +606,22 @@ public class CSGModelTests : RuntimeTestBase
         Assert.Equal(1f, point.Y, 3);
         Assert.True(normal.Y > 0.99f, $"faces {normal}, should face the ray");
     }
+
+    /// <summary>With the subtractive workflow a brush is a room seen from inside: its floor faces up into it and can be clicked from inside.</summary>
+    [Fact]
+    public void SubtractiveWorkflowBuildsRoomsSeenFromInside()
+    {
+        CreateModel();
+        _model.SubtractiveWorkflow = true;
+        AddBrush(new Float3(4f, 2f, 4f), Float3.Zero);
+
+        Update(_scene);
+
+        Assert.All(_model.Faces(), f => Assert.True(Float3.Dot(f.Normal, f.Corners[0] - Float3.Zero) < 0f, $"face faces {f.Normal}"));
+
+        var down = new Ray(Float3.Zero, -Float3.UnitY);
+        Assert.True(_model.Raycast(down, out _, out _, out Float3 point, out Float3 normal));
+        Assert.Equal(-1f, point.Y, 3);
+        Assert.True(normal.Y > 0.99f, $"floor faces {normal}");
+    }
 }
