@@ -114,6 +114,43 @@ public class DynamicBvhTests
     }
 
     [Fact]
+    public void Rebuild_QueriesExactly_AndKeepsTakingAddsAndRemoves()
+    {
+        var rng = new RNG(77);
+        var tree = new DynamicBvh<int>(margin: 0.0f);
+        tree.Add(-1, BoxAt(Float3.Zero, 100f));
+
+        var tight = new List<AABB>();
+        for (int i = 0; i < 500; i++)
+            tight.Add(BoxAt(new Float3(Range(rng, -40, 40), Range(rng, -40, 40), Range(rng, -40, 40)), Range(rng, 0.1f, 2f)));
+        int[] ids = tree.Rebuild(Enumerable.Range(0, tight.Count).ToList(), tight);
+        Assert.Equal(tight.Count, tree.Count);
+
+        var live = Enumerable.Range(0, tight.Count).ToHashSet();
+        for (int i = 0; i < tight.Count; i += 3)
+        {
+            tree.Remove(ids[i]);
+            live.Remove(i);
+        }
+        for (int i = 0; i < 50; i++)
+        {
+            var box = BoxAt(new Float3(Range(rng, -40, 40), Range(rng, -40, 40), Range(rng, -40, 40)), 1f);
+            tight.Add(box);
+            live.Add(tight.Count - 1);
+            tree.Add(tight.Count - 1, box);
+        }
+
+        for (int q = 0; q < 40; q++)
+        {
+            var query = BoxAt(new Float3(Range(rng, -40, 40), Range(rng, -40, 40), Range(rng, -40, 40)), Range(rng, 2f, 8f));
+            var expected = live.Where(i => query.Intersects(tight[i])).ToHashSet();
+            var got = new List<int>();
+            tree.QueryAABB(query, got);
+            Assert.Equal(expected, got.ToHashSet());
+        }
+    }
+
+    [Fact]
     public void AddRemove_KeepsQueriesConsistent()
     {
         var tree = new DynamicBvh<int>(margin: 0.5f);

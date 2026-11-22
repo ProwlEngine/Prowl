@@ -132,8 +132,10 @@ public sealed class CSGScene
     private bool _hasAttributes;
     private readonly Dictionary<SnapKey, List<GeometryData.Vertex>> _vertexGrid = new();
     private readonly Dictionary<SnapKey, List<RepPoint>> _representatives = new();
-    private Bvh<Float3>? _representativeBvh;
-    private bool _representativesChanged;
+    private readonly DynamicBvh<RepPoint> _representativeTree = new();
+    private readonly DynamicBvh<SceneBrush> _brushTree = new();
+    private bool _brushTreeStale = true;
+    private bool _deferRepresentativeTree;
 
     private bool _weldTJunctions = true;
     private bool _keepDiscarded;
@@ -473,7 +475,18 @@ public sealed class CSGScene
             foreach (var b in _brushes) b.Dirty = true;
         _evalDirty = false;
 
-        var bvh = new Bvh<SceneBrush>(_brushes, BrushBox, new BvhBuildSettings { Quality = BvhBuildQuality.Fast, MaxLeafSize = 4 });
+        var bvh = _brushTree;
+        if (_brushTreeStale)
+        {
+            int[] handles = bvh.Rebuild(_brushes, _brushes.ConvertAll(BrushBox));
+            for (int i = 0; i < handles.Length; i++) _brushes[i].TreeHandle = handles[i];
+            _brushTreeStale = false;
+        }
+        else
+        {
+            foreach (var brush in _brushes)
+                bvh.Update(brush.TreeHandle, BrushBox(brush));
+        }
 
         // Propagate pending dirty regions to whatever brushes now occupy them.
         if (_pendingDirtyRegions.Count > 0)
@@ -566,6 +579,7 @@ public sealed class CSGScene
         if (!_treeDirty) return;
         _treeDirty = false;
 
+        _brushTreeStale = true;
         _brushes.Clear();
         _hasIntersect = false;
         bool hasGroups = false;
@@ -819,8 +833,9 @@ public sealed class CSGScene
     }
 
     private static readonly Comparison<SceneBrush> s_latestFirst = (a, b) => b.EvalOrder.CompareTo(a.EvalOrder);
+    private static readonly Comparison<SceneBrush> s_earliestFirst = (a, b) => a.EvalOrder.CompareTo(b.EvalOrder);
 
-    private void Recompute(SceneBrush self, Bvh<SceneBrush> bvh, List<SceneBrush> neighborBuffer)
+    private void Recompute(SceneBrush self, DynamicBvh<SceneBrush> bvh, List<SceneBrush> neighborBuffer)
     {
         self.Output.Clear();
         self.Discarded.Clear();
@@ -832,7 +847,7 @@ public sealed class CSGScene
 
         // In a flat scene a fragment inside a brush is decided by that brush and the ones after it,
         // so walking the neighbours latest first lets such a fragment stop early.
-        if (_flat) neighborBuffer.Sort(s_latestFirst);
+        neighborBuffer.Sort(_flat ? s_latestFirst : s_earliestFirst);
 
         var work = new List<Fragment>();
         var next = new List<Fragment>();
@@ -1309,8 +1324,13 @@ public sealed class CSGScene
 
         var output = _output!;
         if (WeldTJunctions)
+        {
+            _deferRepresentativeTree = fresh;
             foreach (var brush in _brushes)
                 if (brush.OutputChanged) Reference(brush);
+            _deferRepresentativeTree = false;
+            if (fresh) RebuildRepresentativeTree();
+        }
 
         foreach (var brush in _brushes)
         {
@@ -1344,8 +1364,6 @@ public sealed class CSGScene
         _reassemble = false;
         _vertexGrid.Clear();
         _representatives.Clear();
-        _representativeBvh = null;
-        _representativesChanged = true;
         foreach (var brush in _brushes)
         {
             brush.Emitted.Clear();
@@ -1368,6 +1386,21 @@ public sealed class CSGScene
                 brush.References.Add(Representative(p));
     }
 
+    private void RebuildRepresentativeTree()
+    {
+        var all = new List<RepPoint>();
+        var boxes = new List<AABB>();
+        foreach (var bucket in _representatives.Values)
+            foreach (var rep in bucket)
+            {
+                all.Add(rep);
+                boxes.Add(new AABB(rep.Point, rep.Point).Expanded(WeldTolerance));
+            }
+
+        int[] handles = _representativeTree.Rebuild(all, boxes);
+        for (int i = 0; i < handles.Length; i++) all[i].TreeHandle = handles[i];
+    }
+
     // Rebuilds a brush's rings after T-junction welding from its output and the representatives it holds.
     private void Reweld(SceneBrush brush)
     {
@@ -1379,17 +1412,7 @@ public sealed class CSGScene
             return;
         }
 
-        if (_representativesChanged || _representativeBvh == null)
-        {
-            var points = new List<Float3>();
-            foreach (var bucket in _representatives.Values)
-                foreach (var rep in bucket)
-                    points.Add(rep.Point);
-            _representativeBvh = new Bvh<Float3>(points, p => new AABB(p, p).Expanded(WeldTolerance), BvhBuildSettings.Default);
-            _representativesChanged = false;
-        }
-
-        var candidates = new List<Float3>();
+        var candidates = new List<RepPoint>();
         int held = 0;
         foreach (var frag in brush.Output)
         {
@@ -1405,7 +1428,7 @@ public sealed class CSGScene
             brush.Welded.Add(new EmitItem
             {
                 Brush = brush,
-                Ring = InsertCollinearPoints(ring, _representativeBvh, candidates),
+                Ring = InsertCollinearPoints(ring, candidates),
                 Source = frag.Source,
                 Flip = frag.Flip
             });
@@ -1450,25 +1473,9 @@ public sealed class CSGScene
         }
     }
 
-    // Inserts existing vertices that lie on the interior of another polygon's edge, removing the
-    // T-junctions that arise when independent cuts subdivide a shared face.
-    private void WeldTJunctionPass(List<EmitItem> items)
-    {
-        var seen = new HashSet<SnapKey>();
-        var points = new List<Float3>();
-        foreach (var item in items)
-            foreach (var p in item.Ring)
-                if (seen.Add(new SnapKey(p, WeldTolerance)))
-                    points.Add(p);
-
-        var bvh = new Bvh<Float3>(points, p => new AABB(p, p).Expanded(WeldTolerance), BvhBuildSettings.Default);
-        var candidates = new List<Float3>();
-
-        foreach (var item in items)
-            item.Ring = InsertCollinearPoints(item.Ring, bvh, candidates);
-    }
-
-    private List<Float3> InsertCollinearPoints(List<Float3> ring, Bvh<Float3> points, List<Float3> candidates)
+    // Inserts representatives lying on the interior of a ring's edges, removing the T-junctions that arise when
+    // independent cuts subdivide a shared face.
+    private List<Float3> InsertCollinearPoints(List<Float3> ring, List<RepPoint> candidates)
     {
         float tol2 = WeldTolerance * WeldTolerance;
         int n = ring.Count;
@@ -1486,11 +1493,12 @@ public sealed class CSGScene
             if (abLen2 < tol2) continue;
 
             candidates.Clear();
-            points.QueryAABB(new AABB(Maths.Min(a, b), Maths.Max(a, b)).Expanded(WeldTolerance), candidates);
+            _representativeTree.QueryAABB(new AABB(Maths.Min(a, b), Maths.Max(a, b)).Expanded(WeldTolerance), candidates);
 
             inserts.Clear();
-            foreach (var c in candidates)
+            foreach (var rep in candidates)
             {
+                Float3 c = rep.Point;
                 if (Float3.LengthSquared(c - a) < tol2 || Float3.LengthSquared(c - b) < tol2) continue;
                 float t = Float3.Dot(c - a, ab) / abLen2;
                 if (t <= 0.0f || t >= 1.0f) continue;
@@ -1748,7 +1756,7 @@ public sealed class CSGScene
         var rep = new RepPoint { Point = point, Home = VertexHome(point), Count = 1 };
         if (!_representatives.TryGetValue(rep.Home, out var list)) _representatives[rep.Home] = list = new List<RepPoint>(1);
         list.Add(rep);
-        _representativesChanged = true;
+        if (!_deferRepresentativeTree) rep.TreeHandle = _representativeTree.Add(rep, new AABB(point, point).Expanded(WeldTolerance));
         return rep;
     }
 
@@ -1757,7 +1765,7 @@ public sealed class CSGScene
         if (--rep.Count > 0) return;
         if (_representatives.TryGetValue(rep.Home, out var bucket) && bucket.Remove(rep) && bucket.Count == 0)
             _representatives.Remove(rep.Home);
-        _representativesChanged = true;
+        _representativeTree.Remove(rep.TreeHandle);
     }
 
     private SnapKey VertexHome(Float3 point)
@@ -1771,6 +1779,7 @@ public sealed class CSGScene
         public Float3 Point;
         public SnapKey Home;
         public int Count;
+        public int TreeHandle;
     }
 
     // Finds the vertex already standing within the weld tolerance of a point, or adds one. Vertices are
@@ -1888,6 +1897,9 @@ public sealed class CSGScene
         /// <summary>The representative of every corner of <see cref="Output"/>, in order.</summary>
         public readonly List<RepPoint> References = new();
         public bool OutputChanged = true;
+
+        /// <summary>Handle in the scene's brush tree.</summary>
+        public int TreeHandle = -1;
     }
 
     #endregion

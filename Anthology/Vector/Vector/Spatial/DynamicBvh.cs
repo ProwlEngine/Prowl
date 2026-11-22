@@ -145,6 +145,36 @@ public sealed class DynamicBvh<T>
         _leafCount = 0;
     }
 
+    /// <summary>
+    /// Replaces everything with these items in one balanced top down build, much faster than adding them one at a
+    /// time. Returns each item's proxy id, in order. The tree keeps taking adds, removes and updates afterwards.
+    /// </summary>
+    public int[] Rebuild(IReadOnlyList<T> items, IReadOnlyList<AABB> bounds)
+    {
+        Clear();
+        int count = items.Count;
+        var ids = new int[count];
+        if (count == 0) return ids;
+
+        var order = new int[count];
+        var centers = new Float3[count];
+        for (int i = 0; i < count; i++)
+        {
+            int id = AllocateNode();
+            var node = _nodes[id];
+            node.Box = Fatten(bounds[i]);
+            node.Item = items[i];
+            ids[i] = id;
+            order[i] = i;
+            centers[i] = (bounds[i].Min + bounds[i].Max) * 0.5f;
+        }
+
+        _leafCount = count;
+        _root = BuildRange(ids, order, centers, new float[count], 0, count);
+        _nodes[_root].Parent = Null;
+        return ids;
+    }
+
     /// <summary>The item stored at a proxy id.</summary>
     public T GetItem(int proxyId) => _nodes[proxyId].Item;
 
@@ -156,7 +186,29 @@ public sealed class DynamicBvh<T>
     #region Queries
 
     /// <summary>Appends every item whose fat bounds overlap <paramref name="box"/> to <paramref name="results"/>.</summary>
-    public void QueryAABB(AABB box, List<T> results) => QueryAABB(box, results.Add);
+    public void QueryAABB(AABB box, List<T> results)
+    {
+        if (_root == Null) return;
+
+        Span<int> stack = stackalloc int[64];
+        int sp = 0;
+        stack[sp++] = _root;
+        while (sp > 0)
+        {
+            Node node = _nodes[stack[--sp]];
+            if (!node.Box.Intersects(box)) continue;
+
+            if (node.IsLeaf)
+            {
+                results.Add(node.Item);
+            }
+            else if (sp + 2 <= stack.Length)
+            {
+                stack[sp++] = node.Child1;
+                stack[sp++] = node.Child2;
+            }
+        }
+    }
 
     /// <summary>Invokes <paramref name="visit"/> for every item whose fat bounds overlap <paramref name="box"/>.</summary>
     public void QueryAABB(AABB box, Action<T> visit)
@@ -273,6 +325,63 @@ public sealed class DynamicBvh<T>
     #endregion
 
     #region Tree maintenance
+
+    // Splits the items at the median of their centres along the widest axis, and joins the two halves under a new node
+    private int BuildRange(int[] ids, int[] order, Float3[] centers, float[] keys, int start, int count)
+    {
+        if (count == 1) return ids[order[start]];
+
+        Float3 min = centers[order[start]], max = min;
+        for (int i = start + 1; i < start + count; i++)
+        {
+            min = Maths.Min(min, centers[order[i]]);
+            max = Maths.Max(max, centers[order[i]]);
+        }
+
+        Float3 extent = max - min;
+        int axis = extent.X >= extent.Y && extent.X >= extent.Z ? 0 : extent.Y >= extent.Z ? 1 : 2;
+        for (int i = start; i < start + count; i++) keys[i] = Axis(centers[order[i]], axis);
+        int half = count / 2;
+        SelectMedian(keys, order, start, start + count - 1, start + half);
+
+        int left = BuildRange(ids, order, centers, keys, start, half);
+        int right = BuildRange(ids, order, centers, keys, start + half, count - half);
+
+        int parent = AllocateNode();
+        var node = _nodes[parent];
+        node.Child1 = left;
+        node.Child2 = right;
+        node.Box = _nodes[left].Box.Encapsulating(_nodes[right].Box);
+        node.Height = 1 + Math.Max(_nodes[left].Height, _nodes[right].Height);
+        _nodes[left].Parent = parent;
+        _nodes[right].Parent = parent;
+        return parent;
+    }
+
+    // Reorders the range so the item at nth has its sorted place, smaller keys before it and larger after
+    private static void SelectMedian(float[] keys, int[] order, int lo, int hi, int nth)
+    {
+        while (lo < hi)
+        {
+            float pivot = keys[(lo + hi) >> 1];
+            int i = lo, j = hi;
+            while (i <= j)
+            {
+                while (keys[i] < pivot) i++;
+                while (keys[j] > pivot) j--;
+                if (i > j) break;
+                (keys[i], keys[j]) = (keys[j], keys[i]);
+                (order[i], order[j]) = (order[j], order[i]);
+                i++;
+                j--;
+            }
+            if (nth <= j) hi = j;
+            else if (nth >= i) lo = i;
+            else return;
+        }
+    }
+
+    private static float Axis(Float3 point, int axis) => axis == 0 ? point.X : axis == 1 ? point.Y : point.Z;
 
     private void InsertLeaf(int leaf)
     {
