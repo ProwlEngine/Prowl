@@ -387,9 +387,9 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("CSG/SetIntersecting", "Set Intersecting", KeyCode.BackSlash);
         ShortcutManager.Register("CSG/SetPassThrough", "Set Pass Through", KeyCode.Slash);
         ShortcutManager.Register("CSG/SnapToGrid", "Snap Selection To Grid", KeyCode.End, ctrl: true);
-        ShortcutManager.Register("CSG/FlipX", "Flip On X", KeyCode.X, ctrl: true, shift: true);
-        ShortcutManager.Register("CSG/FlipY", "Flip On Y", KeyCode.Y, ctrl: true, shift: true);
-        ShortcutManager.Register("CSG/FlipZ", "Flip On Z", KeyCode.Z, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/FlipX", "Flip On X", KeyCode.X, ctrl: true, alt: true);
+        ShortcutManager.Register("CSG/FlipY", "Flip On Y", KeyCode.Y, ctrl: true, alt: true);
+        ShortcutManager.Register("CSG/FlipZ", "Flip On Z", KeyCode.Z, ctrl: true, alt: true);
         ShortcutManager.Register("CSG/RotateLeft", "Rotate Anticlockwise", KeyCode.Comma, ctrl: true);
         ShortcutManager.Register("CSG/RotateRight", "Rotate Clockwise", KeyCode.Period, ctrl: true);
         ShortcutManager.Register("CSG/Hide", "Hide Selected", KeyCode.H);
