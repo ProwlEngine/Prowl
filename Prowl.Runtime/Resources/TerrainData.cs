@@ -435,6 +435,8 @@ public sealed class TerrainData : Asset, ISerializable
         float oldSize = _size;
         (_resolution, _size, _height) = (resolution, size, height);
         TerrainHeightmap map = from == resolution ? export.Heights : Resample(export.Heights, resolution);
+        IReadOnlyList<TerrainWeightMap> layers = from == resolution ? export.Settings.Layers : export.Settings.Layers.Select(m => Resample(m, resolution)).ToArray();
+        IReadOnlyList<TerrainWeightMap> details = from == resolution ? export.Settings.Details : export.Settings.Details.Select(m => Resample(m, resolution)).ToArray();
         IReadOnlyList<TerrainTree> trees = export.Settings.Trees;
         if (size != oldSize)
             trees = trees.Select(t => t with { Position = t.Position * (size / (double)oldSize) }).ToArray();
@@ -443,8 +445,8 @@ public sealed class TerrainData : Asset, ISerializable
             Spacing = size / (resolution - 1),
             Range = height,
             Seed = export.Settings.Seed,
-            Layers = export.Settings.Layers,
-            Details = export.Settings.Details,
+            Layers = layers,
+            Details = details,
             Trees = trees,
         });
     }
@@ -490,6 +492,24 @@ public sealed class TerrainData : Asset, ISerializable
                     holes[z * resolution + x] = map.Holes![(int)Math.Round(fz) * map.Width + (int)Math.Round(fx)];
             }
         return new TerrainHeightmap(resolution, resolution, samples) { Holes = holes };
+    }
+
+    // A map of one value per sample onto a grid of the given samples a side, its corners staying on the terrain's corners
+    private static TerrainWeightMap Resample(TerrainWeightMap map, int resolution)
+    {
+        byte[] values = new byte[resolution * resolution];
+        double scale = (map.Width - 1) / (double)(resolution - 1);
+        for (int z = 0; z < resolution; z++)
+            for (int x = 0; x < resolution; x++)
+            {
+                double fx = x * scale, fz = z * scale;
+                int x0 = Math.Min((int)fx, map.Width - 2), z0 = Math.Min((int)fz, map.Height - 2);
+                double tx = fx - x0, tz = fz - z0;
+                double a = map.Values[z0 * map.Width + x0], b = map.Values[z0 * map.Width + x0 + 1];
+                double c = map.Values[(z0 + 1) * map.Width + x0], d = map.Values[(z0 + 1) * map.Width + x0 + 1];
+                values[z * resolution + x] = (byte)Math.Round((a + (b - a) * tx) * (1 - tz) + (c + (d - c) * tx) * tz);
+            }
+        return new TerrainWeightMap(resolution, resolution, values);
     }
 
     private TerrainHeightmap Flat() => new(_resolution, _resolution, new ushort[_resolution * _resolution]);
