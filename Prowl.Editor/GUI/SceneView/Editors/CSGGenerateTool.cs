@@ -235,16 +235,12 @@ public sealed class CSGGenerateTool : SceneTool
         return Float3.Dot(ray.Origin + ray.Direction * t - anchor, up);
     }
 
-    // Groups this tool made to hold a multi brush shape, which new shapes never go into
-    private readonly HashSet<GameObject> _shapeGroups = new();
-
-    /// <summary>New brushes go into the selected group when there is one, else the model.</summary>
-    private GameObject ParentFor(CSGModel model)
+    /// <summary>New brushes go into the selected group when there is one, else the model. A shape's own group is never used.</summary>
+    private static GameObject ParentFor(CSGModel model)
     {
-        _shapeGroups.RemoveWhere(go => go.IsNotValid());
         foreach (CSGGroup group in CSGSelection.Groups())
         {
-            if (_shapeGroups.Contains(group.GameObject)) continue;
+            if (group.HoldsShape) continue;
             if (ReferenceEquals(CSGSelection.ModelOf(group.GameObject), model)) return group.GameObject;
         }
         return model.GameObject;
@@ -274,8 +270,8 @@ public sealed class CSGGenerateTool : SceneTool
             root.Transform.Position = worldCentre;
             root.Transform.Rotation = _planeRotation;
 
-            _shapeGroups.Add(root);
             CSGGroup group = root.AddComponent<CSGGroup>();
+            group.HoldsShape = true;
             group.Operation = Operation;
         }
         else root = ParentFor(model!);

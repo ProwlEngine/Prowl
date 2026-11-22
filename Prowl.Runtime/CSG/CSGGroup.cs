@@ -39,6 +39,9 @@ public sealed class CSGGroup : Component
     /// <summary>Clicking any brush inside this group selects the group instead.</summary>
     public bool HandleAsOne;
 
+    /// <summary>Made by the editor to hold the brushes of one generated shape, such as a staircase.</summary>
+    public bool HoldsShape;
+
     /// <summary>Bumped by any edit that changes the CSG result.</summary>
     public int Version { get; private set; } = 1;
 
