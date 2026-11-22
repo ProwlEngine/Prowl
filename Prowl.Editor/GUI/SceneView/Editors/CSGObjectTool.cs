@@ -28,6 +28,7 @@ public sealed class CSGObjectTool : SceneTool
     public override string? Tooltip => "Select and edit CSG brushes";
 
     private const string BrushControl = "csg_brush";
+    private const string MarqueeControl = "csg_brush_marquee";
     private const string TransformControl = "sceneview_transform";
 
     private static readonly Color32 AdditiveColor = new(120, 200, 255, 255);
@@ -73,7 +74,20 @@ public sealed class CSGObjectTool : SceneTool
     {
         HandleContext handles = ctx.Handles;
 
-        if (!CSGSelection.PickBrush(model, _brushes, handles.MouseRay, out CSGBrush hit, out float distance)) return;
+        if (TickMarquee(ctx)) return;
+
+        if (!CSGSelection.PickBrush(model, _brushes, handles.MouseRay, out CSGBrush hit, out float distance))
+        {
+            // Empty space starts a marquee over brushes, ahead of scene picking which would select the whole model
+            ControlID empty = handles.GetControlID(MarqueeControl);
+            handles.AddControl(empty, HandleContext.BodyDistance, float.MaxValue - 1f);
+            if (handles.IsNearest(empty) && handles.TryBeginDrag(empty))
+            {
+                _marqueeStart = handles.MousePosition;
+                _marquee = true;
+            }
+            return;
+        }
 
         ControlID id = handles.GetControlID(BrushControl);
         handles.AddControl(id, HandleContext.BodyDistance, distance);
@@ -88,6 +102,40 @@ public sealed class CSGObjectTool : SceneTool
             else Selection.AddToSelection(target);
         }
         else Selection.Select(target);
+    }
+
+    // A marquee in progress: where it started, and whether it has moved far enough to be one
+    private bool _marquee;
+    private Float2 _marqueeStart;
+
+    /// <summary>Draws the marquee and selects the brushes inside it on release. True while one is in progress.</summary>
+    private bool TickMarquee(SceneToolContext ctx)
+    {
+        if (!_marquee) return false;
+        HandleContext handles = ctx.Handles;
+
+        bool dragged = Float2.Distance(handles.MousePosition, _marqueeStart) > 4f;
+        if (dragged)
+            ctx.Draw.ScreenRect(_marqueeStart, handles.MousePosition, Color32.FromArgb(40, 120, 170, 255), Color32.FromArgb(200, 140, 190, 255));
+
+        if (handles.PrimaryHeld && !handles.PrimaryUp) return true;
+        _marquee = false;
+        handles.TryEndDrag(handles.GetControlID(MarqueeControl));
+
+        if (!handles.Shift && !handles.Ctrl) Selection.Clear();
+        if (!dragged) return true;
+
+        Float2 min = Maths.Min(_marqueeStart, handles.MousePosition), max = Maths.Max(_marqueeStart, handles.MousePosition);
+        foreach (CSGBrush brush in _brushes)
+        {
+            if (CSGVisibility.IsHidden(brush) || !CSGSelection.TryBox(brush, out Float3 centre, out _)) continue;
+            if (handles.WorldToScreen(centre) is not Float2 p || p.X < min.X || p.X > max.X || p.Y < min.Y || p.Y > max.Y) continue;
+
+            GameObject target = SelectionTargetFor(brush);
+            if (handles.Ctrl) Selection.RemoveFromSelection(target);
+            else Selection.AddToSelection(target);
+        }
+        return true;
     }
 
     /// <summary>What a click on this brush selects. The outermost group marked to handle as one stands in for it.</summary>
