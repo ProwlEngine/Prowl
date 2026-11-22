@@ -499,6 +499,13 @@ internal static class CSGSections
                 .Item(Loc.Get("csg.clone_array"), tooltip: Loc.Get("csg.clone_array_tip"))
                 .Show());
 
+        EditorGUI.SettingsRow(paper, "csg_sel_order", Loc.Get("csg.order"), () =>
+            Origami.ButtonGroup(paper, "csg_sel_order_v", -1, idx => CSGSelection.MoveInOrder(idx == 0 ? -1 : 1))
+                .Height(EditorTheme.RowHeight).FullWidth()
+                .Item(Loc.Get("csg.earlier"), tooltip: ShortcutManager.GetTooltip(Loc.Get("csg.earlier_tip"), "CSG/Earlier"))
+                .Item(Loc.Get("csg.later"), tooltip: ShortcutManager.GetTooltip(Loc.Get("csg.later_tip"), "CSG/Later"))
+                .Show());
+
         LabelledButton(paper, font, "csg_sel_pivot", Loc.Get("csg.centre_pivot"),
             Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
 

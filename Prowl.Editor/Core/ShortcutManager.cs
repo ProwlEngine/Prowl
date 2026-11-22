@@ -412,6 +412,8 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("CSG/Confirm", "Confirm Cut or Shape", KeyCode.Enter);
         ShortcutManager.Register("CSG/RepeatClone", "Repeat Last Clone", KeyCode.D, ctrl: true, shift: true);
         ShortcutManager.Register("CSG/GroupSelection", "Group Selection", KeyCode.G, ctrl: true);
+        ShortcutManager.Register("CSG/Earlier", "Move Earlier in CSG Order", KeyCode.LeftBracket, ctrl: true);
+        ShortcutManager.Register("CSG/Later", "Move Later in CSG Order", KeyCode.RightBracket, ctrl: true);
         ShortcutManager.Register("CSG/ShapeBox", "Draw Box", KeyCode.Number1);
         ShortcutManager.Register("CSG/ShapeCylinder", "Draw Cylinder", KeyCode.Number2);
         ShortcutManager.Register("CSG/ShapeSphere", "Draw Sphere", KeyCode.Number3);

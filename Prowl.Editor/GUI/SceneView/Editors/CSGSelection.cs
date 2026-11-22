@@ -402,6 +402,22 @@ public static class CSGSelection
         MarkDirty();
     }
 
+    /// <summary>Moves the selection one place earlier or later among its siblings, which is where it falls in the CSG order.</summary>
+    public static void MoveInOrder(int direction)
+    {
+        List<GameObject> roots = Roots();
+        roots.Sort((a, b) => direction > 0 ? b.SiblingIndex.CompareTo(a.SiblingIndex) : a.SiblingIndex.CompareTo(b.SiblingIndex));
+
+        foreach (GameObject go in roots)
+        {
+            int count = go.Parent.IsValid() ? go.Parent!.Children.Count : int.MaxValue;
+            int index = go.SiblingIndex + direction;
+            if (index < 0 || index >= count) continue;
+            Undo.SetSiblingIndex(go, index, direction < 0 ? "Move CSG Earlier" : "Move CSG Later");
+        }
+        MarkDirty();
+    }
+
     /// <summary>The step the array buttons move by, and how many copies a clone makes.</summary>
     public static Float3 ArrayOffset = new(1f, 0f, 0f);
     public static int ArrayCount = 1;
