@@ -39,17 +39,6 @@ public static class CSGClip
     public static bool PlaneFromEdge(Float3 a, Float3 b, Float3 viewDirection, out Plane plane)
         => PlaneFromPoints(a, b, a + Float3.NormalizeSafe(viewDirection, Float3.UnitZ), out plane);
 
-    /// <summary>The plane sets a clip produces: one when removing, two for a split, empty when the plane misses.</summary>
-    public static List<Plane[]> Clip(IReadOnlyList<Plane> planes, Plane cut, CSGClipMode mode)
-    {
-        var result = new List<Plane[]>(2);
-
-        if (mode != CSGClipMode.RemoveBack) result.Add(Append(planes, cut));
-        if (mode != CSGClipMode.RemoveFront) result.Add(Append(planes, Flip(cut)));
-
-        return result;
-    }
-
     /// <summary>Adding a half space keeps what is behind the plane.</summary>
     private static Plane[] Append(IReadOnlyList<Plane> planes, Plane cut)
     {
@@ -59,8 +48,6 @@ public static class CSGClip
         result[^1] = cut;
         return result;
     }
-
-    public static Plane Flip(Plane plane) => new(-plane.Normal, -plane.D);
 
     /// <summary>Whether the plane passes through the solid.</summary>
     public static bool Crosses(IReadOnlyList<Float3> corners, Plane plane, float epsilon = 1e-4f)

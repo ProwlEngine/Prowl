@@ -132,7 +132,7 @@ public static class CSGSelection
             Float4x4 toLocal = candidate.Transform.WorldToLocalMatrix;
             Float3 origin = Float4x4.TransformPoint(ray.Origin, toLocal);
             Float3 direction = Float4x4.TransformNormal(ray.Direction, toLocal);
-            if (!CSGBrushGeometry.Raycast(candidate.Planes, origin, direction, out float t) || t >= distance) continue;
+            if (!candidate.ControlMesh.Raycast(origin, direction, out float t, out _) || t >= distance) continue;
 
             distance = t;
             brush = candidate;

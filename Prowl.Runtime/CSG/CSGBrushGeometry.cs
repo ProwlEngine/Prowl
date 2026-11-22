@@ -84,44 +84,6 @@ public static class CSGBrushGeometry
         return size.X > 1e-4f && size.Y > 1e-4f && size.Z > 1e-4f;
     }
 
-    /// <summary>Mirrors a plane set about its own origin along an <paramref name="axis"/> in the space <paramref name="frame"/> rotates the planes into.</summary>
-    public static Plane[] Mirror(IReadOnlyList<Plane> planes, Float3 axis, Quaternion frame)
-    {
-        Float3 n = Float3.Normalize(axis);
-        Quaternion inverse = Quaternion.Inverse(frame);
-        var result = new Plane[planes.Count];
-
-        for (int i = 0; i < planes.Count; i++)
-        {
-            Float3 outer = frame * planes[i].Normal;
-            Float3 reflected = outer - n * (2f * Float3.Dot(outer, n));
-            result[i] = new Plane(inverse * reflected, planes[i].D);
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Mirrors a plane set along a world <paramref name="axis"/> through the brush's origin, taking the brush's whole
-    /// transform into account so a scaled and rotated brush still reflects in world space.
-    /// </summary>
-    public static Plane[] Mirror(IReadOnlyList<Plane> planes, Float3 axis, Float4x4 localToWorld)
-    {
-        // A flattened transform has no inverse and nothing to mirror
-        if (!TryMirrorMatrix(axis, localToWorld, out Float4x4 local)) return [.. planes];
-
-        var result = new Plane[planes.Count];
-        for (int i = 0; i < planes.Count; i++)
-        {
-            Float3 p = planes[i].Normal;
-            Float3 normal = new(Float3.Dot(local.c0.XYZ, p), Float3.Dot(local.c1.XYZ, p), Float3.Dot(local.c2.XYZ, p));
-            float length = Float3.Length(normal);
-            result[i] = new Plane(normal / length, planes[i].D / length);
-        }
-
-        return result;
-    }
-
     /// <summary>
     /// The reflection along a world <paramref name="axis"/> through the brush's origin, as seen in the brush's own space.
     /// It is its own inverse. False when the transform is flattened and has no inverse.
@@ -160,15 +122,6 @@ public static class CSGBrushGeometry
             float length = Float3.Length(normal);
             result[i] = new Plane(normal / length, (planes[i].D - Float3.Dot(n, t)) / length);
         }
-        return result;
-    }
-
-    /// <summary>Shifts every plane so the solid moves by <paramref name="offset"/> in local space.</summary>
-    public static Plane[] Translate(IReadOnlyList<Plane> planes, Float3 offset)
-    {
-        var result = new Plane[planes.Count];
-        for (int i = 0; i < planes.Count; i++)
-            result[i] = new Plane(planes[i].Normal, planes[i].D + Float3.Dot(planes[i].Normal, offset));
         return result;
     }
 
