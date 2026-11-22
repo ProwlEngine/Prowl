@@ -67,7 +67,7 @@ public sealed class CSGMeshTool : SceneTool
     private readonly List<int> _faces = new();
 
     /// <summary>What a drag in progress is doing.</summary>
-    private enum Action { None, Marquee, Chamfer, Extrude }
+    private enum Action { None, Marquee, Chamfer, Extrude, Drag }
 
     // Pixels the cursor has to travel before a press becomes a chamfer, extrude or drag, so a click stays a click
     private const float DragThreshold = 4f;
@@ -79,6 +79,8 @@ public sealed class CSGMeshTool : SceneTool
     private List<(int a, int b)> _edges = new();
     private bool _dragging;
     private Float3 _dragRaw, _dragApplied;
+    private Float3 _dragAnchor, _dragStartHit;
+    private bool _dragStarted;
 
     private Action _action;
     private Float2 _dragOrigin;
@@ -244,7 +246,7 @@ public sealed class CSGMeshTool : SceneTool
                 if (handles.IsNearest(id) && handles.TryBeginDrag(id))
                 {
                     SelectEdge(handles, i);
-                    if (handles.Shift) BeginAction(handles, Action.Chamfer, edge: i);
+                    BeginAction(handles, handles.Shift ? Action.Chamfer : Action.Drag, edge: i);
                     return;
                 }
             }
@@ -260,7 +262,7 @@ public sealed class CSGMeshTool : SceneTool
                 if (handles.IsNearest(id) && handles.TryBeginDrag(id))
                 {
                     SelectVertex(handles, i);
-                    if (handles.Shift) BeginAction(handles, Action.Chamfer, point: i);
+                    BeginAction(handles, handles.Shift ? Action.Chamfer : Action.Drag, point: i);
                     return;
                 }
             }
@@ -288,13 +290,58 @@ public sealed class CSGMeshTool : SceneTool
             BeginAction(handles, Action.Marquee);
     }
 
+    /// <summary>Moves the selected points with the cursor, across the plane through them that faces the camera.</summary>
+    private void DragPoints(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        Float3 normal = ctx.Camera.GameObject.Transform.Forward;
+        Ray ray = handles.MouseRay;
+
+        float denom = Float3.Dot(ray.Direction, normal);
+        if (MathF.Abs(denom) < 1e-6f) return;
+        Float3 hit = ray.Origin + ray.Direction * (Float3.Dot(_dragAnchor - ray.Origin, normal) / denom);
+
+        if (!_dragStarted)
+        {
+            _dragStarted = true;
+            _dragStartHit = hit;
+        }
+
+        // Snapped from where the drag started, and the start moves on with each applied step
+        Float3 step = CSGSnap.Value(handles, hit - _dragStartHit);
+        if (Float3.LengthSquared(step) < 1e-12f) return;
+
+        CSGControlMesh? mesh = BeginPointEdit("Move CSG Vertices");
+        if (mesh == null) return;
+
+        Float4x4 toLocal = Target!.Transform.WorldToLocalMatrix;
+        Float3 delta = Float4x4.TransformPoint(_dragAnchor + step, toLocal) - Float4x4.TransformPoint(_dragAnchor, toLocal);
+
+        List<int> moving = [.. _vertices];
+        mesh.MovePoints(moving, delta);
+        Target.ApplyControlMesh();
+        if (!Target.IsShapeValid)
+        {
+            mesh.MovePoints(moving, -delta);
+            Target.ApplyControlMesh();
+            return;
+        }
+
+        _dragAnchor += step;
+        _dragStartHit += step;
+        MarkDirty();
+    }
+
     private void BeginAction(HandleContext handles, Action action, int point = -1, int edge = -1, int face = -1)
     {
         _action = action;
         _dragOrigin = handles.MousePosition;
+        _dragStarted = false;
         _startPlanes = (Plane[])Target!.Planes.Clone();
         _actionNormals.Clear();
         _actionRing.Clear();
+
+        _dragAnchor = Float4x4.TransformPoint(point >= 0 ? _mesh!.Points[point] : edge >= 0 ? (_mesh!.Points[_edges[edge].a] + _mesh.Points[_edges[edge].b]) * 0.5f : Float3.Zero, Target.Transform.LocalToWorldMatrix);
 
         if (point >= 0)
         {
@@ -378,6 +425,7 @@ public sealed class CSGMeshTool : SceneTool
         {
             case Action.Chamfer: if (moved) PreviewChamfer(ctx, amount); break;
             case Action.Extrude: if (moved) PreviewExtrude(ctx, amount); break;
+            case Action.Drag: if (moved) DragPoints(ctx); break;
             case Action.Marquee: DrawMarquee(ctx); break;
         }
 
