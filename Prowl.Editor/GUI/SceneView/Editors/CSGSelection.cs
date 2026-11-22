@@ -470,18 +470,32 @@ public static class CSGSelection
         }
         else
         {
-            foreach (GameObject child in shape.GameObject.Children.ToList())
-                if (child.GetComponent<CSGBrush>().IsValid()) Undo.DestroyObjectImmediate(child);
+            // The brushes already there are reshaped in order, so they keep their identity, surfaces and selection.
+            // Only a change in how many parts the shape needs adds or removes any.
+            List<CSGBrush> existing = shape.GameObject.Children.Select(c => c.GetComponent<CSGBrush>()).Where(b => b.IsValid()).ToList();
+            for (int i = parts.Count; i < existing.Count; i++) Undo.DestroyObjectImmediate(existing[i].GameObject);
 
             for (int i = 0; i < parts.Count; i++)
             {
-                GameObject go = CreateObject($"Step {i + 1}", shape.GameObject);
-                go.Transform.LocalPosition = parts[i].Offset;
-                CSGBrush brush = go.AddComponent<CSGBrush>();
-                brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, go.Transform.WorldToLocalMatrix * Drawn(parts[i].Offset));
+                CSGBrush brush;
+                if (i < existing.Count)
+                {
+                    brush = existing[i];
+                    Undo.RecordObject(brush.GameObject, name);
+                    Undo.RecordObject(brush, name);
+                }
+                else
+                {
+                    GameObject created = CreateObject($"Step {i + 1}", shape.GameObject);
+                    brush = created.AddComponent<CSGBrush>();
+                    Undo.RegisterCreatedObjectUndo(created, name);
+                }
+
+                brush.Transform.LocalPosition = parts[i].Offset;
+                brush.Transform.LocalRotation = Quaternion.Identity;
+                brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, brush.Transform.WorldToLocalMatrix * Drawn(parts[i].Offset));
                 brush.Operation = parts[i].Operation;
                 ApplySmoothing(brush, parts[i].SmoothPlanes);
-                Undo.RegisterCreatedObjectUndo(go, name);
             }
         }
         MarkDirty();

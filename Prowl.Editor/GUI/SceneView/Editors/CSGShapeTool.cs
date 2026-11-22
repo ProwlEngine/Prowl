@@ -84,7 +84,10 @@ public sealed class CSGShapeTool : SceneTool
             return;
         }
 
-        if (shape!.Kind == CSGGeneratorKind.Polygon) PolygonHandles(ctx, shape);
+        // The shape as a whole is what Edit works on, so a brush inside it hands the selection to the shape
+        if (!Selection.IsSelected(shape!.GameObject)) Selection.Select(shape.GameObject);
+
+        if (shape.Kind == CSGGeneratorKind.Polygon) PolygonHandles(ctx, shape);
         else
         {
             BoundsHandles(ctx, shape);
