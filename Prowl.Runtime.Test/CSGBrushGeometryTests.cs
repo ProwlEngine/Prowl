@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Echo;
 using Prowl.Runtime.CSG;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
@@ -219,5 +220,20 @@ public class CSGBrushGeometryTests
         Plane[] planes = Box(Float3.One);
         Plane[] mirrored = CSGBrushGeometry.Mirror(planes, Float3.UnitX, Float4x4.CreateScale(new Float3(0, 1, 1)));
         Assert.Equal(planes, mirrored);
+    }
+
+    [Fact]
+    public void AnEditedControlMeshSurvivesSaveAndLoad()
+    {
+        CSGControlMesh mesh = CSGControlMesh.FromPlanes(Box(Float3.One))!;
+        mesh.MovePoints([0], new Float3(0.1f, 0.2f, 0.3f));
+
+        CSGControlMesh loaded = Serializer.Deserialize<CSGControlMesh>(Serializer.Serialize(typeof(CSGControlMesh), mesh))!;
+
+        Assert.Equal(mesh.Points, loaded.Points);
+        Assert.Equal(mesh.Polygons.Count, loaded.Polygons.Count);
+        for (int i = 0; i < mesh.Polygons.Count; i++)
+            Assert.Equal(mesh.Polygons[i], loaded.Polygons[i]);
+        Assert.Equal(mesh.ToPlanes(), loaded.ToPlanes());
     }
 }
