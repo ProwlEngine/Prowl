@@ -418,6 +418,61 @@ public static class CSGSelection
         MarkDirty();
     }
 
+    /// <summary>Puts a generated brush's curved faces in one smoothing group of their own.</summary>
+    internal static void ApplySmoothing(CSGBrush brush, int smoothPlanes)
+    {
+        if (smoothPlanes <= 0) return;
+
+        int group = CSGSurfaceSelection.UnusedSmoothingGroup();
+        SurfaceData[] surfaces = brush.Surfaces;
+        for (int i = 0; i < smoothPlanes && i < surfaces.Length; i++)
+        {
+            SurfaceData data = surfaces[i];
+            data.SmoothingGroup = group;
+            brush.SetSurface(i, data);
+        }
+    }
+
+    /// <summary>
+    /// Builds a generated shape again from its <see cref="CSGShape"/>, in the frame of the object that holds it. A one
+    /// brush shape keeps its brush, a group gets new brushes in place of the old.
+    /// </summary>
+    public static void Regenerate(CSGShape shape, string name)
+    {
+        List<CSGShapePart> parts = shape.Kind == CSGGeneratorKind.Polygon
+            ? CSGShapeBuilder.PolygonPrism(shape.Outline, shape.Height) is Plane[] prism ? [new CSGShapePart(prism, Float3.Zero)] : []
+            : CSGShapeBuilder.Build(shape.Kind, shape.Size, shape.Settings);
+        if (parts.Count == 0) return;
+
+        Transform frame = shape.Transform;
+        Float4x4 Drawn(Float3 offset) => Float4x4.CreateTRS(frame.Position + frame.Rotation * offset, frame.Rotation, Float3.One);
+
+        CSGBrush own = shape.GetComponent<CSGBrush>();
+        if (own.IsValid())
+        {
+            Undo.RecordObject(own, name);
+            own.Planes = CSGBrushGeometry.Transform(parts[0].Planes, own.Transform.WorldToLocalMatrix * Drawn(parts[0].Offset));
+            ApplySmoothing(own, parts[0].SmoothPlanes);
+        }
+        else
+        {
+            foreach (GameObject child in shape.GameObject.Children.ToList())
+                if (child.GetComponent<CSGBrush>().IsValid()) Undo.DestroyObjectImmediate(child);
+
+            for (int i = 0; i < parts.Count; i++)
+            {
+                GameObject go = CreateObject($"Step {i + 1}", shape.GameObject);
+                go.Transform.LocalPosition = parts[i].Offset;
+                CSGBrush brush = go.AddComponent<CSGBrush>();
+                brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, go.Transform.WorldToLocalMatrix * Drawn(parts[i].Offset));
+                brush.Operation = parts[i].Operation;
+                ApplySmoothing(brush, parts[i].SmoothPlanes);
+                Undo.RegisterCreatedObjectUndo(go, name);
+            }
+        }
+        MarkDirty();
+    }
+
     /// <summary>The step the array buttons move by, and how many copies a clone makes.</summary>
     public static Float3 ArrayOffset = new(1f, 0f, 0f);
     public static int ArrayCount = 1;

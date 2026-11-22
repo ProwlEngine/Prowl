@@ -309,6 +309,7 @@ public sealed class CSGOverlayTool : SceneTool
 
             default:
                 CSGSections.DrawSelectionSection(paper, font, SceneToolManager.Get<CSGObjectTool>());
+                CSGSections.DrawShapeSection(paper, font);
                 CSGSections.DrawVisibilitySection(paper, font, SceneToolManager.Get<CSGObjectTool>());
                 CSGSections.DrawModelSection(paper, font, model!);
                 break;

@@ -386,13 +386,20 @@ public sealed class CSGGenerateTool : SceneTool
             Float4x4 drawn = Float4x4.CreateTRS(worldCentre + rotation * parts[i].Offset, rotation, Float3.One);
             CSGBrush brush = go.AddComponent<CSGBrush>();
             brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, go.Transform.WorldToLocalMatrix * drawn);
-            ApplySmoothing(brush, parts[i].SmoothPlanes);
+            CSGSelection.ApplySmoothing(brush, parts[i].SmoothPlanes);
 
             // Children of a group fold into it, so the group carries the operation instead.
             brush.Operation = parts.Count > 1 ? parts[i].Operation : operation;
         }
 
         GameObject created = parts.Count > 1 ? root : root.Children[^1];
+
+        // Remembered so the shape's size and settings can be changed later
+        CSGShape shape = created.AddComponent<CSGShape>();
+        shape.Kind = Generator;
+        shape.Settings = Settings;
+        shape.Size = size;
+
         Undo.RegisterCreatedObjectUndo(created, "Create CSG Brush");
         Selection.Select(created);
 
@@ -417,26 +424,16 @@ public sealed class CSGGenerateTool : SceneTool
         brush.Planes = CSGBrushGeometry.Transform(planes, go.Transform.WorldToLocalMatrix * drawn);
         brush.Operation = operation;
 
+        CSGShape shape = go.AddComponent<CSGShape>();
+        shape.Kind = CSGGeneratorKind.Polygon;
+        shape.Settings = Settings;
+        shape.Outline = [.. _outline];
+        shape.Height = _height;
+
         Undo.RegisterCreatedObjectUndo(go, "Create CSG Brush");
         Selection.Select(go);
         model!.SetDirty();
         Cancel();
-    }
-
-    /// <summary>Puts the shape's curved faces in one smoothing group, unique per generated brush.</summary>
-    private static void ApplySmoothing(CSGBrush brush, int smoothPlanes)
-    {
-        if (smoothPlanes <= 0) return;
-
-        int group = CSGSurfaceSelection.UnusedSmoothingGroup();
-        SurfaceData[] surfaces = brush.Surfaces;
-
-        for (int i = 0; i < smoothPlanes && i < surfaces.Length; i++)
-        {
-            SurfaceData data = surfaces[i];
-            data.SmoothingGroup = group;
-            brush.SetSurface(i, data);
-        }
     }
 
     /// <summary>Abandons an in progress brush, leaving the tool armed.</summary>

@@ -168,71 +168,79 @@ internal static class CSGSections
         EditorGUI.SettingsRow(paper, "csg_gen_shape", Loc.Get("csg.shape"), () =>
             Origami.EnumDropdown(paper, "csg_gen_shape_v", tool.Generator, v => tool.Generator = v).Show());
 
-        DrawGeneratorSettings(paper, font, tool);
+        DrawGeneratorSettings(paper, font, "csg_gen", tool.Generator, tool.Settings, v => tool.Settings = v);
     }
 
     /// <summary>Only the parameters the chosen shape actually uses.</summary>
-    private static void DrawGeneratorSettings(Paper paper, Scribe.FontFile font, CSGGenerateTool tool)
+    internal static void DrawGeneratorSettings(Paper paper, Scribe.FontFile font, string prefix, CSGGeneratorKind kind, CSGGeneratorSettings settings, Action<CSGGeneratorSettings> apply)
     {
-        switch (tool.Generator)
+        switch (kind)
         {
             case CSGGeneratorKind.Cylinder:
-                IntRow(paper, "csg_gen_sides", Loc.Get("csg.sides"), tool.Settings.Sides,
-                    v => tool.Settings.Sides = v);
-                FloatRow(paper, "csg_gen_angle", Loc.Get("csg.offset_angle"), tool.Settings.OffsetAngle,
-                    v => tool.Settings.OffsetAngle = v);
-                ToggleRow(paper, "csg_gen_corner", Loc.Get("csg.radius_to_corner"), tool.Settings.RadiusToCorner,
-                    v => tool.Settings.RadiusToCorner = v);
-                ToggleRow(paper, "csg_gen_fit", Loc.Get("csg.recentre"), tool.Settings.Recentre,
-                    v => tool.Settings.Recentre = v);
-                ToggleRow(paper, "csg_gen_smooth", Loc.Get("csg.smooth_shading"), tool.Settings.SmoothShading,
-                    v => tool.Settings.SmoothShading = v);
+                IntRow(paper, $"{prefix}_sides", Loc.Get("csg.sides"), settings.Sides,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.Sides = v));
+                FloatRow(paper, $"{prefix}_angle", Loc.Get("csg.offset_angle"), settings.OffsetAngle,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.OffsetAngle = v));
+                ToggleRow(paper, $"{prefix}_corner", Loc.Get("csg.radius_to_corner"), settings.RadiusToCorner,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.RadiusToCorner = v));
+                ToggleRow(paper, $"{prefix}_fit", Loc.Get("csg.recentre"), settings.Recentre,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.Recentre = v));
+                ToggleRow(paper, $"{prefix}_smooth", Loc.Get("csg.smooth_shading"), settings.SmoothShading,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.SmoothShading = v));
                 break;
 
             case CSGGeneratorKind.Sphere:
-                IntRow(paper, "csg_gen_seg", Loc.Get("csg.segments"), tool.Settings.Sides,
-                    v => tool.Settings.Sides = v);
-                IntRow(paper, "csg_gen_rings", Loc.Get("csg.rings"), tool.Settings.Rings,
-                    v => tool.Settings.Rings = v);
-                ToggleRow(paper, "csg_gen_hemi", Loc.Get("csg.hemisphere"), tool.Settings.Hemisphere,
-                    v => tool.Settings.Hemisphere = v);
-                ToggleRow(paper, "csg_gen_ssmooth", Loc.Get("csg.smooth_shading"), tool.Settings.SmoothShading,
-                    v => tool.Settings.SmoothShading = v);
+                IntRow(paper, $"{prefix}_seg", Loc.Get("csg.segments"), settings.Sides,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.Sides = v));
+                IntRow(paper, $"{prefix}_rings", Loc.Get("csg.rings"), settings.Rings,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.Rings = v));
+                ToggleRow(paper, $"{prefix}_hemi", Loc.Get("csg.hemisphere"), settings.Hemisphere,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.Hemisphere = v));
+                ToggleRow(paper, $"{prefix}_ssmooth", Loc.Get("csg.smooth_shading"), settings.SmoothShading,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.SmoothShading = v));
                 break;
 
             case CSGGeneratorKind.LinearStairs:
-                IntRow(paper, "csg_gen_total", Loc.Get("csg.total_steps"), tool.Settings.TotalSteps,
-                    v => tool.Settings.TotalSteps = v);
-                FloatRow(paper, "csg_gen_sh", Loc.Get("csg.step_height"), tool.Settings.StepHeight,
-                    v => tool.Settings.StepHeight = v);
-                FloatRow(paper, "csg_gen_sd", Loc.Get("csg.step_depth"), tool.Settings.StepDepth,
-                    v => tool.Settings.StepDepth = v);
-                FloatRow(paper, "csg_gen_ed", Loc.Get("csg.extra_depth"), tool.Settings.ExtraDepth,
-                    v => tool.Settings.ExtraDepth = v);
-                FloatRow(paper, "csg_gen_eh", Loc.Get("csg.extra_height"), tool.Settings.ExtraHeight,
-                    v => tool.Settings.ExtraHeight = v);
-                ToggleRow(paper, "csg_gen_fill", Loc.Get("csg.filled_stairs"), tool.Settings.FilledStairs,
-                    v => tool.Settings.FilledStairs = v);
+                IntRow(paper, $"{prefix}_total", Loc.Get("csg.total_steps"), settings.TotalSteps,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.TotalSteps = v));
+                FloatRow(paper, $"{prefix}_sh", Loc.Get("csg.step_height"), settings.StepHeight,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.StepHeight = v));
+                FloatRow(paper, $"{prefix}_sd", Loc.Get("csg.step_depth"), settings.StepDepth,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.StepDepth = v));
+                FloatRow(paper, $"{prefix}_ed", Loc.Get("csg.extra_depth"), settings.ExtraDepth,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.ExtraDepth = v));
+                FloatRow(paper, $"{prefix}_eh", Loc.Get("csg.extra_height"), settings.ExtraHeight,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.ExtraHeight = v));
+                ToggleRow(paper, $"{prefix}_fill", Loc.Get("csg.filled_stairs"), settings.FilledStairs,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.FilledStairs = v));
                 break;
 
             case CSGGeneratorKind.Polygon:
-                Hint(paper, font, "csg_gen_poly", Loc.Get("csg.polygon_hint"));
+                Hint(paper, font, $"{prefix}_poly", Loc.Get("csg.polygon_hint"));
                 break;
 
             case CSGGeneratorKind.Room:
-                FloatRow(paper, "csg_gen_wall", Loc.Get("csg.wall_thickness"), tool.Settings.WallThickness,
-                    v => tool.Settings.WallThickness = MathF.Max(0.01f, v));
+                FloatRow(paper, $"{prefix}_wall", Loc.Get("csg.wall_thickness"), settings.WallThickness,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.WallThickness = MathF.Max(0.01f, v)));
                 break;
 
             case CSGGeneratorKind.SpiralStairs:
-                FloatRow(paper, "csg_gen_ssh", Loc.Get("csg.step_height"), tool.Settings.StepHeight,
-                    v => tool.Settings.StepHeight = v);
-                IntRow(paper, "csg_gen_spr", Loc.Get("csg.steps_per_turn"), tool.Settings.StepsPerRevolution,
-                    v => tool.Settings.StepsPerRevolution = v);
-                FloatRow(paper, "csg_gen_inner", Loc.Get("csg.inner_radius"), tool.Settings.InnerRadius,
-                    v => tool.Settings.InnerRadius = v);
+                FloatRow(paper, $"{prefix}_ssh", Loc.Get("csg.step_height"), settings.StepHeight,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.StepHeight = v));
+                IntRow(paper, $"{prefix}_spr", Loc.Get("csg.steps_per_turn"), settings.StepsPerRevolution,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.StepsPerRevolution = v));
+                FloatRow(paper, $"{prefix}_inner", Loc.Get("csg.inner_radius"), settings.InnerRadius,
+                    v => Update(settings, apply, (ref CSGGeneratorSettings s) => s.InnerRadius = v));
                 break;
         }
+    }
+
+    private delegate void SettingsEdit(ref CSGGeneratorSettings settings);
+
+    private static void Update(CSGGeneratorSettings settings, Action<CSGGeneratorSettings> apply, SettingsEdit edit)
+    {
+        edit(ref settings);
+        apply(settings);
     }
 
     private static void IntRow(Paper paper, string id, string label, int value, Action<int> set)
@@ -642,6 +650,35 @@ internal static class CSGSections
 
         LabelledButton(paper, font, "csg_sel_group", Loc.Get("csg.group_selection"),
             ShortcutManager.GetTooltip(Loc.Get("csg.group_selection_tip"), "CSG/GroupSelection"), CSGMenuItems.GroupSelection);
+    }
+
+    /// <summary>The size and settings a generated shape was made with, changing them builds it again.</summary>
+    internal static void DrawShapeSection(Paper paper, Scribe.FontFile font)
+    {
+        List<GameObject> selected = Selection.GetSelected<GameObject>().ToList();
+        if (selected.Count != 1) return;
+        CSGShape shape = selected[0].GetComponent<CSGShape>();
+        if (shape.IsNotValid()) return;
+
+        EditorGUI.SectionHeader(paper, "csg_shape_h", Loc.Get("csg.shape_settings", new { kind = shape.Kind.ToString() }));
+
+        if (shape.Kind == CSGGeneratorKind.Polygon)
+        {
+            EditorGUI.SettingsRow(paper, "csg_shape_height", Loc.Get("csg.height"), () =>
+                Origami.NumericField(paper, "csg_shape_height_v", shape.Height, v => Rebuild(shape, () => shape.Height = v)).Show());
+            return;
+        }
+
+        EditorGUI.SettingsRow(paper, "csg_shape_size", Loc.Get("csg.size"), () =>
+            Origami.Float3Field(paper, "csg_shape_size_v", shape.Size, v => Rebuild(shape, () => shape.Size = Maths.Max(v, new Float3(0.01f)))).Show());
+        DrawGeneratorSettings(paper, font, "csg_shape", shape.Kind, shape.Settings, v => Rebuild(shape, () => shape.Settings = v));
+    }
+
+    private static void Rebuild(CSGShape shape, Action change)
+    {
+        Undo.RecordObject(shape, "Edit CSG Shape");
+        change();
+        CSGSelection.Regenerate(shape, "Edit CSG Shape");
     }
 
     internal static void DrawVisibilitySection(Paper paper, Scribe.FontFile font, CSGObjectTool? tool)

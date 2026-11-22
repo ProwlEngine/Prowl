@@ -968,6 +968,8 @@
   "csg.palette_tip": "Puts this material on every selected surface",
   "csg.wall_thickness": "Wall thickness",
   "csg.polygon_hint": "Click out the corners on a surface, then click the first corner or press Enter and pull the height. Backspace removes the last corner. A brush is convex, so a notch in the outline is filled in.",
+  "csg.shape_settings": "{{kind}} shape",
+  "csg.height": "Height",
   "csg.copy_surface": "Copy to selection",
   "csg.copy_surface_tip": "Applies the last picked surface's texturing to every other selected surface.",
   "csg.generate": "Generate",
