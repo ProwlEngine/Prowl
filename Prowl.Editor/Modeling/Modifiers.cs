@@ -24,11 +24,11 @@ public abstract class ModelModifier
 
     public ModelModifier Clone() => (ModelModifier)MemberwiseClone();
 
-    /// <summary>Runs on a mesh of its own, which it may change or replace.</summary>
-    public abstract GeometryData Apply(GeometryData mesh);
+    /// <summary>Runs on a mesh of its own, which it may change or replace, given the names of the bones its skin counts.</summary>
+    public abstract GeometryData Apply(GeometryData mesh, IReadOnlyList<string> bones);
 
     /// <summary>Runs every enabled modifier in order on a copy of the mesh, or gives back the mesh itself when none runs.</summary>
-    public static GeometryData Run(GeometryData mesh, IReadOnlyList<ModelModifier> stack, bool dragging = false)
+    public static GeometryData Run(GeometryData mesh, IReadOnlyList<ModelModifier> stack, bool dragging = false, IReadOnlyList<string>? bones = null)
     {
         GeometryData result = mesh;
         bool skinned = false;
@@ -41,7 +41,7 @@ public abstract class ModelModifier
                 result.Restore(mesh.Capture());
                 skinned = Operators.SkinToWeights(result);
             }
-            result = modifier.Apply(result);
+            result = modifier.Apply(result, bones ?? []);
         }
         if (skinned) Operators.WeightsToSkin(result);
         return result;
@@ -68,7 +68,7 @@ public sealed class SubdivideModifier : ModelModifier
 
     public override string Name => "Subdivide";
 
-    public override GeometryData Apply(GeometryData mesh)
+    public override GeometryData Apply(GeometryData mesh, IReadOnlyList<string> bones)
     {
         GeometryData result = GeometryOperators.SubdivideSmooth(mesh, Math.Clamp(Levels, 0, 6));
         if (SmoothShading)
@@ -87,7 +87,15 @@ public sealed class MirrorModifier : ModelModifier
 
     public override string Name => "Mirror";
 
-    public override GeometryData Apply(GeometryData mesh) => GeometryOperators.MirrorCopy(mesh, Math.Clamp(Axis, 0, 2), MergeDistance, Offset);
+    /// <summary>The mirrored half has its blend shapes reflected and its skin moved to the bones of the other side.</summary>
+    public override GeometryData Apply(GeometryData mesh, IReadOnlyList<string> bones)
+    {
+        int axis = Math.Clamp(Axis, 0, 2);
+        var mirrored = new List<GeometryData.Face>();
+        GeometryData result = GeometryOperators.MirrorCopy(mesh, axis, MergeDistance, Offset, mirrored);
+        Operators.TurnMirrored(mirrored, axis, bones);
+        return result;
+    }
 }
 
 public sealed class SolidifyModifier : ModelModifier
@@ -99,7 +107,7 @@ public sealed class SolidifyModifier : ModelModifier
 
     public override string Name => "Solidify";
 
-    public override GeometryData Apply(GeometryData mesh) => GeometryOperators.Solidify(mesh, Thickness, Math.Clamp(Offset, -1f, 1f));
+    public override GeometryData Apply(GeometryData mesh, IReadOnlyList<string> bones) => GeometryOperators.Solidify(mesh, Thickness, Math.Clamp(Offset, -1f, 1f));
 }
 
 public sealed class WeldModifier : ModelModifier
@@ -108,7 +116,7 @@ public sealed class WeldModifier : ModelModifier
 
     public override string Name => "Weld";
 
-    public override GeometryData Apply(GeometryData mesh)
+    public override GeometryData Apply(GeometryData mesh, IReadOnlyList<string> bones)
     {
         GeometryOperators.MergeByDistance(mesh, null, Distance);
         return mesh;
@@ -119,7 +127,7 @@ public sealed class TriangulateModifier : ModelModifier
 {
     public override string Name => "Triangulate";
 
-    public override GeometryData Apply(GeometryData mesh)
+    public override GeometryData Apply(GeometryData mesh, IReadOnlyList<string> bones)
     {
         GeometryOperators.Triangulate(mesh);
         return mesh;
@@ -135,7 +143,7 @@ public sealed class SimplifyModifier : ModelModifier
 
     public override bool SkipWhileDragging => true;
 
-    public override GeometryData Apply(GeometryData mesh)
+    public override GeometryData Apply(GeometryData mesh, IReadOnlyList<string> bones)
     {
         GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = Math.Clamp(Ratio, 0f, 1f) });
         return mesh;

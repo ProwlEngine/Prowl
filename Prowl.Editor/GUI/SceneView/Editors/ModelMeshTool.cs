@@ -481,7 +481,7 @@ public sealed class ModelMeshTool : SceneTool
             int chosen = axis;
             string name = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
             list.Add((Loc.Get("csg.symmetrize") + "  " + Loc.Get("csg.symmetrize_side", new { from = "+" + name, to = "-" + name }),
-                () => Edit("Symmetrize Model", (mesh, s) => { Operators.Symmetrize(mesh, chosen, true, 0f); s.Clear(); })));
+                () => EditMeshes("Symmetrize Model", (model, mesh, s) => { Operators.Symmetrize(mesh, chosen, true, 0f, [.. model.Bones.Select(b => b.Name)]); s.Clear(); })));
         }
 
         list.Add((Loc.Get("uv.mark_seam"), () => Edit("Mark Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, true))));

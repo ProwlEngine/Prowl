@@ -147,9 +147,9 @@ internal static class ModelInspector
                     .Disabled(index == model.Modifiers.Count - 1).Show();
                 Origami.Button(paper, $"{id}_apply", Loc.Get("model.apply_modifier"), () => Change(model, "Apply Modifier", () =>
                 {
-                    var copy = new GeometryData();
-                    copy.Restore(model.Mesh.Capture());
-                    model.Mesh = modifier.Apply(copy);
+                    ModelModifier applied = modifier.Clone();
+                    applied.Enabled = true;
+                    model.Mesh = ModelModifier.Run(model.Mesh, [applied], false, [.. model.Bones.Select(b => b.Name)]);
                     model.Mesh.MarkChanged();
                     model.Modifiers.RemoveAt(index);
                 })).Tooltip(Loc.Get("model.apply_modifier_tip")).Show();

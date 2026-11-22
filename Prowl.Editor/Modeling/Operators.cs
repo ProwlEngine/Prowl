@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
@@ -323,7 +324,7 @@ public static class Operators
     /// <param name="axis">0, 1 or 2 for the plane across X, Y or Z.</param>
     /// <param name="keepPositive">Keep the side towards the positive end of the axis.</param>
     /// <param name="offset">Where along the axis the plane stands.</param>
-    public static void Symmetrize(GeometryData mesh, int axis, bool keepPositive, float offset)
+    public static void Symmetrize(GeometryData mesh, int axis, bool keepPositive, float offset, IReadOnlyList<string>? bones = null)
     {
         const float Near = 1e-4f;
         Float3 normal = axis == 0 ? Float3.UnitX : axis == 1 ? Float3.UnitY : Float3.UnitZ;
@@ -344,8 +345,80 @@ public static class Operators
         }
         GeometryOperators.DeleteFaces(mesh, gone);
 
-        GeometryData mirrored = GeometryOperators.MirrorCopy(mesh, axis, Near * 10f, offset);
+        var images = new List<GeometryData.Face>();
+        GeometryData mirrored = GeometryOperators.MirrorCopy(mesh, axis, Near * 10f, offset, images);
+        TurnMirrored(images, axis, bones ?? []);
         mesh.Restore(mirrored.Capture());
+    }
+
+    private static readonly (string Left, string Right)[] s_sideWords = [("Left", "Right"), ("left", "right"), ("LEFT", "RIGHT")];
+    private static readonly (string Left, string Right)[] s_sideEnds = [(".L", ".R"), ("_L", "_R"), (".l", ".r"), ("_l", "_r"), (" L", " R")];
+    private static readonly (string Left, string Right)[] s_sideStarts = [("L_", "R_"), ("l_", "r_"), ("L.", "R.")];
+
+    /// <summary>The name of a bone's mirror image, by the left or right marking in its name, or null when it has none.</summary>
+    public static string? MirrorName(string name)
+    {
+        foreach ((string left, string right) in s_sideEnds)
+        {
+            if (name.EndsWith(left, StringComparison.Ordinal)) return name[..^left.Length] + right;
+            if (name.EndsWith(right, StringComparison.Ordinal)) return name[..^right.Length] + left;
+        }
+        foreach ((string left, string right) in s_sideStarts)
+        {
+            if (name.StartsWith(left, StringComparison.Ordinal)) return right + name[left.Length..];
+            if (name.StartsWith(right, StringComparison.Ordinal)) return left + name[right.Length..];
+        }
+        foreach ((string left, string right) in s_sideWords)
+        {
+            int at = name.IndexOf(left, StringComparison.Ordinal);
+            if (at >= 0) return name[..at] + right + name[(at + left.Length)..];
+            at = name.IndexOf(right, StringComparison.Ordinal);
+            if (at >= 0) return name[..at] + left + name[(at + right.Length)..];
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Turns the attributes of mirrored faces over to their side: blend shape deltas reflected across the axis, and skin
+    /// moved to each bone's mirror image by name, a bone with none keeping its own.
+    /// </summary>
+    public static void TurnMirrored(IEnumerable<GeometryData.Face> mirrored, int axis, IReadOnlyList<string> bones)
+    {
+        const string Indices = Prowl.Runtime.Resources.MeshGeometry.BoneIndices;
+        string prefix = Prowl.Runtime.Resources.MeshGeometry.BlendShapePrefix;
+        int[] other = new int[bones.Count];
+        for (int i = 0; i < other.Length; i++)
+        {
+            string? image = MirrorName(bones[i]);
+            int found = image == null ? -1 : IndexOf(bones, image);
+            other[i] = found >= 0 ? found : i;
+        }
+        int Swap(int bone) => bone >= 0 && bone < other.Length ? other[bone] : bone;
+
+        foreach (GeometryData.Face face in mirrored)
+            ForEachCorner(face, loop =>
+            {
+                foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in loop.Attributes.ToList())
+                {
+                    if (pair.Key.StartsWith(prefix, StringComparison.Ordinal) && pair.Value is GeometryData.FloatAttributeValue delta && axis < delta.Data.Length)
+                    {
+                        var turned = (float[])delta.Data.Clone();
+                        turned[axis] = -turned[axis];
+                        loop.SetAttribute(pair.Key, new GeometryData.FloatAttributeValue(turned));
+                    }
+                    else if (pair.Key == Skin && pair.Value is GeometryData.WeightsAttributeValue skin)
+                        loop.SetAttribute(Skin, new GeometryData.WeightsAttributeValue([.. skin.Groups.Select(Swap)], (float[])skin.Weights.Clone()));
+                    else if (pair.Key == Indices && pair.Value is GeometryData.IntAttributeValue ids)
+                        loop.SetAttribute(Indices, new GeometryData.IntAttributeValue([.. ids.Data.Select(Swap)]));
+                }
+            });
+    }
+
+    private static int IndexOf(IReadOnlyList<string> names, string name)
+    {
+        for (int i = 0; i < names.Count; i++)
+            if (names[i] == name) return i;
+        return -1;
     }
 
     /// <summary>

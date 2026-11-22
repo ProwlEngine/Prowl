@@ -209,4 +209,35 @@ public class SkinnedModelTests : EditorTestHarness
         Assert.True(mixed);
         Assert.True(item.Mesh.HasLoopAttribute(MeshGeometry.BoneIndices));
     }
+
+    [Fact]
+    public void MirroringSwapsLeftAndRightBonesAndReflectsShapes()
+    {
+        var mesh = new Mesh
+        {
+            Vertices = [new(1, 0, 0), new(2, 0, 0), new(2, 1, 0), new(1, 1, 0)],
+            Indices = [0, 2, 1, 0, 3, 2],
+            BoneIndices = [new(0, 0, 0, 0), new(0, 0, 0, 0), new(0, 0, 0, 0), new(0, 0, 0, 0)],
+            BoneWeights = [new(1, 0, 0, 0), new(1, 0, 0, 0), new(1, 0, 0, 0), new(1, 0, 0, 0)],
+        };
+        mesh.BlendShapes = [new BlendShape { Name = "Out", Frames = [new BlendShapeFrame { DeltaVertices = [new(0.3f, 0, 0), new(0.3f, 0, 0), new(0.3f, 0, 0), new(0.3f, 0, 0)] }] }];
+        var item = new PMeshObject { Name = "Arms", Mesh = MeshGeometry.ToGeometryData(mesh) };
+        item.Bones.Add(new PMeshBone { Name = "Arm.L" });
+        item.Bones.Add(new PMeshBone { Name = "Arm.R" });
+        item.Modifiers.Add(new MirrorModifier { Axis = 0 });
+
+        GeometryData result = ModelModifier.Run(item.Mesh, item.Modifiers, false, [.. item.Bones.Select(b => b.Name)]);
+
+        foreach (GeometryData.Loop corner in result.Loops)
+        {
+            (int bone, _) = Skin(corner);
+            bool left = corner.Vert.Point.X > 0f;
+            Assert.Equal(left ? 0 : 1, bone);
+            var delta = (GeometryData.FloatAttributeValue)corner.Attributes[MeshGeometry.BlendShapePosition(0, 0)];
+            Assert.Equal(left ? 0.3f : -0.3f, delta.Data[0], 5);
+        }
+        Assert.Equal("Hand_R", Operators.MirrorName("Hand_L"));
+        Assert.Equal("LeftFoot", Operators.MirrorName("RightFoot"));
+        Assert.Null(Operators.MirrorName("Spine"));
+    }
 }

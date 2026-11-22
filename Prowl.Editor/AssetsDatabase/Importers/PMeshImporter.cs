@@ -153,7 +153,7 @@ public class PMeshImporter : AssetImporter
     /// </summary>
     internal static Mesh BuildMesh(PMeshObject item, bool dragging, out int[]? sources)
     {
-        GeometryData geometry = ModelModifier.Run(item.Mesh, item.Modifiers, dragging);
+        GeometryData geometry = ModelModifier.Run(item.Mesh, item.Modifiers, dragging, [.. item.Bones.Select(b => b.Name)]);
         bool modified = !ReferenceEquals(geometry, item.Mesh);
         if (!modified)
         {
