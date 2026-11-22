@@ -57,4 +57,11 @@ public static class CSGSnap
     public static float Value(HandleContext handles, float value) => Active(handles) ? Round(value) : value;
 
     public static Float3 Value(HandleContext handles, Float3 value) => Active(handles) ? Round(value) : value;
+
+    /// <summary>A point on a surface snapped to the grid, then slid back onto the surface so a slope keeps it.</summary>
+    public static Float3 OnPlane(HandleContext handles, Float3 point, Float3 normal)
+    {
+        Float3 snapped = Value(handles, point);
+        return snapped - normal * Float3.Dot(snapped - point, normal);
+    }
 }

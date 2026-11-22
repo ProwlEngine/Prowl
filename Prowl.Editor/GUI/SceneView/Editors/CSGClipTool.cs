@@ -106,6 +106,7 @@ public sealed class CSGClipTool : SceneTool
     {
         if (!ctx.Handles.ViewportHovered) return;
         if (!TrySurfacePoint(ctx, out Float3 point, out Float3 normal)) return;
+        point = CSGSnap.OnPlane(ctx.Handles, point, normal);
 
         // Shows which plane the cut will be drawn on before the click.
         _workOrigin = point;
@@ -120,7 +121,7 @@ public sealed class CSGClipTool : SceneTool
 
     private void TickAiming(SceneToolContext ctx, bool clicked)
     {
-        if (TryWorkPlanePoint(ctx, out Float3 point)) _pointB = point;
+        if (TryWorkPlanePoint(ctx, out Float3 point)) _pointB = CSGSnap.OnPlane(ctx.Handles, point, _workNormal);
 
         if (!clicked) return;
         if (Float3.Distance(_pointA, _pointB) < 1e-3f) return;
@@ -135,10 +136,10 @@ public sealed class CSGClipTool : SceneTool
 
         // The first click here tilts the plane off the view axis, the next one commits.
         if (!_tilted && ctx.Handles.ViewportHovered
-            && TrySurfacePoint(ctx, out Float3 point, out _)
-            && CSGClip.PlaneFromPoints(_pointA, _pointB, point, out _))
+            && TrySurfacePoint(ctx, out Float3 point, out Float3 normal)
+            && CSGClip.PlaneFromPoints(_pointA, _pointB, CSGSnap.OnPlane(ctx.Handles, point, normal), out _))
         {
-            _tilt = point;
+            _tilt = CSGSnap.OnPlane(ctx.Handles, point, normal);
             _tilted = true;
             return;
         }
