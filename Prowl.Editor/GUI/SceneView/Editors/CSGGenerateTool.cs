@@ -214,6 +214,7 @@ public sealed class CSGGenerateTool : SceneTool
         _height = CSGSnap.Value(ctx.Handles, HeightUnderCursor(ctx));
 
         HandleTyping(ctx.Handles);
+        UpdateGhost(OperationFor(ctx.Handles));
         DrawPreview(ctx, Tint(ctx.Handles));
         DrawTyped(ctx);
 
@@ -337,23 +338,43 @@ public sealed class CSGGenerateTool : SceneTool
 
     private void Commit(SceneToolContext ctx, Operation operation)
     {
-        if (Generator == CSGGeneratorKind.Polygon)
-        {
-            CommitPolygon(operation);
-            return;
-        }
-
-        if (!ShapeFrame(out Float3 center, out Float3 size, out Quaternion rotation))
+        ClearGhost();
+        CSGModel? model = CSGSelection.ActiveModel();
+        Float3 size = Float3.Zero;
+        GameObject? created = model.IsValid() ? Place(model!, operation, out size) : null;
+        if (created.IsNotValid())
         {
             Cancel();
             return;
         }
 
-        CSGModel? model = CSGSelection.ActiveModel();
-        if (model.IsNotValid()) { Cancel(); return; }
+        // Remembered so the shape's size and settings can be changed later
+        CSGShape shape = created!.AddComponent<CSGShape>();
+        shape.Kind = Generator;
+        shape.Settings = Settings;
+        shape.Size = size;
+        if (Generator == CSGGeneratorKind.Polygon)
+        {
+            shape.Outline = [.. _outline];
+            shape.Height = _height;
+        }
+
+        Undo.RegisterCreatedObjectUndo(created, "Create CSG Brush");
+        Selection.Select(created);
+        model!.SetDirty();
+        Cancel();
+    }
+
+    /// <summary>Builds the drawn shape into the model and returns the object that holds it, or null when it encloses nothing.</summary>
+    private GameObject? Place(CSGModel model, Operation operation, out Float3 size)
+    {
+        size = Float3.Zero;
+        if (Generator == CSGGeneratorKind.Polygon) return PlacePolygon(model, operation);
+
+        if (!ShapeFrame(out Float3 center, out size, out Quaternion rotation)) return null;
 
         List<CSGShapePart> parts = CSGShapeBuilder.Build(Generator, size, Settings);
-        if (parts.Count == 0) { Cancel(); return; }
+        if (parts.Count == 0) return null;
 
         Float3 worldCentre = _planeOrigin + _planeRotation * center;
 
@@ -361,7 +382,7 @@ public sealed class CSGGenerateTool : SceneTool
         GameObject root;
         if (parts.Count > 1)
         {
-            root = CSGSelection.CreateObject(Generator.ToString(), ParentFor(model!));
+            root = CSGSelection.CreateObject(Generator.ToString(), ParentFor(model));
             root.Transform.Position = worldCentre;
             root.Transform.Rotation = rotation;
 
@@ -375,7 +396,7 @@ public sealed class CSGGenerateTool : SceneTool
                 group.Operation = operation;
             }
         }
-        else root = ParentFor(model!);
+        else root = ParentFor(model);
 
         for (int i = 0; i < parts.Count; i++)
         {
@@ -398,30 +419,15 @@ public sealed class CSGGenerateTool : SceneTool
             brush.Operation = parts.Count > 1 ? parts[i].Operation : operation;
         }
 
-        GameObject created = parts.Count > 1 ? root : root.Children[^1];
-
-        // Remembered so the shape's size and settings can be changed later
-        CSGShape shape = created.AddComponent<CSGShape>();
-        shape.Kind = Generator;
-        shape.Settings = Settings;
-        shape.Size = size;
-
-        Undo.RegisterCreatedObjectUndo(created, "Create CSG Brush");
-        Selection.Select(created);
-
-        model.SetDirty();
-
-        _stage = Stage.Idle;
-        ClearTyped();
+        return parts.Count > 1 ? root : root.Children[^1];
     }
 
-    private void CommitPolygon(Operation operation)
+    private GameObject? PlacePolygon(CSGModel model, Operation operation)
     {
-        CSGModel? model = CSGSelection.ActiveModel();
         Plane[]? planes = CSGShapeBuilder.PolygonPrism(_outline, _height);
-        if (model.IsNotValid() || planes == null) { Cancel(); return; }
+        if (planes == null) return null;
 
-        GameObject go = CSGSelection.CreateObject(Generator.ToString(), ParentFor(model!));
+        GameObject go = CSGSelection.CreateObject(Generator.ToString(), ParentFor(model));
         go.Transform.Position = _planeOrigin;
         go.Transform.Rotation = _planeRotation;
 
@@ -429,22 +435,45 @@ public sealed class CSGGenerateTool : SceneTool
         CSGBrush brush = go.AddComponent<CSGBrush>();
         brush.Planes = CSGBrushGeometry.Transform(planes, go.Transform.WorldToLocalMatrix * drawn);
         brush.Operation = operation;
+        return go;
+    }
 
-        CSGShape shape = go.AddComponent<CSGShape>();
-        shape.Kind = CSGGeneratorKind.Polygon;
-        shape.Settings = Settings;
-        shape.Outline = [.. _outline];
-        shape.Height = _height;
+    // The shape as it would be placed, built into the model while the height is pulled so the real result shows
+    private GameObject? _ghost;
+    private (Float3 A, Float3 B, float Height, CSGGeneratorKind Kind, CSGGeneratorSettings Settings, Operation Operation) _ghostKey;
 
-        Undo.RegisterCreatedObjectUndo(go, "Create CSG Brush");
-        Selection.Select(go);
-        model!.SetDirty();
-        Cancel();
+    private void UpdateGhost(Operation operation)
+    {
+        var key = (_cornerA, _cornerB, _height, Generator, Settings, operation);
+        if (_ghost.IsValid() && key.Equals(_ghostKey)) return;
+
+        ClearGhost();
+        _ghostKey = key;
+
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (model.IsNotValid()) return;
+
+        _ghost = Place(model!, operation, out _);
+        if (_ghost.IsValid()) HideGhost(_ghost!);
+    }
+
+    /// <summary>Left out of the hierarchy, picking, gizmos, saving and undo.</summary>
+    private static void HideGhost(GameObject go)
+    {
+        go.HideFlags |= HideFlags.Hide | HideFlags.HideAndDontSave | HideFlags.NotEditable | HideFlags.NoGizmos;
+        foreach (GameObject child in go.Children) HideGhost(child);
+    }
+
+    private void ClearGhost()
+    {
+        if (_ghost.IsValid()) _ghost!.Destroy();
+        _ghost = null;
     }
 
     /// <summary>Abandons an in progress brush, leaving the tool armed.</summary>
     public void Cancel()
     {
+        ClearGhost();
         _stage = Stage.Idle;
         ClearTyped();
     }
