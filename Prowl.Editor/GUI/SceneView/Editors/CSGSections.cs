@@ -268,7 +268,7 @@ internal static class CSGSections
                 .Show());
 
         paper.Box("csg_mesh_count").Height(18).Margin(Origami.Current.Metrics.PaddingLarge, 0, 2, 4)
-            .Text(Loc.Get("csg.mesh_selected", new { count = tool.SelectedCount }), font)
+            .Text(Loc.Get("csg.mesh_selected", new { count = tool.SelectedCount, faces = tool.SelectedFaceCount }), font)
             .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleLeft);
 
