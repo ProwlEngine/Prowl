@@ -80,3 +80,29 @@ public static class CSGStatus
 
     public static string? Current => Environment.TickCount64 < _until ? _message : null;
 }
+
+/// <summary>
+/// CSG guides drawn as the scene's gizmos, tested against its depth so the parts behind geometry show dashed. Handles
+/// and labels stay on the scene view's overlay.
+/// </summary>
+internal static class CSGGizmos
+{
+    private static Prowl.Graphite.Rendering.GizmoBatch Batch => Runtime.Resources.Scene.Active.Gizmos.Batch;
+
+    private static float Width(float thickness) => thickness > 0f ? thickness : 2f;
+
+    public static void Line(Float3 a, Float3 b, Color32 color, float thickness = 0f) => Batch.Line(a, b, color, Width(thickness));
+
+    public static void Polyline(ReadOnlySpan<Float3> points, Color32 color, float thickness = 0f, bool closed = false)
+        => Batch.Polyline(points, color, Width(thickness), closed);
+
+    /// <summary>A filled convex polygon.</summary>
+    public static void Polygon(ReadOnlySpan<Float3> points, Color32 color)
+    {
+        Prowl.Graphite.Rendering.GizmoBatch batch = Batch;
+        for (int i = 1; i + 1 < points.Length; i++) batch.Triangle(points[0], points[i], points[i + 1], color);
+    }
+
+    public static void Circle(Float3 center, Float3 normal, float radius, Color32 color, float thickness = 0f)
+        => Batch.Circle(center, normal, radius, color, Width(thickness));
+}

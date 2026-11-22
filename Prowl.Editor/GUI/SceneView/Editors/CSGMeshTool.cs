@@ -613,10 +613,10 @@ public sealed class CSGMeshTool : SceneTool
             Float3 lifted = ring[i] + normal * amount;
             top[i] = Float4x4.TransformPoint(lifted, toWorld);
 
-            ctx.Draw.Line(Float4x4.TransformPoint(ring[i], toWorld), top[i], PickedColor, 2f);
+            CSGGizmos.Line(Float4x4.TransformPoint(ring[i], toWorld), top[i], PickedColor, 2f);
         }
 
-        ctx.Draw.Polyline(top, PickedColor, 2f, closed: true);
+        CSGGizmos.Polyline(top, PickedColor, 2f, closed: true);
         ctx.Draw.Label(top[0], amount.ToString("0.###"), PickedColor);
     }
 
@@ -896,7 +896,7 @@ public sealed class CSGMeshTool : SceneTool
             for (int i = 0; i < ring.Count; i++)
                 corners[i] = Float4x4.TransformPoint(_mesh.Points[ring[i]], toWorld);
 
-            ctx.Draw.Polygon(corners, FaceFill);
+            CSGGizmos.Polygon(corners, FaceFill);
         }
 
         if (Filter.HasFlag(CSGElementFilter.Edge))
@@ -906,7 +906,7 @@ public sealed class CSGMeshTool : SceneTool
                 bool picked = _vertices.Contains(a) && _vertices.Contains(b);
                 Float3 from = Float4x4.TransformPoint(_mesh!.Points[a], toWorld);
                 Float3 to = Float4x4.TransformPoint(_mesh.Points[b], toWorld);
-                ctx.Draw.Line(from, to, picked ? PickedColor : IdleColor, picked ? 2.5f : 1f);
+                CSGGizmos.Line(from, to, picked ? PickedColor : IdleColor, picked ? 2.5f : 1f);
 
                 // Edges are picked at their middle, so that is where their handle is
                 ctx.Draw.Dot((from + to) * 0.5f, picked ? PickedColor : EdgeHandleColor, 5f);

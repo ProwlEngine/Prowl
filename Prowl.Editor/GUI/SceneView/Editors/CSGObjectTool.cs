@@ -278,7 +278,7 @@ public sealed class CSGObjectTool : SceneTool
             if (CSGVisibility.IsHidden(brush)) continue;
             if (!brush.IsShapeValid)
             {
-                ctx.Draw.Circle(brush.Transform.Position, ctx.Camera.GameObject.Transform.Forward, 0.25f, InvalidColor, 2f);
+                CSGGizmos.Circle(brush.Transform.Position, ctx.Camera.GameObject.Transform.Forward, 0.25f, InvalidColor, 2f);
                 ctx.Draw.Label(brush.Transform.Position, brush.GameObject.Name, InvalidColor);
                 continue;
             }
@@ -300,7 +300,7 @@ public sealed class CSGObjectTool : SceneTool
         {
             Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld);
             Float3 b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
-            ctx.Draw.Line(a, b, color, thickness);
+            CSGGizmos.Line(a, b, color, thickness);
         }
     }
 

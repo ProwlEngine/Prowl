@@ -163,9 +163,9 @@ public sealed class CSGGenerateTool : SceneTool
         var ring = new List<Float3>(_outline.Count + 1);
         foreach (Float2 p in _outline) ring.Add(ToWorld(new Float3(p.X, 0f, p.Y)));
         ring.Add(nearFirst ? first : ToWorld(new Float3(cursor.X, 0f, cursor.Y)));
-        ctx.Draw.Polyline(ring.ToArray(), tint.Color, 2f, closed: false);
+        CSGGizmos.Polyline(ring.ToArray(), tint.Color, 2f, closed: false);
         foreach (Float3 corner in ring) ctx.Draw.Dot(corner, tint.Color, 6f);
-        if (nearFirst) ctx.Draw.Circle(first, _planeRotation * Float3.UnitY, 0.2f, tint.Color, 2f);
+        if (nearFirst) CSGGizmos.Circle(first, _planeRotation * Float3.UnitY, 0.2f, tint.Color, 2f);
 
         bool close = _outline.Count >= 3 && handles.IsPressed("CSG/Confirm");
         if (handles.IsNearest(id) && handles.TryBeginDrag(id))
@@ -558,19 +558,19 @@ public sealed class CSGGenerateTool : SceneTool
         {
             byte alpha = (byte)(70 * (1f - MathF.Abs(i) / (float)(Lines + 1)));
             var colour = new Color32(GuideColor.R, GuideColor.G, GuideColor.B, alpha);
-            ctx.Draw.Line(centre + x * (i * step) - z * reach, centre + x * (i * step) + z * reach, colour);
-            ctx.Draw.Line(centre + z * (i * step) - x * reach, centre + z * (i * step) + x * reach, colour);
+            CSGGizmos.Line(centre + x * (i * step) - z * reach, centre + x * (i * step) + z * reach, colour);
+            CSGGizmos.Line(centre + z * (i * step) - x * reach, centre + z * (i * step) + x * reach, colour);
         }
     }
 
     private void DrawCursor(SceneToolContext ctx, Float3 point, Float3 normal, (Color32 Color, string Label) tint)
     {
-        ctx.Draw.Circle(point, normal, 0.15f, tint.Color);
+        CSGGizmos.Circle(point, normal, 0.15f, tint.Color);
 
         Float3 x = _planeRotation * Float3.UnitX;
         Float3 z = _planeRotation * Float3.UnitZ;
-        ctx.Draw.Line(point - x * 0.6f, point + x * 0.6f, tint.Color);
-        ctx.Draw.Line(point - z * 0.6f, point + z * 0.6f, tint.Color);
+        CSGGizmos.Line(point - x * 0.6f, point + x * 0.6f, tint.Color);
+        CSGGizmos.Line(point - z * 0.6f, point + z * 0.6f, tint.Color);
         ctx.Draw.Label(point + normal * 0.3f, tint.Label, tint.Color);
     }
 
@@ -579,8 +579,8 @@ public sealed class CSGGenerateTool : SceneTool
         Span<Float3> corners = stackalloc Float3[4];
         FootprintCorners(0f, corners);
 
-        ctx.Draw.Polygon(corners, new Color32(tint.Color.R, tint.Color.G, tint.Color.B, 40));
-        ctx.Draw.Polyline(corners, tint.Color, 2f, closed: true);
+        CSGGizmos.Polygon(corners, new Color32(tint.Color.R, tint.Color.G, tint.Color.B, 40));
+        CSGGizmos.Polyline(corners, tint.Color, 2f, closed: true);
 
         ctx.Draw.LengthLabel(corners[0], corners[1], tint.Color);
         ctx.Draw.LengthLabel(corners[1], corners[2], tint.Color);
@@ -594,9 +594,9 @@ public sealed class CSGGenerateTool : SceneTool
         FootprintCorners(0f, bottom);
         FootprintCorners(_height, top);
 
-        ctx.Draw.Polyline(bottom, GuideColor, 1f, closed: true);
-        ctx.Draw.Polyline(top, GuideColor, 1f, closed: true);
-        for (int i = 0; i < 4; i++) ctx.Draw.Line(bottom[i], top[i], GuideColor, 1f);
+        CSGGizmos.Polyline(bottom, GuideColor, 1f, closed: true);
+        CSGGizmos.Polyline(top, GuideColor, 1f, closed: true);
+        for (int i = 0; i < 4; i++) CSGGizmos.Line(bottom[i], top[i], GuideColor, 1f);
 
         DrawShapePreview(ctx, tint.Color);
 
@@ -611,7 +611,7 @@ public sealed class CSGGenerateTool : SceneTool
             Plane[]? prism = CSGShapeBuilder.PolygonPrism(_outline, _height);
             if (prism == null || GeometryGenerator.ConvexFromPlanes(prism).Solid is not { } shape) return;
             foreach (GeometryData.Edge edge in shape.Edges)
-                ctx.Draw.Line(ToWorld(edge.Vert1.Point), ToWorld(edge.Vert2.Point), color, 2f);
+                CSGGizmos.Line(ToWorld(edge.Vert1.Point), ToWorld(edge.Vert2.Point), color, 2f);
             return;
         }
 
@@ -625,7 +625,7 @@ public sealed class CSGGenerateTool : SceneTool
 
             foreach (GeometryData.Edge edge in solid.Solid!.Edges)
             {
-                ctx.Draw.Line(worldCentre + rotation * (part.Offset + edge.Vert1.Point),
+                CSGGizmos.Line(worldCentre + rotation * (part.Offset + edge.Vert1.Point),
                               worldCentre + rotation * (part.Offset + edge.Vert2.Point), color, 2f);
             }
         }

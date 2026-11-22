@@ -122,7 +122,7 @@ public sealed class CSGClipTool : SceneTool
         _pointA = point;
         _pointB = point;
 
-        ctx.Draw.Circle(point, normal, 0.12f, PlaneEdge);
+        CSGGizmos.Circle(point, normal, 0.12f, PlaneEdge);
 
         // Ctrl click picks which brushes the cut applies to, without leaving clip mode
         if (clicked && ctx.Handles.Ctrl)
@@ -392,7 +392,7 @@ public sealed class CSGClipTool : SceneTool
         if (_stage == Stage.Idle) return;
         if (!TryPlane(out Plane plane)) return;
 
-        ctx.Draw.Line(_pointA, _pointB, PlaneEdge, 2f);
+        CSGGizmos.Line(_pointA, _pointB, PlaneEdge, 2f);
         DrawPlaneQuad(ctx, plane);
         DrawOutcome(ctx, plane);
     }
@@ -420,7 +420,7 @@ public sealed class CSGClipTool : SceneTool
         points.Sort((p, q) => MathF.Atan2(Float3.Dot(p - centre, v), Float3.Dot(p - centre, u))
             .CompareTo(MathF.Atan2(Float3.Dot(q - centre, v), Float3.Dot(q - centre, u))));
 
-        ctx.Draw.Polyline(points.ToArray(), PlaneEdge, 2f, closed: true);
+        CSGGizmos.Polyline(points.ToArray(), PlaneEdge, 2f, closed: true);
     }
 
     /// <summary>The cut plane, sized to span the brushes it crosses.</summary>
@@ -446,8 +446,8 @@ public sealed class CSGClipTool : SceneTool
             centre - u * extent + v * extent,
         ];
 
-        ctx.Draw.Polygon(quad, PlaneFill);
-        ctx.Draw.Polyline(quad, PlaneEdge, 1f, closed: true);
+        CSGGizmos.Polygon(quad, PlaneFill);
+        CSGGizmos.Polyline(quad, PlaneEdge, 1f, closed: true);
     }
 
     /// <summary>Outlines where the cut crosses each brush, and colours its corners by which side of the cut they fall on.</summary>

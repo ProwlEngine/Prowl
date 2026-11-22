@@ -68,8 +68,8 @@ public static class CSGHelperSurfaces
             Float3[] corners = ring.ToArray();
             Color32 colour = ColourFor(kind);
 
-            ctx.Draw.Polygon(corners, colour);
-            ctx.Draw.Polyline(corners, Opaque(colour), 1f, closed: true);
+            CSGGizmos.Polygon(corners, colour);
+            CSGGizmos.Polyline(corners, Opaque(colour), 1f, closed: true);
         }
     }
 

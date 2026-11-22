@@ -119,7 +119,7 @@ public sealed class CSGSurfaceTool : SceneTool
         List<Float3> corners = CSGSurfaceSelection.WorldCorners(surface);
         if (corners.Count < 3) return;
 
-        ctx.Draw.Polygon(corners.ToArray(), fill);
-        if (thickness > 0f) ctx.Draw.Polyline(corners.ToArray(), edge, thickness, closed: true);
+        CSGGizmos.Polygon(corners.ToArray(), fill);
+        if (thickness > 0f) CSGGizmos.Polyline(corners.ToArray(), edge, thickness, closed: true);
     }
 }
