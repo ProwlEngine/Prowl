@@ -37,8 +37,18 @@ public readonly struct CSGSurfaceRef : IEquatable<CSGSurfaceRef>
         if (Brush.IsNotValid()) return null;
         Plane[] planes = Brush.Planes;
         if (PlaneIndex >= 0 && PlaneIndex < planes.Length && planes[PlaneIndex].Equals(Plane)) return this;
-        int index = Array.IndexOf(planes, Plane);
-        return index >= 0 ? new CSGSurfaceRef(Brush, index) : null;
+
+        // Point edits refit every plane, so the nearest one within a tolerance is still this surface
+        int best = -1;
+        float bestScore = float.MaxValue;
+        for (int i = 0; i < planes.Length; i++)
+        {
+            float score = (1f - Float3.Dot(planes[i].Normal, Plane.Normal)) * 10f + MathF.Abs(planes[i].D - Plane.D);
+            if (score >= bestScore) continue;
+            bestScore = score;
+            best = i;
+        }
+        return best >= 0 && bestScore < 0.05f ? new CSGSurfaceRef(Brush, best) : null;
     }
 
     public SurfaceData Data => Brush.Surfaces[PlaneIndex];
