@@ -68,12 +68,26 @@ public sealed class ModelMeshTool : SceneTool
     private float _operatorKey = float.NaN;
     private HandleContext? _operatorHandles;
 
+    // A loop cut: the object and edge of its ring by point indices, whether a click has picked it, and how many cuts
+    private bool _loopCut;
+    private (ModelObject Model, int A, int B)? _loopEdge;
+    private bool _loopPicked;
+    private int _loopCuts = 1;
+
+    // The knife: the object it cuts, and where each point was clicked and what of the mesh it sits on
+    private ModelObject? _knifeModel;
+    private readonly List<(Float2 Pixel, KnifePoint Point)> _knife = new();
+
     /// <summary>
     /// An operator run with an amount from the mouse and a count from the wheel. A distance amount is the mouse's travel
     /// in world units at the selection and snaps to the grid, any other is the travel in pixels.
     /// </summary>
     private sealed record AmountOperator(string Name, bool Distance, Func<float, float> Amount, string Format,
-                                         Action<GeometryData, ElementSelection, float, int> Run, SelectMode? Selects, int StartCount = 1, int MaxCount = 1);
+                                         Action<GeometryData, ElementSelection, float, int> Run, SelectMode? Selects, int StartCount = 1, int MaxCount = 1)
+    {
+        /// <summary>When set the amount is the mouse's travel along this screen direction, from -1 to 1, as for a slide.</summary>
+        public Float2? Along { get; init; }
+    }
 
     public SelectMode Mode { get; private set; } = SelectMode.Vertex;
     public bool XRay { get; set; }
@@ -117,6 +131,12 @@ public sealed class ModelMeshTool : SceneTool
     private void Leave()
     {
         CancelModal();
+        if (_loopCut)
+        {
+            RestoreStart();
+            EndLoopCut();
+        }
+        if (!ReferenceEquals(_knifeModel, null)) EndKnife();
         if (_operator != null)
         {
             EndOperator();
@@ -176,6 +196,18 @@ public sealed class ModelMeshTool : SceneTool
             DrawElements(ctx);
             return;
         }
+        if (_loopCut)
+        {
+            TickLoopCut(ctx);
+            DrawElements(ctx);
+            return;
+        }
+        if (!ReferenceEquals(_knifeModel, null))
+        {
+            TickKnife(ctx);
+            DrawElements(ctx);
+            return;
+        }
 
         Keys(ctx);
         DrawElements(ctx);
@@ -229,6 +261,8 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/SnapToBrushes")) SnapToObjects = !SnapToObjects;
         else if (handles.IsPressed("MeshEdit/Proportional")) Proportional = !Proportional;
         else if (handles.IsPressed("MeshEdit/Inset")) Inset(ctx);
+        else if (handles.IsPressed("MeshEdit/LoopCut")) StartLoopCut(ctx);
+        else if (handles.IsPressed("MeshEdit/Knife")) StartKnife(ctx);
         else if (handles.IsPressed("MeshEdit/HideUnselected")) Hide(unselected: true);
         else if (handles.IsPressed("MeshEdit/Reveal")) foreach (ModelObject model in _edited) _hidden[model] = new ElementSelection();
         else if (handles.IsPressed("MeshEdit/Hide")) Hide(unselected: false);
@@ -549,7 +583,7 @@ public sealed class ModelMeshTool : SceneTool
         if (wheel != 0f && op.MaxCount > 1) _operatorCount = Math.Clamp(_operatorCount + (wheel > 0f ? 1 : -1), 1, op.MaxCount);
 
         float pixels = Float2.Distance(handles.MousePosition, _operatorFrom);
-        float amount = op.Amount(op.Distance ? pixels * WorldPerPixel(ctx) : pixels);
+        float amount = op.Along is { } along ? Along(handles.MousePosition - _operatorFrom, along) : op.Amount(op.Distance ? pixels * WorldPerPixel(ctx) : pixels);
         if (op.Distance && SceneTools.GridSnap != handles.Ctrl && SceneTools.MoveSnap > 0f) amount = MathF.Round(amount / SceneTools.MoveSnap) * SceneTools.MoveSnap;
 
         float key = amount + _operatorCount * 100000f;
@@ -564,12 +598,7 @@ public sealed class ModelMeshTool : SceneTool
         if (handles.GetKeyDown(KeyCode.Escape) || handles.ViewportHovered && Input.GetMouseButtonDown(1))
         {
             EndOperator();
-            foreach ((ModelObject model, (GeometrySnapshot mesh, ModelEditPart selection)) in _start)
-            {
-                model.Mesh.Restore(mesh);
-                _selection[model] = FromIndices(model.Mesh, selection);
-                model.RefreshPreview();
-            }
+            RestoreStart();
             _start.Clear();
             return;
         }
@@ -579,11 +608,7 @@ public sealed class ModelMeshTool : SceneTool
 
         // Back to the start, then once more as one undo step
         EndOperator();
-        foreach ((ModelObject model, (GeometrySnapshot mesh, ModelEditPart selection)) in _start)
-        {
-            model.Mesh.Restore(mesh);
-            _selection[model] = FromIndices(model.Mesh, selection);
-        }
+        RestoreStart();
         _start.Clear();
         int final = _operatorCount;
         Edit(op.Name, (mesh, s) => op.Run(mesh, s, amount, final), op.Selects);
@@ -742,6 +767,7 @@ public sealed class ModelMeshTool : SceneTool
     private void TickModal(SceneToolContext ctx)
     {
         TransformModal modal = _modal!;
+        if (modal.Kind == TransformKind.Translate && ctx.Handles.GetKeyDown(KeyCode.G) && StartSlide(ctx)) return;
         if (Proportional && _session != null)
         {
             float wheel = Input.MouseWheelDelta;
@@ -768,6 +794,377 @@ public sealed class ModelMeshTool : SceneTool
             TransformKind.Rotate => "Rotate Model Points",
             _ => "Scale Model Points",
         });
+    }
+
+    /// <summary>
+    /// G again while grabbing: one selected point slides along one of its edges, selected edges slide along the edges
+    /// beside them. The grab is put back first.
+    /// </summary>
+    private bool StartSlide(SceneToolContext ctx)
+    {
+        var points = _edited.Where(m => _selection[m].Vertices.Count > 0).ToList();
+        if (points.Count != 1) return false;
+        ModelObject model = points[0];
+        ElementSelection selection = _selection[model];
+
+        if (Mode == SelectMode.Vertex && selection.Vertices.Count == 1)
+        {
+            GeometryData.Vertex point = selection.Vertices.First();
+            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+            var ends = new List<Float3>();
+            foreach (GeometryData.Edge edge in point.NeighborEdges())
+                if (!_hidden[model].Edges.Contains(edge)) ends.Add(Float4x4.TransformPoint(edge.OtherVertex(point).Point, toWorld));
+            if (ends.Count == 0) return false;
+            _session!.Restore();
+            _sessionMove = null;
+            _modal = new TransformModal(TransformKind.Slide, _session, Quaternion.Identity, null) { SlideEnds = ends };
+            return true;
+        }
+
+        if (Mode == SelectMode.Edge && selection.Edges.Count > 0)
+        {
+            EndModal();
+            CancelSession();
+            StartOperator(ctx, new AmountOperator("Slide Model Edges", false, f => f, "0.###", (mesh, s, f, _) => Operators.SlideEdges(mesh, [.. s.Edges], f), SelectMode.Edge)
+            {
+                Along = SlideDirection(ctx, model),
+            });
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Which way on screen the edges slide at +1, found by trying a slide on a copy.</summary>
+    private Float2 SlideDirection(SceneToolContext ctx, ModelObject model)
+    {
+        var copy = new GeometryData();
+        copy.Restore(model.Mesh.Capture());
+        ModelEditPart part = Indices(model);
+        ElementSelection selection = FromIndices(copy, part);
+        if (selection.Edges.Count == 0) return Float2.Zero;
+        GeometryData.Edge first = selection.Edges.First();
+        GeometryData.Vertex end = first.Vert1;
+        Float3 from = end.Point;
+        Operators.SlideEdges(copy, [.. selection.Edges], 1f);
+        Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+        if (ctx.Handles.WorldToScreen(Float4x4.TransformPoint(from, toWorld)) is { } a && ctx.Handles.WorldToScreen(Float4x4.TransformPoint(end.Point, toWorld)) is { } b)
+            return b - a;
+        return Float2.Zero;
+    }
+
+    // ================================================================
+    //  Loop cut
+    // ================================================================
+
+    private void StartLoopCut(SceneToolContext ctx)
+    {
+        _start.Clear();
+        foreach (ModelObject model in _edited) _start[model] = (model.Mesh.Capture(), Indices(model));
+        _loopCut = true;
+        _loopEdge = null;
+        _loopPicked = false;
+        _loopCuts = 1;
+        _operatorKey = float.NaN;
+        ctx.Handles.Modal = true;
+        _operatorHandles = ctx.Handles;
+    }
+
+    /// <summary>
+    /// Before a click the ring of the edge under the mouse shows cut, the wheel setting how many. The click keeps the
+    /// ring, and the mouse then slides the cuts until a second click keeps them.
+    /// </summary>
+    private void TickLoopCut(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        ControlID owner = handles.GetControlID(ModalControl);
+        handles.AddControl(owner, HandleContext.BodyDistance, float.MaxValue - 1f);
+
+        float wheel = Input.MouseWheelDelta;
+        if (wheel != 0f) _loopCuts = Math.Clamp(_loopCuts + (wheel > 0f ? 1 : -1), 1, 64);
+
+        RestoreStart();
+        if (!_loopPicked) _loopEdge = NearestEdge(ctx);
+
+        float slide = 0f;
+        if (_loopPicked && _loopEdge is { } held && EdgeOf(held) is { } ring)
+        {
+            Float4x4 toWorld = held.Model.Transform.LocalToWorldMatrix;
+            if (handles.WorldToScreen(Float4x4.TransformPoint(ring.Vert1.Point, toWorld)) is { } a && handles.WorldToScreen(Float4x4.TransformPoint(ring.Vert2.Point, toWorld)) is { } b)
+                slide = Along((handles.MousePosition - _operatorFrom) * 2f, b - a);
+        }
+        if (_loopEdge is { } picked && EdgeOf(picked) is { } edge)
+        {
+            try
+            {
+                Operators.LoopCut(picked.Model.Mesh, edge, _loopCuts, slide, _selection[picked.Model]);
+            }
+            catch (InvalidOperationException)
+            {
+                RestoreStart();
+            }
+            picked.Model.RefreshPreview();
+        }
+        ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.cuts", new { count = _loopCuts }), PickedColor);
+
+        if (handles.GetKeyDown(KeyCode.Escape) || handles.ViewportHovered && Input.GetMouseButtonDown(1))
+        {
+            RestoreStart();
+            EndLoopCut();
+            return;
+        }
+        if (!handles.IsNearest(owner) || !handles.TryBeginDrag(owner)) return;
+        handles.TryEndDrag(owner);
+        if (!_loopPicked)
+        {
+            if (_loopEdge == null) return;
+            _loopPicked = true;
+            _operatorFrom = handles.MousePosition;
+            return;
+        }
+
+        (ModelObject Model, int A, int B)? chosen = _loopEdge;
+        int cuts = _loopCuts;
+        RestoreStart();
+        EndLoopCut();
+        if (chosen is not { } kept) return;
+        Edit("Loop Cut Model", (mesh, s) =>
+        {
+            if (!ReferenceEquals(mesh, kept.Model.Mesh) || EdgeOf(kept) is not { } cut) return;
+            Operators.LoopCut(mesh, cut, cuts, slide, s);
+        }, SelectMode.Edge);
+    }
+
+    private void EndLoopCut()
+    {
+        _loopCut = false;
+        _start.Clear();
+        if (_operatorHandles != null) _operatorHandles.Modal = false;
+        _operatorHandles = null;
+    }
+
+    private void RestoreStart()
+    {
+        foreach ((ModelObject model, (GeometrySnapshot mesh, ModelEditPart selection)) in _start)
+        {
+            model.Mesh.Restore(mesh);
+            _selection[model] = FromIndices(model.Mesh, selection);
+            model.RefreshPreview();
+        }
+    }
+
+    /// <summary>How far a mouse travel goes along a screen direction, from -1 to 1 at its full length.</summary>
+    private static float Along(Float2 travel, Float2 direction)
+    {
+        float length = Float2.Dot(direction, direction);
+        return length > 1e-6f ? Math.Clamp(Float2.Dot(travel, direction) / length, -1f, 1f) : 0f;
+    }
+
+    private static GeometryData.Edge? EdgeOf((ModelObject Model, int A, int B) at)
+    {
+        GeometryData mesh = at.Model.Mesh;
+        return at.A < mesh.Vertices.Count && at.B < mesh.Vertices.Count ? mesh.FindEdge(mesh.Vertices[at.A], mesh.Vertices[at.B]) : null;
+    }
+
+    /// <summary>The shown edge nearest the mouse on screen, within reach and in sight, as its object and point indices.</summary>
+    private (ModelObject Model, int A, int B)? NearestEdge(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        (ModelObject, int, int)? best = null;
+        float bestDistance = PickRadius * 2f;
+        foreach (ModelObject model in _edited)
+        {
+            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+            foreach (GeometryData.Edge edge in model.Mesh.Edges)
+            {
+                if (_hidden[model].Edges.Contains(edge) || edge.IsHidden) continue;
+                Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
+                if (handles.WorldToScreen(a) is not { } from || handles.WorldToScreen(b) is not { } to) continue;
+                Float2 along = to - from;
+                float lengthSq = Float2.Dot(along, along);
+                float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - from, along) / lengthSq, 0f, 1f) : 0f;
+                float distance = Float2.Distance(handles.MousePosition, from + along * t);
+                if (distance >= bestDistance || !Seen(ctx, a + (b - a) * t)) continue;
+                bestDistance = distance;
+                best = (model, edge.Vert1.Index, edge.Vert2.Index);
+            }
+        }
+        return best;
+    }
+
+    // ================================================================
+    //  Knife
+    // ================================================================
+
+    /// <summary>Starts the knife on the edited object under the mouse: clicks place points, Backspace takes one back, Enter cuts.</summary>
+    private void StartKnife(SceneToolContext ctx)
+    {
+        ModelObject? under = null;
+        float nearest = float.MaxValue;
+        foreach (ModelObject model in _edited)
+            if (MeshPicking.Raycast(model.Mesh, model.Transform.LocalToWorldMatrix, ctx.Handles.MouseRay, out _, out float distance) && distance < nearest)
+            {
+                nearest = distance;
+                under = model;
+            }
+        _knifeModel = under.IsValid() ? under : _edited.Find(m => _selection[m].Vertices.Count > 0) is { } selected ? selected : _edited[0];
+        _knife.Clear();
+        ctx.Handles.Modal = true;
+        _operatorHandles = ctx.Handles;
+    }
+
+    private void TickKnife(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        if (_knifeModel is not { } model || model.IsNotValid())
+        {
+            EndKnife();
+            return;
+        }
+        ControlID owner = handles.GetControlID(ModalControl);
+        handles.AddControl(owner, HandleContext.BodyDistance, float.MaxValue - 1f);
+        (Float2 pixel, KnifePoint landed) = Land(ctx, model);
+
+        Float3 Near(Float2 screen)
+        {
+            Ray ray = ctx.Camera.ScreenPointToRay(screen - (handles.MousePosition - handles.MouseLocal), handles.ViewportSize);
+            return ray.Origin + ray.Direction * MathF.Max(ctx.Camera.NearClipPlane * 4f, 0.05f);
+        }
+        var colour = new Color32(255, 220, 90, 255);
+        for (int i = 1; i < _knife.Count; i++) ctx.Draw.Line(Near(_knife[i - 1].Pixel), Near(_knife[i].Pixel), colour, 2f);
+        if (_knife.Count > 0) ctx.Draw.Line(Near(_knife[^1].Pixel), Near(pixel), new Color32(255, 220, 90, 140), 1.5f);
+        foreach ((Float2 placed, _) in _knife) ctx.Draw.Dot(Near(placed), colour, 7f);
+        ctx.Draw.Dot(Near(pixel), landed.Vertex != null ? new Color32(120, 255, 140, 255) : landed.Edge != null ? new Color32(90, 200, 255, 255) : colour, 9f);
+        ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.knife_status", new { count = _knife.Count }), PickedColor);
+
+        if (handles.GetKeyDown(KeyCode.Backspace) && _knife.Count > 0) _knife.RemoveAt(_knife.Count - 1);
+        if (handles.GetKeyDown(KeyCode.Escape) || handles.ViewportHovered && Input.GetMouseButtonDown(1))
+        {
+            EndKnife();
+            return;
+        }
+        if (handles.GetKeyDown(KeyCode.Enter) || handles.GetKeyDown(KeyCode.KeypadEnter))
+        {
+            Cut(ctx, model);
+            EndKnife();
+            return;
+        }
+        if (!handles.IsNearest(owner) || !handles.TryBeginDrag(owner)) return;
+        handles.TryEndDrag(owner);
+        _knife.Add((pixel, landed));
+    }
+
+    private void EndKnife()
+    {
+        _knifeModel = null;
+        _knife.Clear();
+        if (_operatorHandles != null) _operatorHandles.Modal = false;
+        _operatorHandles = null;
+    }
+
+    /// <summary>What of the object the mouse is on: a point near it, else an edge near it, else the face under it, and where that is on screen.</summary>
+    private (Float2 Pixel, KnifePoint Point) Land(SceneToolContext ctx, ModelObject model)
+    {
+        HandleContext handles = ctx.Handles;
+        var point = new KnifePoint();
+        Float4x4 toWorld = model.Transform.LocalToWorldMatrix, toLocal = toWorld.Invert();
+        Float2 mouse = handles.MousePosition;
+        ElementSelection hidden = _hidden[model];
+
+        GeometryData.Vertex? nearest = null;
+        float best = PickRadius;
+        foreach (GeometryData.Vertex vertex in model.Mesh.Vertices)
+        {
+            if (hidden.Vertices.Contains(vertex)) continue;
+            Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
+            if (handles.WorldToScreen(world) is not { } at || Float2.Distance(at, mouse) >= best || !Seen(ctx, world)) continue;
+            best = Float2.Distance(at, mouse);
+            nearest = vertex;
+        }
+        if (nearest != null)
+        {
+            point.Vertex = nearest;
+            point.Point = nearest.Point;
+            return (handles.WorldToScreen(Float4x4.TransformPoint(nearest.Point, toWorld)) ?? mouse, point);
+        }
+
+        Ray sight = handles.MouseRay;
+        GeometryData.Edge? near = null;
+        float nearT = 0f;
+        best = PickRadius;
+        foreach (GeometryData.Edge edge in model.Mesh.Edges)
+        {
+            if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
+            Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
+            if (handles.WorldToScreen(a) is not { } from || handles.WorldToScreen(b) is not { } to) continue;
+            Float2 along = to - from;
+            float lengthSq = Float2.Dot(along, along);
+            float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(mouse - from, along) / lengthSq, 0f, 1f) : 0f;
+            float distance = Float2.Distance(mouse, from + along * t);
+            if (distance >= best || !Seen(ctx, a + (b - a) * t)) continue;
+            best = distance;
+            near = edge;
+            nearT = t;
+        }
+        if (near != null)
+        {
+            Float3 a = Float4x4.TransformPoint(near.Vert1.Point, toWorld), run = Float4x4.TransformPoint(near.Vert2.Point, toWorld) - a, toStart = a - sight.Origin;
+            float runRun = Float3.Dot(run, run), runSight = Float3.Dot(run, sight.Direction), sightSight = Float3.Dot(sight.Direction, sight.Direction);
+            float span = runRun * sightSight - runSight * runSight;
+            float t = span > 1e-12f ? Math.Clamp((runSight * Float3.Dot(sight.Direction, toStart) - sightSight * Float3.Dot(run, toStart)) / span, 0f, 1f) : nearT;
+            point.Edge = near;
+            point.Point = near.Vert1.Point + (near.Vert2.Point - near.Vert1.Point) * t;
+            return (handles.WorldToScreen(a + run * t) ?? mouse, point);
+        }
+
+        if (MeshPicking.Raycast(model.Mesh, toWorld, sight, out GeometryData.Face? face, out float hit, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null))
+        {
+            point.Face = face;
+            point.Point = Float4x4.TransformPoint(sight.Origin + sight.Direction * hit, toLocal);
+        }
+        return (mouse, point);
+    }
+
+    /// <summary>Cuts along the knife's points, each stretch in the plane of the lines of sight through its ends.</summary>
+    private void Cut(SceneToolContext ctx, ModelObject model)
+    {
+        if (_knife.Count < 2) return;
+        HandleContext handles = ctx.Handles;
+        Camera camera = ctx.Camera;
+        Float4x4 toWorld = model.Transform.LocalToWorldMatrix, toLocal = toWorld.Invert();
+        Float2 corner = handles.MousePosition - handles.MouseLocal;
+
+        var planes = new List<(Float3 Point, Float3 Normal)>();
+        for (int i = 1; i < _knife.Count; i++)
+        {
+            Ray sightA = camera.ScreenPointToRay(_knife[i - 1].Pixel - corner, handles.ViewportSize);
+            Ray sightB = camera.ScreenPointToRay(_knife[i].Pixel - corner, handles.ViewportSize);
+            Float3 origin = Float4x4.TransformPoint(sightA.Origin, toLocal);
+            Float3 first = Float4x4.TransformPoint(sightA.Origin + sightA.Direction, toLocal);
+            Float3 second = camera.IsOrthographic
+                ? Float4x4.TransformPoint(sightB.Origin, toLocal)
+                : Float4x4.TransformPoint(sightB.Origin + sightB.Direction, toLocal);
+            planes.Add((origin, Float3.Cross(first - origin, second - origin)));
+        }
+
+        var pixels = _knife.Select(k => k.Pixel).ToList();
+        var points = _knife.Select(k => k.Point).ToList();
+        float? Along(int stretch, Float3 local)
+        {
+            Float2 a = pixels[stretch], run = pixels[stretch + 1] - a;
+            float lengthSq = Float2.Dot(run, run);
+            Float3 world = Float4x4.TransformPoint(local, toWorld);
+            if (lengthSq < 4f || handles.WorldToScreen(world) is not { } at) return null;
+            float t = Float2.Dot(at - a, run) / lengthSq;
+            if (t < -0.002f || t > 1.002f || !Seen(ctx, world)) return null;
+            return Math.Clamp(t, 0f, 1f);
+        }
+
+        ElementSelection hidden = _hidden[model];
+        Edit("Knife Model", (mesh, s) =>
+        {
+            if (!ReferenceEquals(mesh, model.Mesh)) return;
+            Operators.Knife(mesh, points, planes, Along, f => !hidden.Faces.Contains(f), s);
+        }, SelectMode.Edge);
     }
 
     private void CancelModal()
