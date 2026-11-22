@@ -48,6 +48,7 @@ public sealed class CSGClipTool : SceneTool
     public bool HasPlane => _stage == Stage.Tilting;
 
     private Stage _stage = Stage.Idle;
+    private object? _stageView;
 
     // The plane the clip points are placed on, locked at the first click.
     private Float3 _workOrigin;
@@ -92,6 +93,9 @@ public sealed class CSGClipTool : SceneTool
         bool clicked = handles.IsNearest(id) && handles.TryBeginDrag(id);
         handles.TryEndDrag(id);
 
+        // A cut in progress belongs to the scene view it started in
+        if (_stage != Stage.Idle && !ReferenceEquals(ctx.View, _stageView)) return;
+
         switch (_stage)
         {
             case Stage.Idle: TickIdle(ctx, clicked); break;
@@ -116,7 +120,11 @@ public sealed class CSGClipTool : SceneTool
 
         ctx.Draw.Circle(point, normal, 0.12f, PlaneEdge);
 
-        if (clicked) _stage = Stage.Aiming;
+        if (clicked)
+        {
+            _stage = Stage.Aiming;
+            _stageView = ctx.View;
+        }
     }
 
     /// <summary>The point snapped to the grid, unless snapping would carry it off the surface it is on.</summary>

@@ -58,6 +58,7 @@ public sealed class CSGGenerateTool : SceneTool
     public CSGGeneratorSettings Settings = CSGGeneratorSettings.Default;
 
     private Stage _stage = Stage.Idle;
+    private object? _stageView;
     private Float3 _planeOrigin;
     private Quaternion _planeRotation = Quaternion.Identity;
     private Float3 _cornerA;
@@ -94,6 +95,9 @@ public sealed class CSGGenerateTool : SceneTool
         handles.AddControl(id, HandleContext.BodyDistance, float.MaxValue - 1f);
         handles.RequestCursor(id, PaperCursor.Crosshair);
 
+        // A shape in progress belongs to the scene view it started in
+        if (_stage != Stage.Idle && !ReferenceEquals(ctx.View, _stageView)) return;
+
         switch (_stage)
         {
             case Stage.Idle: TickIdle(ctx, id); break;
@@ -123,6 +127,7 @@ public sealed class CSGGenerateTool : SceneTool
         _cornerB = Float3.Zero;
         _height = 0f;
         _stage = Stage.Footprint;
+        _stageView = ctx.View;
     }
 
     private void TickFootprint(SceneToolContext ctx, ControlID id)

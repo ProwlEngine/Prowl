@@ -92,6 +92,7 @@ public sealed class CSGMeshTool : SceneTool
     // What a chamfer or extrude started on, captured when it began so later renumbering cannot move it
     private Plane[]? _startPlanes;
     private CSGBrush? _actionBrush;
+    private object? _actionView;
     private SurfaceData[]? _startSurfaces;
     private CSGControlMesh? _startMesh;
     private Float3 _actionCorner;
@@ -137,7 +138,12 @@ public sealed class CSGMeshTool : SceneTool
         DrawElements(ctx);
 
         // A gesture in progress owns the frame, the move handle and picking stand down.
-        if (_action != Action.None) { TickAction(ctx); return; }
+        if (_action != Action.None)
+        {
+            // A gesture belongs to the scene view it started in
+            if (ReferenceEquals(ctx.View, _actionView)) TickAction(ctx);
+            return;
+        }
 
         ShapeHandles(ctx);
         MoveSelection(ctx);
@@ -349,6 +355,7 @@ public sealed class CSGMeshTool : SceneTool
     private void BeginAction(HandleContext handles, Action action, int point = -1, int edge = -1, int face = -1)
     {
         _action = action;
+        _actionView = Context.View;
         _dragOrigin = handles.MousePosition;
         _dragStarted = false;
         _passedThreshold = false;
