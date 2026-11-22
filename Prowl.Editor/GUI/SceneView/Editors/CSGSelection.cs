@@ -218,15 +218,25 @@ public static class CSGSelection
         List<CSGBrush> brushes = Brushes();
         if (brushes.Count == 0) return;
 
-        Record("Centre CSG Pivot", SelectedObjects());
+        Record("Centre CSG Pivot", brushes.SelectMany(b => b.GameObject.Children.Prepend(b.GameObject)));
 
         foreach (CSGBrush brush in brushes)
         {
             Float3 centroid = CSGBrushGeometry.Centroid(brush.Shape);
             if (Float3.LengthSquared(centroid) < 1e-9f) continue;
 
+            // Children stay where they are in the world while their parent's pivot moves
+            var children = brush.GameObject.Children.Select(c => (c, c.Transform.Position, c.Transform.Rotation)).ToList();
+
+            Float3 pivot = Float4x4.TransformPoint(centroid, brush.Transform.LocalToWorldMatrix);
             brush.Planes = CSGBrushGeometry.Translate(brush.Planes, -centroid);
-            brush.Transform.Position += brush.Transform.Rotation * (centroid * brush.Transform.LocalScale);
+            brush.Transform.Position = pivot;
+
+            foreach ((GameObject child, Float3 position, Quaternion rotation) in children)
+            {
+                child.Transform.Position = position;
+                child.Transform.Rotation = rotation;
+            }
         }
 
         MarkDirty();
