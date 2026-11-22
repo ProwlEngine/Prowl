@@ -125,6 +125,30 @@ public sealed class CSGScene
     private GeometryData? _cachedOutput;
 
     private bool _weldTJunctions = true;
+    private bool _keepDiscarded;
+
+    /// <summary>
+    /// Whether <see cref="Build"/> also keeps the face pieces the operations remove, for <see cref="Discarded"/>. Off by
+    /// default, as an editor wants them only to show or pick what is buried or carves nothing.
+    /// </summary>
+    public bool KeepDiscarded
+    {
+        get => _keepDiscarded;
+        set
+        {
+            if (_keepDiscarded == value) return;
+            _keepDiscarded = value;
+            MarkEvaluationDirty();
+        }
+    }
+
+    /// <summary>The face pieces the last <see cref="Build"/> removed, while <see cref="KeepDiscarded"/> is on.</summary>
+    public IEnumerable<CSGDiscardedFace> Discarded()
+    {
+        foreach (var brush in _brushes)
+            foreach (var frag in brush.Discarded)
+                yield return new CSGDiscardedFace(brush.Id, frag.Source.SourceIndex, frag.Poly, frag.Source.Plane);
+    }
 
     /// <summary>Whether <see cref="Build"/> runs a T-junction welding pass for watertight output. Default true.</summary>
     public bool WeldTJunctions
@@ -688,6 +712,7 @@ public sealed class CSGScene
     private void Recompute(SceneBrush self, Bvh<SceneBrush> bvh, List<SceneBrush> neighborBuffer)
     {
         self.Output.Clear();
+        self.Discarded.Clear();
         if (!self.Emits) return;
 
         // Boxes are widened by the tolerance, or two faces a hair apart would never be tested against each other
@@ -727,6 +752,8 @@ public sealed class CSGScene
                 if (frag.Poly.Count < 3) continue;
                 if (Visible(frag.Rels, self, out bool flip))
                     self.Output.Add(new OutFrag { Poly = frag.Poly.ToArray(), Source = face, Flip = flip });
+                else if (_keepDiscarded)
+                    self.Discarded.Add(new OutFrag { Poly = frag.Poly.ToArray(), Source = face });
             }
         }
     }
@@ -1382,6 +1409,7 @@ public sealed class CSGScene
         public readonly List<FaceData> Faces = new();
         public AABB Bounds;
         public readonly List<OutFrag> Output = new();
+        public readonly List<OutFrag> Discarded = new();
 
         /// <summary>Rings after T-junction welding. Cached because welding a brush's rings only
         /// depends on points from brushes it overlaps, so an untouched brush keeps its result.</summary>
@@ -1391,3 +1419,6 @@ public sealed class CSGScene
 
     #endregion
 }
+
+/// <summary>A face piece a <see cref="CSGScene"/> build removed: the brush and source face it came from, its corners and the face's plane, in scene space.</summary>
+public readonly record struct CSGDiscardedFace(int BrushId, int SourceFaceIndex, Float3[] Corners, Plane Plane);
