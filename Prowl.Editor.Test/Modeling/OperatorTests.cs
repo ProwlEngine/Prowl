@@ -295,4 +295,118 @@ public class OperatorTests
         Assert.NotEmpty(after.Edges);
         Assert.Equal(7, Brush(target).Polygons.Count);
     }
+
+    [Fact]
+    public void SubdividingAFaceSplitsItIntoFour()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.SubdivideFaces(mesh, target.FacesOf([TopOf(box)]), 1, selected), after));
+
+        Assert.Equal(4, after.Faces.Count);
+        Assert.Equal(9, Brush(target).Polygons.Count);
+    }
+
+    [Fact]
+    public void TriangulatingThenJoiningTrianglesGivesTheFaceBack()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        var triangles = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.TriangulateFaces(mesh, target.FacesOf([TopOf(box)]), selected), triangles));
+        Assert.Equal(2, triangles.Faces.Count);
+        Assert.Equal(7, target.Target.Mesh.Faces.Count);
+
+        var quads = new ElementSelection();
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.TrisToQuads(mesh, [.. triangles.Faces], 5f, selected), quads));
+        Assert.Single(quads.Faces);
+        Assert.Equal(6, Brush(target).Polygons.Count);
+    }
+
+    /// <summary>Inset faces on top and bottom, bridged, make a square hole through the box.</summary>
+    [Fact]
+    public void BridgingTwoFacesMakesAHoleThrough()
+    {
+        CSGControlMesh box = Box();
+        int top = TopOf(box), bottom = Enumerable.Range(0, box.Polygons.Count).First(p => box.PolygonNormal(p).Y < -0.99f);
+        var target = new CSGBrushTarget(box, Marked(box));
+        var inner = new ElementSelection();
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Inset(mesh, target.FacesOf([top, bottom]), 0.5f, selected), inner));
+        Assert.Equal(2, inner.Faces.Count);
+        GeometryData.Face[] ends = [.. inner.Faces];
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Bridge(mesh, ends[0], ends[1], selected), after));
+
+        Assert.Equal(4, after.Faces.Count);
+        Assert.Equal(6f, Brush(target).Volume(), 3);
+    }
+
+    [Fact]
+    public void SymmetrizingCopiesOneSideOverTheOther()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        VertexAt(target.Target.Mesh, new Float3(1, 1, 1)).Point = new Float3(1.5f, 1, 1);
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, _) => Operators.Symmetrize(mesh, 0, keepPositive: true, 0f), new ElementSelection()));
+
+        CSGControlMesh brush = Brush(target);
+        Assert.Contains(brush.Points, p => Float3.Distance(p, new Float3(-1.5f, 1, 1)) < 1e-4f);
+        Assert.Contains(brush.Points, p => Float3.Distance(p, new Float3(1.5f, 1, 1)) < 1e-4f);
+        Assert.DoesNotContain(brush.Points, p => Float3.Distance(p, new Float3(-1, 1, 1)) < 1e-4f);
+    }
+
+    [Fact]
+    public void MergingByDistanceJoinsNearPoints()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        GeometryData.Edge edge = EdgeBetween(target.Target.Mesh, new Float3(1, 1, 1), new Float3(-1, 1, 1));
+        var middle = new ElementSelection();
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.SubdivideEdges(mesh, [edge], 1, selected), middle));
+        var scope = new[] { middle.Vertices.First(), VertexAt(target.Target.Mesh, new Float3(1, 1, 1)) };
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.MergeByDistance(mesh, scope, 1.5f, selected), after));
+
+        Assert.Equal(8, Brush(target).Points.Count);
+        Assert.Single(after.Vertices);
+    }
+
+    [Fact]
+    public void SmoothingPullsCornersIn()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        var corners = new[] { VertexAt(target.Target.Mesh, new Float3(1, 1, 1)) };
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Smooth(mesh, corners, 0.5f, selected), after));
+
+        Assert.Single(after.Vertices);
+        Assert.True(Brush(target).Volume() < 8f);
+    }
+
+    /// <summary>A box pulled up, its upper half separated, gives two closed boxes.</summary>
+    [Fact]
+    public void SeparatingTheUpperHalfMakesTwoBrushes()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.ExtrudeRegion(mesh, target.FacesOf([TopOf(box)]), 2f, selected), new ElementSelection()));
+        (CSGControlMesh tall, SurfaceData[] surfaces) = target.ToBrush();
+        var upper = Enumerable.Range(0, tall.Polygons.Count).Where(p => tall.PolygonPoints(p).All(i => tall.Points[i].Y >= 1f - 1e-4f)).ToList();
+
+        Assert.True(CSGBrushTarget.Separate(tall, surfaces, upper, out var kept, out var separated));
+
+        Assert.Equal(CSGMeshProblem.None, kept.Mesh.Check());
+        Assert.Equal(CSGMeshProblem.None, separated.Mesh.Check());
+        Assert.Equal(8f, kept.Mesh.Volume(), 3);
+        Assert.Equal(8f, separated.Mesh.Volume(), 3);
+        Assert.Equal(kept.Mesh.Polygons.Count, kept.Surfaces.Length);
+    }
 }

@@ -412,6 +412,13 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("MeshEdit/Bevel", "Bevel", KeyCode.B, ctrl: true);
         ShortcutManager.Register("MeshEdit/LoopCut", "Loop Cut", KeyCode.R, ctrl: true);
         ShortcutManager.Register("MeshEdit/Knife", "Knife", KeyCode.K);
+        ShortcutManager.Register("MeshEdit/Triangulate", "Triangulate Faces", KeyCode.T, ctrl: true);
+        ShortcutManager.Register("MeshEdit/TrisToQuads", "Triangles To Quads", KeyCode.J, alt: true);
+        ShortcutManager.Register("MeshEdit/Bridge", "Bridge Faces", KeyCode.E, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Symmetrize", "Symmetrize", KeyCode.M, ctrl: true, shift: true);
+        ShortcutManager.Register("MeshEdit/MergeByDistance", "Merge By Distance", KeyCode.M, shift: true);
+        ShortcutManager.Register("MeshEdit/Separate", "Separate", KeyCode.P);
+        ShortcutManager.Register("MeshEdit/Smooth", "Smooth", KeyCode.S, shift: true);
         ShortcutManager.Register("MeshEdit/Dissolve", "Dissolve", KeyCode.X);
         ShortcutManager.Register("MeshEdit/LimitedDissolve", "Limited Dissolve", KeyCode.X, ctrl: true);
         ShortcutManager.Register("MeshEdit/DeleteFace", "Delete Face", KeyCode.Delete, ctrl: true);

@@ -203,6 +203,44 @@ public sealed class CSGBrushTarget
         return ring.Count == onward.Count ? ring : null;
     }
 
+    /// <summary>
+    /// Splits polygons off a brush as a brush of their own. Both are closed by filling the opening on each side with a
+    /// face of the nearest surface. False when either cannot close.
+    /// </summary>
+    public static bool Separate(CSGControlMesh mesh, SurfaceData[] surfaces, IReadOnlyCollection<int> polygons,
+                                out (CSGControlMesh Mesh, SurfaceData[] Surfaces) kept, out (CSGControlMesh Mesh, SurfaceData[] Surfaces) separated)
+    {
+        var chosen = new HashSet<int>(polygons);
+        var rest = new List<int>();
+        for (int p = 0; p < mesh.Polygons.Count; p++)
+            if (!chosen.Contains(p)) rest.Add(p);
+
+        kept = default;
+        separated = default;
+        if (chosen.Count == 0 || rest.Count == 0) return false;
+        if (Closed(mesh, surfaces, rest) is not { } keptPart || Closed(mesh, surfaces, [.. chosen]) is not { } separatedPart) return false;
+        kept = keptPart;
+        separated = separatedPart;
+        return true;
+    }
+
+    // Some of a brush's polygons as a closed brush, the gaps filled, each polygon keeping its surface
+    private static (CSGControlMesh Mesh, SurfaceData[] Surfaces)? Closed(CSGControlMesh mesh, SurfaceData[] surfaces, IReadOnlyList<int> polygons)
+    {
+        var rings = new List<int[]>(polygons.Count);
+        foreach (int p in polygons) rings.Add((int[])mesh.Polygons[p].Clone());
+        CSGControlMesh part = CSGControlMesh.FromPolygons([.. mesh.Points], rings);
+        if (part.Repaired(out int[] source) is not { } closed) return null;
+
+        var partSurfaces = new SurfaceData[closed.Polygons.Count];
+        for (int p = 0; p < partSurfaces.Length; p++)
+        {
+            int original = polygons[source[p]];
+            partSurfaces[p] = original < surfaces.Length ? surfaces[original] : SurfaceData.Default;
+        }
+        return (closed, partSurfaces);
+    }
+
     /// <summary>The polygon of the brush a face came from, or -1 for a face made from nothing.</summary>
     public static int PolygonOf(GeometryData.Face face) => Tag(face) - 1;
 

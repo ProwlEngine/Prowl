@@ -166,6 +166,12 @@ internal static class CSGSections
         Add(tool.CanSubdivide, EditorIcons.DrawPolygon, "csg.subdivide", tool.SubdivideSelected);
         Add(tool.CanConnect, EditorIcons.Link, "csg.connect", tool.ConnectSelected, "MeshEdit/Connect");
         Add(tool.CanFlatten, EditorIcons.RulerHorizontal, "csg.flatten", tool.FlattenSelected, "MeshEdit/Flatten");
+        Add(tool.CanTriangulate, EditorIcons.CaretUp, "csg.triangulate", tool.TriangulateSelected, "MeshEdit/Triangulate");
+        Add(tool.Active, EditorIcons.BorderAll, "csg.tris_to_quads", tool.TrisToQuadsSelected, "MeshEdit/TrisToQuads");
+        Add(tool.CanBridge, EditorIcons.Bridge, "csg.bridge", tool.BridgeSelected, "MeshEdit/Bridge");
+        Add(tool.Active, EditorIcons.ArrowsToDot, "csg.merge_by_distance", tool.MergeByDistanceSelected, "MeshEdit/MergeByDistance");
+        Add(tool.CanSmooth, EditorIcons.Water, "csg.smooth", tool.SmoothSelected, "MeshEdit/Smooth");
+        Add(tool.CanSeparate, EditorIcons.Clone, "csg.separate", tool.SeparateSelected, "MeshEdit/Separate");
         Add(tool.CanSnap, EditorIcons.Magnet, "csg.snap", tool.SnapSelectedToGrid, "CSG/SnapToGrid");
         Add(tool.CanDeleteFaces, EditorIcons.TrashCan, "csg.delete_face", tool.DeleteSelectedFaces, "MeshEdit/DeleteFace");
         return [.. tiles];

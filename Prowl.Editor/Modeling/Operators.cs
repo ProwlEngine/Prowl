@@ -221,6 +221,128 @@ public static class Operators
             if (mesh.Contains(edge)) after.Edges.Add(edge);
     }
 
+    /// <summary>Splits faces into one quad per corner, as many levels deep as asked. The quads of the last level are selected after.</summary>
+    public static void SubdivideFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, int levels, ElementSelection after)
+    {
+        if (faces.Count == 0 || levels < 1) return;
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(mesh, [.. faces], levels);
+        after.Clear();
+        after.Faces.UnionWith(made);
+    }
+
+    /// <summary>Splits faces into triangles. The triangles are selected after.</summary>
+    public static void TriangulateFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, ElementSelection after)
+    {
+        if (faces.Count == 0) return;
+        List<GeometryData.Face> made = GeometryOperators.Triangulate(mesh, [.. faces]);
+        after.Clear();
+        after.Faces.UnionWith(made);
+    }
+
+    /// <summary>Joins pairs of triangles into quads where they turn and bend less than an angle. The quads are selected after.</summary>
+    public static void TrisToQuads(GeometryData mesh, IReadOnlyCollection<GeometryData.Face>? faces, float degrees, ElementSelection after)
+    {
+        List<GeometryData.Face> made = GeometryOperators.TrisToQuads(mesh, faces == null ? null : [.. faces], degrees);
+        if (made.Count == 0) return;
+        after.Clear();
+        after.Faces.UnionWith(made);
+    }
+
+    /// <summary>
+    /// Removes two faces and joins their outlines with a strip of faces. Outlines whose point counts do not fit get
+    /// points added along the shorter one's longest edges first. The strip is selected after.
+    /// </summary>
+    public static void Bridge(GeometryData mesh, GeometryData.Face first, GeometryData.Face second, ElementSelection after)
+    {
+        var a = new HashSet<GeometryData.Vertex>(first.NeighborVertices());
+        var b = new HashSet<GeometryData.Vertex>(second.NeighborVertices());
+        if (a.Overlaps(b)) throw new InvalidOperationException("Faces sharing a point cannot be bridged");
+        GeometryOperators.DeleteFaces(mesh, [first, second]);
+
+        while (!BridgeFits(a.Count, b.Count))
+        {
+            HashSet<GeometryData.Vertex> shorter = a.Count <= b.Count ? a : b;
+            GeometryData.Edge? longest = null;
+            foreach (GeometryData.Edge edge in Outline(mesh, shorter))
+                if (longest == null || Float3.Distance(edge.Vert1.Point, edge.Vert2.Point) > Float3.Distance(longest.Vert1.Point, longest.Vert2.Point)) longest = edge;
+            if (longest == null) throw new InvalidOperationException("An outline to bridge has no edges");
+            shorter.UnionWith(GeometryOperators.SubdivideEdges(mesh, [longest], 1));
+        }
+
+        var edges = new List<GeometryData.Edge>(Outline(mesh, a));
+        edges.AddRange(Outline(mesh, b));
+        List<GeometryData.Face> made = GeometryOperators.BridgeEdges(mesh, edges);
+        after.Clear();
+        after.Faces.UnionWith(made);
+    }
+
+    private static bool BridgeFits(int a, int b) => (a - b) % 2 == 0 && Math.Max(a, b) <= 3 * Math.Min(a, b);
+
+    /// <summary>The open edges running between points of one outline.</summary>
+    private static List<GeometryData.Edge> Outline(GeometryData mesh, HashSet<GeometryData.Vertex> points)
+    {
+        var edges = new List<GeometryData.Edge>();
+        foreach (GeometryData.Edge edge in mesh.Edges)
+            if (points.Contains(edge.Vert1) && points.Contains(edge.Vert2) && edge.NeighborFaces().Count == 1) edges.Add(edge);
+        return edges;
+    }
+
+    /// <summary>
+    /// Makes the mesh the same on both sides of a plane across an axis: cut at the plane, the far side and anything lying
+    /// in the plane removed, and the kept side mirrored over, welded at the seam.
+    /// </summary>
+    /// <param name="axis">0, 1 or 2 for the plane across X, Y or Z.</param>
+    /// <param name="keepPositive">Keep the side towards the positive end of the axis.</param>
+    /// <param name="offset">Where along the axis the plane stands.</param>
+    public static void Symmetrize(GeometryData mesh, int axis, bool keepPositive, float offset)
+    {
+        const float Near = 1e-4f;
+        Float3 normal = axis == 0 ? Float3.UnitX : axis == 1 ? Float3.UnitY : Float3.UnitZ;
+        GeometryOperators.BisectPlane(mesh, new Plane(normal, offset));
+
+        float side = keepPositive ? 1f : -1f;
+        var gone = new List<GeometryData.Face>();
+        foreach (GeometryData.Face face in mesh.Faces)
+        {
+            bool far = false, flat = true;
+            foreach (GeometryData.Vertex vertex in face.NeighborVertices())
+            {
+                float distance = (Float3.Dot(vertex.Point, normal) - offset) * side;
+                if (distance < -Near) far = true;
+                if (MathF.Abs(distance) > Near) flat = false;
+            }
+            if (far || flat) gone.Add(face);
+        }
+        GeometryOperators.DeleteFaces(mesh, gone);
+
+        GeometryData mirrored = GeometryOperators.MirrorCopy(mesh, axis, Near * 10f, offset);
+        mesh.Restore(mirrored.Capture());
+    }
+
+    /// <summary>
+    /// Joins points within a distance of each other, among <paramref name="scope"/> or all points. The scope's points
+    /// left are selected after.
+    /// </summary>
+    public static void MergeByDistance(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex>? scope, float distance, ElementSelection after)
+    {
+        if (distance <= 0f) return;
+        GeometryOperators.MergeByDistance(mesh, scope == null ? null : [.. scope], distance);
+        after.Clear();
+        if (scope == null) return;
+        foreach (GeometryData.Vertex vertex in scope)
+            if (mesh.Contains(vertex)) after.Vertices.Add(vertex);
+    }
+
+    /// <summary>Moves points towards the middle of the points they share an edge with, by a strength from 0 to 1. They stay selected.</summary>
+    public static void Smooth(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after)
+    {
+        if (vertices.Count == 0 || strength <= 0f) return;
+        var points = new List<GeometryData.Vertex>(vertices);
+        GeometryOperators.SmoothVertices(mesh, points, Math.Clamp(strength, 0f, 1f));
+        after.Clear();
+        after.Vertices.UnionWith(points);
+    }
+
     /// <summary>The edges in groups joined at their points.</summary>
     private static List<List<GeometryData.Edge>> Groups(IReadOnlyCollection<GeometryData.Edge> edges)
     {

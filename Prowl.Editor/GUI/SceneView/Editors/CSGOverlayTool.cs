@@ -190,6 +190,22 @@ public sealed class CSGOverlayTool : SceneTool
         if (mesh.CanSubdivide) { Command(menu, "csg.collapse", mesh.CollapseSelected); Command(menu, "csg.subdivide", mesh.SubdivideSelected); any = true; }
         if (mesh.CanConnect) { Command(menu, "csg.connect", mesh.ConnectSelected, "MeshEdit/Connect"); any = true; }
         if (mesh.CanFlatten) { Command(menu, "csg.flatten", mesh.FlattenSelected, "MeshEdit/Flatten"); any = true; }
+        if (mesh.CanTriangulate) { Command(menu, "csg.triangulate", mesh.TriangulateSelected, "MeshEdit/Triangulate"); any = true; }
+        if (mesh.Active) { Command(menu, "csg.tris_to_quads", mesh.TrisToQuadsSelected, "MeshEdit/TrisToQuads"); any = true; }
+        if (mesh.CanBridge) { Command(menu, "csg.bridge", mesh.BridgeSelected, "MeshEdit/Bridge"); any = true; }
+        if (mesh.Active) { Command(menu, "csg.merge_by_distance", mesh.MergeByDistanceSelected, "MeshEdit/MergeByDistance"); any = true; }
+        if (mesh.CanSmooth) { Command(menu, "csg.smooth", mesh.SmoothSelected, "MeshEdit/Smooth"); any = true; }
+        if (mesh.CanSeparate) { Command(menu, "csg.separate", mesh.SeparateSelected, "MeshEdit/Separate"); any = true; }
+        if (mesh.Active)
+        {
+            for (int axis = 0; axis < 3; axis++)
+            {
+                int chosen = axis;
+                string name = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
+                menu.Item(Loc.Get("csg.symmetrize") + "  " + Loc.Get("csg.symmetrize_side", new { from = "+" + name, to = "-" + name }), () => mesh.Symmetrize(chosen, true));
+            }
+            any = true;
+        }
         if (mesh.CanSnap) { Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid"); any = true; }
         if (mesh.CanDeleteFaces) { Command(menu, "csg.delete_face", mesh.DeleteSelectedFaces, "MeshEdit/DeleteFace"); any = true; }
         if (any) menu.Separator();
