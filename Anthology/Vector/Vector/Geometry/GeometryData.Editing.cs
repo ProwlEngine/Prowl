@@ -39,6 +39,30 @@ public partial class GeometryData
     /// <summary>Records a change that adding and removing elements does not, such as moving vertices.</summary>
     public void MarkChanged() => Version++;
 
+    /// <summary>
+    /// The faces given and every face joined to them through hidden edges, each once, each joined region walked once
+    /// however many of its faces are given.
+    /// </summary>
+    public static List<Face> LogicalFaces(IEnumerable<Face> faces)
+    {
+        var result = new List<Face>();
+        var seen = new HashSet<Face>();
+        foreach (Face start in faces)
+        {
+            if (!seen.Add(start)) continue;
+            int from = result.Count;
+            result.Add(start);
+            for (int i = from; i < result.Count; i++)
+                foreach (Edge e in result[i].NeighborEdges())
+                {
+                    if (!e.IsHidden) continue;
+                    foreach (Face other in e.NeighborFaces())
+                        if (seen.Add(other)) result.Add(other);
+                }
+        }
+        return result;
+    }
+
     private static bool ReadFlag(Element element, string name) =>
         element.TryGetAttribute(name, out var value) && value is IntAttributeValue i && i.Data.Length > 0 && i.Data[0] != 0;
 
@@ -166,19 +190,7 @@ public partial class GeometryData
         }
 
         /// <summary>This face and every face joined to it through hidden edges, which together read as one face.</summary>
-        public List<Face> LogicalFace()
-        {
-            var result = new List<Face> { this };
-            var seen = new HashSet<Face> { this };
-            for (int i = 0; i < result.Count; i++)
-                foreach (Edge e in result[i].NeighborEdges())
-                {
-                    if (!e.IsHidden) continue;
-                    foreach (Face other in e.NeighborFaces())
-                        if (seen.Add(other)) result.Add(other);
-                }
-            return result;
-        }
+        public List<Face> LogicalFace() => LogicalFaces([this]);
 
         /// <summary>The area of the face.</summary>
         public float Area()

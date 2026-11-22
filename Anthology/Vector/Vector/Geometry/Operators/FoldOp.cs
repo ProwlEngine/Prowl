@@ -18,7 +18,7 @@ internal static class FoldOp
     /// <summary>Splits faces into triangles joined by hidden edges, so each can be bent independently.</summary>
     internal static void TriangulateFaces(GeometryData mesh, IEnumerable<Face> faces)
     {
-        foreach (Face f in faces.Where(mesh.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList())
+        foreach (Face f in GeometryData.LogicalFaces(faces.Where(mesh.Contains)))
             if (mesh.Contains(f)) Fold(mesh, f);
         mesh.MarkChanged();
     }

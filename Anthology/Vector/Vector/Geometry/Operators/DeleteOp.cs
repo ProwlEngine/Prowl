@@ -18,7 +18,7 @@ internal static class DeleteOp
     /// <summary>Deletes faces, along with the rest of any face they were joined to by hidden edges. Their edges stay.</summary>
     internal static void DeleteFaces(GeometryData mesh, IEnumerable<Face> faces)
     {
-        var all = faces.Where(f => mesh.Contains(f)).SelectMany(f => f.LogicalFace()).ToHashSet();
+        var all = GeometryData.LogicalFaces(faces.Where(f => mesh.Contains(f))).ToHashSet();
         foreach (Face f in all) mesh.RemoveFace(f);
         mesh.RemoveUnused();
         mesh.MarkChanged();
@@ -60,7 +60,7 @@ internal static class DeleteOp
 
     private static void RemoveWithLogical(GeometryData mesh, Edge e)
     {
-        var faces = e.NeighborFaces().SelectMany(f => f.LogicalFace()).ToHashSet();
+        var faces = GeometryData.LogicalFaces(e.NeighborFaces()).ToHashSet();
         foreach (Face f in faces) mesh.RemoveFace(f);
         mesh.RemoveEdge(e);
     }
@@ -72,7 +72,7 @@ internal static class DeleteOp
         {
             if (!mesh.Contains(v) || mesh.DissolveVertex(v)) continue;
             foreach (Edge e in v.NeighborEdges())
-                foreach (Face f in e.NeighborFaces().SelectMany(f => f.LogicalFace()).Distinct().ToList())
+                foreach (Face f in GeometryData.LogicalFaces(e.NeighborFaces()))
                     if (mesh.Contains(f)) mesh.RemoveFace(f);
             mesh.RemoveVertex(v);
         }

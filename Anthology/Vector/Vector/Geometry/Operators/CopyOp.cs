@@ -28,7 +28,7 @@ internal static class CopyOp
             return copy;
         }
 
-        var all = faces.SelectMany(f => f.LogicalFace()).ToHashSet();
+        var all = GeometryData.LogicalFaces(faces).ToHashSet();
         foreach (Face f in all)
         {
             List<Vertex> copy = f.NeighborVertices().Select(Map).ToList();

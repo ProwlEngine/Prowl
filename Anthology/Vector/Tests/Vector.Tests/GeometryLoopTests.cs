@@ -294,6 +294,22 @@ public class GeometryLoopTests
     }
 
     [Fact]
+    public void LogicalFaces_WalksEachJoinedRegionOnce_EvenWhenAllOfItIsGiven()
+    {
+        GeometryData mesh = Grid(70, 70);
+        GeometryOperators.Triangulate(mesh);
+        foreach (GeometryData.Edge edge in mesh.Edges)
+            if (edge.NeighborFaces().Count == 2) edge.IsHidden = true;
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        List<GeometryData.Face> all = GeometryData.LogicalFaces(mesh.Faces);
+
+        Assert.Equal(mesh.Faces.Count, all.Count);
+        Assert.Equal(mesh.Faces.Count, all.Distinct().Count());
+        Assert.True(watch.ElapsedMilliseconds < 2000, $"took {watch.ElapsedMilliseconds} ms");
+    }
+
+    [Fact]
     public void MirrorCopy_NamesTheFacesItMirrored()
     {
         GeometryData mesh = Grid(2, 1);
