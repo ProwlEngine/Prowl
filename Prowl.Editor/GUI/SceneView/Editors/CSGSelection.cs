@@ -190,13 +190,15 @@ public static class CSGSelection
     /// <summary>Mirrors the selection about its own centre.</summary>
     public static void Flip(Float3 axis)
     {
-        List<CSGBrush> brushes = Brushes();
-        if (brushes.Count == 0) return;
+        List<GameObject> roots = Roots();
+        if (roots.Count == 0) return;
 
-        Record("Flip CSG Brush", SelectedObjects());
+        // Every brush inside a selected group mirrors too, about the centre of the whole selection
+        List<CSGBrush> brushes = BrushesUnder(roots);
+        Record("Flip CSG Brush", brushes.Select(b => b.GameObject));
 
         Float3 n = Float3.Normalize(axis);
-        Float3 center = Centre(brushes);
+        Float3 center = Centre(roots);
 
         foreach (CSGBrush brush in brushes)
         {
@@ -247,13 +249,14 @@ public static class CSGSelection
     /// <summary>Moves the selection by an exact amount, optionally leaving a copy behind.</summary>
     public static void MoveBy(Float3 offset, bool clone)
     {
-        if (Brushes().Count == 0) return;
+        if (Roots().Count == 0) return;
         if (clone) Duplicate();
 
-        Record(clone ? "Clone and Move CSG" : "Move CSG", SelectedObjects());
+        List<GameObject> roots = Roots();
+        Record(clone ? "Clone and Move CSG" : "Move CSG", roots);
 
-        foreach (CSGBrush brush in Brushes())
-            brush.Transform.Position += offset;
+        foreach (GameObject go in roots)
+            go.Transform.Position += offset;
 
         MarkDirty();
     }
@@ -261,49 +264,49 @@ public static class CSGSelection
     /// <summary>Rotates the selection about a pivot, orbiting positions too, optionally leaving a copy behind.</summary>
     public static void RotateBy(Float3 eulerDegrees, Float3 pivot, bool clone)
     {
-        if (Brushes().Count == 0) return;
+        if (Roots().Count == 0) return;
         if (clone) Duplicate();
 
-        Record(clone ? "Clone and Rotate CSG" : "Rotate CSG", SelectedObjects());
+        List<GameObject> roots = Roots();
+        Record(clone ? "Clone and Rotate CSG" : "Rotate CSG", roots);
 
         Quaternion rotation = Quaternion.FromEuler(eulerDegrees);
 
-        foreach (CSGBrush brush in Brushes())
+        foreach (GameObject go in roots)
         {
-            brush.Transform.Position = pivot + rotation * (brush.Transform.Position - pivot);
-            brush.Transform.Rotation = rotation * brush.Transform.Rotation;
+            go.Transform.Position = pivot + rotation * (go.Transform.Position - pivot);
+            go.Transform.Rotation = rotation * go.Transform.Rotation;
         }
 
         MarkDirty();
     }
 
-    /// <summary>Centre of the selected brushes, the default pivot for a rotation.</summary>
+    /// <summary>Centre of the selected brushes and groups, the default pivot for a rotation.</summary>
     public static Float3 SelectionCentre()
     {
-        List<CSGBrush> brushes = Brushes();
-        return brushes.Count == 0 ? Float3.Zero : Centre(brushes);
+        List<GameObject> roots = Roots();
+        return roots.Count == 0 ? Float3.Zero : Centre(roots);
     }
 
-    /// <summary>Snaps each brush's pivot onto the grid.</summary>
+    /// <summary>Snaps the pivot of each selected brush and group onto the grid.</summary>
     public static void SnapToGrid()
     {
-        List<CSGBrush> brushes = Brushes();
-        if (brushes.Count == 0) return;
+        List<GameObject> roots = Roots();
+        if (roots.Count == 0) return;
 
-        Record("Snap CSG to Grid", SelectedObjects());
+        Record("Snap CSG to Grid", roots);
 
-        foreach (CSGBrush brush in brushes)
-            brush.Transform.Position = CSGSnap.Round(brush.Transform.Position);
+        foreach (GameObject go in roots)
+            go.Transform.Position = CSGSnap.Round(go.Transform.Position);
 
         MarkDirty();
     }
 
     public static void Duplicate()
     {
-        List<CSGBrush> brushes = Brushes();
-        if (brushes.Count == 0) return;
+        List<GameObject> sources = Roots();
+        if (sources.Count == 0) return;
 
-        List<GameObject> sources = GameObjectClipboard.FilterToRoots(brushes.Select(b => b.GameObject));
         List<GameObject> copies = GameObjectClipboard.Duplicate(sources);
         for (int i = 0; i < copies.Count && i < sources.Count; i++) PlaceAfter(copies[i], sources[i]);
         foreach (GameObject copy in copies) Undo.RegisterCreatedObjectUndo(copy, "Duplicate CSG Brush");
@@ -311,11 +314,24 @@ public static class CSGSelection
         MarkDirty();
     }
 
-    private static Float3 Centre(List<CSGBrush> brushes)
+    private static Float3 Centre(List<GameObject> objects)
     {
         Float3 sum = Float3.Zero;
-        foreach (CSGBrush brush in brushes) sum += brush.Transform.Position;
-        return sum / brushes.Count;
+        foreach (GameObject go in objects) sum += go.Transform.Position;
+        return sum / objects.Count;
+    }
+
+    /// <summary>The brushes on and inside some objects, nested models excluded.</summary>
+    private static List<CSGBrush> BrushesUnder(List<GameObject> roots)
+    {
+        var result = new List<CSGBrush>();
+        foreach (GameObject root in roots)
+        {
+            CSGBrush brush = root.GetComponent<CSGBrush>();
+            if (brush.IsValid()) result.Add(brush);
+            Collect(root, result);
+        }
+        return result;
     }
 
     private static void MarkDirty()

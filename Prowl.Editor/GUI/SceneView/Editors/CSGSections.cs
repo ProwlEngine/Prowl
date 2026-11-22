@@ -466,8 +466,6 @@ internal static class CSGSections
                 .Item(Loc.Get("csg.intersect"), tooltip: Loc.Get("csg.intersect_tip"))
                 .Show());
 
-        if (brushes.Count == 0) return;
-
         EditorGUI.SettingsRow(paper, "csg_sel_flip", Loc.Get("csg.flip"), () =>
             Origami.ButtonGroup(paper, "csg_sel_flip_v", -1, idx => CSGSelection.Flip(AxisFor(idx)))
                 .Height(EditorTheme.RowHeight).FullWidth()
@@ -476,8 +474,11 @@ internal static class CSGSections
                 .Item("Z", tooltip: Loc.Get("csg.flip_tip"))
                 .Show());
 
-        LabelledButton(paper, font, "csg_sel_pivot", Loc.Get("csg.centre_pivot"),
-            Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
+        if (brushes.Count > 0)
+        {
+            LabelledButton(paper, font, "csg_sel_pivot", Loc.Get("csg.centre_pivot"),
+                Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
+        }
 
         LabelledButton(paper, font, "csg_sel_dup", Loc.Get("csg.duplicate"),
             Loc.Get("csg.duplicate_tip"), CSGSelection.Duplicate);
