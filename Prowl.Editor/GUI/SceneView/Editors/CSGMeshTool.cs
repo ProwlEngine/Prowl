@@ -454,6 +454,7 @@ public sealed class CSGMeshTool : SceneTool
 
     // A gizmo drag that began with Shift on a whole face, extruding it rather than moving it
     private bool _gizmoExtrude;
+    private Float3 _gizmoStart;
     private Float3 _dragRaw, _dragApplied;
     private Float3 _dragAnchor, _dragAnchorStart, _dragStartHit;
     private bool _dragStarted;
@@ -2327,6 +2328,7 @@ public sealed class CSGMeshTool : SceneTool
         if (hot && !_dragging)
         {
             _dragRaw = _dragApplied = Float3.Zero;
+            _gizmoStart = before;
 
             // Shift on a whole face pulls it out as a brush of its own, as Shift dragging the face does
             _gizmoExtrude = handles.Shift && _faces.Count == 1 && _vertices.Count == _mesh!.PolygonPoints(_faces[0]).Count;
@@ -2348,6 +2350,17 @@ public sealed class CSGMeshTool : SceneTool
         {
             _dragRaw += centre - before;
             Float3 snapped = axes * CSGSnap.Value(handles, Quaternion.Inverse(axes) * _dragRaw);
+
+            // Snapping to a brush carries the gizmo's starting centre onto the target, along only the axes being dragged
+            if (SnapToBrushes && !_gizmoExtrude && FindSnap(handles, handles.MousePosition) is { } target)
+            {
+                Float3 raw = Quaternion.Inverse(axes) * _dragRaw, onto = Quaternion.Inverse(axes) * (target - _gizmoStart);
+                float still = 1e-6f + Float3.Length(raw) * 1e-4f;
+                for (int i = 0; i < 3; i++)
+                    if (MathF.Abs(raw[i]) < still) onto[i] = 0f;
+                snapped = axes * onto;
+                ctx.Draw.Dot(target, new Color32(255, 220, 90, 255), 9f);
+            }
             step = snapped - _dragApplied;
             _dragApplied = snapped;
         }
