@@ -76,6 +76,7 @@
   "scene.pivot_individual": "Pivot: Individual Origins",
   "scene.orientation_local": "Orientation: Local",
   "scene.orientation_global": "Orientation: Global",
+  "scene.orientation_normal": "Orientation: Normal",
   "scene.rotation_snap": "Rotation Snap",
   "scene.grid_snap": "Grid Snap",
   "scene.settings": "View Settings",

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 using Prowl.Editor.GUI.SceneView;
@@ -15,6 +16,9 @@ public enum TransformKind
     Translate,
     Rotate,
     Scale,
+
+    /// <summary>One point along one of its edges, the edge picked by the way the mouse first moves.</summary>
+    Slide,
 }
 
 public enum ModalState
@@ -61,6 +65,7 @@ public sealed class TransformModal
     private bool _plane;
     private AxisSpace _space;
     private string _typed = "";
+    private int _slideEdge = -1;
     private Action? _replay;
 
     /// <param name="local">The object's rotation, for the second press of an axis key.</param>
@@ -74,6 +79,9 @@ public sealed class TransformModal
     }
 
     public TransformKind Kind { get; }
+
+    /// <summary>For a slide, the far ends of the edges the point can slide along, in the world.</summary>
+    public IReadOnlyList<Float3> SlideEnds { get; init; } = [];
 
     /// <summary>What the modal is doing, for the status line.</summary>
     public string Status { get; private set; } = "";
@@ -116,6 +124,7 @@ public sealed class TransformModal
             case TransformKind.Translate: Translate(ctx); break;
             case TransformKind.Rotate: Rotate(ctx); break;
             case TransformKind.Scale: Scale(ctx); break;
+            case TransformKind.Slide: Slide(ctx); break;
         }
         DrawLocks(ctx);
 
@@ -136,7 +145,7 @@ public sealed class TransformModal
 
     private void ReadKeys(HandleContext handles)
     {
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 3 && Kind != TransformKind.Slide; i++)
         {
             KeyCode key = i == 0 ? KeyCode.X : i == 1 ? KeyCode.Y : KeyCode.Z;
             if (handles.GetKeyDown(key)) LockAxis(i, handles.Shift);
@@ -235,6 +244,46 @@ public sealed class TransformModal
         _replay = () => _session.Scale(factors, axes);
         _replay();
         Status = string.Create(CultureInfo.InvariantCulture, $"Scale{Lock()}  {factor:0.###}{TypedText()}");
+    }
+
+    /// <summary>Slides the point part of the way along an edge, typed as a fraction of the edge.</summary>
+    private void Slide(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        Float3 from = _session.Median;
+        Float2 moved = _virtual - _start;
+        if (handles.WorldToScreen(from) is not { } fromScreen || SlideEnds.Count == 0) return;
+
+        // The edge is the one whose direction on screen best matches the mouse's first move
+        if (_slideEdge < 0 && Float2.Length(moved) >= 4f)
+        {
+            float best = float.MinValue;
+            Float2 direction = Float2.Normalize(moved);
+            for (int i = 0; i < SlideEnds.Count; i++)
+            {
+                if (handles.WorldToScreen(SlideEnds[i]) is not { } end || Float2.LengthSquared(end - fromScreen) < 1e-6f) continue;
+                float match = Float2.Dot(direction, Float2.Normalize(end - fromScreen));
+                if (match <= best) continue;
+                best = match;
+                _slideEdge = i;
+            }
+        }
+
+        float t = 0f;
+        Float3 target = from;
+        if (_slideEdge >= 0)
+        {
+            target = SlideEnds[_slideEdge];
+            Float2 along = (handles.WorldToScreen(target) ?? fromScreen) - fromScreen;
+            float length = Float2.Dot(along, along);
+            t = Math.Clamp(Typed ?? (length > 1e-6f ? Float2.Dot(moved, along) / length : 0f), 0f, 1f);
+            ctx.Draw.Line(from, target, AxisColors[1], 1.5f);
+        }
+
+        Float3 delta = (target - from) * t;
+        _replay = () => _session.Translate(delta);
+        _replay();
+        Status = string.Create(CultureInfo.InvariantCulture, $"Slide  {t:0.###}{TypedText()}");
     }
 
     /// <summary>Where the ray through a screen point meets the plane through the pivot, or the pivot when it runs along the plane.</summary>

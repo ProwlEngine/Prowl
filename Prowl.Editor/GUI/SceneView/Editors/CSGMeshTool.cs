@@ -437,13 +437,35 @@ public sealed class CSGMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Invert")) Command((mesh, s) => Selecting.Invert(mesh, s, Mode));
         else if (handles.IsPressed("MeshEdit/More")) Command((_, s) => Selecting.More(s, Mode));
         else if (handles.IsPressed("MeshEdit/Less")) Command((mesh, s) => Selecting.Less(mesh, s, Mode));
-        else if (handles.IsPressed("MeshEdit/Linked")) Command((_, s) => Selecting.Linked(s, Mode));
+        else if (handles.IsPressed("MeshEdit/Linked")) SelectLinked(ctx);
         else if (handles.IsPressed("MeshEdit/Similar")) Command((mesh, s) => Selecting.Similar(mesh, s, Mode));
         else if (handles.IsPressed("MeshEdit/XRay")) XRay = !XRay;
         else if (handles.IsPressed("MeshEdit/HideUnselected")) Hide(unselected: true);
         else if (handles.IsPressed("MeshEdit/Reveal")) ClearHidden();
         else if (handles.IsPressed("MeshEdit/Hide")) Hide(unselected: false);
         else if (handles.IsPressed("MeshEdit/Frame")) FrameSelected(ctx);
+    }
+
+    /// <summary>Adds the whole shell under the cursor to the selection, or grows the selection's own shells when the cursor is off the brush.</summary>
+    private void SelectLinked(SceneToolContext ctx)
+    {
+        if (_target == null) return;
+        if (!FaceUnderCursor(ctx.Handles, out int polygon, out _))
+        {
+            Command((_, s) => Selecting.Linked(s, Mode));
+            return;
+        }
+
+        List<GeometryData.Face> seed = _target.FacesOf([polygon]);
+        Command((_, s) =>
+        {
+            var shell = new ElementSelection();
+            foreach (GeometryData.Face face in seed) shell.Vertices.UnionWith(face.NeighborVertices());
+            Selecting.Linked(shell, SelectMode.Vertex);
+            s.Vertices.UnionWith(shell.Vertices);
+            s.Edges.UnionWith(shell.Edges);
+            s.Faces.UnionWith(shell.Faces);
+        });
     }
 
     /// <summary>Hides the selected parts, or every other part, while editing. The shape is untouched.</summary>
@@ -1025,6 +1047,10 @@ public sealed class CSGMeshTool : SceneTool
     private void TickTransform(SceneToolContext ctx)
     {
         TransformModal modal = _transform!;
+
+        // G again while grabbing a single point slides it along an edge instead
+        if (modal.Kind == TransformKind.Translate && ctx.Handles.GetKeyDown(KeyCode.G) && StartSlide()) return;
+
         ModalState state = modal.Tick(ctx);
         ctx.Draw.Label(_session!.Pivot, modal.Status, PickedColor);
 
@@ -1044,8 +1070,32 @@ public sealed class CSGMeshTool : SceneTool
         {
             TransformKind.Translate => "Move CSG Points",
             TransformKind.Rotate => "Rotate CSG Points",
+            TransformKind.Slide => "Slide CSG Point",
             _ => "Scale CSG Points",
         });
+    }
+
+    /// <summary>Turns a grab of one point into a slide along one of its edges, from where the point started.</summary>
+    private bool StartSlide()
+    {
+        if (Mode != SelectMode.Vertex || _vertices.Count != 1 || _session == null || _sessionStart == null) return false;
+
+        int point = 0;
+        foreach (int i in _vertices) point = i;
+        Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
+        var ends = new List<Float3>();
+        foreach ((int a, int b) in _edges)
+        {
+            if (a != point && b != point || _hiddenEdges.Contains(EdgeKey(a, b))) continue;
+            ends.Add(Float4x4.TransformPoint(_sessionStart.Points[a == point ? b : a], toWorld));
+        }
+        if (ends.Count == 0) return false;
+
+        _session.Restore();
+        ShowShape(_sessionStart.Clone());
+        _sessionMove = null;
+        _transform = new TransformModal(TransformKind.Slide, _session, Target.Transform.Rotation, null) { SlideEnds = ends };
+        return true;
     }
 
     /// <summary>Puts the brush back as the transform found it and ends it.</summary>
@@ -1357,7 +1407,12 @@ public sealed class CSGMeshTool : SceneTool
         if (_gizmoExtrude && _dragging) centre += _dragRaw;
 
         Float3 before = centre;
-        Quaternion axes = SceneTools.Orientation == PivotOrientation.Local ? Target.Transform.Rotation : Quaternion.Identity;
+        Quaternion axes = SceneTools.Orientation switch
+        {
+            PivotOrientation.Global => Quaternion.Identity,
+            PivotOrientation.Normal => NormalFrame() ?? Target.Transform.Rotation,
+            _ => Target.Transform.Rotation,
+        };
         bool moved = TransformHandles.PositionHandle(handles, MoveHandle, ref centre, axes, out bool hot);
         if (hot && !_dragging)
         {

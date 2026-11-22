@@ -35,6 +35,8 @@ public enum PivotOrientation
     Global,
     /// <summary>Axes align to the active object's rotation.</summary>
     Local,
+    /// <summary>Axes align to the selection's normal where a tool has one, such as mesh editing, and as Local elsewhere.</summary>
+    Normal,
 }
 
 /// <summary>

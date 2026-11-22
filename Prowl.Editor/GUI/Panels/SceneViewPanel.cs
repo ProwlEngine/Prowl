@@ -137,10 +137,17 @@ public class SceneViewPanel : DockPanel
 
             using (HeaderGroup(paper, "sv_hdr_orient_grp"))
             {
-                bool global = SceneTools.Orientation == PivotOrientation.Global;
-                HeaderToggle(paper, font, "sv_hdr_orient", global ? EditorIcons.Globe : EditorIcons.Cube,
-                    Loc.Get(global ? "scene.orientation_global" : "scene.orientation_local"), global,
-                    () => SceneTools.Orientation = global ? PivotOrientation.Local : PivotOrientation.Global);
+                PivotOrientation orientation = SceneTools.Orientation;
+                HeaderToggle(paper, font, "sv_hdr_orient",
+                    orientation switch { PivotOrientation.Global => EditorIcons.Globe, PivotOrientation.Local => EditorIcons.Cube, _ => EditorIcons.ArrowUpLong },
+                    Loc.Get(orientation switch { PivotOrientation.Global => "scene.orientation_global", PivotOrientation.Local => "scene.orientation_local", _ => "scene.orientation_normal" }),
+                    orientation == PivotOrientation.Global,
+                    () => SceneTools.Orientation = orientation switch
+                    {
+                        PivotOrientation.Global => PivotOrientation.Local,
+                        PivotOrientation.Local => PivotOrientation.Normal,
+                        _ => PivotOrientation.Global,
+                    });
                 PivotButton(paper, font);
             }
 
@@ -1513,7 +1520,7 @@ public class SceneViewPanel : DockPanel
 
         // The gizmo derives its axis directions from this, so drive the widget's own orientation
         // rather than flattening the rotation, which would also flatten the drawn axes.
-        _transformGizmo.Orientation = SceneTools.Orientation == PivotOrientation.Local
+        _transformGizmo.Orientation = SceneTools.Orientation != PivotOrientation.Global
             ? Gizmo.TransformGizmo.GizmoOrientation.Local
             : Gizmo.TransformGizmo.GizmoOrientation.Global;
 
@@ -1533,7 +1540,7 @@ public class SceneViewPanel : DockPanel
 
         // The toolbar toggles snap their own kind of drag, and Ctrl inverts them. Moves snap to the grid here
         // rather than in the gizmo, so the gizmo hands over the raw drag for them.
-        Quaternion handleSpace = SceneTools.Orientation == PivotOrientation.Local ? rotation : Quaternion.Identity;
+        Quaternion handleSpace = SceneTools.Orientation != PivotOrientation.Global ? rotation : Quaternion.Identity;
         _transformGizmo.Snapping = StickySnap() && (_dragKind ?? SceneTools.Transform) != TransformTool.Translate;
         _transformGizmo.SnapDistance = SceneTools.MoveSnap;
         _transformGizmo.SnapAngle = SceneTools.RotateSnap;
