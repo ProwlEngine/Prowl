@@ -395,4 +395,43 @@ public class CSGConcaveTests
             first = full;
         }
     }
+
+    /// <summary>A hole exactly as deep as its wall, like a face pulled through it, cuts the wall where it is moved to.</summary>
+    [Fact]
+    public void MovingAFlushHoleRecutsTheWall()
+    {
+        var scene = new CSGScene();
+        scene.Add(Box(new Float3(6f, 3f, 0.5f)));
+        var hole = scene.Add(Box(new Float3(1f, 1f, 0.5f)), CSGOperation.Subtractive);
+        scene.Build();
+
+        var moved = Float4x4.CreateTranslation(new Float3(1.5f, 0.25f, 0f));
+        scene.SetTransform(hole, moved);
+        GeometryData patched = scene.Build();
+
+        var fresh = new CSGScene();
+        fresh.Add(Box(new Float3(6f, 3f, 0.5f)));
+        fresh.SetTransform(fresh.Add(Box(new Float3(1f, 1f, 0.5f)), CSGOperation.Subtractive), moved);
+        GeometryData expected = fresh.Build();
+
+        Assert.Equal(expected.Volume(), patched.Volume(), 4);
+        Assert.Equal(expected.Faces.Count, patched.Faces.Count);
+        Assert.Empty(patched.Edges.Where(e => e.FaceCount != 2));
+    }
+
+    /// <summary>A brush a hair away from another counts as touching it, so moving it away re-evaluates the other too.</summary>
+    [Fact]
+    public void MovingABrushAHairAwayRecutsTheOneItTouched()
+    {
+        var scene = new CSGScene();
+        scene.Add(Box(new Float3(2f, 2f, 0.5f), new Float3(0f, 0f, 0.25f)));
+        var block = scene.Add(Box(new Float3(1f, 1f, 0.5f), new Float3(0f, 0f, 0.75f + 0.00005f)));
+        scene.Build();
+
+        scene.SetTransform(block, Float4x4.CreateTranslation(new Float3(5f, 0f, 0f)));
+        GeometryData moved = scene.Build();
+
+        Assert.Empty(moved.Edges.Where(e => e.FaceCount != 2));
+        Assert.Equal(2f * 2f * 0.5f + 0.5f, moved.Volume(), 3);
+    }
 }

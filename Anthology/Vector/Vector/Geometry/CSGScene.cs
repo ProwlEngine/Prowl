@@ -495,7 +495,7 @@ public sealed class CSGScene
             foreach (var region in _pendingDirtyRegions)
             {
                 hits.Clear();
-                bvh.QueryAABB(region, hits);
+                bvh.QueryAABB(region.Expanded(DistanceEpsilon), hits);
                 foreach (var b in hits) b.Dirty = true;
             }
             _pendingDirtyRegions.Clear();
@@ -528,7 +528,7 @@ public sealed class CSGScene
             foreach (var brush in changed)
             {
                 neighborBuffer.Clear();
-                bvh.QueryAABB(BrushBox(brush), neighborBuffer);
+                bvh.QueryAABB(BrushBox(brush).Expanded(WeldTolerance), neighborBuffer);
                 foreach (var n in neighborBuffer) n.WeldDirty = true;
             }
         }
