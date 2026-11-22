@@ -441,6 +441,36 @@ public static class Operators
         return normal;
     }
 
+    /// <summary>
+    /// Takes faces out of a mesh into a mesh of their own, keeping every attribute. Points left with no face are dropped
+    /// from both.
+    /// </summary>
+    public static GeometryData Separate(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces)
+    {
+        var taken = new HashSet<int>();
+        foreach (GeometryData.Face face in faces)
+            if (mesh.Contains(face)) taken.Add(face.Index);
+
+        var part = new GeometryData();
+        part.Restore(mesh.Capture());
+        var others = new List<GeometryData.Face>();
+        foreach (GeometryData.Face face in part.Faces)
+            if (!taken.Contains(face.Index)) others.Add(face);
+        GeometryOperators.DeleteFaces(part, others);
+        GeometryOperators.DeleteFaces(mesh, [.. faces]);
+        DropLoosePoints(part);
+        DropLoosePoints(mesh);
+        return part;
+    }
+
+    private static void DropLoosePoints(GeometryData mesh)
+    {
+        var loose = new List<GeometryData.Vertex>();
+        foreach (GeometryData.Vertex vertex in mesh.Vertices)
+            if (vertex.NeighborFaces().Count == 0) loose.Add(vertex);
+        foreach (GeometryData.Vertex vertex in loose) mesh.RemoveVertex(vertex);
+    }
+
     /// <summary>The edges in groups joined at their points.</summary>
     private static List<List<GeometryData.Edge>> Groups(IReadOnlyCollection<GeometryData.Edge> edges)
     {

@@ -507,4 +507,20 @@ public class OperatorTests
             loop = loop.Next!;
         } while (loop != side.Loop);
     }
+
+    [Fact]
+    public void SeparatingFacesMovesThemIntoAMeshOfTheirOwn()
+    {
+        GeometryData mesh = Primitives.Make(PrimitiveKind.Cube);
+        GeometryData.Face top = mesh.Faces.First(f => f.Normal().Y > 0.99f);
+
+        GeometryData part = Operators.Separate(mesh, [top]);
+
+        Assert.Equal(5, mesh.Faces.Count);
+        Assert.Single(part.Faces);
+        Assert.Equal(4, part.Vertices.Count);
+        Assert.True(part.HasLoopAttribute(MeshGeometry.UV));
+        Assert.True(part.Faces[0].Normal().Y > 0.99f);
+        Assert.Equal(8, mesh.Vertices.Count);
+    }
 }
