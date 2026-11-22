@@ -643,13 +643,14 @@ public static class GeometryOperators
     }
 
     /// <summary>
-    /// Splits faces into one quad per corner through the middles of their edges and their centres, <paramref name="levels"/>
-    /// times. The faces beside them gain the edge middles, so the surface stays closed.
+    /// Cuts faces with evenly spaced points along their edges: a four sided face becomes a grid of quads, any other face
+    /// one quad per corner at a single cut or a fan to its centre at more. The faces beside them gain the edge points, so
+    /// the surface stays closed.
     /// </summary>
-    /// <returns>The quads made by the last level.</returns>
-    public static List<GeometryData.Face> SubdivideFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, int levels = 1)
+    /// <returns>The faces made.</returns>
+    public static List<GeometryData.Face> SubdivideFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, int cuts = 1)
     {
-        return SubdivideOp.Faces(mesh, faces, levels);
+        return SubdivideOp.Faces(mesh, faces, cuts);
     }
 
     /// <summary>

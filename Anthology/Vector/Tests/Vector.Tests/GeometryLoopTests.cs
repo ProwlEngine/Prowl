@@ -401,13 +401,15 @@ public class GeometryLoopTests
     }
 
     [Fact]
-    public void SubdivideFaces_TwiceMakesSixteen()
+    public void SubdivideFaces_ThreeCutsMakeAFourByFourGrid()
     {
         GeometryData cube = Cube();
 
-        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(cube, [Top(cube)], 2);
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(cube, [Top(cube)], 3);
 
         Assert.Equal(16, made.Count);
+        Assert.All(made, f => Assert.Equal(4, f.VertCount));
+        Assert.All(made, f => Assert.True(f.Normal().Y > 0.99f));
         Assert.True(cube.IsClosed());
         Assert.Equal(8f, cube.Volume(), 3);
     }
@@ -450,5 +452,20 @@ public class GeometryLoopTests
         GeometryOperators.TrisToQuads(cube, top, 5f);
 
         Assert.Equal(11, cube.Faces.Count);
+    }
+
+    [Fact]
+    public void SubdivideFaces_FansATriangleToItsCentreAtMoreThanOneCut()
+    {
+        GeometryData mesh = new();
+        var a = mesh.AddVertex(0, 0, 0);
+        var b = mesh.AddVertex(2, 0, 0);
+        var c = mesh.AddVertex(0, 0, 2);
+        GeometryData.Face triangle = mesh.AddFace(a, c, b)!;
+
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(mesh, [triangle], 2);
+
+        Assert.Equal(9, made.Count);
+        Assert.All(made, f => Assert.True(f.Normal().Y > 0.99f));
     }
 }
