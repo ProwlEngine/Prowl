@@ -65,6 +65,24 @@ public sealed class CSGMeshTool : SceneTool
     /// <summary>How far the chamfer and extrude buttons cut and pull.</summary>
     public float ChamferDistance => CSGSnap.Grid;
     public float ExtrudeDistance => CSGSnap.Grid;
+    public float InsetDistance => CSGSnap.Grid;
+
+    /// <summary>Insets every selected face by <see cref="InsetDistance"/>, ringing it with new faces of its surface.</summary>
+    public void InsetSelected()
+    {
+        if (Target.IsNotValid() || _faces.Count == 0) return;
+
+        if (!CSGMeshEdit.Inset(Target!.ControlMesh, Target.Surfaces, _faces, InsetDistance, out CSGControlMesh mesh, out SurfaceData[] surfaces))
+        {
+            CSGStatus.Flash(Loc.Get("csg.status_inset_too_wide"));
+            return;
+        }
+
+        Undo.RecordObject(Target, "Inset CSG Face");
+        Target.SetShape(mesh, surfaces);
+        ClearSelection();
+        MarkDirty();
+    }
 
     /// <summary>Cuts every selected edge, or every selected corner when no whole edge is selected, by <see cref="ChamferDistance"/>.</summary>
     public void ChamferSelected()
@@ -714,7 +732,8 @@ public sealed class CSGMeshTool : SceneTool
         if (_gizmoExtrude && _dragging) centre += _dragRaw;
 
         Float3 before = centre;
-        bool moved = TransformHandles.PositionHandle(handles, MoveHandle, ref centre, out bool hot);
+        Quaternion axes = SceneTools.Orientation == PivotOrientation.Local ? Target.Transform.Rotation : Quaternion.Identity;
+        bool moved = TransformHandles.PositionHandle(handles, MoveHandle, ref centre, axes, out bool hot);
         if (hot && !_dragging)
         {
             _dragRaw = _dragApplied = Float3.Zero;
@@ -732,12 +751,12 @@ public sealed class CSGMeshTool : SceneTool
 
         _dragging = hot;
 
-        // Snapped over the whole drag so small per frame steps do not round away.
+        // Snapped over the whole drag, along the handle's own axes, so small per frame steps do not round away.
         Float3 step = Float3.Zero;
         if (moved)
         {
             _dragRaw += centre - before;
-            Float3 snapped = CSGSnap.Value(handles, _dragRaw);
+            Float3 snapped = axes * CSGSnap.Value(handles, Quaternion.Inverse(axes) * _dragRaw);
             step = snapped - _dragApplied;
             _dragApplied = snapped;
         }
@@ -757,11 +776,7 @@ public sealed class CSGMeshTool : SceneTool
         CSGControlMesh? mesh = BeginPointEdit("Edit CSG Brush");
         if (mesh == null) return;
 
-        // A whole face slides along its own normal, otherwise only the selected points move
         List<int> moving = [.. _vertices];
-        if (_faces.Count == 1 && _vertices.Count == mesh.PolygonPoints(_faces[0]).Count)
-            delta = mesh.PolygonNormal(_faces[0]) * Float3.Dot(delta, mesh.PolygonNormal(_faces[0]));
-
         mesh.MovePoints(moving, delta);
         Target.ApplyControlMesh();
 
