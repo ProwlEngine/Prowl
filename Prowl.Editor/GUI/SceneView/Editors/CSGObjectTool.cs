@@ -148,7 +148,7 @@ public sealed class CSGObjectTool : SceneTool
         }
     }
 
-    private static Color32 ColorFor(Operation operation) => operation switch
+    internal static Color32 ColorFor(Operation operation) => operation switch
     {
         Operation.Subtractive => SubtractiveColor,
         Operation.Intersect => IntersectColor,

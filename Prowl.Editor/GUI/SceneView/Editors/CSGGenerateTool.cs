@@ -42,8 +42,6 @@ public sealed class CSGGenerateTool : SceneTool
     private const float MinimumFootprint = 1e-3f;
 
     private static readonly Color32 GuideColor = new(140, 200, 255, 200);
-    private static readonly Color32 SolidColor = new(120, 220, 160, 255);
-    private static readonly Color32 PlaneColor = new(140, 200, 255, 40);
 
     /// <summary>Whether drawing is the CSG mode in force.</summary>
     public bool Drawing => CSGEditMode.Is(CSGMode.Generate);
@@ -118,7 +116,7 @@ public sealed class CSGGenerateTool : SceneTool
         Float3 snapped = CSGSnap.Value(ctx.Handles, point);
         _planeOrigin = snapped - normal * Float3.Dot(snapped - point, normal);
 
-        DrawCursor(ctx, _planeOrigin, normal);
+        DrawCursor(ctx, _planeOrigin, normal, Tint(ctx.Handles));
 
         if (!ctx.Handles.IsNearest(id) || !ctx.Handles.TryBeginDrag(id)) return;
 
@@ -135,7 +133,7 @@ public sealed class CSGGenerateTool : SceneTool
         if (TryPlanePoint(ctx, out Float3 local))
             _cornerB = new Float3(CSGSnap.Value(ctx.Handles, local.X), local.Y, CSGSnap.Value(ctx.Handles, local.Z));
 
-        DrawFootprint(ctx);
+        DrawFootprint(ctx, Tint(ctx.Handles));
 
         if (!ctx.Handles.PrimaryUp) return;
 
@@ -156,12 +154,12 @@ public sealed class CSGGenerateTool : SceneTool
     {
         _height = CSGSnap.Value(ctx.Handles, HeightUnderCursor(ctx));
 
-        DrawPreview(ctx);
+        DrawPreview(ctx, Tint(ctx.Handles));
 
-        if (ctx.Handles.IsPressed("CSG/Confirm")) { Commit(ctx); return; }
+        if (ctx.Handles.IsPressed("CSG/Confirm")) { Commit(ctx, OperationFor(ctx.Handles)); return; }
 
         // The commit click is a raw press, so check the cursor is on the scene rather than a panel.
-        if (ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered) Commit(ctx);
+        if (ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered) Commit(ctx, OperationFor(ctx.Handles));
     }
 
     /// <summary>Where a new brush would start: the surface under the cursor, or the grid plane.</summary>
@@ -251,7 +249,21 @@ public sealed class CSGGenerateTool : SceneTool
         return model.GameObject;
     }
 
-    private void Commit(SceneToolContext ctx)
+    /// <summary>The operation the brush will get. Holding Shift swaps add and subtract for one brush.</summary>
+    private Operation OperationFor(HandleContext handles) => !handles.Shift ? Operation : Operation switch
+    {
+        Operation.Additive => Operation.Subtractive,
+        Operation.Subtractive => Operation.Additive,
+        _ => Operation,
+    };
+
+    private (Color32 Color, string Label) Tint(HandleContext handles)
+    {
+        Operation operation = OperationFor(handles);
+        return (CSGObjectTool.ColorFor(operation), Loc.Get(CSGSections.OperationLabel(operation)));
+    }
+
+    private void Commit(SceneToolContext ctx, Operation operation)
     {
         if (!CSGBrushGeometry.BoxFromDrag(_cornerA, _cornerB, _height, out Float3 center, out Float3 size))
         {
@@ -277,7 +289,7 @@ public sealed class CSGGenerateTool : SceneTool
 
             CSGGroup group = root.AddComponent<CSGGroup>();
             group.HoldsShape = true;
-            group.Operation = Operation;
+            group.Operation = operation;
         }
         else root = ParentFor(model!);
 
@@ -299,7 +311,7 @@ public sealed class CSGGenerateTool : SceneTool
             ApplySmoothing(brush, parts[i].SmoothPlanes);
 
             // Children of a group fold into it, so the group carries the operation instead.
-            brush.Operation = parts.Count > 1 ? Vector.Geometry.CSGOperation.Additive : Operation;
+            brush.Operation = parts.Count > 1 ? Operation.Additive : operation;
         }
 
         GameObject created = parts.Count > 1 ? root : root.Children[^1];
@@ -330,30 +342,31 @@ public sealed class CSGGenerateTool : SceneTool
     /// <summary>Abandons an in progress brush, leaving the tool armed.</summary>
     public void Cancel() => _stage = Stage.Idle;
 
-    private void DrawCursor(SceneToolContext ctx, Float3 point, Float3 normal)
+    private void DrawCursor(SceneToolContext ctx, Float3 point, Float3 normal, (Color32 Color, string Label) tint)
     {
-        ctx.Draw.Circle(point, normal, 0.15f, GuideColor);
+        ctx.Draw.Circle(point, normal, 0.15f, tint.Color);
 
         Float3 x = _planeRotation * Float3.UnitX;
         Float3 z = _planeRotation * Float3.UnitZ;
-        ctx.Draw.Line(point - x * 0.6f, point + x * 0.6f, GuideColor);
-        ctx.Draw.Line(point - z * 0.6f, point + z * 0.6f, GuideColor);
+        ctx.Draw.Line(point - x * 0.6f, point + x * 0.6f, tint.Color);
+        ctx.Draw.Line(point - z * 0.6f, point + z * 0.6f, tint.Color);
+        ctx.Draw.Label(point + normal * 0.3f, tint.Label, tint.Color);
     }
 
-    private void DrawFootprint(SceneToolContext ctx)
+    private void DrawFootprint(SceneToolContext ctx, (Color32 Color, string Label) tint)
     {
         Span<Float3> corners = stackalloc Float3[4];
         FootprintCorners(0f, corners);
 
-        ctx.Draw.Polygon(corners, PlaneColor);
-        ctx.Draw.Polyline(corners, GuideColor, 2f, closed: true);
+        ctx.Draw.Polygon(corners, new Color32(tint.Color.R, tint.Color.G, tint.Color.B, 40));
+        ctx.Draw.Polyline(corners, tint.Color, 2f, closed: true);
 
-        ctx.Draw.LengthLabel(corners[0], corners[1], GuideColor);
-        ctx.Draw.LengthLabel(corners[1], corners[2], GuideColor);
+        ctx.Draw.LengthLabel(corners[0], corners[1], tint.Color);
+        ctx.Draw.LengthLabel(corners[1], corners[2], tint.Color);
     }
 
-    /// <summary>Draws the bounds as a faint cage with the shape inside it.</summary>
-    private void DrawPreview(SceneToolContext ctx)
+    /// <summary>Draws the bounds as a faint cage with the shape inside it, in the colour of its operation.</summary>
+    private void DrawPreview(SceneToolContext ctx, (Color32 Color, string Label) tint)
     {
         Span<Float3> bottom = stackalloc Float3[4];
         Span<Float3> top = stackalloc Float3[4];
@@ -364,12 +377,13 @@ public sealed class CSGGenerateTool : SceneTool
         ctx.Draw.Polyline(top, GuideColor, 1f, closed: true);
         for (int i = 0; i < 4; i++) ctx.Draw.Line(bottom[i], top[i], GuideColor, 1f);
 
-        DrawShapePreview(ctx);
+        DrawShapePreview(ctx, tint.Color);
 
-        ctx.Draw.LengthLabel(bottom[0], top[0], SolidColor);
+        ctx.Draw.LengthLabel(bottom[0], top[0], tint.Color);
+        ctx.Draw.Label(top[2], tint.Label, tint.Color);
     }
 
-    private void DrawShapePreview(SceneToolContext ctx)
+    private void DrawShapePreview(SceneToolContext ctx, Color32 color)
     {
         if (!CSGBrushGeometry.BoxFromDrag(_cornerA, _cornerB, _height, out Float3 centre, out Float3 size))
             return;
@@ -383,7 +397,7 @@ public sealed class CSGGenerateTool : SceneTool
             foreach (GeometryData.Edge edge in solid.Solid!.Edges)
             {
                 ctx.Draw.Line(ToWorld(origin + edge.Vert1.Point),
-                              ToWorld(origin + edge.Vert2.Point), SolidColor, 2f);
+                              ToWorld(origin + edge.Vert2.Point), color, 2f);
             }
         }
     }
