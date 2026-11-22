@@ -57,7 +57,7 @@ public sealed class CSGBrushHandle
 }
 
 /// <summary>
-/// An incremental N-ary CSG scene built from convex brushes (after Sander van Rossen's Realtime-CSG
+/// An incremental N-ary CSG scene built from brushes (after Sander van Rossen's Realtime-CSG
 /// model). Brushes form an ordered list; later brushes override earlier ones where they overlap, so
 /// the final solid is "the last brush whose volume contains a point decides whether it is solid".
 ///
@@ -66,7 +66,9 @@ public sealed class CSGBrushHandle
 /// cached surface. Overlap queries go through a <see cref="Bvh{T}"/> broadphase so large scenes stay
 /// cheap to edit.
 ///
-/// Every brush MUST be a convex closed solid. Build a concave shape from several brushes. Vertex,
+/// A brush is any closed, consistently wound mesh: concave, with bent faces, or with holes through it. Convex brushes
+/// are clipped by their planes, others cut fragments along the faces that reach them and decide inside or outside by
+/// winding number. A brush that is not quite closed is still classified by what it nearly encloses. Vertex,
 /// edge, loop, and face attributes are carried through; where two brushes define an attribute of the
 /// same name, the earlier brush's schema wins.
 ///
@@ -675,30 +677,111 @@ public sealed class CSGScene
 
             var plane = Plane.FromNormalAndPoint(Float3.Normalize(normal), centroid / n);
 
-            Float3 faceMin = world[0], faceMax = world[0];
-            for (int i = 1; i < n; i++)
+            int before = brush.Faces.Count;
+            if (IsFlat(world, plane) && IsConvex(world, plane.Normal))
+                brush.Faces.Add(Piece(faceIndex, face, world, srcVerts, srcLoops, plane, plane));
+            else
+                AddTriangles(brush, faceIndex, face, world, srcVerts, srcLoops, plane);
+
+            for (int i = before; i < brush.Faces.Count; i++)
             {
-                faceMin = Maths.Min(faceMin, world[i]);
-                faceMax = Maths.Max(faceMax, world[i]);
+                if (firstBrush) { brushBounds = brush.Faces[i].Bounds; firstBrush = false; }
+                else brushBounds = brushBounds.Encapsulating(brush.Faces[i].Bounds);
             }
-            AABB faceBounds = new AABB(faceMin, faceMax);
-
-            brush.Faces.Add(new FaceData
-            {
-                SourceIndex = faceIndex,
-                World = world,
-                Plane = plane,
-                Source = face,
-                SrcVerts = srcVerts,
-                SrcLoops = srcLoops,
-                Bounds = faceBounds
-            });
-
-            if (firstBrush) { brushBounds = faceBounds; firstBrush = false; }
-            else brushBounds = brushBounds.Encapsulating(faceBounds);
         }
 
         brush.Bounds = brushBounds;
+        brush.Convex = brush.Shape.IsClosed() && IsConvexSolid(brush);
+    }
+
+    private static FaceData Piece(int sourceIndex, GeometryData.Face face, Float3[] world, GeometryData.Vertex[] srcVerts,
+                                  GeometryData.Loop?[] srcLoops, Plane plane, Plane surfacePlane)
+    {
+        Float3 min = world[0], max = world[0];
+        for (int i = 1; i < world.Length; i++)
+        {
+            min = Maths.Min(min, world[i]);
+            max = Maths.Max(max, world[i]);
+        }
+
+        return new FaceData
+        {
+            SourceIndex = sourceIndex,
+            World = world,
+            Plane = plane,
+            SurfacePlane = surfacePlane,
+            Source = face,
+            SrcVerts = srcVerts,
+            SrcLoops = srcLoops,
+            Bounds = new AABB(min, max),
+        };
+    }
+
+    /// <summary>
+    /// Splits a concave or bent face into flat triangles, ear clipped in the face's fitted plane. Each keeps the face's
+    /// index and fitted plane, so the pieces stay one surface with one texture projection.
+    /// </summary>
+    private static void AddTriangles(SceneBrush brush, int sourceIndex, GeometryData.Face face, Float3[] world,
+                                     GeometryData.Vertex[] srcVerts, GeometryData.Loop?[] srcLoops, Plane surfacePlane)
+    {
+        PlaneBasis(surfacePlane.Normal, out Float3 u, out Float3 v);
+        var flat = new Float2[world.Length];
+        for (int i = 0; i < world.Length; i++) flat[i] = new Float2(Float3.Dot(world[i], u), Float3.Dot(world[i], v));
+
+        List<int> triangles = Polygon2D.Triangulate(flat);
+        for (int t = 0; t + 2 < triangles.Count; t += 3)
+        {
+            int a = triangles[t], b = triangles[t + 1], c = triangles[t + 2];
+            Float3[] corners = [world[a], world[b], world[c]];
+            Float3 normal = Float3.Cross(corners[1] - corners[0], corners[2] - corners[0]);
+            if (Float3.LengthSquared(normal) < DegenerateEpsilon * DegenerateEpsilon) continue;
+
+            var plane = Plane.FromNormalAndPoint(Float3.Normalize(normal), corners[0]);
+            brush.Faces.Add(Piece(sourceIndex, face, corners, [srcVerts[a], srcVerts[b], srcVerts[c]],
+                [srcLoops[a], srcLoops[b], srcLoops[c]], plane, surfacePlane));
+        }
+    }
+
+    /// <summary>Two axes across a plane, so that with its normal they make a right handed frame.</summary>
+    private static void PlaneBasis(Float3 normal, out Float3 u, out Float3 v)
+    {
+        Float3 helper = Maths.Abs(normal.Y) < 0.9f ? Float3.UnitY : Float3.UnitX;
+        u = Float3.Normalize(Float3.Cross(helper, normal));
+        v = Float3.Cross(normal, u);
+    }
+
+    private static bool IsFlat(Float3[] world, Plane plane)
+    {
+        foreach (var p in world)
+            if (Maths.Abs(Float3.Dot(plane.Normal, p) - plane.D) > DegenerateEpsilon) return false;
+        return true;
+    }
+
+    /// <summary>Whether a flat polygon turns the same way at every corner.</summary>
+    private static bool IsConvex(Float3[] world, Float3 normal)
+    {
+        int n = world.Length;
+        for (int i = 0; i < n; i++)
+        {
+            Float3 a = world[i], b = world[(i + 1) % n], c = world[(i + 2) % n];
+            if (Float3.Dot(Float3.Cross(b - a, c - b), normal) < -DegenerateEpsilon) return false;
+        }
+        return true;
+    }
+
+    /// <summary>A closed brush is convex when every face is one flat convex piece and every corner lies behind every face.</summary>
+    private static bool IsConvexSolid(SceneBrush brush)
+    {
+        int pieces = 0;
+        var sources = new HashSet<int>();
+        foreach (var face in brush.Faces) { pieces++; sources.Add(face.SourceIndex); }
+        if (pieces != sources.Count) return false;
+
+        foreach (var face in brush.Faces)
+            foreach (var other in brush.Faces)
+                foreach (var p in other.World)
+                    if (Float3.Dot(face.Plane.Normal, p) - face.Plane.D > 1e-3f) return false;
+        return true;
     }
 
     #endregion
@@ -757,12 +840,14 @@ public sealed class CSGScene
                 foreach (var frag in work)
                 {
                     if (frag.Final || !Reaches(frag.Poly, b.Bounds)) next.Add(frag);
-                    else SplitByBrush(frag, b, face.Plane, self, next);
+                    else if (b.Convex) SplitByBrush(frag, b, face.Plane, self, next);
+                    else SplitByConcave(frag, b, face.Plane, self, next);
                 }
 
                 (work, next) = (next, work);
             }
 
+            int emitted = self.Output.Count;
             foreach (var frag in work)
             {
                 if (frag.Poly.Count < 3) continue;
@@ -771,8 +856,65 @@ public sealed class CSGScene
                 else if (_keepDiscarded)
                     self.Discarded.Add(new OutFrag { Poly = frag.Poly.ToArray(), Source = face });
             }
+            MergePieces(self.Output, emitted);
         }
     }
+
+    /// <summary>
+    /// Joins pieces of one face back together where cutting by a concave neighbour split more than it had to: two
+    /// pieces facing the same way that share an edge become one, as long as the result stays convex.
+    /// </summary>
+    private static void MergePieces(List<OutFrag> output, int start)
+    {
+        for (bool merged = true; merged;)
+        {
+            merged = false;
+            for (int i = start; i < output.Count && !merged; i++)
+            {
+                for (int j = i + 1; j < output.Count && !merged; j++)
+                {
+                    OutFrag a = output[i], b = output[j];
+                    if (a.Flip != b.Flip || !TryJoin(a.Poly, b.Poly, a.Source.Plane.Normal, out Float3[] joined)) continue;
+
+                    output[i] = new OutFrag { Poly = joined, Source = a.Source, Flip = a.Flip };
+                    output.RemoveAt(j);
+                    merged = true;
+                }
+            }
+        }
+    }
+
+    /// <summary>The convex polygon two convex polygons make when they share an edge, or false.</summary>
+    private static bool TryJoin(Float3[] p, Float3[] q, Float3 normal, out Float3[] joined)
+    {
+        joined = Array.Empty<Float3>();
+        for (int i = 0; i < p.Length; i++)
+        {
+            Float3 a = p[i], b = p[(i + 1) % p.Length];
+            for (int k = 0; k < q.Length; k++)
+            {
+                if (!Same(q[k], b) || !Same(q[(k + 1) % q.Length], a)) continue;
+
+                // Round the first polygon from the end of the shared edge back to its start, then the rest of the second
+                var ring = new List<Float3>(p.Length + q.Length - 2);
+                for (int n = 1; n <= p.Length; n++) ring.Add(p[(i + n) % p.Length]);
+                for (int n = 2; n < q.Length; n++) ring.Add(q[(k + n) % q.Length]);
+
+                for (int n = ring.Count - 1; n >= 0 && ring.Count > 3; n--)
+                {
+                    Float3 before = ring[(n + ring.Count - 1) % ring.Count], after = ring[(n + 1) % ring.Count];
+                    if (Float3.LengthSquared(Float3.Cross(ring[n] - before, after - ring[n])) < 1e-12f) ring.RemoveAt(n);
+                }
+
+                if (!IsConvex(ring.ToArray(), normal)) return false;
+                joined = ring.ToArray();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool Same(Float3 a, Float3 b) => Float3.DistanceSquared(a, b) < 1e-10f;
 
     // Whether every corner of a polygon lies on a plane. Measured at the corners themselves, because
     // two planes through the same points can still differ in their constants by rounding.
@@ -855,6 +997,155 @@ public sealed class CSGScene
     }
 
     /// <summary>
+    /// Splits a face fragment by a neighbour that is not convex. The fragment is cut only along the neighbour's faces
+    /// that touch its plane, and along the edges of neighbour faces lying in it, so every cell is wholly inside, wholly
+    /// outside, or on the neighbour. Each cell is then classified on its own: lying on a neighbour face gives the
+    /// shared surface relation, otherwise the neighbour's winding number at the cell's centre says whether it is inside.
+    /// </summary>
+    private void SplitByConcave(Fragment frag, SceneBrush b, Plane facePlane, SceneBrush self, List<Fragment> results)
+    {
+        AABB fragBox = PolyBounds(frag.Poly).Expanded(DistanceEpsilon);
+        var cuts = new List<Plane>();
+        var coplanar = new List<(FaceData Face, Relation Relation)>();
+
+        foreach (var f in b.Faces)
+        {
+            if (!f.Bounds.Expanded(DistanceEpsilon).Intersects(fragBox)) continue;
+
+            float dn = Float3.Dot(f.Plane.Normal, facePlane.Normal);
+            if (Maths.Abs(dn) >= 1.0f - NormalEpsilon && (LiesOn(frag.Poly, f.Plane) || LiesOn(f.World, facePlane)))
+            {
+                coplanar.Add((f, dn > 0 ? Relation.Aligned : Relation.Opposite));
+
+                // The face covers the fragment only within its edges, so the fragment is cut along them
+                for (int i = 0; i < f.World.Length; i++)
+                {
+                    Float3 a = f.World[i], c = f.World[(i + 1) % f.World.Length];
+                    Float3 n = Float3.Cross(c - a, facePlane.Normal);
+                    if (Float3.LengthSquared(n) < DegenerateEpsilon * DegenerateEpsilon) continue;
+                    n = Float3.Normalize(n);
+                    cuts.Add(new Plane(n, Float3.Dot(n, a)));
+                }
+                continue;
+            }
+
+            if (Touches(f.World, facePlane)) cuts.Add(f.Plane);
+        }
+
+        var cells = new List<List<Float3>> { frag.Poly };
+        var back = new List<Float3>();
+        var front = new List<Float3>();
+        foreach (var plane in cuts)
+        {
+            var split = new List<List<Float3>>(cells.Count + 2);
+            foreach (var cell in cells)
+            {
+                ClipByPlane(cell, plane, back, front, out bool anyBack, out bool anyFront);
+                if (anyBack && anyFront && back.Count >= 3 && front.Count >= 3)
+                {
+                    split.Add(new List<Float3>(back));
+                    split.Add(new List<Float3>(front));
+                }
+                else split.Add(cell);
+            }
+            cells = split;
+        }
+
+        foreach (var cell in cells)
+        {
+            Float3 centre = Float3.Zero;
+            foreach (var p in cell) centre += p;
+            centre /= cell.Count;
+
+            Relation? relation = null;
+            foreach (var (f, rel) in coplanar)
+                if (InsideConvex(f.World, f.Plane.Normal, centre)) { relation = rel; break; }
+            if (relation == null && WindingNumber(b, centre) > 0.5f) relation = Relation.Interior;
+
+            if (relation == null)
+            {
+                results.Add(new Fragment(cell, frag.Rels));
+                continue;
+            }
+
+            // Two brushes sharing a surface would each emit it. The later one in traversal order owns it.
+            if (relation == Relation.Aligned && b.EvalOrder > self.EvalOrder) continue;
+
+            var rels = new List<Rel>(frag.Rels) { new Rel(b, relation.Value) };
+            var piece = new Fragment(cell, rels);
+            if (_flat && relation == Relation.Interior)
+            {
+                if (!Visible(rels, self, out _)) continue;
+                piece.Final = true;
+            }
+            results.Add(piece);
+        }
+    }
+
+    private static AABB PolyBounds(List<Float3> poly)
+    {
+        Float3 min = poly[0], max = poly[0];
+        for (int i = 1; i < poly.Count; i++)
+        {
+            min = Maths.Min(min, poly[i]);
+            max = Maths.Max(max, poly[i]);
+        }
+        return new AABB(min, max);
+    }
+
+    /// <summary>Whether a polygon reaches a plane: corners on both sides of it, or on it.</summary>
+    private bool Touches(Float3[] poly, Plane plane)
+    {
+        bool below = false, above = false;
+        foreach (var p in poly)
+        {
+            float d = Float3.Dot(plane.Normal, p) - plane.D;
+            if (d <= DistanceEpsilon) below = true;
+            if (d >= -DistanceEpsilon) above = true;
+        }
+        return below && above;
+    }
+
+    /// <summary>Whether a point in a convex polygon's plane lies inside it, edges included within the tolerance.</summary>
+    private bool InsideConvex(Float3[] poly, Float3 normal, Float3 point)
+    {
+        for (int i = 0; i < poly.Length; i++)
+        {
+            Float3 a = poly[i], c = poly[(i + 1) % poly.Length];
+            Float3 inward = Float3.Cross(normal, c - a);
+            float length = Float3.Length(inward);
+            if (length < DegenerateEpsilon) continue;
+            if (Float3.Dot(inward / length, point - a) < -DistanceEpsilon) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// How many times a brush's surface wraps around a point: one inside a closed brush, zero outside, and in between
+    /// for a brush that is not quite closed. The sum of the solid angles its faces fill seen from the point.
+    /// </summary>
+    private static float WindingNumber(SceneBrush brush, Float3 point)
+    {
+        float total = 0f;
+        foreach (var face in brush.Faces)
+        {
+            Float3 a = face.World[0] - point;
+            for (int i = 1; i + 1 < face.World.Length; i++)
+                total += SolidAngle(a, face.World[i] - point, face.World[i + 1] - point);
+        }
+        return total / (4f * MathF.PI);
+    }
+
+    /// <summary>The signed solid angle a triangle fills seen from the origin, positive when it winds counter clockwise toward it.</summary>
+    private static float SolidAngle(Float3 a, Float3 b, Float3 c)
+    {
+        float la = Float3.Length(a), lb = Float3.Length(b), lc = Float3.Length(c);
+        float numerator = Float3.Dot(a, Float3.Cross(b, c));
+        float denominator = la * lb * lc + Float3.Dot(a, b) * lc + Float3.Dot(a, c) * lb + Float3.Dot(b, c) * la;
+        return 2f * MathF.Atan2(numerator, denominator);
+    }
+
+    /// <summary>
     /// Whether a fully classified fragment lies on the final solid's surface: true exactly when the
     /// volume behind the face and the volume in front disagree about being solid. Each side is
     /// evaluated against the whole tree.
@@ -875,6 +1166,13 @@ public sealed class CSGScene
             return false; // both sides solid or both empty: not a boundary
 
         flip = !innerSolid && outerSolid; // solid is in front: the face must point the other way
+
+        // A face lying on an opposite facing brush face is visible from both brushes, one of them turned round, so both
+        // would come out facing the same way. The one turned round leaves it to the other.
+        if (flip)
+            foreach (var r in rels)
+                if (r.Relation == Relation.Opposite) return false;
+
         return true;
     }
 
@@ -1172,7 +1470,7 @@ public sealed class CSGScene
         SurfaceTexSpace texSpace = default;
         if (SurfaceUV != null)
         {
-            Plane plane = source.Plane;
+            Plane plane = source.SurfacePlane;
             projectUV = SurfaceUV(item.Brush.Id, source.SourceIndex, in plane, out texSpace);
         }
 
@@ -1386,6 +1684,9 @@ public sealed class CSGScene
         public int SourceIndex = -1;
         public Float3[] World = Array.Empty<Float3>();
         public Plane Plane;
+
+        /// <summary>The fitted plane of the whole source face, which a concave or bent face's pieces share for texturing.</summary>
+        public Plane SurfacePlane;
         public GeometryData.Face Source = null!;
         public GeometryData.Vertex[] SrcVerts = Array.Empty<GeometryData.Vertex>();
         public GeometryData.Loop?[] SrcLoops = Array.Empty<GeometryData.Loop?>();
@@ -1422,6 +1723,9 @@ public sealed class CSGScene
         public Float4x4 Transform;
         public bool Dirty;
         public bool Emits = true;
+
+        /// <summary>Every face one flat convex piece with all corners behind it, so neighbours can clip by its planes.</summary>
+        public bool Convex = true;
 
         public readonly List<FaceData> Faces = new();
         public AABB Bounds;
