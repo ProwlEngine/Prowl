@@ -180,8 +180,16 @@ public sealed class CSGOverlayTool : SceneTool
         if (mesh.CanChamfer) { Command(menu, "csg.chamfer", mesh.ChamferSelected); any = true; }
         if (mesh.CanExtrude) { Command(menu, "csg.extrude", mesh.ExtrudeSelected); any = true; }
         if (mesh.CanInset) { Command(menu, "csg.inset", mesh.InsetSelected); any = true; }
+        if (mesh.CanExtrudeRegion) { Command(menu, "csg.extrude_region", mesh.ExtrudeRegionSelected, "MeshEdit/Extrude"); any = true; }
+        if (mesh.CanDissolve) { Command(menu, "csg.dissolve", mesh.DissolveSelected, "MeshEdit/Dissolve"); any = true; }
+        if (mesh.Active) { Command(menu, "csg.limited_dissolve", mesh.LimitedDissolveSelected, "MeshEdit/LimitedDissolve"); any = true; }
+        if (mesh.CanMerge && mesh.Mode == Prowl.Editor.Modeling.SelectMode.Vertex) { Command(menu, "csg.merge_centre", mesh.MergeAtCentre); any = true; }
+        if (mesh.CanMergeAtActive) { Command(menu, "csg.merge_active", mesh.MergeAtActive); any = true; }
+        if (mesh.CanSubdivide) { Command(menu, "csg.collapse", mesh.CollapseSelected); Command(menu, "csg.subdivide", mesh.SubdivideSelected); any = true; }
+        if (mesh.CanConnect) { Command(menu, "csg.connect", mesh.ConnectSelected, "MeshEdit/Connect"); any = true; }
+        if (mesh.CanFlatten) { Command(menu, "csg.flatten", mesh.FlattenSelected, "MeshEdit/Flatten"); any = true; }
         if (mesh.CanSnap) { Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid"); any = true; }
-        if (mesh.CanDeleteFaces) { Command(menu, "csg.delete_face", mesh.DeleteSelectedFaces); any = true; }
+        if (mesh.CanDeleteFaces) { Command(menu, "csg.delete_face", mesh.DeleteSelectedFaces, "MeshEdit/DeleteFace"); any = true; }
         if (any) menu.Separator();
     }
 
