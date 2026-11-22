@@ -41,6 +41,7 @@ public sealed class CSGMeshTool : SceneTool
     private const string MoveHandle = "csg_mesh_move";
     private const string MarqueeControl = "csg_mesh_marquee";
     private const string BrushControl = "csg_mesh_brush";
+    private const string MenuActionControl = "csg_mesh_menu_action";
 
     private const float PickRadius = 9f;
 
@@ -62,77 +63,75 @@ public sealed class CSGMeshTool : SceneTool
 
     public int SelectedFaceCount => _faces.Count;
 
-    /// <summary>How far the chamfer and extrude buttons cut and pull.</summary>
-    public float ChamferDistance => CSGSnap.Grid;
-    public float ExtrudeDistance => CSGSnap.Grid;
-    public float InsetDistance => CSGSnap.Grid;
+    /// <summary>Whether a chamfer has something to cut: a selected edge, or a selected corner.</summary>
+    public bool CanChamfer => Active && _vertices.Count > 0;
 
-    /// <summary>Insets every selected face by <see cref="InsetDistance"/>, ringing it with new faces of its surface.</summary>
-    public void InsetSelected()
-    {
-        if (Target.IsNotValid() || _faces.Count == 0) return;
+    /// <summary>Whether one whole face is selected to pull out.</summary>
+    public bool CanExtrude => Active && _faces.Count == 1;
 
-        if (!CSGMeshEdit.Inset(Target!.ControlMesh, Target.Surfaces, _faces, InsetDistance, out CSGControlMesh mesh, out SurfaceData[] surfaces))
-        {
-            CSGStatus.Flash(Loc.Get("csg.status_inset_too_wide"));
-            return;
-        }
+    /// <summary>Whether any face is selected to inset.</summary>
+    public bool CanInset => Active && _faces.Count > 0;
 
-        Undo.RecordObject(Target, "Inset CSG Face");
-        Target.SetShape(mesh, surfaces);
-        ClearSelection();
-        MarkDirty();
-    }
+    /// <summary>Whether selected faces can be dropped, which only means something on a convex brush.</summary>
+    public bool CanDeleteFaces => Active && _faces.Count > 0 && Target.IsValid() && Target!.ControlMesh.IsConvex();
 
-    /// <summary>Cuts every selected edge, or every selected corner when no whole edge is selected, by <see cref="ChamferDistance"/>.</summary>
+    public bool CanSnap => Active && _vertices.Count > 0;
+
+    /// <summary>Starts cutting every selected edge, or every selected corner when no whole edge is selected, by as far as the mouse moves.</summary>
     public void ChamferSelected()
     {
-        if (Target.IsNotValid() || _mesh == null || ChamferDistance <= 1e-4f) return;
+        if (!CanChamfer) return;
+        BeginAction(Context.Handles, Action.Chamfer, fromMenu: true);
+    }
 
-        var planes = new List<Plane>(Target!.Planes);
-        int original = planes.Count;
+    /// <summary>Starts pulling the one selected face out into a brush of its own, by as far as the mouse moves.</summary>
+    public void ExtrudeSelected()
+    {
+        if (!CanExtrude) return;
+        BeginAction(Context.Handles, Action.Extrude, face: _faces[0], fromMenu: true);
+    }
 
-        foreach ((int a, int b) in _edges)
+    /// <summary>Starts insetting every selected face, by as far as the mouse moves.</summary>
+    public void InsetSelected()
+    {
+        if (!CanInset) return;
+        BeginAction(Context.Handles, Action.Inset, fromMenu: true);
+    }
+
+    /// <summary>The start shape with every selected edge, or else every selected corner, cut off by a distance.</summary>
+    private (CSGControlMesh Mesh, SurfaceData[] Surfaces)? ChamferSelection(float distance)
+    {
+        CSGControlMesh start = _startMesh!;
+        var cuts = new List<Plane>();
+
+        foreach ((int a, int b) in start.Edges())
         {
-            if (!_vertices.Contains(a) || !_vertices.Contains(b)) continue;
+            if (!_actionPoints.Contains(a) || !_actionPoints.Contains(b)) continue;
             var normals = new List<Float3>();
-            foreach (int p in _mesh.PolygonsAtEdge(a, b)) normals.Add(_mesh.PolygonNormal(p));
-            if (CSGMeshEdit.ChamferPlane(normals, (_mesh.Points[a] + _mesh.Points[b]) * 0.5f, ChamferDistance, out Plane cut)) planes.Add(cut);
+            foreach (int p in start.PolygonsAtEdge(a, b)) normals.Add(start.PolygonNormal(p));
+            if (CSGMeshEdit.ChamferPlane(normals, (start.Points[a] + start.Points[b]) * 0.5f, distance, out Plane cut)) cuts.Add(cut);
         }
 
-        if (planes.Count == original)
+        if (cuts.Count == 0)
         {
-            foreach (int point in _vertices)
+            foreach (int point in _actionPoints)
             {
                 var normals = new List<Float3>();
-                foreach (int p in _mesh.PolygonsAtPoint(point)) normals.Add(_mesh.PolygonNormal(p));
-                if (CSGMeshEdit.ChamferPlane(normals, _mesh.Points[point], ChamferDistance, out Plane cut)) planes.Add(cut);
+                foreach (int p in start.PolygonsAtPoint(point)) normals.Add(start.PolygonNormal(p));
+                if (CSGMeshEdit.ChamferPlane(normals, start.Points[point], distance, out Plane cut)) cuts.Add(cut);
             }
         }
 
-        if (planes.Count == original) return;
+        if (cuts.Count == 0) return null;
 
-        CSGControlMesh mesh = Target.ControlMesh.Clone();
-        SurfaceData[] surfaces = (SurfaceData[])Target.Surfaces.Clone();
-        for (int i = original; i < planes.Count; i++)
+        CSGControlMesh mesh = start.Clone();
+        SurfaceData[] surfaces = (SurfaceData[])_startSurfaces!.Clone();
+        foreach (Plane cut in cuts)
         {
-            if (CSGSelection.CutAway(mesh, surfaces, planes[i], CSGSelection.NearestSurface(Target, planes[i].Normal, surfaces.Length)) is not { } cut) return;
-            (mesh, surfaces) = cut;
+            if (CSGSelection.CutAway(mesh, surfaces, cut, CSGSelection.NearestSurface(Target!, cut.Normal, surfaces.Length)) is not { } piece) return null;
+            (mesh, surfaces) = piece;
         }
-
-        Undo.RecordObject(Target, "Chamfer CSG Brush");
-        Target.SetShape(mesh, surfaces);
-        ClearSelection();
-        MarkDirty();
-    }
-
-    /// <summary>Pulls the one selected face out into a brush of its own by <see cref="ExtrudeDistance"/>.</summary>
-    public void ExtrudeSelected()
-    {
-        if (Target.IsNotValid() || _mesh == null || _faces.Count != 1) return;
-
-        PrepareExtrude(_faces[0]);
-        CommitExtrude(ExtrudeDistance);
+        return (mesh, surfaces);
     }
 
     /// <summary>Takes the face's corners, direction and look, ready for an extrude.</summary>
@@ -159,7 +158,7 @@ public sealed class CSGMeshTool : SceneTool
     private readonly List<int> _faces = new();
 
     /// <summary>What a drag in progress is doing.</summary>
-    private enum Action { None, Marquee, Chamfer, Extrude, Drag }
+    private enum Action { None, Marquee, Chamfer, Extrude, Inset, Drag }
 
     // Pixels the cursor has to travel before a press becomes a chamfer, extrude or drag, so a click stays a click
     private const float DragThreshold = 4f;
@@ -181,6 +180,11 @@ public sealed class CSGMeshTool : SceneTool
 
     private Action _action;
     private Float2 _dragOrigin;
+
+    // An action started from the menu follows the mouse with no button held, and the next click commits it
+    private bool _fromMenu;
+    private readonly HashSet<int> _actionPoints = new();
+    private readonly List<int> _actionFaces = new();
 
     // What a chamfer or extrude started on, captured when it began so later renumbering cannot move it
     private CSGBrush? _actionBrush;
@@ -289,7 +293,7 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (_action == Action.None) return;
         // Exactly the shape it started with, so the open undo record finds nothing changed and leaves no step
-        if (_action is Action.Chamfer or Action.Drag && _actionBrush.IsValid() && _startMesh != null)
+        if (_action is Action.Chamfer or Action.Inset or Action.Drag && _actionBrush.IsValid() && _startMesh != null)
         {
             _actionBrush!.SetShape(_startMesh.Clone(), (SurfaceData[])_startSurfaces!.Clone());
             MarkDirty();
@@ -473,9 +477,17 @@ public sealed class CSGMeshTool : SceneTool
         ctx.Draw.Label(at, $"{Float3.Length(moved):0.###}  ({moved.X:0.###}, {moved.Y:0.###}, {moved.Z:0.###})", PickedColor);
     }
 
-    private void BeginAction(HandleContext handles, Action action, int point = -1, int edge = -1, int face = -1)
+    private void BeginAction(HandleContext handles, Action action, int point = -1, int edge = -1, int face = -1, bool fromMenu = false)
     {
         _action = action;
+        _fromMenu = fromMenu;
+        _actionPoints.Clear();
+        _actionFaces.Clear();
+        if (fromMenu)
+        {
+            _actionPoints.UnionWith(_vertices);
+            _actionFaces.AddRange(_faces);
+        }
         _actionView = Context.View;
         _dragOrigin = handles.MousePosition;
         _dragStarted = false;
@@ -559,11 +571,16 @@ public sealed class CSGMeshTool : SceneTool
     {
         HandleContext handles = ctx.Handles;
 
-        // Cursor travel in world units at the brush's distance, counted from the drag threshold
+        // Cursor travel in world units at the brush's distance, counted from the drag threshold. A menu action has no
+        // press to tell apart from a click, so it counts from where the menu was used
         float pixels = Float2.Distance(handles.MousePosition, _dragOrigin);
-        _passedThreshold |= pixels >= DragThreshold;
+        _passedThreshold |= _fromMenu || pixels >= DragThreshold;
         bool moved = _passedThreshold;
-        float amount = MathF.Max(0f, pixels - DragThreshold) * WorldPerPixel(ctx);
+        float amount = MathF.Max(0f, pixels - (_fromMenu ? 0f : DragThreshold)) * WorldPerPixel(ctx);
+
+        // While a menu action runs the tool holds the viewport, so the click that commits it picks nothing else
+        ControlID owner = handles.GetControlID(MenuActionControl);
+        if (_fromMenu) handles.AddControl(owner, HandleContext.BodyDistance, float.MaxValue - 1f);
 
         switch (_action)
         {
@@ -571,9 +588,15 @@ public sealed class CSGMeshTool : SceneTool
                 if (moved)
                 {
                     amount = CSGSnap.Value(handles, amount);
-                    PreviewChamfer(ctx, amount);
-                    ctx.Draw.Label(Float4x4.TransformPoint(_actionCorner, _actionBrush!.Transform.LocalToWorldMatrix), amount.ToString("0.###"), PickedColor);
+                    if (_fromMenu) PreviewChamferSelection(amount);
+                    else PreviewChamfer(ctx, amount);
+                    ctx.Draw.Label(_fromMenu ? handles.MouseRay.Origin + handles.MouseRay.Direction * 5f : Float4x4.TransformPoint(_actionCorner, _actionBrush!.Transform.LocalToWorldMatrix), amount.ToString("0.###"), PickedColor);
                 }
+                break;
+            case Action.Inset:
+                amount = CSGSnap.Value(handles, amount);
+                PreviewInset(amount);
+                ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, amount.ToString("0.###"), PickedColor);
                 break;
             case Action.Extrude:
                 amount = CSGSnap.Value(handles, amount);
@@ -586,12 +609,18 @@ public sealed class CSGMeshTool : SceneTool
             case Action.Marquee: DrawMarquee(ctx); break;
         }
 
-        if (!handles.PrimaryUp && handles.PrimaryHeld) return;
+        if (_fromMenu)
+        {
+            if (!handles.IsNearest(owner) || !handles.TryBeginDrag(owner)) return;
+            handles.TryEndDrag(owner);
+        }
+        else if (!handles.PrimaryUp && handles.PrimaryHeld) return;
 
         switch (_action)
         {
             case Action.Extrude: CommitExtrude(amount); break;
             case Action.Marquee: ApplyMarquee(ctx); break;
+            case Action.Chamfer or Action.Inset when _fromMenu: ClearSelection(); break;
         }
 
         // A click on part of a selection, with no drag, narrows the selection to what was clicked
@@ -602,6 +631,47 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         EndAction();
+    }
+
+    /// <summary>The start shape with the action's faces inset, or the start shape back again at no distance.</summary>
+    private void PreviewInset(float amount)
+    {
+        if (amount <= 1e-4f)
+        {
+            RestoreStart();
+            return;
+        }
+
+        if (!CSGMeshEdit.Inset(_startMesh!, _startSurfaces!, _actionFaces, amount, out CSGControlMesh mesh, out SurfaceData[] surfaces))
+        {
+            CSGStatus.Flash(Loc.Get("csg.status_inset_too_wide"));
+            return;
+        }
+
+        Undo.RecordObject(Target!, "Inset CSG Face");
+        Target!.SetShape(mesh, surfaces);
+        MarkDirty();
+    }
+
+    private void PreviewChamferSelection(float amount)
+    {
+        if (amount <= 1e-4f || ChamferSelection(amount) is not { } chamfered)
+        {
+            RestoreStart();
+            return;
+        }
+
+        Undo.RecordObject(Target!, "Chamfer CSG Brush");
+        Target!.SetShape(chamfered.Mesh, chamfered.Surfaces);
+        MarkDirty();
+    }
+
+    /// <summary>Puts the brush back as the action found it.</summary>
+    private void RestoreStart()
+    {
+        if (ReferenceEquals(Target!.ControlMesh, _startMesh)) return;
+        Target.SetShape(_startMesh!.Clone(), (SurfaceData[])_startSurfaces!.Clone());
+        MarkDirty();
     }
 
     /// <summary>World units one pixel spans at the brush, so drags scale with the view.</summary>

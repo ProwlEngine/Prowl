@@ -166,12 +166,13 @@ public sealed class CSGOverlayTool : SceneTool
 
     private static void MeshCommands(ContextBuilder menu, CSGMeshTool mesh)
     {
-        Command(menu, "csg.chamfer", mesh.ChamferSelected);
-        Command(menu, "csg.extrude", mesh.ExtrudeSelected);
-        Command(menu, "csg.inset", mesh.InsetSelected);
-        Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid");
-        Command(menu, "csg.delete_face", mesh.DeleteSelectedFaces);
-        menu.Separator();
+        bool any = false;
+        if (mesh.CanChamfer) { Command(menu, "csg.chamfer", mesh.ChamferSelected); any = true; }
+        if (mesh.CanExtrude) { Command(menu, "csg.extrude", mesh.ExtrudeSelected); any = true; }
+        if (mesh.CanInset) { Command(menu, "csg.inset", mesh.InsetSelected); any = true; }
+        if (mesh.CanSnap) { Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid"); any = true; }
+        if (mesh.CanDeleteFaces) { Command(menu, "csg.delete_face", mesh.DeleteSelectedFaces); any = true; }
+        if (any) menu.Separator();
     }
 
     private static void SelectionCommands(ContextBuilder menu)
