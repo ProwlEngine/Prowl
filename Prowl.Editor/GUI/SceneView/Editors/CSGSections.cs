@@ -129,8 +129,7 @@ internal static class CSGSections
 
         EditorGUI.SectionHeader(paper, "csg_gen_h", Loc.Get("csg.generate"));
 
-        Hint(paper, font, "csg_gen_hint",
-            Loc.Get(tool.Drawing ? "csg.draw_active" : "csg.draw_inactive"));
+        Hint(paper, font, "csg_gen_hint", Loc.Get("csg.draw_active"));
 
         EditorGUI.SettingsRow(paper, "csg_gen_op", Loc.Get("csg.new_operation"), () =>
             Origami.ButtonGroup(paper, "csg_gen_op_v", (int)tool.Operation, idx => tool.Operation = (Operation)idx)
@@ -144,11 +143,6 @@ internal static class CSGSections
             Origami.EnumDropdown(paper, "csg_gen_shape_v", tool.Generator, v => tool.Generator = v).Show());
 
         DrawGeneratorSettings(paper, font, tool);
-
-        LabelledButton(paper, font, "csg_gen_toggle",
-            Loc.Get(tool.Drawing ? "csg.stop_drawing" : "csg.draw_box"),
-            Loc.Get(tool.Drawing ? "csg.stop_drawing_tip" : "csg.draw_box_tip"),
-            () => CSGEditMode.Current = tool.Drawing ? CSGMode.Object : CSGMode.Generate);
     }
 
     /// <summary>Only the parameters the chosen shape actually uses.</summary>
@@ -320,11 +314,6 @@ internal static class CSGSections
 
         EditorGUI.SectionHeader(paper, "csg_surf_h", Loc.Get("csg.surfaces"));
 
-        LabelledButton(paper, font, "csg_surf_toggle",
-            Loc.Get(tool.Active ? "csg.surface_stop" : "csg.surface_mode"),
-            Loc.Get(tool.Active ? "csg.surface_stop_tip" : "csg.surface_mode_tip"),
-            () => CSGEditMode.Current = tool.Active ? CSGMode.Object : CSGMode.Surface);
-
         EditorGUI.SettingsRow(paper, "csg_surf_pick", Loc.Get("csg.select"), () =>
             Origami.ButtonGroup(paper, "csg_surf_pick_v", -1, idx =>
                 {
@@ -347,8 +336,7 @@ internal static class CSGSections
 
         if (CSGSurfaceSelection.Active is not CSGSurfaceRef active || !active.IsValid)
         {
-            Hint(paper, font, "csg_surf_hint",
-                Loc.Get(tool.Active ? "csg.surface_pick_hint" : "csg.surface_off_hint"));
+            Hint(paper, font, "csg_surf_hint", Loc.Get("csg.surface_pick_hint"));
             return;
         }
 
