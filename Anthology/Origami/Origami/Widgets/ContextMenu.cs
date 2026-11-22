@@ -339,6 +339,7 @@ public sealed class ContextBuilder
             var submenuState = paper.GetElementStorage(paper.CurrentParent, $"{id}_submenu", new OpenSubmenuState {  Index = -1 });
             bool submenuIsOpen = submenuState.Index == index && submenuState.RemainingTime >= 0 || ContextMenu.IsKeyOpened(index);
             bool keyOn = ContextMenu.IsKeyHighlighted(index);
+            ElementHandle rowHandle = default;
 
             using (paper.Row($"{id}_i_{index}")
                 .Height(RowHeight)
@@ -350,8 +351,11 @@ public sealed class ContextBuilder
                 // Remember this row's on-screen rect so next frame the submenu can decide which side to
                 // open on (this frame's layout isn't available yet at build time).
                 .OnPostLayout((h, r) => paper.SetElementStorage(h, "srect", r))
+                // A press opens the submenu straight away, without waiting out the hover delay.
+                .OnPress(_ => paper.SetElementStorage(rowHandle, "hover_time", SUBMENU_DELAY_TIME))
                 .Enter())
             {
+                rowHandle = paper.CurrentParent;
                 bool hovered = paper.IsParentHovered;
                 Color txt = hovered || submenuIsOpen || keyOn ? ink.C500 : ink.C400;
 
