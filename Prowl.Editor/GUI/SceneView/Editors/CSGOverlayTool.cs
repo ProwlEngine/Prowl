@@ -167,6 +167,7 @@ public sealed class CSGOverlayTool : SceneTool
     {
         Command(menu, "csg.chamfer", mesh.ChamferSelected);
         Command(menu, "csg.extrude", mesh.ExtrudeSelected);
+        Command(menu, "csg.inset", mesh.InsetSelected);
         Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid");
         Command(menu, "csg.delete_face", mesh.DeleteSelectedFaces);
         menu.Separator();
