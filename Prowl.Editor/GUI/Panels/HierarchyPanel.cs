@@ -1266,7 +1266,7 @@ public class HierarchyPanel : DockPanel
             // Only objects the user asked for; side-effect ones (auto Canvas, Event System) stay at the origin.
             // On the surface at the centre of the scene view, else its pivot; not the far-off world origin.
             var centerRay = cam.ScreenPointToRay(new Float2(1f, 1f), new Float2(2f, 2f));
-            go.Transform.Position = SceneViewMenu.TakeSpawnPoint() ?? SceneViewPanel.RaycastSurface(scene, centerRay) ?? cam.ViewFocusPoint;
+            go.Transform.Position = SceneViewPanel.RaycastSurface(scene, centerRay) ?? cam.ViewFocusPoint;
         }
         if (select)
             Selection.Select(go);

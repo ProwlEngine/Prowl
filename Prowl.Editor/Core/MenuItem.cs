@@ -221,11 +221,12 @@ public sealed class MenuItemAttribute : Attribute
     }
 
     /// <summary> Builds a context menu by adding items under the specified root path to the given ContextBuilder. </summary>
-    public static void BuildContextMenu(ContextBuilder builder, string rootPath)
+    /// <param name="wrap">Wraps every item's action, to run code around whatever the item does.</param>
+    public static void BuildContextMenu(ContextBuilder builder, string rootPath, Func<Action, Action>? wrap = null)
     {
         string prefix = rootPath.TrimEnd('/') + "/";
         var relevant = GetSorted().Where(e => e.Path.StartsWith(prefix, StringComparison.Ordinal)).ToList();
-        BuildLevel(builder, relevant, prefix);
+        BuildLevel(builder, relevant, prefix, wrap);
     }
 
     private static Action PerTarget(Entry leaf)
@@ -247,7 +248,7 @@ public sealed class MenuItemAttribute : Attribute
         };
     }
 
-    private static void BuildLevel(ContextBuilder builder, List<Entry> entries, string prefix)
+    private static void BuildLevel(ContextBuilder builder, List<Entry> entries, string prefix, Func<Action, Action>? wrap)
     {
         var leaves = new List<Entry>();
         var branchOrder = new List<string>();
@@ -285,14 +286,15 @@ public sealed class MenuItemAttribute : Attribute
             if (leaf != null)
             {
                 Func<bool>? validator = _validators.TryGetValue(leaf.Path, out Func<bool>? v) ? v : null;
-                builder.Item(leaf.Path.Substring(prefix.Length), PerTarget(leaf), enabled: validator?.Invoke() ?? true, icon: leaf.Icon);
+                Action action = PerTarget(leaf);
+                builder.Item(leaf.Path.Substring(prefix.Length), wrap != null ? wrap(action) : action, enabled: validator?.Invoke() ?? true, icon: leaf.Icon);
             }
             else if (branch != null)
             {
                 List<Entry> list = branches[branch];
                 string subPrefix = prefix + branch + "/";
                 string icon = list.OrderBy(e => e.Priority).Select(e => e.Icon).FirstOrDefault(ic => !string.IsNullOrEmpty(ic)) ?? "";
-                builder.Submenu(branch, sub => BuildLevel(sub, list, subPrefix), icon);
+                builder.Submenu(branch, sub => BuildLevel(sub, list, subPrefix, wrap), icon);
             }
         }
     }

@@ -43,9 +43,8 @@ public static class SceneViewMenu
             GameObject? hit = SceneViewPanel.PickObjectAt(scene, camera, mouseLocal, panelSize, pickGizmos: true);
             if (hit.IsValid() && !Selection.IsSelected(hit!)) Selection.Select(hit!);
         }
-        MenuContext.SetMany([.. Selection.GetSelected<GameObject>()]);
-        _spawnPending = true;
-        _closedFrames = 0;
+        // Scene items act on the selection themselves, and new objects go to the scene root rather than under it
+        MenuContext.Set(null);
 
         Origami.ContextMenu(pointer.X, pointer.Y, builder =>
         {
@@ -70,27 +69,32 @@ public static class SceneViewMenu
 
     private static void BuildScene(ContextBuilder builder)
     {
-        builder.Submenu("Create", sub => MenuItemAttribute.BuildContextMenu(sub, "GameObject"));
+        builder.Submenu("Create", sub => MenuItemAttribute.BuildContextMenu(sub, "GameObject", AtPoint));
         MenuItemAttribute.BuildContextMenu(builder, "SceneView");
     }
 
-    /// <summary>Where a new object made from this menu should go, once. Null when the menu did not make it.</summary>
-    internal static Float3? TakeSpawnPoint()
+    /// <summary>
+    /// Runs a create item, then moves what it made onto the point that was right clicked, so it lands where the menu
+    /// was opened rather than in front of the camera. Objects keep their places relative to each other.
+    /// </summary>
+    private static Action AtPoint(Action create) => () =>
     {
-        Float3? point = _spawnPending ? Point : null;
-        _spawnPending = false;
-        return point;
-    }
+        Scene? scene = Scene;
+        if (scene.IsNotValid())
+        {
+            create();
+            return;
+        }
 
-    private static bool _spawnPending;
-    private static int _closedFrames;
+        var before = new HashSet<GameObject>(scene!.Objects);
+        create();
 
-    /// <summary>Called every frame: an object made from the Create submenu lands where the menu was opened, but only just after it closes.</summary>
-    internal static void Tick()
-    {
-        if (ContextMenu.IsOpen) _closedFrames = 0;
-        else if (_spawnPending && ++_closedFrames > 2) _spawnPending = false;
-    }
+        List<GameObject> made = scene.Objects.Where(go => !before.Contains(go) && (go.Parent.IsNotValid() || before.Contains(go.Parent!))).ToList();
+        if (made.Count == 0) return;
+
+        Float3 offset = Point - made[0].Transform.Position;
+        foreach (GameObject go in made) go.Transform.Position += offset;
+    };
 
     // ================================================================
     //  Utilities

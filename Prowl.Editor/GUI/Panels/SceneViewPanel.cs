@@ -617,7 +617,6 @@ public class SceneViewPanel : DockPanel
                 new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y),
                 new Float2(width, height));
 
-            SceneViewMenu.Tick();
             if (_editorCamera.TakeRightClick() && isHovered)
             {
                 Float2 viewportOrigin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
