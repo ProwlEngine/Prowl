@@ -8,6 +8,7 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Editor.Modeling;
 using Prowl.Runtime;
+using Prowl.Runtime.AssetImporting;
 using Prowl.Runtime.MeshFeatures;
 using Prowl.Runtime.Resources;
 using Prowl.Vector.Geometry;
@@ -31,6 +32,9 @@ public class PMeshImporter : AssetImporter
         try
         {
             PMeshDocument document = PMeshDocument.Read(File.ReadAllBytes(ctx.AbsolutePath));
+            EchoObject? settings = ctx.Settings;
+            var collider = (PMeshCollider)(settings != null && settings.TryGet(Keys.Collider, out EchoObject? c) ? c!.IntValue : 0);
+            bool lightmapUVs = settings != null && settings.TryGet(Keys.LightmapUVs, out EchoObject? l) && l!.BoolValue;
 
             var root = new GameObject(ctx.FileName);
             root.SetIdentifier(BuiltInAssets.DeterministicGuid("$PMesh/$Root"));
@@ -45,6 +49,7 @@ public class PMeshImporter : AssetImporter
                 objects[item.Id] = go;
 
                 Mesh mesh = BuildMesh(item);
+                if (lightmapUVs) LightmapUVGenerator.Generate(mesh);
                 meshIdentities.Add(ctx.AddSubAsset(item.Name, mesh, SubAssetIdentity.Key(item.Id.ToString())));
                 meshes.Add(mesh);
 
@@ -52,6 +57,14 @@ public class PMeshImporter : AssetImporter
                 renderer.Identifier = BuiltInAssets.DeterministicGuid($"$PMesh/{item.Id}#Renderer");
                 renderer.Mesh = mesh;
                 renderer.Materials = Materials(item, ctx);
+
+                if (collider != PMeshCollider.None)
+                {
+                    MeshCollider shape = go.AddComponent<MeshCollider>();
+                    shape.Identifier = BuiltInAssets.DeterministicGuid($"$PMesh/{item.Id}#Collider");
+                    shape.Mesh = mesh;
+                    shape.Convex = collider == PMeshCollider.Convex;
+                }
             }
 
             // Parents once every object exists, so a child may be written before its parent
@@ -123,10 +136,27 @@ public class PMeshImporter : AssetImporter
         return materials;
     }
 
+    /// <summary>The keys of the import settings in the meta file.</summary>
+    public static class Keys
+    {
+        public const string Collider = "collider";
+        public const string LightmapUVs = "generateLightmapUVs";
+    }
+
     public override EchoObject? DefaultSettings()
     {
         var s = EchoObject.NewCompound();
+        s[Keys.Collider] = new EchoObject((int)PMeshCollider.None);
+        s[Keys.LightmapUVs] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;
     }
+}
+
+/// <summary>Which collider each object of an imported model gets.</summary>
+public enum PMeshCollider
+{
+    None,
+    Mesh,
+    Convex,
 }

@@ -131,4 +131,26 @@ public class PMeshTests : EditorTestHarness
         Assert.NotEqual(Guid.Empty, objectBefore);
         Assert.Equal(objectBefore, after.SourceIdentifier);
     }
+
+    [Fact]
+    public void ImportSettingsAddCollidersAndLightmapUVs()
+    {
+        File.WriteAllBytes(AssetAbsolutePath("Crate.pmesh"), Document().Write());
+        Assets.Refresh();
+        Guid guid = Assets.GetEntry("Crate.pmesh")!.Guid;
+        string metaPath = AssetAbsolutePath("Crate.pmesh") + ".meta";
+        MetaFileData meta = MetaFile.Read(metaPath)!;
+        meta.Settings ??= Echo.EchoObject.NewCompound();
+        meta.Settings[Prowl.Editor.Importers.PMeshImporter.Keys.Collider] = new Echo.EchoObject((int)Prowl.Editor.Importers.PMeshCollider.Convex);
+        meta.Settings[Prowl.Editor.Importers.PMeshImporter.Keys.LightmapUVs] = new Echo.EchoObject(true);
+        MetaFile.Write(metaPath, meta);
+        Assets.Reimport(guid);
+
+        GameObject body = GameObject.InstantiateDetached(Load<PrefabAsset>(guid)!).Transform.Find("Body")!.GameObject;
+
+        MeshCollider collider = body.GetComponent<MeshCollider>()!;
+        Assert.True(collider.Convex);
+        Mesh mesh = body.GetComponent<MeshRenderer>()!.Mesh!;
+        Assert.Equal(mesh.VertexCount, mesh.UV2.Length);
+    }
 }
