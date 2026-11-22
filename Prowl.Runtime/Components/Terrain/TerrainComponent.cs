@@ -69,6 +69,7 @@ public class TerrainComponent : Component, IRenderSync
     [NonSerialized, NotHeld] private TerrainProps? _trees;
     [NonSerialized] private int _layerSignature, _detailSignature, _treeSignature;
     [NonSerialized] private Double3 _placedAt;
+    [NonSerialized] private Double3? _viewer;
     [NonSerialized, NotHeld] private readonly Dictionary<object, (int Key, TerrainPropKind? Kind)> _kinds = new(ReferenceEqualityComparer.Instance);
 
     public float TerrainSize { get { TerrainData? d = Data; return d.IsValid() ? d.Size : 1024f; } }
@@ -121,11 +122,24 @@ public class TerrainComponent : Component, IRenderSync
             _details?.Reset();
             _trees?.Reset();
         }
-        IReadOnlyList<Double3> viewers = _surface.Viewers;
-        Double3 viewer = viewers.Count > 0 ? viewers[0] : terrain.Position;
+        Double3 viewer = Viewer(_surface.Viewers) ?? terrain.Position;
         _details?.Update(viewer);
         _trees?.Update(viewer);
         return false;
+    }
+
+    // The view the props stay placed around: the one nearest the last chosen, so several views do not take turns
+    private Double3? Viewer(IReadOnlyList<Double3> viewers)
+    {
+        if (viewers.Count == 0)
+            return _viewer;
+        Double3 best = viewers[0];
+        if (_viewer is { } last)
+            for (int i = 1; i < viewers.Count; i++)
+                if (Double3.LengthSquared(viewers[i] - last) < Double3.LengthSquared(best - last))
+                    best = viewers[i];
+        _viewer = best;
+        return best;
     }
 
     void IRenderSync.Detach(RenderWorld world) => Release(world);
@@ -146,6 +160,7 @@ public class TerrainComponent : Component, IRenderSync
         (_surface, _built, _world, _layers, _cards) = (null, null, null, null, null);
         (_details, _detailInstances, _trees, _treeInstances) = (null, null, null, null);
         (_layerSignature, _detailSignature, _treeSignature) = (0, 0, 0);
+        _viewer = null;
         _kinds.Clear();
     }
 
