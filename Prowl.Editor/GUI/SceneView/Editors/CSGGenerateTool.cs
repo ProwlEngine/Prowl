@@ -276,7 +276,7 @@ public sealed class CSGGenerateTool : SceneTool
 
     private void Commit(SceneToolContext ctx, Operation operation)
     {
-        if (!CSGBrushGeometry.BoxFromDrag(_cornerA, _cornerB, _height, out Float3 center, out Float3 size))
+        if (!ShapeFrame(out Float3 center, out Float3 size, out Quaternion rotation))
         {
             Cancel();
             return;
@@ -296,7 +296,7 @@ public sealed class CSGGenerateTool : SceneTool
         {
             root = CSGSelection.CreateObject(Generator.ToString(), ParentFor(model!));
             root.Transform.Position = worldCentre;
-            root.Transform.Rotation = _planeRotation;
+            root.Transform.Rotation = rotation;
 
             CSGGroup group = root.AddComponent<CSGGroup>();
             group.HoldsShape = true;
@@ -311,12 +311,12 @@ public sealed class CSGGenerateTool : SceneTool
             if (parts.Count > 1) go.Transform.LocalPosition = parts[i].Offset;
             else
             {
-                go.Transform.Position = worldCentre + _planeRotation * parts[i].Offset;
-                go.Transform.Rotation = _planeRotation;
+                go.Transform.Position = worldCentre + rotation * parts[i].Offset;
+                go.Transform.Rotation = rotation;
             }
 
             // Whatever scale the parents carry, the shape lands in the world exactly as it was drawn
-            Float4x4 drawn = Float4x4.CreateTRS(worldCentre + _planeRotation * parts[i].Offset, _planeRotation, Float3.One);
+            Float4x4 drawn = Float4x4.CreateTRS(worldCentre + rotation * parts[i].Offset, rotation, Float3.One);
             CSGBrush brush = go.AddComponent<CSGBrush>();
             brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, go.Transform.WorldToLocalMatrix * drawn);
             ApplySmoothing(brush, parts[i].SmoothPlanes);
@@ -396,24 +396,46 @@ public sealed class CSGGenerateTool : SceneTool
 
     private void DrawShapePreview(SceneToolContext ctx, Color32 color)
     {
-        if (!CSGBrushGeometry.BoxFromDrag(_cornerA, _cornerB, _height, out Float3 centre, out Float3 size))
-            return;
+        if (!ShapeFrame(out Float3 centre, out Float3 size, out Quaternion rotation)) return;
 
+        Float3 worldCentre = ToWorld(centre);
         foreach (CSGShapePart part in CSGShapeBuilder.Build(Generator, size, Settings))
         {
             ConvexSolidResult solid = GeometryGenerator.ConvexFromPlanes(part.Planes);
             if (!solid.IsValid) continue;
 
-            Float3 origin = centre + part.Offset;
             foreach (GeometryData.Edge edge in solid.Solid!.Edges)
             {
-                ctx.Draw.Line(ToWorld(origin + edge.Vert1.Point),
-                              ToWorld(origin + edge.Vert2.Point), color, 2f);
+                ctx.Draw.Line(worldCentre + rotation * (part.Offset + edge.Vert1.Point),
+                              worldCentre + rotation * (part.Offset + edge.Vert2.Point), color, 2f);
             }
         }
     }
 
     private Float3 ToWorld(Float3 local) => _planeOrigin + _planeRotation * local;
+
+    /// <summary>
+    /// The drawn box in the work plane's frame and the rotation its shape is built in. Stairs turn to climb toward
+    /// where the drag ended, along whichever footprint side is longer in that direction.
+    /// </summary>
+    private bool ShapeFrame(out Float3 centre, out Float3 size, out Quaternion rotation)
+    {
+        rotation = _planeRotation;
+        if (!CSGBrushGeometry.BoxFromDrag(_cornerA, _cornerB, _height, out centre, out size)) return false;
+        if (Generator != CSGGeneratorKind.LinearStairs) return true;
+
+        Float3 drag = _cornerB - _cornerA;
+        float turn;
+        if (MathF.Abs(drag.Z) >= MathF.Abs(drag.X)) turn = drag.Z >= 0f ? 0f : MathF.PI;
+        else
+        {
+            turn = drag.X >= 0f ? MathF.PI * 0.5f : -MathF.PI * 0.5f;
+            size = new Float3(size.Z, size.Y, size.X);
+        }
+
+        rotation = _planeRotation * Quaternion.AxisAngle(Float3.UnitY, turn);
+        return true;
+    }
 
     private void FootprintCorners(float height, Span<Float3> corners)
     {
