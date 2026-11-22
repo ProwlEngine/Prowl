@@ -134,4 +134,26 @@ public class TransformSessionTests
         Assert.Equal(1f, near.Point.Y, 4);
         Assert.Equal(2f, corner.Point.Y, 4);
     }
+
+    /// <summary>Two objects edited together share one pivot in the world and move together, each in its own space.</summary>
+    [Fact]
+    public void ASessionOverSeveralObjectsMovesThemTogether()
+    {
+        EditTarget left = Box(), right = Box(Float4x4.CreateTranslation(new Float3(10, 0, 0)));
+        ElementSelection leftTop = FaceSelection(left.Mesh, Float3.UnitY), rightTop = FaceSelection(right.Mesh, Float3.UnitY);
+
+        var session = new TransformSession([(left, leftTop), (right, rightTop)]);
+
+        Near(new Float3(5, 1, 0), session.Pivot);
+        Assert.Equal(8, session.Count);
+        session.Translate(new Float3(0, 2, 0));
+        Assert.All(leftTop.Vertices, v => Assert.Equal(3f, v.Point.Y, 4));
+        Assert.All(rightTop.Vertices, v => Assert.Equal(3f, v.Point.Y, 4));
+
+        session.Scale(new Float3(0.5f, 1f, 1f), Quaternion.Identity);
+        Assert.All(rightTop.Vertices, v => Assert.InRange(v.Point.X, -3.6f, -1.4f));
+
+        session.Restore();
+        Assert.All(rightTop.Vertices, v => Assert.Equal(1f, v.Point.Y, 4));
+    }
 }

@@ -16,19 +16,21 @@ namespace Prowl.Editor.Modeling;
 /// </summary>
 public sealed class TransformSession
 {
-    private readonly EditTarget _target;
-    private readonly ElementSelection _selection;
-    private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight)> _points = new();
-    private readonly Float4x4 _toLocal;
+    private readonly IReadOnlyList<(EditTarget Target, ElementSelection Selection)> _parts;
+    private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight, Float4x4 ToLocal)> _points = new();
     private readonly List<Float3> _selected = new();
     private float _falloff;
     private Func<Float3, Float3, Float3>? _last;
 
     public TransformSession(EditTarget target, ElementSelection selection, float falloff = 0f)
+        : this([(target, selection)], falloff)
     {
-        _target = target;
-        _selection = selection;
-        _toLocal = target.LocalToWorld.Invert();
+    }
+
+    /// <summary>A session over several objects at once, their points moving together in the world about one pivot.</summary>
+    public TransformSession(IReadOnlyList<(EditTarget Target, ElementSelection Selection)> parts, float falloff = 0f)
+    {
+        _parts = parts;
         _falloff = falloff;
         Gather();
 
@@ -91,10 +93,10 @@ public sealed class TransformSession
     private void Apply(Func<Float3, Float3, Float3> move)
     {
         _last = move;
-        foreach ((GeometryData.Vertex vertex, _, Float3 world, Float3 origin, float weight) in _points)
+        foreach ((GeometryData.Vertex vertex, _, Float3 world, Float3 origin, float weight, Float4x4 toLocal) in _points)
         {
             Float3 moved = move(world, Individual ? origin : Pivot);
-            vertex.Point = Float4x4.TransformPoint(world + (moved - world) * weight, _toLocal);
+            vertex.Point = Float4x4.TransformPoint(world + (moved - world) * weight, toLocal);
         }
     }
 
@@ -103,27 +105,35 @@ public sealed class TransformSession
     {
         _points.Clear();
         _selected.Clear();
-        Float4x4 toWorld = _target.LocalToWorld;
-        Dictionary<GeometryData.Vertex, Float3> origins = IslandCentres(_selection, toWorld);
-        foreach (GeometryData.Vertex vertex in _selection.Vertices)
+        foreach ((EditTarget target, ElementSelection selection) in _parts)
         {
-            Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
-            _points.Add((vertex, vertex.Point, world, origins.TryGetValue(vertex, out Float3 origin) ? origin : world, 1f));
-            _selected.Add(world);
+            Float4x4 toWorld = target.LocalToWorld, toLocal = toWorld.Invert();
+            Dictionary<GeometryData.Vertex, Float3> origins = IslandCentres(selection, toWorld);
+            foreach (GeometryData.Vertex vertex in selection.Vertices)
+            {
+                Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
+                _points.Add((vertex, vertex.Point, world, origins.TryGetValue(vertex, out Float3 origin) ? origin : world, 1f, toLocal));
+                _selected.Add(world);
+            }
         }
         if (_falloff <= 0f || _selected.Count == 0) return;
 
-        foreach (GeometryData.Vertex vertex in _target.Mesh.Vertices)
+        // Unselected points of every object are pulled by the nearest selected point of any of them
+        foreach ((EditTarget target, ElementSelection selection) in _parts)
         {
-            if (_selection.Vertices.Contains(vertex)) continue;
-            Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
-            float nearest = float.MaxValue;
-            foreach (Float3 point in _selected) nearest = MathF.Min(nearest, Float3.DistanceSquared(world, point));
-            float distance = MathF.Sqrt(nearest);
-            if (distance >= _falloff) continue;
+            Float4x4 toWorld = target.LocalToWorld, toLocal = toWorld.Invert();
+            foreach (GeometryData.Vertex vertex in target.Mesh.Vertices)
+            {
+                if (selection.Vertices.Contains(vertex)) continue;
+                Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
+                float nearest = float.MaxValue;
+                foreach (Float3 point in _selected) nearest = MathF.Min(nearest, Float3.DistanceSquared(world, point));
+                float distance = MathF.Sqrt(nearest);
+                if (distance >= _falloff) continue;
 
-            float t = 1f - distance / _falloff;
-            _points.Add((vertex, vertex.Point, world, world, t * t * (3f - 2f * t)));
+                float t = 1f - distance / _falloff;
+                _points.Add((vertex, vertex.Point, world, world, t * t * (3f - 2f * t), toLocal));
+            }
         }
     }
 
