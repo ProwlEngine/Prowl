@@ -79,7 +79,7 @@ public sealed class CSGMeshTool : SceneTool
     private List<(int a, int b)> _edges = new();
     private bool _dragging;
     private Float3 _dragRaw, _dragApplied;
-    private Float3 _dragAnchor, _dragStartHit;
+    private Float3 _dragAnchor, _dragAnchorStart, _dragStartHit;
     private bool _dragStarted;
     private bool _passedThreshold;
 
@@ -318,10 +318,12 @@ public sealed class CSGMeshTool : SceneTool
         {
             _dragStarted = true;
             _dragStartHit = hit;
+            _dragAnchorStart = _dragAnchor;
         }
 
-        // Snapped from where the drag started, and the start moves on with each applied step
-        Float3 step = CSGSnap.Value(handles, hit - _dragStartHit);
+        // The pressed point itself lands on the grid, so an off grid vertex is pulled onto it
+        Float3 target = CSGSnap.Value(handles, _dragAnchorStart + (hit - _dragStartHit));
+        Float3 step = target - _dragAnchor;
         if (Float3.LengthSquared(step) < 1e-12f) return;
 
         CSGControlMesh? mesh = BeginPointEdit("Move CSG Vertices");
@@ -340,8 +342,7 @@ public sealed class CSGMeshTool : SceneTool
             return;
         }
 
-        _dragAnchor += step;
-        _dragStartHit += step;
+        _dragAnchor = target;
         MarkDirty();
     }
 
