@@ -81,6 +81,7 @@ public sealed class CSGMeshTool : SceneTool
     private Float3 _dragRaw, _dragApplied;
     private Float3 _dragAnchor, _dragStartHit;
     private bool _dragStarted;
+    private bool _passedThreshold;
 
     private Action _action;
     private Float2 _dragOrigin;
@@ -341,6 +342,7 @@ public sealed class CSGMeshTool : SceneTool
         _action = action;
         _dragOrigin = handles.MousePosition;
         _dragStarted = false;
+        _passedThreshold = false;
         _actionBrush = Target;
         _startPlanes = (Plane[])Target!.Planes.Clone();
         _startSurfaces = (SurfaceData[])Target.Surfaces.Clone();
@@ -425,8 +427,9 @@ public sealed class CSGMeshTool : SceneTool
 
         // Cursor travel in world units at the brush's distance, counted from the drag threshold
         float pixels = Float2.Distance(handles.MousePosition, _dragOrigin);
-        bool moved = pixels >= DragThreshold;
-        float amount = moved ? (pixels - DragThreshold) * WorldPerPixel(ctx) : 0f;
+        _passedThreshold |= pixels >= DragThreshold;
+        bool moved = _passedThreshold;
+        float amount = MathF.Max(0f, pixels - DragThreshold) * WorldPerPixel(ctx);
 
         switch (_action)
         {
@@ -462,7 +465,16 @@ public sealed class CSGMeshTool : SceneTool
 
     private void PreviewChamfer(SceneToolContext ctx, float amount)
     {
-        if (amount <= 1e-4f || !CSGMeshEdit.ChamferPlane(_actionNormals, _actionCorner, amount, out Plane cut)) return;
+        // Back at the start there is no cut, so the brush goes back to how it began
+        if (amount <= 1e-4f || !CSGMeshEdit.ChamferPlane(_actionNormals, _actionCorner, amount, out Plane cut))
+        {
+            if (!ReferenceEquals(Target!.Planes, _startPlanes) && Target.Planes.Length != _startPlanes!.Length)
+            {
+                Target.SetShape(_startPlanes, _startSurfaces!, _startMesh);
+                MarkDirty();
+            }
+            return;
+        }
 
         Plane[] array = [.. _startPlanes!, cut];
         if (!GeometryGenerator.ConvexFromPlanes(array).IsValid) return;
