@@ -749,7 +749,10 @@ public sealed class ModelMeshTool : SceneTool
                 handles.AddControl(id, HandleContext.BodyDistance, distance);
                 if (handles.IsNearest(id) && handles.TryBeginDrag(id))
                 {
+                    // Faces joined by hidden edges are one face, so the whole of it is picked
                     Choose(handles, model, s => s.Faces, face);
+                    foreach (GeometryData.Face part in face.LogicalFace())
+                        if (part != face) Choose(handles, model, s => s.Faces, part, adding: true);
                     handles.TryEndDrag(id);
                     return;
                 }
@@ -803,9 +806,9 @@ public sealed class ModelMeshTool : SceneTool
     }
 
     /// <summary>Shift adds, Ctrl removes, a plain click replaces the selection of every edited object.</summary>
-    private void Choose<T>(HandleContext handles, ModelObject model, Func<ElementSelection, HashSet<T>> set, T element)
+    private void Choose<T>(HandleContext handles, ModelObject model, Func<ElementSelection, HashSet<T>> set, T element, bool adding = false)
     {
-        if (!handles.Shift && !handles.Ctrl)
+        if (!adding && !handles.Shift && !handles.Ctrl)
             foreach (ModelObject other in _edited) _selection[other].Clear();
         ElementSelection selection = _selection[model];
         if (handles.Ctrl) set(selection).Remove(element);
@@ -847,12 +850,37 @@ public sealed class ModelMeshTool : SceneTool
                     break;
                 case SelectMode.Face:
                     foreach (GeometryData.Face f in model.Mesh.Faces)
-                        if (!hidden.Faces.Contains(f) && Inside(Float4x4.TransformPoint(f.Center(), toWorld)))
-                            Mark(selection.Faces, f, handles.Ctrl);
+                    {
+                        if (hidden.Faces.Contains(f) || !IsFirstOfItsFace(f)) continue;
+                        List<GeometryData.Face> whole = f.LogicalFace();
+                        if (Inside(Float4x4.TransformPoint(Centre(whole), toWorld)))
+                            foreach (GeometryData.Face part in whole) Mark(selection.Faces, part, handles.Ctrl);
+                    }
                     break;
             }
             Selecting.Normalize(selection, Mode);
         }
+    }
+
+    /// <summary>Whether a face stands for the face it is part of, joined by hidden edges: the one listed first.</summary>
+    private static bool IsFirstOfItsFace(GeometryData.Face face)
+    {
+        foreach (GeometryData.Edge edge in face.NeighborEdges())
+            if (edge.IsHidden) return face.LogicalFace().Min(f => f.Index) == face.Index;
+        return true;
+    }
+
+    private static Float3 Centre(List<GeometryData.Face> faces)
+    {
+        Float3 sum = Float3.Zero;
+        int count = 0;
+        foreach (GeometryData.Face face in faces)
+            foreach (GeometryData.Vertex vertex in face.NeighborVertices())
+            {
+                sum += vertex.Point;
+                count++;
+            }
+        return count > 0 ? sum / count : sum;
     }
 
     private static void Mark<T>(HashSet<T> set, T item, bool remove)
@@ -904,9 +932,9 @@ public sealed class ModelMeshTool : SceneTool
             {
                 foreach (GeometryData.Face face in model.Mesh.Faces)
                 {
-                    if (hidden.Faces.Contains(face)) continue;
+                    if (hidden.Faces.Contains(face) || !IsFirstOfItsFace(face)) continue;
                     bool picked = selection.Faces.Contains(face);
-                    Float3 p = Float4x4.TransformPoint(face.Center(), toWorld);
+                    Float3 p = Float4x4.TransformPoint(Centre(face.LogicalFace()), toWorld);
                     if (!picked && !Seen(ctx, p)) continue;
                     ctx.Draw.Dot(p, picked ? PickedColor : IdleColor, picked ? 7f : 5f);
                 }

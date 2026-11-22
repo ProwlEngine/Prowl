@@ -1547,8 +1547,74 @@ public static class MeshGeometry
         public readonly string Tangent = BlendShapeTangent(shape, frame);
     }
 
-    /// <summary>Builds geometry from a triangle mesh. Throws for a submesh with triangles in another topology.</summary>
-    public static GeometryData ToGeometryData(Mesh mesh)
+    /// <summary>
+    /// Builds geometry from a triangle mesh. Throws for a submesh with triangles in another topology. With
+    /// <paramref name="joinDegrees"/> at zero or more, neighbouring triangles turned less than that against each other are
+    /// joined into one face by a hidden edge, only where their corners on that edge carry the same values, so texture seams
+    /// and split normals stay apart.
+    /// </summary>
+    public static GeometryData ToGeometryData(Mesh mesh, float joinDegrees = -1f)
+    {
+        GeometryData geometry = BuildGeometry(mesh);
+        if (joinDegrees >= 0f) JoinFlatTriangles(geometry, joinDegrees);
+        return geometry;
+    }
+
+    private static void JoinFlatTriangles(GeometryData geometry, float degrees)
+    {
+        float limit = MathF.Cos(degrees * MathF.PI / 180f);
+        List<string> names = geometry.LoopAttributeNames();
+        foreach (GeometryData.Edge edge in geometry.Edges)
+        {
+            List<GeometryData.Face> faces = edge.NeighborFaces();
+            if (faces.Count != 2 || Float3.Dot(faces[0].Normal(), faces[1].Normal()) < limit) continue;
+            if (CornersMatch(faces[0], faces[1], edge.Vert1, names) && CornersMatch(faces[0], faces[1], edge.Vert2, names)) edge.IsHidden = true;
+        }
+    }
+
+    private static bool CornersMatch(GeometryData.Face a, GeometryData.Face b, GeometryData.Vertex at, List<string> names)
+    {
+        GeometryData.Loop? first = CornerAt(a, at), second = CornerAt(b, at);
+        if (first == null || second == null) return false;
+        foreach (string name in names)
+        {
+            bool hasFirst = first.TryGetAttribute(name, out GeometryData.AttributeValue? x);
+            bool hasSecond = second.TryGetAttribute(name, out GeometryData.AttributeValue? y);
+            if (hasFirst != hasSecond) return false;
+            if (!hasFirst) continue;
+            if (!SameValue(x!, y!)) return false;
+        }
+        return true;
+    }
+
+    private static GeometryData.Loop? CornerAt(GeometryData.Face face, GeometryData.Vertex vertex)
+    {
+        GeometryData.Loop loop = face.Loop!;
+        do
+        {
+            if (loop.Vert == vertex) return loop;
+            loop = loop.Next!;
+        } while (loop != face.Loop);
+        return null;
+    }
+
+    private static bool SameValue(GeometryData.AttributeValue x, GeometryData.AttributeValue y)
+    {
+        switch (x, y)
+        {
+            case (GeometryData.FloatAttributeValue f, GeometryData.FloatAttributeValue g):
+                if (f.Data.Length != g.Data.Length) return false;
+                for (int i = 0; i < f.Data.Length; i++)
+                    if (MathF.Abs(f.Data[i] - g.Data[i]) > 1e-5f) return false;
+                return true;
+            case (GeometryData.IntAttributeValue n, GeometryData.IntAttributeValue m):
+                return n.Data.AsSpan().SequenceEqual(m.Data);
+            default:
+                return false;
+        }
+    }
+
+    private static GeometryData BuildGeometry(Mesh mesh)
     {
         for (int s = 0; s < mesh.SubMeshCount; s++)
         {

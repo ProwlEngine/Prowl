@@ -362,7 +362,7 @@ public static class ModelEditingMode
     {
         if (AssetDatabase.Load<Mesh>(asset) is { } mesh && mesh.IsValid())
         {
-            var item = new PMeshObject { Name = mesh.Name, Mesh = MeshGeometry.ToGeometryData(mesh) };
+            var item = new PMeshObject { Name = mesh.Name, Mesh = MeshGeometry.ToGeometryData(mesh, PMeshDocument.JoinDegrees) };
             return new PMeshDocument { Objects = { item } };
         }
 

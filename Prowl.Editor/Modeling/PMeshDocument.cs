@@ -124,6 +124,9 @@ public sealed class PMeshDocument
         return ReadMesh(EchoObject.ReadFromBinary(reader));
     }
 
+    /// <summary>Triangles of a mesh brought in that turn less than this against each other join into one face where their corners agree.</summary>
+    public const float JoinDegrees = 1f;
+
     /// <summary>
     /// A model made from copies of objects that draw meshes. Objects keep where they are relative to the active one and
     /// hang under the nearest of the others they were under. Each gets its own copy of its mesh, and material slots keep
@@ -149,7 +152,7 @@ public sealed class PMeshDocument
             while (parent.IsValid() && !ids.ContainsKey(parent!)) parent = parent!.Parent;
 
             Transform transform = go.Transform;
-            var item = new PMeshObject { Id = id, Name = go.Name, Mesh = MeshGeometry.ToGeometryData(renderer.Mesh!) };
+            var item = new PMeshObject { Id = id, Name = go.Name, Mesh = MeshGeometry.ToGeometryData(renderer.Mesh!, JoinDegrees) };
             if (parent.IsValid())
             {
                 Transform above = parent!.Transform;

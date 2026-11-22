@@ -50,6 +50,36 @@ public class LODTests
         Assert.Equal(12, geometry.Faces.Count);
     }
 
+    /// <summary>Each side of a cube is two triangles alike in every corner, so they join into one face, and no two sides do.</summary>
+    [Fact]
+    public void FlatTrianglesJoinIntoFacesAcrossMatchingCorners()
+    {
+        using var cube = Mesh.CreateCube(Float3.One);
+
+        GeometryData geometry = MeshGeometry.ToGeometryData(cube, joinDegrees: 1f);
+
+        Assert.Equal(6, geometry.Edges.Count(e => e.IsHidden));
+        Assert.All(geometry.Edges.Where(e => e.IsHidden), e => Assert.Equal(2, e.NeighborFaces().Count));
+        Assert.Equal(0, MeshGeometry.ToGeometryData(cube).Edges.Count(e => e.IsHidden));
+    }
+
+    /// <summary>Two flat triangles with a texture seam between them stay apart.</summary>
+    [Fact]
+    public void ASeamKeepsFlatTrianglesApart()
+    {
+        using var quad = new Mesh
+        {
+            Vertices = [new(0, 0, 0), new(1, 0, 0), new(1, 0, 1), new(0, 0, 0), new(1, 0, 1), new(0, 0, 1)],
+            UV = [new(0, 0), new(1, 0), new(1, 1), new(0.5f, 0.5f), new(0.2f, 0.9f), new(0, 1)],
+            Indices = [0, 2, 1, 3, 5, 4],
+        };
+
+        GeometryData geometry = MeshGeometry.ToGeometryData(quad, joinDegrees: 1f);
+
+        Assert.Equal(2, geometry.Faces.Count);
+        Assert.Equal(0, geometry.Edges.Count(e => e.IsHidden));
+    }
+
     [Fact]
     public void CubeRoundTripsThroughGeometry()
     {
