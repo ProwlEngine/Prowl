@@ -33,8 +33,11 @@ public enum TerrainBrush : byte
 /// <summary>One edit: a brush over a circle of world x and z, fading to nothing at its edge. Height is Flatten's target, Layer is Paint's layer or Detail's prototype.</summary>
 public readonly record struct TerrainEdit(TerrainBrush Brush, Double2 Center, double Radius, double Strength, double Height = 0, int Layer = 0);
 
-/// <summary>What an edit changed: the world x and z box whose finest samples it changed, normals and occlusion included, and every page of every level it rewrote.</summary>
-public sealed record TerrainEdited(Double2 Min, Double2 Max, IReadOnlyList<TerrainPageKey> Pages);
+/// <summary>
+/// What an edit changed: the world x and z box whose finest samples it changed, normals and occlusion included, every
+/// page of every level it rewrote, and whether heights changed or only the surface's weights, holes and densities.
+/// </summary>
+public sealed record TerrainEdited(Double2 Min, Double2 Max, IReadOnlyList<TerrainPageKey> Pages, bool Heights = true);
 
 public sealed partial class TerrainData
 {
@@ -233,7 +236,7 @@ public sealed partial class TerrainData
         }
         Double2 min = new(Position.X + i0 * spacing, Position.Z + j0 * spacing);
         Double2 max = new(Position.X + (i1 + 1) * spacing, Position.Z + (j1 + 1) * spacing);
-        return new TerrainEdited(min, max, keys);
+        return new TerrainEdited(min, max, keys, Heights: false);
     }
 
     // Copies a finest sample's surface layers into the edges and aprons of the other finest pages that hold it
