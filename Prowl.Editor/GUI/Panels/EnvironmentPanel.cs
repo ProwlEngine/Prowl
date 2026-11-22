@@ -117,12 +117,12 @@ public class EnvironmentPanel : DockPanel
                     });
         });
 
-        EditorGUI.SettingsRow(paper, $"{id}_bg", Loc.Get("env.background_color"), () =>
-            Origami.ColorField(paper, $"{id}_bg_v", env.SkyColor, v => { RecordEnvironment("Background Color"); env.SkyColor = v; }).Show());
-
         Material? material = env.SkyMaterial;
         if (material.IsNotValid())
         {
+            // Sky Color is only the fallback background; with a sky material it does nothing, so only offer it here.
+            EditorGUI.SettingsRow(paper, $"{id}_bg", Loc.Get("env.background_color"), () =>
+                Origami.ColorField(paper, $"{id}_bg_v", env.SkyColor, v => { RecordEnvironment("Background Color"); env.SkyColor = v; }).Show());
             Hint(paper, $"{id}_none", font, Loc.Get("env.no_sky_hint"));
         }
         else if (material.AssetID != Guid.Empty)
