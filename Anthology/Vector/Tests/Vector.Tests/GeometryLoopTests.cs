@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Vector;
@@ -380,5 +381,74 @@ public class GeometryLoopTests
         Assert.Equal(2, mirrored.Faces.Count);
         Assert.Equal(-1f, mirrored.Vertices.Min(v => v.Point.X), 4);
         Assert.Equal(3f, mirrored.Vertices.Max(v => v.Point.X), 4);
+    }
+
+    private static GeometryData.Face Top(GeometryData mesh) => mesh.Faces.First(f => f.Normal().Y > 0.99f);
+
+    [Fact]
+    public void SubdivideFaces_SplitsOnlyTheGivenFaces_AndStaysClosed()
+    {
+        GeometryData cube = Cube();
+
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(cube, [Top(cube)]);
+
+        Assert.Equal(4, made.Count);
+        Assert.All(made, f => Assert.Equal(4, f.VertCount));
+        Assert.Equal(9, cube.Faces.Count);
+        Assert.Equal(13, cube.Vertices.Count);
+        Assert.True(cube.IsClosed());
+        Assert.Equal(8f, cube.Volume(), 3);
+    }
+
+    [Fact]
+    public void SubdivideFaces_TwiceMakesSixteen()
+    {
+        GeometryData cube = Cube();
+
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(cube, [Top(cube)], 2);
+
+        Assert.Equal(16, made.Count);
+        Assert.True(cube.IsClosed());
+        Assert.Equal(8f, cube.Volume(), 3);
+    }
+
+    [Fact]
+    public void Triangulate_OnlyTheGivenFaces()
+    {
+        GeometryData cube = Cube();
+
+        List<GeometryData.Face> made = GeometryOperators.Triangulate(cube, [Top(cube)]);
+
+        Assert.Equal(2, made.Count);
+        Assert.Equal(7, cube.Faces.Count);
+        Assert.Equal(5, cube.Faces.Count(f => f.VertCount == 4));
+        Assert.True(cube.IsClosed());
+    }
+
+    [Fact]
+    public void TrisToQuads_JoinsATriangulatedCubeBack()
+    {
+        GeometryData cube = Cube();
+        GeometryOperators.Triangulate(cube);
+        Assert.Equal(12, cube.Faces.Count);
+
+        List<GeometryData.Face> made = GeometryOperators.TrisToQuads(cube, null, 5f);
+
+        Assert.Equal(6, made.Count);
+        Assert.Equal(6, cube.Faces.Count);
+        Assert.All(cube.Faces, f => Assert.Equal(4, f.VertCount));
+        Assert.True(cube.IsClosed());
+    }
+
+    [Fact]
+    public void TrisToQuads_KeepsToTheGivenFaces()
+    {
+        GeometryData cube = Cube();
+        GeometryOperators.Triangulate(cube);
+        var top = cube.Faces.Where(f => f.Normal().Y > 0.99f).ToList();
+
+        GeometryOperators.TrisToQuads(cube, top, 5f);
+
+        Assert.Equal(11, cube.Faces.Count);
     }
 }

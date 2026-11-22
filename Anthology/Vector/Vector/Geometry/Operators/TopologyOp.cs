@@ -399,4 +399,46 @@ internal static class TopologyOp
 
     private static float Component(Loop loop, string name, int index, float fallback)
         => loop.Attributes.TryGetValue(name, out var value) && value is GeometryData.FloatAttributeValue floats && index < floats.Data.Length ? floats.Data[index] : fallback;
+
+    /// <summary>Joins pairs of triangles into quads, the pairs that turn and bend least first. Returns the quads made.</summary>
+    internal static List<Face> TrisToQuads(GeometryData mesh, IEnumerable<Face>? faces, float degrees)
+    {
+        var triangles = (faces ?? mesh.Faces).Where(f => mesh.Contains(f) && f.VertCount == 3).ToHashSet();
+        float limit = degrees * MathF.PI / 180f;
+        var pairs = new List<(float Cost, Edge Edge, Face A, Face B)>();
+        foreach (Edge edge in mesh.Edges)
+        {
+            if (edge.IsSeam || edge.IsSharp) continue;
+            List<Face> sides = edge.NeighborFaces();
+            if (sides.Count != 2 || !triangles.Contains(sides[0]) || !triangles.Contains(sides[1])) continue;
+
+            float turn = MathF.Acos(Math.Clamp(Float3.Dot(sides[0].Normal(), sides[1].Normal()), -1f, 1f));
+            if (turn > limit) continue;
+
+            Vertex apexA = sides[0].NeighborVertices().First(v => v != edge.Vert1 && v != edge.Vert2);
+            Vertex apexB = sides[1].NeighborVertices().First(v => v != edge.Vert1 && v != edge.Vert2);
+            Float3[] quad = [apexA.Point, edge.Vert1.Point, apexB.Point, edge.Vert2.Point];
+            float bend = 0f;
+            for (int i = 0; i < 4; i++)
+            {
+                Float3 a = Float3.Normalize(quad[(i + 3) % 4] - quad[i]), b = Float3.Normalize(quad[(i + 1) % 4] - quad[i]);
+                bend = MathF.Max(bend, MathF.Abs(MathF.Acos(Math.Clamp(Float3.Dot(a, b), -1f, 1f)) - MathF.PI / 2f));
+            }
+            if (bend <= limit) pairs.Add((turn + bend, edge, sides[0], sides[1]));
+        }
+
+        var used = new HashSet<Face>();
+        var joins = new List<Edge>();
+        foreach ((_, Edge edge, Face a, Face b) in pairs.OrderBy(p => p.Cost))
+        {
+            if (used.Contains(a) || used.Contains(b)) continue;
+            used.Add(a);
+            used.Add(b);
+            joins.Add(edge);
+        }
+
+        var before = new HashSet<Face>(mesh.Faces);
+        GeometryOperators.DissolveEdges(mesh, joins);
+        return mesh.Faces.Where(f => !before.Contains(f)).ToList();
+    }
 }

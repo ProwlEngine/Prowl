@@ -84,4 +84,89 @@ internal static class SubdivideOp
             mesh.RemoveEdge(e);
         }
     }
+
+    /// <summary>
+    /// Splits the given faces into one quad per corner through a point at the middle of each edge and one at the face
+    /// centre, as many times as asked, each time splitting the quads the last made. The faces beside them gain the
+    /// edge points, so the surface stays closed. Returns the faces made by the last pass.
+    /// </summary>
+    internal static List<GeometryData.Face> Faces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, int levels)
+    {
+        var current = faces.Where(mesh.Contains).Distinct().ToList();
+        for (int level = 0; level < levels && current.Count > 0; level++)
+        {
+            var edges = new HashSet<GeometryData.Edge>();
+            var outlines = new List<List<GeometryData.Vertex>>();
+            foreach (GeometryData.Face face in current)
+            {
+                foreach (GeometryData.Edge edge in face.NeighborEdges()) edges.Add(edge);
+                outlines.Add(face.NeighborVertices());
+            }
+
+            var middles = new HashSet<GeometryData.Vertex>();
+            foreach (GeometryData.Edge edge in edges)
+            {
+                GeometryData.Vertex middle = mesh.AddVertex(edge.Center());
+                GeometryOperators.AttributeLerp(mesh, middle, edge.Vert1, edge.Vert2, 0.5f);
+                mesh.InsertVertexInEdge(edge, middle);
+                middles.Add(middle);
+            }
+
+            // Putting a point in an edge rebuilds the faces beside it, so each face is found again by its corners
+            var made = new List<GeometryData.Face>();
+            foreach (List<GeometryData.Vertex> outline in outlines)
+                if (FaceWith(outline) is { } face) made.AddRange(SplitAtCentre(mesh, face, middles));
+            current = made;
+        }
+        return current;
+    }
+
+    private static GeometryData.Face? FaceWith(List<GeometryData.Vertex> corners)
+    {
+        foreach (GeometryData.Face face in corners[0].NeighborFaces())
+        {
+            List<GeometryData.Vertex> ring = face.NeighborVertices();
+            if (corners.All(ring.Contains)) return face;
+        }
+        return null;
+    }
+
+    // A face whose edges all hold a new middle point becomes one quad per original corner, meeting at its centre
+    private static List<GeometryData.Face> SplitAtCentre(GeometryData mesh, GeometryData.Face face, HashSet<GeometryData.Vertex> middles)
+    {
+        var made = new List<GeometryData.Face>();
+        FaceSnapshot snapshot = FaceSnapshot.Capture(mesh, face);
+        List<GeometryData.Vertex> ring = snapshot.Vertices;
+        int count = ring.Count;
+
+        var centre = mesh.AddVertex(face.Center());
+        int corners = 0;
+        for (int i = 0; i < count; i++)
+        {
+            if (middles.Contains(ring[i])) continue;
+            corners++;
+            GeometryOperators.AttributeLerp(mesh, centre, corners == 1 ? ring[i] : centre, ring[i], corners == 1 ? 1f : 1f / corners);
+        }
+        var centreLoop = AttributeTransfer.Average(snapshot.Loops);
+
+        var quads = new List<GeometryData.Vertex[]>();
+        for (int i = 0; i < count; i++)
+        {
+            if (middles.Contains(ring[i])) continue;
+            GeometryData.Vertex previous = ring[(i + count - 1) % count], next = ring[(i + 1) % count];
+            if (!middles.Contains(previous) || !middles.Contains(next)) return made;
+            quads.Add([ring[i], next, centre, previous]);
+        }
+
+        mesh.RemoveFace(face);
+        foreach (GeometryData.Vertex[] quad in quads)
+        {
+            var quadFace = mesh.AddFace(quad);
+            if (quadFace == null) continue;
+            snapshot.ApplyFaceAttributes(quadFace);
+            FaceSnapshot.ApplyLoops(quadFace, v => v == centre ? centreLoop : snapshot.LoopOf(v));
+            made.Add(quadFace);
+        }
+        return made;
+    }
 }

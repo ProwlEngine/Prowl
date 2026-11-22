@@ -610,9 +610,17 @@ public static class GeometryOperators
     /// concave faces come out right. Each triangle keeps the face attributes and the loop attributes of its corners.
     /// </summary>
     /// <param name="mesh">The mesh to triangulate.</param>
-    public static void Triangulate(GeometryData mesh)
+    public static void Triangulate(GeometryData mesh) => Triangulate(mesh, mesh.Faces);
+
+    /// <summary>
+    /// Splits the given faces with more than three corners into triangles, as <see cref="Triangulate(GeometryData)"/>
+    /// does for every face.
+    /// </summary>
+    /// <returns>The triangles made.</returns>
+    public static List<GeometryData.Face> Triangulate(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
     {
-        foreach (var face in mesh.Faces.Where(f => f.VertCount > 3).ToList())
+        var made = new List<GeometryData.Face>();
+        foreach (var face in faces.Where(f => mesh.Contains(f) && f.VertCount > 3).ToList())
         {
             var snapshot = FaceSnapshot.Capture(mesh, face);
             var verts = snapshot.Vertices;
@@ -628,8 +636,32 @@ public static class GeometryOperators
                 if (triangle == null) continue;
                 snapshot.ApplyFaceAttributes(triangle);
                 FaceSnapshot.ApplyLoops(triangle, snapshot.LoopOf);
+                made.Add(triangle);
             }
         }
+        return made;
+    }
+
+    /// <summary>
+    /// Splits faces into one quad per corner through the middles of their edges and their centres, <paramref name="levels"/>
+    /// times. The faces beside them gain the edge middles, so the surface stays closed.
+    /// </summary>
+    /// <returns>The quads made by the last level.</returns>
+    public static List<GeometryData.Face> SubdivideFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, int levels = 1)
+    {
+        return SubdivideOp.Faces(mesh, faces, levels);
+    }
+
+    /// <summary>
+    /// Joins pairs of triangles into quads, best pairs first. A pair is joined when its two triangles turn less than the
+    /// angle against each other and the quad they make has no corner bent further than that from a right angle. Seams
+    /// and sharp edges are never joined across.
+    /// </summary>
+    /// <param name="faces">The triangles that may be joined, all when null.</param>
+    /// <returns>The quads made.</returns>
+    public static List<GeometryData.Face> TrisToQuads(GeometryData mesh, IEnumerable<GeometryData.Face>? faces, float degrees)
+    {
+        return TopologyOp.TrisToQuads(mesh, faces, degrees);
     }
 
     #endregion
