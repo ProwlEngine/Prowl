@@ -1031,15 +1031,16 @@ public sealed class CSGScene
     }
 
     /// <summary>
-    /// Splits a face fragment by a neighbour that is not convex. The fragment is cut only along the neighbour's faces
-    /// that touch its plane, and along the edges of neighbour faces lying in it, so every cell is wholly inside, wholly
-    /// outside, or on the neighbour. Each cell is then classified on its own: lying on a neighbour face gives the
-    /// shared surface relation, otherwise the neighbour's winding number at the cell's centre says whether it is inside.
+    /// Splits a face fragment by a neighbour that is not convex. The fragment is cut where the neighbour's surface meets
+    /// its plane: the segments its faces cross the plane along, and the outline of its faces lying in the plane. A cell
+    /// is only cut by a segment that runs through it, so the split stays around the neighbour, and every cell ends up
+    /// wholly inside, wholly outside, or on it. Each cell is then classified on its own: lying on a neighbour face gives
+    /// the shared surface relation, otherwise the neighbour's winding number at the cell's centre says whether it is inside.
     /// </summary>
     private void SplitByConcave(Fragment frag, SceneBrush b, Plane facePlane, SceneBrush self, List<Fragment> results)
     {
         AABB fragBox = PolyBounds(frag.Poly).Expanded(DistanceEpsilon);
-        var cuts = new List<Plane>();
+        var cuts = new List<(Plane Plane, Float3 A, Float3 B)>();
         var coplanar = new List<(FaceData Face, Relation Relation)>();
 
         foreach (var f in b.Faces)
@@ -1050,30 +1051,42 @@ public sealed class CSGScene
             if (Maths.Abs(dn) >= 1.0f - NormalEpsilon && (LiesOn(frag.Poly, f.Plane) || LiesOn(f.World, facePlane)))
             {
                 coplanar.Add((f, dn > 0 ? Relation.Aligned : Relation.Opposite));
-
-                // The face covers the fragment only within its edges, so the fragment is cut along them
-                for (int i = 0; i < f.World.Length; i++)
-                {
-                    Float3 a = f.World[i], c = f.World[(i + 1) % f.World.Length];
-                    Float3 n = Float3.Cross(c - a, facePlane.Normal);
-                    if (Float3.LengthSquared(n) < DegenerateEpsilon * DegenerateEpsilon) continue;
-                    n = Float3.Normalize(n);
-                    cuts.Add(new Plane(n, Float3.Dot(n, a)));
-                }
                 continue;
             }
 
-            if (Touches(f.World, facePlane)) cuts.Add(f.Plane);
+            if (Touches(f.World, facePlane) && CrossingSegment(f, facePlane, out Float3 a, out Float3 c))
+                cuts.Add((f.Plane, a, c));
+        }
+
+        // A face in the plane covers the fragment only within its outline. Edges two of its pieces share run inside it.
+        foreach (var (f, _) in coplanar)
+        {
+            for (int i = 0; i < f.World.Length; i++)
+            {
+                Float3 a = f.World[i], c = f.World[(i + 1) % f.World.Length];
+                if (SharedWithinPlane(coplanar, f, a, c)) continue;
+
+                Float3 n = Float3.Cross(c - a, facePlane.Normal);
+                if (Float3.LengthSquared(n) < DegenerateEpsilon * DegenerateEpsilon) continue;
+                n = Float3.Normalize(n);
+                cuts.Add((new Plane(n, Float3.Dot(n, a)), a, c));
+            }
         }
 
         var cells = new List<List<Float3>> { frag.Poly };
         var back = new List<Float3>();
         var front = new List<Float3>();
-        foreach (var plane in cuts)
+        foreach (var (plane, a, c) in cuts)
         {
             var split = new List<List<Float3>>(cells.Count + 2);
             foreach (var cell in cells)
             {
+                if (!RunsThrough(cell, facePlane.Normal, a, c))
+                {
+                    split.Add(cell);
+                    continue;
+                }
+
                 ClipByPlane(cell, plane, back, front, out bool anyBack, out bool anyFront);
                 if (anyBack && anyFront && back.Count >= 3 && front.Count >= 3)
                 {
@@ -1114,6 +1127,82 @@ public sealed class CSGScene
             }
             results.Add(piece);
         }
+    }
+
+    /// <summary>Where a flat convex face crosses a plane, as a segment, or false when it only grazes it at a point.</summary>
+    private bool CrossingSegment(FaceData face, Plane plane, out Float3 a, out Float3 c)
+    {
+        a = c = default;
+        Float3 along = Float3.Cross(face.Plane.Normal, plane.Normal);
+        if (Float3.LengthSquared(along) < DegenerateEpsilon * DegenerateEpsilon) return false;
+
+        float min = float.MaxValue, max = float.MinValue;
+        var poly = face.World;
+        for (int i = 0; i < poly.Length; i++)
+        {
+            Float3 p = poly[i], q = poly[(i + 1) % poly.Length];
+            float dp = Float3.Dot(plane.Normal, p) - plane.D, dq = Float3.Dot(plane.Normal, q) - plane.D;
+
+            Float3? point = null;
+            if (Maths.Abs(dp) <= DistanceEpsilon) point = p;
+            else if ((dp > DistanceEpsilon && dq < -DistanceEpsilon) || (dp < -DistanceEpsilon && dq > DistanceEpsilon))
+                point = p + (q - p) * (dp / (dp - dq));
+            if (point is not Float3 at) continue;
+
+            float t = Float3.Dot(at, along);
+            if (t < min) { min = t; a = at; }
+            if (t > max) { max = t; c = at; }
+        }
+
+        return max - min > DistanceEpsilon * Float3.Length(along);
+    }
+
+    /// <summary>Whether another piece of the same face in the plane has the edge too, run the other way, so it lies inside the face.</summary>
+    private static bool SharedWithinPlane(List<(FaceData Face, Relation Relation)> coplanar, FaceData face, Float3 a, Float3 c)
+    {
+        foreach (var (other, _) in coplanar)
+        {
+            if (ReferenceEquals(other, face) || other.SourceIndex != face.SourceIndex) continue;
+            for (int i = 0; i < other.World.Length; i++)
+                if (Same(other.World[i], c) && Same(other.World[(i + 1) % other.World.Length], a)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether a segment in a convex cell's plane runs through the cell's inside, not only along or outside its edges.</summary>
+    private bool RunsThrough(List<Float3> cell, Float3 normal, Float3 a, Float3 c)
+    {
+        Float3 centre = Float3.Zero;
+        foreach (var p in cell) centre += p;
+        centre /= cell.Count;
+
+        float t0 = 0f, t1 = 1f;
+        Float3 d = c - a;
+        for (int i = 0; i < cell.Count; i++)
+        {
+            Float3 p = cell[i], q = cell[(i + 1) % cell.Count];
+            Float3 inward = Float3.Cross(normal, q - p);
+            float length = Float3.Length(inward);
+            if (length < DegenerateEpsilon) continue;
+            inward /= length;
+            if (Float3.Dot(inward, centre - p) < 0f) inward = -inward;
+
+            // Inside by more than the tolerance, so a segment lying along an edge does not count
+            float start = Float3.Dot(inward, a - p) - DistanceEpsilon;
+            float rate = Float3.Dot(inward, d);
+            if (Maths.Abs(rate) < 1e-12f)
+            {
+                if (start < 0f) return false;
+                continue;
+            }
+
+            float t = -start / rate;
+            if (rate > 0f) t0 = MathF.Max(t0, t);
+            else t1 = MathF.Min(t1, t);
+            if (t0 >= t1) return false;
+        }
+
+        return (t1 - t0) * Float3.Length(d) > DistanceEpsilon;
     }
 
     private static AABB PolyBounds(List<Float3> poly)

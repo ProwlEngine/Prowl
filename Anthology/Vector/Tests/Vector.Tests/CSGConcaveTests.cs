@@ -434,4 +434,26 @@ public class CSGConcaveTests
         Assert.Empty(moved.Edges.Where(e => e.FaceCount != 2));
         Assert.Equal(2f * 2f * 0.5f + 0.5f, moved.Volume(), 3);
     }
+
+    /// <summary>A many cornered concave pit dug into a floor from its surface leaves the floor in few pieces, not cut along every line of the pit.</summary>
+    [Fact]
+    public void ADetailedPitCutsTheFloorOnlyAroundItself()
+    {
+        const int corners = 48;
+        var outline = new List<Float2>();
+        for (int i = 0; i < corners; i++)
+        {
+            float angle = i * MathF.Tau / corners;
+            float radius = 3f + 1.6f * MathF.Sin(angle * 3f) + 0.3f * MathF.Sin(angle * 7f);
+            outline.Add(new Float2(MathF.Cos(angle) * radius * 1.3f, MathF.Sin(angle) * radius));
+        }
+
+        GeometryData output = Build(
+            (Box(new Float3(20f, 1f, 20f), new Float3(0f, -0.5f, 0f)), CSGOperation.Additive),
+            (Prism(outline, -0.8f, 0f), CSGOperation.Subtractive));
+
+        var floor = output.Faces.Where(f => f.Normal().Y > 0.99f && MathF.Abs(f.NeighborVertices()[0].Point.Y) < 1e-3f).ToList();
+        Assert.True(floor.Count <= corners * 2, $"the floor came out in {floor.Count} pieces");
+        Assert.Empty(output.Edges.Where(e => e.FaceCount != 2));
+    }
 }
