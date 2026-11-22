@@ -172,10 +172,11 @@ public sealed class CSGMeshTool : SceneTool
         return mesh;
     }
 
-    /// <summary>The plane a polygon of the points belongs to.</summary>
+    /// <summary>The plane a polygon of the points belongs to. Committed points give each polygon its own plane.</summary>
     private int PlaneOf(int polygon)
     {
-        int[] map = Target!.FaceToPlane;
+        if (Target!.HasControlMesh) return polygon >= 0 && polygon < Target.Planes.Length ? polygon : -1;
+        int[] map = Target.FaceToPlane;
         return polygon >= 0 && polygon < map.Length ? map[polygon] : -1;
     }
 
@@ -304,7 +305,7 @@ public sealed class CSGMeshTool : SceneTool
 
         if (!CSGBrushGeometry.Raycast(Target.Planes, origin, direction, out float t, out int plane)) return false;
 
-        polygon = Array.IndexOf(Target.FaceToPlane, plane);
+        polygon = Target.HasControlMesh ? plane : Array.IndexOf(Target.FaceToPlane, plane);
         if (polygon < 0 || polygon >= _mesh!.Polygons.Count) return false;
 
         id = handles.GetControlID(FaceControl, polygon);
