@@ -91,6 +91,7 @@ internal static class CSGSections
             v => CSGHelperSurfaces.Set(CSGHelperFlags.CollisionOnly, v));
         ToggleRow(paper, "csg_help_inert", Loc.Get("csg.helper_inert"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Inert),
             v => CSGHelperSurfaces.Set(CSGHelperFlags.Inert, v));
+        Hint(paper, EditorTheme.DefaultFont!, "csg_help_hint", Loc.Get("csg.helpers_hint"));
     }
 
     /// <summary>Lightmap UVs are opt in and deferred. Stale UVs show a rebuild button rather than unwrapping mid edit.</summary>
