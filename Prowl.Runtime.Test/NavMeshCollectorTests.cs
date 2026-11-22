@@ -24,6 +24,46 @@ public class NavMeshCollectorTests : RuntimeTestBase
         },
     };
 
+    // A capsule collider's Height is its whole height, caps included.
+    [Fact]
+    public void CapsuleCollider_CollectsItsWholeHeight()
+    {
+        (float min, float max) = CollectedHeight<CapsuleCollider>();
+        Assert.Equal(-1f, min, 0.01f);
+        Assert.Equal(1f, max, 0.01f);
+    }
+
+    // The physics cone sits on its centre of mass, a quarter of its height above the base.
+    [Fact]
+    public void ConeCollider_CollectsWhereThePhysicsConeIs()
+    {
+        (float min, float max) = CollectedHeight<ConeCollider>();
+        Assert.Equal(-0.5f, min, 0.01f);
+        Assert.Equal(1.5f, max, 0.01f);
+    }
+
+    private (float Min, float Max) CollectedHeight<T>() where T : Collider, new()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject("Shape");
+        scene.Add(go);
+        go.AddComponent<T>();
+
+        List<NavMeshGeometrySource> sources = [];
+        NavMeshGeometryCollector.Collect(scene.Objects.Where(o => o.EnabledInHierarchy), NavMeshCollectGeometry.PhysicsColliders,
+            LayerMask.Everything, 0.25f, NavMeshAreas.Walkable, sources);
+
+        NavMeshGeometrySource source = Assert.Single(sources);
+        float min = float.MaxValue, max = float.MinValue;
+        foreach (Float3 v in source.Vertices)
+        {
+            float y = Float4x4.TransformPoint(v, source.Transform).Y;
+            min = Math.Min(min, y);
+            max = Math.Max(max, y);
+        }
+        return (min, max);
+    }
+
     [Fact]
     public void Collect_RespectsLayerMask()
     {
