@@ -533,7 +533,7 @@ public sealed class CSGModel : Component
     /// </summary>
     private static Mesh? KeepOrReplace(Mesh? existing, Mesh? rebuilt, ref long hash)
     {
-        long rebuiltHash = CSGLightmapUVs.GeometryHash(rebuilt);
+        long rebuiltHash = CSGLightmapUVs.ContentHash(rebuilt);
         if (existing.IsValid() && rebuilt.IsValid() && rebuiltHash == hash) return existing;
 
         hash = rebuiltHash;

@@ -446,4 +446,20 @@ public class CSGModelTests : RuntimeTestBase
 
         Assert.Same(built, _model.GeneratedMesh);
     }
+
+    [Fact]
+    public void ChangingOnlyATextureOffsetReachesTheMesh()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
+        Update(_scene);
+        Float2[] before = _model.GeneratedMesh!.UV;
+
+        SurfaceData surface = brush.Surfaces[0];
+        surface.Offset = new Float2(0.25f, 0.5f);
+        brush.SetSurface(0, surface);
+        Update(_scene);
+
+        Assert.NotEqual(before, _model.GeneratedMesh!.UV);
+    }
 }

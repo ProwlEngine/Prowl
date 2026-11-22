@@ -37,6 +37,32 @@ public static class CSGLightmapUVs
         return hash;
     }
 
+    /// <summary>Hash of everything a CSG build writes into a mesh: positions, normals, UVs, indices and submesh ranges.</summary>
+    public static long ContentHash(Mesh? mesh)
+    {
+        if (mesh.IsNotValid()) return 0;
+
+        long hash = GeometryHash(mesh);
+        foreach (Float3 n in mesh!.Normals)
+        {
+            hash = hash * 31 + n.X.GetHashCode();
+            hash = hash * 31 + n.Y.GetHashCode();
+            hash = hash * 31 + n.Z.GetHashCode();
+        }
+        foreach (Float2 uv in mesh.UV)
+        {
+            hash = hash * 31 + uv.X.GetHashCode();
+            hash = hash * 31 + uv.Y.GetHashCode();
+        }
+        for (int i = 0; i < mesh.SubMeshCount; i++)
+        {
+            SubMeshDescriptor sub = mesh.GetSubMesh(i);
+            hash = hash * 31 + sub.IndexStart;
+            hash = hash * 31 + sub.IndexCount;
+        }
+        return hash;
+    }
+
     /// <summary>Unwraps into UV2.</summary>
     public static void Generate(Mesh? mesh)
     {
