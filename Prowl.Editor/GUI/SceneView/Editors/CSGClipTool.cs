@@ -106,7 +106,7 @@ public sealed class CSGClipTool : SceneTool
     {
         if (!ctx.Handles.ViewportHovered) return;
         if (!TrySurfacePoint(ctx, out Float3 point, out Float3 normal)) return;
-        point = CSGSnap.OnPlane(ctx.Handles, point, normal);
+        point = SnapOnSurface(ctx, point, normal);
 
         // Shows which plane the cut will be drawn on before the click.
         _workOrigin = point;
@@ -117,6 +117,16 @@ public sealed class CSGClipTool : SceneTool
         ctx.Draw.Circle(point, normal, 0.12f, PlaneEdge);
 
         if (clicked) _stage = Stage.Aiming;
+    }
+
+    /// <summary>The point snapped to the grid, unless snapping would carry it off the surface it is on.</summary>
+    private static Float3 SnapOnSurface(SceneToolContext ctx, Float3 point, Float3 normal)
+    {
+        Float3 snapped = CSGSnap.OnPlane(ctx.Handles, point, normal);
+        Float3 eye = ctx.Handles.MouseRay.Origin;
+        var toward = new Ray(eye, Float3.Normalize(snapped - eye));
+        if (!TrySurfaceAlong(toward, out Float3 hit)) return point;
+        return Float3.Distance(hit, snapped) < 1e-3f ? snapped : point;
     }
 
     private void TickAiming(SceneToolContext ctx, bool clicked)
@@ -137,9 +147,9 @@ public sealed class CSGClipTool : SceneTool
         // The first click here tilts the plane off the view axis, the next one commits.
         if (!_tilted && ctx.Handles.ViewportHovered
             && TrySurfacePoint(ctx, out Float3 point, out Float3 normal)
-            && CSGClip.PlaneFromPoints(_pointA, _pointB, CSGSnap.OnPlane(ctx.Handles, point, normal), out _))
+            && CSGClip.PlaneFromPoints(_pointA, _pointB, SnapOnSurface(ctx, point, normal), out _))
         {
-            _tilt = CSGSnap.OnPlane(ctx.Handles, point, normal);
+            _tilt = SnapOnSurface(ctx, point, normal);
             _tilted = true;
             return;
         }
@@ -173,11 +183,15 @@ public sealed class CSGClipTool : SceneTool
 
     /// <summary>The generated surface under the cursor, or the grid when there is none.</summary>
     private static bool TrySurfacePoint(SceneToolContext ctx, out Float3 point, out Float3 normal)
+        => TrySurfaceAlong(ctx.Handles.MouseRay, out point, out normal);
+
+    private static bool TrySurfaceAlong(Ray ray, out Float3 point) => TrySurfaceAlong(ray, out point, out _);
+
+    private static bool TrySurfaceAlong(Ray ray, out Float3 point, out Float3 normal)
     {
         point = Float3.Zero;
         normal = Float3.UnitY;
 
-        Ray ray = ctx.Handles.MouseRay;
         CSGModel? model = CSGSelection.ActiveModel();
 
         if (model.IsValid() && model!.Raycast(ray, out CSGBrush brush, out int plane, out Float3 hit, b => !CSGVisibility.IsHidden(b)))
