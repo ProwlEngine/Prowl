@@ -965,6 +965,7 @@
   "csg.clip_cancel": "Cancel",
   "csg.clip_cancel_tip": "Drops the cut without changing anything",
   "csg.helpers_hint": "Collision shows faces that collide but never render, such as invisible walls. Inert shows faces that neither render nor collide.",
+  "csg.palette_tip": "Puts this material on every selected surface",
   "csg.copy_surface": "Copy to selection",
   "csg.copy_surface_tip": "Applies the last picked surface's texturing to every other selected surface.",
   "csg.generate": "Generate",

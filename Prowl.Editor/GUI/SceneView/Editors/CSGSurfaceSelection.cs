@@ -233,6 +233,7 @@ public static class CSGSurfaceSelection
             return;
         }
 
+        Remember(material);
         Undo.RecordObject(brush, "Assign CSG Material");
         SurfaceData data = hit.Data;
         data.Material = material;
@@ -240,7 +241,39 @@ public static class CSGSurfaceSelection
         model.SetDirty();
     }
 
+    private static readonly List<Material> _recent = new();
+
+    /// <summary>Materials to paint with: the ones last assigned, then every other one the model already uses.</summary>
+    public static List<Material> Palette()
+    {
+        _recent.RemoveAll(m => m.IsNotValid());
+        var palette = new List<Material>(_recent);
+
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (model.IsNotValid()) return palette;
+
+        if (model!.DefaultMaterial.IsValid() && !palette.Contains(model.DefaultMaterial!)) palette.Add(model.DefaultMaterial!);
+        foreach (CSGBrush brush in CSGSelection.BrushesIn(model))
+            foreach (SurfaceData data in brush.Surfaces)
+                if (data.Material.IsValid() && !palette.Contains(data.Material!)) palette.Add(data.Material!);
+        return palette;
+    }
+
+    private static void Remember(Material? material)
+    {
+        if (material.IsNotValid()) return;
+        _recent.Remove(material!);
+        _recent.Insert(0, material!);
+        if (_recent.Count > 8) _recent.RemoveAt(_recent.Count - 1);
+    }
+
     public static void SetMaterial(Material? material)
+    {
+        Remember(material);
+        SetMaterialOnly(material);
+    }
+
+    private static void SetMaterialOnly(Material? material)
         => Edit("Assign CSG Material", (data, _, _) => { data.Material = material; return data; });
 
     public static void SetOffset(Float2 offset)

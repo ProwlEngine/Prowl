@@ -393,6 +393,8 @@ internal static class CSGSections
             PropertyGridUtils.DrawField(paper, "csg_surf_mat_v", "", typeof(Material),
                 data.Material, v => CSGSurfaceSelection.SetMaterial(v as Material), 0));
 
+        DrawPalette(paper, font);
+
         EditorGUI.SectionHeader(paper, "csg_surf_map_h", Loc.Get("csg.mapping"));
 
         EditorGUI.SettingsRow(paper, "csg_surf_offset", Loc.Get("csg.uv_offset"), () =>
@@ -466,6 +468,31 @@ internal static class CSGSections
 
         LabelledButton(paper, font, "csg_surf_copy", Loc.Get("csg.copy_surface"),
             Loc.Get("csg.copy_surface_tip"), CSGSurfaceSelection.CopyFromActive);
+    }
+
+    /// <summary>The materials to paint with as a row of buttons, a click puts one on every selected surface.</summary>
+    private static void DrawPalette(Paper paper, Scribe.FontFile font)
+    {
+        List<Material> palette = CSGSurfaceSelection.Palette();
+        if (palette.Count == 0) return;
+
+        Material? current = CSGSurfaceSelection.Active is CSGSurfaceRef active && active.IsValid ? active.Data.Material : null;
+        using (paper.Row("csg_palette").Height(UnitValue.Auto).WrapContent().Gap(3)
+                   .Padding(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 2, 4).Enter())
+        {
+            for (int i = 0; i < palette.Count; i++)
+            {
+                Material material = palette[i];
+                bool on = ReferenceEquals(material, current);
+                paper.Box($"csg_palette_{i}").Width(UnitValue.Auto).Height(20).Padding(6, 6, 0, 0).Rounded(4)
+                    .BackgroundColor(on ? EditorTheme.Accent : EditorTheme.Ink100)
+                    .Hovered.BackgroundColor(on ? EditorTheme.AccentBright : EditorTheme.Hover).End()
+                    .Text(material.Name, font).TextColor(on ? System.Drawing.Color.White : EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+                    .Tooltip(Loc.Get("csg.palette_tip"))
+                    .OnClick(material, (m, _) => CSGSurfaceSelection.SetMaterial(m));
+            }
+        }
     }
 
     /// <summary>A U, V and both row, which is how most texture operations come.</summary>
