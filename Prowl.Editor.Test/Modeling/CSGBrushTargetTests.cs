@@ -33,7 +33,8 @@ public class CSGBrushTargetTests
         (CSGControlMesh mesh, SurfaceData[] surfaces) = target.ToBrush();
 
         Assert.Equal(box.Polygons.Count, mesh.Polygons.Count);
-        Assert.Equal(8, mesh.Points.Count);
+        Assert.Equal(box.Points, mesh.Points);
+        Assert.Equal(box.Polygons, mesh.Polygons);
         Assert.Equal(8f, mesh.Volume(), 4);
         for (int p = 0; p < mesh.Polygons.Count; p++)
             Assert.Equal(Facing(box, mesh.PolygonNormal(p)), (int)surfaces[p].Offset.X);
@@ -120,5 +121,32 @@ public class CSGBrushTargetTests
 
         Assert.Null(problem);
         Assert.Equal(5, target.Target.Mesh.Faces.Count);
+    }
+
+    /// <summary>A selection carried through an edit comes back as the indices its points and faces end up at.</summary>
+    [Fact]
+    public void ASelectionIsCarriedToItsNewIndices()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        GeometryData geometry = target.Target.Mesh;
+
+        // The first point goes, with its faces, so every later point and face moves down
+        GeometryData.Vertex first = geometry.Vertices[0];
+        GeometryData.Vertex corner = geometry.Vertices.OrderByDescending(v => Float3.Distance(v.Point, first.Point)).First();
+        GeometryData.Face away = geometry.Faces.First(f => !f.NeighborVertices().Contains(first));
+        Float3 awayNormal = away.Normal();
+        geometry.RemoveVertex(first);
+
+        var carry = new ElementSelection();
+        carry.Vertices.Add(corner);
+        carry.Faces.Add(away);
+
+        (CSGControlMesh mesh, _) = target.ToBrush(carry, out HashSet<int> points, out List<int> faces);
+
+        int point = Assert.Single(points);
+        Assert.Equal(corner.Point, mesh.Points[point]);
+        int face = Assert.Single(faces);
+        Assert.True(Float3.Dot(mesh.PolygonNormal(face), awayNormal) > 0.99f);
     }
 }

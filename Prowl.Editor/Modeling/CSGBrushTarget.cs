@@ -57,9 +57,26 @@ public sealed class CSGBrushTarget
     }
 
     /// <summary>The edited mesh as the brush's points, polygons and surfaces.</summary>
-    public (CSGControlMesh Mesh, SurfaceData[] Surfaces) ToBrush()
+    public (CSGControlMesh Mesh, SurfaceData[] Surfaces) ToBrush() => ToBrush(null, out _, out _);
+
+    /// <summary>
+    /// As <see cref="ToBrush()"/>, also giving where the elements of <paramref name="carry"/> end up: the points its
+    /// vertices became, and the polygons its faces became part of.
+    /// </summary>
+    public (CSGControlMesh Mesh, SurfaceData[] Surfaces) ToBrush(ElementSelection? carry, out HashSet<int> points, out List<int> faces)
     {
-        CSGControlMesh mesh = ToControlMesh(Target.Mesh, out List<GeometryData.Face> sources);
+        CSGControlMesh mesh = ToControlMesh(Target.Mesh, out List<GeometryData.Face> sources, out Dictionary<GeometryData.Vertex, int> pointOf,
+            out Dictionary<GeometryData.Face, int> polygonOf);
+
+        points = new HashSet<int>();
+        faces = new List<int>();
+        if (carry != null)
+        {
+            foreach (GeometryData.Vertex vertex in carry.Vertices)
+                if (pointOf.TryGetValue(vertex, out int point)) points.Add(point);
+            foreach (GeometryData.Face face in carry.Faces)
+                if (polygonOf.TryGetValue(face, out int polygon) && !faces.Contains(polygon)) faces.Add(polygon);
+        }
 
         var surfaces = new SurfaceData[mesh.Polygons.Count];
         for (int p = 0; p < surfaces.Length; p++)
@@ -72,7 +89,7 @@ public sealed class CSGBrushTarget
 
     private static string? Validate(GeometryData geometry)
     {
-        CSGControlMesh mesh = ToControlMesh(geometry, out _);
+        CSGControlMesh mesh = ToControlMesh(geometry, out _, out _, out _);
         CSGMeshProblem problem = mesh.Check();
         if (problem == CSGMeshProblem.None) return null;
         if (problem == CSGMeshProblem.SelfIntersecting) return FoldsThroughItself;
@@ -81,15 +98,31 @@ public sealed class CSGBrushTarget
 
     /// <summary>
     /// Points and polygons from the faces: faces joined by hidden edges become the one polygon they read as, and points
-    /// no face uses are left out. <paramref name="sources"/> names a face each polygon came from.
+    /// no face uses are left out. Points keep the order of the mesh's vertices, so an edit that only moves points keeps
+    /// every index. <paramref name="sources"/> names a face each polygon came from.
     /// </summary>
-    private static CSGControlMesh ToControlMesh(GeometryData geometry, out List<GeometryData.Face> sources)
+    private static CSGControlMesh ToControlMesh(GeometryData geometry, out List<GeometryData.Face> sources,
+                                                out Dictionary<GeometryData.Vertex, int> index, out Dictionary<GeometryData.Face, int> polygonOf)
     {
-        var index = new Dictionary<GeometryData.Vertex, int>();
+        index = new Dictionary<GeometryData.Vertex, int>();
         var points = new List<Float3>();
+        var used = new HashSet<GeometryData.Vertex>();
+        foreach (GeometryData.Face face in geometry.Faces)
+            foreach (GeometryData.Vertex vertex in face.NeighborVertices())
+                used.Add(vertex);
+        foreach (GeometryData.Vertex vertex in geometry.Vertices)
+        {
+            if (!used.Contains(vertex)) continue;
+            index[vertex] = points.Count;
+            points.Add(vertex.Point);
+        }
+
         var polygons = new List<int[]>();
         var from = new List<GeometryData.Face>();
         var done = new HashSet<GeometryData.Face>();
+        polygonOf = new Dictionary<GeometryData.Face, int>();
+        Dictionary<GeometryData.Face, int> owners = polygonOf;
+        Dictionary<GeometryData.Vertex, int> pointIndex = index;
 
         foreach (GeometryData.Face face in geometry.Faces)
         {
@@ -100,33 +133,27 @@ public sealed class CSGBrushTarget
             List<GeometryData.Vertex>? outline = group.Count == 1 ? face.NeighborVertices() : Outline(group);
             if (outline != null)
             {
-                Emit(outline, face);
+                if (Emit(outline, face))
+                    foreach (GeometryData.Face member in group) owners[member] = polygons.Count - 1;
                 continue;
             }
 
             // An outline that does not close into one ring keeps its pieces as they are
-            foreach (GeometryData.Face member in group) Emit(member.NeighborVertices(), member);
+            foreach (GeometryData.Face member in group)
+                if (Emit(member.NeighborVertices(), member)) owners[member] = polygons.Count - 1;
         }
 
         sources = from;
         return CSGControlMesh.FromPolygons(points, polygons);
 
-        void Emit(List<GeometryData.Vertex> ring, GeometryData.Face source)
+        bool Emit(List<GeometryData.Vertex> ring, GeometryData.Face source)
         {
-            if (ring.Count < 3) return;
+            if (ring.Count < 3) return false;
             var polygon = new int[ring.Count];
-            for (int i = 0; i < ring.Count; i++)
-            {
-                if (!index.TryGetValue(ring[i], out int at))
-                {
-                    at = points.Count;
-                    index[ring[i]] = at;
-                    points.Add(ring[i].Point);
-                }
-                polygon[i] = at;
-            }
+            for (int i = 0; i < ring.Count; i++) polygon[i] = pointIndex[ring[i]];
             polygons.Add(polygon);
             from.Add(source);
+            return true;
         }
     }
 

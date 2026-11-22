@@ -892,7 +892,6 @@
   "csg.status_grid": "Grid {{size}}",
   "csg.status_invalid": "{{count}} invalid",
   "csg.status_invalid_tip": "Brushes whose planes no longer enclose a solid, so they add nothing. Click to select them.",
-  "csg.status_inside_out": "That would turn the brush inside out",
   "csg.status_folds": "That would fold the brush through itself",
   "csg.status_encloses_nothing": "That would leave the brush enclosing nothing",
   "mesh.status_operation_failed": "That edit cannot be made here",

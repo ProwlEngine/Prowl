@@ -166,6 +166,10 @@ public sealed class CSGMeshTool : SceneTool
 
     private CSGControlMesh? _mesh;
     private object? _meshSource;
+
+    // The brush as an edit target, loaded again whenever its points change, and the selection as undo keeps it
+    private CSGBrushTarget? _target;
+    private readonly CSGEditSelection _held = new();
     private List<(int a, int b)> _edges = new();
     private bool _dragging;
 
@@ -223,6 +227,7 @@ public sealed class CSGMeshTool : SceneTool
             CancelAction();
             if (Target.IsNotValid()) return;
         }
+        HoldSelection();
 
         HandleContext handles = ctx.Handles;
 
@@ -262,34 +267,103 @@ public sealed class CSGMeshTool : SceneTool
         List<CSGBrush> selected = CSGSelection.Brushes();
         CSGBrush? brush = selected.Count == 1 ? selected[0] : null;
 
-        if (!ReferenceEquals(brush, Target)) { Target = brush; ClearSelection(); }
-        if (Target.IsNotValid()) { Target = null; return false; }
-
-        _mesh = Target!.ControlMesh;
-
-        // New points after a plane edit or an undo, so old indices mean nothing
-        if (!ReferenceEquals(_mesh, _meshSource))
+        if (!ReferenceEquals(brush, Target))
         {
-            _meshSource = _mesh;
-            if (_action == Action.None) ClearSelection();
+            Target = brush;
+            ClearSelection();
+            _meshSource = null;
         }
+        if (Target.IsNotValid()) { Target = null; _target = null; return false; }
+
+        // The points changed from outside the tool, by an undo, a redo or the Inspector, so the target is loaded again
+        // and the selection comes back as undo kept it
+        if (!ReferenceEquals(Target!.ControlMesh, _meshSource))
+        {
+            bool sameBrush = _meshSource != null;
+            Reload();
+            if (sameBrush && _action == Action.None) RestoreHeldSelection();
+        }
+
+        _mesh = Target.ControlMesh;
         _vertices.RemoveWhere(i => i >= _mesh.Points.Count);
         _faces.RemoveAll(f => f >= _mesh.Polygons.Count);
 
-        _edges = _mesh.Edges();
         NonPlanar = !_mesh.IsPlanar();
         return _mesh.Points.Count > 0;
     }
 
-    /// <summary>Records the brush and makes its points its own, before an edit to them.</summary>
-    private CSGControlMesh? BeginPointEdit(string name)
+    /// <summary>Loads the brush's points as the edit target, after the tool or anything else changed them.</summary>
+    private void Reload()
     {
-        Undo.RecordObject(Target!, name);
-        CSGControlMesh mesh = Target!.ControlMesh;
+        _mesh = Target!.ControlMesh;
+        _meshSource = _mesh;
+        _target = new CSGBrushTarget(_mesh, Target.Surfaces, Target.Transform.LocalToWorldMatrix);
+        _edges = _mesh.Edges();
+    }
 
-        _mesh = mesh;
-        _meshSource = mesh;
-        return mesh;
+    private void HoldSelection()
+    {
+        _held.Points = [.. _vertices];
+        _held.Faces = [.. _faces];
+    }
+
+    private void RestoreHeldSelection()
+    {
+        _vertices.Clear();
+        _vertices.UnionWith(_held.Points);
+        _faces.Clear();
+        _faces.AddRange(_held.Faces);
+    }
+
+    /// <summary>The selected points and faces as elements of the edit target.</summary>
+    private ElementSelection SelectedElements()
+    {
+        var selected = new ElementSelection();
+        var vertices = _target!.Target.Mesh.Vertices;
+        foreach (int i in _vertices)
+            if (i >= 0 && i < vertices.Count) selected.Vertices.Add(vertices[i]);
+        foreach (GeometryData.Face face in _target.FacesOf(_faces)) selected.Faces.Add(face);
+        return selected;
+    }
+
+    /// <summary>
+    /// Runs an edit on the selected elements through the edit target: recorded for undo with the selection, refused with
+    /// a reason when the brush could not keep it, and written back to the brush when it can.
+    /// </summary>
+    private bool RunEdit(string name, Action<ElementSelection> edit)
+    {
+        if (Target.IsNotValid() || _target == null) return false;
+
+        ElementSelection selected = SelectedElements();
+        Undo.RecordObject(Target!, name);
+        HoldSelection();
+        Undo.RecordObject(_held, UndoOwner.Of(Target!), name);
+
+        string? problem = MeshEdit.Run(_target.Target, (_, _) => edit(selected), new ElementSelection());
+        if (problem != null)
+        {
+            CSGStatus.Flash(Loc.Get(problem));
+            return false;
+        }
+
+        (CSGControlMesh mesh, SurfaceData[] surfaces) = _target.ToBrush(selected, out HashSet<int> points, out List<int> faces);
+        Target!.SetShape(mesh, surfaces);
+        _vertices.Clear();
+        _vertices.UnionWith(points);
+        _faces.Clear();
+        _faces.AddRange(faces);
+        Reload();
+        HoldSelection();
+        MarkDirty();
+        return true;
+    }
+
+    /// <summary>Puts a whole shape on the brush from inside the tool, keeping the edit target in step with it.</summary>
+    private void ApplyShape(CSGBrush brush, CSGControlMesh mesh, SurfaceData[] surfaces)
+    {
+        brush.SetShape(mesh, surfaces);
+        if (ReferenceEquals(brush, Target)) Reload();
+        MarkDirty();
     }
 
     /// <summary>The surface of a polygon of the points, which is the polygon's own index.</summary>
@@ -301,10 +375,7 @@ public sealed class CSGMeshTool : SceneTool
         if (_action == Action.None) return;
         // Exactly the shape it started with, so the open undo record finds nothing changed and leaves no step
         if (_action is Action.Chamfer or Action.Inset or Action.Drag && _actionBrush.IsValid() && _startMesh != null)
-        {
-            _actionBrush!.SetShape(_startMesh.Clone(), (SurfaceData[])_startSurfaces!.Clone());
-            MarkDirty();
-        }
+            ApplyShape(_actionBrush!, _startMesh.Clone(), (SurfaceData[])_startSurfaces!.Clone());
         EndAction();
     }
 
@@ -456,25 +527,10 @@ public sealed class CSGMeshTool : SceneTool
         Float3 step = target - _dragAnchor;
         if (Float3.LengthSquared(step) < 1e-12f) return;
 
-        CSGControlMesh? mesh = BeginPointEdit("Move CSG Vertices");
-        if (mesh == null) return;
-
         Float4x4 toLocal = Target!.Transform.WorldToLocalMatrix;
         Float3 delta = Float4x4.TransformPoint(_dragAnchor + step, toLocal) - Float4x4.TransformPoint(_dragAnchor, toLocal);
 
-        List<int> moving = [.. _vertices];
-        mesh.MovePoints(moving, delta);
-        Target.ApplyControlMesh();
-        if (!Target.IsShapeValid)
-        {
-            CSGStatus.Flash(Loc.Get("csg.status_inside_out"));
-            mesh.MovePoints(moving, -delta);
-            Target.ApplyControlMesh();
-            return;
-        }
-
-        _dragAnchor = target;
-        MarkDirty();
+        if (RunEdit("Move CSG Vertices", selected => Translate(selected, delta))) _dragAnchor = target;
     }
 
     /// <summary>How far a drag has moved, beside what is being moved.</summary>
@@ -638,7 +694,7 @@ public sealed class CSGMeshTool : SceneTool
         {
             case Action.Extrude: CommitExtrude(amount); break;
             case Action.Marquee: ApplyMarquee(ctx); break;
-            case Action.Chamfer or Action.Inset when _fromMenu: ClearSelection(); break;
+            case Action.Chamfer or Action.Inset: ClearSelection(); break;
         }
 
         // A click on part of a selection, with no drag, narrows the selection to what was clicked
@@ -671,8 +727,7 @@ public sealed class CSGMeshTool : SceneTool
 
         (CSGControlMesh mesh, SurfaceData[] surfaces) = target.ToBrush();
         Undo.RecordObject(Target!, "Inset CSG Face");
-        Target!.SetShape(mesh, surfaces);
-        MarkDirty();
+        ApplyShape(Target!, mesh, surfaces);
     }
 
     private void PreviewChamferSelection(float amount)
@@ -684,16 +739,14 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         Undo.RecordObject(Target!, "Chamfer CSG Brush");
-        Target!.SetShape(chamfered.Mesh, chamfered.Surfaces);
-        MarkDirty();
+        ApplyShape(Target!, chamfered.Mesh, chamfered.Surfaces);
     }
 
     /// <summary>Puts the brush back as the action found it.</summary>
     private void RestoreStart()
     {
         if (ReferenceEquals(Target!.ControlMesh, _startMesh)) return;
-        Target.SetShape(_startMesh!.Clone(), (SurfaceData[])_startSurfaces!.Clone());
-        MarkDirty();
+        ApplyShape(Target, _startMesh!.Clone(), (SurfaceData[])_startSurfaces!.Clone());
     }
 
     /// <summary>World units one pixel spans at the brush, so drags scale with the view.</summary>
@@ -714,11 +767,7 @@ public sealed class CSGMeshTool : SceneTool
         // Back at the start there is no cut, so the brush goes back to how it began
         if (amount <= 1e-4f || !CSGMeshEdit.ChamferPlane(_actionNormals, _actionCorner, amount, out Plane cut))
         {
-            if (!ReferenceEquals(Target!.ControlMesh, _startMesh))
-            {
-                Target.SetShape(_startMesh!.Clone(), (SurfaceData[])_startSurfaces!.Clone());
-                MarkDirty();
-            }
+            RestoreStart();
             return;
         }
 
@@ -727,8 +776,7 @@ public sealed class CSGMeshTool : SceneTool
         if (CSGSelection.CutAway(_startMesh!, _startSurfaces, cut, cap) is not { } chamfered) return;
 
         Undo.RecordObject(Target!, "Chamfer CSG Brush");
-        Target!.SetShape(chamfered.Mesh, chamfered.Surfaces);
-        MarkDirty();
+        ApplyShape(Target!, chamfered.Mesh, chamfered.Surfaces);
     }
 
     /// <summary>Draws where the extruded brush would go, without creating it until release.</summary>
@@ -905,23 +953,8 @@ public sealed class CSGMeshTool : SceneTool
         Float4x4 toLocal = Target.Transform.WorldToLocalMatrix;
         Float3 delta = Float4x4.TransformPoint(before + step, toLocal) - Float4x4.TransformPoint(before, toLocal);
 
-        CSGControlMesh? mesh = BeginPointEdit("Edit CSG Brush");
-        if (mesh == null) return;
-
-        List<int> moving = [.. _vertices];
-        mesh.MovePoints(moving, delta);
-        Target.ApplyControlMesh();
-
-        // A move that stops the points enclosing a solid is taken back, and the drag waits where it was
-        if (!Target.IsShapeValid)
-        {
-            CSGStatus.Flash(Loc.Get("csg.status_inside_out"));
-            mesh.MovePoints(moving, -delta);
-            Target.ApplyControlMesh();
-            _dragApplied -= step;
-        }
-
-        MarkDirty();
+        // A move the brush cannot keep is refused, and the drag waits where it was
+        if (!RunEdit("Edit CSG Brush", selected => Translate(selected, delta))) _dragApplied -= step;
     }
 
     /// <summary>How far the gizmo has been dragged along the face being extruded, in the brush's own units.</summary>
@@ -953,19 +986,21 @@ public sealed class CSGMeshTool : SceneTool
     }
 
     private void ScaleFace(float factor)
-    {
-        CSGControlMesh? mesh = BeginPointEdit("Scale CSG Face");
-        if (mesh == null) return;
-
-        mesh.ScalePolygon(_faces[0], factor);
-        Target!.ApplyControlMesh();
-        if (!Target.IsShapeValid)
+        => RunEdit("Scale CSG Face", selected =>
         {
-            CSGStatus.Flash(Loc.Get("csg.status_inside_out"));
-            mesh.ScalePolygon(_faces[0], 1f / factor);
-            Target.ApplyControlMesh();
-        }
-        MarkDirty();
+            foreach (GeometryData.Face face in selected.Faces)
+            {
+                List<GeometryData.Vertex> ring = face.NeighborVertices();
+                Float3 centre = Float3.Zero;
+                foreach (GeometryData.Vertex vertex in ring) centre += vertex.Point;
+                centre /= ring.Count;
+                foreach (GeometryData.Vertex vertex in ring) vertex.Point = centre + (vertex.Point - centre) * factor;
+            }
+        });
+
+    private static void Translate(ElementSelection selected, Float3 delta)
+    {
+        foreach (GeometryData.Vertex vertex in selected.Vertices) vertex.Point += delta;
     }
 
     private bool IsEdge(HashSet<int> pair)
@@ -985,37 +1020,25 @@ public sealed class CSGMeshTool : SceneTool
         if (Float3.LengthSquared(axis) < 1e-10f) return;
 
         // Everything except the edge turns about it, tilting the faces either side.
-        var others = new List<int>();
-        for (int i = 0; i < _mesh.Points.Count; i++)
-            if (!_vertices.Contains(i)) others.Add(i);
+        Quaternion turn = Quaternion.AxisAngle(Float3.NormalizeSafe(axis, Float3.UnitY), degrees * (MathF.PI / 180f));
+        Float3 pivot = (a + b) * 0.5f;
 
-        CSGControlMesh? mesh = BeginPointEdit("Rotate CSG Edge");
-        if (mesh == null) return;
-
-        mesh.RotatePoints(others, (a + b) * 0.5f, axis, degrees);
-        Target!.ApplyControlMesh();
-        if (!Target.IsShapeValid)
+        RunEdit("Rotate CSG Edge", selected =>
         {
-            CSGStatus.Flash(Loc.Get("csg.status_inside_out"));
-            mesh.RotatePoints(others, (a + b) * 0.5f, axis, -degrees);
-            Target.ApplyControlMesh();
-        }
-        MarkDirty();
+            foreach (GeometryData.Vertex vertex in _target!.Target.Mesh.Vertices)
+                if (!selected.Vertices.Contains(vertex)) vertex.Point = pivot + turn * (vertex.Point - pivot);
+        });
     }
 
     private void SnapSelection()
     {
         if (_vertices.Count == 0) return;
 
-        CSGControlMesh? mesh = BeginPointEdit("Snap CSG Vertices");
-        if (mesh == null) return;
-
         // Each point snaps on its own, which squares up a skewed brush
-        foreach (int i in _vertices)
-            mesh.SetPoint(i, CSGSnap.Round(mesh.Points[i]));
-
-        Target!.ApplyControlMesh();
-        MarkDirty();
+        RunEdit("Snap CSG Vertices", selected =>
+        {
+            foreach (GeometryData.Vertex vertex in selected.Vertices) vertex.Point = CSGSnap.Round(vertex.Point);
+        });
     }
 
     /// <summary>Removes a face by dropping its plane, the faces around it grow to close the gap.</summary>
@@ -1045,6 +1068,7 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         ClearSelection();
+        Reload();
         MarkDirty();
     }
 
@@ -1099,4 +1123,11 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (Active) TransformHandles.Draw(canvas);
     }
+}
+
+/// <summary>The Edit tool's selection as point and polygon indices, recorded with each edit so undo brings it back.</summary>
+internal sealed class CSGEditSelection
+{
+    public int[] Points = [];
+    public int[] Faces = [];
 }
