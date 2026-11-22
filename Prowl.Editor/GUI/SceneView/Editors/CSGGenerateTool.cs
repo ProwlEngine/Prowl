@@ -68,6 +68,10 @@ public sealed class CSGGenerateTool : SceneTool
     private Float3 _cornerB;
     private float _height;
 
+    // Started on a model surface, so pulling into it means digging
+    private bool _onSurface;
+    private bool _hoverOnSurface;
+
     public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
 
     /// <summary>While armed, drawing owns the button so the gizmo cannot win the press.</summary>
@@ -116,7 +120,7 @@ public sealed class CSGGenerateTool : SceneTool
     {
         // No cursor preview while the pointer is on a panel.
         if (!ctx.Handles.ViewportHovered) return;
-        if (!TryHoverPoint(ctx, out Float3 point, out Float3 normal)) return;
+        if (!TryHoverPoint(ctx, out Float3 point, out Float3 normal, out _hoverOnSurface)) return;
 
         _planeRotation = CSGBrushGeometry.FrameFor(normal);
 
@@ -133,6 +137,7 @@ public sealed class CSGGenerateTool : SceneTool
         _cornerA = Float3.Zero;
         _cornerB = Float3.Zero;
         _height = 0f;
+        _onSurface = _hoverOnSurface;
         _stage = Stage.Footprint;
         _stageView = ctx.View;
 
@@ -236,11 +241,12 @@ public sealed class CSGGenerateTool : SceneTool
     }
 
     /// <summary>Where a new brush would start: the surface under the cursor, or the grid plane.</summary>
-    private static bool TryHoverPoint(SceneToolContext ctx, out Float3 point, out Float3 normal)
+    private static bool TryHoverPoint(SceneToolContext ctx, out Float3 point, out Float3 normal, out bool onSurface)
     {
         Ray ray = ctx.Handles.MouseRay;
 
-        if (TryHitBrush(ray, out point, out normal)) return true;
+        onSurface = TryHitBrush(ray, out point, out normal);
+        if (onSurface) return true;
 
         // Grid plane through the origin, a ray from below hits its back face.
         float denom = ray.Direction.Y;
@@ -322,13 +328,23 @@ public sealed class CSGGenerateTool : SceneTool
         return model.GameObject;
     }
 
-    /// <summary>The operation the brush will get. Holding Shift swaps add and subtract for one brush.</summary>
-    private Operation OperationFor(HandleContext handles) => !handles.Shift ? Operation : Operation switch
+    /// <summary>
+    /// The operation the brush will get. Pulling an additive brush into the surface it started on digs, and holding
+    /// Shift swaps add and subtract for one brush.
+    /// </summary>
+    private Operation OperationFor(HandleContext handles)
     {
-        Operation.Additive => Operation.Subtractive,
-        Operation.Subtractive => Operation.Additive,
-        _ => Operation,
-    };
+        Operation operation = Operation == Operation.Additive && _onSurface && _stage == Stage.Extrude && _height < 0f
+            ? Operation.Subtractive
+            : Operation;
+
+        return !handles.Shift ? operation : operation switch
+        {
+            Operation.Additive => Operation.Subtractive,
+            Operation.Subtractive => Operation.Additive,
+            _ => operation,
+        };
+    }
 
     private (Color32 Color, string Label) Tint(HandleContext handles)
     {
