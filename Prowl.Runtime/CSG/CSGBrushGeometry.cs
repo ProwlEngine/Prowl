@@ -116,6 +116,9 @@ public static class CSGBrushGeometry
         reflect.c1 = new Float4(-2 * n.X * n.Y, 1 - 2 * n.Y * n.Y, -2 * n.Z * n.Y, 0);
         reflect.c2 = new Float4(-2 * n.X * n.Z, -2 * n.Y * n.Z, 1 - 2 * n.Z * n.Z, 0);
 
+        // A flattened transform has no inverse and nothing to mirror
+        if (MathF.Abs(Float4x4.Determinant(linear)) < 1e-12f) return [.. planes];
+
         // The reflection seen from the brush's own space. It is its own inverse, so normals go through its transpose
         Float4x4 local = linear.Invert() * reflect * linear;
 

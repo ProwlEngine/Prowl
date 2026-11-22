@@ -212,4 +212,12 @@ public class CSGBrushGeometryTests
             Assert.True(Inside(mirrored, back + (Float3.Zero - back) * 1e-3f), $"{back} not on the mirrored solid");
         }
     }
+
+    [Fact]
+    public void MirrorThroughAFlattenedTransformLeavesThePlanesAlone()
+    {
+        Plane[] planes = Box(Float3.One);
+        Plane[] mirrored = CSGBrushGeometry.Mirror(planes, Float3.UnitX, Float4x4.CreateScale(new Float3(0, 1, 1)));
+        Assert.Equal(planes, mirrored);
+    }
 }
