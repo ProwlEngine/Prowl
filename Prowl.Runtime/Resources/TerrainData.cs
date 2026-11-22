@@ -143,6 +143,9 @@ public sealed class TerrainData : Asset, ISerializable
     [NotContent] private bool _changed;
     [NotContent] private long _bytes;
 
+    /// <summary>The terrain drawing this data, which places it. One terrain draws a data at a time.</summary>
+    [NotContent] internal object? Owner;
+
     /// <summary>Raised after the package is built again or loaded anew, so renderers and physics take the new one.</summary>
     public event Action? Rebuilt;
 

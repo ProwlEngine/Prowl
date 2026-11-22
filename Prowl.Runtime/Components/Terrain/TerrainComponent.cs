@@ -70,6 +70,8 @@ public class TerrainComponent : Component, IRenderSync
     [NonSerialized] private int _layerSignature, _detailSignature, _treeSignature;
     [NonSerialized] private Double3 _placedAt;
     [NonSerialized] private Double3? _viewer;
+    [NonSerialized] private bool _warnedShared;
+    [NonSerialized, NotHeld] private TerrainData? _owned;
     [NonSerialized, NotHeld] private readonly Dictionary<object, (int Key, TerrainPropKind? Kind)> _kinds = new(ReferenceEqualityComparer.Instance);
 
     public float TerrainSize { get { TerrainData? d = Data; return d.IsValid() ? d.Size : 1024f; } }
@@ -92,6 +94,18 @@ public class TerrainComponent : Component, IRenderSync
             Release(world);
             return false;
         }
+
+        if (data.Owner is TerrainComponent other && !ReferenceEquals(other, this) && other.IsValid() && other.EnabledInHierarchy)
+        {
+            if (!_warnedShared)
+                Debug.LogWarning($"'{GameObject.Name}' shares its TerrainData with '{other.GameObject.Name}', which already draws it. A TerrainData is drawn by one terrain at a time.");
+            _warnedShared = true;
+            Release(world);
+            return false;
+        }
+        data.Owner = this;
+        _owned = data;
+        _warnedShared = false;
 
         GTerrain terrain = data.Terrain;
         Float3 position = Transform.Position;
@@ -157,7 +171,9 @@ public class TerrainComponent : Component, IRenderSync
         _treeInstances?.Dispose();
         Graphics.DeferDispose(_layers);
         Graphics.DeferDispose(_cards);
-        (_surface, _built, _world, _layers, _cards) = (null, null, null, null, null);
+        if (_owned.IsValid() && ReferenceEquals(_owned.Owner, this))
+            _owned.Owner = null;
+        (_surface, _built, _world, _layers, _cards, _owned) = (null, null, null, null, null, null);
         (_details, _detailInstances, _trees, _treeInstances) = (null, null, null, null);
         (_layerSignature, _detailSignature, _treeSignature) = (0, 0, 0);
         _viewer = null;
