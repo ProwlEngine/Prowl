@@ -397,6 +397,32 @@ public sealed class CSGClipTool : SceneTool
         DrawOutcome(ctx, plane);
     }
 
+    /// <summary>The polygon the cut leaves on one brush, from where its edges cross the plane.</summary>
+    private static void DrawCutOutline(SceneToolContext ctx, CSGBrush brush, Float4x4 toWorld, Plane plane)
+    {
+        var points = new List<Float3>();
+        foreach (var edge in brush.Shape!.Edges)
+        {
+            Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld);
+            Float3 b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
+            float da = plane.GetSignedDistanceToPoint(a), db = plane.GetSignedDistanceToPoint(b);
+            if ((da > 0f) == (db > 0f) || MathF.Abs(da - db) < 1e-9f) continue;
+            points.Add(a + (b - a) * (da / (da - db)));
+        }
+        if (points.Count < 3) return;
+
+        // Around their middle, in the plane's own frame
+        Float3 centre = Float3.Zero;
+        foreach (Float3 p in points) centre += p;
+        centre /= points.Count;
+        Quaternion frame = CSGBrushGeometry.FrameFor(plane.Normal);
+        Float3 u = frame * Float3.UnitX, v = frame * Float3.UnitZ;
+        points.Sort((p, q) => MathF.Atan2(Float3.Dot(p - centre, v), Float3.Dot(p - centre, u))
+            .CompareTo(MathF.Atan2(Float3.Dot(q - centre, v), Float3.Dot(q - centre, u))));
+
+        ctx.Draw.Polyline(points.ToArray(), PlaneEdge, 2f, closed: true);
+    }
+
     /// <summary>The cut plane, sized to span the brushes it crosses.</summary>
     private static void DrawPlaneQuad(SceneToolContext ctx, Plane plane)
     {
@@ -424,7 +450,7 @@ public sealed class CSGClipTool : SceneTool
         ctx.Draw.Polyline(quad, PlaneEdge, 1f, closed: true);
     }
 
-    /// <summary>Colours each brush's corners by which side of the cut they fall on.</summary>
+    /// <summary>Outlines where the cut crosses each brush, and colours its corners by which side of the cut they fall on.</summary>
     private void DrawOutcome(SceneToolContext ctx, Plane worldPlane)
     {
         foreach (CSGBrush brush in Brushes())
@@ -432,6 +458,7 @@ public sealed class CSGClipTool : SceneTool
             if (brush.Shape == null) continue;
 
             Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
+            DrawCutOutline(ctx, brush, toWorld, worldPlane);
             foreach (var v in brush.Shape.Vertices)
             {
                 Float3 world = Float4x4.TransformPoint(v.Point, toWorld);
