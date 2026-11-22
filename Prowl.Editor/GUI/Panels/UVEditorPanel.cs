@@ -542,12 +542,18 @@ public class UVEditorPanel : DockPanel
         if (_moving.Count == 0) return;
         _before.Clear();
         _unwrapped.Clear();
-        if (_moving.Exists(m => UVs.IsPinned(m.Corner)))
-        {
-            _unwrapped.AddRange(faces);
-            foreach (Shown shown in faces)
-                foreach (GeometryData.Loop corner in UVs.Corners(shown.Face)) _before.Add((corner, UVs.Get(corner)));
-        }
+        var pinnedFaces = new HashSet<GeometryData.Face>(_moving.Where(m => UVs.IsPinned(m.Corner)).Select(m => m.Corner.Face));
+        if (pinnedFaces.Count > 0)
+            foreach (IGrouping<ModelObject, Shown> group in faces.GroupBy(f => f.Model))
+                foreach (List<GeometryData.Face> island in UVs.Islands(group.Key.Mesh, [.. group.Select(f => f.Face)]))
+                {
+                    if (!island.Exists(pinnedFaces.Contains)) continue;
+                    foreach (GeometryData.Face face in island)
+                    {
+                        _unwrapped.Add(new Shown(group.Key, face));
+                        foreach (GeometryData.Loop corner in UVs.Corners(face)) _before.Add((corner, UVs.Get(corner)));
+                    }
+                }
         Float2 sum = Float2.Zero;
         foreach ((_, _, Float2 uv) in _moving) sum += uv;
         _pivot = sum / _moving.Count;
@@ -592,7 +598,7 @@ public class UVEditorPanel : DockPanel
     private void Preview(ModelMeshTool tool, Func<Float2, Float2> change)
     {
         Move(_moving, _unwrapped, change);
-        foreach (ModelObject model in _moving.Select(m => m.Model).Distinct()) model.RefreshPreview(dragging: true);
+        foreach (ModelObject model in _moving.Select(m => m.Model).Distinct()) model.RefreshPreview();
     }
 
     /// <summary>Sets the moved points, and unwraps the faces again around the pins when a pinned point is among them.</summary>

@@ -52,8 +52,13 @@ public static class ModelExport
             node.Parent = nodeOf.TryGetValue(item.Parent, out int parent) ? parent : -1;
 
             using Mesh mesh = PMeshImporter.BuildMesh(item);
-            node.Mesh = model.Meshes.Count;
-            model.Meshes.Add(MeshOf(mesh, item, slot => MaterialIndex(model, item, slot, materials, png, materialOf, textureOf)));
+            ExportMesh export = MeshOf(mesh, item, slot => MaterialIndex(model, item, slot, materials, png, materialOf, textureOf));
+            // An object with nothing to draw stays a node, since a mesh needs at least one primitive and point
+            if (export.Primitives.Count > 0 && export.Positions.Length > 0)
+            {
+                node.Mesh = model.Meshes.Count;
+                model.Meshes.Add(export);
+            }
 
             if (item.Bones.Count == 0) continue;
             var skin = new ExportSkin { Name = item.Name };
@@ -64,7 +69,7 @@ public static class ModelExport
                 model.Nodes.Add(new ExportNode
                 {
                     Name = bone.Name,
-                    Parent = bone.Parent >= 0 && bone.Parent < item.Bones.Count ? first + bone.Parent : nodeOf[item.Id],
+                    Parent = bone.Parent >= 0 && bone.Parent < item.Bones.Count && bone.Parent != i ? first + bone.Parent : nodeOf[item.Id],
                     Position = bone.Position,
                     Rotation = bone.Rotation,
                     Scale = bone.Scale,
@@ -127,6 +132,14 @@ public static class ModelExport
     }
 
     private static Float2 Flip(Float2 uv) => new(uv.X, 1f - uv.Y);
+
+    // Whether the material or one it inherits from sets an alpha cutoff, which only cut out materials do
+    private static bool SetsCutoff(Material material)
+    {
+        for (Material? at = material; at.IsValid(); at = at!.Parent)
+            if (at!._properties.HasFloat("alpha_cutoff")) return true;
+        return false;
+    }
 
     /// <summary>
     /// The metalness and roughness maps as glTF keeps them, roughness in green and metalness in blue of one image. A
@@ -222,7 +235,7 @@ public static class ModelExport
             TextureScale = new Float2(scaleOffset.X, scaleOffset.Y),
             TextureOffset = new Float2(scaleOffset.Z, scaleOffset.W),
             AlphaMode = surface is { Type: SurfaceType.Transparent } ? ClayMaterialAlphaMode.Blend
-                : material._properties.HasFloat("alpha_cutoff") ? ClayMaterialAlphaMode.Mask : ClayMaterialAlphaMode.Opaque,
+                : SetsCutoff(material) ? ClayMaterialAlphaMode.Mask : ClayMaterialAlphaMode.Opaque,
             AlphaCutoff = material.GetFloat("alpha_cutoff"),
             DoubleSided = surface is { Cull: SurfaceCull.Off },
         };

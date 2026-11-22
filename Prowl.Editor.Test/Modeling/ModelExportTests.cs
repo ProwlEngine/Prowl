@@ -103,4 +103,15 @@ public class ModelExportTests : EditorTestHarness
         Assert.Equal(60, packed.Pixels[1]);
         Assert.Equal(200, packed.Pixels[2]);
     }
+
+    [Fact]
+    public void AnObjectWithNothingToDrawExportsAsANodeOnly()
+    {
+        var empty = new PMeshObject { Name = "Empty" };
+
+        Clay.ExportModel model = ModelExport.Build(new PMeshDocument { Objects = { empty } }, _ => null, _ => null);
+
+        Assert.Empty(model.Meshes);
+        Assert.Equal(-1, Assert.Single(model.Nodes).Mesh);
+    }
 }

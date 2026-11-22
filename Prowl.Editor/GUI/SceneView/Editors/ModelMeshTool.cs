@@ -585,8 +585,10 @@ public sealed class ModelMeshTool : SceneTool
         int group = Undo.GetCurrentGroup();
         Edit(op.Name, (mesh, s) => op.Run(mesh, s, amount, count), op.Selects);
         Undo.FlushUndoRecordObjects();
+        // An operator that changed nothing pushed no step, and the step on top belongs to something else
         IReadOnlyList<UndoStepInfo> steps = Undo.UndoSteps;
-        _last = steps.Count == 0 ? null : new LastOperator(op, amount, count, group, steps[^1].Id, [.. _edited.Select(m => (m, m.Mesh, m.Mesh.Version))]);
+        _last = steps.Count == 0 || steps[^1].Group != group ? null
+            : new LastOperator(op, amount, count, group, steps[^1].Id, [.. _edited.Select(m => (m, m.Mesh, m.Mesh.Version))]);
     }
 
     // ================================================================

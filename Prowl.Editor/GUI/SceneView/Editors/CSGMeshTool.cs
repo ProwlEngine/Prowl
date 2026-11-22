@@ -1857,13 +1857,21 @@ public sealed class CSGMeshTool : SceneTool
 
     // How to run the last operator again from the shape before it, and the shape it left, so a later change ends it
     private sealed record LastOperator(string Name, float Amount, int Count, int MaxCount, Func<float, int, Action<CSGBrushTarget, ElementSelection>> Make,
-                                       SelectMode Lead, CSGControlMesh Start, SurfaceData[] StartSurfaces, CSGBrush Brush, CSGControlMesh? Left);
+                                       SelectMode Lead, CSGControlMesh Start, SurfaceData[] StartSurfaces, CSGBrush Brush, CSGControlMesh? Left, long Step = -1);
     private LastOperator? _pendingLast, _last;
 
     private void KeepLast()
     {
-        _last = _pendingLast is { } pending && Target.IsValid() ? pending with { Left = Target!.ControlMesh } : null;
+        _last = _pendingLast is { } pending && Target.IsValid() ? pending with { Left = Target!.ControlMesh, Step = TopStep() } : null;
         _pendingLast = null;
+    }
+
+    // The undo step on top once pending records are in, which a later edit of the brush in place replaces
+    private static long TopStep()
+    {
+        Undo.FlushUndoRecordObjects();
+        IReadOnlyList<UndoStepInfo> steps = Undo.UndoSteps;
+        return steps.Count > 0 ? steps[^1].Id : -1;
     }
 
     /// <summary>The last operator run, while its brush still has the shape it left. A NaN amount means it has none.</summary>
@@ -1871,7 +1879,8 @@ public sealed class CSGMeshTool : SceneTool
         => _last is { } last && LastStillHolds(last) ? (last.Name, last.Amount, last.Count, last.MaxCount) : null;
 
     private bool LastStillHolds(LastOperator last)
-        => _action == Action.None && ReferenceEquals(last.Brush, Target) && last.Brush.IsValid() && ReferenceEquals(last.Brush.ControlMesh, last.Left);
+        => _action == Action.None && ReferenceEquals(last.Brush, Target) && last.Brush.IsValid() && ReferenceEquals(last.Brush.ControlMesh, last.Left)
+           && Undo.UndoSteps is { Count: > 0 } steps && steps[^1].Id == last.Step;
 
     /// <summary>Runs the last operator again from the shape before it with a new amount and count, as one undo step.</summary>
     public void AdjustLast(float amount, int count)
@@ -1894,7 +1903,7 @@ public sealed class CSGMeshTool : SceneTool
         ApplyShape(last.Brush, mesh, surfaces);
         KeepActionResult(points, faces, last.Lead);
         TakeActionResult();
-        _last = last with { Amount = amount, Count = count, Left = last.Brush.ControlMesh };
+        _last = last with { Amount = amount, Count = count, Left = last.Brush.ControlMesh, Step = TopStep() };
     }
 
     // ================================================================

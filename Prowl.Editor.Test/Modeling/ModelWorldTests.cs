@@ -229,6 +229,25 @@ public class ModelWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void MovingTheOriginKeepsTheBonesOnTheMesh()
+    {
+        Guid guid = WriteModel(out _);
+        ModelEditingMode.Open(guid);
+        GameObject body = ModelEditingMode.World!.FindObject("Body")!;
+        ModelObject model = body.GetComponent<ModelObject>()!;
+        model.Bones.Add(new PMeshBone { Name = "Root", Position = new Float3(0.5f, 0f, 0f), BindPose = Float4x4.CreateTranslation(new Float3(-0.5f, 0f, 0f)) });
+        Float3 boneWorld = body.Transform.TransformPoint(model.Bones[0].Position);
+        GeometryData.Vertex vertex = model.Mesh.Vertices[2];
+        Float3 inBone = Float4x4.TransformPoint(vertex.Point, model.Bones[0].BindPose);
+
+        ModelEditingMode.MoveOrigin(model, model.Mesh.Vertices[2].Point, "Origin");
+
+        Assert.True(Float3.Distance(body.Transform.TransformPoint(model.Bones[0].Position), boneWorld) < 1e-4f);
+        Assert.True(Float3.Distance(Float4x4.TransformPoint(vertex.Point, model.Bones[0].BindPose), inBone) < 1e-4f);
+        ModelEditingMode.Exit();
+    }
+
+    [Fact]
     public void ADuplicatedObjectSavesWithAnIdOfItsOwn()
     {
         Guid guid = WriteModel(out PMeshDocument document);

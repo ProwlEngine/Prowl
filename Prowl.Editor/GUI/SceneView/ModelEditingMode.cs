@@ -307,6 +307,13 @@ public static class ModelEditingMode
         Undo.RecordObject(go, undoName);
         foreach (Vector.Geometry.GeometryData.Vertex vertex in model.Mesh.Vertices) vertex.Point -= local;
         model.Mesh.MarkChanged();
+        // Bones stay where they are on the mesh: roots shift with it, and bind poses take the mesh's new space
+        Float4x4 back = Float4x4.CreateTranslation(local);
+        foreach (PMeshBone bone in model.Bones)
+        {
+            if (bone.Parent < 0) bone.Position -= local;
+            bone.BindPose *= back;
+        }
         go.Transform.Position = go.Transform.TransformPoint(local);
         model.RefreshPreview();
     }
