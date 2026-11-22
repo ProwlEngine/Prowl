@@ -42,7 +42,7 @@ public static class CSGMeshEdit
         catch (InvalidOperationException) { return false; }
 
         CSGControlMesh? inset = CSGControlMesh.FromMesh(shape);
-        if (inset == null || !inset.IsValid()) return false;
+        if (inset == null || (!inset.IsValid() && inset.Repaired(out _) == null)) return false;
 
         var kept = new List<SurfaceData>(inset.Polygons.Count);
         foreach (GeometryData.Face face in shape.Faces)

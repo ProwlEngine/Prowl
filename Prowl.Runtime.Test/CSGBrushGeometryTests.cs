@@ -201,4 +201,91 @@ public class CSGBrushGeometryTests
             Assert.Equal(uvs[i].Y, uv.Y, 3);
         }
     }
+
+    // ================================================================
+    //  Repair
+    // ================================================================
+
+    private static CSGControlMesh TwoUnitBox() => CSGControlMesh.FromPlanes(Box(new Float3(2f)))!;
+
+    private static CSGControlMesh Rebuilt(CSGControlMesh mesh, Func<int, bool> keep, IEnumerable<Float3>? extraPoints = null, IEnumerable<int[]>? extraPolygons = null)
+    {
+        var points = mesh.Points.ToList();
+        if (extraPoints != null) points.AddRange(extraPoints);
+        var polygons = Enumerable.Range(0, mesh.Polygons.Count).Where(keep).Select(p => mesh.Polygons[p]).ToList();
+        if (extraPolygons != null) polygons.AddRange(extraPolygons);
+        return CSGControlMesh.FromPolygons(points, polygons);
+    }
+
+    private static int Top(CSGControlMesh mesh) => Enumerable.Range(0, mesh.Polygons.Count).First(p => mesh.PolygonNormal(p).Y > 0.99f);
+
+    private static int PointAt(CSGControlMesh mesh, Float3 at) => Enumerable.Range(0, mesh.Points.Count).First(i => Float3.Distance(mesh.Points[i], at) < 1e-4f);
+
+    /// <summary>A brush missing a face is closed by filling the hole, its other faces kept as they were.</summary>
+    [Fact]
+    public void AnOpenBrushIsRepairedByFillingTheHole()
+    {
+        CSGControlMesh box = TwoUnitBox();
+        int top = Top(box);
+        CSGControlMesh open = Rebuilt(box, p => p != top);
+        Assert.False(open.IsValid());
+
+        CSGControlMesh? repaired = open.Repaired(out int[] source);
+
+        Assert.NotNull(repaired);
+        Assert.True(repaired!.IsValid());
+        Assert.Equal(8f, repaired.Volume(), 4);
+        Assert.Equal(6, repaired.Polygons.Count);
+        Assert.Equal(repaired.Polygons.Count, source.Length);
+        Assert.All(source, s => Assert.InRange(s, 0, open.Polygons.Count - 1));
+    }
+
+    /// <summary>A flat face sticking out of a brush encloses nothing, so it is clipped off.</summary>
+    [Fact]
+    public void AFinIsClippedOff()
+    {
+        CSGControlMesh box = TwoUnitBox();
+        int a = PointAt(box, new Float3(-1f, 1f, 1f)), b = PointAt(box, new Float3(1f, 1f, 1f));
+        int c = box.Points.Count, d = c + 1;
+        CSGControlMesh fin = Rebuilt(box, _ => true, [new Float3(1f, 2f, 1f), new Float3(-1f, 2f, 1f)], [[a, b, c, d]]);
+        Assert.False(fin.IsValid());
+
+        CSGControlMesh? repaired = fin.Repaired(out int[] source);
+
+        Assert.NotNull(repaired);
+        Assert.True(repaired!.IsValid());
+        Assert.Equal(8f, repaired.Volume(), 4);
+        Assert.Equal(6, repaired.Polygons.Count);
+        Assert.DoesNotContain(box.Polygons.Count, source);
+        Assert.Equal(8, repaired.Points.Count);
+    }
+
+    /// <summary>A loose sheet inside a brush has solid on both sides, so it is clipped off too.</summary>
+    [Fact]
+    public void ASheetInsideABrushIsClippedOff()
+    {
+        CSGControlMesh box = TwoUnitBox();
+        int n = box.Points.Count;
+        CSGControlMesh sheet = Rebuilt(box, _ => true,
+            [new Float3(-0.5f, 0f, -0.5f), new Float3(0.5f, 0f, -0.5f), new Float3(0.5f, 0f, 0.5f), new Float3(-0.5f, 0f, 0.5f)],
+            [[n, n + 3, n + 2, n + 1]]);
+        Assert.False(sheet.IsValid());
+
+        CSGControlMesh? repaired = sheet.Repaired(out _);
+
+        Assert.NotNull(repaired);
+        Assert.Equal(6, repaired!.Polygons.Count);
+        Assert.Equal(8f, repaired.Volume(), 4);
+    }
+
+    /// <summary>A lone quad encloses nothing however it is repaired.</summary>
+    [Fact]
+    public void ALoneQuadCannotBeRepaired()
+    {
+        CSGControlMesh quad = CSGControlMesh.FromPolygons(
+            [new Float3(0f, 0f, 0f), new Float3(1f, 0f, 0f), new Float3(1f, 0f, 1f), new Float3(0f, 0f, 1f)],
+            [[0, 3, 2, 1]]);
+
+        Assert.Null(quad.Repaired(out _));
+    }
 }

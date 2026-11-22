@@ -711,4 +711,42 @@ public class CSGModelTests : RuntimeTestBase
             Assert.Equal(before[i].Y * 2f, after[i].Y, 3);
         }
     }
+
+    /// <summary>A brush missing a face builds from its repaired points, keeping the points it was given to edit.</summary>
+    [Fact]
+    public void AnOpenBrushStillBuildsTheModel()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
+        CSGControlMesh box = brush.ControlMesh;
+        int top = Enumerable.Range(0, box.Polygons.Count).First(p => box.PolygonNormal(p).Y > 0.99f);
+        CSGControlMesh open = CSGControlMesh.FromPolygons(box.Points.ToList(),
+            Enumerable.Range(0, box.Polygons.Count).Where(p => p != top).Select(p => box.Polygons[p]).ToList());
+        brush.SetShape(open, new SurfaceData[open.Polygons.Count]);
+
+        Assert.True(brush.IsShapeValid);
+        Assert.True(brush.IsRepaired);
+        Assert.Same(open, brush.ControlMesh);
+        Assert.Equal(6, brush.Shape!.Faces.Count);
+        Assert.All(brush.FaceToPlane, plane => Assert.InRange(plane, 0, open.Polygons.Count - 1));
+
+        Update(_scene);
+        Assert.Equal(8f, VolumeOf(_model.GeneratedMesh!), 2);
+    }
+
+    /// <summary>A brush that encloses nothing even when repaired is left out of the model.</summary>
+    [Fact]
+    public void ABrushThatCannotBeRepairedIsLeftOut()
+    {
+        CreateModel();
+        AddBrush(Float3.One * 2f, Float3.Zero);
+        CSGBrush quad = AddBrush(Float3.One * 2f, new Float3(5f, 0f, 0f));
+        quad.SetShape(CSGControlMesh.FromPolygons([new Float3(0f, 0f, 0f), new Float3(1f, 0f, 0f), new Float3(1f, 0f, 1f), new Float3(0f, 0f, 1f)], [[0, 3, 2, 1]]), new SurfaceData[1]);
+
+        Assert.False(quad.IsShapeValid);
+        Assert.Null(quad.Shape);
+
+        Update(_scene);
+        Assert.Equal(8f, VolumeOf(_model.GeneratedMesh!), 2);
+    }
 }

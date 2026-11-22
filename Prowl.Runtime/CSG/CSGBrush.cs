@@ -62,6 +62,9 @@ public sealed class CSGBrush : Component
     [SerializeIgnore] private GeometryData? _shape;
     [SerializeIgnore] private Plane[]? _planes;
     [SerializeIgnore] private int[] _faceToPlane = [];
+
+    // The points the CSG builds from: the control mesh itself when it encloses a solid, else a repaired copy of it
+    [SerializeIgnore] private CSGControlMesh? _buildMesh;
     [SerializeIgnore] private bool _valid;
 
     public CSGOperation Operation
@@ -94,13 +97,19 @@ public sealed class CSGBrush : Component
     /// <summary>Bumped by any edit that changes the CSG result.</summary>
     public int Version { get; private set; } = 1;
 
-    /// <summary>Whether the faces enclose a solid: closed, facing out, with room inside.</summary>
+    /// <summary>Whether the faces enclose a solid, as they are or once repaired. A brush that does not is left out of the CSG.</summary>
     public bool IsShapeValid
     {
         get { EnsureShape(); return _valid; }
     }
 
-    /// <summary>The solid as a mesh in brush local space, one face per face of the brush, or null when it encloses nothing.</summary>
+    /// <summary>Whether the faces had stray faces clipped or holes filled to enclose a solid. The control mesh keeps them as made.</summary>
+    public bool IsRepaired
+    {
+        get { EnsureShape(); return _valid && !ReferenceEquals(_buildMesh, controlMesh); }
+    }
+
+    /// <summary>The solid as a mesh in brush local space, built from the repaired faces when they needed it, or null when it encloses nothing.</summary>
     public GeometryData? Shape
     {
         get { EnsureShape(); return _shape; }
@@ -182,9 +191,15 @@ public sealed class CSGBrush : Component
     {
         if (_shape != null) return;
 
-        _valid = controlMesh.IsValid();
-        _shape = _valid ? controlMesh.ToMesh(out _faceToPlane) : null;
-        if (!_valid) _faceToPlane = [];
+        int[]? sourceOfPolygon = null;
+        _buildMesh = controlMesh.IsValid() ? controlMesh : controlMesh.Repaired(out sourceOfPolygon);
+        _valid = _buildMesh != null;
+        _shape = _buildMesh?.ToMesh(out _faceToPlane);
+        if (_shape == null) _faceToPlane = [];
+
+        // The repaired polygons name the surfaces of the polygons they came from
+        if (sourceOfPolygon != null)
+            for (int i = 0; i < _faceToPlane.Length; i++) _faceToPlane[i] = sourceOfPolygon[_faceToPlane[i]];
     }
 
     private void ResizeSurfaces()

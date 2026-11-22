@@ -296,6 +296,179 @@ public sealed class CSGControlMesh
     /// <summary>Whether the polygons enclose a solid: closed, facing out, with room inside.</summary>
     public bool IsValid() => IsClosed() && Volume() > 1e-9f;
 
+    /// <summary>
+    /// A copy that encloses a solid where this one has stray faces or gaps. Faces that bound nothing, such as a fin
+    /// sticking out or a sheet inside, are clipped off: the other faces wrap about half way round a face on the surface,
+    /// and not at all or all the way round a stray one. Every loop of edges left with a face on one side only is then
+    /// closed with a new face. Null when nothing solid is left.
+    /// </summary>
+    /// <param name="sourceOfPolygon">For each polygon of the copy, the polygon of this mesh it came from. A filled hole names the kept polygon nearest it by normal.</param>
+    public CSGControlMesh? Repaired(out int[] sourceOfPolygon)
+    {
+        sourceOfPolygon = [];
+
+        var triangles = new List<(Float3 A, Float3 B, Float3 C)>[polygons.Count];
+        for (int p = 0; p < polygons.Count; p++) triangles[p] = Triangles(p);
+
+        var kept = new List<int>();
+        for (int p = 0; p < polygons.Count; p++)
+        {
+            if (triangles[p].Count == 0) continue;
+            (Float3 a, Float3 b, Float3 c) = triangles[p][0];
+            Float3 centre = (a + b + c) / 3f;
+
+            float winding = 0f;
+            for (int q = 0; q < polygons.Count; q++)
+            {
+                if (q == p) continue;
+                foreach ((Float3 x, Float3 y, Float3 z) in triangles[q])
+                    winding += SolidAngle(x - centre, y - centre, z - centre);
+            }
+            winding /= 4f * MathF.PI;
+
+            if (winding > 0.25f && winding < 0.75f) kept.Add(p);
+        }
+        if (kept.Count == 0) return null;
+
+        var rings = new List<int[]>(kept.Count);
+        foreach (int p in kept) rings.Add(polygons[p]);
+        var sources = new List<int>(kept);
+
+        foreach (int[] hole in Holes(rings))
+        {
+            rings.Add(hole);
+            sources.Add(NearestByNormal(kept, RingNormal(hole)));
+        }
+
+        // Points no polygon uses any more are dropped, the rest renumbered in order
+        var renumber = new Dictionary<int, int>();
+        var used = new List<Float3>();
+        var compact = new List<int[]>(rings.Count);
+        foreach (int[] ring in rings)
+        {
+            var mapped = new int[ring.Length];
+            for (int i = 0; i < ring.Length; i++)
+            {
+                if (!renumber.TryGetValue(ring[i], out int index))
+                {
+                    index = used.Count;
+                    renumber[ring[i]] = index;
+                    used.Add(points[ring[i]]);
+                }
+                mapped[i] = index;
+            }
+            compact.Add(mapped);
+        }
+
+        var repaired = new CSGControlMesh(used, compact);
+        if (!repaired.IsValid()) return null;
+
+        sourceOfPolygon = [.. sources];
+        return repaired;
+    }
+
+    /// <summary>One polygon cut into flat triangles in its own plane, any shape of polygon.</summary>
+    private List<(Float3 A, Float3 B, Float3 C)> Triangles(int polygon)
+    {
+        var result = new List<(Float3, Float3, Float3)>();
+        int[] ring = polygons[polygon];
+        if (ring.Length < 3 || !FitPolygon(polygon, out Plane plane)) return result;
+
+        Float3 helper = MathF.Abs(plane.Normal.Y) < 0.9f ? Float3.UnitY : Float3.UnitX;
+        Float3 u = Float3.Normalize(Float3.Cross(helper, plane.Normal)), v = Float3.Cross(plane.Normal, u);
+        var flat = new Float2[ring.Length];
+        for (int i = 0; i < ring.Length; i++) flat[i] = new Float2(Float3.Dot(points[ring[i]], u), Float3.Dot(points[ring[i]], v));
+
+        List<int> corners = Polygon2D.Triangulate(flat);
+        for (int t = 0; t + 2 < corners.Count; t += 3)
+            result.Add((points[ring[corners[t]]], points[ring[corners[t + 1]]], points[ring[corners[t + 2]]]));
+        return result;
+    }
+
+    /// <summary>The signed solid angle a triangle fills seen from the origin.</summary>
+    private static float SolidAngle(Float3 a, Float3 b, Float3 c)
+    {
+        float la = Float3.Length(a), lb = Float3.Length(b), lc = Float3.Length(c);
+        float numerator = Float3.Dot(a, Float3.Cross(b, c));
+        float denominator = la * lb * lc + Float3.Dot(a, b) * lc + Float3.Dot(a, c) * lb + Float3.Dot(b, c) * la;
+        return 2f * MathF.Atan2(numerator, denominator);
+    }
+
+    /// <summary>The closed loops of edges that have a polygon on one side only, each wound to close the gap facing out.</summary>
+    private static List<int[]> Holes(List<int[]> rings)
+    {
+        var directed = new HashSet<(int, int)>();
+        foreach (int[] ring in rings)
+            for (int i = 0; i < ring.Length; i++)
+                directed.Add((ring[i], ring[(i + 1) % ring.Length]));
+
+        // A gap's edge runs a to b in the polygon beside it, so the face closing it runs b to a
+        var onward = new Dictionary<int, List<int>>();
+        foreach ((int a, int b) in directed)
+        {
+            if (directed.Contains((b, a))) continue;
+            if (!onward.TryGetValue(b, out List<int>? list)) onward[b] = list = new List<int>();
+            list.Add(a);
+        }
+
+        var walked = new HashSet<(int, int)>();
+        var holes = new List<int[]>();
+        foreach ((int start, List<int> firsts) in onward)
+        {
+            foreach (int first in firsts)
+            {
+                if (walked.Contains((start, first))) continue;
+
+                var loop = new List<int> { start };
+                int at = start, next = first;
+                bool closed = false;
+                while (true)
+                {
+                    walked.Add((at, next));
+                    if (next == start) { closed = true; break; }
+                    if (loop.Contains(next)) break;
+                    loop.Add(next);
+                    at = next;
+
+                    if (!onward.TryGetValue(at, out List<int>? ways)) break;
+                    int step = ways.FindIndex(w => !walked.Contains((at, w)));
+                    if (step < 0) break;
+                    next = ways[step];
+                }
+
+                if (closed && loop.Count >= 3) holes.Add([.. loop]);
+            }
+        }
+        return holes;
+    }
+
+    private Float3 RingNormal(int[] ring)
+    {
+        Float3 n = Float3.Zero;
+        for (int i = 0; i < ring.Length; i++)
+        {
+            Float3 a = points[ring[i]], b = points[ring[(i + 1) % ring.Length]];
+            n.X += (a.Y - b.Y) * (a.Z + b.Z);
+            n.Y += (a.Z - b.Z) * (a.X + b.X);
+            n.Z += (a.X - b.X) * (a.Y + b.Y);
+        }
+        return Float3.NormalizeSafe(n, Float3.UnitY);
+    }
+
+    private int NearestByNormal(List<int> candidates, Float3 normal)
+    {
+        int best = candidates[0];
+        float bestDot = float.MinValue;
+        foreach (int p in candidates)
+        {
+            float dot = Float3.Dot(PolygonNormal(p), normal);
+            if (dot <= bestDot) continue;
+            bestDot = dot;
+            best = p;
+        }
+        return best;
+    }
+
     /// <summary>Turns every polygon round, as a mirroring transform needs to keep them facing out.</summary>
     public void ReverseWinding()
     {
