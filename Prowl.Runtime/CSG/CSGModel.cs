@@ -129,6 +129,43 @@ public sealed class CSGModel : Component
         return false;
     }
 
+    /// <summary>Every face the model generated, in world space, with the brush plane it came from and the way it really faces.</summary>
+    public List<CSGModelFace> Faces()
+    {
+        var result = new List<CSGModelFace>();
+        if (_geometry == null) return result;
+
+        Float4x4 toWorld = Transform.LocalToWorldMatrix;
+        foreach (GeometryData.Face face in _geometry.Faces)
+        {
+            if (!_byBrushId.TryGetValue(CSGScene.GetBrushId(face), out BrushLink? link) || link.Brush.IsNotValid()) continue;
+
+            int source = CSGScene.GetSourceFaceIndex(face);
+            if (source < 0 || source >= link.FaceToPlane.Length || link.FaceToPlane[source] < 0) continue;
+
+            var ring = face.NeighborVertices();
+            if (ring.Count < 3) continue;
+
+            var corners = new Float3[ring.Count];
+            for (int i = 0; i < ring.Count; i++) corners[i] = Float4x4.TransformPoint(ring[i].Point, toWorld);
+
+            result.Add(new CSGModelFace(link.Brush, link.FaceToPlane[source], NormalOf(corners), corners));
+        }
+        return result;
+    }
+
+    /// <summary>The facing of a polygon from its winding, which survives any scale the model carries.</summary>
+    private static Float3 NormalOf(Float3[] corners)
+    {
+        Float3 sum = Float3.Zero;
+        for (int i = 0; i < corners.Length; i++)
+        {
+            Float3 a = corners[i], b = corners[(i + 1) % corners.Length];
+            sum += new Float3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
+        }
+        return Float3.NormalizeSafe(sum, Float3.UnitY);
+    }
+
     public override void OnValidate() => SetDirty();
 
     public override void OnEnable() => SetDirty();
@@ -681,3 +718,6 @@ public sealed class CSGModel : Component
         public bool Enabled = true;
     }
 }
+
+/// <summary>A face of a model's generated surface: the brush and plane it came from, the way it faces and its corners, in world space.</summary>
+public readonly record struct CSGModelFace(CSGBrush Brush, int PlaneIndex, Float3 Normal, Float3[] Corners);

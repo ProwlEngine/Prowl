@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Runtime.CSG;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -538,5 +540,28 @@ public class CSGModelTests : RuntimeTestBase
 
         Assert.True(carved < 7.5f);
         Assert.Equal(8f, VolumeOf(_model.GeneratedMesh!), 2);
+    }
+
+    /// <summary>A subtractive brush's faces show facing into the hole it cuts, the opposite way to its planes.</summary>
+    [Fact]
+    public void FacesReportTheWayGeneratedFacesShow()
+    {
+        CreateModel();
+        AddBrush(new Float3(4f, 2f, 4f), Float3.Zero);
+        CSGBrush pit = AddBrush(new Float3(2f, 2f, 2f), new Float3(0f, 1.5f, 0f), Operation.Subtractive);
+
+        Update(_scene);
+
+        // The pit's bottom plane faces down in the brush, but in the model it is a floor facing up
+        int bottom = System.Array.FindIndex(pit.Planes, p => p.Normal.Y < -0.9f);
+        List<CSGModelFace> pitFloor = _model.Faces().FindAll(f => ReferenceEquals(f.Brush, pit) && f.PlaneIndex == bottom);
+
+        Assert.NotEmpty(pitFloor);
+        Assert.All(pitFloor, f => Assert.True(f.Normal.Y > 0.9f, $"pit floor faces {f.Normal}"));
+        Assert.All(pitFloor, f => Assert.Equal(0.5f, f.Corners[0].Y, 3));
+
+        // Its top plane is above the solid, so it makes no face at all
+        int top = System.Array.FindIndex(pit.Planes, p => p.Normal.Y > 0.9f);
+        Assert.DoesNotContain(_model.Faces(), f => ReferenceEquals(f.Brush, pit) && f.PlaneIndex == top);
     }
 }

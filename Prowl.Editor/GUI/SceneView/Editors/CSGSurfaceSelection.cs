@@ -161,54 +161,67 @@ public static class CSGSurfaceSelection
         {
             foreach (ModelSurface other in all)
             {
-                if (found.Exists(f => f.Surface.Equals(other.Surface))) continue;
+                if (found.Exists(f => ReferenceEquals(f.Corners, other.Corners))) continue;
                 if (Float3.Dot(other.Normal, found[i].Normal) < 0.7f || !SharesEdge(found[i], other)) continue;
                 found.Add(other);
             }
         }
 
         _selected.Clear();
-        foreach (ModelSurface surface in found.Skip(1)) _selected.Add(surface.Surface);
+        foreach (ModelSurface surface in found)
+            if (!surface.Surface.Equals(active.Surface) && !_selected.Contains(surface.Surface)) _selected.Add(surface.Surface);
         _selected.Add(active.Surface);
     }
 
-    private readonly record struct ModelSurface(CSGSurfaceRef Surface, Float3 Normal, List<Float3> Corners);
+    private readonly record struct ModelSurface(CSGSurfaceRef Surface, Float3 Normal, IReadOnlyList<Float3> Corners);
 
+    /// <summary>The faces the model actually shows, so a face is judged by where it ends up rather than by its brush.</summary>
     private static List<ModelSurface> ModelSurfaces()
     {
         var result = new List<ModelSurface>();
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return result;
 
-        foreach (CSGBrush brush in CSGSelection.BrushesIn(model!))
+        foreach (CSGModelFace face in model!.Faces())
         {
-            if (!brush.EnabledInHierarchy || CSGVisibility.IsHidden(brush)) continue;
-            for (int plane = 0; plane < brush.Planes.Length; plane++)
-            {
-                var surface = new CSGSurfaceRef(brush, plane);
-                List<Float3> corners = WorldCorners(surface);
-                if (corners.Count < 3) continue;
-                result.Add(new ModelSurface(surface, CSGSelection.WorldNormal(brush, plane), corners));
-            }
+            if (!face.Brush.EnabledInHierarchy || CSGVisibility.IsHidden(face.Brush)) continue;
+            result.Add(new ModelSurface(new CSGSurfaceRef(face.Brush, face.PlaneIndex), face.Normal, face.Corners));
         }
         return result;
     }
 
+    /// <summary>The active surface as the model shows it, the largest of its pieces when it shows in several.</summary>
     private static bool TryActiveFace(out ModelSurface active)
     {
         active = default;
         if (Active is not CSGSurfaceRef surface || !surface.IsValid) return false;
-        List<Float3> corners = WorldCorners(surface);
-        if (corners.Count < 3) return false;
-        active = new ModelSurface(surface, CSGSelection.WorldNormal(surface.Brush, surface.PlaneIndex), corners);
-        return true;
+
+        bool found = false;
+        float best = -1f;
+        foreach (ModelSurface piece in ModelSurfaces())
+        {
+            if (!piece.Surface.Equals(surface)) continue;
+            float area = Area(piece.Corners);
+            if (area <= best) continue;
+            best = area;
+            active = piece;
+            found = true;
+        }
+        return found;
+    }
+
+    private static float Area(IReadOnlyList<Float3> corners)
+    {
+        Float3 sum = Float3.Zero;
+        for (int i = 1; i + 1 < corners.Count; i++) sum += Float3.Cross(corners[i] - corners[0], corners[i + 1] - corners[0]);
+        return Float3.Length(sum) * 0.5f;
     }
 
     private static void SelectWhere(Func<ModelSurface, bool> keep, CSGSurfaceRef? last = null)
     {
         _selected.Clear();
         foreach (ModelSurface surface in ModelSurfaces())
-            if (keep(surface) && !surface.Surface.Equals(last)) _selected.Add(surface.Surface);
+            if (keep(surface) && !surface.Surface.Equals(last) && !_selected.Contains(surface.Surface)) _selected.Add(surface.Surface);
         if (last is CSGSurfaceRef active) _selected.Add(active);
     }
 
