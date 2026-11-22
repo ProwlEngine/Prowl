@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -59,15 +60,24 @@ public static class CSGSelection
         return model;
     }
 
-    /// <summary>A new GameObject in the edited scene, under <paramref name="parent"/> when given. The caller registers the undo.</summary>
+    /// <summary>A new GameObject of unit world scale in the edited scene, under <paramref name="parent"/> when given. The caller registers the undo.</summary>
     public static GameObject CreateObject(string name, GameObject? parent)
     {
         Scene scene = EditorSceneManager.EditedWorld;
         var go = new GameObject(name);
         scene.Add(go, HierarchyPanel.SectionForNew(scene, parent));
-        if (parent.IsValid()) go.SetParent(parent, worldPositionStays: false);
+        if (parent.IsValid())
+        {
+            go.SetParent(parent, worldPositionStays: false);
+
+            // Unit size in the world, so what is drawn under a scaled model or group is not scaled again
+            Float3 parentScale = parent!.Transform.LossyScale;
+            go.Transform.LocalScale = new Float3(Inverse(parentScale.X), Inverse(parentScale.Y), Inverse(parentScale.Z));
+        }
         return go;
     }
+
+    private static float Inverse(float scale) => MathF.Abs(scale) > 1e-6f ? 1f / scale : 1f;
 
     /// <summary>Records objects and their CSG components before an edit, so the edit undoes as one step.</summary>
     public static void Record(string name, IEnumerable<GameObject> objects)
