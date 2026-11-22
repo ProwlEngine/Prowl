@@ -90,6 +90,12 @@ public sealed class CSGGenerateTool : SceneTool
     private bool _onSurface;
     private bool _hoverOnSurface;
 
+    /// <summary>The first click is the middle of the base rather than a corner.</summary>
+    public bool FromCentre { get; set; }
+
+    /// <summary>The base keeps equal width and depth.</summary>
+    public bool SquareBase { get; set; }
+
     /// <summary>A shape is being drawn, so the shape keys and tool changes wait.</summary>
     public bool Busy => _stage != Stage.Idle;
 
@@ -217,6 +223,7 @@ public sealed class CSGGenerateTool : SceneTool
             _cornerB = new Float3(CSGSnap.Value(ctx.Handles, local.X), local.Y, CSGSnap.Value(ctx.Handles, local.Z));
 
         HandleTyping(ctx.Handles);
+        ApplyPlacement();
         DrawWorkGrid(ctx, ToWorld(_cornerB));
         DrawFootprint(ctx, Tint());
         DrawTyped(ctx);
@@ -248,6 +255,7 @@ public sealed class CSGGenerateTool : SceneTool
         _height = CSGSnap.Value(ctx.Handles, HeightUnderCursor(ctx));
 
         HandleTyping(ctx.Handles);
+        if (Generator != CSGGeneratorKind.Polygon) ApplyPlacement();
         UpdateGhost(OperationFor());
         DrawPreview(ctx, Tint());
         DrawTyped(ctx);
@@ -537,9 +545,30 @@ public sealed class CSGGenerateTool : SceneTool
             }
         }
 
-        if (Typed(0, out float width)) _cornerB = new Float3(_cornerA.X + Side(_cornerB.X - _cornerA.X) * width, _cornerB.Y, _cornerB.Z);
-        if (Typed(1, out float depth)) _cornerB = new Float3(_cornerB.X, _cornerB.Y, _cornerA.Z + Side(_cornerB.Z - _cornerA.Z) * depth);
+        // Drawn shapes measure from the first click, which is the middle of the base when drawing from the centre
+        bool drawn = Generator != CSGGeneratorKind.Polygon;
+        Float3 from = drawn ? Float3.Zero : _cornerA;
+        float reach = drawn && FromCentre ? 0.5f : 1f;
+        if (Typed(0, out float width)) _cornerB = new Float3(from.X + Side(_cornerB.X - from.X) * width * reach, _cornerB.Y, _cornerB.Z);
+        if (Typed(1, out float depth)) _cornerB = new Float3(_cornerB.X, _cornerB.Y, from.Z + Side(_cornerB.Z - from.Z) * depth * reach);
         if (_stage == Stage.Extrude && Typed(2, out float height)) _height = Side(_height) * height;
+    }
+
+    /// <summary>
+    /// Squares the base and mirrors it about the first click when asked to. The first click sits at the plane's origin,
+    /// so the far corner alone says where the base reaches.
+    /// </summary>
+    private void ApplyPlacement()
+    {
+        Float3 far = _cornerB;
+        if (SquareBase)
+        {
+            float side = MathF.Max(MathF.Abs(far.X), MathF.Abs(far.Z));
+            far = new Float3(Side(far.X) * side, far.Y, Side(far.Z) * side);
+        }
+
+        _cornerB = far;
+        _cornerA = FromCentre ? new Float3(-far.X, 0f, -far.Z) : Float3.Zero;
     }
 
     private bool Typed(int field, out float value)

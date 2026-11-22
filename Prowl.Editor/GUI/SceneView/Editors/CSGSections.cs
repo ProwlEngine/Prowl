@@ -114,6 +114,10 @@ internal static class CSGSections
                 new Tile(EditorIcons.WandMagicSparkles, Loc.Get("csg.auto"), Loc.Get("csg.auto_tip"), () => tool.AutoOperation = true, tool.AutoOperation),
                 .. OperationTiles(tool.AutoOperation ? -1 : (int)tool.Operation, op => tool.Operation = op),
             ]);
+            if (tool.Generator != CSGGeneratorKind.Polygon)
+                Chips(paper, font, "csg_gen_place",
+                    (Loc.Get("csg.from_centre"), tool.FromCentre, Loc.Get("csg.from_centre_tip"), () => tool.FromCentre = !tool.FromCentre),
+                    (Loc.Get("csg.square_base"), tool.SquareBase, Loc.Get("csg.square_base_tip"), () => tool.SquareBase = !tool.SquareBase));
         }));
 
         if (HasSettings(tool.Generator))
