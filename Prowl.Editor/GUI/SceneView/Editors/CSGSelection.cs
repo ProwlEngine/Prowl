@@ -59,18 +59,6 @@ public static class CSGSelection
         return Float3.NormalizeSafe(new Float3(Float3.Dot(toLocal.c0.XYZ, n), Float3.Dot(toLocal.c1.XYZ, n), Float3.Dot(toLocal.c2.XYZ, n)), Float3.UnitY);
     }
 
-    /// <summary>The generated shape a brush belongs to, on its own object or the group holding it, or null.</summary>
-    public static CSGShape? ShapeOf(CSGBrush brush)
-    {
-        for (GameObject? go = brush.GameObject; go.IsValid(); go = go!.Parent)
-        {
-            CSGShape shape = go!.GetComponent<CSGShape>();
-            if (shape.IsValid()) return shape;
-            if (go.GetComponent<CSGModel>().IsValid()) break;
-        }
-        return null;
-    }
-
     /// <summary>Creates an empty CSG model at the scene root and selects it.</summary>
     public static CSGModel CreateModel()
     {
@@ -445,60 +433,6 @@ public static class CSGSelection
             data.SmoothingGroup = group;
             brush.SetSurface(i, data);
         }
-    }
-
-    /// <summary>
-    /// Builds a generated shape again from its <see cref="CSGShape"/>, in the frame of the object that holds it. A one
-    /// brush shape keeps its brush, a group gets new brushes in place of the old.
-    /// </summary>
-    public static void Regenerate(CSGShape shape, string name)
-    {
-        List<CSGShapePart> parts = shape.Kind == CSGGeneratorKind.Polygon
-            ? CSGShapeBuilder.PolygonPrism(shape.Outline, shape.Height) is Plane[] prism ? [new CSGShapePart(prism, Float3.Zero)] : []
-            : CSGShapeBuilder.Build(shape.Kind, shape.Size, shape.Settings);
-        if (parts.Count == 0) return;
-
-        Transform frame = shape.Transform;
-        Float4x4 Drawn(Float3 offset) => Float4x4.CreateTRS(frame.Position + frame.Rotation * offset, frame.Rotation, Float3.One);
-
-        CSGBrush own = shape.GetComponent<CSGBrush>();
-        if (own.IsValid())
-        {
-            Undo.RecordObject(own, name);
-            own.Planes = CSGBrushGeometry.Transform(parts[0].Planes, own.Transform.WorldToLocalMatrix * Drawn(parts[0].Offset));
-            ApplySmoothing(own, parts[0].SmoothPlanes);
-        }
-        else
-        {
-            // The brushes already there are reshaped in order, so they keep their identity, surfaces and selection.
-            // Only a change in how many parts the shape needs adds or removes any.
-            List<CSGBrush> existing = shape.GameObject.Children.Select(c => c.GetComponent<CSGBrush>()).Where(b => b.IsValid()).ToList();
-            for (int i = parts.Count; i < existing.Count; i++) Undo.DestroyObjectImmediate(existing[i].GameObject);
-
-            for (int i = 0; i < parts.Count; i++)
-            {
-                CSGBrush brush;
-                if (i < existing.Count)
-                {
-                    brush = existing[i];
-                    Undo.RecordObject(brush.GameObject, name);
-                    Undo.RecordObject(brush, name);
-                }
-                else
-                {
-                    GameObject created = CreateObject($"Step {i + 1}", shape.GameObject);
-                    brush = created.AddComponent<CSGBrush>();
-                    Undo.RegisterCreatedObjectUndo(created, name);
-                }
-
-                brush.Transform.LocalPosition = parts[i].Offset;
-                brush.Transform.LocalRotation = Quaternion.Identity;
-                brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, brush.Transform.WorldToLocalMatrix * Drawn(parts[i].Offset));
-                brush.Operation = parts[i].Operation;
-                ApplySmoothing(brush, parts[i].SmoothPlanes);
-            }
-        }
-        MarkDirty();
     }
 
     private static Float3? _lastClone;

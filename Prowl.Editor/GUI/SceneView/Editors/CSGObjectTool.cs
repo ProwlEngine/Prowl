@@ -272,7 +272,7 @@ public sealed class CSGObjectTool : SceneTool
 
 /// <summary>
 /// Moves the selected brush's pivot without moving its shape. The handle drags on the plane facing the camera and snaps
-/// to the brush's corners within a few pixels, else to the grid. Generated shapes keep their pivot at their centre.
+/// to the brush's corners within a few pixels, else to the grid.
 /// </summary>
 [GlobalSceneTool(Group = "CSG")]
 public sealed class CSGPivotTool : SceneTool
@@ -294,7 +294,7 @@ public sealed class CSGPivotTool : SceneTool
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
-        if (!CSGEditMode.Is(CSGMode.Pivot) || CSGSelection.Brushes() is not [var brush] || CSGSelection.ShapeOf(brush).IsValid())
+        if (!CSGEditMode.Is(CSGMode.Pivot) || CSGSelection.Brushes() is not [var brush])
         {
             _dragging = false;
             return;

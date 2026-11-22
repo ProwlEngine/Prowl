@@ -49,8 +49,8 @@ public sealed class CSGMeshTool : SceneTool
     private static readonly Color32 FaceFill = new(255, 200, 90, 60);
     private static readonly Color32 EdgeHandleColor = new(150, 190, 230, 140);
 
-    /// <summary>Editing a plain brush: Edit is the tool and the selection is one brush that is not a generated shape.</summary>
-    public bool Active => CSGEditMode.Is(CSGMode.Edit) && CSGSelection.Brushes() is [var brush] && CSGSelection.ShapeOf(brush).IsNotValid();
+    /// <summary>Editing a brush's points: Edit is the tool and the selection is one brush.</summary>
+    public bool Active => CSGEditMode.Is(CSGMode.Edit) && CSGSelection.Brushes().Count == 1;
 
     /// <summary>Which element types a click will pick.</summary>
     public CSGElementFilter Filter { get; set; } = CSGElementFilter.All;

@@ -375,23 +375,11 @@ public sealed class CSGGenerateTool : SceneTool
     {
         ClearGhost();
         CSGModel? model = CSGSelection.ActiveModel();
-        Float3 size = Float3.Zero;
-        GameObject? created = model.IsValid() ? Place(model!, operation, out size) : null;
+        GameObject? created = model.IsValid() ? Place(model!, operation, out _) : null;
         if (created.IsNotValid())
         {
             Cancel();
             return;
-        }
-
-        // Remembered so the shape's size and settings can be changed later
-        CSGShape shape = created!.AddComponent<CSGShape>();
-        shape.Kind = Generator;
-        shape.Settings = Settings;
-        shape.Size = size;
-        if (Generator == CSGGeneratorKind.Polygon)
-        {
-            shape.Outline = [.. _outline];
-            shape.Height = _height;
         }
 
         Undo.RegisterCreatedObjectUndo(created, "Create CSG Brush");
@@ -432,6 +420,7 @@ public sealed class CSGGenerateTool : SceneTool
             {
                 CSGGroup group = root.AddComponent<CSGGroup>();
                 group.HoldsShape = true;
+                group.HandleAsOne = true;
                 group.Operation = operation;
             }
         }
