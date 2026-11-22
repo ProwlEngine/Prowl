@@ -52,6 +52,8 @@ public enum DefaultMaterial
     Standard,
     Particle,
     Line,
+    /// <summary>Lit with the grid texture, what CSG surfaces show until given a material.</summary>
+    Grid,
 }
 
 /// <summary>

@@ -37,6 +37,13 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         if (material == Prowl.Runtime.Resources.DefaultMaterial.Line)
             return new Material(Shader.GetDefault(DefaultShader.Line)) { Name = "Line" };
 
+        if (material == Prowl.Runtime.Resources.DefaultMaterial.Grid)
+        {
+            var grid = new Material(Shader.GetDefault(DefaultShader.Lit)) { Name = "Grid" };
+            grid.SetTexture("base_color_map", Texture2D.GetDefault(DefaultTexture.Grid));
+            return grid;
+        }
+
         string fileName = material switch
         {
             Prowl.Runtime.Resources.DefaultMaterial.Standard => "Standard.mat",

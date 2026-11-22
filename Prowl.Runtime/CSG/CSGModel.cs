@@ -26,6 +26,8 @@ public enum CSGModelFlags
 public sealed class CSGModel : Component
 {
     public CSGModelFlags Flags;
+
+    /// <summary>What surfaces without a material of their own show. Unset, they show the built in grid.</summary>
     public Material? DefaultMaterial;
 
     /// <summary>Texture tiles per world unit, multiplied into every surface's own scale.</summary>
@@ -591,7 +593,7 @@ public sealed class CSGModel : Component
     {
         var info = new CSGSurfaceInfo
         {
-            Material = DefaultMaterial,
+            Material = DefaultMaterial.IsValid() ? DefaultMaterial : AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(Resources.DefaultMaterial.Grid)),
             Render = !Flags.HasFlag(CSGModelFlags.DoNotRender),
             Collide = !Flags.HasFlag(CSGModelFlags.NoCollider),
         };
