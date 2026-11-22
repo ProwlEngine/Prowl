@@ -185,6 +185,26 @@ public class ModelWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void MovingTheOriginLeavesTheMeshWhereItIsInTheWorld()
+    {
+        Guid guid = WriteModel(out _);
+        ModelEditingMode.Open(guid);
+        GameObject body = ModelEditingMode.World!.FindObject("Body")!;
+        body.Transform.Position = new Float3(3f, 0f, 0f);
+        body.Transform.LocalScale = new Float3(2f, 2f, 2f);
+        ModelObject model = body.GetComponent<ModelObject>()!;
+        List<Float3> before = [.. model.Mesh.Vertices.Select(v => body.Transform.TransformPoint(v.Point))];
+        Float3 corner = model.Mesh.Vertices[0].Point;
+
+        ModelEditingMode.MoveOrigin(model, corner, "Origin");
+
+        Assert.True(Float3.Distance(body.Transform.Position, before[0]) < 1e-4f);
+        for (int i = 0; i < before.Count; i++)
+            Assert.True(Float3.Distance(body.Transform.TransformPoint(model.Mesh.Vertices[i].Point), before[i]) < 1e-4f);
+        ModelEditingMode.Exit();
+    }
+
+    [Fact]
     public void ADuplicatedObjectSavesWithAnIdOfItsOwn()
     {
         Guid guid = WriteModel(out PMeshDocument document);

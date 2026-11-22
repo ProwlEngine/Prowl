@@ -455,6 +455,7 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("csg.flatten"), () => Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s)));
         menu.Item(Loc.Get("csg.bridge"), () => Edit("Bridge Model Faces", Bridge, SelectMode.Face));
         menu.Item(Loc.Get("csg.separate"), SeparateSelected);
+        menu.Item(Loc.Get("model.origin_to_selection"), OriginToSelection);
         for (int axis = 0; axis < 3; axis++)
         {
             int chosen = axis;
@@ -466,6 +467,19 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("csg.xray"), () => XRay = !XRay, on: XRay);
         menu.Item(Loc.Get("csg.snap_brushes"), () => SnapToObjects = !SnapToObjects, on: SnapToObjects);
         menu.Item(Loc.Get("csg.proportional"), () => Proportional = !Proportional, on: Proportional);
+    }
+
+    /// <summary>Moves the origin of each edited object with something selected to the middle of its selected points.</summary>
+    private void OriginToSelection()
+    {
+        foreach (ModelObject model in _edited)
+        {
+            ElementSelection selection = _selection[model];
+            if (selection.Vertices.Count == 0) continue;
+            Float3 centre = Float3.Zero;
+            foreach (GeometryData.Vertex vertex in selection.Vertices) centre += vertex.Point;
+            ModelEditingMode.MoveOrigin(model, centre / selection.Vertices.Count, "Origin To Selection");
+        }
     }
 
     private static void MergeAtCentre(GeometryData mesh, ElementSelection selection)
@@ -753,10 +767,33 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited) model.RefreshPreview();
     }
 
+    /// <summary>The rotation of the first edited object with something selected, which Local orientation follows.</summary>
+    private Quaternion LocalFrame()
+        => _edited.Find(m => _selection[m].Vertices.Count > 0) is { } model ? model.Transform.Rotation : Quaternion.Identity;
+
+    /// <summary>A frame whose Z axis is the selection's average normal in the world, or null when it has none.</summary>
+    private Quaternion? NormalFrame()
+    {
+        Float3 sum = Float3.Zero;
+        foreach (ModelObject model in _edited)
+        {
+            ElementSelection selection = _selection[model];
+            IEnumerable<GeometryData.Face> faces = selection.Faces.Count > 0 ? selection.Faces
+                : selection.Edges.Count > 0 ? selection.Edges.SelectMany(e => e.NeighborFaces()).Distinct()
+                : selection.Vertices.SelectMany(v => v.NeighborFaces()).Distinct();
+            Float3 local = Float3.Zero;
+            foreach (GeometryData.Face face in faces) local += face.Normal();
+            sum += Float4x4.TransformNormal(local, model.Transform.LocalToWorldMatrix);
+        }
+        if (Float3.LengthSquared(sum) < 1e-10f) return null;
+        Float3 normal = Float3.Normalize(sum);
+        return Quaternion.LookRotation(normal, MathF.Abs(normal.Y) < 0.99f ? Float3.UnitY : Float3.UnitX);
+    }
+
     private void StartModal(SceneToolContext ctx, TransformKind kind)
     {
         if (StartSession() is not { } session) return;
-        _modal = new TransformModal(kind, session, Quaternion.Identity, null)
+        _modal = new TransformModal(kind, session, LocalFrame(), NormalFrame())
         {
             Snap = SnapToObjects ? mouse => FindSnap(ctx.Handles, mouse) : null,
         };
@@ -817,7 +854,7 @@ public sealed class ModelMeshTool : SceneTool
             if (ends.Count == 0) return false;
             _session!.Restore();
             _sessionMove = null;
-            _modal = new TransformModal(TransformKind.Slide, _session, Quaternion.Identity, null) { SlideEnds = ends };
+            _modal = new TransformModal(TransformKind.Slide, _session, LocalFrame(), NormalFrame()) { SlideEnds = ends };
             return true;
         }
 
@@ -1203,7 +1240,13 @@ public sealed class ModelMeshTool : SceneTool
         }
 
         Float3 centre = sum / count, before = centre;
-        bool moved = TransformHandles.PositionHandle(handles, MoveHandle, ref centre, Quaternion.Identity, out bool hot);
+        Quaternion axes = SceneTools.Orientation switch
+        {
+            PivotOrientation.Global => Quaternion.Identity,
+            PivotOrientation.Normal => NormalFrame() ?? LocalFrame(),
+            _ => LocalFrame(),
+        };
+        bool moved = TransformHandles.PositionHandle(handles, MoveHandle, ref centre, axes, out bool hot);
         if (hot && !_gizmoDragging)
         {
             _gizmoRaw = _gizmoApplied = Float3.Zero;

@@ -284,20 +284,25 @@ public static class ModelEditingMode
     /// <summary>Moves an object's origin to the middle of its mesh, the mesh staying where it is in the world.</summary>
     public static void OriginToGeometry(IReadOnlyList<GameObject> selected)
     {
-        const string Name = "Origin To Geometry";
         foreach (GameObject go in selected)
         {
             if (go.GetComponent<ModelObject>() is not { } model || model.IsNotValid() || model.Mesh.Vertices.Count == 0) continue;
             Float3 centre = Float3.Zero;
             foreach (Vector.Geometry.GeometryData.Vertex vertex in model.Mesh.Vertices) centre += vertex.Point;
-            centre /= model.Mesh.Vertices.Count;
-
-            Undo.RecordObject(model, Name);
-            Undo.RecordObject(go, Name);
-            foreach (Vector.Geometry.GeometryData.Vertex vertex in model.Mesh.Vertices) vertex.Point -= centre;
-            go.Transform.Position = go.Transform.TransformPoint(centre);
-            model.RefreshPreview();
+            MoveOrigin(model, centre / model.Mesh.Vertices.Count, "Origin To Geometry");
         }
+    }
+
+    /// <summary>Moves a model object's origin to a point of its mesh, leaving the mesh where it is in the world.</summary>
+    internal static void MoveOrigin(ModelObject model, Float3 local, string undoName)
+    {
+        GameObject go = model.GameObject;
+        Undo.RecordObject(model, undoName);
+        Undo.RecordObject(go, undoName);
+        foreach (Vector.Geometry.GeometryData.Vertex vertex in model.Mesh.Vertices) vertex.Point -= local;
+        model.Mesh.MarkChanged();
+        go.Transform.Position = go.Transform.TransformPoint(local);
+        model.RefreshPreview();
     }
 
     /// <summary>Whether an asset is a model document, whose instances open in the model world.</summary>
