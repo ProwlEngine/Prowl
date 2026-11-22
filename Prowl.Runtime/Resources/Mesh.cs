@@ -802,448 +802,265 @@ public class Mesh : Asset, ISerializable
         return mesh;
     }
 
+    /// <summary>A UV sphere with its poles on Y, u running around it and v from the bottom pole to the top.</summary>
+    /// <param name="rings">Bands from pole to pole.</param>
+    /// <param name="slices">Segments around.</param>
     public static Mesh CreateSphere(float radius, int rings, int slices)
     {
-        Mesh mesh = new();
-
-        List<Float3> vertices = [];
-        List<Float3> normals = [];
-        List<Float4> tangents = [];
-        List<Float2> uvs = [];
-        List<uint> indices = [];
+        rings = Math.Max(2, rings);
+        slices = Math.Max(3, slices);
+        var b = new PrimitiveBuilder();
 
         for (int i = 0; i <= rings; i++)
         {
-            float v = 1 - (float)i / rings;
-            float phi = v * MathF.PI;
+            float v = (float)i / rings;
+            float phi = MathF.PI * (1f - v);
+            float sinPhi = MathF.Sin(phi), cosPhi = MathF.Cos(phi);
+            bool pole = i == 0 || i == rings;
 
             for (int j = 0; j <= slices; j++)
             {
-                float u = (float)j / slices;
-                float theta = u * MathF.PI * 2;
+                // A pole vertex sits under the middle of the one triangle that uses it.
+                float u = pole ? (j + 0.5f) / slices : (float)j / slices;
+                float theta = u * MathF.PI * 2f;
+                float sinTheta = MathF.Sin(theta), cosTheta = MathF.Cos(theta);
 
-                float x = MathF.Sin(phi) * MathF.Cos(theta);
-                float y = MathF.Cos(phi);
-                float z = MathF.Sin(phi) * MathF.Sin(theta);
-
-                vertices.Add(new Float3(x, y, z) * radius);
-                normals.Add(new Float3(x, y, z));
-                uvs.Add(new Float2(u, v));
-
-                // Along increasing u, with the sign saying which way increasing v runs
-                Float3 tangent = new(-MathF.Sin(theta), 0, MathF.Cos(theta));
-                Float3 bitangent = new(MathF.Cos(phi) * MathF.Cos(theta), -MathF.Sin(phi), MathF.Cos(phi) * MathF.Sin(theta));
-                float handedness = Float3.Dot(Float3.Cross(new Float3(x, y, z), tangent), bitangent) < 0f ? -1f : 1f;
-                tangents.Add(new Float4(tangent.X, tangent.Y, tangent.Z, handedness));
+                Float3 normal = new(sinPhi * cosTheta, cosPhi, sinPhi * sinTheta);
+                b.Add(normal * radius, normal, new Float2(u, v),
+                    new Float3(-sinTheta, 0f, cosTheta),
+                    new Float3(-cosPhi * cosTheta, sinPhi, -cosPhi * sinTheta));
             }
         }
 
-        for (int i = 0; i < rings; i++)
-        {
-            for (int j = 0; j < slices; j++)
-            {
-                uint a = (uint)(i * (slices + 1) + j);
-                uint b = (uint)(a + slices + 1);
-
-                indices.Add(a);
-                indices.Add(b);
-                indices.Add(a + 1);
-
-                indices.Add(b);
-                indices.Add(b + 1);
-                indices.Add(a + 1);
-            }
-        }
-
-        mesh.vertices = [.. vertices];
-        mesh.normals = [.. normals];
-        mesh.tangents = [.. tangents];
-        mesh.uv = [.. uvs];
-        mesh.indices = [.. indices];
-
-        mesh.RecalculateBounds();
-
-        return mesh;
+        b.Grid(rings, slices);
+        return b.Build();
     }
 
+    /// <summary>A box with a flat face on each side, each face mapped to the whole of UV space.</summary>
     public static Mesh CreateCube(Float3 size)
     {
-        Mesh mesh = new();
-        float x = (float)size.X / 2f;
-        float y = (float)size.Y / 2f;
-        float z = (float)size.Z / 2f;
+        var b = new PrimitiveBuilder();
+        Face(Float3.UnitZ, -Float3.UnitX, Float3.UnitY);
+        Face(-Float3.UnitZ, Float3.UnitX, Float3.UnitY);
+        Face(Float3.UnitX, Float3.UnitZ, Float3.UnitY);
+        Face(-Float3.UnitX, -Float3.UnitZ, Float3.UnitY);
+        Face(Float3.UnitY, -Float3.UnitX, -Float3.UnitZ);
+        Face(-Float3.UnitY, -Float3.UnitX, Float3.UnitZ);
+        return b.Build();
 
-        Float3[] vertices =
-        [
-            // Front face
-            new(-x, -y, z), new(x, -y, z), new(x, y, z), new(-x, y, z),
-            
-            // Back face
-            new(-x, -y, -z), new(x, -y, -z), new(x, y, -z), new(-x, y, -z),
-            
-            // Left face
-            new(-x, -y, -z), new(-x, y, -z), new(-x, y, z), new(-x, -y, z),
-            
-            // Right face
-            new(x, -y, z), new(x, y, z), new(x, y, -z), new(x, -y, -z),
-            
-            // Top face
-            new(-x, y, z), new(x, y, z), new(x, y, -z), new(-x, y, -z),
-            
-            // Bottom face
-            new(-x, -y, -z), new(x, -y, -z), new(x, -y, z), new(-x, -y, z)
-        ];
-
-        Float2[] uvs =
-        [
-            // Front face
-            new(0, 0), new(1, 0), new(1, 1), new(0, 1),
-            // Back face
-            new(1, 0), new(0, 0), new(0, 1), new(1, 1),
-            // Left face
-            new(0, 0), new(1, 0), new(1, 1), new(0, 1),
-            // Right face
-            new(1, 0), new(1, 1), new(0, 1), new(0, 0),
-            // Top face
-            new(0, 1), new(1, 1), new(1, 0), new(0, 0),
-            // Bottom face
-            new(0, 0), new(1, 0), new(1, 1), new(0, 1)
-        ];
-
-        uint[] indices =
-        [
-            0, 1, 2, 0, 2, 3,       // Front face
-            4, 6, 5, 4, 7, 6,       // Back face
-            8, 10, 9, 8, 11, 10,    // Left face
-            12, 14, 13, 12, 15, 14, // Right face
-            16, 17, 18, 16, 18, 19, // Top face
-            20, 21, 22, 20, 22, 23  // Bottom face
-        ];
-
-        mesh.vertices = vertices;
-        mesh.uv = uvs;
-        mesh.indices = indices;
-
-        mesh.RecalculateBounds();
-        mesh.RecalculateNormals();
-        mesh.RecalculateTangents();
-
-        return mesh;
+        void Face(Float3 normal, Float3 uDir, Float3 vDir)
+        {
+            uint first = b.Count;
+            for (int y = 0; y <= 1; y++)
+                for (int x = 0; x <= 1; x++)
+                    b.Add((normal * 0.5f + uDir * (x - 0.5f) + vDir * (y - 0.5f)) * size, normal, new Float2(x, y), uDir, vDir);
+            b.Quad(first, first + 1, first + 3, first + 2);
+        }
     }
 
+    /// <summary>A flat plane facing up, centred on the origin, with UVs tiling once per unit along X and Z.</summary>
+    public static Mesh CreatePlane(float width, float depth)
+    {
+        var b = new PrimitiveBuilder();
+        float hw = width * 0.5f, hd = depth * 0.5f;
+        for (int z = 0; z <= 1; z++)
+            for (int x = 0; x <= 1; x++)
+            {
+                float px = x == 0 ? -hw : hw, pz = z == 0 ? -hd : hd;
+                b.Add(new Float3(px, 0f, pz), Float3.UnitY, new Float2(px + hw, pz + hd), Float3.UnitX, Float3.UnitZ);
+            }
+        b.Quad(0, 1, 3, 2);
+        return b.Build();
+    }
+
+    /// <summary>A cylinder on Y, centred on the origin. The side wraps u around it, and each flat cap gets its own vertices.</summary>
     public static Mesh CreateCylinder(float radius, float length, int sliceCount)
     {
-        // TODO: Test this hasn't been tested at all, just assumed it will work.
-        Mesh mesh = new();
+        int slices = Math.Max(3, sliceCount);
+        float half = length * 0.5f;
+        var b = new PrimitiveBuilder();
 
-        List<Float3> vertices = [];
-        List<Float2> uvs = [];
-        List<uint> indices = [];
-
-        float halfLength = length / 2.0f;
-
-        // Create the vertices and UVs for the top and bottom circles
-        for (int i = 0; i <= sliceCount; i++)
-        {
-            float angle = 2 * MathF.PI * i / sliceCount;
-            float x = radius * MathF.Cos(angle);
-            float z = radius * MathF.Sin(angle);
-
-            // Top circle
-            vertices.Add(new Float3(x, halfLength, z));
-            uvs.Add(new Float2((float)i / sliceCount, 1));
-
-            // Bottom circle
-            vertices.Add(new Float3(x, -halfLength, z));
-            uvs.Add(new Float2((float)i / sliceCount, 0));
-        }
-
-        // Add the center vertices for the top and bottom circles
-        vertices.Add(new Float3(0, halfLength, 0));
-        uvs.Add(new Float2(0.5f, 1));
-        vertices.Add(new Float3(0, -halfLength, 0));
-        uvs.Add(new Float2(0.5f, 0));
-
-        int topCenterIndex = vertices.Count - 2;
-        int bottomCenterIndex = vertices.Count - 1;
-
-        // Create the indices for the sides of the cylinder
-        for (int i = 0; i < sliceCount; i++)
-        {
-            int top1 = i * 2;
-            int top2 = top1 + 2;
-            int bottom1 = top1 + 1;
-            int bottom2 = top2 + 1;
-
-            if (i == sliceCount - 1)
+        for (int i = 0; i <= 1; i++)
+            for (int j = 0; j <= slices; j++)
             {
-                top2 = 0;
-                bottom2 = 1;
+                float u = (float)j / slices, theta = u * MathF.PI * 2f;
+                Float3 normal = new(MathF.Cos(theta), 0f, MathF.Sin(theta));
+                b.Add(new Float3(normal.X * radius, i == 0 ? -half : half, normal.Z * radius), normal, new Float2(u, i),
+                    new Float3(-normal.Z, 0f, normal.X), Float3.UnitY);
             }
+        b.Grid(1, slices);
 
-            indices.Add((uint)top1);
-            indices.Add((uint)top2);
-            indices.Add((uint)bottom1);
-
-            indices.Add((uint)bottom1);
-            indices.Add((uint)top2);
-            indices.Add((uint)bottom2);
-        }
-
-        // Create the indices for the top and bottom circles
-        for (int i = 0; i < sliceCount; i++)
-        {
-            int top1 = i * 2;
-            int top2 = (i == sliceCount - 1) ? 0 : top1 + 2;
-            int bottom1 = top1 + 1;
-            int bottom2 = (i == sliceCount - 1) ? 1 : bottom1 + 2;
-
-            // Top circle
-            indices.Add((uint)top1);
-            indices.Add((uint)topCenterIndex);
-            indices.Add((uint)top2);
-
-            // Bottom circle
-            indices.Add((uint)bottom2);
-            indices.Add((uint)bottomCenterIndex);
-            indices.Add((uint)bottom1);
-        }
-
-        mesh.vertices = [.. vertices];
-        mesh.uv = [.. uvs];
-        mesh.indices = [.. indices];
-
-        mesh.RecalculateBounds();
-        mesh.RecalculateNormals();
-        mesh.RecalculateTangents();
-
-        return mesh;
+        b.Cap(radius, -half, slices, up: false);
+        b.Cap(radius, half, slices, up: true);
+        return b.Build();
     }
 
     /// <summary>
-    /// Creates a capsule mesh (cylinder with hemisphere caps).
+    /// A capsule on Y, centred on the origin: a cylinder with a hemisphere on each end. v runs along its profile from the
+    /// bottom pole to the top, spaced by distance so the texture keeps its proportions.
     /// </summary>
-    /// <param name="radius">Radius of the capsule.</param>
-    /// <param name="height">Total height of the capsule including the hemisphere caps.</param>
-    /// <param name="slices">Number of subdivisions around the capsule.</param>
-    /// <param name="stacks">Number of subdivisions along the height of the cylinder portion.</param>
-    /// <returns>A new capsule mesh.</returns>
+    /// <param name="height">Total height, caps included. Never less than the two caps.</param>
+    /// <param name="slices">Segments around.</param>
+    /// <param name="stacks">Bands in each hemisphere.</param>
     public static Mesh CreateCapsule(float radius, float height, int slices = 16, int stacks = 4)
     {
-        Mesh mesh = new();
+        slices = Math.Max(3, slices);
+        stacks = Math.Max(1, stacks);
+        float straight = MathF.Max(0f, height - 2f * radius);
+        float profile = MathF.PI * radius + straight;
+        var b = new PrimitiveBuilder();
 
-        List<Float3> vertices = [];
-        List<Float2> uvs = [];
-        List<uint> indices = [];
-
-        // Calculate cylinder height (total height minus the two hemisphere radii)
-        float cylinderHeight = MathF.Max(0, height - 2 * radius);
-        float halfCylinderHeight = cylinderHeight / 2.0f;
-
-        // Generate vertices for the cylinder portion
-        for (int i = 0; i <= stacks; i++)
+        // Each hemisphere ends on the ring where the straight part meets it, so the two rings share a normal.
+        for (int end = 0; end <= 1; end++)
         {
-            float v = (float)i / stacks;
-            float y = -halfCylinderHeight + cylinderHeight * v;
+            float centre = end == 0 ? -straight * 0.5f : straight * 0.5f;
+            for (int k = 0; k <= stacks; k++)
+            {
+                float alpha = end == 0 ? MathF.PI * 0.5f * ((float)k / stacks - 1f) : MathF.PI * 0.5f * k / stacks;
+                float along = end == 0 ? radius * (alpha + MathF.PI * 0.5f) : radius * MathF.PI * 0.5f + straight + radius * alpha;
+                bool pole = end == 0 ? k == 0 : k == stacks;
+                Row(centre, alpha, along / profile, pole);
+            }
+        }
 
+        b.Grid(2 * stacks + 1, slices);
+        return b.Build();
+
+        void Row(float centre, float alpha, float v, bool pole)
+        {
+            float cosA = MathF.Cos(alpha), sinA = MathF.Sin(alpha);
             for (int j = 0; j <= slices; j++)
             {
-                float u = (float)j / slices;
-                float angle = u * MathF.PI * 2;
-                float x = radius * MathF.Cos(angle);
-                float z = radius * MathF.Sin(angle);
-
-                vertices.Add(new Float3(x, y, z));
-                uvs.Add(new Float2(u, v * 0.5f + 0.25f)); // Middle 50% of UV space
+                float u = pole ? (j + 0.5f) / slices : (float)j / slices;
+                float theta = u * MathF.PI * 2f;
+                float sinT = MathF.Sin(theta), cosT = MathF.Cos(theta);
+                Float3 normal = new(cosA * cosT, sinA, cosA * sinT);
+                b.Add(new Float3(0f, centre, 0f) + normal * radius, normal, new Float2(u, v),
+                    new Float3(-sinT, 0f, cosT), new Float3(-sinA * cosT, cosA, -sinA * sinT));
             }
         }
-
-        // Generate indices for cylinder
-        int cylinderVertexCount = (stacks + 1) * (slices + 1);
-        for (int i = 0; i < stacks; i++)
-        {
-            for (int j = 0; j < slices; j++)
-            {
-                uint a = (uint)(i * (slices + 1) + j);
-                uint b = (uint)(a + slices + 1);
-
-                indices.Add(a);
-                indices.Add(b);
-                indices.Add(a + 1);
-
-                indices.Add(b);
-                indices.Add(b + 1);
-                indices.Add(a + 1);
-            }
-        }
-
-        // Generate top hemisphere (cap)
-        int hemisphereStacks = (int)MathF.Max(2, stacks / 2);
-        int topHemisphereStart = vertices.Count;
-
-        for (int i = 0; i <= hemisphereStacks; i++)
-        {
-            float v = (float)i / hemisphereStacks;
-            float phi = v * MathF.PI / 2; // 0 to PI/2 for top hemisphere
-
-            for (int j = 0; j <= slices; j++)
-            {
-                float u = (float)j / slices;
-                float theta = u * MathF.PI * 2;
-
-                float x = radius * MathF.Sin(phi) * MathF.Cos(theta);
-                float y = halfCylinderHeight + radius * MathF.Cos(phi);
-                float z = radius * MathF.Sin(phi) * MathF.Sin(theta);
-
-                vertices.Add(new Float3(x, y, z));
-                uvs.Add(new Float2(u, 0.75f + v * 0.25f)); // Top 25% of UV space
-            }
-        }
-
-        // Generate indices for top hemisphere
-        for (int i = 0; i < hemisphereStacks; i++)
-        {
-            for (int j = 0; j < slices; j++)
-            {
-                uint a = (uint)(topHemisphereStart + i * (slices + 1) + j);
-                uint b = (uint)(a + slices + 1);
-
-                indices.Add(a);
-                indices.Add(a + 1);
-                indices.Add(b);
-
-                indices.Add(b);
-                indices.Add(a + 1);
-                indices.Add(b + 1);
-            }
-        }
-
-        // Generate bottom hemisphere (cap)
-        int bottomHemisphereStart = vertices.Count;
-
-        for (int i = 0; i <= hemisphereStacks; i++)
-        {
-            float v = (float)i / hemisphereStacks;
-            float phi = MathF.PI / 2 + v * MathF.PI / 2; // PI/2 to PI for bottom hemisphere
-
-            for (int j = 0; j <= slices; j++)
-            {
-                float u = (float)j / slices;
-                float theta = u * MathF.PI * 2;
-
-                float x = radius * MathF.Sin(phi) * MathF.Cos(theta);
-                float y = -halfCylinderHeight + radius * MathF.Cos(phi);
-                float z = radius * MathF.Sin(phi) * MathF.Sin(theta);
-
-                vertices.Add(new Float3(x, y, z));
-                uvs.Add(new Float2(u, v * 0.25f)); // Bottom 25% of UV space
-            }
-        }
-
-        // Generate indices for bottom hemisphere
-        for (int i = 0; i < hemisphereStacks; i++)
-        {
-            for (int j = 0; j < slices; j++)
-            {
-                uint a = (uint)(bottomHemisphereStart + i * (slices + 1) + j);
-                uint b = (uint)(a + slices + 1);
-
-                indices.Add(a);
-                indices.Add(a + 1);
-                indices.Add(b);
-
-                indices.Add(b);
-                indices.Add(a + 1);
-                indices.Add(b + 1);
-            }
-        }
-
-        mesh.vertices = [.. vertices];
-        mesh.uv = [.. uvs];
-        mesh.indices = [.. indices];
-
-        mesh.RecalculateBounds();
-        mesh.RecalculateNormals();
-        mesh.RecalculateTangents();
-
-        return mesh;
     }
 
     /// <summary>
-    /// Creates a cone mesh pointing up along the Y axis.
+    /// A cone on Y, centred on the origin with its base at -height/2. Each side segment has its own tip vertex, so the
+    /// side shades smoothly to the point, and the base is a flat cap.
     /// </summary>
-    /// <param name="radius">Radius of the cone base.</param>
-    /// <param name="height">Height of the cone.</param>
-    /// <param name="slices">Number of subdivisions around the cone.</param>
-    /// <returns>A new cone mesh.</returns>
     public static Mesh CreateCone(float radius, float height, int slices = 16)
     {
-        Mesh mesh = new();
+        slices = Math.Max(3, slices);
+        float half = height * 0.5f;
+        float slant = MathF.Sqrt(radius * radius + height * height);
+        float across = height / slant, rise = radius / slant;
+        var b = new PrimitiveBuilder();
 
-        List<Float3> vertices = [];
-        List<Float2> uvs = [];
-        List<uint> indices = [];
+        for (int j = 0; j <= slices; j++)
+            Side(j, 0f, (float)j / slices);
+        uint tips = b.Count;
+        for (int j = 0; j < slices; j++)
+            Side(j, 1f, (j + 0.5f) / slices);
+        for (int j = 0; j < slices; j++)
+            b.Triangle((uint)j, (uint)j + 1, tips + (uint)j);
 
-        float halfHeight = height / 2.0f;
+        b.Cap(radius, -half, slices, up: false);
+        return b.Build();
 
-        // Apex vertex (top of cone)
-        int apexIndex = 0;
-        vertices.Add(new Float3(0, halfHeight, 0));
-        uvs.Add(new Float2(0.5f, 1.0f));
-
-        // Base center vertex (for base cap)
-        int baseCenterIndex = 1;
-        vertices.Add(new Float3(0, -halfHeight, 0));
-        uvs.Add(new Float2(0.5f, 0.0f));
-
-        // Generate vertices around the base circle
-        for (int i = 0; i <= slices; i++)
+        void Side(int j, float v, float u)
         {
-            float angle = 2 * MathF.PI * i / slices;
-            float x = radius * MathF.Cos(angle);
-            float z = radius * MathF.Sin(angle);
-            float u = (float)i / slices;
+            float theta = u * MathF.PI * 2f;
+            float sinT = MathF.Sin(theta), cosT = MathF.Cos(theta);
+            float ring = radius * (1f - v);
+            b.Add(new Float3(ring * cosT, -half + height * v, ring * sinT), new Float3(across * cosT, rise, across * sinT),
+                new Float2(u, v), new Float3(-sinT, 0f, cosT), new Float3(-radius * cosT, height, -radius * sinT));
+        }
+    }
 
-            // Vertex for sides
-            vertices.Add(new Float3(x, -halfHeight, z));
-            uvs.Add(new Float2(u, 0.0f));
+    /// <summary>
+    /// Collects a primitive's vertices from exact positions, normals and UV directions, so nothing is averaged and a
+    /// seam's two sides shade the same.
+    /// </summary>
+    private sealed class PrimitiveBuilder
+    {
+        private readonly List<Float3> _positions = [];
+        private readonly List<Float3> _normals = [];
+        private readonly List<Float4> _tangents = [];
+        private readonly List<Float2> _uvs = [];
+        private readonly List<uint> _indices = [];
+
+        public uint Count => (uint)_positions.Count;
+
+        /// <summary>Adds a vertex. <paramref name="uDir"/> and <paramref name="vDir"/> point where u and v grow.</summary>
+        public uint Add(Float3 position, Float3 normal, Float2 uv, Float3 uDir, Float3 vDir)
+        {
+            normal = Float3.Normalize(normal);
+            Float3 tangent = Float3.Normalize(uDir - normal * Float3.Dot(normal, uDir));
+            float handedness = Float3.Dot(Float3.Cross(normal, tangent), vDir) < 0f ? -1f : 1f;
+
+            _positions.Add(position);
+            _normals.Add(normal);
+            _tangents.Add(new Float4(tangent.X, tangent.Y, tangent.Z, handedness));
+            _uvs.Add(uv);
+            return Count - 1;
         }
 
-        int baseStart = 2; // First base vertex index
-
-        // The cap gets its own ring so its flat normals don't blend into the sides
-        int capStart = vertices.Count;
-        for (int i = 0; i <= slices; i++)
+        /// <summary>Adds a triangle wound to face the way its normals do, dropping one with no area.</summary>
+        public void Triangle(uint a, uint b, uint c)
         {
-            vertices.Add(vertices[baseStart + i]);
-            uvs.Add(uvs[baseStart + i]);
+            Float3 face = Float3.Cross(_positions[(int)b] - _positions[(int)a], _positions[(int)c] - _positions[(int)a]);
+            if (Float3.LengthSquared(face) < 1e-14f) return;
+            if (Float3.Dot(face, _normals[(int)a] + _normals[(int)b] + _normals[(int)c]) < 0f) (b, c) = (c, b);
+            _indices.Add(a);
+            _indices.Add(b);
+            _indices.Add(c);
         }
 
-        // Generate indices for cone sides (from apex to base)
-        for (int i = 0; i < slices; i++)
+        public void Quad(uint a, uint b, uint c, uint d)
         {
-            indices.Add((uint)apexIndex);
-            indices.Add((uint)(baseStart + i + 1));
-            indices.Add((uint)(baseStart + i));
+            Triangle(a, b, c);
+            Triangle(a, c, d);
         }
 
-        // Generate indices for base cap (circle at bottom)
-        for (int i = 0; i < slices; i++)
+        /// <summary>Joins the last <paramref name="rows"/> + 1 rows of <paramref name="columns"/> + 1 vertices into quads.</summary>
+        public void Grid(int rows, int columns)
         {
-            indices.Add((uint)baseCenterIndex);
-            indices.Add((uint)(capStart + i));
-            indices.Add((uint)(capStart + i + 1));
+            uint first = Count - (uint)((rows + 1) * (columns + 1));
+            uint stride = (uint)columns + 1;
+            for (uint i = 0; i < rows; i++)
+                for (uint j = 0; j < columns; j++)
+                {
+                    uint a = first + i * stride + j;
+                    Quad(a, a + 1, a + stride + 1, a + stride);
+                }
         }
 
-        mesh.vertices = [.. vertices];
-        mesh.uv = [.. uvs];
-        mesh.indices = [.. indices];
+        /// <summary>A flat round cap at height <paramref name="y"/>, mapped from above with the circle filling UV space.</summary>
+        public void Cap(float radius, float y, int slices, bool up)
+        {
+            Float3 normal = up ? Float3.UnitY : -Float3.UnitY;
+            Float3 vDir = up ? Float3.UnitZ : -Float3.UnitZ;
+            uint centre = Add(new Float3(0f, y, 0f), normal, new Float2(0.5f, 0.5f), Float3.UnitX, vDir);
+            for (int j = 0; j < slices; j++)
+            {
+                float theta = MathF.PI * 2f * j / slices;
+                float x = MathF.Cos(theta), z = MathF.Sin(theta);
+                Add(new Float3(x * radius, y, z * radius), normal, new Float2(0.5f + x * 0.5f, 0.5f + (up ? z : -z) * 0.5f), Float3.UnitX, vDir);
+            }
+            for (int j = 0; j < slices; j++)
+                Triangle(centre, centre + 1 + (uint)j, centre + 1 + (uint)((j + 1) % slices));
+        }
 
-        mesh.RecalculateBounds();
-        mesh.RecalculateNormals();
-        mesh.RecalculateTangents();
-
-        return mesh;
+        public Mesh Build()
+        {
+            Mesh mesh = new()
+            {
+                vertices = [.. _positions],
+                normals = [.. _normals],
+                tangents = [.. _tangents],
+                uv = [.. _uvs],
+                indices = [.. _indices],
+            };
+            mesh.RecalculateBounds();
+            return mesh;
+        }
     }
 
     public static Mesh CreateTriangle(Float3 a, Float3 b, Float3 c)

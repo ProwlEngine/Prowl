@@ -278,26 +278,26 @@ public static class NavMeshGeometryCollector
             return;
         }
 
-        // Primitives are origin-centered by construction, so their bounds are tested before any tessellation.
+        // Primitives sit on the collider's origin, so their bounds are tested before any tessellation. The cone is the
+        // exception: its origin is its centre of mass, a quarter of its height above the base.
         Float3? halfExtents = collider switch
         {
             BoxCollider box => box.Size * 0.5f,
             SphereCollider sphere => new Float3(sphere.Radius, sphere.Radius, sphere.Radius),
-            CapsuleCollider capsule => new Float3(capsule.Radius, capsule.Height * 0.5f + capsule.Radius, capsule.Radius),
+            CapsuleCollider capsule => new Float3(capsule.Radius, CapsuleHeight(capsule) * 0.5f, capsule.Radius),
             CylinderCollider cylinder => new Float3(cylinder.Radius, cylinder.Height * 0.5f, cylinder.Radius),
-            ConeCollider cone => new Float3(cone.Radius, cone.Height * 0.5f, cone.Radius),
+            ConeCollider cone => new Float3(cone.Radius, cone.Height * 0.75f, cone.Radius),
             _ => null,
         };
         if (halfExtents is not Float3 half) return;
         if (bounds is AABB filter && !TransformedBoundsIntersect(-half, half, world, filter)) return;
 
-        // Same sizing conventions as each collider's Jitter shape and gizmo (origin-centered, GizmoMatrix places it).
+        // Same sizing conventions as each collider's Jitter shape and gizmo, which GizmoMatrix places.
         Mesh primitive = collider switch
         {
             BoxCollider box => Mesh.CreateCube(box.Size),
             SphereCollider sphere => Mesh.CreateSphere(Math.Max(sphere.Radius, 0.01f), 12, 12),
-            // Collider capsule height is the cylindrical segment; CreateCapsule takes total height.
-            CapsuleCollider capsule => Mesh.CreateCapsule(Math.Max(capsule.Radius, 0.01f), capsule.Height + 2f * capsule.Radius, 12, 4),
+            CapsuleCollider capsule => Mesh.CreateCapsule(Math.Max(capsule.Radius, 0.01f), CapsuleHeight(capsule), 12, 4),
             CylinderCollider cylinder => Mesh.CreateCylinder(Math.Max(cylinder.Radius, 0.01f), cylinder.Height, 12),
             ConeCollider cone => Mesh.CreateCone(Math.Max(cone.Radius, 0.01f), cone.Height, 12),
             _ => throw new InvalidOperationException("Every collider with half extents has a primitive."),
@@ -305,13 +305,22 @@ public static class NavMeshGeometryCollector
 
         try
         {
-            results.Add(new NavMeshGeometrySource(primitive.Vertices, ToIntIndices(primitive.Indices), world, area));
+            Float3[] vertices = primitive.Vertices;
+            if (collider is ConeCollider coneCollider)
+            {
+                float lift = coneCollider.Height * 0.25f;
+                for (int i = 0; i < vertices.Length; i++) vertices[i].Y += lift;
+            }
+            results.Add(new NavMeshGeometrySource(vertices, ToIntIndices(primitive.Indices), world, area));
         }
         finally
         {
             primitive.Dispose();
         }
     }
+
+    // The whole height, caps included, never shorter than the caps as the physics capsule keeps a segment.
+    private static float CapsuleHeight(CapsuleCollider capsule) => Math.Max(capsule.Height, 2f * Math.Max(capsule.Radius, 0.01f));
 
     /// <summary>A mesh's triangles, after testing its transformed bounds against the filter.</summary>
     private static void AddMesh(Mesh? mesh, Float4x4 world, int area, List<NavMeshGeometrySource> results, AABB? bounds)

@@ -35,7 +35,7 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     internal static Material ParseDefault(DefaultMaterial material)
     {
         if (material == Prowl.Runtime.Resources.DefaultMaterial.Line)
-            return new Material(Shader.LoadDefault(DefaultShader.Line)) { Name = "Line" };
+            return new Material(Shader.GetDefault(DefaultShader.Line)) { Name = "Line" };
 
         string fileName = material switch
         {
