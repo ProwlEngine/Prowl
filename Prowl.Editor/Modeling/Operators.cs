@@ -385,6 +385,62 @@ public static class Operators
         after.Vertices.UnionWith(points);
     }
 
+    /// <summary>
+    /// Gives every corner a normal: the faces around its point that are joined to its face across soft edges, averaged by
+    /// area, so the surface is smooth across soft edges and creased across any other.
+    /// </summary>
+    public static void CornerNormals(GeometryData mesh)
+    {
+        const string Normal = Prowl.Runtime.Resources.MeshGeometry.Normal;
+        if (!mesh.HasLoopAttribute(Normal)) mesh.AddLoopAttribute(Normal, GeometryData.AttributeBaseType.Float, 3);
+
+        var areaNormals = new Dictionary<GeometryData.Face, Float3>(mesh.Faces.Count);
+        foreach (GeometryData.Face face in mesh.Faces) areaNormals[face] = AreaNormal(face);
+
+        var fan = new HashSet<GeometryData.Face>();
+        var stack = new Stack<GeometryData.Face>();
+        foreach (GeometryData.Face face in mesh.Faces)
+        {
+            GeometryData.Loop loop = face.Loop!;
+            do
+            {
+                GeometryData.Vertex point = loop.Vert;
+                fan.Clear();
+                fan.Add(face);
+                stack.Push(face);
+                while (stack.Count > 0)
+                {
+                    GeometryData.Face at = stack.Pop();
+                    foreach (GeometryData.Edge edge in at.NeighborEdges())
+                    {
+                        if (!edge.ContainsVertex(point) || !edge.IsSoft || edge.IsSharp) continue;
+                        foreach (GeometryData.Face next in edge.NeighborFaces())
+                            if (fan.Add(next)) stack.Push(next);
+                    }
+                }
+
+                Float3 sum = Float3.Zero;
+                foreach (GeometryData.Face member in fan) sum += areaNormals[member];
+                Float3 normal = Float3.LengthSquared(sum) > 1e-20f ? Float3.Normalize(sum) : Float3.UnitY;
+                loop.Attributes[Normal] = new GeometryData.FloatAttributeValue(normal.X, normal.Y, normal.Z);
+                loop = loop.Next!;
+            } while (loop != face.Loop);
+        }
+    }
+
+    // Twice the face's area along its normal, by Newell's method, so bigger faces count for more
+    private static Float3 AreaNormal(GeometryData.Face face)
+    {
+        List<GeometryData.Vertex> ring = face.NeighborVertices();
+        Float3 normal = Float3.Zero;
+        for (int i = 0; i < ring.Count; i++)
+        {
+            Float3 a = ring[i].Point, b = ring[(i + 1) % ring.Count].Point;
+            normal += new Float3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
+        }
+        return normal;
+    }
+
     /// <summary>The edges in groups joined at their points.</summary>
     private static List<List<GeometryData.Edge>> Groups(IReadOnlyCollection<GeometryData.Edge> edges)
     {

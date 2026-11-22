@@ -3,6 +3,7 @@
 
 using Prowl.Editor.Modeling;
 using Prowl.Runtime.CSG;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
@@ -456,5 +457,54 @@ public class OperatorTests
 
         Assert.Single(after.Vertices);
         Assert.True(MathF.Abs(middle.Point.X) < 0.6f);
+    }
+
+    private static Float3 CornerNormal(GeometryData.Loop loop)
+    {
+        float[] n = ((GeometryData.FloatAttributeValue)loop.Attributes[MeshGeometry.Normal]).Data;
+        return new Float3(n[0], n[1], n[2]);
+    }
+
+    [Fact]
+    public void ABoxSoftenedAt30DegreesHasFlatCornerNormals()
+    {
+        GeometryData mesh = Box().ToMesh(out _);
+        GeometryOperators.SoftenByAngle(mesh, mesh.Edges, 30f);
+
+        Operators.CornerNormals(mesh);
+
+        foreach (GeometryData.Face face in mesh.Faces)
+        {
+            GeometryData.Loop loop = face.Loop!;
+            do
+            {
+                Assert.True(Float3.Dot(CornerNormal(loop), face.Normal()) > 0.999f);
+                loop = loop.Next!;
+            } while (loop != face.Loop);
+        }
+    }
+
+    [Fact]
+    public void AManySidedPrismIsSmoothRoundItsSides()
+    {
+        var outline = Enumerable.Range(0, 32).Select(i => new Float2(MathF.Cos(i * MathF.PI / 16f), MathF.Sin(i * MathF.PI / 16f))).ToList();
+        var points = outline.Select(p => new Float3(p.X, 0, p.Y)).Concat(outline.Select(p => new Float3(p.X, 1, p.Y))).ToList();
+        var polygons = new List<int[]> { Enumerable.Range(0, 32).ToArray(), Enumerable.Range(32, 32).Reverse().ToArray() };
+        for (int i = 0; i < 32; i++) polygons.Add([(i + 1) % 32, i, 32 + i, 32 + (i + 1) % 32]);
+        CSGControlMesh prism = CSGControlMesh.FromPolygons(points, polygons);
+        if (prism.Volume() < 0) prism.ReverseWinding();
+        GeometryData mesh = prism.ToMesh(out _);
+        GeometryOperators.SoftenByAngle(mesh, mesh.Edges, 30f);
+
+        Operators.CornerNormals(mesh);
+
+        GeometryData.Face side = mesh.Faces.First(f => MathF.Abs(f.Normal().Y) < 0.1f);
+        GeometryData.Loop loop = side.Loop!;
+        do
+        {
+            Float3 radial = Float3.Normalize(new Float3(loop.Vert.Point.X, 0, loop.Vert.Point.Z));
+            Assert.True(Float3.Dot(CornerNormal(loop), radial) > 0.999f);
+            loop = loop.Next!;
+        } while (loop != side.Loop);
     }
 }
