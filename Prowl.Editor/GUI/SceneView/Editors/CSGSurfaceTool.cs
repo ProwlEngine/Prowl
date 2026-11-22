@@ -197,9 +197,12 @@ public sealed class CSGSurfaceTool : SceneTool
         {
             case CSGMode.UVMove:
             {
-                Float3 target = Input.GetKey(KeyCode.V) ? NearestCorner(handles, at) ?? at : at;
-                Float3 delta = target - _pressPoint;
-                if (!Input.GetKey(KeyCode.V)) delta = CSGSnap.Value(handles, delta);
+                // Corners first, then edges, then the grid. V snaps to corners only
+                bool cornersOnly = Input.GetKey(KeyCode.V);
+                Float3? snapped = NearestCorner(handles, at) ?? (cornersOnly ? null : NearestEdgePoint(handles));
+                Float3 delta = (snapped ?? at) - _pressPoint;
+                if (snapped == null && !cornersOnly) delta = CSGSnap.Value(handles, delta);
+                if (snapped is Float3 point) ctx.Draw.Dot(point, colour, 9f, HandleCap.Square);
                 CSGSurfaceSelection.MoveTextures(delta);
                 CSGGizmos.Line(_pressPoint, _pressPoint + delta, colour, 1.5f);
                 ctx.Draw.Dot(_pressPoint + delta, colour, 7f);
@@ -257,6 +260,34 @@ public sealed class CSGSurfaceTool : SceneTool
         if (t < 0f) return false;
         point = ray.Origin + ray.Direction * t;
         return true;
+    }
+
+    /// <summary>The point on a selected surface's edge nearest the cursor on screen, within a few pixels.</summary>
+    private Float3? NearestEdgePoint(HandleContext handles)
+    {
+        Float3? best = null;
+        float bestDistance = 8f;
+        Float2 mouse = handles.MousePosition;
+        foreach (CSGSurfaceRef surface in CSGSurfaceSelection.Selected)
+        {
+            if (!_pieces.TryGetValue(surface, out List<Float3[]>? pieces)) continue;
+            foreach (Float3[] corners in pieces)
+            {
+                for (int i = 0; i < corners.Length; i++)
+                {
+                    Float3 a = corners[i], b = corners[(i + 1) % corners.Length];
+                    if (handles.WorldToScreen(a) is not Float2 sa || handles.WorldToScreen(b) is not Float2 sb) continue;
+
+                    Float2 edge = sb - sa;
+                    float t = Math.Clamp(Float2.Dot(mouse - sa, edge) / MathF.Max(1e-6f, Float2.Dot(edge, edge)), 0f, 1f);
+                    float distance = Float2.Distance(mouse, sa + edge * t);
+                    if (distance >= bestDistance) continue;
+                    bestDistance = distance;
+                    best = a + (b - a) * t;
+                }
+            }
+        }
+        return best;
     }
 
     /// <summary>The corner of a selected surface nearest the cursor on screen, within a few pixels.</summary>
