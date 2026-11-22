@@ -185,7 +185,7 @@ public sealed class CSGOverlayTool : SceneTool
         menu.Separator();
     }
 
-    /// <summary>Selection shortcuts, in every mode. The mesh tool keeps rotate and snap for its own points.</summary>
+    /// <summary>Selection shortcuts, in every mode but Create, which only sets up the next brush. The mesh tool keeps rotate and snap for its own points.</summary>
     private static void HandleShortcuts(HandleContext handles)
     {
         if (handles.KeyboardCaptured) return;
@@ -200,6 +200,8 @@ public sealed class CSGOverlayTool : SceneTool
         if (handles.IsPressed("CSG/SetAdditive")) { SetOperation(Operation.Additive); return; }
         if (handles.IsPressed("CSG/SetSubtractive")) { SetOperation(Operation.Subtractive); return; }
         if (handles.IsPressed("CSG/SetIntersecting")) { SetOperation(Operation.Intersect); return; }
+        if (CSGEditMode.Is(CSGMode.Create)) return;
+
         if (handles.IsPressed("CSG/SetPassThrough")) { CSGSelection.SetPassThrough(); return; }
 
         if (handles.IsPressed("Scene/Duplicate")) { CSGSelection.Duplicate(); return; }
@@ -227,10 +229,14 @@ public sealed class CSGOverlayTool : SceneTool
         CSGStatus.Flash(Loc.Get("csg.status_grid", new { size = SceneTools.MoveSnap.ToString(SceneTools.CurrentMoveSnapFormat) }));
     }
 
-    /// <summary>Sets the selection's operation, and while drawing also the operation the next brush gets.</summary>
+    /// <summary>Sets the selection's operation, or in Create the operation the next brush gets.</summary>
     private static void SetOperation(Operation operation)
     {
-        if (CSGEditMode.Is(CSGMode.Create) && SceneToolManager.Get<CSGGenerateTool>() is { } generate) generate.Operation = operation;
+        if (CSGEditMode.Is(CSGMode.Create))
+        {
+            if (SceneToolManager.Get<CSGGenerateTool>() is { } generate) generate.Operation = operation;
+            return;
+        }
         CSGSelection.SetOperation(operation);
     }
 
@@ -316,16 +322,20 @@ public sealed class CSGOverlayTool : SceneTool
             paper.Box($"{id}_head_gap").Height(30).IsNotInteractable();
             DrawWarnings(paper, font, id);
 
-            // The selection's operation, lit when every selected brush and group shares it
-            int shared = CSGSections.OperationIndex(CSGSelection.Brushes(), CSGSelection.Groups());
+            // The selection's operation, lit when every selected brush and group shares it, or in Create the next brush's
+            bool create = CSGEditMode.Is(CSGMode.Create);
+            int shared = create
+                ? SceneToolManager.Get<CSGGenerateTool>() is { AutoOperation: false } next ? (int)next.Operation : -1
+                : CSGSections.OperationIndex(CSGSelection.Brushes(), CSGSelection.Groups());
             HeaderButton(paper, font, $"{id}_op_add", EditorIcons.SquarePlus, shared == (int)Operation.Additive,
                 ShortcutManager.GetTooltip(Loc.Get("csg.additive"), "CSG/SetAdditive"), Loc.Get("csg.additive_tip"), () => SetOperation(Operation.Additive));
             HeaderButton(paper, font, $"{id}_op_sub", EditorIcons.SquareMinus, shared == (int)Operation.Subtractive,
                 ShortcutManager.GetTooltip(Loc.Get("csg.subtractive"), "CSG/SetSubtractive"), Loc.Get("csg.subtractive_tip"), () => SetOperation(Operation.Subtractive));
             HeaderButton(paper, font, $"{id}_op_int", EditorIcons.CropSimple, shared == (int)Operation.Intersect,
                 ShortcutManager.GetTooltip(Loc.Get("csg.intersect"), "CSG/SetIntersecting"), Loc.Get("csg.intersect_tip"), () => SetOperation(Operation.Intersect));
-            HeaderButton(paper, font, $"{id}_pivot", EditorIcons.Crosshairs, false,
-                Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
+            if (!create)
+                HeaderButton(paper, font, $"{id}_pivot", EditorIcons.Crosshairs, false,
+                    Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
 
             paper.Box($"{id}_head_show")
                 .Width(22).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
