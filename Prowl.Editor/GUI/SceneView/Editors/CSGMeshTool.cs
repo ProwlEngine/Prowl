@@ -69,6 +69,9 @@ public sealed class CSGMeshTool : SceneTool
     /// <summary>What a drag in progress is doing.</summary>
     private enum Action { None, Marquee, Chamfer, Extrude }
 
+    // Pixels the cursor has to travel before a press becomes a chamfer, extrude or drag, so a click stays a click
+    private const float DragThreshold = 4f;
+
     private CSGControlMesh? _mesh;
     private object? _meshSource;
     private Plane[]? _previewPlanes;
@@ -366,14 +369,15 @@ public sealed class CSGMeshTool : SceneTool
     {
         HandleContext handles = ctx.Handles;
 
-        // Cursor travel in world units at the brush's distance.
+        // Cursor travel in world units at the brush's distance, counted from the drag threshold
         float pixels = Float2.Distance(handles.MousePosition, _dragOrigin);
-        float amount = pixels * WorldPerPixel(ctx);
+        bool moved = pixels >= DragThreshold;
+        float amount = moved ? (pixels - DragThreshold) * WorldPerPixel(ctx) : 0f;
 
         switch (_action)
         {
-            case Action.Chamfer: PreviewChamfer(ctx, amount); break;
-            case Action.Extrude: PreviewExtrude(ctx, amount); break;
+            case Action.Chamfer: if (moved) PreviewChamfer(ctx, amount); break;
+            case Action.Extrude: if (moved) PreviewExtrude(ctx, amount); break;
             case Action.Marquee: DrawMarquee(ctx); break;
         }
 
