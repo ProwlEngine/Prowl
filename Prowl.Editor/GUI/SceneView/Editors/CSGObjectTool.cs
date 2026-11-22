@@ -47,14 +47,17 @@ public sealed class CSGObjectTool : SceneTool
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
-        // The modes are exclusive so a click in surface mode does not also select the brush.
-        if (!CSGEditMode.Is(CSGMode.Object)) return;
+        // Brushes are picked in Select and in Edit, unless a cut is being placed or a plain brush's points are edited
+        bool edit = CSGEditMode.Is(CSGMode.Edit);
+        if (!edit && !CSGEditMode.Is(CSGMode.Select)) return;
+        if (SceneToolManager.Get<CSGClipTool>() is { Active: true }) return;
+        if (edit && SceneToolManager.Get<CSGMeshTool>() is { Active: true }) return;
 
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return;
 
         CollectBrushes(model!);
-        if (ResizeHandles(ctx)) { DrawBrushes(ctx); return; }
+        if (edit && ResizeHandles(ctx)) { DrawBrushes(ctx); return; }
         HandleCloneDrag(ctx);
         PickBrush(ctx, model!);
         DrawBrushes(ctx);
@@ -311,11 +314,23 @@ public sealed class CSGObjectTool : SceneTool
     private void HandleCloneDrag(SceneToolContext ctx)
     {
         HandleContext handles = ctx.Handles;
+
+        // Where the copies ended up is the step Repeat Clone goes on with
+        if (_cloneFrom is Float3 from && handles.PrimaryUp)
+        {
+            Float3 step = CSGSelection.SelectionCentre() - from;
+            if (Float3.LengthSquared(step) > 1e-8f) CSGSelection.RememberClone(step);
+            _cloneFrom = null;
+        }
+
         if (!handles.PrimaryDown || !handles.Shift || handles.Blocked) return;
         if (!handles.IsNearest(handles.GetControlID(TransformControl))) return;
 
         CSGSelection.Duplicate();
+        _cloneFrom = CSGSelection.SelectionCentre();
     }
+
+    private Float3? _cloneFrom;
 
     private void DrawBrushes(SceneToolContext ctx)
     {

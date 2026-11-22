@@ -49,7 +49,8 @@ public sealed class CSGMeshTool : SceneTool
     private static readonly Color32 FaceFill = new(255, 200, 90, 60);
     private static readonly Color32 EdgeHandleColor = new(150, 190, 230, 140);
 
-    public bool Active => CSGEditMode.Is(CSGMode.Mesh);
+    /// <summary>Editing a plain brush: Edit is the tool and the selection is one brush that is not a generated shape.</summary>
+    public bool Active => CSGEditMode.Is(CSGMode.Edit) && CSGSelection.Brushes() is [var brush] && CSGSelection.ShapeOf(brush).IsNotValid();
 
     /// <summary>Which element types a click will pick.</summary>
     public CSGElementFilter Filter { get; set; } = CSGElementFilter.All;
@@ -62,8 +63,8 @@ public sealed class CSGMeshTool : SceneTool
     public int SelectedFaceCount => _faces.Count;
 
     /// <summary>How far the chamfer and extrude buttons cut and pull.</summary>
-    public float ChamferDistance { get; set; } = 0.25f;
-    public float ExtrudeDistance { get; set; } = 1f;
+    public float ChamferDistance => CSGSnap.Grid;
+    public float ExtrudeDistance => CSGSnap.Grid;
 
     /// <summary>Cuts every selected edge, or every selected corner when no whole edge is selected, by <see cref="ChamferDistance"/>.</summary>
     public void ChamferSelected()
@@ -193,7 +194,7 @@ public sealed class CSGMeshTool : SceneTool
         if (handles.KeyDown(KeyCode.Escape))
         {
             if (_action != Action.None) { CancelAction(); return; }
-            if (_vertices.Count == 0) CSGEditMode.Current = CSGMode.Object;
+            if (_vertices.Count == 0) CSGEditMode.Current = CSGMode.Select;
             ClearSelection();
             return;
         }

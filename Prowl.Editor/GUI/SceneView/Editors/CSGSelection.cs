@@ -59,6 +59,18 @@ public static class CSGSelection
         return Float3.NormalizeSafe(new Float3(Float3.Dot(toLocal.c0.XYZ, n), Float3.Dot(toLocal.c1.XYZ, n), Float3.Dot(toLocal.c2.XYZ, n)), Float3.UnitY);
     }
 
+    /// <summary>The generated shape a brush belongs to, on its own object or the group holding it, or null.</summary>
+    public static CSGShape? ShapeOf(CSGBrush brush)
+    {
+        for (GameObject? go = brush.GameObject; go.IsValid(); go = go!.Parent)
+        {
+            CSGShape shape = go!.GetComponent<CSGShape>();
+            if (shape.IsValid()) return shape;
+            if (go.GetComponent<CSGModel>().IsValid()) break;
+        }
+        return null;
+    }
+
     /// <summary>Creates an empty CSG model at the scene root and selects it.</summary>
     public static CSGModel CreateModel()
     {
@@ -69,7 +81,7 @@ public static class CSGSelection
         Selection.Select(go);
 
         // An empty model has nothing to select, so the first thing to do is draw
-        CSGEditMode.Current = CSGMode.Generate;
+        CSGEditMode.Current = CSGMode.Create;
         return model;
     }
 
@@ -473,18 +485,10 @@ public static class CSGSelection
         MarkDirty();
     }
 
-    /// <summary>The step the array buttons move by, and how many copies a clone makes.</summary>
-    public static Float3 ArrayOffset = new(1f, 0f, 0f);
-    public static int ArrayCount = 1;
-
     private static Float3? _lastClone;
 
-    /// <summary>Leaves <see cref="ArrayCount"/> copies in a row, each <see cref="ArrayOffset"/> past the last.</summary>
-    public static void CloneArray()
-    {
-        for (int i = 0; i < Math.Max(1, ArrayCount); i++) MoveBy(ArrayOffset, clone: true);
-        _lastClone = ArrayOffset;
-    }
+    /// <summary>The step a clone was dragged by, which <see cref="RepeatClone"/> repeats.</summary>
+    public static void RememberClone(Float3 step) => _lastClone = step;
 
     /// <summary>Clones the selection once more by the last clone's step.</summary>
     public static void RepeatClone()

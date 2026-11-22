@@ -43,7 +43,25 @@ public sealed class CSGClipTool : SceneTool
     /// <summary>Which half survives the cut.</summary>
     public CSGClipMode Mode { get; set; } = CSGClipMode.RemoveFront;
 
-    public bool Active => CSGEditMode.Is(CSGMode.Clip);
+    /// <summary>A cut is being placed. Started by <see cref="Begin"/>, from the right click menu.</summary>
+    public bool Active => Cutting && CSGEditMode.Is(CSGMode.Select);
+
+    public bool Cutting { get; private set; }
+
+    /// <summary>Starts placing a cut through the selected brushes, or the whole model when none are selected.</summary>
+    public void Begin()
+    {
+        CSGEditMode.Current = CSGMode.Select;
+        Cancel();
+        Cutting = true;
+    }
+
+    /// <summary>Stops cutting without changing anything.</summary>
+    public void End()
+    {
+        Cancel();
+        Cutting = false;
+    }
 
     /// <summary>True once there is a cut worth applying.</summary>
     public bool HasPlane => _stage == Stage.Tilting;
@@ -64,13 +82,13 @@ public sealed class CSGClipTool : SceneTool
 
     public override bool SuppressTransformGizmo => Active;
 
-    public override void OnDeactivated() => Cancel();
+    public override void OnDeactivated() => End();
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
         if (!Active)
         {
-            Cancel();
+            End();
             return;
         }
 
@@ -78,8 +96,7 @@ public sealed class CSGClipTool : SceneTool
 
         if (handles.KeyDown(KeyCode.Escape))
         {
-            if (_stage != Stage.Idle) Cancel();
-            else CSGEditMode.Current = CSGMode.Object;
+            End();
             return;
         }
 
@@ -312,7 +329,7 @@ public sealed class CSGClipTool : SceneTool
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsValid()) model!.SetDirty();
 
-        Cancel();
+        End();
     }
 
     private void ClipBrush(CSGBrush brush, Plane worldPlane)

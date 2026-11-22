@@ -55,32 +55,16 @@ internal static class CSGSections
         }
     }
 
-    /// <summary>The columns the current mode shows.</summary>
+    /// <summary>The options of the tool in use. Only Create, the UV tools and a cut being placed have any.</summary>
     internal static List<Column> Columns()
     {
         var columns = new List<Column>();
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return columns;
 
-        switch (CSGEditMode.Current)
-        {
-            case CSGMode.Generate:
-                AddGenerate(columns, SceneToolManager.Get<CSGGenerateTool>());
-                break;
-            case CSGMode.Surface:
-                AddSurface(columns);
-                break;
-            case CSGMode.Clip:
-                AddClip(columns, SceneToolManager.Get<CSGClipTool>());
-                break;
-            case CSGMode.Mesh:
-                AddMesh(columns, SceneToolManager.Get<CSGMeshTool>());
-                break;
-            default:
-                AddSelection(columns);
-                AddShape(columns);
-                break;
-        }
+        if (CSGEditMode.Is(CSGMode.Create)) AddGenerate(columns, SceneToolManager.Get<CSGGenerateTool>());
+        else if (CSGEditMode.IsUV) AddSurface(columns);
+        else if (SceneToolManager.Get<CSGClipTool>() is { Active: true } clip) AddClip(columns, clip);
         return columns;
     }
 
@@ -114,101 +98,6 @@ internal static class CSGSections
                 }
             }
         }
-    }
-
-    private static void AddSelection(List<Column> columns)
-    {
-        List<CSGBrush> brushes = CSGSelection.Brushes();
-        List<CSGGroup> groups = CSGSelection.Groups();
-
-        if (brushes.Count == 0 && groups.Count == 0)
-        {
-            columns.Add(new Column("csg_sel", Loc.Get("csg.selection"), null, (paper, font) =>
-            {
-                Note(paper, font, "csg_sel_hint", Loc.Get("csg.select_hint"));
-                if (CSGVisibility.HiddenCount > 0) Actions(paper, font, "csg_sel_show", 1, UnhideTile());
-            }));
-            return;
-        }
-
-        columns.Add(new Column("csg_sel", $"{Loc.Get("csg.selection")}  {brushes.Count + groups.Count}", null, (paper, font) =>
-        {
-            Segments(paper, font, "csg_sel_op", OperationTiles(OperationIndex(brushes, groups), CSGSelection.SetOperation));
-
-            // One brush can be sized and placed by number, which reshapes it rather than scaling its transform
-            if (brushes.Count == 1 && groups.Count == 0 && CSGSelection.TryBox(brushes[0], out Float3 centre, out Float3 size))
-            {
-                CSGBrush brush = brushes[0];
-                Line(paper, font, "csg_sel_size", Loc.Get("csg.size"), () =>
-                    Origami.Float3Field(paper, "csg_sel_size_v", size, v => CSGSelection.Resize(brush, v)).Show());
-                Line(paper, font, "csg_sel_pos", Loc.Get("csg.position"), () =>
-                    Origami.Float3Field(paper, "csg_sel_pos_v", centre, v => CSGSelection.MoveCentre(brush, v)).Show());
-            }
-
-            var actions = new List<Tile>
-            {
-                new(EditorIcons.Clone, Loc.Get("csg.duplicate"), ShortcutManager.GetTooltip(Loc.Get("csg.duplicate_tip"), "Scene/Duplicate"), CSGSelection.Duplicate),
-                new(EditorIcons.ObjectGroup, Loc.Get("csg.group"), ShortcutManager.GetTooltip(Loc.Get("csg.group_selection_tip"), "CSG/GroupSelection"), CSGMenuItems.GroupSelection),
-                new(EditorIcons.AnglesUp, Loc.Get("csg.earlier"), ShortcutManager.GetTooltip(Loc.Get("csg.earlier_tip"), "CSG/Earlier"), () => CSGSelection.MoveInOrder(-1)),
-                new(EditorIcons.AnglesDown, Loc.Get("csg.later"), ShortcutManager.GetTooltip(Loc.Get("csg.later_tip"), "CSG/Later"), () => CSGSelection.MoveInOrder(1)),
-                new(EditorIcons.Crosshairs, Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot),
-                new(EditorIcons.EyeSlash, Loc.Get("csg.hide"), ShortcutManager.GetTooltip(Loc.Get("csg.hide_selected_tip"), "CSG/Hide"), () => CSGVisibility.Hide(CSGSelection.Brushes())),
-            };
-            if (CSGVisibility.HiddenCount > 0) actions.Add(UnhideTile());
-            Actions(paper, font, "csg_sel_acts", 2, [.. actions]);
-        }));
-
-        columns.Add(new Column("csg_xf", Loc.Get("csg.transform"), null, (paper, font) =>
-        {
-            Line(paper, font, "csg_sel_flip", Loc.Get("csg.flip"), () =>
-                SmallButtons(paper, font, "csg_sel_flip_v", Loc.Get("csg.flip_tip"), ["X", "Y", "Z"], i => CSGSelection.Flip(AxisFor(i))));
-            Line(paper, font, "csg_sel_rot", Loc.Get("csg.rotate"), () =>
-                SmallButtons(paper, font, "csg_sel_rot_v", Loc.Get("csg.rotate_tip"), ["X-", "X+", "Y-", "Y+", "Z-", "Z+"], i =>
-                {
-                    Float3 axis = AxisFor(i / 2) * (i % 2 == 0 ? -SceneTools.RotateSnap : SceneTools.RotateSnap);
-                    CSGSelection.RotateBy(axis, CSGSelection.SelectionCentre(), clone: false);
-                }));
-            Line(paper, font, "csg_sel_step", Loc.Get("csg.move_by"), () =>
-                Origami.Float3Field(paper, "csg_sel_step_v", CSGSelection.ArrayOffset, v => CSGSelection.ArrayOffset = v).Show());
-            Line(paper, font, "csg_sel_count", Loc.Get("csg.copies"), () =>
-                Number(paper, "csg_sel_count_v", CSGSelection.ArrayCount, v => CSGSelection.ArrayCount = Math.Clamp(v, 1, 256)));
-            Actions(paper, font, "csg_sel_array", 2,
-                new Tile(EditorIcons.ArrowsUpDownLeftRight, Loc.Get("csg.move"), Loc.Get("csg.move_tip"), () => CSGSelection.MoveBy(CSGSelection.ArrayOffset, clone: false)),
-                new Tile(EditorIcons.Clone, Loc.Get("csg.clone_array"), ShortcutManager.GetTooltip(Loc.Get("csg.clone_array_tip"), "CSG/RepeatClone"), CSGSelection.CloneArray));
-        }));
-    }
-
-    private static Tile UnhideTile() => new(EditorIcons.Eye, Loc.Get("csg.unhide_all", new { count = CSGVisibility.HiddenCount }),
-        ShortcutManager.GetTooltip(Loc.Get("csg.unhide_all_tip"), "CSG/UnhideAll"), CSGVisibility.UnhideAll);
-
-    /// <summary>The size and settings a generated shape was made with, changing them builds it again.</summary>
-    private static void AddShape(List<Column> columns)
-    {
-        List<GameObject> selected = Selection.GetSelected<GameObject>().ToList();
-        if (selected.Count != 1) return;
-        CSGShape shape = selected[0].GetComponent<CSGShape>();
-        if (shape.IsNotValid()) return;
-
-        columns.Add(new Column("csg_shape", Loc.Get("csg.shape_settings", new { kind = ShapeName(shape.Kind) }), null, (paper, font) =>
-        {
-            if (shape.Kind == CSGGeneratorKind.Polygon)
-            {
-                Line(paper, font, "csg_shape_height", Loc.Get("csg.height"), () =>
-                    Number(paper, "csg_shape_height_v", shape.Height, v => Rebuild(shape, () => shape.Height = v)));
-                return;
-            }
-
-            Line(paper, font, "csg_shape_size", Loc.Get("csg.size"), () =>
-                Origami.Float3Field(paper, "csg_shape_size_v", shape.Size, v => Rebuild(shape, () => shape.Size = Maths.Max(v, new Float3(0.01f)))).Show());
-            DrawGeneratorSettings(paper, font, "csg_shape", shape.Kind, shape.Settings, v => Rebuild(shape, () => shape.Settings = v));
-        }));
-    }
-
-    private static void Rebuild(CSGShape shape, Action change)
-    {
-        Undo.RecordObject(shape, "Edit CSG Shape");
-        change();
-        CSGSelection.Regenerate(shape, "Edit CSG Shape");
     }
 
     private static void AddGenerate(List<Column> columns, CSGGenerateTool? tool)
@@ -333,54 +222,9 @@ internal static class CSGSections
         apply(settings);
     }
 
-    private static void AddMesh(List<Column> columns, CSGMeshTool? tool)
+    private static void AddClip(List<Column> columns, CSGClipTool tool)
     {
-        if (tool == null) return;
-
-        if (tool.Target.IsNotValid())
-        {
-            columns.Add(new Column("csg_mesh", Loc.Get("csg.mesh"), null, (paper, font) =>
-                Note(paper, font, "csg_mesh_none", Loc.Get("csg.mesh_one_brush"))));
-            return;
-        }
-
-        columns.Add(new Column("csg_mesh_pick", Loc.Get("csg.mesh_select"), Loc.Get("csg.mesh_help"), (paper, font) =>
-        {
-            Segments(paper, font, "csg_mesh_filter",
-                FilterTile(tool, EditorIcons.CircleDot, "csg.vertex", CSGElementFilter.Vertex),
-                FilterTile(tool, EditorIcons.Slash, "csg.edge", CSGElementFilter.Edge),
-                FilterTile(tool, EditorIcons.SquareFull, "csg.face", CSGElementFilter.Face));
-
-            Note(paper, font, "csg_mesh_count", Loc.Get("csg.mesh_selected", new { count = tool.SelectedCount, faces = tool.SelectedFaceCount }));
-            if (tool.Filter == CSGElementFilter.None)
-                Note(paper, font, "csg_mesh_warn", Loc.Get("csg.mesh_nothing_selectable"), warn: true);
-            if (tool.NonPlanar)
-                Note(paper, font, "csg_mesh_planar", Loc.Get("csg.mesh_non_planar"), warn: true);
-        }));
-
-        columns.Add(new Column("csg_mesh_edit", Loc.Get("csg.edit"), null, (paper, font) =>
-        {
-            Line(paper, font, "csg_mesh_chamfer", Loc.Get("csg.chamfer"), () =>
-                Number(paper, "csg_mesh_chamfer_v", tool.ChamferDistance, v => tool.ChamferDistance = MathF.Max(0f, v)));
-            Line(paper, font, "csg_mesh_extrude", Loc.Get("csg.extrude"), () =>
-                Number(paper, "csg_mesh_extrude_v", tool.ExtrudeDistance, v => tool.ExtrudeDistance = v));
-            Actions(paper, font, "csg_mesh_actions", 2,
-                new Tile(EditorIcons.BezierCurve, Loc.Get("csg.chamfer"), Loc.Get("csg.chamfer_tip"), tool.ChamferSelected),
-                new Tile(EditorIcons.ArrowUpFromBracket, Loc.Get("csg.extrude"), Loc.Get("csg.extrude_tip"), tool.ExtrudeSelected),
-                new Tile(EditorIcons.Magnet, Loc.Get("csg.snap"), ShortcutManager.GetTooltip(Loc.Get("csg.snap_tip"), "CSG/SnapToGrid"), tool.SnapSelectedToGrid),
-                new Tile(EditorIcons.Trash, Loc.Get("csg.delete_face"), Loc.Get("csg.delete_face_tip"), tool.DeleteSelectedFaces));
-        }));
-    }
-
-    private static Tile FilterTile(CSGMeshTool tool, string icon, string label, CSGElementFilter flag)
-        => new(icon, Loc.Get(label), Loc.Get("csg.mesh_select_tip"),
-            () => tool.Filter = tool.Filter.HasFlag(flag) ? tool.Filter & ~flag : tool.Filter | flag, tool.Filter.HasFlag(flag));
-
-    private static void AddClip(List<Column> columns, CSGClipTool? tool)
-    {
-        if (tool == null) return;
-
-        columns.Add(new Column("csg_clip", Loc.Get("csg.clip"), Loc.Get("csg.clip_help"), (paper, font) =>
+        columns.Add(new Column("csg_clip", Loc.Get("csg.cut_with_plane"), Loc.Get("csg.clip_help"), (paper, font) =>
         {
             int count = CSGSelection.Brushes().Count;
             Note(paper, font, "csg_clip_hint", count > 0 ? Loc.Get("csg.clip_selected", new { count }) : Loc.Get("csg.clip_all"));
@@ -394,43 +238,25 @@ internal static class CSGSections
             {
                 Actions(paper, font, "csg_clip_go", 2,
                     new Tile(EditorIcons.Check, Loc.Get("csg.clip_commit"), ShortcutManager.GetTooltip(Loc.Get("csg.clip_commit_tip"), "CSG/Confirm"), tool.Commit),
-                    new Tile(EditorIcons.Xmark, Loc.Get("csg.clip_cancel"), Loc.Get("csg.clip_cancel_tip"), tool.Cancel));
+                    new Tile(EditorIcons.Xmark, Loc.Get("csg.clip_cancel"), Loc.Get("csg.clip_cancel_tip"), tool.End));
             }
         }));
     }
 
+    /// <summary>The selected surfaces' material, mapping and flags, for the UV tools.</summary>
     private static void AddSurface(List<Column> columns)
     {
-        bool picked = CSGSurfaceSelection.Active is CSGSurfaceRef active && active.IsValid;
-
-        columns.Add(new Column("csg_surf_pick", Loc.Get("csg.select"), Loc.Get("csg.surface_pick_hint"), (paper, font) =>
+        if (CSGSurfaceSelection.Active is not CSGSurfaceRef active || !active.IsValid)
         {
-            Actions(paper, font, "csg_surf_by", 2,
-                new Tile(EditorIcons.ArrowDown, Loc.Get("csg.floors"), Loc.Get("csg.floors_tip"), CSGSurfaceSelection.SelectFloors),
-                new Tile(EditorIcons.BorderAll, Loc.Get("csg.walls"), Loc.Get("csg.walls_tip"), CSGSurfaceSelection.SelectWalls),
-                new Tile(EditorIcons.ArrowUp, Loc.Get("csg.ceilings"), Loc.Get("csg.ceilings_tip"), CSGSurfaceSelection.SelectCeilings),
-                new Tile(EditorIcons.LayerGroup, Loc.Get("csg.coplanar"), Loc.Get("csg.coplanar_tip"), CSGSurfaceSelection.SelectCoplanar),
-                new Tile(EditorIcons.Link, Loc.Get("csg.connected"), Loc.Get("csg.connected_tip"), CSGSurfaceSelection.SelectConnected),
-                new Tile(EditorIcons.Cube, Loc.Get("csg.all_faces"), Loc.Get("csg.select_all_faces_tip"), CSGSurfaceSelection.SelectAllOfBrush),
-                new Tile(EditorIcons.Palette, Loc.Get("csg.same_material"), Loc.Get("csg.select_same_material_tip"), CSGSurfaceSelection.SelectSameMaterial));
+            columns.Add(new Column("csg_surf", Loc.Get("csg.surfaces_title"), Loc.Get("csg.surface_pick_hint"), (paper, font) =>
+                Note(paper, font, "csg_surf_none", Loc.Get("csg.no_surfaces"))));
+            return;
+        }
 
-            if (!picked)
-            {
-                Note(paper, font, "csg_surf_hint", Loc.Get("csg.surface_pick_hint"));
-                return;
-            }
+        SurfaceData data = active.Data;
+        string count = Loc.Get("csg.surfaces_selected", new { count = CSGSurfaceSelection.Count });
 
-            CSGSurfaceRef current = CSGSurfaceSelection.Active!.Value;
-            Actions(paper, font, "csg_surf_owner", 1,
-                new Tile(EditorIcons.Cube, $"{Loc.Get("csg.surfaces_selected", new { count = CSGSurfaceSelection.Count })}  {current.Brush.GameObject.Name}",
-                    Loc.Get("csg.surface_owner_tip"), () => Selection.Select(current.Brush.GameObject)));
-        }));
-
-        if (!picked) return;
-
-        SurfaceData data = CSGSurfaceSelection.Active!.Value.Data;
-
-        columns.Add(new Column("csg_surf_mat", Loc.Get("csg.material"), Loc.Get("csg.surface_paint_hint"), (paper, font) =>
+        columns.Add(new Column("csg_surf_mat", $"{Loc.Get("csg.material")}  {count}", Loc.Get("csg.surface_paint_hint"), (paper, font) =>
         {
             PropertyGridUtils.DrawField(paper, "csg_surf_mat_v", "", typeof(Material),
                 data.Material, v => CSGSurfaceSelection.SetMaterial(v as Material), 0);
@@ -439,36 +265,24 @@ internal static class CSGSections
 
         columns.Add(new Column("csg_surf_map", Loc.Get("csg.mapping"), null, (paper, font) =>
         {
-            Line(paper, font, "csg_surf_offset", Loc.Get("csg.uv_offset"), () =>
-                Origami.Float2Field(paper, "csg_surf_offset_v", data.Offset, v => CSGSurfaceSelection.SetOffset(v)).Show());
-            Line(paper, font, "csg_surf_scale", Loc.Get("csg.uv_scale"), () =>
-                Origami.Float2Field(paper, "csg_surf_scale_v", data.Scale, v => CSGSurfaceSelection.SetScale(v)).Show());
-            Line(paper, font, "csg_surf_rot", Loc.Get("csg.uv_rotation"), () =>
-                Number(paper, "csg_surf_rot_v", data.Rotation, v => CSGSurfaceSelection.SetRotation(v)));
-            Line(paper, font, "csg_surf_step", "", () =>
-                SmallButtons(paper, font, "csg_surf_step_v", Loc.Get("csg.uv_step_tip"), ["-90", "+90", "/2", "x2"], i =>
-                {
-                    if (i < 2) CSGSurfaceSelection.RotateBy(i == 0 ? -90f : 90f);
-                    else CSGSurfaceSelection.ScaleBy(i == 2 ? 0.5f : 2f);
-                }));
-        }));
-
-        columns.Add(new Column("csg_surf_align", Loc.Get("csg.align_title"), null, (paper, font) =>
-        {
+            Line(paper, font, "csg_surf_offset", Loc.Get("csg.uv_offset"), () => Reset(paper, font, "csg_surf_offset_r",
+                () => Origami.Float2Field(paper, "csg_surf_offset_v", data.Offset, v => CSGSurfaceSelection.SetOffset(v)).Show(),
+                () => CSGSurfaceSelection.SetOffset(Float2.Zero)));
+            Line(paper, font, "csg_surf_rot", Loc.Get("csg.uv_rotation"), () => Reset(paper, font, "csg_surf_rot_r",
+                () => Number(paper, "csg_surf_rot_v", data.Rotation, v => CSGSurfaceSelection.SetRotation(v)),
+                () => CSGSurfaceSelection.SetRotation(0f)));
+            Line(paper, font, "csg_surf_scale", Loc.Get("csg.uv_scale"), () => Reset(paper, font, "csg_surf_scale_r",
+                () => Origami.Float2Field(paper, "csg_surf_scale_v", data.Scale, v => CSGSurfaceSelection.SetScale(v)).Show(),
+                () => CSGSurfaceSelection.SetScale(Float2.One)));
             AxisLine(paper, font, "csg_surf_fit", Loc.Get("csg.fit"), Loc.Get("csg.fit_tip"), CSGSurfaceSelection.Fit);
-            AxisLine(paper, font, "csg_surf_flip", Loc.Get("csg.reverse"), Loc.Get("csg.reverse_tip"), CSGSurfaceSelection.Flip);
-            AxisLine(paper, font, "csg_surf_reset", Loc.Get("csg.reset"), Loc.Get("csg.reset_tip"), CSGSurfaceSelection.Reset);
-
-            using (paper.Row("csg_surf_just_row").Height(UnitValue.Auto).Gap(6).Enter())
-            {
-                DrawJustifyGrid(paper, font);
-                using (paper.Column("csg_surf_just_acts").Height(UnitValue.Auto).Enter())
+            Actions(paper, font, "csg_surf_acts", 2,
+                new Tile(EditorIcons.AlignCenter, Loc.Get("csg.align"), Loc.Get("csg.align_tip"), CSGSurfaceSelection.AlignToActive),
+                new Tile(EditorIcons.ArrowsRotate, Loc.Get("csg.reset_all"), Loc.Get("csg.reset_all_tip"), () =>
                 {
-                    Actions(paper, font, "csg_surf_tools", 1,
-                        new Tile(EditorIcons.AlignCenter, Loc.Get("csg.align"), Loc.Get("csg.align_tip"), CSGSurfaceSelection.AlignToActive),
-                        new Tile(EditorIcons.Copy, Loc.Get("csg.copy_surface"), Loc.Get("csg.copy_surface_tip"), CSGSurfaceSelection.CopyFromActive));
-                }
-            }
+                    CSGSurfaceSelection.SetOffset(Float2.Zero);
+                    CSGSurfaceSelection.SetRotation(0f);
+                    CSGSurfaceSelection.SetScale(Float2.One);
+                }));
         }));
 
         columns.Add(new Column("csg_surf_flags", Loc.Get("csg.shading_flags"), null, (paper, font) =>
@@ -476,8 +290,6 @@ internal static class CSGSections
             Segments(paper, font, "csg_surf_smooth",
                 new Tile(EditorIcons.Circle, Loc.Get("csg.smooth"), Loc.Get("csg.smooth_tip"), CSGSurfaceSelection.Smooth, data.SmoothingGroup != 0),
                 new Tile(EditorIcons.Square, Loc.Get("csg.unsmooth"), Loc.Get("csg.unsmooth_tip"), CSGSurfaceSelection.UnSmooth, data.SmoothingGroup == 0));
-            Line(paper, font, "csg_surf_group", Loc.Get("csg.smooth_group"), () =>
-                Number(paper, "csg_surf_group_v", data.SmoothingGroup, v => CSGSurfaceSelection.SetSmoothingGroup(v)));
             Chips(paper, font, "csg_surf_flag_v",
                 (Loc.Get("csg.texture_lock"), !data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture), Loc.Get("csg.texture_lock_tip"),
                     () => CSGSurfaceSelection.SetFlag(CSGSurfaceFlags.WorldSpaceTexture, !data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture))),
@@ -486,6 +298,20 @@ internal static class CSGSections
                 (Loc.Get("csg.collide"), !data.Flags.HasFlag(CSGSurfaceFlags.NoCollision), null,
                     () => CSGSurfaceSelection.SetFlag(CSGSurfaceFlags.NoCollision, !data.Flags.HasFlag(CSGSurfaceFlags.NoCollision))));
         }));
+    }
+
+    /// <summary>A control with a small reset button after it.</summary>
+    private static void Reset(Paper paper, Scribe.FontFile font, string id, System.Action control, System.Action reset)
+    {
+        using (paper.Row($"{id}_c").Height(UnitValue.Auto).MinHeight(RowHeight).Enter())
+            control();
+        paper.Box(id).Width(22).Height(RowHeight).Rounded(5).Margin(4, 0, 0, 0)
+            .BackgroundColor(TileColor)
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink400)
+            .FontSize(Small - 3f).Alignment(TextAlignment.MiddleCenter)
+            .Tooltip(Loc.Get("csg.reset"))
+            .OnClick(reset, (run, _) => run());
     }
 
     /// <summary>The materials to paint with as chips, a click puts one on every selected surface.</summary>
@@ -516,39 +342,6 @@ internal static class CSGSections
         => Line(paper, font, id, label, () =>
             SmallButtons(paper, font, $"{id}_v", tooltip, ["U", "V", "UV"], i => apply(i != 1, i != 0)));
 
-    /// <summary>The nine way justify as a three by three grid of arrows.</summary>
-    private static void DrawJustifyGrid(Paper paper, Scribe.FontFile font)
-    {
-        SurfaceAlign[] order = [SurfaceAlign.Min, SurfaceAlign.Center, SurfaceAlign.Max];
-        string[] glyphs =
-        [
-            EditorIcons.ArrowUp, EditorIcons.ArrowUp, EditorIcons.ArrowUp,
-            EditorIcons.ArrowLeft, EditorIcons.Crosshairs, EditorIcons.ArrowRight,
-            EditorIcons.ArrowDown, EditorIcons.ArrowDown, EditorIcons.ArrowDown,
-        ];
-
-        using (paper.Column("csg_just_grid").Width(72).Height(UnitValue.Auto).Gap(2).Enter())
-        {
-            for (int row = 0; row < 3; row++)
-            {
-                using (paper.Row($"csg_just_r{row}").Height(20).Gap(2).Enter())
-                {
-                    for (int col = 0; col < 3; col++)
-                    {
-                        int r = row, c = col;
-                        paper.Box($"csg_just_{r}{c}").Width(22).Height(20).Rounded(4)
-                            .BackgroundColor(TileColor)
-                            .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                            .Text(glyphs[r * 3 + c], font).TextColor(EditorTheme.Ink500)
-                            .FontSize(Small - 3f).Alignment(TextAlignment.MiddleCenter)
-                            .Tooltip(Loc.Get("csg.justify"), Loc.Get("csg.justify_tip"))
-                            .OnClick(0, (_, _) => CSGSurfaceSelection.Justify(order[c], order[r]));
-                    }
-                }
-            }
-        }
-    }
-
     internal static string OperationLabel(Operation operation) => operation switch
     {
         Operation.Subtractive => "csg.subtractive",
@@ -557,7 +350,7 @@ internal static class CSGSections
     };
 
     /// <summary>A short label with a control filling the rest of the row.</summary>
-    private static void Line(Paper paper, Scribe.FontFile font, string id, string label, System.Action control, float labelWidth = LabelWidth, string? tooltip = null)
+    internal static void Line(Paper paper, Scribe.FontFile font, string id, string label, System.Action control, float labelWidth = LabelWidth, string? tooltip = null)
     {
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(RowHeight).Gap(6).Enter())
         {
@@ -700,7 +493,7 @@ internal static class CSGSections
     };
 
     /// <summary>The shared operation of the selection, or -1 when they disagree.</summary>
-    private static int OperationIndex(List<CSGBrush> brushes, List<CSGGroup> groups)
+    internal static int OperationIndex(List<CSGBrush> brushes, List<CSGGroup> groups)
     {
         int result = -1;
         foreach (Operation op in brushes.Select(b => b.Operation).Concat(groups.Select(g => g.Operation)))

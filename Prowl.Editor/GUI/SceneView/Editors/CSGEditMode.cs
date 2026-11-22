@@ -7,25 +7,27 @@ using Prowl.Vector;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
-/// <summary>What clicking in the viewport does while working on a CSG model.</summary>
+/// <summary>The CSG tool in use while working on a model.</summary>
 public enum CSGMode
 {
-    /// <summary>Select and move whole brushes.</summary>
-    Object,
-    /// <summary>Draw new brushes.</summary>
-    Generate,
-    /// <summary>Select and texture faces.</summary>
-    Surface,
-    /// <summary>Cut brushes with a plane.</summary>
-    Clip,
-    /// <summary>Edit a brush's vertices, edges and faces.</summary>
-    Mesh,
+    /// <summary>Select and move whole brushes with the transform gizmo.</summary>
+    Select,
+    /// <summary>Place new shapes.</summary>
+    Create,
+    /// <summary>Reshape the selection: shape handles, or vertices, edges and faces of a plain brush.</summary>
+    Edit,
+    /// <summary>Drag the texture across selected surfaces.</summary>
+    UVMove,
+    /// <summary>Turn the texture of selected surfaces.</summary>
+    UVRotate,
+    /// <summary>Scale the texture of selected surfaces.</summary>
+    UVScale,
 }
 
-/// <summary>The one CSG mode in force, exclusive since every mode wants the primary button.</summary>
+/// <summary>The one CSG tool in force, exclusive since every tool wants the primary button.</summary>
 public static class CSGEditMode
 {
-    private static CSGMode _mode = CSGMode.Object;
+    private static CSGMode _mode = CSGMode.Select;
 
     public static event Action? Changed;
 
@@ -41,6 +43,9 @@ public static class CSGEditMode
     }
 
     public static bool Is(CSGMode mode) => _mode == mode;
+
+    /// <summary>One of the tools that work on surfaces rather than brushes.</summary>
+    public static bool IsUV => _mode is CSGMode.UVMove or CSGMode.UVRotate or CSGMode.UVScale;
 }
 
 /// <summary>Grid snapping for the CSG tools, following the scene view's grid toggle and size. Holding Ctrl inverts it.</summary>

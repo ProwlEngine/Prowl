@@ -33,7 +33,7 @@ public sealed class CSGSurfaceTool : SceneTool
     private static readonly Color32 SelectedEdge = new(255, 220, 120, 255);
 
     /// <summary>Whether surface picking is the CSG mode in force.</summary>
-    public bool Active => CSGEditMode.Is(CSGMode.Surface);
+    public bool Active => CSGEditMode.IsUV;
 
     private CSGSurfaceRef _lastSmeared;
 
@@ -61,7 +61,7 @@ public sealed class CSGSurfaceTool : SceneTool
 
         if (ctx.Handles.KeyDown(KeyCode.Escape))
         {
-            if (CSGSurfaceSelection.Count == 0) CSGEditMode.Current = CSGMode.Object;
+            if (CSGSurfaceSelection.Count == 0) CSGEditMode.Current = CSGMode.Select;
             CSGSurfaceSelection.Clear();
             return;
         }

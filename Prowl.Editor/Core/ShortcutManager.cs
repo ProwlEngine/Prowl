@@ -380,11 +380,12 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("GraphEditor/Recenter", "Recenter View", KeyCode.Space);
         ShortcutManager.Register("GraphEditor/GroupSelection", "Group Selected", KeyCode.G, ctrl: true);
 
-        ShortcutManager.Register("CSG/ModeObject", "Object Mode", KeyCode.Number1, alt: true);
-        ShortcutManager.Register("CSG/ModeGenerate", "Generate Mode", KeyCode.Number2, alt: true);
-        ShortcutManager.Register("CSG/ModeSurface", "Surface Mode", KeyCode.Number3, alt: true);
-        ShortcutManager.Register("CSG/ModeClip", "Clip Mode", KeyCode.Number4, alt: true);
-        ShortcutManager.Register("CSG/ModeMesh", "Mesh Mode", KeyCode.Number5, alt: true);
+        ShortcutManager.Register("CSG/ModeSelect", "Select Tool", KeyCode.Number1, alt: true);
+        ShortcutManager.Register("CSG/ModeCreate", "Create Tool", KeyCode.Number2, alt: true);
+        ShortcutManager.Register("CSG/ModeEdit", "Edit Tool", KeyCode.Number3, alt: true);
+        ShortcutManager.Register("CSG/ModeUVMove", "UV Move Tool", KeyCode.Number4, alt: true);
+        ShortcutManager.Register("CSG/ModeUVRotate", "UV Rotate Tool", KeyCode.Number5, alt: true);
+        ShortcutManager.Register("CSG/ModeUVScale", "UV Scale Tool", KeyCode.Number6, alt: true);
         ShortcutManager.Register("CSG/SetAdditive", "Set Additive", KeyCode.Equal);
         ShortcutManager.Register("CSG/SetSubtractive", "Set Subtractive", KeyCode.Minus);
         ShortcutManager.Register("CSG/SetIntersecting", "Set Intersecting", KeyCode.BackSlash);
@@ -414,12 +415,12 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("CSG/GroupSelection", "Group Selection", KeyCode.G, ctrl: true);
         ShortcutManager.Register("CSG/Earlier", "Move Earlier in CSG Order", KeyCode.LeftBracket, ctrl: true);
         ShortcutManager.Register("CSG/Later", "Move Later in CSG Order", KeyCode.RightBracket, ctrl: true);
-        ShortcutManager.Register("CSG/ShapeBox", "Draw Box", KeyCode.Number1);
-        ShortcutManager.Register("CSG/ShapeCylinder", "Draw Cylinder", KeyCode.Number2);
-        ShortcutManager.Register("CSG/ShapeSphere", "Draw Sphere", KeyCode.Number3);
-        ShortcutManager.Register("CSG/ShapeLinearStairs", "Draw Stairs", KeyCode.Number4);
-        ShortcutManager.Register("CSG/ShapeSpiralStairs", "Draw Spiral Stairs", KeyCode.Number5);
-        ShortcutManager.Register("CSG/ShapeRoom", "Draw Room", KeyCode.Number6);
-        ShortcutManager.Register("CSG/ShapePolygon", "Draw Polygon", KeyCode.Number7);
+        ShortcutManager.Register("CSG/ShapeBox", "Draw Box", KeyCode.B);
+        ShortcutManager.Register("CSG/ShapeCylinder", "Draw Cylinder", KeyCode.C);
+        ShortcutManager.Register("CSG/ShapeSphere", "Draw Sphere", KeyCode.K);
+        ShortcutManager.Register("CSG/ShapeLinearStairs", "Draw Stairs", KeyCode.L);
+        ShortcutManager.Register("CSG/ShapeSpiralStairs", "Draw Spiral Stairs", KeyCode.P);
+        ShortcutManager.Register("CSG/ShapeRoom", "Draw Room", KeyCode.O);
+        ShortcutManager.Register("CSG/ShapePolygon", "Draw Polygon", KeyCode.N);
     }
 }

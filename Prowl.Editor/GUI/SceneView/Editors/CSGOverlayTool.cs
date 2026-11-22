@@ -20,7 +20,7 @@ using SColor = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
-/// <summary>The CSG editor's panel inside the scene view: mode tabs with the active mode's options under them.</summary>
+/// <summary>The CSG editor's bar inside the scene view: the tools, the selection's operation, and the options of the tool in use.</summary>
 [GlobalSceneTool(Group = "CSG")]
 public sealed class CSGOverlayTool : SceneTool
 {
@@ -28,14 +28,25 @@ public sealed class CSGOverlayTool : SceneTool
     public override string Icon => EditorIcons.Cube;
     public override int Order => -1;
 
-
     private static readonly (CSGMode mode, string label, string tip, string shortcut, string icon)[] Modes =
     {
-        (CSGMode.Object, "csg.mode_object", "csg.mode_object_tip", "CSG/ModeObject", EditorIcons.ArrowPointer),
-        (CSGMode.Generate, "csg.mode_generate", "csg.mode_generate_tip", "CSG/ModeGenerate", EditorIcons.SquarePlus),
-        (CSGMode.Surface, "csg.mode_surface", "csg.mode_surface_tip", "CSG/ModeSurface", EditorIcons.PaintRoller),
-        (CSGMode.Clip, "csg.mode_clip", "csg.mode_clip_tip", "CSG/ModeClip", EditorIcons.Scissors),
-        (CSGMode.Mesh, "csg.mode_mesh", "csg.mode_mesh_tip", "CSG/ModeMesh", EditorIcons.DrawPolygon),
+        (CSGMode.Select, "csg.mode_select", "csg.mode_select_tip", "CSG/ModeSelect", EditorIcons.ArrowPointer),
+        (CSGMode.Create, "csg.mode_create", "csg.mode_create_tip", "CSG/ModeCreate", EditorIcons.SquarePlus),
+        (CSGMode.Edit, "csg.mode_edit", "csg.mode_edit_tip", "CSG/ModeEdit", EditorIcons.DrawPolygon),
+        (CSGMode.UVMove, "csg.mode_uv_move", "csg.mode_uv_move_tip", "CSG/ModeUVMove", EditorIcons.ArrowsUpDownLeftRight),
+        (CSGMode.UVRotate, "csg.mode_uv_rotate", "csg.mode_uv_rotate_tip", "CSG/ModeUVRotate", EditorIcons.RotateRight),
+        (CSGMode.UVScale, "csg.mode_uv_scale", "csg.mode_uv_scale_tip", "CSG/ModeUVScale", EditorIcons.Expand),
+    };
+
+    private static readonly (CSGGeneratorKind Kind, string Shortcut)[] ShapeKeys =
+    {
+        (CSGGeneratorKind.Box, "CSG/ShapeBox"),
+        (CSGGeneratorKind.Cylinder, "CSG/ShapeCylinder"),
+        (CSGGeneratorKind.Sphere, "CSG/ShapeSphere"),
+        (CSGGeneratorKind.LinearStairs, "CSG/ShapeLinearStairs"),
+        (CSGGeneratorKind.SpiralStairs, "CSG/ShapeSpiralStairs"),
+        (CSGGeneratorKind.Room, "CSG/ShapeRoom"),
+        (CSGGeneratorKind.Polygon, "CSG/ShapePolygon"),
     };
 
     private bool _collapsed;
@@ -46,11 +57,11 @@ public sealed class CSGOverlayTool : SceneTool
     {
         if (!ctx.Handles.KeyboardCaptured)
         {
-            if (ctx.Handles.IsPressed("CSG/ModeObject")) CSGEditMode.Current = CSGMode.Object;
-            else if (ctx.Handles.IsPressed("CSG/ModeGenerate")) CSGEditMode.Current = CSGMode.Generate;
-            else if (ctx.Handles.IsPressed("CSG/ModeMesh")) CSGEditMode.Current = CSGMode.Mesh;
-            else if (ctx.Handles.IsPressed("CSG/ModeClip")) CSGEditMode.Current = CSGMode.Clip;
-            else if (ctx.Handles.IsPressed("CSG/ModeSurface")) CSGEditMode.Current = CSGMode.Surface;
+            foreach ((CSGMode mode, _, _, string shortcut, _) in Modes)
+                if (ctx.Handles.IsPressed(shortcut)) CSGEditMode.Current = mode;
+
+            foreach ((CSGGeneratorKind kind, string shortcut) in ShapeKeys)
+                if (ctx.Handles.IsPressed(shortcut)) StartShape(kind);
 
             // The mesh tool tapers a selected face on the same keys
             if (SceneToolManager.Get<CSGMeshTool>() is not { TapersFace: true })
@@ -66,14 +77,22 @@ public sealed class CSGOverlayTool : SceneTool
         if (model.IsValid()) CSGHelperSurfaces.Draw(ctx, model!);
     }
 
+    /// <summary>Switches to Create with a shape, unless one is being drawn.</summary>
+    private static void StartShape(CSGGeneratorKind kind)
+    {
+        if (SceneToolManager.Get<CSGGenerateTool>() is not { } create || create.Busy) return;
+        create.Generator = kind;
+        CSGEditMode.Current = CSGMode.Create;
+    }
+
     /// <summary>While a model is being worked on, the scene view's right click menu is the CSG one.</summary>
     public override bool ReplacesSceneContextMenu => true;
 
-    /// <summary>In object mode the brush under the cursor is selected, other modes keep what they have.</summary>
+    /// <summary>In Select and Edit the brush under the cursor is selected, the other tools keep what they have.</summary>
     public override bool OnSceneContextPick(SceneToolContext ctx, Ray ray)
     {
         CSGModel? model = CSGSelection.ActiveModel();
-        if (!CSGEditMode.Is(CSGMode.Object) || model.IsNotValid()) return true;
+        if (!(CSGEditMode.Is(CSGMode.Select) || CSGEditMode.Is(CSGMode.Edit)) || model.IsNotValid()) return true;
 
         if (CSGSelection.PickBrush(model!, CSGSelection.BrushesIn(model!), ray, out CSGBrush brush, out _)
             && !Selection.IsSelected(brush.GameObject))
@@ -84,90 +103,92 @@ public sealed class CSGOverlayTool : SceneTool
     public override void OnSceneContextMenu(SceneToolContext ctx, ContextBuilder menu)
     {
         menu.Title($"{Loc.Get("csg.title")}  {Loc.Get(ModeLabel(CSGEditMode.Current))}");
-        foreach ((string label, System.Action run) in ModeCommands()) menu.Item(label, run);
 
-        if (!CSGEditMode.Is(CSGMode.Object))
-            menu.Submenu(Loc.Get("csg.selection"), sub =>
-            {
-                foreach ((string label, System.Action run) in SelectionCommands()) sub.Item(label, run);
-            });
+        if (CSGEditMode.Is(CSGMode.Create)) ShapeCommands(menu);
+        else if (CSGEditMode.IsUV) SurfaceCommands(menu);
+        else
+        {
+            if (SceneToolManager.Get<CSGMeshTool>() is { Active: true } mesh) MeshCommands(menu, mesh);
+            SelectionCommands(menu);
+        }
 
-        menu.Submenu(Loc.Get("csg.mode"), sub =>
+        menu.Submenu(Loc.Get("csg.tools"), sub =>
         {
             foreach ((CSGMode mode, string label, _, string shortcut, _) in Modes)
-            {
-                string keys = ShortcutManager.Find(shortcut) is { } def ? ShortcutManager.GetDisplayString(def.Binding) : "";
-                sub.Item(Loc.Get(label), () => CSGEditMode.Current = mode, shortcut: keys, on: CSGEditMode.Is(mode));
-            }
+                sub.Item(Loc.Get(label), () => CSGEditMode.Current = mode, shortcut: Keys(shortcut), on: CSGEditMode.Is(mode));
         });
         menu.Separator();
     }
 
-    private static List<(string Label, System.Action Run)> SelectionCommands() =>
-    [
-        (Loc.Get("csg.additive"), () => SetOperation(Operation.Additive)),
-        (Loc.Get("csg.subtractive"), () => SetOperation(Operation.Subtractive)),
-        (Loc.Get("csg.intersect"), () => SetOperation(Operation.Intersect)),
-        (Loc.Get("csg.duplicate"), CSGSelection.Duplicate),
-        (Loc.Get("csg.group_selection"), CSGMenuItems.GroupSelection),
-        (Loc.Get("csg.hide_selected"), () => CSGVisibility.Hide(CSGSelection.Brushes())),
-        (Loc.Get("csg.unhide_all", new { count = CSGVisibility.HiddenCount }), CSGVisibility.UnhideAll),
-        (Loc.Get("csg.centre_pivot"), CSGSelection.CentrePivot),
-        (Loc.Get("csg.clone_array"), CSGSelection.CloneArray),
-    ];
+    private static string Keys(string shortcut)
+        => ShortcutManager.Find(shortcut) is { } def ? ShortcutManager.GetDisplayString(def.Binding) : "";
 
-    /// <summary>The current mode's main commands.</summary>
-    private static List<(string Label, System.Action Run)> ModeCommands()
+    private static void Command(ContextBuilder menu, string label, System.Action run, string shortcut = "")
+        => menu.Item(Loc.Get(label), run, shortcut: shortcut.Length > 0 ? Keys(shortcut) : "");
+
+    private static void ShapeCommands(ContextBuilder menu)
     {
-        CSGGenerateTool? generate = SceneToolManager.Get<CSGGenerateTool>();
-        CSGClipTool? clip = SceneToolManager.Get<CSGClipTool>();
-        CSGMeshTool? mesh = SceneToolManager.Get<CSGMeshTool>();
+        if (SceneToolManager.Get<CSGGenerateTool>() is not { } create) return;
+        foreach ((CSGGeneratorKind kind, string shortcut) in ShapeKeys)
+            menu.Item(CSGSections.ShapeName(kind), () => create.Generator = kind, shortcut: Keys(shortcut), on: create.Generator == kind);
+        menu.Separator();
+    }
 
-        return CSGEditMode.Current switch
+    private static void SurfaceCommands(ContextBuilder menu)
+    {
+        Command(menu, "csg.select_floors", CSGSurfaceSelection.SelectFloors);
+        Command(menu, "csg.select_walls", CSGSurfaceSelection.SelectWalls);
+        Command(menu, "csg.select_ceilings", CSGSurfaceSelection.SelectCeilings);
+        Command(menu, "csg.select_coplanar", CSGSurfaceSelection.SelectCoplanar);
+        Command(menu, "csg.select_connected", CSGSurfaceSelection.SelectConnected);
+        Command(menu, "csg.select_all_faces", CSGSurfaceSelection.SelectAllOfBrush);
+        Command(menu, "csg.select_same_material", CSGSurfaceSelection.SelectSameMaterial);
+        menu.Separator();
+        Command(menu, "csg.align", CSGSurfaceSelection.AlignToActive);
+        Command(menu, "csg.copy_surface", CSGSurfaceSelection.CopyFromActive);
+        menu.Separator();
+    }
+
+    private static void MeshCommands(ContextBuilder menu, CSGMeshTool mesh)
+    {
+        Command(menu, "csg.chamfer", mesh.ChamferSelected);
+        Command(menu, "csg.extrude", mesh.ExtrudeSelected);
+        Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid");
+        Command(menu, "csg.delete_face", mesh.DeleteSelectedFaces);
+        menu.Separator();
+    }
+
+    private static void SelectionCommands(ContextBuilder menu)
+    {
+        if (SceneToolManager.Get<CSGClipTool>() is { } clip) Command(menu, "csg.cut_with_plane", clip.Begin);
+        menu.Separator();
+        Command(menu, "csg.duplicate", CSGSelection.Duplicate, "Scene/Duplicate");
+        Command(menu, "csg.repeat_clone", CSGSelection.RepeatClone, "CSG/RepeatClone");
+        Command(menu, "csg.group_selection", CSGMenuItems.GroupSelection, "CSG/GroupSelection");
+        Command(menu, "csg.earlier", () => CSGSelection.MoveInOrder(-1), "CSG/Earlier");
+        Command(menu, "csg.later", () => CSGSelection.MoveInOrder(1), "CSG/Later");
+        menu.Separator();
+        menu.Submenu(Loc.Get("csg.flip"), sub =>
         {
-            CSGMode.Generate when generate != null =>
-            [
-                (CSGSections.ShapeName(CSGGeneratorKind.Box), () => generate.Generator = CSGGeneratorKind.Box),
-                (CSGSections.ShapeName(CSGGeneratorKind.Cylinder), () => generate.Generator = CSGGeneratorKind.Cylinder),
-                (CSGSections.ShapeName(CSGGeneratorKind.Sphere), () => generate.Generator = CSGGeneratorKind.Sphere),
-                (CSGSections.ShapeName(CSGGeneratorKind.LinearStairs), () => generate.Generator = CSGGeneratorKind.LinearStairs),
-                (CSGSections.ShapeName(CSGGeneratorKind.SpiralStairs), () => generate.Generator = CSGGeneratorKind.SpiralStairs),
-                (CSGSections.ShapeName(CSGGeneratorKind.Room), () => generate.Generator = CSGGeneratorKind.Room),
-                (CSGSections.ShapeName(CSGGeneratorKind.Polygon), () => generate.Generator = CSGGeneratorKind.Polygon),
-                (Loc.Get("csg.subtractive"), () => generate.Operation = generate.Operation == Operation.Subtractive ? Operation.Additive : Operation.Subtractive),
-            ],
-            CSGMode.Surface =>
-            [
-                (Loc.Get("csg.floors"), CSGSurfaceSelection.SelectFloors),
-                (Loc.Get("csg.walls"), CSGSurfaceSelection.SelectWalls),
-                (Loc.Get("csg.ceilings"), CSGSurfaceSelection.SelectCeilings),
-                (Loc.Get("csg.coplanar"), CSGSurfaceSelection.SelectCoplanar),
-                (Loc.Get("csg.connected"), CSGSurfaceSelection.SelectConnected),
-                (Loc.Get("csg.align"), CSGSurfaceSelection.AlignToActive),
-            ],
-            CSGMode.Clip when clip != null =>
-            [
-                (Loc.Get("csg.clip_front"), () => clip.Mode = CSGClipMode.RemoveFront),
-                (Loc.Get("csg.clip_back"), () => clip.Mode = CSGClipMode.RemoveBack),
-                (Loc.Get("csg.clip_split"), () => clip.Mode = CSGClipMode.Split),
-                (Loc.Get("csg.clip_commit"), clip.Commit),
-            ],
-            CSGMode.Mesh when mesh != null =>
-            [
-                (Loc.Get("csg.chamfer"), mesh.ChamferSelected),
-                (Loc.Get("csg.extrude"), mesh.ExtrudeSelected),
-                (Loc.Get("csg.snap"), mesh.SnapSelectedToGrid),
-                (Loc.Get("csg.delete_face"), mesh.DeleteSelectedFaces),
-            ],
-            _ => SelectionCommands(),
-        };
+            Command(sub, "csg.flip_x", () => CSGSelection.Flip(Float3.UnitX), "CSG/FlipX");
+            Command(sub, "csg.flip_y", () => CSGSelection.Flip(Float3.UnitY), "CSG/FlipY");
+            Command(sub, "csg.flip_z", () => CSGSelection.Flip(Float3.UnitZ), "CSG/FlipZ");
+        });
+        Command(menu, "csg.rotate_left", () => RotateBySnap(-1f), "CSG/RotateLeft");
+        Command(menu, "csg.rotate_right", () => RotateBySnap(1f), "CSG/RotateRight");
+        Command(menu, "csg.snap_to_grid", CSGSelection.SnapToGrid, "CSG/SnapToGrid");
+        Command(menu, "csg.centre_pivot", CSGSelection.CentrePivot);
+        menu.Separator();
+        Command(menu, "csg.hide_selected", () => CSGVisibility.Hide(CSGSelection.Brushes()), "CSG/Hide");
+        menu.Item(Loc.Get("csg.unhide_all", new { count = CSGVisibility.HiddenCount }), CSGVisibility.UnhideAll, shortcut: Keys("CSG/UnhideAll"));
+        menu.Separator();
     }
 
     /// <summary>Selection shortcuts, in every mode. The mesh tool keeps rotate and snap for its own points.</summary>
     private static void HandleShortcuts(HandleContext handles)
     {
         if (handles.KeyboardCaptured) return;
-        bool mesh = CSGEditMode.Is(CSGMode.Mesh);
+        bool mesh = SceneToolManager.Get<CSGMeshTool>() is { Active: true };
 
         // Modified bindings are tested first so plain Hide does not swallow Ctrl+H and Shift+H
         if (handles.IsPressed("CSG/HideUnselected")) { CSGVisibility.HideUnselected(); return; }
@@ -208,7 +229,7 @@ public sealed class CSGOverlayTool : SceneTool
     /// <summary>Sets the selection's operation, and while drawing also the operation the next brush gets.</summary>
     private static void SetOperation(Operation operation)
     {
-        if (CSGEditMode.Is(CSGMode.Generate) && SceneToolManager.Get<CSGGenerateTool>() is { } generate) generate.Operation = operation;
+        if (CSGEditMode.Is(CSGMode.Create) && SceneToolManager.Get<CSGGenerateTool>() is { } generate) generate.Operation = operation;
         CSGSelection.SetOperation(operation);
     }
 
@@ -253,12 +274,13 @@ public sealed class CSGOverlayTool : SceneTool
             DrawHeader(paper, font, id, _collapsed, () => _collapsed = !_collapsed);
             if (_collapsed) return;
 
+            if (columns.Count == 0) return;
             paper.Box($"{id}_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
             CSGSections.DrawColumns(paper, font, $"{id}_cols", columns, width);
         }
     }
 
-    private const float HeaderWidth = 560f;
+    private const float HeaderWidth = 460f;
 
     /// <summary>The mode buttons along the top, with any warning about the model at the far end.</summary>
     internal static void DrawHeader(Paper paper, Scribe.FontFile font, string id, bool collapsed, System.Action? toggle)
@@ -272,7 +294,7 @@ public sealed class CSGOverlayTool : SceneTool
             foreach ((CSGMode mode, string label, string tip, string shortcut, string icon) in Modes)
             {
                 bool active = CSGEditMode.Is(mode);
-                using (paper.Row($"{id}_mode_{mode}").Width(UnitValue.Auto).Height(22).Padding(7, 8, 0, 0).Gap(5).Rounded(5)
+                using (paper.Row($"{id}_mode_{mode}").Width(UnitValue.Auto).Height(22).Padding(7, active ? 8 : 7, 0, 0).Gap(5).Rounded(5)
                            .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                            .BackgroundColor(active ? EditorTheme.Accent : SColor.Transparent)
                            .Hovered.BackgroundColor(active ? EditorTheme.AccentBright : EditorTheme.Hover).End()
@@ -283,14 +305,26 @@ public sealed class CSGOverlayTool : SceneTool
                     paper.Box($"{id}_mode_{mode}_i").Width(UnitValue.Auto).Height(22).IsNotInteractable()
                         .Text(icon, font).TextColor(active ? SColor.White : EditorTheme.AccentText)
                         .FontSize(EditorTheme.FontSizeSmall - 2f).Alignment(TextAlignment.MiddleCenter);
+                    if (!active) continue;
                     paper.Box($"{id}_mode_{mode}_t").Width(UnitValue.Auto).Height(22).IsNotInteractable()
-                        .Text(Loc.Get(label), font).TextColor(active ? SColor.White : EditorTheme.Ink400)
+                        .Text(Loc.Get(label), font).TextColor(SColor.White)
                         .FontSize(EditorTheme.FontSizeSmall - 1f).Alignment(TextAlignment.MiddleCenter);
                 }
             }
 
             paper.Box($"{id}_head_gap").Height(30).IsNotInteractable();
             DrawWarnings(paper, font, id);
+
+            // The selection's operation, lit when every selected brush and group shares it
+            int shared = CSGSections.OperationIndex(CSGSelection.Brushes(), CSGSelection.Groups());
+            HeaderButton(paper, font, $"{id}_op_add", EditorIcons.SquarePlus, shared == (int)Operation.Additive,
+                ShortcutManager.GetTooltip(Loc.Get("csg.additive"), "CSG/SetAdditive"), Loc.Get("csg.additive_tip"), () => SetOperation(Operation.Additive));
+            HeaderButton(paper, font, $"{id}_op_sub", EditorIcons.SquareMinus, shared == (int)Operation.Subtractive,
+                ShortcutManager.GetTooltip(Loc.Get("csg.subtractive"), "CSG/SetSubtractive"), Loc.Get("csg.subtractive_tip"), () => SetOperation(Operation.Subtractive));
+            HeaderButton(paper, font, $"{id}_op_int", EditorIcons.CropSimple, shared == (int)Operation.Intersect,
+                ShortcutManager.GetTooltip(Loc.Get("csg.intersect"), "CSG/SetIntersecting"), Loc.Get("csg.intersect_tip"), () => SetOperation(Operation.Intersect));
+            HeaderButton(paper, font, $"{id}_pivot", EditorIcons.Crosshairs, false,
+                Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
 
             paper.Box($"{id}_head_show")
                 .Width(22).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
@@ -310,6 +344,18 @@ public sealed class CSGOverlayTool : SceneTool
                 .Tooltip(Loc.Get("csg.collapse"), Loc.Get("csg.collapse_tip"))
                 .OnClick(toggle, (t, _) => t());
         }
+    }
+
+    private static void HeaderButton(Paper paper, Scribe.FontFile font, string id, string icon, bool on, string title, string tip, System.Action run)
+    {
+        paper.Box(id)
+            .Width(24).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .BackgroundColor(on ? EditorTheme.Accent : SColor.Transparent)
+            .Hovered.BackgroundColor(on ? EditorTheme.AccentBright : EditorTheme.Hover).End()
+            .Text(icon, font)
+            .TextColor(on ? SColor.White : EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall - 2f).Alignment(TextAlignment.MiddleCenter)
+            .Tooltip(title, tip)
+            .OnClick(run, (r, _) => r());
     }
 
     /// <summary>Which normally invisible surfaces the viewport draws.</summary>

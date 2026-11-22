@@ -49,7 +49,7 @@ public sealed class CSGGenerateTool : SceneTool
     private static readonly Color32 GuideColor = new(140, 200, 255, 200);
 
     /// <summary>Whether drawing is the CSG mode in force.</summary>
-    public bool Drawing => CSGEditMode.Is(CSGMode.Generate);
+    public bool Drawing => CSGEditMode.Is(CSGMode.Create);
 
     /// <summary>Operation the next brush is created with. Choosing one turns <see cref="AutoOperation"/> off.</summary>
     public Operation Operation
@@ -90,6 +90,9 @@ public sealed class CSGGenerateTool : SceneTool
     private bool _onSurface;
     private bool _hoverOnSurface;
 
+    /// <summary>A shape is being drawn, so the shape keys and tool changes wait.</summary>
+    public bool Busy => _stage != Stage.Idle;
+
     public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
 
     /// <summary>While armed, drawing owns the button so the gizmo cannot win the press.</summary>
@@ -111,7 +114,7 @@ public sealed class CSGGenerateTool : SceneTool
         if (handles.KeyDown(KeyCode.Escape))
         {
             if (_stage != Stage.Idle) Cancel();
-            else CSGEditMode.Current = CSGMode.Object;
+            else CSGEditMode.Current = CSGMode.Select;
             return;
         }
 
@@ -123,7 +126,6 @@ public sealed class CSGGenerateTool : SceneTool
         // A shape in progress belongs to the scene view it started in
         if (_stage != Stage.Idle && !ReferenceEquals(ctx.View, _stageView)) return;
 
-        if (_stage == Stage.Idle) PickShapeKey(handles);
 
         switch (_stage)
         {
@@ -256,17 +258,6 @@ public sealed class CSGGenerateTool : SceneTool
         if (ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered) Commit(ctx, OperationFor());
     }
 
-    private void PickShapeKey(HandleContext handles)
-    {
-        if (handles.IsPressed("CSG/ShapeBox")) Generator = CSGGeneratorKind.Box;
-        else if (handles.IsPressed("CSG/ShapeCylinder")) Generator = CSGGeneratorKind.Cylinder;
-        else if (handles.IsPressed("CSG/ShapeSphere")) Generator = CSGGeneratorKind.Sphere;
-        else if (handles.IsPressed("CSG/ShapeLinearStairs")) Generator = CSGGeneratorKind.LinearStairs;
-        else if (handles.IsPressed("CSG/ShapeSpiralStairs")) Generator = CSGGeneratorKind.SpiralStairs;
-        else if (handles.IsPressed("CSG/ShapeRoom")) Generator = CSGGeneratorKind.Room;
-        else if (handles.IsPressed("CSG/ShapePolygon")) Generator = CSGGeneratorKind.Polygon;
-    }
-
     /// <summary>Where a new brush would start: the surface under the cursor, or the grid plane.</summary>
     private static bool TryHoverPoint(SceneToolContext ctx, out Float3 point, out Float3 normal, out bool onSurface)
     {
@@ -395,7 +386,7 @@ public sealed class CSGGenerateTool : SceneTool
         Cancel();
 
         // Straight to editing what was placed, as most brushes are adjusted right after
-        CSGEditMode.Current = CSGMode.Object;
+        CSGEditMode.Current = CSGMode.Edit;
     }
 
     /// <summary>Builds the drawn shape into the model and returns the object that holds it, or null when it encloses nothing.</summary>
