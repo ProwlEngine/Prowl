@@ -486,7 +486,7 @@ public sealed class CSGMeshTool : SceneTool
         Float3 origin = Float4x4.TransformPoint(handles.MouseRay.Origin, toLocal);
         Float3 direction = Float4x4.TransformNormal(handles.MouseRay.Direction, toLocal);
 
-        if (!_mesh!.Raycast(origin, direction, out float t, out polygon)) return false;
+        if (!_mesh!.Raycast(origin, direction, out float t, out polygon, bothSides: true)) return false;
 
         id = handles.GetControlID(FaceControl, polygon);
         handles.AddControl(id, HandleContext.BodyDistance, t);

@@ -70,6 +70,22 @@ public class CSGBrushGeometryTests
         Assert.Equal(1f, t, 3);
     }
 
+    /// <summary>A ray from inside the points hits the face it leaves through, as from inside a room, when both sides count.</summary>
+    [Fact]
+    public void ControlMeshRaycastFromInsideHitsTheFaceItLeavesThrough()
+    {
+        CSGControlMesh box = CSGControlMesh.FromPlanes(Box(Float3.One * 2f))!;
+
+        Assert.False(box.Raycast(Float3.Zero, -Float3.UnitY, out _, out _));
+        Assert.True(box.Raycast(Float3.Zero, -Float3.UnitY, out float t, out int polygon, bothSides: true));
+        Assert.Equal(1f, t, 3);
+        Assert.True(box.PolygonNormal(polygon).Y < -0.99f);
+
+        Assert.True(box.Raycast(new Float3(0f, 5f, 0f), -Float3.UnitY, out t, out polygon, bothSides: true));
+        Assert.Equal(4f, t, 3);
+        Assert.True(box.PolygonNormal(polygon).Y > 0.99f);
+    }
+
     [Fact]
     public void RaycastHitsAnOffCenterBox()
     {

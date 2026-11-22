@@ -124,8 +124,11 @@ public sealed class CSGControlMesh
         return prism.IsValid() ? prism : null;
     }
 
-    /// <summary>The nearest polygon a ray enters through, any shape of polygon, and how far along the ray.</summary>
-    public bool Raycast(Float3 origin, Float3 direction, out float distance, out int polygon)
+    /// <summary>
+    /// The nearest polygon a ray enters through, any shape of polygon, and how far along the ray. With
+    /// <paramref name="bothSides"/> it is the nearest polygon crossed either way, so a ray from inside finds the one it leaves through.
+    /// </summary>
+    public bool Raycast(Float3 origin, Float3 direction, out float distance, out int polygon, bool bothSides = false)
     {
         distance = float.MaxValue;
         polygon = -1;
@@ -134,7 +137,7 @@ public sealed class CSGControlMesh
         {
             if (!FitPolygon(p, out Plane plane)) continue;
             float denom = Float3.Dot(plane.Normal, direction);
-            if (denom > -1e-9f) continue;
+            if (bothSides ? MathF.Abs(denom) < 1e-9f : denom > -1e-9f) continue;
 
             float t = (plane.D - Float3.Dot(plane.Normal, origin)) / denom;
             if (t < 0f || t >= distance || !Inside(polygons[p], plane.Normal, origin + direction * t)) continue;
