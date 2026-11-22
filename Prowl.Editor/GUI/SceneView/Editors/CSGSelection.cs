@@ -210,13 +210,20 @@ public static class CSGSelection
         Float3 n = Float3.Normalize(axis);
         Float3 center = Centre(roots);
 
+        // Every pivot's mirrored place is worked out before any moves, since a brush moving takes its children along
+        var targets = new List<Float3>(brushes.Count);
         foreach (CSGBrush brush in brushes)
         {
+            Float3 offset = brush.Transform.Position - center;
+            targets.Add(center + offset - n * (2f * Float3.Dot(offset, n)));
+        }
+
+        for (int i = 0; i < brushes.Count; i++)
+        {
+            CSGBrush brush = brushes[i];
             brush.Planes = CSGBrushGeometry.Mirror(brush.Planes, axis, brush.Transform.LocalToWorldMatrix);
 
-            // Mirror the pivot about the selection centre so the whole selection reflects as one.
-            Float3 offset = brush.Transform.Position - center;
-            brush.Transform.Position = center + offset - n * (2f * Float3.Dot(offset, n));
+            brush.Transform.Position = targets[i];
         }
 
         MarkDirty();
