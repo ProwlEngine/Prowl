@@ -311,6 +311,89 @@ public static class ModelEditingMode
         model.RefreshPreview();
     }
 
+    // ================================================================
+    //  Export
+    // ================================================================
+
+    [MenuItem("File/Export Model as GLB", priority: 60)]
+    private static void ExportMenu() => ExportGlb();
+
+    [MenuItem("File/Export Model as GLB", isValidate: true)]
+    private static bool CanExportMenu() => IsEditing;
+
+    /// <summary>
+    /// Writes the open model as a GLB file chosen in a save dialog, never over the model itself. Writing over a file
+    /// asks first, naming what it holds that the export cannot write back.
+    /// </summary>
+    public static void ExportGlb()
+    {
+        if (World is not { } world || Session is not { } session) return;
+        PMeshDocument document = Gather(world);
+        EditorApplication.OpenFileDialog(OrigamiUI.FileDialogMode.Save, path =>
+        {
+            if (path == null) return;
+            if (!path.EndsWith(".glb", StringComparison.OrdinalIgnoreCase)) path += ".glb";
+            if (!File.Exists(path))
+            {
+                WriteExport(document, path);
+                return;
+            }
+            OrigamiUI.Origami.Confirm(Loc.Get("model.export_overwrite_title"), Loc.Get("model.export_overwrite_body", new { name = Path.GetFileName(path), lost = WhatExportDrops(path) }),
+                onYes: () => WriteExport(document, path));
+        }, Project.Current?.AssetsPath, ["*.glb"], [Loc.Get("model.export_filter")]);
+    }
+
+    private static void WriteExport(PMeshDocument document, string path)
+    {
+        try
+        {
+            using (FileStream file = File.Create(path))
+                ModelExport.WriteGlb(document, file, id => AssetDatabase.Get<Material>(id), SourcePng);
+            Debug.Log($"[Model] Exported {document.Objects.Count} objects to {path}");
+            if (Project.Current != null && path.StartsWith(Project.Current.AssetsPath, StringComparison.OrdinalIgnoreCase)) EditorAssetBackend.Instance?.Refresh();
+        }
+        catch (Exception e)
+        {
+            Debug.LogException("[Model] Exporting the model failed", e);
+        }
+    }
+
+    /// <summary>What a model file holds that an export over it cannot keep, as a short list.</summary>
+    private static string WhatExportDrops(string path)
+    {
+        try
+        {
+            Clay.Model existing = Clay.Importer.ModelImporter.Load(path);
+            var lost = new List<string>();
+            if (existing.AnimationClips.Count > 0) lost.Add(Loc.Get("model.export_lost_animations", new { count = existing.AnimationClips.Count }));
+            if (existing.Cameras.Count > 0) lost.Add(Loc.Get("model.export_lost_cameras", new { count = existing.Cameras.Count }));
+            if (existing.Lights.Count > 0) lost.Add(Loc.Get("model.export_lost_lights", new { count = existing.Lights.Count }));
+            if (existing.Metadata.RawExtensions.Count > 0) lost.Add(Loc.Get("model.export_lost_extensions", new { count = existing.Metadata.RawExtensions.Count }));
+            return lost.Count > 0 ? string.Join(", ", lost) : Loc.Get("model.export_lost_nothing");
+        }
+        catch (Exception)
+        {
+            return Loc.Get("model.export_lost_unknown");
+        }
+    }
+
+    /// <summary>A texture's source image re-encoded as PNG, or null when it has no image file of its own.</summary>
+    private static byte[]? SourcePng(Texture2D texture)
+    {
+        if (Project.Current == null || EditorAssetBackend.Instance?.GetEntry(texture.AssetID) is not { } entry) return null;
+        string file = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        try
+        {
+            using Aperture.Image image = Aperture.Image.Load(file, new Aperture.DecodeOptions { TargetPixelFormat = Aperture.PixelFormat.Rgba8 });
+            return image.Encode(new Aperture.EncodeOptions { Format = Aperture.ImageFormat.Png });
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[Model] The texture '{texture.Name}' was left out of the export: {e.Message}");
+            return null;
+        }
+    }
+
     /// <summary>Draws the model world's objects with a checker in place of their materials, or with them again.</summary>
     public static void SetChecker(bool on)
     {

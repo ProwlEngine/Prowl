@@ -1167,6 +1167,7 @@ public class HierarchyPanel : DockPanel
             builder.Item(Loc.Get("model.join"), () => ModelEditingMode.Join(selectedGOs, clickedItem), enabled: selectedGOs.Count > 1,
                 icon: EditorIcons.ObjectGroup);
             builder.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selectedGOs), icon: EditorIcons.Crosshairs);
+            builder.Item(Loc.Get("model.export"), ModelEditingMode.ExportGlb, icon: EditorIcons.FileExport);
         }
 
         if (!IsolatedWorld.IsOpen && ModelEditingMode.CanEditAsModel(selectedGOs))
