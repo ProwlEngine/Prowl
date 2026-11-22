@@ -240,4 +240,27 @@ public class SkinnedModelTests : EditorTestHarness
         Assert.Equal("LeftFoot", Operators.MirrorName("RightFoot"));
         Assert.Null(Operators.MirrorName("Spine"));
     }
+
+    [Fact]
+    public void BlendShapeDeltasAreSavedOnlyWhereTheyMove()
+    {
+        PMeshObject sparse = SkinnedItem();
+        PMeshObject full = SkinnedItem();
+        string bulge = MeshGeometry.BlendShapePosition(0, 0);
+        foreach (GeometryData.Loop corner in full.Mesh.Loops) corner.SetAttribute(bulge, new GeometryData.FloatAttributeValue(0.1f, 0.2f, 0.3f));
+
+        byte[] sparseBytes = new PMeshDocument { Objects = { sparse } }.Write();
+        byte[] fullBytes = new PMeshDocument { Objects = { full } }.Write();
+        GeometryData read = PMeshDocument.Read(sparseBytes).Objects[0].Mesh;
+
+        Assert.True(read.HasLoopAttribute(bulge));
+        foreach (GeometryData.Loop corner in read.Loops)
+        {
+            var delta = (GeometryData.FloatAttributeValue)corner.Attributes[bulge];
+            float expected = corner.Vert.Point == new Float3(1, 1, 0) ? 0.5f : 0f;
+            Assert.Equal(expected, delta.Data[0], 6);
+        }
+        int corners = sparse.Mesh.Loops.Count;
+        Assert.True(fullBytes.Length - sparseBytes.Length > corners * 12 - 64, $"{sparseBytes.Length} against {fullBytes.Length}");
+    }
 }

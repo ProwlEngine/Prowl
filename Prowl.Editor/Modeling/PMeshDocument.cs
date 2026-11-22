@@ -430,7 +430,22 @@ public sealed class PMeshDocument
             column["name"] = new EchoObject(definition.Name);
             column["type"] = new EchoObject(isFloat ? "float" : "int");
             column["size"] = new EchoObject(size);
-            if (isFloat)
+            if (isFloat && definition.Name.StartsWith(MeshGeometry.BlendShapePrefix, StringComparison.Ordinal))
+            {
+                // Blend shape deltas only where a corner moves, the rest reading back as the declared zero
+                var at = new List<int>();
+                var moved = new List<float>();
+                for (int i = 0; i < elements.Count; i++)
+                    if (elements[i].TryGetAttribute(definition.Name, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue f
+                        && f.Data.Length == size && Array.Exists(f.Data, x => x != 0f))
+                    {
+                        at.Add(i);
+                        moved.AddRange(f.Data);
+                    }
+                column["elements"] = Ints([.. at]);
+                column["floats"] = Floats([.. moved]);
+            }
+            else if (isFloat)
             {
                 var values = new float[elements.Count * size];
                 for (int i = 0; i < elements.Count; i++)
@@ -541,7 +556,14 @@ public sealed class PMeshDocument
             }
 
             int size = column["size"].IntValue;
-            if (type == "float")
+            if (type == "float" && column.TryGet("elements", out EchoObject? listed))
+            {
+                int[] at = IntsOf(listed!);
+                float[] values = FloatsOf(column["floats"]);
+                for (int i = 0; i < at.Length && (i + 1) * size <= values.Length; i++)
+                    if (at[i] < elements.Count) elements[at[i]].SetAttribute(name, new GeometryData.FloatAttributeValue(values.AsSpan(i * size, size).ToArray()));
+            }
+            else if (type == "float")
             {
                 float[] values = FloatsOf(column["floats"]);
                 for (int i = 0; i < elements.Count && (i + 1) * size <= values.Length; i++)
