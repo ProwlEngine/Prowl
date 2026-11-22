@@ -617,6 +617,13 @@ public class SceneViewPanel : DockPanel
                 new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y),
                 new Float2(width, height));
 
+            SceneViewMenu.Tick();
+            if (_editorCamera.TakeRightClick() && isHovered)
+            {
+                Float2 viewportOrigin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
+                SceneViewMenu.Open(_toolContext, scene, _editorCamera, paper.PointerPos, paper.PointerPos - viewportOrigin, new Float2(width, height));
+            }
+
             // Scene view keyboard shortcuts (only when hovered and not right-click flying)
             if (isHovered && !_handles.KeysUsed && !ShortcutManager.IsRebinding && !Input.GetMouseButton(1))
             {

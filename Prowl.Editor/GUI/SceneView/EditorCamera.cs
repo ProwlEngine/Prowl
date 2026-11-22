@@ -55,6 +55,21 @@ public class EditorCamera
     /// <summary>Where the camera comes to rest: the WASD flight target while gliding, otherwise its position.</summary>
     public Float3 RestPosition => _moveTarget ?? _position;
     public float Yaw => _yaw;
+
+    // A right press is a click when it is short and neither looks nor moves
+    private double _rightDownAt;
+    private float _rightTravel;
+    private bool _rightMoved;
+    private float _rightDownYaw, _rightDownPitch;
+    private bool _rightClicked;
+
+    /// <summary>True once after a right click that was not a camera look, which opens the scene view's menu.</summary>
+    public bool TakeRightClick()
+    {
+        bool clicked = _rightClicked;
+        _rightClicked = false;
+        return clicked;
+    }
     public float Pitch => _pitch;
     public Float3 Forward => _cameraObject.Transform.Forward;
 
@@ -465,6 +480,11 @@ public class EditorCamera
         // Right mouse = look + WASD (with cursor lock)
         if (Input.GetMouseButtonDown(1))
         {
+            _rightDownAt = Runtime.Time.UnscaledTotalTime;
+            _rightTravel = 0f;
+            _rightMoved = false;
+            _rightDownYaw = _yaw;
+            _rightDownPitch = _pitch;
             _lockContext.PanelOrigin = panelOrigin;
             _lockContext.PanelSize = panelSize;
             _flying = true;
@@ -475,6 +495,7 @@ public class EditorCamera
         if (Input.GetMouseButton(1))
         {
             Float2 delta = Input.MouseDelta;
+            _rightTravel += Float2.Length(delta);
 
             // Mouse look
             _yaw += delta.X * 0.2f;
@@ -498,6 +519,7 @@ public class EditorCamera
 
             if (Float3.LengthSquared(move) > 0)
             {
+                _rightMoved = true;
                 move = Float3.Normalize(move) * speed;
                 _moveTarget = (_moveTarget ?? _position) + move;
             }
@@ -522,6 +544,15 @@ public class EditorCamera
             _flying = false;
             Input.UnlockCursor();
             Input.PopLockContext();
+
+            // A quick press that went nowhere was a click, not a look around, so the view goes back as it was
+            if (!_rightMoved && _rightTravel < 4f && Runtime.Time.UnscaledTotalTime - _rightDownAt < 0.3)
+            {
+                _yaw = _rightDownYaw;
+                _pitch = _rightDownPitch;
+                UpdateTransform();
+                _rightClicked = true;
+            }
         }
 
         // F = focus on selection

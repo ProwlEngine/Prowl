@@ -81,6 +81,12 @@ public abstract class SceneTool
     /// <see cref="OverridesViewManipulator"/> is set.</summary>
     public virtual void OnViewManipulatorGUI(SceneToolContext ctx, Paper paper, string id, Rect rect) { }
 
+    /// <summary>Replace the scene view's right click menu with <see cref="OnSceneContextMenu"/>, the usual items moving to a submenu.</summary>
+    public virtual bool ReplacesSceneContextMenu => false;
+
+    /// <summary>Items for the scene view's right click menu, added after the usual ones unless <see cref="ReplacesSceneContextMenu"/> is set.</summary>
+    public virtual void OnSceneContextMenu(SceneToolContext ctx, OrigamiUI.ContextBuilder menu) { }
+
     /// <summary>Floating UI inside the viewport. Elements should be self directed and place themselves.</summary>
     public virtual void OnSceneOverlayGUI(SceneToolContext ctx, Paper paper, string id, Float2 viewportSize) { }
 
