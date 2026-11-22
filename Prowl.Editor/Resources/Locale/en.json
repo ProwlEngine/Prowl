@@ -51,6 +51,7 @@
   "uv.stitch": "Stitch",
   "uv.project_angle": "Project By Angle",
   "uv.frame": "Frame",
+  "uv.checker_world": "Checker in Scene",
   "uv.export_layout": "Export Layout",
   "uv.filter_png": "PNG Image",
   "uv.pin": "Pin",

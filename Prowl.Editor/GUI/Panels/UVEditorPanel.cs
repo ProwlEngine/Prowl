@@ -143,6 +143,8 @@ public class UVEditorPanel : DockPanel
                 [Loc.Get("uv.backdrop_texture"), Loc.Get("uv.backdrop_checker"), Loc.Get("uv.backdrop_none")]).Width(110).Show();
             Origami.Dropdown(paper, "uv_stretch", (int)_stretch, i => _stretch = (Stretch)i,
                 [Loc.Get("uv.stretch_off"), Loc.Get("uv.stretch_angle"), Loc.Get("uv.stretch_area"), Loc.Get("uv.overlay_islands"), Loc.Get("uv.overlay_overlap")]).Width(120).Show();
+            Origami.Checkbox(paper, "uv_checker", ModelObject.ShowChecker, ModelEditingMode.SetChecker).Show();
+            Origami.Label(paper, "uv_checker_label", Loc.Get("uv.checker_world")).Show();
             Origami.Button(paper, "uv_frame", Loc.Get("uv.frame"), Frame).Show();
             Origami.Button(paper, "uv_export", Loc.Get("uv.export_layout"), () => ExportLayout(tool, faces)).Show();
         }

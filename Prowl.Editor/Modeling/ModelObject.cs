@@ -80,14 +80,44 @@ public sealed class ModelObject : Component
 
         var materials = new List<Material>();
         foreach (Guid id in Materials)
-            materials.Add(id != Guid.Empty && AssetDatabase.Get<Material>(id) is { } material ? material : StandardMaterial);
-        if (materials.Count == 0) materials.Add(StandardMaterial);
+            materials.Add(ShowChecker ? Checker : id != Guid.Empty && AssetDatabase.Get<Material>(id) is { } material ? material : StandardMaterial);
+        if (materials.Count == 0) materials.Add(ShowChecker ? Checker : StandardMaterial);
         renderer.Materials = materials;
 
         if (old.IsValid()) old!.Dispose();
     }
 
     private static Material StandardMaterial => BuiltInAssets.Load<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard))!;
+
+    /// <summary>Draws every model object with a checker in place of its materials, for judging how UVs stretch.</summary>
+    public static bool ShowChecker { get; set; }
+
+    private static Material? s_checker;
+
+    private static Material Checker
+    {
+        get
+        {
+            if (s_checker.IsValid()) return s_checker!;
+            const int Size = 256, Cells = 8;
+            var pixels = new byte[Size * Size * 4];
+            for (int y = 0; y < Size; y++)
+                for (int x = 0; x < Size; x++)
+                {
+                    bool light = (x / (Size / Cells) + y / (Size / Cells)) % 2 == 0;
+                    int at = (y * Size + x) * 4;
+                    pixels[at] = light ? (byte)220 : (byte)60;
+                    pixels[at + 1] = light ? (byte)220 : (byte)60;
+                    pixels[at + 2] = light ? (byte)220 : (byte)70;
+                    pixels[at + 3] = 255;
+                }
+            var texture = new Texture2D(Size, Size, srgb: true) { Name = "UV Checker", Filter = FilterMode.Point };
+            texture.SetData(pixels, 0, 0, Size, Size);
+            s_checker = new Material(StandardMaterial) { Name = "UV Checker" };
+            s_checker.SetTexture("_MainTex", texture);
+            return s_checker;
+        }
+    }
 
     /// <summary>This object as written into a model document, its transform taken as it is under its parent.</summary>
     public PMeshObject ToDocumentObject()

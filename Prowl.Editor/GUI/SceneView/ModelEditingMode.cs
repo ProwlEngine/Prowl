@@ -306,6 +306,15 @@ public static class ModelEditingMode
         model.RefreshPreview();
     }
 
+    /// <summary>Draws the model world's objects with a checker in place of their materials, or with them again.</summary>
+    public static void SetChecker(bool on)
+    {
+        ModelObject.ShowChecker = on;
+        if (World is not { } world) return;
+        foreach (GameObject go in world.Objects)
+            if (go.GetComponent<ModelObject>() is { } model && model.IsValid()) model.RefreshPreview();
+    }
+
     /// <summary>Whether an asset is a model document, whose instances open in the model world.</summary>
     public static bool IsModelAsset(Guid asset)
         => EditorAssetBackend.Instance?.GetEntry(asset) is { } entry && entry.Path.EndsWith(PMeshDocument.Extension, StringComparison.OrdinalIgnoreCase);
