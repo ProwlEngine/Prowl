@@ -929,6 +929,8 @@
   "csg.move_tip": "Moves the selection by the step above.",
   "csg.clone_array": "Clone",
   "csg.clone_array_tip": "Leaves copies in a row, each one step past the last. Ctrl+Shift+D repeats the last clone.",
+  "csg.group_selection": "Group Selection",
+  "csg.group_selection_tip": "Puts the selected brushes and groups in a new group, so they can be subtracted or intersected as one solid",
   "csg.copy_surface": "Copy to selection",
   "csg.copy_surface_tip": "Applies the last picked surface's texturing to every other selected surface.",
   "csg.generate": "Generate",

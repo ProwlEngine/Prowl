@@ -46,7 +46,7 @@ public static class CSGMenuItems
 
     /// <summary>Wraps the selected brushes in a group at their centre, so they can be subtracted or intersected as one solid.</summary>
     [MenuItem("GameObject/CSG/Group Selection", priority: 43)]
-    private static void GroupSelection()
+    internal static void GroupSelection()
     {
         List<GameObject> selected = CSGSelection.Roots();
         if (selected.Count == 0) return;

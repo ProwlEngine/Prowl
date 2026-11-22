@@ -504,6 +504,9 @@ internal static class CSGSections
 
         LabelledButton(paper, font, "csg_sel_dup", Loc.Get("csg.duplicate"),
             Loc.Get("csg.duplicate_tip"), CSGSelection.Duplicate);
+
+        LabelledButton(paper, font, "csg_sel_group", Loc.Get("csg.group_selection"),
+            ShortcutManager.GetTooltip(Loc.Get("csg.group_selection_tip"), "CSG/GroupSelection"), CSGMenuItems.GroupSelection);
     }
 
     internal static void DrawVisibilitySection(Paper paper, Scribe.FontFile font, CSGObjectTool? tool)
