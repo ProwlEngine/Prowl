@@ -504,4 +504,112 @@ public static class CSGSurfaceSelection
 
         return corners;
     }
+
+    // ================================================================
+    //  Texture drags
+    // ================================================================
+
+    /// <summary>A selected surface as a texture drag began: its data, and the space and normal its UVs project in.</summary>
+    private readonly record struct DragStart(CSGSurfaceRef Surface, SurfaceData Data, Float4x4 ToProjection, Float3 Normal);
+
+    private static readonly List<DragStart> _drag = new();
+    private static float _dragTexel = 1f;
+
+    /// <summary>Remembers every selected surface as it is, so a drag is always applied to where it started.</summary>
+    public static void BeginTextureDrag()
+    {
+        Prune();
+        _drag.Clear();
+        CSGModel? model = CSGSelection.ActiveModel();
+        _dragTexel = model.IsValid() && model!.DefaultTexelScale > 0f ? model.DefaultTexelScale : 1f;
+
+        foreach (CSGSurfaceRef surface in _selected)
+        {
+            SurfaceData data = surface.Data;
+            if (data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture))
+            {
+                Float4x4 toModel = model.IsValid() ? model!.Transform.WorldToLocalMatrix : Float4x4.Identity;
+                List<Float3> corners = surface.Brush.FaceCorners(surface.PlaneIndex);
+                Float4x4 brushToModel = toModel * surface.Brush.Transform.LocalToWorldMatrix;
+                for (int i = 0; i < corners.Count; i++) corners[i] = Float4x4.TransformPoint(corners[i], brushToModel);
+                _drag.Add(new DragStart(surface, data, toModel, NormalOf(corners)));
+            }
+            else
+            {
+                _drag.Add(new DragStart(surface, data, surface.Brush.Transform.WorldToLocalMatrix, surface.Brush.Planes[surface.PlaneIndex].Normal));
+            }
+        }
+    }
+
+    /// <summary>Slides every dragged texture by a world distance, so the texture follows the cursor.</summary>
+    public static void MoveTextures(Float3 worldDelta)
+    {
+        ApplyDrag("Move CSG Texture", start =>
+        {
+            Float3 d = Float4x4.TransformNormal(worldDelta, start.ToProjection);
+            CSGSurfaceGeometry.Basis(start.Normal, start.Data.Rotation, out Float3 u, out Float3 v);
+            Float2 scale = CSGSurfaceGeometry.Effective(start.Data, _dragTexel);
+
+            SurfaceData data = start.Data;
+            data.Offset = start.Data.Offset - new Float2(Float3.Dot(d, u) / scale.X, Float3.Dot(d, v) / scale.Y);
+            return data;
+        });
+    }
+
+    /// <summary>Turns every dragged texture about a world point, which keeps its place on the texture.</summary>
+    public static void RotateTextures(Float3 worldPivot, float degrees)
+        => ApplyDrag("Rotate CSG Texture", start =>
+        {
+            SurfaceData data = start.Data;
+            data.Rotation = start.Data.Rotation + degrees;
+            return KeepPivot(start, data, worldPivot);
+        });
+
+    /// <summary>Scales every dragged texture about a world point, which keeps its place on the texture.</summary>
+    public static void ScaleTextures(Float3 worldPivot, float factor)
+        => ApplyDrag("Scale CSG Texture", start =>
+        {
+            SurfaceData data = start.Data;
+            data.Scale = new Float2(NonZero(start.Data.Scale.X), NonZero(start.Data.Scale.Y)) * factor;
+            return KeepPivot(start, data, worldPivot);
+        });
+
+    /// <summary>The angle of a world point about a pivot, measured on a surface's own unrotated texture axes.</summary>
+    public static float AngleOnSurface(Float3 normalWorld, Float3 pivot, Float3 point)
+    {
+        CSGSurfaceGeometry.Basis(normalWorld, 0f, out Float3 u, out Float3 v);
+        Float3 w = point - pivot;
+        return MathF.Atan2(Float3.Dot(w, v), Float3.Dot(w, u)) * (180f / MathF.PI);
+    }
+
+    private static float NonZero(float value) => value == 0f ? 1f : value;
+
+    /// <summary>Sets the offset so the pivot lands on the same texture spot as before the change.</summary>
+    private static SurfaceData KeepPivot(DragStart start, SurfaceData changed, Float3 worldPivot)
+    {
+        Float3 p = Float4x4.TransformPoint(worldPivot, start.ToProjection);
+        Float2 before = UVAt(start.Data, start.Normal, p);
+        Float2 after = UVAt(changed, start.Normal, p);
+        changed.Offset += before - after;
+        return changed;
+    }
+
+    private static Float2 UVAt(SurfaceData data, Float3 normal, Float3 point)
+    {
+        CSGSurfaceGeometry.Basis(normal, data.Rotation, out Float3 u, out Float3 v);
+        Float2 scale = CSGSurfaceGeometry.Effective(data, _dragTexel);
+        return new Float2(Float3.Dot(point, u) / scale.X, Float3.Dot(point, v) / scale.Y) + data.Offset;
+    }
+
+    private static void ApplyDrag(string description, Func<DragStart, SurfaceData> change)
+    {
+        foreach (DragStart start in _drag)
+        {
+            if (!start.Surface.IsValid) continue;
+            Undo.RecordObject(start.Surface.Brush, description);
+            start.Surface.Brush.SetSurface(start.Surface.PlaneIndex, change(start));
+        }
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (model.IsValid()) model!.SetDirty();
+    }
 }

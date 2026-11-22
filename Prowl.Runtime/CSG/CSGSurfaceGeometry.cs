@@ -174,7 +174,7 @@ public static class CSGSurfaceGeometry
     }
 
     /// <summary>The scale the projection uses, the surface's tile scale combined with the model's texel scale.</summary>
-    private static Float2 Effective(in SurfaceData data, float texelScale)
+    internal static Float2 Effective(in SurfaceData data, float texelScale)
     {
         float texel = texelScale > 0f ? texelScale : 1f;
         return new Float2(NonZero(data.Scale.X) / texel, NonZero(data.Scale.Y) / texel);
