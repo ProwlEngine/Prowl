@@ -255,4 +255,17 @@ public class CSGSceneTests
             } while (loop != face.Loop);
         }
     }
+
+    [Fact]
+    public void MirroredBrushStaysOutsideOut()
+    {
+        var scene = new CSGScene();
+        scene.Add(Box(new Float3(2, 2, 2)), CSGOperation.Additive, Float4x4.CreateScale(-1f, 1f, 1f));
+
+        GeometryData result = scene.Build();
+
+        Assert.True(result.Volume() > 7.9f);
+        foreach (var face in result.Faces)
+            Assert.True(Float3.Dot(face.Normal(), face.Center()) > 0f);
+    }
 }

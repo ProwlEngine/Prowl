@@ -591,6 +591,9 @@ public sealed class CSGScene
         AABB brushBounds = default;
         bool firstBrush = true;
 
+        // A mirroring transform turns the winding inside out, so it is read backwards
+        bool mirrored = Float4x4.Determinant(brush.Transform) < 0f;
+
         for (int faceIndex = 0; faceIndex < brush.Shape.Faces.Count; faceIndex++)
         {
             var face = brush.Shape.Faces[faceIndex];
@@ -607,6 +610,13 @@ public sealed class CSGScene
                 srcVerts[i] = verts[i];
                 srcLoops[i] = face.GetLoop(verts[i]);
                 world[i] = Float4x4.TransformPoint(verts[i].Point, brush.Transform);
+            }
+
+            if (mirrored)
+            {
+                Array.Reverse(world);
+                Array.Reverse(srcVerts);
+                Array.Reverse(srcLoops);
             }
 
             // Plane and normal from the transformed winding (Newell's method).
