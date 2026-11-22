@@ -47,7 +47,7 @@ public sealed class CSGMeshTool : SceneTool
     private static readonly Color32 IdleColor = new(150, 190, 230, 200);
     private static readonly Color32 PickedColor = new(255, 210, 80, 255);
     private static readonly Color32 FaceFill = new(255, 200, 90, 60);
-    private static readonly Color32 EdgeHandleColor = new(150, 190, 230, 140);
+    private static readonly Color32 HoverEdgeColor = new(210, 235, 255, 255);
 
     /// <summary>Editing a brush's points: Edit is the tool and the selection is one brush.</summary>
     public bool Active => CSGEditMode.Is(CSGMode.Edit) && CSGSelection.Brushes().Count == 1;
@@ -307,13 +307,14 @@ public sealed class CSGMeshTool : SceneTool
 
         if (Filter.HasFlag(CSGElementFilter.Edge))
         {
+            float endGap = Filter.HasFlag(CSGElementFilter.Vertex) ? PickRadius : 0f;
             for (int i = 0; i < _edges.Count; i++)
             {
-                Float3 mid = Float4x4.TransformPoint(
-                    (_mesh!.Points[_edges[i].a] + _mesh.Points[_edges[i].b]) * 0.5f, toWorld);
+                Float3 from = Float4x4.TransformPoint(_mesh!.Points[_edges[i].a], toWorld);
+                Float3 to = Float4x4.TransformPoint(_mesh.Points[_edges[i].b], toWorld);
 
                 ControlID id = handles.GetControlID(EdgeControl, i);
-                handles.AddControl(id, mid, PickRadius);
+                handles.AddControl(id, from, to, PickRadius, endGap);
 
                 if (handles.IsNearest(id) && handles.TryBeginDrag(id))
                 {
@@ -924,15 +925,14 @@ public sealed class CSGMeshTool : SceneTool
 
         if (Filter.HasFlag(CSGElementFilter.Edge))
         {
-            foreach ((int a, int b) in _edges)
+            for (int i = 0; i < _edges.Count; i++)
             {
+                (int a, int b) = _edges[i];
                 bool picked = _vertices.Contains(a) && _vertices.Contains(b);
+                bool hovered = ctx.Handles.IsNearest(ctx.Handles.GetControlID(EdgeControl, i));
                 Float3 from = Float4x4.TransformPoint(_mesh!.Points[a], toWorld);
                 Float3 to = Float4x4.TransformPoint(_mesh.Points[b], toWorld);
-                CSGGizmos.Line(from, to, picked ? PickedColor : IdleColor, picked ? 2.5f : 1f);
-
-                // Edges are picked at their middle, so that is where their handle is
-                ctx.Draw.Dot((from + to) * 0.5f, picked ? PickedColor : EdgeHandleColor, 5f);
+                CSGGizmos.Line(from, to, picked ? PickedColor : hovered ? HoverEdgeColor : IdleColor, picked || hovered ? 2.5f : 1f);
             }
         }
 

@@ -265,6 +265,37 @@ public sealed class HandleContext
     public void AddControl(ControlID id, Float3 world, float grabRadiusPixels)
         => AddControl(id, DistanceToPoint(world, grabRadiusPixels), DepthOf(world));
 
+    /// <summary>
+    /// Register a line handle grabbed anywhere along a world segment. <paramref name="endGapPixels"/> leaves that much
+    /// of each end to point handles sitting there, and a segment too short for the gaps is grabbed at its middle.
+    /// </summary>
+    public void AddControl(ControlID id, Float3 a, Float3 b, float grabRadiusPixels, float endGapPixels = 0f)
+    {
+        Float2? sa = WorldToScreen(a), sb = WorldToScreen(b);
+        if (sa is null || sb is null)
+        {
+            const float near = 1e-3f;
+            float da = DepthOf(a), db = DepthOf(b);
+            if (da < near && db < near) return;
+            if (da < near) a += (b - a) * ((near - da) / (db - da));
+            else b += (a - b) * ((near - db) / (da - db));
+            sa = WorldToScreen(a);
+            sb = WorldToScreen(b);
+            if (sa is null || sb is null) return;
+        }
+
+        Float2 ab = sb.Value - sa.Value;
+        float length = Float2.Length(ab);
+        float t = 0.5f;
+        if (length > 2f * endGapPixels && length > 1e-4f)
+        {
+            float gap = endGapPixels / length;
+            t = Maths.Clamp(Float2.Dot(MousePosition - sa.Value, ab) / (length * length), gap, 1f - gap);
+        }
+
+        AddControl(id, DistanceToScreenPoint(sa.Value + ab * t, grabRadiusPixels), DepthOf(a + (b - a) * t));
+    }
+
     /// <summary>Register a fallback that wins only when no other control registered at all.</summary>
     public void AddDefaultControl(ControlID id)
     {
