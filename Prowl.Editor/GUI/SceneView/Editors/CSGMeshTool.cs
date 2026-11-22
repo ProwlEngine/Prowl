@@ -181,8 +181,10 @@ public sealed class CSGMeshTool : SceneTool
     private Action _action;
     private Float2 _dragOrigin;
 
-    // An action started from the menu follows the mouse with no button held, and the next click commits it
+    // An action started from the menu follows the mouse with no button held, and the next click commits it. It runs
+    // modal, holding the viewport it started in until it ends
     private bool _fromMenu;
+    private HandleContext? _modalHandles;
     private readonly HashSet<int> _actionPoints = new();
     private readonly List<int> _actionFaces = new();
 
@@ -200,7 +202,11 @@ public sealed class CSGMeshTool : SceneTool
 
     public override bool SuppressTransformGizmo => Active;
 
-    public override void OnDeactivated() => ClearSelection();
+    public override void OnDeactivated()
+    {
+        CancelAction();
+        ClearSelection();
+    }
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
@@ -481,6 +487,11 @@ public sealed class CSGMeshTool : SceneTool
     {
         _action = action;
         _fromMenu = fromMenu;
+        if (fromMenu)
+        {
+            handles.Modal = true;
+            _modalHandles = handles;
+        }
         _actionPoints.Clear();
         _actionFaces.Clear();
         if (fromMenu)
@@ -611,6 +622,12 @@ public sealed class CSGMeshTool : SceneTool
 
         if (_fromMenu)
         {
+            // The camera stands still while modal, so a right click is free to cancel
+            if (handles.ViewportHovered && Input.GetMouseButtonDown(1))
+            {
+                CancelAction();
+                return;
+            }
             if (!handles.IsNearest(owner) || !handles.TryBeginDrag(owner)) return;
             handles.TryEndDrag(owner);
         }
@@ -816,6 +833,11 @@ public sealed class CSGMeshTool : SceneTool
 
     private void EndAction()
     {
+        if (_modalHandles != null)
+        {
+            _modalHandles.Modal = false;
+            _modalHandles = null;
+        }
         _action = Action.None;
         _startSurfaces = null;
         _startMesh = null;

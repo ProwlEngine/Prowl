@@ -605,17 +605,17 @@ public class SceneViewPanel : DockPanel
                     });
                 });
 
-            // Camera input
+            // Camera input. A tool's modal operation keeps the camera still, as if the pointer were elsewhere
             bool isHovered = paper.IsParentHovered;
             _handles.PanelHovered = isHovered;
             _editorCamera.ProcessInput(
                 (float)Time.UnscaledDeltaTime,
-                isHovered,
+                isHovered && !_handles.Modal,
                 paper.PointerPos,
                 new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y),
                 new Float2(width, height));
 
-            if (_editorCamera.TakeRightClick() && isHovered)
+            if (_editorCamera.TakeRightClick() && isHovered && !_handles.Modal)
             {
                 Float2 viewportOrigin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
                 Float2 pointer = _editorCamera.RightClickPointer;
@@ -623,7 +623,7 @@ public class SceneViewPanel : DockPanel
             }
 
             // Scene view keyboard shortcuts (only when hovered and not right-click flying)
-            if (isHovered && !_handles.KeysUsed && !ShortcutManager.IsRebinding && !Input.GetMouseButton(1))
+            if (isHovered && !_handles.KeysUsed && !_handles.Modal && !ShortcutManager.IsRebinding && !Input.GetMouseButton(1))
             {
                 if (ShortcutManager.IsPressed("Scene/Delete"))
                 {

@@ -70,13 +70,24 @@ public sealed class CSGOverlayTool : SceneTool
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
+        CSGModel? model = CSGSelection.ActiveModel();
+
+        // A modal operation owns every key. Edit keeps only the tool and grid keys, the rest are its own
+        if (ctx.Handles.Modal)
+        {
+            if (model.IsValid()) CSGHelperSurfaces.Draw(ctx, model!);
+            return;
+        }
+        bool edit = CSGEditMode.Is(CSGMode.Edit);
+
         if (!ctx.Handles.KeyboardCaptured)
         {
             foreach ((CSGMode mode, _, _, string shortcut, _) in Modes)
                 if (ctx.Handles.IsPressed(shortcut)) CSGEditMode.Current = mode;
 
-            foreach ((CSGGeneratorKind kind, string shortcut) in ShapeKeys)
-                if (ctx.Handles.IsPressed(shortcut)) StartShape(kind);
+            if (!edit)
+                foreach ((CSGGeneratorKind kind, string shortcut) in ShapeKeys)
+                    if (ctx.Handles.IsPressed(shortcut)) StartShape(kind);
 
             // The mesh tool tapers a selected face on the same keys
             if (SceneToolManager.Get<CSGMeshTool>() is not { TapersFace: true })
@@ -86,9 +97,8 @@ public sealed class CSGOverlayTool : SceneTool
             }
         }
 
-        HandleShortcuts(ctx.Handles);
+        if (!edit) HandleShortcuts(ctx.Handles);
 
-        CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsValid()) CSGHelperSurfaces.Draw(ctx, model!);
     }
 
