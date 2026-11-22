@@ -334,4 +334,74 @@ public class CSGBrushGeometryTests
         Assert.True(pinched.IsClosed());
         Assert.Equal(CSGMeshProblem.PinchedPoint, pinched.Check());
     }
+
+    /// <summary>A prism over an outline in the XZ plane, one unit tall.</summary>
+    private static CSGControlMesh Prism(IReadOnlyList<Float2> outline)
+    {
+        int n = outline.Count;
+        var points = new List<Float3>();
+        foreach (Float2 p in outline) points.Add(new Float3(p.X, 0f, p.Y));
+        foreach (Float2 p in outline) points.Add(new Float3(p.X, 1f, p.Y));
+        var polygons = new List<int[]> { Enumerable.Range(0, n).ToArray(), Enumerable.Range(n, n).Reverse().ToArray() };
+        for (int i = 0; i < n; i++)
+        {
+            int j = (i + 1) % n;
+            polygons.Add([j, i, n + i, n + j]);
+        }
+        CSGControlMesh mesh = CSGControlMesh.FromPolygons(points, polygons);
+        if (mesh.Volume() < 0) mesh.ReverseWinding();
+        return mesh;
+    }
+
+    private static CSGControlMesh RoundPrism(int sides)
+        => Prism(Enumerable.Range(0, sides).Select(i => new Float2(MathF.Cos(i * MathF.PI * 2f / sides), MathF.Sin(i * MathF.PI * 2f / sides)) * 4f).ToList());
+
+    [Fact]
+    public void TwoPointsAtOnePlaceRepeat()
+    {
+        CSGControlMesh box = TwoUnitBox();
+        int moved = PointAt(box, new Float3(1f, 1f, 1f));
+        box.SetPoint(moved, box.Points[PointAt(box, new Float3(1f, 1f, -1f))] + new Float3(-1e-6f, 1e-6f, 1e-6f));
+        Assert.Equal(CSGMeshProblem.RepeatedPoint, box.Check());
+    }
+
+    [Fact]
+    public void AnLShapedPrismHasNoProblem()
+        => Assert.Equal(CSGMeshProblem.None, Prism([new(0, 0), new(2, 0), new(2, 1), new(1, 1), new(1, 2), new(0, 2)]).Check());
+
+    [Fact]
+    public void AManySidedPrismHasNoProblem() => Assert.Equal(CSGMeshProblem.None, RoundPrism(512).Check());
+
+    /// <summary>A top corner of a many sided prism pushed down through the bottom folds its sides through the cap.</summary>
+    [Fact]
+    public void AManySidedPrismWithACornerPushedThroughFolds()
+    {
+        CSGControlMesh prism = RoundPrism(512);
+        int top = PointAt(prism, new Float3(4f, 1f, 0f));
+        prism.SetPoint(top, new Float3(2f, -1f, 0f));
+        Assert.Equal(CSGMeshProblem.SelfIntersecting, prism.Check());
+    }
+
+    /// <summary>A many sided brush with a side missing, a fin on its top and a sheet inside keeps only its own faces, the gap filled.</summary>
+    [Fact]
+    public void AManySidedBrushIsRepairedAsASmallOneIs()
+    {
+        CSGControlMesh prism = RoundPrism(256);
+        float volume = prism.Volume();
+        int side = Enumerable.Range(0, prism.Polygons.Count).First(p => MathF.Abs(prism.PolygonNormal(p).Y) < 0.1f);
+
+        float step = MathF.PI * 2f / 256f;
+        Float3 first = new(4f, 1f, 0f), second = new(MathF.Cos(step) * 4f, 1f, MathF.Sin(step) * 4f);
+        int a = PointAt(prism, first), b = PointAt(prism, second), n = prism.Points.Count;
+        CSGControlMesh broken = Rebuilt(prism, p => p != side,
+            [second + Float3.UnitY, first + Float3.UnitY, new Float3(-1f, 0.5f, -1f), new Float3(1f, 0.5f, -1f), new Float3(1f, 0.5f, 1f), new Float3(-1f, 0.5f, 1f)],
+            [[a, b, n, n + 1], [n + 2, n + 5, n + 4, n + 3]]);
+
+        CSGControlMesh? repaired = broken.Repaired(out _);
+
+        Assert.NotNull(repaired);
+        Assert.True(repaired!.IsValid());
+        Assert.Equal(prism.Polygons.Count, repaired.Polygons.Count);
+        Assert.Equal(volume, repaired.Volume(), 2);
+    }
 }

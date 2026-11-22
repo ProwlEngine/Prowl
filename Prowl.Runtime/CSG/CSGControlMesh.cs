@@ -360,10 +360,28 @@ public sealed class CSGControlMesh
             }
         }
 
-        var list = new List<int>(used);
-        for (int i = 0; i < list.Count; i++)
-            for (int j = i + 1; j < list.Count; j++)
-                if (Float3.DistanceSquared(points[list[i]], points[list[j]]) < 1e-10f) return true;
+        // Points bucketed in cells twice the distance that counts as the same place, so each looks in at most the
+        // eight cells its reach touches
+        const float Same = 1e-5f, Cell = Same * 2f;
+        static long At(float value) => (long)MathF.Floor(value / Cell);
+
+        var cells = new Dictionary<(long, long, long), List<int>>();
+        foreach (int index in used)
+        {
+            Float3 point = points[index];
+            for (long x = At(point.X - Same); x <= At(point.X + Same); x++)
+                for (long y = At(point.Y - Same); y <= At(point.Y + Same); y++)
+                    for (long z = At(point.Z - Same); z <= At(point.Z + Same); z++)
+                    {
+                        if (!cells.TryGetValue((x, y, z), out List<int>? near)) continue;
+                        foreach (int other in near)
+                            if (Float3.DistanceSquared(point, points[other]) < Same * Same) return true;
+                    }
+
+            var key = (At(point.X), At(point.Y), At(point.Z));
+            if (!cells.TryGetValue(key, out List<int>? cell)) cells[key] = cell = new List<int>();
+            cell.Add(index);
+        }
         return false;
     }
 
@@ -402,8 +420,11 @@ public sealed class CSGControlMesh
     /// <summary>Whether two polygons sharing no point cross, tested on their triangles where their bounds meet.</summary>
     private bool CrossesItself(List<(Float3 A, Float3 B, Float3 C)>[] triangles)
     {
-        var bounds = new AABB[polygons.Count];
-        for (int p = 0; p < polygons.Count; p++)
+        int count = polygons.Count;
+        var bounds = new AABB[count];
+        Float3 low = new(float.MaxValue), high = new(float.MinValue);
+        float sizes = 0f;
+        for (int p = 0; p < count; p++)
         {
             Float3 min = new(float.MaxValue), max = new(float.MinValue);
             foreach (int i in polygons[p])
@@ -412,23 +433,81 @@ public sealed class CSGControlMesh
                 max = Maths.Max(max, points[i]);
             }
             bounds[p] = new AABB(min, max);
+            low = Maths.Min(low, min);
+            high = Maths.Max(high, max);
+            Float3 size = max - min;
+            sizes += MathF.Max(size.X, MathF.Max(size.Y, size.Z));
         }
 
-        for (int p = 0; p < polygons.Count; p++)
-        {
-            var corners = new HashSet<int>(polygons[p]);
-            for (int q = p + 1; q < polygons.Count; q++)
-            {
-                if (!bounds[p].Intersects(bounds[q])) continue;
-                bool shared = false;
-                foreach (int i in polygons[q])
-                    if (corners.Contains(i)) { shared = true; break; }
-                if (shared) continue;
+        // Polygons bucketed in a grid about as fine as a typical polygon, capped so a few huge ones stay cheap to place.
+        // Each pair is tested once, in the first cell both cover
+        Float3 extent = high - low;
+        float cell = MathF.Max(sizes / MathF.Max(count, 1), MathF.Max(extent.X, MathF.Max(extent.Y, extent.Z)) / 32f);
+        if (cell <= 0f) cell = 1f;
 
-                foreach ((Float3 a0, Float3 a1, Float3 a2) in triangles[p])
-                    foreach ((Float3 b0, Float3 b1, Float3 b2) in triangles[q])
-                        if (Intersection.TriangleTriangle(a0, a1, a2, b0, b1, b2)) return true;
+        var ranges = new (int X0, int Y0, int Z0, int X1, int Y1, int Z1)[count];
+        var grid = new Dictionary<(int, int, int), List<int>>();
+        for (int p = 0; p < count; p++)
+        {
+            Float3 from = (bounds[p].Min - low) / cell, to = (bounds[p].Max - low) / cell;
+            var range = ((int)from.X, (int)from.Y, (int)from.Z, (int)to.X, (int)to.Y, (int)to.Z);
+            ranges[p] = range;
+            for (int x = range.Item1; x <= range.Item4; x++)
+                for (int y = range.Item2; y <= range.Item5; y++)
+                    for (int z = range.Item3; z <= range.Item6; z++)
+                    {
+                        if (!grid.TryGetValue((x, y, z), out List<int>? list)) grid[(x, y, z)] = list = new List<int>();
+                        list.Add(p);
+                    }
+        }
+
+        var cornerSets = new HashSet<int>?[count];
+        foreach (((int x, int y, int z), List<int> list) in grid)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                int p = list[i];
+                for (int j = i + 1; j < list.Count; j++)
+                {
+                    int q = list[j];
+                    var a = ranges[p];
+                    var b = ranges[q];
+                    if (Math.Max(a.X0, b.X0) != x || Math.Max(a.Y0, b.Y0) != y || Math.Max(a.Z0, b.Z0) != z) continue;
+                    if (!bounds[p].Intersects(bounds[q]) || ShareCorner(p, q, cornerSets)) continue;
+                    if (TrianglesCross(triangles[p], triangles[q], bounds[q])) return true;
+                }
             }
+        }
+        return false;
+    }
+
+    /// <summary>Whether two polygons share a point, through a set of the larger one's points kept for many sided ones.</summary>
+    private bool ShareCorner(int p, int q, HashSet<int>?[] sets)
+    {
+        if (polygons[p].Length < polygons[q].Length) (p, q) = (q, p);
+        int[] large = polygons[p], small = polygons[q];
+        if (large.Length <= 8)
+        {
+            foreach (int i in large)
+                foreach (int j in small)
+                    if (i == j) return true;
+            return false;
+        }
+
+        HashSet<int> corners = sets[p] ??= new HashSet<int>(large);
+        foreach (int i in small)
+            if (corners.Contains(i)) return true;
+        return false;
+    }
+
+    private static bool TrianglesCross(List<(Float3 A, Float3 B, Float3 C)> first, List<(Float3 A, Float3 B, Float3 C)> second, AABB secondBounds)
+    {
+        foreach ((Float3 a0, Float3 a1, Float3 a2) in first)
+        {
+            var bounds = new AABB(Maths.Min(a0, Maths.Min(a1, a2)), Maths.Max(a0, Maths.Max(a1, a2)));
+            if (!bounds.Intersects(secondBounds)) continue;
+            foreach ((Float3 b0, Float3 b1, Float3 b2) in second)
+                if (Intersection.TriangleTriangle(a0, a1, a2, b0, b1, b2)) return true;
         }
         return false;
     }
@@ -447,22 +526,13 @@ public sealed class CSGControlMesh
         var triangles = new List<(Float3 A, Float3 B, Float3 C)>[polygons.Count];
         for (int p = 0; p < polygons.Count; p++) triangles[p] = Triangles(p);
 
+        var tree = new WindingTree(triangles);
         var kept = new List<int>();
         for (int p = 0; p < polygons.Count; p++)
         {
             if (triangles[p].Count == 0) continue;
             (Float3 a, Float3 b, Float3 c) = triangles[p][0];
-            Float3 centre = (a + b + c) / 3f;
-
-            float winding = 0f;
-            for (int q = 0; q < polygons.Count; q++)
-            {
-                if (q == p) continue;
-                foreach ((Float3 x, Float3 y, Float3 z) in triangles[q])
-                    winding += SolidAngle(x - centre, y - centre, z - centre);
-            }
-            winding /= 4f * MathF.PI;
-
+            float winding = tree.Winding((a + b + c) / 3f, p);
             if (winding > 0.25f && winding < 0.75f) kept.Add(p);
         }
         if (kept.Count == 0) return null;
@@ -516,10 +586,190 @@ public sealed class CSGControlMesh
         var flat = new Float2[ring.Length];
         for (int i = 0; i < ring.Length; i++) flat[i] = new Float2(Float3.Dot(points[ring[i]], u), Float3.Dot(points[ring[i]], v));
 
+        // A flat, strictly convex polygon is cut by halving chords, in one pass however many sides it has, into
+        // triangles that stay compact rather than fanning out from one corner. A bent one keeps the triangles ear
+        // clipping picks, since which way it folds depends on them
+        if (Flat(ring, plane) && StrictlyConvex(flat))
+        {
+            var chords = new Stack<(int From, int To)>();
+            chords.Push((0, ring.Length - 1));
+            while (chords.Count > 0)
+            {
+                (int from, int to) = chords.Pop();
+                if (to - from < 2) continue;
+                int middle = (from + to) / 2;
+                result.Add((points[ring[from]], points[ring[middle]], points[ring[to]]));
+                chords.Push((from, middle));
+                chords.Push((middle, to));
+            }
+            return result;
+        }
+
         List<int> corners = Polygon2D.Triangulate(flat);
         for (int t = 0; t + 2 < corners.Count; t += 3)
             result.Add((points[ring[corners[t]]], points[ring[corners[t + 1]]], points[ring[corners[t + 2]]]));
         return result;
+    }
+
+    private bool Flat(int[] ring, Plane plane)
+    {
+        Float3 min = new(float.MaxValue), max = new(float.MinValue);
+        foreach (int i in ring)
+        {
+            min = Maths.Min(min, points[i]);
+            max = Maths.Max(max, points[i]);
+        }
+        float tolerance = MathF.Max(1e-6f, Float3.Length(max - min) * 1e-5f);
+        foreach (int i in ring)
+            if (MathF.Abs(plane.GetSignedDistanceToPoint(points[i])) > tolerance) return false;
+        return true;
+    }
+
+    /// <summary>Whether every corner turns the same way, none of them straight, going round once.</summary>
+    private static bool StrictlyConvex(Float2[] flat)
+    {
+        int sign = 0;
+        float turned = 0f;
+        for (int i = 0; i < flat.Length; i++)
+        {
+            Float2 a = flat[i], b = flat[(i + 1) % flat.Length], c = flat[(i + 2) % flat.Length];
+            Float2 ab = b - a, bc = c - b;
+            float cross = ab.X * bc.Y - ab.Y * bc.X;
+            float scale = Float2.Length(ab) * Float2.Length(bc);
+            if (MathF.Abs(cross) <= scale * 1e-5f) return false;
+            int turn = cross > 0f ? 1 : -1;
+            if (sign != 0 && turn != sign) return false;
+            sign = turn;
+            turned += MathF.Atan2(cross, Float2.Dot(ab, bc));
+        }
+        return sign != 0 && MathF.Abs(MathF.Abs(turned) - MathF.PI * 2f) < 1e-2f;
+    }
+
+    /// <summary>
+    /// Winding numbers about many triangles at once. The triangles are grouped in a tree, a group far from the point
+    /// counts as one small patch with the group's summed area, and near ones count triangle by triangle.
+    /// </summary>
+    private sealed class WindingTree
+    {
+        private const int LeafSize = 8;
+
+        // How many of its own radii away a group must be to count as one patch
+        private const float Far = 2f;
+
+        private readonly Float3[] _a, _b, _c, _centroid;
+        private readonly float[] _area;
+        private readonly int[] _polygon;
+        private readonly int[] _order;
+        private readonly List<Node> _nodes = new();
+
+        private struct Node
+        {
+            public int Start, End, Left, Right;
+            public Float3 Centre, Area;
+            public float Radius;
+        }
+
+        public WindingTree(List<(Float3 A, Float3 B, Float3 C)>[] triangles)
+        {
+            int count = 0;
+            foreach (var list in triangles) count += list.Count;
+            _a = new Float3[count];
+            _b = new Float3[count];
+            _c = new Float3[count];
+            _centroid = new Float3[count];
+            _area = new float[count];
+            _polygon = new int[count];
+            _order = new int[count];
+
+            int t = 0;
+            for (int p = 0; p < triangles.Length; p++)
+                foreach ((Float3 a, Float3 b, Float3 c) in triangles[p])
+                {
+                    _a[t] = a;
+                    _b[t] = b;
+                    _c[t] = c;
+                    _centroid[t] = (a + b + c) / 3f;
+                    _area[t] = Float3.Length(Float3.Cross(b - a, c - a)) * 0.5f;
+                    _polygon[t] = p;
+                    _order[t] = t;
+                    t++;
+                }
+
+            if (count > 0) Build(0, count, new float[count]);
+        }
+
+        private int Build(int start, int end, float[] keys)
+        {
+            Float3 sum = Float3.Zero, area = Float3.Zero, min = new(float.MaxValue), max = new(float.MinValue);
+            float weight = 0f;
+            for (int i = start; i < end; i++)
+            {
+                int t = _order[i];
+                sum += _centroid[t] * _area[t];
+                weight += _area[t];
+                area += Float3.Cross(_b[t] - _a[t], _c[t] - _a[t]) * 0.5f;
+                min = Maths.Min(min, _centroid[t]);
+                max = Maths.Max(max, _centroid[t]);
+            }
+            Float3 centre = weight > 1e-12f ? sum / weight : (min + max) * 0.5f;
+
+            float radius = 0f;
+            for (int i = start; i < end; i++)
+            {
+                int t = _order[i];
+                radius = MathF.Max(radius, MathF.Max(Float3.Distance(centre, _a[t]), MathF.Max(Float3.Distance(centre, _b[t]), Float3.Distance(centre, _c[t]))));
+            }
+
+            int index = _nodes.Count;
+            _nodes.Add(default);
+            int left = -1, right = -1;
+            if (end - start > LeafSize)
+            {
+                // Split at the middle of the longest side, by triangle centres
+                Float3 size = max - min;
+                int axis = size.X >= size.Y && size.X >= size.Z ? 0 : size.Y >= size.Z ? 1 : 2;
+                for (int i = start; i < end; i++) keys[i] = _centroid[_order[i]][axis];
+                Array.Sort(keys, _order, start, end - start);
+                int middle = (start + end) / 2;
+                left = Build(start, middle, keys);
+                right = Build(middle, end, keys);
+            }
+            _nodes[index] = new Node { Start = start, End = end, Left = left, Right = right, Centre = centre, Area = area, Radius = radius };
+            return index;
+        }
+
+        /// <summary>How many times the triangles wind round a point, leaving out one polygon's own.</summary>
+        public float Winding(Float3 point, int skip)
+        {
+            if (_nodes.Count == 0) return 0f;
+            float total = 0f;
+            var stack = new Stack<int>();
+            stack.Push(0);
+            while (stack.Count > 0)
+            {
+                Node node = _nodes[stack.Pop()];
+                Float3 offset = node.Centre - point;
+                float distanceSq = Float3.Dot(offset, offset);
+                float reach = Far * node.Radius;
+                if (distanceSq > reach * reach && distanceSq > 1e-12f)
+                {
+                    total += Float3.Dot(node.Area, offset) / (distanceSq * MathF.Sqrt(distanceSq));
+                    continue;
+                }
+                if (node.Left < 0)
+                {
+                    for (int i = node.Start; i < node.End; i++)
+                    {
+                        int t = _order[i];
+                        if (_polygon[t] != skip) total += SolidAngle(_a[t] - point, _b[t] - point, _c[t] - point);
+                    }
+                    continue;
+                }
+                stack.Push(node.Left);
+                stack.Push(node.Right);
+            }
+            return total / (4f * MathF.PI);
+        }
     }
 
     /// <summary>The signed solid angle a triangle fills seen from the origin.</summary>
