@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.PaperUI;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 using Prowl.Vector;
@@ -344,6 +345,7 @@ public sealed class CSGMeshTool : SceneTool
         Target.ApplyControlMesh();
         if (!Target.IsShapeValid)
         {
+            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
             mesh.MovePoints(moving, -delta);
             Target.ApplyControlMesh();
             return;
@@ -666,6 +668,7 @@ public sealed class CSGMeshTool : SceneTool
         // A move that stops the points enclosing a solid is taken back, and the drag waits where it was
         if (!Target.IsShapeValid)
         {
+            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
             mesh.MovePoints(moving, -delta);
             Target.ApplyControlMesh();
             _dragApplied -= step;
@@ -703,6 +706,7 @@ public sealed class CSGMeshTool : SceneTool
         Target!.ApplyControlMesh();
         if (!Target.IsShapeValid)
         {
+            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
             mesh.ScalePolygon(_faces[0], 1f / factor);
             Target.ApplyControlMesh();
         }
@@ -737,6 +741,7 @@ public sealed class CSGMeshTool : SceneTool
         Target!.ApplyControlMesh();
         if (!Target.IsShapeValid)
         {
+            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
             mesh.RotatePoints(others, (a + b) * 0.5f, axis, -degrees);
             Target.ApplyControlMesh();
         }

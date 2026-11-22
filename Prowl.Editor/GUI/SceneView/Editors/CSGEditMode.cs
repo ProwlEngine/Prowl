@@ -65,3 +65,18 @@ public static class CSGSnap
         return snapped - normal * Float3.Dot(snapped - point, normal);
     }
 }
+
+/// <summary>A short message the CSG status line shows for a moment, such as why an edit was refused.</summary>
+public static class CSGStatus
+{
+    private static string? _message;
+    private static long _until;
+
+    public static void Flash(string message)
+    {
+        _message = message;
+        _until = Environment.TickCount64 + 1500;
+    }
+
+    public static string? Current => Environment.TickCount64 < _until ? _message : null;
+}

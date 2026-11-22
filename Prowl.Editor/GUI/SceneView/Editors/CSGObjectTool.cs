@@ -34,6 +34,7 @@ public sealed class CSGObjectTool : SceneTool
     private static readonly Color32 SubtractiveColor = new(255, 140, 120, 255);
     private static readonly Color32 IntersectColor = new(220, 200, 120, 255);
     private static readonly Color32 SelectedColor = new(255, 220, 90, 255);
+    private static readonly Color32 InvalidColor = new(255, 80, 70, 255);
 
     private readonly List<CSGBrush> _brushes = new();
 
@@ -118,7 +119,13 @@ public sealed class CSGObjectTool : SceneTool
     {
         foreach (CSGBrush brush in _brushes)
         {
-            if (CSGVisibility.IsHidden(brush) || !brush.IsShapeValid) continue;
+            if (CSGVisibility.IsHidden(brush)) continue;
+            if (!brush.IsShapeValid)
+            {
+                ctx.Draw.Circle(brush.Transform.Position, ctx.Camera.GameObject.Transform.Forward, 0.25f, InvalidColor, 2f);
+                ctx.Draw.Label(brush.Transform.Position, brush.GameObject.Name, InvalidColor);
+                continue;
+            }
 
             bool selected = Selection.IsSelected(brush.GameObject);
             Color32 color = selected ? SelectedColor : ColorFor(brush.Operation);

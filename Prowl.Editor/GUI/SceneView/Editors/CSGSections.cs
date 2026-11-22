@@ -496,6 +496,13 @@ internal static class CSGSections
             Loc.Get("csg.unhide_all_tip"), CSGVisibility.UnhideAll);
     }
 
+    internal static string OperationLabel(Operation operation) => operation switch
+    {
+        Operation.Subtractive => "csg.subtractive",
+        Operation.Intersect => "csg.intersect",
+        _ => "csg.additive",
+    };
+
     /// <summary>The keys a mode answers to, one per line, with their current bindings.</summary>
     internal static void DrawKeys(Paper paper, Scribe.FontFile font, string[] shortcuts)
     {

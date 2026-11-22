@@ -2,6 +2,8 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
@@ -139,6 +141,8 @@ public sealed class CSGOverlayTool : SceneTool
 
         float maxHeight = MathF.Max(120f, viewportSize.Y - 90f);
 
+        DrawStatus(paper, font, id, viewportSize);
+
         using (paper.Column($"{id}_panel")
                    .PositionType(PositionType.SelfDirected)
                    .Position(56, 12)
@@ -165,8 +169,9 @@ public sealed class CSGOverlayTool : SceneTool
     {
         using (paper.Row($"{id}_title").Height(22).Padding(8, 6, 0, 0).Enter())
         {
+            string title = _collapsed ? $"{Loc.Get("csg.title")}  {Loc.Get(ModeLabel(CSGEditMode.Current))}" : Loc.Get("csg.title");
             paper.Box($"{id}_title_t").Height(22)
-                .Text(Loc.Get("csg.title"), font).TextColor(EditorTheme.Ink400)
+                .Text(title, font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
             paper.Box($"{id}_title_c")
@@ -179,6 +184,74 @@ public sealed class CSGOverlayTool : SceneTool
                 .OnClick(_ => _collapsed = !_collapsed);
         }
     }
+
+    private static string ModeLabel(CSGMode mode)
+    {
+        foreach ((CSGMode m, string label, _, _) in Modes)
+            if (m == mode) return label;
+        return "csg.title";
+    }
+
+    /// <summary>
+    /// What the CSG tools will do, along the bottom of the viewport: the mode, what a new brush will be, the grid, how
+    /// much is hidden, any brush that no longer encloses a solid, and a moment's word on a refused edit.
+    /// </summary>
+    private static void DrawStatus(Paper paper, Scribe.FontFile font, string id, Float2 viewportSize)
+    {
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (model.IsNotValid()) return;
+
+        var parts = new List<string> { Loc.Get(ModeLabel(CSGEditMode.Current)) };
+        if (CSGEditMode.Is(CSGMode.Generate) && SceneToolManager.Get<CSGGenerateTool>() is { } generate)
+        {
+            parts.Add(Loc.Get(CSGSections.OperationLabel(generate.Operation)));
+            parts.Add(generate.Generator.ToString());
+        }
+        parts.Add(Loc.Get("csg.status_grid", new { size = SceneTools.MoveSnap.ToString(SceneTools.CurrentMoveSnapFormat) }));
+
+        int hidden = CSGVisibility.HiddenCount;
+        if (hidden > 0) parts.Add(Loc.Get("csg.status_hidden", new { count = hidden }));
+
+        List<CSGBrush> invalid = CSGSelection.BrushesIn(model!).Where(b => !b.IsShapeValid).ToList();
+        string? flash = CSGStatus.Current;
+        string text = string.Join("   ", parts);
+
+        using (paper.Row($"{id}_status")
+                   .PositionType(PositionType.SelfDirected)
+                   .Position(56, viewportSize.Y - 34)
+                   .Width(UnitValue.Auto).Height(22).Padding(8, 8, 0, 0).Gap(8)
+                   .Rounded(11)
+                   .BackgroundColor(EditorTheme.Glass)
+                   .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+                   .Enter())
+        {
+            paper.Box($"{id}_status_t").Width(UnitValue.Auto).Height(22)
+                .Text(text, font).TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+
+            if (invalid.Count > 0)
+            {
+                paper.Box($"{id}_status_bad").Width(UnitValue.Auto).Height(22)
+                    .Text(Loc.Get("csg.status_invalid", new { count = invalid.Count }), font).TextColor(InvalidText)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
+                    .Tooltip(Loc.Get("csg.status_invalid_tip"))
+                    .OnClick(_ =>
+                    {
+                        Selection.Clear();
+                        foreach (CSGBrush brush in invalid) Selection.AddToSelection(brush.GameObject);
+                    });
+            }
+
+            if (flash != null)
+            {
+                paper.Box($"{id}_status_flash").Width(UnitValue.Auto).Height(22)
+                    .Text(flash, font).TextColor(InvalidText)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            }
+        }
+    }
+
+    private static readonly SColor InvalidText = SColor.FromArgb(255, 255, 120, 110);
 
     private static void DrawModeTabs(Paper paper, Scribe.FontFile font, string id)
     {
