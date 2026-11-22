@@ -118,6 +118,7 @@ public sealed class CSGGenerateTool : SceneTool
         Float3 snapped = CSGSnap.Value(ctx.Handles, point);
         _planeOrigin = snapped - normal * Float3.Dot(snapped - point, normal);
 
+        DrawWorkGrid(ctx, _planeOrigin);
         DrawCursor(ctx, _planeOrigin, normal, Tint(ctx.Handles));
 
         if (!ctx.Handles.IsNearest(id) || !ctx.Handles.TryBeginDrag(id)) return;
@@ -136,6 +137,7 @@ public sealed class CSGGenerateTool : SceneTool
             _cornerB = new Float3(CSGSnap.Value(ctx.Handles, local.X), local.Y, CSGSnap.Value(ctx.Handles, local.Z));
 
         HandleTyping(ctx.Handles);
+        DrawWorkGrid(ctx, ToWorld(_cornerB));
         DrawFootprint(ctx, Tint(ctx.Handles));
         DrawTyped(ctx);
 
@@ -422,6 +424,28 @@ public sealed class CSGGenerateTool : SceneTool
 
         Float3 at = ToWorld(new Float3(_cornerB.X, _height, _cornerB.Z));
         ctx.Draw.Label(at, $"{Field(0, "W")}  {Field(1, "D")}  {Field(2, "H")}", GuideColor);
+    }
+
+    /// <summary>The grid of the surface being drawn on, around the cursor, so snapping can be seen on walls and slopes too.</summary>
+    private void DrawWorkGrid(SceneToolContext ctx, Float3 around)
+    {
+        const int Lines = 8;
+        float step = CSGSnap.Grid;
+        Float3 x = _planeRotation * Float3.UnitX;
+        Float3 z = _planeRotation * Float3.UnitZ;
+
+        // Lines through grid points of the plane's own frame, centred on the cursor's nearest grid point
+        Float3 local = Quaternion.Inverse(_planeRotation) * (around - _planeOrigin);
+        Float3 centre = _planeOrigin + _planeRotation * new Float3(CSGSnap.Round(local.X), 0f, CSGSnap.Round(local.Z));
+        float reach = step * Lines;
+
+        for (int i = -Lines; i <= Lines; i++)
+        {
+            byte alpha = (byte)(70 * (1f - MathF.Abs(i) / (float)(Lines + 1)));
+            var colour = new Color32(GuideColor.R, GuideColor.G, GuideColor.B, alpha);
+            ctx.Draw.Line(centre + x * (i * step) - z * reach, centre + x * (i * step) + z * reach, colour);
+            ctx.Draw.Line(centre + z * (i * step) - x * reach, centre + z * (i * step) + x * reach, colour);
+        }
     }
 
     private void DrawCursor(SceneToolContext ctx, Float3 point, Float3 normal, (Color32 Color, string Label) tint)
