@@ -51,10 +51,12 @@ public static class CSGMenuItems
         List<GameObject> selected = CSGSelection.Roots();
         if (selected.Count == 0) return;
 
-        // Sibling order is CSG order, so the group takes the place of the first object and keeps their order inside
-        GameObject? parent = selected[0].Parent;
-        selected.Sort((a, b) => a.SiblingIndex.CompareTo(b.SiblingIndex));
-        int index = selected.Where(go => ReferenceEquals(go.Parent, parent)).Min(go => go.SiblingIndex);
+        // Hierarchy order is CSG order, so the group takes the place of the first object under their common parent
+        // and keeps their order inside
+        GameObject? parent = CommonParent(selected);
+        List<GameObject> order = parent.IsValid() ? PreOrder(parent!) : [];
+        selected.Sort((x, y) => order.IndexOf(x).CompareTo(order.IndexOf(y)));
+        int index = parent.IsValid() ? ChildOf(parent!, selected[0]).SiblingIndex : selected[0].SiblingIndex;
 
         Float3 centre = Float3.Zero;
         foreach (GameObject go in selected) centre += go.Transform.Position;
@@ -69,5 +71,44 @@ public static class CSGMenuItems
         foreach (GameObject go in selected) Undo.SetTransformParent(go, group, worldPositionStays: true, "Group CSG Selection");
 
         Selection.Select(group);
+    }
+
+    /// <summary>The nearest object every one of them sits under.</summary>
+    private static GameObject? CommonParent(List<GameObject> objects)
+    {
+        for (GameObject? candidate = objects[0].Parent; candidate.IsValid(); candidate = candidate!.Parent)
+            if (objects.TrueForAll(go => IsUnder(go, candidate!))) return candidate;
+        return null;
+    }
+
+    private static bool IsUnder(GameObject go, GameObject ancestor)
+    {
+        for (GameObject? current = go.Parent; current.IsValid(); current = current!.Parent)
+            if (ReferenceEquals(current, ancestor)) return true;
+        return false;
+    }
+
+    /// <summary>The child of <paramref name="parent"/> that <paramref name="go"/> is, or sits under.</summary>
+    private static GameObject ChildOf(GameObject parent, GameObject go)
+    {
+        GameObject current = go;
+        while (current.Parent.IsValid() && !ReferenceEquals(current.Parent, parent)) current = current.Parent!;
+        return current;
+    }
+
+    /// <summary>Everything under an object, each before its children, in sibling order.</summary>
+    private static List<GameObject> PreOrder(GameObject root)
+    {
+        var result = new List<GameObject>();
+        void Visit(GameObject go)
+        {
+            foreach (GameObject child in go.Children)
+            {
+                result.Add(child);
+                Visit(child);
+            }
+        }
+        Visit(root);
+        return result;
     }
 }
