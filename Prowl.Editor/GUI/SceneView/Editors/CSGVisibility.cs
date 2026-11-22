@@ -3,8 +3,6 @@
 
 using System.Collections.Generic;
 
-using Prowl.Editor.Core;
-
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 
@@ -14,26 +12,6 @@ namespace Prowl.Editor.GUI.SceneView.Editors;
 public static class CSGVisibility
 {
     private static readonly HashSet<CSGBrush> _hidden = new();
-
-    [InitializeOnLoad]
-    private static void Install()
-    {
-        EditorSceneManager.Capturing -= ShowForCapture;
-        EditorSceneManager.Capturing += ShowForCapture;
-        EditorSceneManager.Captured -= HideAfterCapture;
-        EditorSceneManager.Captured += HideAfterCapture;
-    }
-
-    // Saved scenes and play copies keep every brush
-    private static void ShowForCapture() => SetShowHidden(true);
-    private static void HideAfterCapture() => SetShowHidden(false);
-
-    private static void SetShowHidden(bool show)
-    {
-        if (CSGModel.ShowHidden == show) return;
-        CSGModel.ShowHidden = show;
-        foreach (CSGModel model in Models()) model.RefreshRenderer();
-    }
 
     /// <summary>Hands the hidden set to the models and has them build what the viewport draws again.</summary>
     private static void Changed()

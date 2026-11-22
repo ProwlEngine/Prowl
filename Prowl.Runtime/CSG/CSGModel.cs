@@ -58,8 +58,6 @@ public sealed class CSGModel : Component
     /// <summary>Editor only: brushes left out of what the viewport draws. They still shape the model and its saved mesh.</summary>
     internal static Func<CSGBrush, bool>? EditorHidden;
 
-    /// <summary>Editor only: draw hidden brushes for now, while a scene is written or copied for play.</summary>
-    internal static bool ShowHidden;
 
     [SerializeIgnore] private double _geometryChangedAt = double.NegativeInfinity;
 
@@ -211,8 +209,6 @@ public sealed class CSGModel : Component
 
     [SerializeIgnore] private readonly List<Material?> _previewMaterials = new();
 
-    /// <summary>Puts the mesh the viewport should draw on the renderer again, after <see cref="ShowHidden"/> changes.</summary>
-    internal void RefreshRenderer() => ApplyRenderer();
 
     /// <summary>Records when the geometry last changed so an automatic unwrap can wait for it to settle.</summary>
     private void TrackLightmapUVs()
@@ -628,9 +624,11 @@ public sealed class CSGModel : Component
             renderer = GameObject.AddComponent<MeshRenderer>();
         }
 
-        bool preview = _preview.IsValid() && !ShowHidden;
-        renderer.Mesh = preview ? _preview : _visible;
-        renderer.Materials = (preview ? _previewMaterials : GeneratedMaterials)!;
+        renderer.Mesh = _visible;
+        renderer.Materials = GeneratedMaterials!;
+
+        // Hidden brushes only leave what is drawn, so saves, copies, undo and bakes keep every brush
+        renderer.SetDrawOverride(_preview, _preview.IsValid() ? _previewMaterials! : null);
     }
 
     private void ApplyCollider()

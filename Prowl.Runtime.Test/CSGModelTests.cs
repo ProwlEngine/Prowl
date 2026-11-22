@@ -480,7 +480,7 @@ public class CSGModelTests : RuntimeTestBase
     }
 
     [Fact]
-    public void HiddenBrushesAreLeftOutOfTheRendererButKeptInTheGeneratedMesh()
+    public void HiddenBrushesAreOnlyLeftOutOfWhatIsDrawn()
     {
         CreateModel();
         AddBrush(Float3.One * 2f, Float3.Zero);
@@ -494,17 +494,13 @@ public class CSGModelTests : RuntimeTestBase
             Update(_scene);
 
             MeshRenderer renderer = _model.GetComponent<MeshRenderer>();
-            Assert.Equal(8f, VolumeOf(renderer.Mesh!), 2);
-            Assert.Equal(16f, VolumeOf(_model.GeneratedMesh!), 2);
-
-            CSGModel.ShowHidden = true;
-            _model.RefreshRenderer();
+            Assert.Equal(8f, VolumeOf(renderer.DrawOverride!), 2);
             Assert.Same(_model.GeneratedMesh, renderer.Mesh);
+            Assert.Equal(16f, VolumeOf(renderer.Mesh!), 2);
         }
         finally
         {
             CSGModel.EditorHidden = null;
-            CSGModel.ShowHidden = false;
         }
     }
 }

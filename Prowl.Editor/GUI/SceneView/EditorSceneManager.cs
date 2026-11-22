@@ -55,11 +55,7 @@ public static class EditorSceneManager
     internal static Scene BuildPlayWorld() => BuildPlayWorld(CaptureEditSections());
 
     private static List<(SceneSection Section, EchoObject Tree)> CaptureEditSections()
-    {
-        Capturing?.Invoke();
-        try { return [.. EditWorld.Sections.Where(section => !section.IsPersistent).Select(section => (section, section.CaptureTree()))]; }
-        finally { Captured?.Invoke(); }
-    }
+        => [.. EditWorld.Sections.Where(section => !section.IsPersistent).Select(section => (section, section.CaptureTree()))];
 
     private static Scene BuildPlayWorld(List<(SceneSection Section, EchoObject Tree)> captured)
     {
@@ -214,12 +210,6 @@ public static class EditorSceneManager
 
     /// <summary>Fires after a scene is written to its file.</summary>
     public static event Action<OpenScene>? SceneSaved;
-
-    /// <summary>Fires before edit scenes are captured to be saved or copied for play, so editor only state can step aside.</summary>
-    internal static event Action? Capturing;
-
-    /// <summary>Fires once that capture is done.</summary>
-    internal static event Action? Captured;
 
     /// <summary>The open scene <paramref name="section"/> of the edit world belongs to, or null for any other section.</summary>
     public static OpenScene? SceneOf(SceneSection? section)
@@ -606,11 +596,7 @@ public static class EditorSceneManager
             // save without it would lose those edits on the next refresh.
             PrefabUtility.ReconcileSection(section);
 
-            string text;
-            Capturing?.Invoke();
-            try { text = section.CaptureTree().WriteToString(); }
-            finally { Captured?.Invoke(); }
-            File.WriteAllText(absolutePath, text);
+            File.WriteAllText(absolutePath, section.CaptureTree().WriteToString());
 
             // The stored scene takes what was written, so a build or a SceneAsset.Load of it sees this save.
             Guid guid = EditorAssetBackend.Instance?.ImportFile(relativePath) ?? Guid.Empty;
