@@ -53,6 +53,13 @@ public sealed class CSGModel : Component
     // The hashes of the meshes held now. Not serialized, so an undo of the fields above cannot fool the comparison
     [SerializeIgnore] private long _visibleKey;
     [SerializeIgnore] private long _collisionKey;
+    [SerializeIgnore] private Mesh? _preview;
+
+    /// <summary>Editor only: brushes left out of what the viewport draws. They still shape the model and its saved mesh.</summary>
+    internal static Func<CSGBrush, bool>? EditorHidden;
+
+    /// <summary>Editor only: draw hidden brushes for now, while a scene is written or copied for play.</summary>
+    internal static bool ShowHidden;
 
     [SerializeIgnore] private double _geometryChangedAt = double.NegativeInfinity;
 
@@ -179,6 +186,33 @@ public sealed class CSGModel : Component
         ApplyMeshes(meshes);
         TrackLightmapUVs();
     }
+
+    /// <summary>The visible mesh without hidden brushes, or null when nothing in this model is hidden.</summary>
+    private Mesh? BuildPreview(GeometryData geometry)
+    {
+        if (EditorHidden == null) return null;
+
+        bool any = false;
+        foreach (CSGBrush brush in _brushes.Keys)
+            if (brush.IsValid() && EditorHidden(brush)) { any = true; break; }
+        if (!any) return null;
+
+        CSGMeshes preview = CSGMeshBuilder.Build(geometry, (brushId, face) =>
+        {
+            CSGSurfaceInfo info = ResolveSurface(brushId, face);
+            if (_byBrushId.TryGetValue(brushId, out BrushLink? link) && link.Brush.IsValid() && EditorHidden(link.Brush)) info.Render = false;
+            info.Collide = false;
+            return info;
+        }, GameObject.Name);
+        _previewMaterials.Clear();
+        _previewMaterials.AddRange(preview.Materials);
+        return preview.Visible;
+    }
+
+    [SerializeIgnore] private readonly List<Material?> _previewMaterials = new();
+
+    /// <summary>Puts the mesh the viewport should draw on the renderer again, after <see cref="ShowHidden"/> changes.</summary>
+    internal void RefreshRenderer() => ApplyRenderer();
 
     /// <summary>Records when the geometry last changed so an automatic unwrap can wait for it to settle.</summary>
     private void TrackLightmapUVs()
@@ -534,6 +568,7 @@ public sealed class CSGModel : Component
         _collision = KeepOrReplace(_collision, meshes.Collision, ref _collisionKey);
         visibleHash = _visibleKey;
         collisionHash = _collisionKey;
+        _preview = BuildPreview(_geometry!);
 
         GeneratedMaterials.Clear();
         GeneratedMaterials.AddRange(meshes.Materials);
@@ -593,8 +628,9 @@ public sealed class CSGModel : Component
             renderer = GameObject.AddComponent<MeshRenderer>();
         }
 
-        renderer.Mesh = _visible;
-        renderer.Materials = GeneratedMaterials!;
+        bool preview = _preview.IsValid() && !ShowHidden;
+        renderer.Mesh = preview ? _preview : _visible;
+        renderer.Materials = (preview ? _previewMaterials : GeneratedMaterials)!;
     }
 
     private void ApplyCollider()

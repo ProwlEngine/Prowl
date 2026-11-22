@@ -478,4 +478,33 @@ public class CSGModelTests : RuntimeTestBase
         Assert.True(carved < 7.5f);
         Assert.Equal(8f, VolumeOf(_model.GeneratedMesh!), 2);
     }
+
+    [Fact]
+    public void HiddenBrushesAreLeftOutOfTheRendererButKeptInTheGeneratedMesh()
+    {
+        CreateModel();
+        AddBrush(Float3.One * 2f, Float3.Zero);
+        CSGBrush hidden = AddBrush(Float3.One * 2f, new Float3(5, 0, 0));
+        Update(_scene);
+
+        try
+        {
+            CSGModel.EditorHidden = b => ReferenceEquals(b, hidden);
+            _model.SetDirty();
+            Update(_scene);
+
+            MeshRenderer renderer = _model.GetComponent<MeshRenderer>();
+            Assert.Equal(8f, VolumeOf(renderer.Mesh!), 2);
+            Assert.Equal(16f, VolumeOf(_model.GeneratedMesh!), 2);
+
+            CSGModel.ShowHidden = true;
+            _model.RefreshRenderer();
+            Assert.Same(_model.GeneratedMesh, renderer.Mesh);
+        }
+        finally
+        {
+            CSGModel.EditorHidden = null;
+            CSGModel.ShowHidden = false;
+        }
+    }
 }

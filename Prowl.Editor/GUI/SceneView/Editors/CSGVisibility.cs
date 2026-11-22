@@ -3,15 +3,53 @@
 
 using System.Collections.Generic;
 
+using Prowl.Editor.Core;
+
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
-/// <summary>Which brushes are hidden in the viewport, per model. Hiding never changes the CSG result.</summary>
+/// <summary>Which brushes are hidden in the viewport. Hiding never changes the CSG result or the saved mesh.</summary>
 public static class CSGVisibility
 {
     private static readonly HashSet<CSGBrush> _hidden = new();
+
+    [InitializeOnLoad]
+    private static void Install()
+    {
+        EditorSceneManager.Capturing -= ShowForCapture;
+        EditorSceneManager.Capturing += ShowForCapture;
+        EditorSceneManager.Captured -= HideAfterCapture;
+        EditorSceneManager.Captured += HideAfterCapture;
+    }
+
+    // Saved scenes and play copies keep every brush
+    private static void ShowForCapture() => SetShowHidden(true);
+    private static void HideAfterCapture() => SetShowHidden(false);
+
+    private static void SetShowHidden(bool show)
+    {
+        if (CSGModel.ShowHidden == show) return;
+        CSGModel.ShowHidden = show;
+        foreach (CSGModel model in Models()) model.RefreshRenderer();
+    }
+
+    /// <summary>Hands the hidden set to the models and has them build what the viewport draws again.</summary>
+    private static void Changed()
+    {
+        CSGModel.EditorHidden = _hidden.Count > 0 ? IsHidden : null;
+        foreach (CSGModel model in Models()) model.SetDirty();
+    }
+
+    private static IEnumerable<CSGModel> Models()
+    {
+        foreach (GameObject go in EditorSceneManager.EditedWorld.Objects)
+        {
+            CSGModel model = go.GetComponent<CSGModel>();
+            if (model.IsValid()) yield return model;
+        }
+    }
 
     public static int HiddenCount
     {
@@ -27,6 +65,7 @@ public static class CSGVisibility
     public static void Hide(IEnumerable<CSGBrush> brushes)
     {
         foreach (CSGBrush brush in brushes) _hidden.Add(brush);
+        Changed();
     }
 
     /// <summary>Hides everything except the selection.</summary>
@@ -37,6 +76,7 @@ public static class CSGVisibility
 
         foreach (CSGBrush brush in AllBrushes())
             if (!selected.Contains(brush)) _hidden.Add(brush);
+        Changed();
     }
 
     /// <summary>Swaps hidden and shown.</summary>
@@ -48,9 +88,14 @@ public static class CSGVisibility
 
         _hidden.Clear();
         foreach (CSGBrush brush in shown) _hidden.Add(brush);
+        Changed();
     }
 
-    public static void UnhideAll() => _hidden.Clear();
+    public static void UnhideAll()
+    {
+        _hidden.Clear();
+        Changed();
+    }
 
     /// <summary>Drops brushes that have been deleted.</summary>
     public static void Prune() => _hidden.RemoveWhere(b => b.IsNotValid());
