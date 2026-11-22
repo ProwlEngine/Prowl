@@ -92,19 +92,26 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
 
     [System.NonSerialized, NotHeld] private Mesh? _drawOverride;
     [System.NonSerialized, NotHeld] private IReadOnlyList<Material>? _drawOverrideMaterials;
+    [System.NonSerialized, NotHeld] private bool _drawNothing;
 
-    /// <summary>Editor only: draws another mesh in place of <see cref="Mesh"/> without changing what is saved, copied or baked. Null draws the real one.</summary>
-    internal void SetDrawOverride(Mesh? drawn, IReadOnlyList<Material>? materials)
+    /// <summary>
+    /// Editor only: draws another mesh in place of <see cref="Mesh"/> without changing what is saved, copied or baked.
+    /// Null draws the real one, unless <paramref name="drawNothing"/> leaves the renderer drawing nothing at all.
+    /// </summary>
+    internal void SetDrawOverride(Mesh? drawn, IReadOnlyList<Material>? materials, bool drawNothing = false)
     {
-        if (ReferenceEquals(_drawOverride, drawn) && ReferenceEquals(_drawOverrideMaterials, materials)) return;
+        if (ReferenceEquals(_drawOverride, drawn) && ReferenceEquals(_drawOverrideMaterials, materials) && _drawNothing == drawNothing) return;
         _drawOverride = drawn;
         _drawOverrideMaterials = materials;
+        _drawNothing = drawNothing;
         Wake();
     }
 
     internal Mesh? DrawOverride => _drawOverride;
 
-    private Mesh? DrawnMesh => _drawOverride.IsValid() ? _drawOverride : mesh;
+    internal bool DrawsNothing => _drawNothing;
+
+    private Mesh? DrawnMesh => _drawNothing ? null : _drawOverride.IsValid() ? _drawOverride : mesh;
 
     // Syncs it again next frame, for a setting that changed
     private void Wake() => SceneRendering.Wake(this, GameObject);

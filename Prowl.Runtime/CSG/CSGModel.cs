@@ -53,16 +53,17 @@ public sealed class CSGModel : Component
     public bool LightmapUVsStale { get; private set; }
 
     /// <summary>Geometry hash the current mesh's UV2 was unwrapped from, or 0 when it never was.</summary>
-    [SerializeField] private long lightmapUVHash;
+    [SerializeField, HideInInspector] private long lightmapUVHash;
 
     // Hashes of the saved meshes as built, before any unwrap, so the first rebuild after a load can keep them
-    [SerializeField] private long visibleHash;
-    [SerializeField] private long collisionHash;
+    [SerializeField, HideInInspector] private long visibleHash;
+    [SerializeField, HideInInspector] private long collisionHash;
 
     // The hashes of the meshes held now. Not serialized, so an undo of the fields above cannot fool the comparison
     [SerializeIgnore] private long _visibleKey;
     [SerializeIgnore] private long _collisionKey;
     [SerializeIgnore] private Mesh? _preview;
+    [SerializeIgnore] private bool _hidesAll;
 
     /// <summary>Editor only: brushes left out of what the viewport draws. They still shape the model and its saved mesh.</summary>
     internal static Func<CSGBrush, bool>? EditorHidden;
@@ -294,9 +295,13 @@ public sealed class CSGModel : Component
         TrackLightmapUVs();
     }
 
-    /// <summary>The visible mesh without hidden brushes, or null when nothing in this model is hidden.</summary>
-    private Mesh? BuildPreview(GeometryData geometry)
+    /// <summary>
+    /// The visible mesh without hidden brushes, or null when nothing in this model is hidden. Null with
+    /// <paramref name="hidesAll"/> set when the hidden brushes leave nothing to draw.
+    /// </summary>
+    private Mesh? BuildPreview(GeometryData geometry, out bool hidesAll)
     {
+        hidesAll = false;
         if (EditorHidden == null) return null;
 
         bool any = false;
@@ -313,6 +318,7 @@ public sealed class CSGModel : Component
         }, GameObject.Name);
         _previewMaterials.Clear();
         _previewMaterials.AddRange(preview.Materials);
+        hidesAll = preview.Visible.IsNotValid();
         return preview.Visible;
     }
 
@@ -322,9 +328,10 @@ public sealed class CSGModel : Component
     internal void RefreshHidden()
     {
         if (_geometry == null) return;
-        Mesh? preview = BuildPreview(_geometry);
-        if (preview.IsNotValid() && _preview.IsNotValid()) return;
+        Mesh? preview = BuildPreview(_geometry, out bool hidesAll);
+        if (preview.IsNotValid() && _preview.IsNotValid() && hidesAll == _hidesAll) return;
         _preview = preview;
+        _hidesAll = hidesAll;
         ApplyRenderer();
     }
 
@@ -686,7 +693,7 @@ public sealed class CSGModel : Component
         _collision = KeepOrReplace(_collision, meshes.Collision, ref _collisionKey);
         visibleHash = _visibleKey;
         collisionHash = _collisionKey;
-        _preview = BuildPreview(_geometry!);
+        _preview = BuildPreview(_geometry!, out _hidesAll);
 
         GeneratedMaterials.Clear();
         GeneratedMaterials.AddRange(meshes.Materials);
@@ -750,7 +757,7 @@ public sealed class CSGModel : Component
         renderer.Materials = GeneratedMaterials!;
 
         // Hidden brushes only leave what is drawn, so saves, copies, undo and bakes keep every brush
-        renderer.SetDrawOverride(_preview, _preview.IsValid() ? _previewMaterials! : null);
+        renderer.SetDrawOverride(_preview, _preview.IsValid() ? _previewMaterials! : null, _hidesAll);
     }
 
     private void ApplyCollider()

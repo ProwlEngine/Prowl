@@ -512,6 +512,33 @@ public class CSGModelTests : RuntimeTestBase
         }
     }
 
+    /// <summary>Hiding the only brush leaves nothing drawn, while the saved mesh keeps it.</summary>
+    [Fact]
+    public void HidingEveryBrushDrawsNothing()
+    {
+        CreateModel();
+        CSGBrush only = AddBrush(Float3.One * 2f, Float3.Zero);
+        Update(_scene);
+
+        try
+        {
+            CSGModel.EditorHidden = b => ReferenceEquals(b, only);
+            _model.RefreshHidden();
+
+            MeshRenderer renderer = _model.GetComponent<MeshRenderer>();
+            Assert.True(renderer.DrawsNothing);
+            Assert.Equal(8f, VolumeOf(renderer.Mesh!), 2);
+
+            CSGModel.EditorHidden = _ => false;
+            _model.RefreshHidden();
+            Assert.False(renderer.DrawsNothing);
+        }
+        finally
+        {
+            CSGModel.EditorHidden = null;
+        }
+    }
+
     [Fact]
     public void MovingABrushAndBackLeavesLightmapUVsStale()
     {
