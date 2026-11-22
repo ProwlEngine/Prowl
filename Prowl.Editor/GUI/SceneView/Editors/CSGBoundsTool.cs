@@ -72,7 +72,7 @@ public sealed class CSGBoundsTool : SceneTool
     /// <summary>The one selected object, when it is a brush or holds brushes.</summary>
     private static GameObject? Target()
     {
-        if (!CSGEditMode.Is(CSGMode.Edit)) return null;
+        if (!CSGEditMode.Is(CSGMode.Select)) return null;
         List<GameObject> selected = Selection.GetSelected<GameObject>().ToList();
         if (selected.Count != 1 || selected[0].GetComponent<CSGModel>().IsValid()) return null;
         return Brushes(selected[0]).Count > 0 ? selected[0] : null;
