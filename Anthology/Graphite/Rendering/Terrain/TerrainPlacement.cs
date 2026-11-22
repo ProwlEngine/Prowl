@@ -154,11 +154,13 @@ public sealed class TerrainDetailInstances : ITerrainInstances, IDisposable
     private readonly TerrainData _data;
     private readonly TerrainDetailPrototype[] _prototypes;
     private readonly ConcurrentDictionary<(int, int), TerrainInstance[]> _cells = new();
+    private Double3 _placedAt;
     private long _version;
 
     public TerrainDetailInstances(TerrainData data, IReadOnlyList<TerrainDetailPrototype> prototypes, double cellSize = 32)
     {
         _data = data;
+        _placedAt = data.Position;
         _prototypes = [.. prototypes];
         CellSize = cellSize;
         data.Edited += OnEdited;
@@ -172,6 +174,7 @@ public sealed class TerrainDetailInstances : ITerrainInstances, IDisposable
 
     public IReadOnlyList<TerrainInstance> Cell(int x, int z)
     {
+        Forget(_data.Position);
         if (_cells.TryGetValue((x, z), out TerrainInstance[]? cached))
             return cached;
         long version = Interlocked.Read(ref _version);
@@ -182,6 +185,19 @@ public sealed class TerrainDetailInstances : ITerrainInstances, IDisposable
     }
 
     public void Dispose() => _data.Edited -= OnEdited;
+
+    // Cached cells hold world positions, so they go when the terrain moves
+    private void Forget(Double3 position)
+    {
+        lock (_cells)
+        {
+            if (position == _placedAt)
+                return;
+            _placedAt = position;
+            Interlocked.Increment(ref _version);
+            _cells.Clear();
+        }
+    }
 
     private void OnEdited(TerrainEdited edited)
     {
