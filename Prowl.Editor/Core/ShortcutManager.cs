@@ -420,5 +420,6 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("CSG/ShapeLinearStairs", "Draw Stairs", KeyCode.Number4);
         ShortcutManager.Register("CSG/ShapeSpiralStairs", "Draw Spiral Stairs", KeyCode.Number5);
         ShortcutManager.Register("CSG/ShapeRoom", "Draw Room", KeyCode.Number6);
+        ShortcutManager.Register("CSG/ShapePolygon", "Draw Polygon", KeyCode.Number7);
     }
 }

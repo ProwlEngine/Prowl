@@ -31,7 +31,12 @@ public sealed class CSGGenerateTool : SceneTool
         Footprint,
         /// <summary>Pulling the height along the plane normal.</summary>
         Extrude,
+        /// <summary>Clicking out the corners of a polygon on the locked work plane.</summary>
+        Outline,
     }
+
+    // The corners of a polygon being drawn, in the work plane's frame
+    private readonly List<Float2> _outline = new();
 
     public override string Name => "CSG Generate";
     public override string Icon => EditorIcons.Plus;
@@ -103,6 +108,7 @@ public sealed class CSGGenerateTool : SceneTool
             case Stage.Idle: TickIdle(ctx, id); break;
             case Stage.Footprint: TickFootprint(ctx, id); break;
             case Stage.Extrude: TickExtrude(ctx); break;
+            case Stage.Outline: TickOutline(ctx, id); break;
         }
     }
 
@@ -129,6 +135,54 @@ public sealed class CSGGenerateTool : SceneTool
         _height = 0f;
         _stage = Stage.Footprint;
         _stageView = ctx.View;
+
+        if (Generator == CSGGeneratorKind.Polygon)
+        {
+            ctx.Handles.TryEndDrag(id);
+            _outline.Clear();
+            _outline.Add(Float2.Zero);
+            _stage = Stage.Outline;
+        }
+    }
+
+    /// <summary>Each click adds a corner. Clicking the first corner again, or Enter, closes the outline for its height.</summary>
+    private void TickOutline(SceneToolContext ctx, ControlID id)
+    {
+        HandleContext handles = ctx.Handles;
+        Float2 cursor = _outline[^1];
+        if (TryPlanePoint(ctx, out Float3 local))
+            cursor = new Float2(CSGSnap.Value(handles, local.X), CSGSnap.Value(handles, local.Z));
+
+        if (handles.KeyDown(KeyCode.Backspace) && _outline.Count > 1) _outline.RemoveAt(_outline.Count - 1);
+
+        Float3 first = ToWorld(new Float3(_outline[0].X, 0f, _outline[0].Y));
+        bool nearFirst = _outline.Count >= 3 && handles.WorldToScreen(first) is Float2 screen && Float2.Distance(screen, handles.MousePosition) < 10f;
+
+        var tint = Tint(handles);
+        DrawWorkGrid(ctx, ToWorld(new Float3(cursor.X, 0f, cursor.Y)));
+        var ring = new List<Float3>(_outline.Count + 1);
+        foreach (Float2 p in _outline) ring.Add(ToWorld(new Float3(p.X, 0f, p.Y)));
+        ring.Add(nearFirst ? first : ToWorld(new Float3(cursor.X, 0f, cursor.Y)));
+        ctx.Draw.Polyline(ring.ToArray(), tint.Color, 2f, closed: false);
+        foreach (Float3 corner in ring) ctx.Draw.Dot(corner, tint.Color, 6f);
+        if (nearFirst) ctx.Draw.Circle(first, _planeRotation * Float3.UnitY, 0.2f, tint.Color, 2f);
+
+        bool close = _outline.Count >= 3 && handles.IsPressed("CSG/Confirm");
+        if (handles.IsNearest(id) && handles.TryBeginDrag(id))
+        {
+            handles.TryEndDrag(id);
+            if (nearFirst) close = true;
+            else if (Float2.Distance(cursor, _outline[^1]) > 1e-3f) _outline.Add(cursor);
+        }
+
+        if (!close) return;
+
+        // The footprint corners frame the outline, which is what the height pull is measured beside
+        Float2 min = _outline[0], max = _outline[0];
+        foreach (Float2 p in _outline) { min = Maths.Min(min, p); max = Maths.Max(max, p); }
+        _cornerA = new Float3(min.X, 0f, min.Y);
+        _cornerB = new Float3(max.X, 0f, max.Y);
+        _stage = Stage.Extrude;
     }
 
     private void TickFootprint(SceneToolContext ctx, ControlID id)
@@ -177,6 +231,7 @@ public sealed class CSGGenerateTool : SceneTool
         else if (handles.IsPressed("CSG/ShapeLinearStairs")) Generator = CSGGeneratorKind.LinearStairs;
         else if (handles.IsPressed("CSG/ShapeSpiralStairs")) Generator = CSGGeneratorKind.SpiralStairs;
         else if (handles.IsPressed("CSG/ShapeRoom")) Generator = CSGGeneratorKind.Room;
+        else if (handles.IsPressed("CSG/ShapePolygon")) Generator = CSGGeneratorKind.Polygon;
     }
 
     /// <summary>Where a new brush would start: the surface under the cursor, or the grid plane.</summary>
@@ -282,6 +337,12 @@ public sealed class CSGGenerateTool : SceneTool
 
     private void Commit(SceneToolContext ctx, Operation operation)
     {
+        if (Generator == CSGGeneratorKind.Polygon)
+        {
+            CommitPolygon(operation);
+            return;
+        }
+
         if (!ShapeFrame(out Float3 center, out Float3 size, out Quaternion rotation))
         {
             Cancel();
@@ -339,6 +400,27 @@ public sealed class CSGGenerateTool : SceneTool
 
         _stage = Stage.Idle;
         ClearTyped();
+    }
+
+    private void CommitPolygon(Operation operation)
+    {
+        CSGModel? model = CSGSelection.ActiveModel();
+        Plane[]? planes = CSGShapeBuilder.PolygonPrism(_outline, _height);
+        if (model.IsNotValid() || planes == null) { Cancel(); return; }
+
+        GameObject go = CSGSelection.CreateObject(Generator.ToString(), ParentFor(model!));
+        go.Transform.Position = _planeOrigin;
+        go.Transform.Rotation = _planeRotation;
+
+        Float4x4 drawn = Float4x4.CreateTRS(_planeOrigin, _planeRotation, Float3.One);
+        CSGBrush brush = go.AddComponent<CSGBrush>();
+        brush.Planes = CSGBrushGeometry.Transform(planes, go.Transform.WorldToLocalMatrix * drawn);
+        brush.Operation = operation;
+
+        Undo.RegisterCreatedObjectUndo(go, "Create CSG Brush");
+        Selection.Select(go);
+        model!.SetDirty();
+        Cancel();
     }
 
     /// <summary>Puts the shape's curved faces in one smoothing group, unique per generated brush.</summary>
@@ -492,6 +574,15 @@ public sealed class CSGGenerateTool : SceneTool
 
     private void DrawShapePreview(SceneToolContext ctx, Color32 color)
     {
+        if (Generator == CSGGeneratorKind.Polygon)
+        {
+            Plane[]? prism = CSGShapeBuilder.PolygonPrism(_outline, _height);
+            if (prism == null || GeometryGenerator.ConvexFromPlanes(prism).Solid is not { } shape) return;
+            foreach (GeometryData.Edge edge in shape.Edges)
+                ctx.Draw.Line(ToWorld(edge.Vert1.Point), ToWorld(edge.Vert2.Point), color, 2f);
+            return;
+        }
+
         if (!ShapeFrame(out Float3 centre, out Float3 size, out Quaternion rotation)) return;
 
         Float3 worldCentre = ToWorld(centre);
