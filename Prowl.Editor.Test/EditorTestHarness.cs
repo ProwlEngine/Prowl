@@ -79,6 +79,22 @@ public abstract class EditorTestHarness : IDisposable
         if (previous.IsValid() && !ReferenceEquals(previous, world)) previous!.Dispose();
     }
 
+    /// <summary>Opens <paramref name="scene"/> in place of the open scenes, and runs the load.</summary>
+    protected static GUI.SceneView.OpenScene Open(Scene scene)
+    {
+        GUI.SceneView.OpenScene open = GUI.SceneView.EditorSceneManager.Open(scene, force: true);
+        SceneInstance.ProcessPendingLoad();
+        return open;
+    }
+
+    /// <summary>Opens <paramref name="scene"/> beside the open scenes, and runs the load.</summary>
+    protected static GUI.SceneView.OpenScene Additive(Scene scene, bool load = true)
+    {
+        GUI.SceneView.OpenScene open = GUI.SceneView.EditorSceneManager.OpenAdditive(scene, load);
+        SceneInstance.ProcessPendingLoad();
+        return open;
+    }
+
     /// <summary>The asset with this GUID, loaded.</summary>
     protected static T? Load<T>(Guid guid) where T : Asset => AssetDatabase.Load<T>(guid);
 
