@@ -140,6 +140,8 @@ public sealed class TerrainData : Asset, ISerializable
 
     [NotContent] private readonly object _gate = new();
     [NotContent] private int _version;
+    [NotContent] private bool _changed;
+    [NotContent] private long _bytes;
 
     /// <summary>Raised after the package is built again or loaded anew, so renderers and physics take the new one.</summary>
     public event Action? Rebuilt;
@@ -193,7 +195,7 @@ public sealed class TerrainData : Asset, ISerializable
                 if (_terrain == null)
                 {
                     if (_package != null)
-                        Attach(GTerrain.Load(new MemoryStream(_package, writable: false)));
+                        Attach(GTerrain.Load(new MemoryStream(_package, writable: false)), _package.Length, false);
                     else
                         Build(Flat(), FlatSettings());
                 }
@@ -521,12 +523,15 @@ public sealed class TerrainData : Asset, ISerializable
         TerrainImporter.Import(map, settings, stream);
         stream.Position = 0;
         lock (_gate)
-            Attach(GTerrain.Load(stream));
+        {
+            _package = null;
+            Attach(GTerrain.Load(stream), stream.Length, true);
+        }
     }
 
     // Takes a new package, keeping where the old one stood. The old one reads from memory, so it needs no disposing and
     // whatever still streams from it finishes on what it held.
-    private void Attach(GTerrain terrain)
+    private void Attach(GTerrain terrain, long bytes, bool changed)
     {
         GTerrain? old = _terrain;
         if (old != null)
@@ -537,6 +542,8 @@ public sealed class TerrainData : Asset, ISerializable
         terrain.Edited += OnEdited;
         terrain.TreesChanged += OnTreesChanged;
         _terrain = terrain;
+        _bytes = bytes;
+        _changed = changed;
         Interlocked.Increment(ref _version);
         Rebuilt?.Invoke();
     }
@@ -547,9 +554,17 @@ public sealed class TerrainData : Asset, ISerializable
         terrain.TreesChanged -= OnTreesChanged;
     }
 
-    private void OnEdited(TerrainEdited edited) => Interlocked.Increment(ref _version);
+    private void OnEdited(TerrainEdited edited)
+    {
+        _changed = true;
+        Interlocked.Increment(ref _version);
+    }
 
-    private void OnTreesChanged() => Interlocked.Increment(ref _version);
+    private void OnTreesChanged()
+    {
+        _changed = true;
+        Interlocked.Increment(ref _version);
+    }
 
     #endregion
 
@@ -557,6 +572,8 @@ public sealed class TerrainData : Asset, ISerializable
     {
         base.TakeContent(staging);
         _terrain = null;
+        _changed = false;
+        _bytes = _package?.Length ?? 0;
         Interlocked.Increment(ref _version);
         Rebuilt?.Invoke();
     }
@@ -568,6 +585,8 @@ public sealed class TerrainData : Asset, ISerializable
             Detach(_terrain);
         _terrain = null;
     }
+
+    protected internal override long EstimateBytes() => _bytes;
 
     #region Serialization
 
@@ -636,9 +655,17 @@ public sealed class TerrainData : Asset, ISerializable
         }
         value.Add("TreePrototypes", trees);
 
+        value.Add("Package", new EchoObject(PackageBytes()));
+    }
+
+    // The package as saved: the bytes it was loaded from while nothing has changed them, else written afresh
+    private byte[] PackageBytes()
+    {
+        if (!_changed && _package != null)
+            return _package;
         MemoryStream package = new();
         Terrain.Save(package);
-        value.Add("Package", new EchoObject(package.ToArray()));
+        return package.ToArray();
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)

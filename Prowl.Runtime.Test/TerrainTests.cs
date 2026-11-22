@@ -493,6 +493,18 @@ public class TerrainTests
     }
 
     [Fact]
+    public void SavingAnUnchangedTerrainKeepsItsBytes_AndAnEditedOneWritesNewOnes()
+    {
+        using TerrainData data = Serializer.Deserialize<TerrainData>(Serializer.Serialize(RampTerrain()))!;
+        byte[] loaded = Serializer.Serialize(data).Get("Package")!.ByteArrayValue;
+        Assert.Same(loaded, Serializer.Serialize(data).Get("Package")!.ByteArrayValue);
+
+        data.Edit(TerrainBrush.Raise, new Float2(16, 16), 4f, 5f);
+        using TerrainData clone = Serializer.Deserialize<TerrainData>(Serializer.Serialize(data))!;
+        Assert.Equal(data.GetHeight(16, 16), clone.GetHeight(16, 16));
+    }
+
+    [Fact]
     public void RestoringACaptureUndoesTheEditsSinceAndRedoesThem()
     {
         using TerrainData data = Small();
