@@ -106,7 +106,7 @@ public static class CliEditorCommands
         project = Project.Current?.Name,
         projectPath = Project.Current?.RootPath,
         scenes = EditorSceneManager.OpenScenes.Select(o => o.Name).ToList(),
-        dirty = EditorSceneManager.HasDirtyScenes || (PrefabEditingMode.IsEditing && PrefabEditingMode.IsDirty),
+        dirty = EditorSceneManager.HasDirtyScenes || IsolatedWorld.IsDirty,
         isPlaying = Application.IsPlaying,
         isPaused = EditorApplication.IsPlayPaused,
         compiling = ScriptAssemblyManager.IsCompiling,

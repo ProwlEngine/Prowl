@@ -45,8 +45,8 @@ public static class EditorSceneManager
     /// <summary>The world built from the edit world for play mode, or null outside it.</summary>
     public static Scene? PlayWorld => s_playWorld.IsValid() ? s_playWorld : null;
 
-    /// <summary>The world panels act on: the prefab world while editing a prefab, otherwise Main, the edit world or the play world.</summary>
-    public static Scene EditedWorld => PrefabEditingMode.World.IsValid() ? PrefabEditingMode.World : Scene.Main;
+    /// <summary>The world panels act on: an isolated session's world, such as a prefab's, otherwise Main, the edit world or the play world.</summary>
+    public static Scene EditedWorld => IsolatedWorld.World.IsValid() ? IsolatedWorld.World! : Scene.Main;
 
     /// <summary>
     /// The play copy of the edit world: each section captured into a section of a new dormant game world, in the same
@@ -310,7 +310,7 @@ public static class EditorSceneManager
     private static void RequireEditing(string operation)
     {
         if (Application.IsPlaying) throw new InvalidOperationException($"Cannot {operation} during play mode.");
-        if (PrefabEditingMode.IsEditing) throw new InvalidOperationException($"Cannot {operation} while editing a prefab. Leave prefab editing mode first.");
+        if (IsolatedWorld.Current is { } session) throw new InvalidOperationException($"Cannot {operation} while editing {session.Name}. Leave it first.");
     }
 
     private static void RefuseDirty(IEnumerable<OpenScene> closing, bool force)
@@ -320,8 +320,8 @@ public static class EditorSceneManager
         if (dirty != null) throw new InvalidOperationException($"'{dirty.Name}' has unsaved changes. Save it first, or pass force to discard them.");
     }
 
-    /// <summary>Whether scenes can be opened, closed and saved now: not during play or prefab editing.</summary>
-    public static bool CanEditScenes => !Application.IsPlaying && !PrefabEditingMode.IsEditing;
+    /// <summary>Whether scenes can be opened, closed and saved now: not during play or an isolated session such as prefab editing.</summary>
+    public static bool CanEditScenes => !Application.IsPlaying && !IsolatedWorld.IsOpen;
 
     /// <summary>
     /// Replaces the setup with <paramref name="scene"/>, loaded and active, and clears the undo history. Refused when a
@@ -581,9 +581,9 @@ public static class EditorSceneManager
     private static bool Write(OpenScene scene, string relativePath)
     {
         if (Project.Current == null || scene.Section is not { IsLoaded: true } section) return false;
-        if (PrefabEditingMode.IsEditing)
+        if (IsolatedWorld.Current is { } session)
         {
-            Debug.LogWarning("Cannot save a scene while editing a prefab. Leave prefab editing mode first.");
+            Debug.LogWarning($"Cannot save a scene while editing {session.Name}. Leave it first.");
             return false;
         }
 

@@ -307,10 +307,10 @@ public class EditorApplication : Game
         SaveManager.OnSave += () =>
         {
             if (Application.IsPlaying) return null;
-            if (PrefabEditingMode.IsEditing)
+            if (IsolatedWorld.Current is { } session)
             {
-                bool changed = PrefabEditingMode.IsDirty;
-                return PrefabEditingMode.Save() && changed ? PrefabEditingMode.SaveLabel : null;
+                bool changed = session.IsDirty;
+                return session.Save() && changed ? session.SaveLabel : null;
             }
 
             List<string> saved = [];
@@ -328,7 +328,7 @@ public class EditorApplication : Game
         Runtime.Debug.OnLog += PauseOnLog;
         SaveManager.CollectUnsaved += unsaved =>
         {
-            if (PrefabEditingMode.IsEditing && PrefabEditingMode.IsDirty) unsaved.Add(PrefabEditingMode.SaveLabel);
+            if (IsolatedWorld.Current is { IsDirty: true } session) unsaved.Add(session.SaveLabel);
             foreach (OpenScene scene in EditorSceneManager.OpenScenes)
                 if (scene.IsDirty) unsaved.Add(EditorSceneManager.LabelOf(scene));
         };
@@ -1967,10 +1967,10 @@ public class EditorApplication : Game
     {
         if (Application.IsPlaying) return;
 
-        // Play copies the edit world, which is dormant under prefab editing.
-        if (PrefabEditingMode.IsEditing)
+        // Play copies the edit world, which is dormant under an isolated session such as prefab editing.
+        if (IsolatedWorld.Current is { } isolated)
         {
-            Runtime.Debug.LogWarning("Exit prefab editing mode before entering play mode.");
+            Runtime.Debug.LogWarning($"Leave editing {isolated.Name} before entering play mode.");
             return;
         }
 

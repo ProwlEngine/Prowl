@@ -135,8 +135,8 @@ public class HierarchyPanel : DockPanel
             //.OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
-            // Prefab editing breadcrumb
-            if (PrefabEditingMode.IsEditing)
+            // Breadcrumb of an isolated session, such as a prefab being edited
+            if (IsolatedWorld.Current is { } session)
             {
                 using (paper.Row("hier_prefab_breadcrumb")
                     .Height(24)
@@ -151,7 +151,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
                         .Hovered.TextColor(EditorTheme.Ink500).End()
-                        .OnClick(0, (_, _) => PrefabEditingMode.RequestExit());
+                        .OnClick(0, (_, _) => IsolatedWorld.RequestClose());
 
                     paper.Box("hier_prefab_sep_arrow")
                         .Width(UnitValue.Auto).Height(24)
@@ -159,7 +159,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string sceneName = PrefabEditingMode.OriginalSceneName ?? Loc.Get("panel.scene");
+                    string sceneName = IsolatedWorld.OriginalSceneName ?? Loc.Get("panel.scene");
                     paper.Box("hier_prefab_scene")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(sceneName, font)
@@ -172,9 +172,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string prefabName = PrefabEditingMode.EditingPrefabPath != null
-                        ? System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath)
-                        : Loc.Get("hierarchy.prefab_fallback");
+                    string prefabName = session.Name;
 
                     paper.Box("hier_prefab_name")
                         .Width(UnitValue.Auto).Height(24)
@@ -184,7 +182,7 @@ public class HierarchyPanel : DockPanel
 
                     paper.Box("hier_prefab_spacer");
 
-                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  {Loc.Get("hierarchy.save_and_exit")}", () => PrefabEditingMode.SaveAndExit()).Width(100).Show();
+                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  {Loc.Get("hierarchy.save_and_exit")}", () => session.SaveAndClose()).Width(100).Show();
                 }
             }
 
@@ -279,8 +277,8 @@ public class HierarchyPanel : DockPanel
 
                 // Account for toolbar + margins + optional prefab breadcrumb
                 float usedHeight = ToolbarHeight + 8;
-                if (PrefabEditingMode.IsEditing)
-                    usedHeight += 28; // prefab breadcrumb row + margins
+                if (IsolatedWorld.IsOpen)
+                    usedHeight += 28; // session breadcrumb row + margins
                 float scrollHeight = height - usedHeight;
                 List<TreeNode> treeNodes = _treeNodes;
                 treeNodes.Clear();
@@ -533,7 +531,7 @@ public class HierarchyPanel : DockPanel
     // and none in the prefab world, which is one prefab.
     internal void BuildSceneNodes(Scene world, List<TreeNode> nodes)
     {
-        if (PrefabEditingMode.IsEditing)
+        if (IsolatedWorld.IsOpen)
         {
             foreach (SceneSection section in world.Sections)
             {

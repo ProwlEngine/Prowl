@@ -308,4 +308,35 @@ public class EditorWorldTests : EditorTestHarness
         Assert.Equal(SceneState.Running, edit.State);
         Assert.False(sceneObject.IsDisposed);
     }
+
+    /// <summary>The isolated world owner answers for the prefab session: its world, its name, its dirty flag from undo.</summary>
+    [Fact]
+    public void APrefabSessionIsTheIsolatedWorldsSession()
+    {
+        var authored = new GameObject("Barrel");
+        authored.AddComponent<Marker>();
+        Guid prefab = CreatePrefabAsset(authored, "Barrel.prefab");
+
+        PrefabEditingMode.Enter(prefab);
+
+        IsolatedSession session = Assert.IsAssignableFrom<IsolatedSession>(IsolatedWorld.Current);
+        Assert.Same(PrefabEditingMode.World, IsolatedWorld.World);
+        Assert.Equal("Barrel", session.Name);
+        Assert.False(IsolatedWorld.IsDirty);
+        Assert.False(EditorSceneManager.CanEditScenes);
+
+        GameObject root = IsolatedWorld.World!.FindObject("Barrel")!;
+        Undo.RecordObject(root.GetComponent<Marker>()!, "Change Marker");
+        root.GetComponent<Marker>()!.Value = 7;
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        Assert.True(IsolatedWorld.IsDirty);
+        Assert.True(PrefabEditingMode.IsDirty);
+
+        PrefabEditingMode.Exit();
+
+        Assert.Null(IsolatedWorld.Current);
+        Assert.False(IsolatedWorld.IsOpen);
+        Assert.True(EditorSceneManager.CanEditScenes);
+    }
 }

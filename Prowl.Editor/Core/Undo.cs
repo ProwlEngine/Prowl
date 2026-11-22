@@ -16,7 +16,7 @@ namespace Prowl.Editor.Core;
 /// <summary>What a record changes, for dirty marks and for dropping steps.</summary>
 public readonly struct UndoOwner : IEquatable<UndoOwner>
 {
-    internal enum OwnerKind { None, Scene, Prefab, Asset, AssetFile, Settings }
+    internal enum OwnerKind { None, Scene, Session, Asset, AssetFile, Settings }
 
     internal OwnerKind Kind { get; }
     internal Guid AssetId { get; }
@@ -38,7 +38,8 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
     public static UndoOwner OfScene(OpenScene? scene) => scene == null ? None : new(OwnerKind.Scene, scene: scene);
 
     /// <summary>The prefab being edited, which keeps its own dirty flag.</summary>
-    internal static UndoOwner OfPrefabSession => new(OwnerKind.Prefab);
+    /// <summary>The isolated session open over the edit world, such as a prefab being edited.</summary>
+    internal static UndoOwner OfSession => new(OwnerKind.Session);
 
     /// <summary>A file written straight to disk. Keys a step for dropping and marks nothing.</summary>
     public static UndoOwner OfAssetFile(Guid asset) => new(OwnerKind.AssetFile, asset);
@@ -58,7 +59,7 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
     private static UndoOwner OfObjectIn(GameObject go)
     {
         if (IsDontSave(go)) return None;
-        if (PrefabEditingMode.World.IsValid() && ReferenceEquals(go.Scene, PrefabEditingMode.World)) return OfPrefabSession;
+        if (IsolatedWorld.World is { } isolated && ReferenceEquals(go.Scene, isolated)) return OfSession;
         return OfScene(EditorSceneManager.SceneOf(go));
     }
 
@@ -67,7 +68,7 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
     internal string DisplayName => Kind switch
     {
         OwnerKind.Scene => Scene!.Name,
-        OwnerKind.Prefab => PrefabEditingMode.EditingPrefabPath is { } path ? System.IO.Path.GetFileNameWithoutExtension(path) : "Prefab",
+        OwnerKind.Session => IsolatedWorld.Current?.Name ?? "Session",
         OwnerKind.Asset or OwnerKind.AssetFile => AssetDatabase.Get(AssetId) is Asset a ? a.Name : AssetId.ToString(),
         OwnerKind.Settings => SettingsType?.Name ?? "Settings",
         _ => "",
@@ -965,7 +966,7 @@ public static class Undo
         switch (owner.Kind)
         {
             case UndoOwner.OwnerKind.Scene: EditorSceneManager.MarkDirty(owner.Scene); break;
-            case UndoOwner.OwnerKind.Prefab when PrefabEditingMode.IsEditing: PrefabEditingMode.IsDirty = true; break;
+            case UndoOwner.OwnerKind.Session when IsolatedWorld.Current is { } session: session.IsDirty = true; break;
             case UndoOwner.OwnerKind.Asset: EditorUtility.MarkAssetDirty(owner.AssetId); break;
             case UndoOwner.OwnerKind.Settings when owner.SettingsType != null: EditorRegistries.SaveSettings(owner.SettingsType); break;
         }
