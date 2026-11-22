@@ -30,7 +30,6 @@ public sealed class CSGObjectTool : SceneTool
 
     private const string BrushControl = "csg_brush";
     private const string MarqueeControl = "csg_brush_marquee";
-    private const string ResizeControl = "csg_brush_resize";
     private const string TransformControl = "sceneview_transform";
 
     private static readonly Color32 AdditiveColor = new(120, 200, 255, 255);
@@ -57,7 +56,6 @@ public sealed class CSGObjectTool : SceneTool
         if (model.IsNotValid()) return;
 
         CollectBrushes(model!);
-        if (edit && ResizeHandles(ctx)) { DrawBrushes(ctx); return; }
         HandleCloneDrag(ctx);
         PickBrush(ctx, model!);
         DrawBrushes(ctx);
@@ -108,111 +106,6 @@ public sealed class CSGObjectTool : SceneTool
             else Selection.AddToSelection(target);
         }
         else Selection.Select(target);
-    }
-
-    // A face being dragged by its resize handle, and the brush as it was when the drag began
-    private int _resizeFace = -1;
-    private CSGBrush? _resizeBrush;
-    private float _resizeStart;
-    private Plane[] _resizePlanes = [];
-    private SurfaceData[] _resizeSurfaces = [];
-    private CSGControlMesh? _resizeMesh;
-
-    private static readonly Float3[] FaceAxes = [Float3.UnitX, -Float3.UnitX, Float3.UnitY, -Float3.UnitY, Float3.UnitZ, -Float3.UnitZ];
-
-    /// <summary>
-    /// A handle on each face of one selected brush's bounds. Dragging one moves that side while the opposite side stays,
-    /// reshaping the brush rather than scaling its transform. True while a handle is dragged.
-    /// </summary>
-    private bool ResizeHandles(SceneToolContext ctx)
-    {
-        List<CSGBrush> selected = CSGSelection.Brushes();
-        if (selected.Count != 1 || CSGSelection.Groups().Count > 0) { _resizeFace = -1; return false; }
-
-        CSGBrush brush = selected[0];
-        if (!brush.IsShapeValid) return false;
-
-        HandleContext handles = ctx.Handles;
-        AABB bounds = CSGBrushGeometry.Bounds(brush.Shape);
-        Float3 centre = (bounds.Min + bounds.Max) * 0.5f, extent = (bounds.Max - bounds.Min) * 0.5f;
-        Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
-
-        for (int face = 0; face < 6; face++)
-        {
-            Float3 axis = FaceAxes[face];
-            Float3 world = Float4x4.TransformPoint(centre + axis * Float3.Dot(Maths.Abs(axis), extent), toWorld);
-            ControlID id = handles.GetControlID(ResizeControl, face);
-            handles.AddControl(id, world, 8f);
-            handles.RequestCursor(id, PaperCursor.Pointer);
-            bool hot = handles.IsHot(id) && ReferenceEquals(_resizeBrush, brush) && _resizeFace == face;
-            ctx.Draw.Dot(world, hot || handles.IsNearest(id) ? SelectedColor : ColorFor(brush.Operation), 7f);
-
-            if (handles.IsNearest(id) && handles.TryBeginDrag(id))
-            {
-                _resizeFace = face;
-                _resizeBrush = brush;
-                _resizeStart = AlongAxis(handles.MouseRay, world, Float3.Normalize(Float4x4.TransformNormal(axis, toWorld)));
-                _resizePlanes = (Plane[])brush.Planes.Clone();
-                _resizeSurfaces = (SurfaceData[])brush.Surfaces.Clone();
-                _resizeMesh = brush.HasControlMesh ? brush.ControlMesh!.Clone() : null;
-            }
-        }
-
-        if (_resizeFace < 0 || !ReferenceEquals(_resizeBrush, brush)) return false;
-        ControlID active = handles.GetControlID(ResizeControl, _resizeFace);
-        if (!handles.IsHot(active))
-        {
-            _resizeFace = -1;
-            return false;
-        }
-
-        DragFace(ctx, brush, bounds);
-        handles.TryEndDrag(active);
-        return true;
-    }
-
-    private void DragFace(SceneToolContext ctx, CSGBrush brush, AABB bounds)
-    {
-        Float3 axis = FaceAxes[_resizeFace];
-        Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
-        Float3 worldAxis = Float4x4.TransformNormal(axis, toWorld);
-        float scale = Float3.Length(worldAxis);
-        if (scale < 1e-6f) return;
-
-        // The bounds the drag began with, from the brush as it was then
-        AABB start = CSGBrushGeometry.Bounds(GeometryGenerator.ConvexFromPlanes(_resizePlanes).Solid);
-        Float3 startExtent = start.Max - start.Min;
-        float length = Float3.Dot(Maths.Abs(axis), startExtent);
-        Float3 startFace = (start.Min + start.Max) * 0.5f + axis * (length * 0.5f);
-        Float3 opposite = startFace - axis * length;
-
-        float moved = AlongAxis(ctx.Handles.MouseRay, Float4x4.TransformPoint(startFace, toWorld), worldAxis / scale) - _resizeStart;
-        moved = CSGSnap.Value(ctx.Handles, moved);
-        float wanted = MathF.Max(CSGSnap.Grid * 0.25f, length + moved / scale);
-        float factor = wanted / length;
-
-        // Scaled along the dragged axis about the opposite face
-        Float3 factors = Float3.One + Maths.Abs(axis) * (factor - 1f);
-        Float4x4 reshape = Float4x4.CreateTranslation(opposite) * Float4x4.CreateScale(factors) * Float4x4.CreateTranslation(-opposite);
-
-        Undo.RecordObject(brush, "Resize CSG Brush");
-        CSGControlMesh? mesh = _resizeMesh?.Clone();
-        mesh?.TransformPoints(reshape);
-        brush.SetShape(mesh != null ? mesh.ToPlanes() : CSGBrushGeometry.Transform(_resizePlanes, reshape), (SurfaceData[])_resizeSurfaces.Clone(), mesh);
-
-        ctx.Draw.Label(Float4x4.TransformPoint((start.Min + start.Max) * 0.5f + axis * (wanted - length * 0.5f), toWorld),
-                       (wanted * scale).ToString("0.###"), SelectedColor);
-        CSGModel? model = CSGSelection.ActiveModel();
-        if (model.IsValid()) model!.SetDirty();
-    }
-
-    /// <summary>How far along a line through <paramref name="origin"/> the ray passes closest.</summary>
-    private static float AlongAxis(Ray ray, Float3 origin, Float3 direction)
-    {
-        Float3 w = ray.Origin - origin;
-        float b = Float3.Dot(direction, ray.Direction), d = Float3.Dot(direction, w), e = Float3.Dot(ray.Direction, w);
-        float denominator = 1f - b * b;
-        return MathF.Abs(denominator) < 1e-6f ? d : (d - b * e) / denominator;
     }
 
     // Brushes under the last click, nearest first, and which of them that click took
