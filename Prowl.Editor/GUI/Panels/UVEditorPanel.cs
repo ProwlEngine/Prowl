@@ -254,7 +254,7 @@ public class UVEditorPanel : DockPanel
         ModelObject model = tool.EditedObjects[0];
         int slot = Math.Max(0, tool.SelectedFaceSlot ?? 0);
         if (slot >= model.Materials.Count || model.Materials[slot] == Guid.Empty) return null;
-        return AssetDatabase.Get<Material>(model.Materials[slot]) is { } material ? material.GetTexture("_MainTex") : null;
+        return AssetDatabase.Get<Material>(model.Materials[slot]) is { } material ? material.GetTexture("base_color_map") : null;
     }
 
     private static (int Width, int Height) TextureSize(ModelMeshTool tool)

@@ -151,7 +151,7 @@ public sealed class ModelObject : Component
             var texture = new Texture2D(Size, Size, srgb: true) { Name = "UV Checker", Filter = FilterMode.Point };
             texture.SetData(pixels, 0, 0, Size, Size);
             s_checker = new Material(StandardMaterial) { Name = "UV Checker" };
-            s_checker.SetTexture("_MainTex", texture);
+            s_checker.SetTexture("base_color_map", texture);
             return s_checker;
         }
     }
