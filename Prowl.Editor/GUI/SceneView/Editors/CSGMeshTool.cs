@@ -112,13 +112,18 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (Target.IsNotValid() || _mesh == null || _faces.Count != 1) return;
 
-        int face = _faces[0];
+        PrepareExtrude(_faces[0]);
+        CommitExtrude(ExtrudeDistance);
+    }
+
+    /// <summary>Takes the face's corners, direction and look, ready for an extrude.</summary>
+    private void PrepareExtrude(int face)
+    {
         _actionRing.Clear();
-        foreach (int i in _mesh.PolygonPoints(face)) _actionRing.Add(_mesh.Points[i]);
+        foreach (int i in _mesh!.PolygonPoints(face)) _actionRing.Add(_mesh.Points[i]);
         _actionCorner = _mesh.PolygonNormal(face);
         int plane = PlaneOf(face);
         _actionSurface = plane >= 0 ? Target!.Surfaces[plane] : SurfaceData.Default;
-        CommitExtrude(ExtrudeDistance);
     }
 
     public void SnapSelectedToGrid() => SnapSelection();
@@ -146,6 +151,9 @@ public sealed class CSGMeshTool : SceneTool
     private CSGControlMesh? _preview;
     private List<(int a, int b)> _edges = new();
     private bool _dragging;
+
+    // A gizmo drag that began with Shift on a whole face, extruding it rather than moving it
+    private bool _gizmoExtrude;
     private Float3 _dragRaw, _dragApplied;
     private Float3 _dragAnchor, _dragAnchorStart, _dragStartHit;
     private bool _dragStarted;
@@ -725,20 +733,46 @@ public sealed class CSGMeshTool : SceneTool
         foreach (int i in _vertices) centre += _mesh!.Points[i];
         centre = Float4x4.TransformPoint(centre / _vertices.Count, toWorld);
 
+        // While extruding the points stay put, so the handle is carried along by the drag instead
+        if (_gizmoExtrude && _dragging) centre += _dragRaw;
+
         Float3 before = centre;
         bool moved = TransformHandles.PositionHandle(handles, MoveHandle, ref centre, out bool hot);
-        if (hot && !_dragging) _dragRaw = _dragApplied = Float3.Zero;
-        _dragging = hot;
-        if (hot) DrawDistance(ctx, centre, _dragApplied);
+        if (hot && !_dragging)
+        {
+            _dragRaw = _dragApplied = Float3.Zero;
 
-        if (!moved) return;
+            // Shift on a whole face pulls it out as a brush of its own, as Shift dragging the face does
+            _gizmoExtrude = handles.Shift && _faces.Count == 1 && _vertices.Count == _mesh!.PolygonPoints(_faces[0]).Count;
+            if (_gizmoExtrude) PrepareExtrude(_faces[0]);
+        }
+
+        if (_dragging && !hot && _gizmoExtrude)
+        {
+            _gizmoExtrude = false;
+            CommitExtrude(GizmoExtrudeAmount(toWorld));
+        }
+
+        _dragging = hot;
 
         // Snapped over the whole drag so small per frame steps do not round away.
-        _dragRaw += centre - before;
-        Float3 snapped = CSGSnap.Value(handles, _dragRaw);
-        Float3 step = snapped - _dragApplied;
-        _dragApplied = snapped;
-        if (Float3.LengthSquared(step) < 1e-12f) return;
+        Float3 step = Float3.Zero;
+        if (moved)
+        {
+            _dragRaw += centre - before;
+            Float3 snapped = CSGSnap.Value(handles, _dragRaw);
+            step = snapped - _dragApplied;
+            _dragApplied = snapped;
+        }
+
+        if (_gizmoExtrude)
+        {
+            if (hot) PreviewExtrude(ctx, MathF.Max(0f, GizmoExtrudeAmount(toWorld)));
+            return;
+        }
+
+        if (hot) DrawDistance(ctx, centre, _dragApplied);
+        if (!moved || Float3.LengthSquared(step) < 1e-12f) return;
 
         Float4x4 toLocal = Target.Transform.WorldToLocalMatrix;
         Float3 delta = Float4x4.TransformPoint(before + step, toLocal) - Float4x4.TransformPoint(before, toLocal);
@@ -764,6 +798,14 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         MarkDirty();
+    }
+
+    /// <summary>How far the gizmo has been dragged along the face being extruded, in the brush's own units.</summary>
+    private float GizmoExtrudeAmount(Float4x4 toWorld)
+    {
+        Float3 normal = Float4x4.TransformNormal(_actionCorner, toWorld);
+        float scale = Float3.Length(normal);
+        return scale < 1e-6f ? 0f : Float3.Dot(_dragApplied, normal / scale) / scale;
     }
 
     /// <summary>Scales the selected face about its centre and rotates a selected edge about itself.</summary>
