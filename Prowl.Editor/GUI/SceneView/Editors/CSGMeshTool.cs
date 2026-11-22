@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Modeling;
 using Prowl.PaperUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
@@ -659,12 +660,16 @@ public sealed class CSGMeshTool : SceneTool
             return;
         }
 
-        if (!CSGMeshEdit.Inset(_startMesh!, _startSurfaces!, _actionFaces, amount, out CSGControlMesh mesh, out SurfaceData[] surfaces))
+        var target = new CSGBrushTarget(_startMesh!, _startSurfaces!);
+        List<GeometryData.Face> faces = target.FacesOf(_actionFaces);
+        string? problem = MeshEdit.Run(target.Target, (mesh, selected) => Operators.Inset(mesh, faces, amount, selected), new ElementSelection());
+        if (problem != null)
         {
-            CSGStatus.Flash(Loc.Get("csg.status_inset_too_wide"));
+            CSGStatus.Flash(Loc.Get(problem));
             return;
         }
 
+        (CSGControlMesh mesh, SurfaceData[] surfaces) = target.ToBrush();
         Undo.RecordObject(Target!, "Inset CSG Face");
         Target!.SetShape(mesh, surfaces);
         MarkDirty();

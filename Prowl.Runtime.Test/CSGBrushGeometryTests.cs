@@ -148,27 +148,6 @@ public class CSGBrushGeometryTests
         }
     }
 
-    /// <summary>An inset face shrinks inside its outline, ringed by new faces that take its surface, and the solid stays the same.</summary>
-    [Fact]
-    public void InsetAFaceRingsItWithFacesOfItsSurface()
-    {
-        CSGControlMesh box = CSGControlMesh.FromPlanes(Box(new Float3(2f)))!;
-        int top = Enumerable.Range(0, box.Polygons.Count).First(p => box.PolygonNormal(p).Y > 0.99f);
-        SurfaceData[] surfaces = Enumerable.Range(0, box.Polygons.Count).Select(p => new SurfaceData { Scale = Float2.One, Offset = new Float2(p, 0f) }).ToArray();
-
-        Assert.True(CSGMeshEdit.Inset(box, surfaces, [top], 0.25f, out CSGControlMesh inset, out SurfaceData[] kept));
-
-        Assert.True(inset.IsValid());
-        Assert.Equal(box.Polygons.Count + 4, inset.Polygons.Count);
-        Assert.Equal(kept.Length, inset.Polygons.Count);
-        Assert.Equal(8f, inset.Volume(), 4);
-
-        var upward = Enumerable.Range(0, inset.Polygons.Count).Where(p => inset.PolygonNormal(p).Y > 0.99f).ToList();
-        Assert.Equal(5, upward.Count);
-        Assert.All(upward, p => Assert.Equal(top, (int)kept[p].Offset.X));
-        Assert.Contains(upward, p => inset.PolygonPoints(p).All(i => MathF.Abs(inset.Points[i].X) <= 0.75f + 1e-4f && MathF.Abs(inset.Points[i].Z) <= 0.75f + 1e-4f));
-    }
-
     /// <summary>New faces project their textures in world space, so a moved brush slides under its texture.</summary>
     [Fact]
     public void NewFacesProjectTexturesInWorldSpace()

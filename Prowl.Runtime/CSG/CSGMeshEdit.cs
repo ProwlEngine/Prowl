@@ -9,54 +9,9 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.CSG;
 
-/// <summary>Shape edits: dropping a face of a convex brush, the plane a chamfer cuts along, and insetting faces.</summary>
+/// <summary>Plane edits for convex brushes: dropping a face and the plane a chamfer cuts along.</summary>
 public static class CSGMeshEdit
 {
-    private const string PolygonAttribute = "csg:polygon";
-
-    /// <summary>
-    /// Shrinks polygons inside their own outlines by <paramref name="distance"/>, joining each to its old outline with new
-    /// faces that take its surface. Neighbouring polygons are inset as one region. False when the inset leaves no solid.
-    /// </summary>
-    public static bool Inset(CSGControlMesh mesh, SurfaceData[] surfaces, ICollection<int> polygons, float distance,
-                             out CSGControlMesh result, out SurfaceData[] resultSurfaces)
-    {
-        result = mesh;
-        resultSurfaces = surfaces;
-        if (polygons.Count == 0 || distance <= 1e-5f) return false;
-
-        GeometryData shape = mesh.ToMesh(out int[] faceToPolygon);
-        shape.AddFaceAttribute(PolygonAttribute, GeometryData.AttributeBaseType.Int, 1);
-
-        var picked = new List<GeometryData.Face>();
-        int index = 0;
-        foreach (GeometryData.Face face in shape.Faces)
-        {
-            int polygon = faceToPolygon[index++];
-            face.Attributes[PolygonAttribute] = new GeometryData.IntAttributeValue(polygon);
-            if (polygons.Contains(polygon)) picked.Add(face);
-        }
-        if (picked.Count == 0) return false;
-
-        try { GeometryOperators.InsetFaces(shape, picked, distance, InsetMode.Shared, InsetMeasure.Distance); }
-        catch (InvalidOperationException) { return false; }
-
-        CSGControlMesh? inset = CSGControlMesh.FromMesh(shape);
-        if (inset == null || (!inset.IsValid() && inset.Repaired(out _) == null)) return false;
-
-        var kept = new List<SurfaceData>(inset.Polygons.Count);
-        foreach (GeometryData.Face face in shape.Faces)
-        {
-            if (face.VertCount < 3) continue;
-            int polygon = face.Attributes.TryGetValue(PolygonAttribute, out var value) && value is GeometryData.IntAttributeValue tag && tag.Data.Length > 0 ? tag.Data[0] : -1;
-            kept.Add(polygon >= 0 && polygon < surfaces.Length ? surfaces[polygon] : SurfaceData.Default);
-        }
-
-        result = inset;
-        resultSurfaces = [.. kept];
-        return true;
-    }
-
     /// <summary>Drops a face by removing its plane, the neighbouring faces grow to close the gap.</summary>
     public static bool RemoveFace(Plane[] planes, int planeIndex, out Plane[] result)
         => RemoveFace(planes, planeIndex, out result, out _, []);
