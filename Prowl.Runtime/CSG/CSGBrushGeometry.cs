@@ -143,6 +143,26 @@ public static class CSGBrushGeometry
         return true;
     }
 
+    /// <summary>Puts a plane set through an affine transform of its points, scale and shear included.</summary>
+    public static Plane[] Transform(IReadOnlyList<Plane> planes, Float4x4 pointTransform)
+    {
+        if (MathF.Abs(Float4x4.Determinant(pointTransform)) < 1e-12f) return [.. planes];
+
+        // A point q of the result came from p = inverse * q, so n.p = d becomes (inverse transposed n).q = d - n.t
+        Float4x4 inverse = pointTransform.Invert();
+        Float3 t = inverse.c3.XYZ;
+
+        var result = new Plane[planes.Count];
+        for (int i = 0; i < planes.Count; i++)
+        {
+            Float3 n = planes[i].Normal;
+            Float3 normal = new(Float3.Dot(inverse.c0.XYZ, n), Float3.Dot(inverse.c1.XYZ, n), Float3.Dot(inverse.c2.XYZ, n));
+            float length = Float3.Length(normal);
+            result[i] = new Plane(normal / length, (planes[i].D - Float3.Dot(n, t)) / length);
+        }
+        return result;
+    }
+
     /// <summary>Shifts every plane so the solid moves by <paramref name="offset"/> in local space.</summary>
     public static Plane[] Translate(IReadOnlyList<Plane> planes, Float3 offset)
     {

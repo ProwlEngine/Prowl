@@ -236,4 +236,23 @@ public class CSGBrushGeometryTests
             Assert.Equal(mesh.Polygons[i], loaded.Polygons[i]);
         Assert.Equal(mesh.ToPlanes(), loaded.ToPlanes());
     }
+
+    [Fact]
+    public void TransformingPlanesMovesTheSolidLikeItsCorners()
+    {
+        Plane[] planes = Box(new Float3(2, 1, 1));
+        Float4x4 transform = Float4x4.CreateTranslation(new Float3(1, 2, 3))
+                           * Float4x4.CreateFromQuaternion(Quaternion.AxisAngle(Float3.UnitY, 0.6f))
+                           * Float4x4.CreateScale(new Float3(0.5f, 2, 1));
+
+        Plane[] moved = CSGBrushGeometry.Transform(planes, transform);
+
+        foreach (GeometryData.Vertex v in Solid(planes).Vertices)
+        {
+            Float3 corner = Float4x4.TransformPoint(v.Point, transform);
+            float worst = 0f;
+            foreach (Plane plane in moved) worst = MathF.Max(worst, plane.GetSignedDistanceToPoint(corner));
+            Assert.InRange(worst, -1e-3f, 1e-3f);
+        }
+    }
 }

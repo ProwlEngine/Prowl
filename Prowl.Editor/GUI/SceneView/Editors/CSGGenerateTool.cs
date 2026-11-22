@@ -291,8 +291,10 @@ public sealed class CSGGenerateTool : SceneTool
                 go.Transform.Rotation = _planeRotation;
             }
 
+            // Whatever scale the parents carry, the shape lands in the world exactly as it was drawn
+            Float4x4 drawn = Float4x4.CreateTRS(worldCentre + _planeRotation * parts[i].Offset, _planeRotation, Float3.One);
             CSGBrush brush = go.AddComponent<CSGBrush>();
-            brush.Planes = parts[i].Planes;
+            brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, go.Transform.WorldToLocalMatrix * drawn);
             ApplySmoothing(brush, parts[i].SmoothPlanes);
 
             // Children of a group fold into it, so the group carries the operation instead.
