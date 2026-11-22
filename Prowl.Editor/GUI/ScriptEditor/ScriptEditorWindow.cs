@@ -721,10 +721,15 @@ public class ScriptEditorWindow : DockPanel
     private void AskReload(ScriptTab tab, string reason)
     {
         if (tab.Asking) return;
+        if (!tab.Editor.IsDirty)
+        {
+            Reload(tab);
+            return;
+        }
+
         tab.Asking = true;
-        string detail = tab.Editor.IsDirty ? " Reloading discards your unsaved edits here." : "";
         var dialog = new DialogModal { Title = "Script changed", Width = 420, OnDismissed = _ => tab.Asking = false };
-        dialog.DrawContent = paper => Origami.Label(paper, "se_reload_msg", $"{reason} Reload it, or close its tab?{detail}").Show();
+        dialog.DrawContent = paper => Origami.Label(paper, "se_reload_msg", $"{reason} Reload it, or close its tab? Reloading discards your unsaved edits here.").Show();
         dialog.Button("Reload", () => { Modal.Remove(dialog); tab.Asking = false; Reload(tab); }, OrigamiVariant.Primary);
         dialog.Button("Close", () => { Modal.Remove(dialog); tab.Asking = false; CloseTab(_tabs.IndexOf(tab), save: false); });
         Modal.Push(dialog);

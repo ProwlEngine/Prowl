@@ -349,13 +349,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
         // Skip dependency check if the entire GameObject is being disposed
         if (_go.IsDisposed)
             return true;
-
-        if (_go.IsComponentRequired(this, out Type dependentType))
-        {
-            Debug.LogError("Can't remove " + GetType().Name + " because " + dependentType.Name + " depends on it");
-            return false;
-        }
-        return true;
+        return !_go.IsComponentRequired(this, out _);
     }
 
     #region Behaviour
@@ -672,6 +666,9 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     private protected override void OnDisposed()
     {
+        SceneInstance? world = OwningScene;
+        if (world.IsValid()) world.ComponentDisposed(this);
+
         CancellationTokenSource? cancellation = Interlocked.Exchange(ref _destroyCancellation, null);
         if (cancellation == null) return;
 

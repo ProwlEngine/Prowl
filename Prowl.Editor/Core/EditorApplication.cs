@@ -540,13 +540,12 @@ public class EditorApplication : Game
         DwmSetWindowAttribute(hwnd, 20, ref darkMode, sizeof(int));
     }
 
-    /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     // Panels act inside the world they edit, so Camera.Main, Physics and Debug.Draw reach it rather than Main.
-    private SceneInstance.SceneScope _guiScope;
+    protected override SceneInstance? GuiWorld => SceneInstance.HasMain ? EditorSceneManager.EditedWorld : null;
 
+    /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     public override void BeginGui(Paper paper)
     {
-        _guiScope = SceneInstance.HasMain ? EditorSceneManager.EditedWorld.Enter() : default;
         (Input.Current as GameViewInputHandler)?.UpdateSuppressedKeys();
 
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
@@ -997,8 +996,6 @@ public class EditorApplication : Game
         // Pop the editor Origami theme now that all rendering (including overlays) is done.
         _origamiScope?.Dispose();
         _origamiScope = null;
-        _guiScope.Dispose();
-        _guiScope = default;
     }
 
     // ================================================================

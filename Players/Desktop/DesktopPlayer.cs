@@ -20,6 +20,17 @@ public sealed class DesktopPlayer : Game, IDisposable
 
     public DesktopPlayer(PlayerManifest manifest) => _manifest = manifest;
 
+    public override void InitializeWindow(string title, int width, int height)
+    {
+        Silk.NET.Windowing.WindowState startState = _manifest.Fullscreen
+            ? Silk.NET.Windowing.WindowState.Fullscreen
+            : _manifest.WindowMaximized
+                ? Silk.NET.Windowing.WindowState.Maximized
+                : Silk.NET.Windowing.WindowState.Normal;
+
+        Window.InitWindow(title, width, height, startState, vsync: false);
+    }
+
     public override void Initialize()
     {
         Application.IsPlaying = true;

@@ -98,6 +98,16 @@ public abstract class RuntimeTestBase : IDisposable
         return scene;
     }
 
+    /// <summary>Collects until nothing is left waiting on a finalizer, for tests that ask whether a WeakReference is still alive.</summary>
+    protected static void CollectGarbage()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+    }
+
     /// <summary>Binds <paramref name="world"/> as Main, running, the way a host binds the world it shows.</summary>
     protected static void Bind(SceneInstance world)
     {

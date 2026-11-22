@@ -40,20 +40,6 @@ public class MultiSceneTests : EditorTestHarness
         return AssetDatabase.Get<Scene>(CreateSceneAsset(world, path))!;
     }
 
-    private static OpenScene Open(Scene scene)
-    {
-        OpenScene open = EditorSceneManager.Open(scene, force: true);
-        SceneInstance.ProcessPendingLoad();
-        return open;
-    }
-
-    private static OpenScene Additive(Scene scene, bool load = true)
-    {
-        OpenScene open = EditorSceneManager.OpenAdditive(scene, load);
-        SceneInstance.ProcessPendingLoad();
-        return open;
-    }
-
     private static GameObject Root(OpenScene scene) => Assert.Single(scene.Section!.Roots);
 
     [Fact]

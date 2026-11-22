@@ -35,6 +35,8 @@
   "scene.gizmos.none_hidden": "Every component type shows its gizmos",
   "scene.gizmos.hidden_count": "{{count}} types hidden. Show all",
   "scene.gizmos.none": "No component draws gizmos",
+  "scene.gizmos.search": "Search gizmo types",
+  "scene.gizmos.no_match": "No gizmo types match",
   "scene.post_processing": "Post Processing",
   "scene.debug_view": "Debug View",
   "scene.debug_view.lit": "Lit",
