@@ -454,7 +454,14 @@ public sealed class CSGMeshTool : SceneTool
 
         switch (_action)
         {
-            case Action.Chamfer: if (moved) PreviewChamfer(ctx, amount); break;
+            case Action.Chamfer:
+                if (moved)
+                {
+                    amount = CSGSnap.Value(handles, amount);
+                    PreviewChamfer(ctx, amount);
+                    ctx.Draw.Label(Float4x4.TransformPoint(_actionCorner, _actionBrush!.Transform.LocalToWorldMatrix), amount.ToString("0.###"), PickedColor);
+                }
+                break;
             case Action.Extrude: if (moved) PreviewExtrude(ctx, amount); break;
             case Action.Drag: if (moved) DragPoints(ctx); break;
             case Action.Marquee: DrawMarquee(ctx); break;
