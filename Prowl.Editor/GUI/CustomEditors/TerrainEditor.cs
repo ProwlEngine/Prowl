@@ -804,7 +804,7 @@ public class TerrainEditor : CustomEditor
             });
         }
         if (placed.Count > 0)
-            data.SetTrees([.. data.Trees, .. placed]);
+            data.AddTrees(placed);
         return placed.Count;
     }
 

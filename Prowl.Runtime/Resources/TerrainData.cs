@@ -323,6 +323,8 @@ public sealed class TerrainData : Asset, ISerializable
 
     public void AddTree(TreeInstance tree) => Terrain.AddTree(ToTree(tree));
 
+    public void AddTrees(IEnumerable<TreeInstance> trees) => Terrain.AddTrees(trees.Select(ToTree).ToArray());
+
     /// <summary>Removes the trees within a radius of a point across the terrain, both from 0 to 1, returning how many.</summary>
     public int RemoveTrees(Float2 center, float radius)
     {
