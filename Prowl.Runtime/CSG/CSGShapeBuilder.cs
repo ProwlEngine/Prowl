@@ -17,6 +17,8 @@ public enum CSGGeneratorKind
     Sphere,
     LinearStairs,
     SpiralStairs,
+    /// <summary>A hollow box: walls, floor and ceiling of <see cref="CSGGeneratorSettings.WallThickness"/>.</summary>
+    Room,
 }
 
 /// <summary>Settings shared by the generators. Each uses the ones that apply to it.</summary>
@@ -67,6 +69,9 @@ public struct CSGGeneratorSettings
     /// <summary>Extra height under the whole flight, to lift it off the floor.</summary>
     public float ExtraHeight;
 
+    /// <summary>Thickness of a room's walls, floor and ceiling.</summary>
+    public float WallThickness;
+
     public static CSGGeneratorSettings Default => new()
     {
         Sides = 12,
@@ -77,6 +82,7 @@ public struct CSGGeneratorSettings
         StepsPerRevolution = 12,
         InnerRadius = 0.2f,
         SmoothShading = true,
+        WallThickness = 0.25f,
     };
 }
 
@@ -89,11 +95,15 @@ public readonly struct CSGShapePart
     /// <summary>How many leading planes are the curved surface, smooth shading applies to <c>[0, SmoothPlanes)</c>.</summary>
     public readonly int SmoothPlanes;
 
-    public CSGShapePart(Plane[] planes, Float3 offset, int smoothPlanes = 0)
+    /// <summary>What the brush does inside the shape's group, as a room's inside carving out its solid.</summary>
+    public readonly CSGOperation Operation;
+
+    public CSGShapePart(Plane[] planes, Float3 offset, int smoothPlanes = 0, CSGOperation operation = CSGOperation.Additive)
     {
         Planes = planes;
         Offset = offset;
         SmoothPlanes = smoothPlanes;
+        Operation = operation;
     }
 }
 
@@ -121,8 +131,20 @@ public static class CSGShapeBuilder
 
             case CSGGeneratorKind.LinearStairs: return LinearStairs(half * 2f, settings);
             case CSGGeneratorKind.SpiralStairs: return SpiralStairs(half, settings);
+            case CSGGeneratorKind.Room: return Room(half * 2f, settings);
             default: return Single(GeometryGenerator.BoxPlanes(half * 2f), 0);
         }
+    }
+
+    /// <summary>A solid box with a smaller box carved out of it, leaving walls of the set thickness.</summary>
+    private static List<CSGShapePart> Room(Float3 size, CSGGeneratorSettings settings)
+    {
+        float wall = MathF.Max(1e-3f, settings.WallThickness);
+        Float3 inner = size - new Float3(wall * 2f);
+        var parts = new List<CSGShapePart> { new(GeometryGenerator.BoxPlanes(size), Float3.Zero) };
+        if (inner.X > 1e-3f && inner.Y > 1e-3f && inner.Z > 1e-3f)
+            parts.Add(new CSGShapePart(GeometryGenerator.BoxPlanes(inner), Float3.Zero, 0, CSGOperation.Subtractive));
+        return parts;
     }
 
     private static List<CSGShapePart> Single(Plane[] planes, int smooth)

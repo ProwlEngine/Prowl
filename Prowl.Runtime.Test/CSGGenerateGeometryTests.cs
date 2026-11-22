@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Runtime.CSG;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
@@ -170,5 +172,23 @@ public class CSGGenerateGeometryTests
         // And no drift sideways off the point that was drawn on.
         Float3 flat = worldCenter - origin - normal * Float3.Dot(worldCenter - origin, normal);
         Assert.Equal(MathF.Sqrt(2 * 2 + 2 * 2), Float3.Length(flat), 3);
+    }
+
+    [Fact]
+    public void ARoomIsASolidWithASmallerHoleInside()
+    {
+        var settings = CSGGeneratorSettings.Default;
+        settings.WallThickness = 0.5f;
+
+        List<CSGShapePart> parts = CSGShapeBuilder.Build(CSGGeneratorKind.Room, new Float3(4, 3, 6), settings);
+
+        Assert.Equal(2, parts.Count);
+        Assert.Equal(Prowl.Vector.Geometry.CSGOperation.Additive, parts[0].Operation);
+        Assert.Equal(Prowl.Vector.Geometry.CSGOperation.Subtractive, parts[1].Operation);
+
+        AABB inner = GeometryGenerator.ConvexFromPlanes(parts[1].Planes).Solid!.GetAABB();
+        Assert.Equal(3f, inner.Max.X - inner.Min.X, 3);
+        Assert.Equal(2f, inner.Max.Y - inner.Min.Y, 3);
+        Assert.Equal(5f, inner.Max.Z - inner.Min.Z, 3);
     }
 }

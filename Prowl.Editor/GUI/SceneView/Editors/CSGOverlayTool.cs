@@ -42,7 +42,7 @@ public sealed class CSGOverlayTool : SceneTool
     // The keys each mode answers to, shown under its options
     private static readonly string[] SelectionKeys = ["CSG/Hide", "CSG/UnhideAll", "CSG/SetAdditive", "CSG/SetSubtractive", "Scene/Duplicate"];
     private static readonly string[] ObjectKeys = [.. SelectionKeys, "CSG/RepeatClone", "CSG/GroupSelection", "CSG/Earlier", "CSG/Later", "CSG/SnapToGrid", "CSG/RotateLeft", "CSG/RotateRight", "CSG/NudgeLeft", "CSG/NudgeUp"];
-    private static readonly string[] GenerateKeys = ["CSG/ShapeBox", "CSG/ShapeCylinder", "CSG/ShapeSphere", "CSG/ShapeLinearStairs", "CSG/ShapeSpiralStairs", "CSG/SetAdditive", "CSG/SetSubtractive", "CSG/SetIntersecting", "CSG/Confirm"];
+    private static readonly string[] GenerateKeys = ["CSG/ShapeBox", "CSG/ShapeCylinder", "CSG/ShapeSphere", "CSG/ShapeLinearStairs", "CSG/ShapeSpiralStairs", "CSG/ShapeRoom", "CSG/SetAdditive", "CSG/SetSubtractive", "CSG/SetIntersecting", "CSG/Confirm"];
     private static readonly string[] SurfaceKeys = ["CSG/Smear", "CSG/Hide", "CSG/UnhideAll"];
     private static readonly string[] ClipKeys = ["CSG/ClipSwapSide", "CSG/Confirm"];
     private static readonly string[] MeshKeys = ["CSG/HalveGrid", "CSG/DoubleGrid", "CSG/RotateLeft", "CSG/SnapToGrid"];

@@ -176,6 +176,7 @@ public sealed class CSGGenerateTool : SceneTool
         else if (handles.IsPressed("CSG/ShapeSphere")) Generator = CSGGeneratorKind.Sphere;
         else if (handles.IsPressed("CSG/ShapeLinearStairs")) Generator = CSGGeneratorKind.LinearStairs;
         else if (handles.IsPressed("CSG/ShapeSpiralStairs")) Generator = CSGGeneratorKind.SpiralStairs;
+        else if (handles.IsPressed("CSG/ShapeRoom")) Generator = CSGGeneratorKind.Room;
     }
 
     /// <summary>Where a new brush would start: the surface under the cursor, or the grid plane.</summary>
@@ -327,7 +328,7 @@ public sealed class CSGGenerateTool : SceneTool
             ApplySmoothing(brush, parts[i].SmoothPlanes);
 
             // Children of a group fold into it, so the group carries the operation instead.
-            brush.Operation = parts.Count > 1 ? Operation.Additive : operation;
+            brush.Operation = parts.Count > 1 ? parts[i].Operation : operation;
         }
 
         GameObject created = parts.Count > 1 ? root : root.Children[^1];

@@ -215,6 +215,11 @@ internal static class CSGSections
                     v => tool.Settings.FilledStairs = v);
                 break;
 
+            case CSGGeneratorKind.Room:
+                FloatRow(paper, "csg_gen_wall", Loc.Get("csg.wall_thickness"), tool.Settings.WallThickness,
+                    v => tool.Settings.WallThickness = MathF.Max(0.01f, v));
+                break;
+
             case CSGGeneratorKind.SpiralStairs:
                 FloatRow(paper, "csg_gen_ssh", Loc.Get("csg.step_height"), tool.Settings.StepHeight,
                     v => tool.Settings.StepHeight = v);
