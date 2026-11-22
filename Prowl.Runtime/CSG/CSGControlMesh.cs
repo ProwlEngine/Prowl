@@ -14,6 +14,27 @@ namespace Prowl.Runtime.CSG;
 /// A brush's shape as points and polygons: any closed solid, concave or with bent polygons. Each polygon is wound so its
 /// normal points out. Planes are only derived from it, see <see cref="ToPlanes"/>.
 /// </summary>
+/// <summary>The first thing keeping a brush's points and faces from enclosing a solid cleanly, as <see cref="CSGControlMesh.Check"/> finds it.</summary>
+public enum CSGMeshProblem
+{
+    None,
+
+    /// <summary>A polygon names a point twice, or two points stand in the same place.</summary>
+    RepeatedPoint,
+
+    /// <summary>An edge is not shared by exactly two polygons running opposite ways.</summary>
+    Open,
+
+    /// <summary>The polygons around a point do not form one fan, as where two solids meet at a single corner.</summary>
+    PinchedPoint,
+
+    /// <summary>The polygons face inward, or enclose no room.</summary>
+    InsideOut,
+
+    /// <summary>Two polygons that share no point cross each other.</summary>
+    SelfIntersecting,
+}
+
 public sealed class CSGControlMesh
 {
     [SerializeField] private List<Float3> points = new();
@@ -295,6 +316,122 @@ public sealed class CSGControlMesh
 
     /// <summary>Whether the polygons enclose a solid: closed, facing out, with room inside.</summary>
     public bool IsValid() => IsClosed() && Volume() > 1e-9f;
+
+    /// <summary>
+    /// The first problem keeping the polygons from enclosing a solid cleanly, checked from the cheapest: repeated points,
+    /// open edges, pinched points, facing inward, then polygons crossing each other.
+    /// </summary>
+    public CSGMeshProblem Check()
+    {
+        if (HasRepeatedPoint()) return CSGMeshProblem.RepeatedPoint;
+        if (!IsClosed()) return CSGMeshProblem.Open;
+        if (HasPinchedPoint()) return CSGMeshProblem.PinchedPoint;
+
+        var triangles = new List<(Float3 A, Float3 B, Float3 C)>[polygons.Count];
+        for (int p = 0; p < polygons.Count; p++) triangles[p] = Triangles(p);
+
+        float volume = 0f;
+        Float3 min = new(float.MaxValue), max = new(float.MinValue);
+        foreach (var list in triangles)
+            foreach ((Float3 a, Float3 b, Float3 c) in list)
+                volume += Float3.Dot(a, Float3.Cross(b, c)) / 6f;
+        foreach (Float3 point in points)
+        {
+            min = Maths.Min(min, point);
+            max = Maths.Max(max, point);
+        }
+        Float3 size = max - min;
+        float extent = MathF.Max(size.X, MathF.Max(size.Y, size.Z));
+        if (extent <= 0f || volume <= 1e-6f * extent * extent * extent) return CSGMeshProblem.InsideOut;
+
+        return CrossesItself(triangles) ? CSGMeshProblem.SelfIntersecting : CSGMeshProblem.None;
+    }
+
+    private bool HasRepeatedPoint()
+    {
+        var used = new HashSet<int>();
+        foreach (int[] ring in polygons)
+        {
+            var seen = new HashSet<int>();
+            foreach (int index in ring)
+            {
+                if (!seen.Add(index)) return true;
+                used.Add(index);
+            }
+        }
+
+        var list = new List<int>(used);
+        for (int i = 0; i < list.Count; i++)
+            for (int j = i + 1; j < list.Count; j++)
+                if (Float3.DistanceSquared(points[list[i]], points[list[j]]) < 1e-10f) return true;
+        return false;
+    }
+
+    /// <summary>Whether the polygons around some point fall into more than one fan, walked across the edges they share.</summary>
+    private bool HasPinchedPoint()
+    {
+        // For each point, each polygon round it as the corner after it (where it leaves) and before it (where it arrives)
+        var around = new Dictionary<int, List<(int Next, int Previous)>>();
+        foreach (int[] ring in polygons)
+        {
+            for (int i = 0; i < ring.Length; i++)
+            {
+                int point = ring[i];
+                if (!around.TryGetValue(point, out var corners)) around[point] = corners = new List<(int, int)>();
+                corners.Add((ring[(i + 1) % ring.Length], ring[(i + ring.Length - 1) % ring.Length]));
+            }
+        }
+
+        foreach (var corners in around.Values)
+        {
+            // The polygon after one round the point is the one arriving from where this one leaves to
+            int walked = 0, at = 0;
+            var visited = new HashSet<int>();
+            while (visited.Add(at))
+            {
+                walked++;
+                int leaves = corners[at].Next;
+                at = corners.FindIndex(c => c.Previous == leaves);
+                if (at < 0) break;
+            }
+            if (walked != corners.Count) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether two polygons sharing no point cross, tested on their triangles where their bounds meet.</summary>
+    private bool CrossesItself(List<(Float3 A, Float3 B, Float3 C)>[] triangles)
+    {
+        var bounds = new AABB[polygons.Count];
+        for (int p = 0; p < polygons.Count; p++)
+        {
+            Float3 min = new(float.MaxValue), max = new(float.MinValue);
+            foreach (int i in polygons[p])
+            {
+                min = Maths.Min(min, points[i]);
+                max = Maths.Max(max, points[i]);
+            }
+            bounds[p] = new AABB(min, max);
+        }
+
+        for (int p = 0; p < polygons.Count; p++)
+        {
+            var corners = new HashSet<int>(polygons[p]);
+            for (int q = p + 1; q < polygons.Count; q++)
+            {
+                if (!bounds[p].Intersects(bounds[q])) continue;
+                bool shared = false;
+                foreach (int i in polygons[q])
+                    if (corners.Contains(i)) { shared = true; break; }
+                if (shared) continue;
+
+                foreach ((Float3 a0, Float3 a1, Float3 a2) in triangles[p])
+                    foreach ((Float3 b0, Float3 b1, Float3 b2) in triangles[q])
+                        if (Intersection.TriangleTriangle(a0, a1, a2, b0, b1, b2)) return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>
     /// A copy that encloses a solid where this one has stray faces or gaps. Faces that bound nothing, such as a fin

@@ -288,4 +288,71 @@ public class CSGBrushGeometryTests
 
         Assert.Null(quad.Repaired(out _));
     }
+
+    // ================================================================
+    //  Check
+    // ================================================================
+
+    [Fact]
+    public void ABoxHasNoProblem() => Assert.Equal(CSGMeshProblem.None, TwoUnitBox().Check());
+
+    [Fact]
+    public void ABoxMissingAFaceIsOpen()
+    {
+        CSGControlMesh box = TwoUnitBox();
+        int top = Top(box);
+        Assert.Equal(CSGMeshProblem.Open, Rebuilt(box, p => p != top).Check());
+    }
+
+    [Fact]
+    public void ABoxTurnedInsideOutIsInsideOut()
+    {
+        CSGControlMesh box = TwoUnitBox();
+        box.ReverseWinding();
+        Assert.Equal(CSGMeshProblem.InsideOut, box.Check());
+    }
+
+    /// <summary>A corner pushed down through the floor makes faces cross the faces opposite them.</summary>
+    [Fact]
+    public void ACornerPushedThroughTheFloorFoldsThroughItself()
+    {
+        CSGControlMesh box = TwoUnitBox();
+        int corner = PointAt(box, new Float3(1f, 1f, 1f));
+        box.MovePoints([corner], new Float3(-1.5f, -3.5f, -1.5f));
+        Assert.Equal(CSGMeshProblem.SelfIntersecting, box.Check());
+    }
+
+    [Fact]
+    public void APolygonNamingAPointTwiceRepeatsIt()
+    {
+        CSGControlMesh box = TwoUnitBox();
+        int top = Top(box);
+        int[] ring = box.Polygons[top];
+        Assert.Equal(CSGMeshProblem.RepeatedPoint, Rebuilt(box, p => p != top, extraPolygons: [[ring[0], ring[1], ring[2], ring[2], ring[3]]]).Check());
+    }
+
+    /// <summary>Two boxes meeting at one shared corner are closed and solid, but the corner is pinched.</summary>
+    [Fact]
+    public void TwoBoxesSharingACornerArePinched()
+    {
+        CSGControlMesh a = TwoUnitBox();
+        var points = a.Points.ToList();
+        var polygons = a.Polygons.Select(p => (int[])p.Clone()).ToList();
+
+        int shared = PointAt(a, new Float3(1f, 1f, 1f));
+        var offset = new Float3(2f, 2f, 2f);
+        var map = new int[a.Points.Count];
+        for (int i = 0; i < a.Points.Count; i++)
+        {
+            Float3 moved = a.Points[i] + offset;
+            if (Float3.Distance(moved, a.Points[shared]) < 1e-4f) { map[i] = shared; continue; }
+            map[i] = points.Count;
+            points.Add(moved);
+        }
+        foreach (int[] ring in a.Polygons) polygons.Add(ring.Select(i => map[i]).ToArray());
+
+        CSGControlMesh pinched = CSGControlMesh.FromPolygons(points, polygons);
+        Assert.True(pinched.IsClosed());
+        Assert.Equal(CSGMeshProblem.PinchedPoint, pinched.Check());
+    }
 }
