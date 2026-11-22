@@ -73,7 +73,11 @@ public sealed class CSGGenerateTool : SceneTool
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
-        if (!Drawing) return;
+        if (!Drawing)
+        {
+            Cancel();
+            return;
+        }
 
         HandleContext handles = ctx.Handles;
 

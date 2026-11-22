@@ -66,7 +66,11 @@ public sealed class CSGClipTool : SceneTool
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
-        if (!Active) return;
+        if (!Active)
+        {
+            Cancel();
+            return;
+        }
 
         HandleContext handles = ctx.Handles;
 
