@@ -1869,14 +1869,22 @@ public static class MeshGeometry
 
         var subIndices = new List<uint>[subMeshCount];
         for (int s = 0; s < subMeshCount; s++) subIndices[s] = [];
+        var cornerList = new List<GeometryData.Loop>();
+        var flat = new List<Float2>();
+        var cut = new List<int>();
 
         foreach (GeometryData.Face face in geometry.Faces)
         {
             if (face.VertCount < 3 || face.Loop == null) continue;
 
-            // Fan out faces with more than three corners
+            // Convex faces fan out from their first corner, concave ones are ear clipped in their own plane
             List<uint> target = subIndices[Math.Max(0, SubMeshOf(face))];
             GeometryData.Loop first = face.Loop;
+            if (face.VertCount > 3 && ConcaveCut(face, cornerList, flat, cut))
+            {
+                for (int i = 0; i < cut.Count; i++) target.Add((uint)Emit(cornerList[cut[i]]));
+                continue;
+            }
             for (GeometryData.Loop loop = first.Next!; loop.Next != first; loop = loop.Next!)
             {
                 target.Add((uint)Emit(first));
@@ -1988,6 +1996,42 @@ public static class MeshGeometry
             ids[i] = slots[i].Bone;
             weights[i] = slots[i].Weight;
         }
+    }
+
+    /// <summary>
+    /// The triangles of a face that is not convex, cut by ear clipping in its plane, as indices into its corners. False
+    /// for a convex face, or one the clipping cannot cut whole, which fan out instead.
+    /// </summary>
+    private static bool ConcaveCut(GeometryData.Face face, List<GeometryData.Loop> corners, List<Float2> flat, List<int> cut)
+    {
+        corners.Clear();
+        GeometryData.Loop loop = face.Loop!;
+        do
+        {
+            corners.Add(loop);
+            loop = loop.Next!;
+        } while (loop != face.Loop);
+
+        Float3 normal = face.Normal();
+        if (Float3.LengthSquared(normal) < 1e-12f) return false;
+        var frame = new PlaneFrame(normal, corners[0].Vert.Point);
+        flat.Clear();
+        foreach (GeometryData.Loop corner in corners) flat.Add(frame.To2D(corner.Vert.Point));
+
+        int n = flat.Count;
+        bool convex = true;
+        for (int i = 0; i < n && convex; i++)
+        {
+            Float2 a = flat[(i + n - 1) % n], b = flat[i], c = flat[(i + 1) % n];
+            convex = (b.X - a.X) * (c.Y - b.Y) - (b.Y - a.Y) * (c.X - b.X) >= -1e-9f;
+        }
+        if (convex) return false;
+
+        List<int> triangles = Polygon2D.Triangulate(flat);
+        if (triangles.Count != (n - 2) * 3) return false;
+        cut.Clear();
+        cut.AddRange(triangles);
+        return true;
     }
 
     private static (int, int, int) Sorted(int a, int b, int c)

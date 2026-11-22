@@ -88,6 +88,31 @@ public class LODTests
         Assert.True(watch.ElapsedMilliseconds < 3000, $"took {watch.ElapsedMilliseconds} ms");
     }
 
+    /// <summary>A concave face is cut inside itself: its triangles cover its area once, all facing its way.</summary>
+    [Fact]
+    public void AConcaveFaceIsEarClippedNotFanned()
+    {
+        var geometry = new GeometryData();
+        // An L seen from above, starting where a fan would cross the notch
+        Float3[] corners = [new(0, 0, 2), new(0, 0, 0), new(2, 0, 0), new(2, 0, 1), new(1, 0, 1), new(1, 0, 2)];
+        GeometryData.Face face = geometry.AddFace([.. corners.Select(c => geometry.AddVertex(c))])!;
+        Float3 normal = face.Normal();
+
+        using Mesh mesh = MeshGeometry.ToMesh(geometry);
+
+        Float3[] positions = mesh.Vertices;
+        uint[] indices = mesh.Indices;
+        Assert.Equal(4 * 3, indices.Length);
+        float area = 0f;
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            Float3 cross = Float3.Cross(positions[indices[i + 1]] - positions[indices[i]], positions[indices[i + 2]] - positions[indices[i]]);
+            Assert.True(Float3.Dot(cross, normal) > 0f, $"triangle {i / 3} faces away");
+            area += Float3.Length(cross) * 0.5f;
+        }
+        Assert.Equal(3f, area, 4);
+    }
+
     /// <summary>Two flat triangles with a texture seam between them stay apart.</summary>
     [Fact]
     public void ASeamKeepsFlatTrianglesApart()

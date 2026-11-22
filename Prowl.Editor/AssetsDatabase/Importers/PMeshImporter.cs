@@ -97,8 +97,8 @@ public class PMeshImporter : AssetImporter
 
     /// <summary>
     /// A copy of the object's mesh made drawable: run through its modifiers, corner normals from its edge flags when it
-    /// has none or a modifier ran, softened by its smoothing angle when no edge is flagged at all, then faces ear clipped
-    /// into triangles. While dragging, modifiers too slow for every frame are left out.
+    /// has none or a modifier ran, softened by its smoothing angle when no edge is flagged at all. The mesh cuts its faces
+    /// into triangles, ear clipping the concave ones. While dragging, modifiers too slow for every frame are left out.
     /// </summary>
     internal static Mesh BuildMesh(PMeshObject item, bool dragging = false)
     {
@@ -119,7 +119,6 @@ public class PMeshImporter : AssetImporter
             Operators.CornerNormals(geometry);
         }
 
-        GeometryOperators.Triangulate(geometry);
         Mesh mesh = MeshGeometry.ToMesh(geometry);
         mesh.Name = item.Name;
         return mesh;
