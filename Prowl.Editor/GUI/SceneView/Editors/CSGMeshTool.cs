@@ -641,7 +641,7 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         // An edge tilt on the same keys the object tool rotates with.
-        if (_vertices.Count != 2) return;
+        if (_vertices.Count != 2 || !IsEdge(_vertices)) return;
 
         if (handles.IsPressed("CSG/RotateLeft")) RotateEdge(-SceneTools.RotateSnap);
         else if (handles.IsPressed("CSG/RotateRight")) RotateEdge(SceneTools.RotateSnap);
@@ -660,6 +660,13 @@ public sealed class CSGMeshTool : SceneTool
             Target.ApplyControlMesh();
         }
         MarkDirty();
+    }
+
+    private bool IsEdge(HashSet<int> pair)
+    {
+        foreach ((int a, int b) in _edges)
+            if (pair.Contains(a) && pair.Contains(b)) return true;
+        return false;
     }
 
     private void RotateEdge(float degrees)
