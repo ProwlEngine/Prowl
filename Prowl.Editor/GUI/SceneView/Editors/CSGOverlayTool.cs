@@ -13,6 +13,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 using Prowl.Vector;
 
+using Operation = Prowl.Vector.Geometry.CSGOperation;
 using SColor = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
@@ -58,9 +59,70 @@ public sealed class CSGOverlayTool : SceneTool
             }
         }
 
+        HandleShortcuts(ctx.Handles);
+
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsValid()) CSGHelperSurfaces.Draw(ctx, model!);
     }
+
+    /// <summary>Selection shortcuts, in every mode. The mesh tool keeps rotate and snap for its own points.</summary>
+    private static void HandleShortcuts(HandleContext handles)
+    {
+        if (handles.KeyboardCaptured) return;
+        bool mesh = CSGEditMode.Is(CSGMode.Mesh);
+
+        // Modified bindings are tested first so plain Hide does not swallow Ctrl+H and Shift+H
+        if (handles.IsPressed("CSG/HideUnselected")) { CSGVisibility.HideUnselected(); return; }
+        if (handles.IsPressed("CSG/ToggleVisibility")) { CSGVisibility.ToggleAll(); return; }
+        if (handles.IsPressed("CSG/Hide")) { CSGVisibility.Hide(CSGSelection.Brushes()); return; }
+        if (handles.IsPressed("CSG/UnhideAll")) { CSGVisibility.UnhideAll(); return; }
+
+        if (handles.IsPressed("CSG/SetAdditive")) { SetOperation(Operation.Additive); return; }
+        if (handles.IsPressed("CSG/SetSubtractive")) { SetOperation(Operation.Subtractive); return; }
+        if (handles.IsPressed("CSG/SetIntersecting")) { SetOperation(Operation.Intersect); return; }
+        if (handles.IsPressed("CSG/SetPassThrough")) { CSGSelection.SetPassThrough(); return; }
+
+        if (handles.IsPressed("Scene/Duplicate")) { CSGSelection.Duplicate(); return; }
+
+        if (handles.IsPressed("CSG/FlipX")) { CSGSelection.Flip(Float3.UnitX); return; }
+        if (handles.IsPressed("CSG/FlipY")) { CSGSelection.Flip(Float3.UnitY); return; }
+        if (handles.IsPressed("CSG/FlipZ")) { CSGSelection.Flip(Float3.UnitZ); return; }
+
+        if (mesh) return;
+
+        if (handles.IsPressed("CSG/SnapToGrid")) { CSGSelection.SnapToGrid(); return; }
+        if (handles.IsPressed("CSG/RotateLeft")) { RotateBySnap(-1f); return; }
+        if (handles.IsPressed("CSG/RotateRight")) { RotateBySnap(1f); return; }
+
+        if (handles.Ctrl && handles.Shift) HandleNudge(handles);
+    }
+
+    /// <summary>Sets the selection's operation, and while drawing also the operation the next brush gets.</summary>
+    private static void SetOperation(Operation operation)
+    {
+        if (CSGEditMode.Is(CSGMode.Generate) && SceneToolManager.Get<CSGGenerateTool>() is { } generate) generate.Operation = operation;
+        CSGSelection.SetOperation(operation);
+    }
+
+    /// <summary>Arrow keys and page up/down move the selection one grid step.</summary>
+    private static void HandleNudge(HandleContext handles)
+    {
+        float grid = CSGSnap.Grid;
+
+        Float3 step;
+        if (handles.KeyDown(KeyCode.Left)) step = new Float3(-grid, 0, 0);
+        else if (handles.KeyDown(KeyCode.Right)) step = new Float3(grid, 0, 0);
+        else if (handles.KeyDown(KeyCode.Down)) step = new Float3(0, 0, -grid);
+        else if (handles.KeyDown(KeyCode.Up)) step = new Float3(0, 0, grid);
+        else if (handles.KeyDown(KeyCode.PageDown)) step = new Float3(0, -grid, 0);
+        else if (handles.KeyDown(KeyCode.PageUp)) step = new Float3(0, grid, 0);
+        else return;
+
+        CSGSelection.MoveBy(step, clone: false);
+    }
+
+    private static void RotateBySnap(float sign)
+        => CSGSelection.RotateBy(new Float3(0f, SceneTools.RotateSnap * sign, 0f), CSGSelection.SelectionCentre(), clone: false);
 
     public override void OnSceneOverlayGUI(SceneToolContext ctx, Paper paper, string id, Float2 viewportSize)
     {

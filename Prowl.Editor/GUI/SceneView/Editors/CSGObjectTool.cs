@@ -50,7 +50,6 @@ public sealed class CSGObjectTool : SceneTool
         if (model.IsNotValid()) return;
 
         CollectBrushes(model!);
-        HandleShortcuts(ctx);
         HandleCloneDrag(ctx);
         PickBrush(ctx, model!);
         DrawBrushes(ctx);
@@ -104,57 +103,6 @@ public sealed class CSGObjectTool : SceneTool
         return target;
     }
 
-    private void HandleShortcuts(SceneToolContext ctx)
-    {
-        HandleContext handles = ctx.Handles;
-        if (handles.KeyboardCaptured) return;
-
-        // Modified bindings are tested first so plain Hide does not swallow Ctrl+H and Shift+H.
-        if (handles.IsPressed("CSG/HideUnselected")) { CSGVisibility.HideUnselected(); return; }
-        if (handles.IsPressed("CSG/ToggleVisibility")) { CSGVisibility.ToggleAll(); return; }
-        if (handles.IsPressed("CSG/Hide")) { CSGVisibility.Hide(CSGSelection.Brushes()); return; }
-        if (handles.IsPressed("CSG/UnhideAll")) { CSGVisibility.UnhideAll(); return; }
-
-        if (handles.IsPressed("CSG/SetAdditive")) { CSGSelection.SetOperation(Operation.Additive); return; }
-        if (handles.IsPressed("CSG/SetSubtractive")) { CSGSelection.SetOperation(Operation.Subtractive); return; }
-        if (handles.IsPressed("CSG/SetIntersecting")) { CSGSelection.SetOperation(Operation.Intersect); return; }
-        if (handles.IsPressed("CSG/SetPassThrough")) { CSGSelection.SetPassThrough(); return; }
-
-        if (handles.IsPressed("Scene/Duplicate")) { CSGSelection.Duplicate(); return; }
-        if (handles.IsPressed("CSG/SnapToGrid")) { CSGSelection.SnapToGrid(); return; }
-
-        if (handles.IsPressed("CSG/FlipX")) { CSGSelection.Flip(Float3.UnitX); return; }
-        if (handles.IsPressed("CSG/FlipY")) { CSGSelection.Flip(Float3.UnitY); return; }
-        if (handles.IsPressed("CSG/FlipZ")) { CSGSelection.Flip(Float3.UnitZ); return; }
-
-        if (handles.IsPressed("CSG/RotateLeft")) { RotateBySnap(-1f); return; }
-        if (handles.IsPressed("CSG/RotateRight")) { RotateBySnap(1f); return; }
-
-        // Nudging stays on raw arrow and page keys rather than shortcut bindings.
-        if (handles.Ctrl && handles.Shift) HandleNudge(handles);
-    }
-
-    /// <summary>Arrow keys and page up/down move the selection one grid step.</summary>
-    private static bool HandleNudge(HandleContext handles)
-    {
-        float grid = CSGSnap.Grid;
-
-        Float3 step;
-        if (handles.KeyDown(KeyCode.Left)) step = new Float3(-grid, 0, 0);
-        else if (handles.KeyDown(KeyCode.Right)) step = new Float3(grid, 0, 0);
-        else if (handles.KeyDown(KeyCode.Down)) step = new Float3(0, 0, -grid);
-        else if (handles.KeyDown(KeyCode.Up)) step = new Float3(0, 0, grid);
-        else if (handles.KeyDown(KeyCode.PageDown)) step = new Float3(0, -grid, 0);
-        else if (handles.KeyDown(KeyCode.PageUp)) step = new Float3(0, grid, 0);
-        else return false;
-
-        CSGSelection.MoveBy(step, clone: false);
-        return true;
-    }
-
-    private static void RotateBySnap(float sign)
-        => CSGSelection.RotateBy(new Float3(0f, SceneTools.RotateSnap * sign, 0f),
-                                 CSGSelection.SelectionCentre(), clone: false);
 
     /// <summary>Shift pressing the transform gizmo leaves a copy behind and drags the duplicate.</summary>
     private void HandleCloneDrag(SceneToolContext ctx)
