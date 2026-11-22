@@ -46,6 +46,9 @@ public sealed class ModelObject : Component
     /// <summary>Edges whose faces meet at less than this many degrees are smooth when normals are worked out.</summary>
     public float SmoothingAngle = 30f;
 
+    /// <summary>Run in order on a copy of the mesh for what is shown and imported, the mesh underneath left as edited.</summary>
+    public List<ModelModifier> Modifiers = new();
+
     [NonSerialized] private Mesh? _preview;
 
     public override void OnEnable()
@@ -62,13 +65,16 @@ public sealed class ModelObject : Component
     /// <summary>Marks the preview out of date, to be rebuilt on the next update.</summary>
     public void MarkPreviewStale() => _previewStale = true;
 
-    /// <summary>Builds the mesh drawn for the geometry as the import would, and shows it on the renderer.</summary>
-    public void RefreshPreview()
+    /// <summary>
+    /// Builds the mesh drawn for the geometry as the import would, and shows it on the renderer. While dragging, modifiers
+    /// too slow for every frame are left out.
+    /// </summary>
+    public void RefreshPreview(bool dragging = false)
     {
         MeshRenderer? renderer = GameObject.GetComponent<MeshRenderer>();
         if (renderer.IsNotValid()) renderer = GameObject.AddComponent<MeshRenderer>();
         Mesh? old = _preview;
-        _preview = PMeshImporter.BuildMesh(ToDocumentObject());
+        _preview = PMeshImporter.BuildMesh(ToDocumentObject(), dragging);
         _previewStale = false;
         renderer!.Mesh = _preview;
 
@@ -98,6 +104,7 @@ public sealed class ModelObject : Component
             Mesh = Mesh,
             Materials = new List<Guid>(Materials),
             SmoothingAngle = SmoothingAngle,
+            Modifiers = new List<ModelModifier>(Modifiers),
         };
     }
 

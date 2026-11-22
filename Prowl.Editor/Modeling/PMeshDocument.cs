@@ -36,6 +36,9 @@ public sealed class PMeshObject
 
     /// <summary>Edges whose faces meet at less than this many degrees are smooth when normals are worked out.</summary>
     public float SmoothingAngle = 30f;
+
+    /// <summary>Run in order on a copy of the mesh, whose end is what the import builds.</summary>
+    public List<ModelModifier> Modifiers = new();
 }
 
 /// <summary>
@@ -89,6 +92,7 @@ public sealed class PMeshDocument
         foreach (Guid material in item.Materials) materials.ListAdd(new EchoObject(material.ToString()));
         o["materials"] = materials;
         o["mesh"] = WriteMesh(item.Mesh);
+        if (item.Modifiers.Count > 0) o["modifiers"] = Serializer.Serialize(typeof(List<ModelModifier>), item.Modifiers);
         return o;
     }
 
@@ -107,6 +111,8 @@ public sealed class PMeshDocument
         item.Scale = new Float3(scale[0], scale[1], scale[2]);
         foreach (EchoObject material in o["materials"].List) item.Materials.Add(Guid.Parse(material.StringValue));
         item.Mesh = ReadMesh(o["mesh"]);
+        if (o.TryGet("modifiers", out EchoObject? modifiers) && Serializer.Deserialize<List<ModelModifier>>(modifiers) is { } stack)
+            item.Modifiers = stack;
         return item;
     }
 

@@ -724,7 +724,7 @@ public sealed class ModelMeshTool : SceneTool
         _session!.Restore();
         move();
         _sessionMove = move;
-        foreach (ModelObject model in _edited) model.RefreshPreview();
+        foreach (ModelObject model in _edited) model.RefreshPreview(dragging: true);
     }
 
     /// <summary>Back to where the points started, then the whole move once, as one undo step.</summary>

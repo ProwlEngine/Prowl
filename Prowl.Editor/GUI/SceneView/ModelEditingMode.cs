@@ -156,6 +156,7 @@ public static class ModelEditingMode
             model.Mesh = item.Mesh;
             model.Materials = new List<Guid>(item.Materials);
             model.SmoothingAngle = item.SmoothingAngle;
+            model.Modifiers = item.Modifiers;
             objects[item.Id] = go;
         }
 

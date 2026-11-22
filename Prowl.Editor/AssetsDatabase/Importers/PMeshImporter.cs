@@ -96,15 +96,21 @@ public class PMeshImporter : AssetImporter
     }
 
     /// <summary>
-    /// A copy of the object's mesh made drawable: corner normals from its edge flags when it has none, softened by its
-    /// smoothing angle when no edge is flagged at all, then faces ear clipped into triangles.
+    /// A copy of the object's mesh made drawable: run through its modifiers, corner normals from its edge flags when it
+    /// has none or a modifier ran, softened by its smoothing angle when no edge is flagged at all, then faces ear clipped
+    /// into triangles. While dragging, modifiers too slow for every frame are left out.
     /// </summary>
-    internal static Mesh BuildMesh(PMeshObject item)
+    internal static Mesh BuildMesh(PMeshObject item, bool dragging = false)
     {
-        var geometry = new GeometryData();
-        geometry.Restore(item.Mesh.Capture());
+        GeometryData geometry = ModelModifier.Run(item.Mesh, item.Modifiers, dragging);
+        bool modified = !ReferenceEquals(geometry, item.Mesh);
+        if (!modified)
+        {
+            geometry = new GeometryData();
+            geometry.Restore(item.Mesh.Capture());
+        }
 
-        if (!geometry.HasLoopAttribute(MeshGeometry.Normal))
+        if (modified || !geometry.HasLoopAttribute(MeshGeometry.Normal))
         {
             bool flagged = false;
             foreach (GeometryData.Edge edge in geometry.Edges)
