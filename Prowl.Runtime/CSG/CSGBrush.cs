@@ -186,6 +186,16 @@ public sealed class CSGBrush : Component
         InvalidateShape();
     }
 
+    /// <summary>Puts back a whole shape taken earlier, its edited points included, as a cancelled edit does.</summary>
+    public void SetShape(Plane[] newPlanes, SurfaceData[] newSurfaces, CSGControlMesh? points)
+    {
+        planes = newPlanes;
+        surfaces = newSurfaces;
+        controlMesh = points;
+        ResizeSurfaces();
+        InvalidateShape();
+    }
+
     /// <summary>Replaces one plane, keeping its surface data.</summary>
     public void SetPlane(int index, Plane plane)
     {

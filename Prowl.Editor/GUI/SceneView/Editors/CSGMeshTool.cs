@@ -88,6 +88,8 @@ public sealed class CSGMeshTool : SceneTool
     // What a chamfer or extrude started on, captured when it began so later renumbering cannot move it
     private Plane[]? _startPlanes;
     private CSGBrush? _actionBrush;
+    private SurfaceData[]? _startSurfaces;
+    private CSGControlMesh? _startMesh;
     private Float3 _actionCorner;
     private readonly List<Float3> _actionNormals = new();
     private readonly List<Float3> _actionRing = new();
@@ -200,9 +202,10 @@ public sealed class CSGMeshTool : SceneTool
     private void CancelAction()
     {
         if (_action == Action.None) return;
-        if (_action == Action.Chamfer && _actionBrush.IsValid() && _startPlanes != null && !ReferenceEquals(_actionBrush!.Planes, _startPlanes))
+        // Exactly the shape it started with, so the open undo record finds nothing changed and leaves no step
+        if (_action is Action.Chamfer or Action.Drag && _actionBrush.IsValid() && _startPlanes != null)
         {
-            _actionBrush.Planes = _startPlanes;
+            _actionBrush!.SetShape(_startPlanes, _startSurfaces!, _startMesh);
             MarkDirty();
         }
         EndAction();
@@ -340,6 +343,8 @@ public sealed class CSGMeshTool : SceneTool
         _dragStarted = false;
         _actionBrush = Target;
         _startPlanes = (Plane[])Target!.Planes.Clone();
+        _startSurfaces = (SurfaceData[])Target.Surfaces.Clone();
+        _startMesh = Target.HasControlMesh ? Target.ControlMesh!.Clone() : null;
         _actionNormals.Clear();
         _actionRing.Clear();
 
@@ -577,6 +582,8 @@ public sealed class CSGMeshTool : SceneTool
     {
         _action = Action.None;
         _startPlanes = null;
+        _startSurfaces = null;
+        _startMesh = null;
         _actionBrush = null;
     }
 
