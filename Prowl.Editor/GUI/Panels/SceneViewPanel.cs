@@ -387,17 +387,14 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    // Floating transform-tools panel, top-left of the viewport. The active scene-view
-    // editor may replace the default gizmo-mode buttons with its own toolbar.
+    // Floating tool groups stacked down the top left of the viewport. The active scene view
+    // editor may replace the default gizmo mode buttons with groups of its own.
     private void DrawTransformTools(Paper paper)
     {
         using (paper.Column("sv_tools")
             .PositionType(PositionType.SelfDirected)
             .Position(12, 12)
-            .Width(32).Height(UnitValue.Auto)
-            .Rounded(Origami.Current.Metrics.ContainerRounding)
-            .BackgroundColor(EditorTheme.Glass)
-            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Width(32).Height(UnitValue.Auto).Gap(6)
             .Enter())
         {
             // The viewport owns the strip and draws the built-in buttons, so they exist even with no
@@ -430,6 +427,7 @@ public class SceneViewPanel : DockPanel
         bool isScale = SceneTools.Transform == TransformTool.Scale;
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
+        using IDisposable group = EditorGUI.ToolStripGroup(paper, "sv_transform_grp");
         EditorGUI.ToolStripButton(paper, "sv_move_btn", EditorIcons.ArrowsUpDownLeftRight_I,
             ShortcutManager.GetTooltip(Loc.Get("scene.tool_move"), "Scene/ToolTranslate"), isTranslate,
             () => SetGizmoMode(TransformTool.Translate));

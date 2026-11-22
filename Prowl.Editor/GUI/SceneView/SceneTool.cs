@@ -73,8 +73,8 @@ public abstract class SceneTool
     /// <summary>Draw 2D overlays in the viewport foreground.</summary>
     public virtual void OnDrawOverlay(SceneToolContext ctx, Canvas canvas) { }
 
-    /// <summary>Tool strip contents. Appended after the built-in transform buttons unless
-    /// <see cref="OverridesToolStrip"/> is set, in which case this replaces them.</summary>
+    /// <summary>Tool strip contents, each set of buttons inside its own <see cref="EditorGUI.ToolStripGroup"/>. Appended
+    /// after the built-in transform buttons unless <see cref="OverridesToolStrip"/> is set, in which case this replaces them.</summary>
     public virtual void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id) { }
 
     /// <summary>Replacement orientation-cube UI. Only called when

@@ -88,13 +88,12 @@ public class TerrainSceneEditor : SceneTool
     public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
         if (_terrain.IsNotValid()) return;
-        // Transform tool button (always available)
-        EditorGUI.ToolStripButton(paper, $"{id}_xform", EditorIcons.ArrowsUpDownLeftRight_I, "Move", _useTransformTool,
-            () => _useTransformTool = true);
-
-        EditorGUI.Divider(paper, $"{id}_sep", 4f);
+        using (EditorGUI.ToolStripGroup(paper, $"{id}_xform_grp"))
+            EditorGUI.ToolStripButton(paper, $"{id}_xform", EditorIcons.ArrowsUpDownLeftRight_I, "Move", _useTransformTool,
+                () => _useTransformTool = true);
 
         // Terrain-specific tools based on active tab
+        using IDisposable tools = EditorGUI.ToolStripGroup(paper, $"{id}_tools_grp");
         if (TerrainEditor.ActiveTab == TerrainTab.Height)
         {
             DrawHeightToolButtons(paper, id);

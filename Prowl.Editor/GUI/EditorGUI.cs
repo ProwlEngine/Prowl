@@ -441,6 +441,15 @@ public static class EditorGUI
     }
 
     /// <summary>A button in the scene view's floating tool strip, filled with the accent while active.</summary>
+    /// <summary>One floating box of the scene view tool strip. Each group stands apart from the others, so wrap every set of related buttons in its own.</summary>
+    public static IDisposable ToolStripGroup(Paper paper, string id)
+        => paper.Column(id)
+            .Width(UnitValue.StretchOne).Height(UnitValue.Auto)
+            .Rounded(Origami.Current.Metrics.ContainerRounding)
+            .BackgroundColor(EditorTheme.Glass)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Enter();
+
     public static void ToolStripButton(Paper paper, string id, IOrigamiIcon icon, string tooltip, bool active, Action onClick)
     {
         ButtonBuilder b = Origami.IconButton(paper, id, icon, onClick)
