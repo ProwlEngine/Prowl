@@ -126,6 +126,22 @@ public sealed class CSGScene
 
     private bool _weldTJunctions = true;
     private bool _keepDiscarded;
+    private bool _invertOutput;
+
+    /// <summary>
+    /// Builds the inside of the solid instead of its outside: every face turns to face inward and its texture runs the
+    /// other way across, so it reads unmirrored from inside. Brushes then read as rooms carved out of an endless solid.
+    /// </summary>
+    public bool InvertOutput
+    {
+        get => _invertOutput;
+        set
+        {
+            if (_invertOutput == value) return;
+            _invertOutput = value;
+            InvalidateOutput();
+        }
+    }
 
     /// <summary>
     /// Whether <see cref="Build"/> also keeps the face pieces the operations remove, for <see cref="Discarded"/>. Off by
@@ -1124,7 +1140,7 @@ public sealed class CSGScene
 
         for (int idx = 0; idx < count; idx++)
         {
-            Float3 point = item.Flip ? ring[count - 1 - idx] : ring[idx];
+            Float3 point = item.Flip != _invertOutput ? ring[count - 1 - idx] : ring[idx];
             var vertex = GetOrAddVertex(result, weld, point);
             if (verts.Count > 0 && verts[verts.Count - 1] == vertex) continue;
             verts.Add(vertex);
@@ -1167,6 +1183,7 @@ public sealed class CSGScene
                 var loop = face.GetLoop(verts[i]);
                 if (loop == null) continue;
                 Float2 uv = texSpace.Project(positions[i]);
+                if (_invertOutput) uv = new Float2(-uv.X, uv.Y);
                 loop.Attributes[UVAttributeName] = new GeometryData.FloatAttributeValue(uv.X, uv.Y);
             }
         }

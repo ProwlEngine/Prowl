@@ -434,6 +434,37 @@ public class CSGTests
         return scene;
     }
 
+    /// <summary>
+    /// Inverted output is the inside of the solid: every face turns to face inward, and its texture runs the other way
+    /// across so it reads unmirrored from inside.
+    /// </summary>
+    [Fact]
+    public void InvertedOutput_FacesInwardWithTexturesReadingFromInside()
+    {
+        CSGScene normal = SceneWithProjection(scale: Float2.One);
+        CSGScene inverted = SceneWithProjection(scale: Float2.One);
+        inverted.InvertOutput = true;
+
+        GeometryData outside = normal.Build(), inside = inverted.Build();
+        Assert.Equal(outside.Faces.Count, inside.Faces.Count);
+
+        foreach (var face in inside.Faces)
+        {
+            Float3 centre = face.Center();
+            Assert.True(Float3.Dot(face.Normal(), centre) < 0f, $"face at {centre} faces {face.Normal()}");
+        }
+
+        var before = UVs(outside).ToDictionary(t => (t.surface, Round(t.pos)), t => t.uv);
+        foreach (var (surface, pos, uv) in UVs(inside))
+        {
+            Float2 was = before[(surface, Round(pos))];
+            Assert.Equal(-was.X, uv.X, 4);
+            Assert.Equal(was.Y, uv.Y, 4);
+        }
+
+        static (int, int, int) Round(Float3 p) => ((int)MathF.Round(p.X * 100), (int)MathF.Round(p.Y * 100), (int)MathF.Round(p.Z * 100));
+    }
+
     private static Dictionary<(int, int, int), Float2> UVByPosition(CSGScene scene)
     {
         var map = new Dictionary<(int, int, int), Float2>();
