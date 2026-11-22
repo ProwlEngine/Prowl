@@ -39,6 +39,7 @@ public sealed class ModelMeshTool : SceneTool
 
     private static readonly Color32 IdleColor = new(150, 190, 230, 200);
     private static readonly Color32 PickedColor = new(255, 210, 80, 255);
+    private static readonly Color32 SeamColor = new(235, 70, 55, 255);
     private static readonly Color32 FaceFill = new(255, 200, 90, 60);
 
     /// <summary>The objects being edited, empty outside edit mode.</summary>
@@ -479,8 +480,29 @@ public sealed class ModelMeshTool : SceneTool
             list.Add((Loc.Get("csg.symmetrize") + "  " + Loc.Get("csg.symmetrize_side", new { from = "+" + name, to = "-" + name }),
                 () => Edit("Symmetrize Model", (mesh, s) => { Operators.Symmetrize(mesh, chosen, true, 0f); s.Clear(); })));
         }
+
+        list.Add((Loc.Get("uv.mark_seam"), () => Edit("Mark Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, true))));
+        list.Add((Loc.Get("uv.clear_seam"), () => Edit("Clear Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, false))));
+        list.Add((Loc.Get("uv.seams_from_sharp"), () => Edit("Seams From Sharp Edges", (mesh, _) => UVs.SeamsFromSharp(mesh))));
+        list.Add((Loc.Get("uv.seams_from_materials"), () => Edit("Seams From Materials", (mesh, _) => UVs.SeamsFromMaterials(mesh))));
+        list.Add((Loc.Get("uv.seams_from_islands"), () => Edit("Seams From Islands", (mesh, _) => UVs.SeamsFromIslands(mesh))));
+        list.Add((Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => UVs.Unwrap(mesh, UVFaces(mesh, s)))));
+        list.Add((Loc.Get("uv.project_cube"), () => Edit("Cube Projection", (mesh, s) => UVs.Cube(mesh, UVFaces(mesh, s)))));
+        list.Add((Loc.Get("uv.project_cylinder"), () => Edit("Cylinder Projection", (mesh, s) => UVs.Cylinder(mesh, UVFaces(mesh, s)))));
+        list.Add((Loc.Get("uv.project_sphere"), () => Edit("Sphere Projection", (mesh, s) => UVs.Sphere(mesh, UVFaces(mesh, s)))));
+        list.Add((Loc.Get("uv.project_view"), () => Edit("Project From View", (mesh, s) =>
+        {
+            if (_edited.Find(m => ReferenceEquals(m.Mesh, mesh)) is not { } model) return;
+            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+            UVs.FromView(mesh, UVFaces(mesh, s), p => ctx.Handles.WorldToScreen(Float4x4.TransformPoint(p, toWorld)) is { } at ? new Float2(at.X, -at.Y) : Float2.Zero);
+        })));
+        list.Add((Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => UVs.Reset(mesh, UVFaces(mesh, s)))));
         return list;
     }
+
+    /// <summary>The faces a UV operation works on: the selected ones, or every face when none is selected.</summary>
+    private static List<GeometryData.Face> UVFaces(GeometryData mesh, ElementSelection selection)
+        => selection.Faces.Count > 0 ? [.. selection.Faces] : [.. mesh.Faces];
 
     /// <summary>The operations for the Inspector's Tool tab, started in the scene view as from its menu.</summary>
     public List<(string Label, System.Action Run)> PanelOperations() => Editing ? Operations(Context) : [];
@@ -1597,9 +1619,9 @@ public sealed class ModelMeshTool : SceneTool
             foreach (GeometryData.Edge edge in model.Mesh.Edges)
             {
                 if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
-                bool picked = selection.Edges.Contains(edge);
+                bool picked = selection.Edges.Contains(edge), seam = UVs.IsSeam(edge);
                 ctx.Draw.Line(Float4x4.TransformPoint(edge.Vert1.Point, toWorld), Float4x4.TransformPoint(edge.Vert2.Point, toWorld),
-                    picked ? PickedColor : IdleColor, picked ? 2.5f : 1f);
+                    picked ? PickedColor : seam ? SeamColor : IdleColor, picked || seam ? 2.5f : 1f);
             }
 
             if (Mode == SelectMode.Vertex)
