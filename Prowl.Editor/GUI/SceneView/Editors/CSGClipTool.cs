@@ -120,6 +120,18 @@ public sealed class CSGClipTool : SceneTool
 
         ctx.Draw.Circle(point, normal, 0.12f, PlaneEdge);
 
+        // Ctrl click picks which brushes the cut applies to, without leaving clip mode
+        if (clicked && ctx.Handles.Ctrl)
+        {
+            CSGModel? model = CSGSelection.ActiveModel();
+            if (model.IsValid() && CSGSelection.PickBrush(model!, CSGSelection.BrushesIn(model!), ctx.Handles.MouseRay, out CSGBrush brush, out _))
+            {
+                if (Selection.IsSelected(brush.GameObject)) Selection.RemoveFromSelection(brush.GameObject);
+                else Selection.AddToSelection(brush.GameObject);
+            }
+            return;
+        }
+
         if (clicked)
         {
             _stage = Stage.Aiming;
