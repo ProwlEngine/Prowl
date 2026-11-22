@@ -211,8 +211,10 @@ public static class CSGMeshEdit
     {
         if (ring.Count < 3 || MathF.Abs(height) < 1e-4f) return null;
 
-        Float3 up = Float3.NormalizeSafe(normal, Float3.UnitY);
-        if (height < 0f) { up = -up; height = -height; }
+        // The sides face out from the ring's own winding, whichever way it is pulled
+        Float3 wound = Float3.NormalizeSafe(normal, Float3.UnitY);
+        Float3 up = height < 0f ? -wound : wound;
+        height = MathF.Abs(height);
 
         Float3 basePoint = ring[0];
 
@@ -226,7 +228,7 @@ public static class CSGMeshEdit
         {
             Float3 a = ring[i], b = ring[(i + 1) % ring.Count];
 
-            Float3 side = Float3.Cross(b - a, up);
+            Float3 side = Float3.Cross(b - a, wound);
             if (Float3.LengthSquared(side) < 1e-12f) continue;
 
             side = Float3.Normalize(side);

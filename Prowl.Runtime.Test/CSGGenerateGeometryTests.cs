@@ -204,4 +204,18 @@ public class CSGGenerateGeometryTests
         Assert.Equal(3.5f * 3f, solid.Volume(), 3);
         Assert.Equal(3f, solid.GetAABB().Max.Y, 3);
     }
+
+    [Fact]
+    public void APolygonPulledDownwardSinksIntoAPrismBelowItsOutline()
+    {
+        Float2[] outline = [new(0, 0), new(2, 0), new(2, 2), new(0, 2)];
+
+        Plane[]? planes = CSGShapeBuilder.PolygonPrism(outline, -3f);
+        Assert.NotNull(planes);
+
+        GeometryData solid = GeometryGenerator.ConvexFromPlanes(planes!).Solid!;
+        Assert.Equal(4f * 3f, solid.Volume(), 3);
+        Assert.Equal(0f, solid.GetAABB().Max.Y, 3);
+        Assert.Equal(-3f, solid.GetAABB().Min.Y, 3);
+    }
 }
