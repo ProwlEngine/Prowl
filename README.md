@@ -449,6 +449,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <sub><b>Uncle Bane</b></sub>
                 </a>
             </td>
+            <td align="center">
+                <a href="https://github.com/japsuu">
+                    <img src="https://avatars.githubusercontent.com/u/55388432?v=4" width="100;" alt="japsuu"/>
+                    <br />
+                    <sub><b>Jasper Honkasalo</b></sub>
+                </a>
+            </td>
 		</tr>
 	<tbody>
 </table>
