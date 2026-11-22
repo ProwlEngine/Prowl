@@ -49,6 +49,12 @@ public sealed class ModelObject : Component
     /// <summary>Run in order on a copy of the mesh for what is shown and imported, the mesh underneath left as edited.</summary>
     public List<ModelModifier> Modifiers = new();
 
+    /// <summary>The skeleton the mesh is skinned to, kept for the import. The model world shows the mesh at rest.</summary>
+    public List<PMeshBone> Bones = new();
+
+    /// <summary>The blend shapes the mesh's shape attributes hold.</summary>
+    public List<PMeshShape> Shapes = new();
+
     [NonSerialized] private Mesh? _preview;
 
     // The point of the mesh each preview vertex sits on, and the mesh and version it was built from, so a drag that only
@@ -166,6 +172,8 @@ public sealed class ModelObject : Component
             Materials = new List<Guid>(Materials),
             SmoothingAngle = SmoothingAngle,
             Modifiers = new List<ModelModifier>(Modifiers),
+            Bones = new List<PMeshBone>(Bones),
+            Shapes = new List<PMeshShape>(Shapes),
         };
     }
 

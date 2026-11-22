@@ -383,6 +383,8 @@ public sealed class ModelMeshTool : SceneTool
             split.Materials = new List<Guid>(model.Materials);
             split.SmoothingAngle = model.SmoothingAngle;
             split.Modifiers = [.. model.Modifiers.Select(m => m.Clone())];
+            split.Bones = new List<PMeshBone>(model.Bones);
+            split.Shapes = new List<PMeshShape>(model.Shapes);
             split.RefreshPreview();
             Undo.RegisterCreatedObjectUndo(go, Name);
         }

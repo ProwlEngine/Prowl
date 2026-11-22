@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
@@ -39,6 +40,45 @@ public sealed class PMeshObject
 
     /// <summary>Run in order on a copy of the mesh, whose end is what the import builds.</summary>
     public List<ModelModifier> Modifiers = new();
+
+    /// <summary>The bones the mesh is skinned to, in the order its bone indices count them. Empty for a mesh with no skin.</summary>
+    public List<PMeshBone> Bones = new();
+
+    /// <summary>The names and weights of the blend shapes the mesh's shape attributes hold, in their order.</summary>
+    public List<PMeshShape> Shapes = new();
+
+    /// <summary>A mesh holding what the geometry does not: bone names, bind poses, blend shape names and frame weights.</summary>
+    public Mesh SkinTemplate() => new()
+    {
+        Name = Name,
+        BoneNames = Bones.Count > 0 ? [.. Bones.Select(b => b.Name)] : null,
+        BindPoses = Bones.Count > 0 ? [.. Bones.Select(b => b.BindPose)] : null,
+        BlendShapes = [.. Shapes.Select(s => new BlendShape { Name = s.Name, Frames = [.. s.FrameWeights.Select(w => new BlendShapeFrame { Weight = w })] })],
+    };
+}
+
+/// <summary>A bone of a model object's skeleton, its rest transform under its parent bone or, for a root, the object.</summary>
+public sealed class PMeshBone
+{
+    public string Name = "Bone";
+
+    /// <summary>The index of the parent bone, -1 for a bone at the top.</summary>
+    public int Parent = -1;
+
+    public Float3 Position;
+    public Quaternion Rotation = Quaternion.Identity;
+    public Float3 Scale = Float3.One;
+
+    /// <summary>From the mesh's space into the bone's at rest.</summary>
+    public Float4x4 BindPose = Float4x4.Identity;
+}
+
+/// <summary>A blend shape of a model object: its name, its weight from 0 to 100, and the weight each frame is reached at.</summary>
+public sealed class PMeshShape
+{
+    public string Name = "Shape";
+    public float Weight;
+    public float[] FrameWeights = [100f];
 }
 
 /// <summary>
@@ -93,6 +133,36 @@ public sealed class PMeshDocument
         o["materials"] = materials;
         o["mesh"] = WriteMesh(item.Mesh);
         if (item.Modifiers.Count > 0) o["modifiers"] = Serializer.Serialize(typeof(List<ModelModifier>), item.Modifiers);
+        if (item.Bones.Count > 0)
+        {
+            EchoObject bones = EchoObject.NewList();
+            foreach (PMeshBone bone in item.Bones)
+            {
+                EchoObject b = EchoObject.NewCompound();
+                b["name"] = new EchoObject(bone.Name);
+                b["parent"] = new EchoObject(bone.Parent);
+                b["position"] = Floats([bone.Position.X, bone.Position.Y, bone.Position.Z]);
+                b["rotation"] = Floats([bone.Rotation.X, bone.Rotation.Y, bone.Rotation.Z, bone.Rotation.W]);
+                b["scale"] = Floats([bone.Scale.X, bone.Scale.Y, bone.Scale.Z]);
+                Float4x4 m = bone.BindPose;
+                b["bind"] = Floats([m.c0.X, m.c0.Y, m.c0.Z, m.c0.W, m.c1.X, m.c1.Y, m.c1.Z, m.c1.W, m.c2.X, m.c2.Y, m.c2.Z, m.c2.W, m.c3.X, m.c3.Y, m.c3.Z, m.c3.W]);
+                bones.ListAdd(b);
+            }
+            o["bones"] = bones;
+        }
+        if (item.Shapes.Count > 0)
+        {
+            EchoObject shapes = EchoObject.NewList();
+            foreach (PMeshShape shape in item.Shapes)
+            {
+                EchoObject s = EchoObject.NewCompound();
+                s["name"] = new EchoObject(shape.Name);
+                s["weight"] = new EchoObject(shape.Weight);
+                s["frames"] = Floats(shape.FrameWeights);
+                shapes.ListAdd(s);
+            }
+            o["shapes"] = shapes;
+        }
         return o;
     }
 
@@ -113,6 +183,23 @@ public sealed class PMeshDocument
         item.Mesh = ReadMesh(o["mesh"]);
         if (o.TryGet("modifiers", out EchoObject? modifiers) && Serializer.Deserialize<List<ModelModifier>>(modifiers) is { } stack)
             item.Modifiers = stack;
+        if (o.TryGet("bones", out EchoObject? bones))
+            foreach (EchoObject b in bones!.List)
+            {
+                float[] p = FloatsOf(b["position"]), r = FloatsOf(b["rotation"]), sc = FloatsOf(b["scale"]), m = FloatsOf(b["bind"]);
+                item.Bones.Add(new PMeshBone
+                {
+                    Name = b["name"].StringValue,
+                    Parent = b["parent"].IntValue,
+                    Position = new Float3(p[0], p[1], p[2]),
+                    Rotation = new Quaternion(r[0], r[1], r[2], r[3]),
+                    Scale = new Float3(sc[0], sc[1], sc[2]),
+                    BindPose = new Float4x4(new Float4(m[0], m[1], m[2], m[3]), new Float4(m[4], m[5], m[6], m[7]), new Float4(m[8], m[9], m[10], m[11]), new Float4(m[12], m[13], m[14], m[15])),
+                });
+            }
+        if (o.TryGet("shapes", out EchoObject? shapes))
+            foreach (EchoObject s in shapes!.List)
+                item.Shapes.Add(new PMeshShape { Name = s["name"].StringValue, Weight = s["weight"].FloatValue, FrameWeights = FloatsOf(s["frames"]) });
         return item;
     }
 
@@ -143,22 +230,20 @@ public sealed class PMeshDocument
         var document = new PMeshDocument();
         var ids = new Dictionary<GameObject, Guid>();
         foreach (GameObject go in objects)
-        {
-            MeshRenderer? drawn = go.GetComponent<MeshRenderer>();
-            if (drawn.IsValid() && drawn!.Mesh.IsValid()) ids[go] = Guid.NewGuid();
-        }
+            if (DrawnMesh(go) is not null) ids[go] = Guid.NewGuid();
 
         Transform frame = active.Transform;
         foreach (GameObject go in objects)
         {
             if (!ids.TryGetValue(go, out Guid id)) continue;
-            MeshRenderer renderer = go.GetComponent<MeshRenderer>()!;
+            (Mesh drawnMesh, IReadOnlyList<Material> materials) = DrawnMesh(go)!.Value;
 
             GameObject? parent = go.Parent;
             while (parent.IsValid() && !ids.ContainsKey(parent!)) parent = parent!.Parent;
 
             Transform transform = go.Transform;
-            var item = new PMeshObject { Id = id, Name = go.Name, Mesh = MeshGeometry.ToGeometryData(renderer.Mesh!, JoinDegrees) };
+            var item = new PMeshObject { Id = id, Name = go.Name, Mesh = MeshGeometry.ToGeometryData(drawnMesh, JoinDegrees) };
+            if (go.GetComponent<SkinnedMeshRenderer>() is { } skinned && skinned.IsValid()) TakeSkin(item, skinned, drawnMesh);
 
             // The mesh brings its own normals, and edges flagged by the smoothing angle say how those are worked out again after an edit
             GeometryOperators.SoftenByAngle(item.Mesh, item.Mesh.Edges, item.SmoothingAngle);
@@ -177,7 +262,7 @@ public sealed class PMeshDocument
                 item.Scale = transform.LossyScale / frame.LossyScale;
             }
 
-            foreach (Material material in renderer.Materials)
+            foreach (Material material in materials)
             {
                 if (material.IsValid() && material.AssetID != Guid.Empty) item.Materials.Add(material.AssetID);
                 else
@@ -189,6 +274,52 @@ public sealed class PMeshDocument
             document.Objects.Add(item);
         }
         return document;
+    }
+
+    /// <summary>The mesh an object draws and its materials, through a mesh renderer or a skinned one, or null.</summary>
+    public static (Mesh Mesh, IReadOnlyList<Material> Materials)? DrawnMesh(GameObject go)
+    {
+        if (go.GetComponent<MeshRenderer>() is { } renderer && renderer.IsValid() && renderer.Mesh is { } mesh && mesh.IsValid())
+            return (mesh, renderer.Materials);
+        if (go.GetComponent<SkinnedMeshRenderer>() is { } skinned && skinned.IsValid() && skinned.SharedMesh is { } shared && shared.IsValid())
+            return (shared, skinned.Materials);
+        return null;
+    }
+
+    /// <summary>
+    /// Copies a skinned renderer's skeleton and blend shapes onto a model object: each bone's rest transform under its
+    /// nearest ancestor among the bones, or under the renderer's object for a bone with none, and its bind pose.
+    /// </summary>
+    private static void TakeSkin(PMeshObject item, SkinnedMeshRenderer skinned, Mesh mesh)
+    {
+        Transform?[] bones = skinned.Bones ?? [];
+        Float4x4[] binds = mesh.BindPoses ?? [];
+        string[] names = mesh.BoneNames ?? [];
+        Transform owner = skinned.GameObject.Transform;
+        for (int i = 0; i < bones.Length; i++)
+        {
+            Transform? bone = bones[i];
+            int parent = -1;
+            for (Transform? up = bone?.Parent; up != null && parent < 0; up = up.Parent) parent = Array.IndexOf(bones, up);
+            Float4x4 above = parent >= 0 ? bones[parent]!.LocalToWorldMatrix : owner.LocalToWorldMatrix;
+            Float4x4 local = bone != null ? above.Invert() * bone.LocalToWorldMatrix : Float4x4.Identity;
+            item.Bones.Add(new PMeshBone
+            {
+                Name = bone != null ? bone.GameObject.Name : i < names.Length ? names[i] : $"Bone{i}",
+                Parent = parent,
+                Position = new Float3(local.c3.X, local.c3.Y, local.c3.Z),
+                Rotation = bone != null ? Quaternion.Inverse(parent >= 0 ? bones[parent]!.Rotation : owner.Rotation) * bone.Rotation : Quaternion.Identity,
+                Scale = bone != null ? bone.LossyScale / (parent >= 0 ? bones[parent]!.LossyScale : owner.LossyScale) : Float3.One,
+                BindPose = i < binds.Length ? binds[i] : Float4x4.Identity,
+            });
+        }
+        for (int s = 0; s < mesh.BlendShapeCount; s++)
+            item.Shapes.Add(new PMeshShape
+            {
+                Name = mesh.GetBlendShapeName(s),
+                Weight = skinned.GetBlendShapeWeight(s),
+                FrameWeights = [.. mesh.BlendShapes[s].Frames.Select(f => f.Weight)],
+            });
     }
 
     // ================================================================

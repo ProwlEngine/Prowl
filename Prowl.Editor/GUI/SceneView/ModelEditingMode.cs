@@ -157,6 +157,8 @@ public static class ModelEditingMode
             model.Materials = new List<Guid>(item.Materials);
             model.SmoothingAngle = item.SmoothingAngle;
             model.Modifiers = item.Modifiers;
+            model.Bones = item.Bones;
+            model.Shapes = item.Shapes;
             objects[item.Id] = go;
         }
 
@@ -219,8 +221,7 @@ public static class ModelEditingMode
     /// <summary>Whether an object draws a mesh made only of triangles, which is what can be edited as a model.</summary>
     private static bool Drawable(GameObject go)
     {
-        MeshRenderer? renderer = go.GetComponent<MeshRenderer>();
-        if (renderer.IsNotValid() || renderer!.Mesh is not { } mesh || mesh.IsNotValid()) return false;
+        if (PMeshDocument.DrawnMesh(go) is not { Mesh: var mesh }) return false;
         for (int i = 0; i < mesh.SubMeshCount; i++)
             if (mesh.GetSubMesh(i).Topology != Topology.Triangles) return false;
         return true;
