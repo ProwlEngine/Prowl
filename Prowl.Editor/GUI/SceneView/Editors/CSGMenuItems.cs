@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 using Prowl.Runtime.Resources;
@@ -15,10 +16,10 @@ namespace Prowl.Editor.GUI.SceneView.Editors;
 /// <summary>Menu entries that create CSG objects.</summary>
 public static class CSGMenuItems
 {
-    [MenuItem("GameObject/CSG/Model", priority: 65)]
+    [MenuItem("GameObject/CSG/Model", priority: 65, Icon = EditorIcons.CubesStacked)]
     private static void CreateModel() => CSGSelection.CreateModel();
 
-    [MenuItem("GameObject/CSG/Brush", priority: 66)]
+    [MenuItem("GameObject/CSG/Brush", priority: 66, Icon = EditorIcons.Cube)]
     private static void CreateBrush()
     {
         CSGModel? existing = CSGSelection.ActiveModel();
@@ -31,7 +32,7 @@ public static class CSGMenuItems
         Selection.Select(go);
     }
 
-    [MenuItem("GameObject/CSG/Group", priority: 67)]
+    [MenuItem("GameObject/CSG/Group", priority: 67, Icon = EditorIcons.LayerGroup)]
     private static void CreateGroup()
     {
         CSGModel? existing = CSGSelection.ActiveModel();
@@ -45,7 +46,7 @@ public static class CSGMenuItems
     }
 
     /// <summary>Wraps the selected brushes in a group at their centre, so they can be subtracted or intersected as one solid.</summary>
-    [MenuItem("GameObject/CSG/Group Selection", priority: 68)]
+    [MenuItem("GameObject/CSG/Group Selection", priority: 68, Icon = EditorIcons.ObjectGroup)]
     internal static void GroupSelection()
     {
         List<GameObject> selected = CSGSelection.Roots();
