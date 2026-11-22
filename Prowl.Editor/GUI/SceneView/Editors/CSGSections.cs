@@ -640,8 +640,8 @@ internal static class CSGSections
 
     private static void Hint(Paper paper, Scribe.FontFile font, string id, string text)
     {
-        paper.Box(id).Height(32).Margin(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 2, 4)
-            .Text(text, font).TextColor(EditorTheme.Ink300)
+        paper.Box(id).Height(UnitValue.Auto).Margin(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 2, 4)
+            .Text(text, font).TextColor(EditorTheme.Ink300).Wrap(Scribe.TextWrapMode.Wrap)
             .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.Left);
     }
 
