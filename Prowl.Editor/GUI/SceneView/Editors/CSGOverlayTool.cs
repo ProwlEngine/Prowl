@@ -41,7 +41,7 @@ public sealed class CSGOverlayTool : SceneTool
 
     // The keys each mode answers to, shown under its options
     private static readonly string[] SelectionKeys = ["CSG/Hide", "CSG/UnhideAll", "CSG/SetAdditive", "CSG/SetSubtractive", "Scene/Duplicate"];
-    private static readonly string[] ObjectKeys = [.. SelectionKeys, "CSG/SnapToGrid", "CSG/RotateLeft", "CSG/RotateRight", "CSG/NudgeLeft", "CSG/NudgeUp"];
+    private static readonly string[] ObjectKeys = [.. SelectionKeys, "CSG/RepeatClone", "CSG/SnapToGrid", "CSG/RotateLeft", "CSG/RotateRight", "CSG/NudgeLeft", "CSG/NudgeUp"];
     private static readonly string[] GenerateKeys = ["CSG/ShapeBox", "CSG/ShapeCylinder", "CSG/ShapeSphere", "CSG/ShapeLinearStairs", "CSG/ShapeSpiralStairs", "CSG/SetAdditive", "CSG/SetSubtractive", "CSG/SetIntersecting", "CSG/Confirm"];
     private static readonly string[] SurfaceKeys = ["CSG/Smear", "CSG/Hide", "CSG/UnhideAll"];
     private static readonly string[] ClipKeys = ["CSG/ClipSwapSide", "CSG/Confirm"];
@@ -93,6 +93,7 @@ public sealed class CSGOverlayTool : SceneTool
         if (handles.IsPressed("CSG/SetPassThrough")) { CSGSelection.SetPassThrough(); return; }
 
         if (handles.IsPressed("Scene/Duplicate")) { CSGSelection.Duplicate(); return; }
+        if (handles.IsPressed("CSG/RepeatClone")) { CSGSelection.RepeatClone(); return; }
 
         if (handles.IsPressed("CSG/FlipX")) { CSGSelection.Flip(Float3.UnitX); return; }
         if (handles.IsPressed("CSG/FlipY")) { CSGSelection.Flip(Float3.UnitY); return; }

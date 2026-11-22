@@ -484,6 +484,21 @@ internal static class CSGSections
                 .Item("Z", tooltip: Loc.Get("csg.flip_tip"))
                 .Show());
 
+        EditorGUI.SettingsRow(paper, "csg_sel_step", Loc.Get("csg.move_by"), () =>
+            Origami.Float3Field(paper, "csg_sel_step_v", CSGSelection.ArrayOffset, v => CSGSelection.ArrayOffset = v).Show());
+        EditorGUI.SettingsRow(paper, "csg_sel_count", Loc.Get("csg.copies"), () =>
+            Origami.NumericField(paper, "csg_sel_count_v", CSGSelection.ArrayCount, v => CSGSelection.ArrayCount = Math.Clamp(v, 1, 256)).Show());
+        EditorGUI.SettingsRow(paper, "csg_sel_array", "", () =>
+            Origami.ButtonGroup(paper, "csg_sel_array_v", -1, idx =>
+                {
+                    if (idx == 0) CSGSelection.MoveBy(CSGSelection.ArrayOffset, clone: false);
+                    else CSGSelection.CloneArray();
+                })
+                .Height(EditorTheme.RowHeight).FullWidth()
+                .Item(Loc.Get("csg.move"), tooltip: Loc.Get("csg.move_tip"))
+                .Item(Loc.Get("csg.clone_array"), tooltip: Loc.Get("csg.clone_array_tip"))
+                .Show());
+
         LabelledButton(paper, font, "csg_sel_pivot", Loc.Get("csg.centre_pivot"),
             Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
 

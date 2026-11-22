@@ -369,6 +369,7 @@ public static class CSGSelection
     /// <summary>Moves the selection by an exact amount, optionally leaving a copy behind.</summary>
     public static void MoveBy(Float3 offset, bool clone)
     {
+        if (clone) _lastClone = offset;
         if (Roots().Count == 0) return;
         if (clone) Duplicate();
 
@@ -399,6 +400,25 @@ public static class CSGSelection
         }
 
         MarkDirty();
+    }
+
+    /// <summary>The step the array buttons move by, and how many copies a clone makes.</summary>
+    public static Float3 ArrayOffset = new(1f, 0f, 0f);
+    public static int ArrayCount = 1;
+
+    private static Float3? _lastClone;
+
+    /// <summary>Leaves <see cref="ArrayCount"/> copies in a row, each <see cref="ArrayOffset"/> past the last.</summary>
+    public static void CloneArray()
+    {
+        for (int i = 0; i < Math.Max(1, ArrayCount); i++) MoveBy(ArrayOffset, clone: true);
+        _lastClone = ArrayOffset;
+    }
+
+    /// <summary>Clones the selection once more by the last clone's step.</summary>
+    public static void RepeatClone()
+    {
+        if (_lastClone is Float3 step) MoveBy(step, clone: true);
     }
 
     /// <summary>Centre of the selected brushes and groups, the default pivot for a rotation.</summary>
