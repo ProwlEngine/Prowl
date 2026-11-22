@@ -154,4 +154,51 @@ public class SelectionTests
         Assert.Equal(2, selection.Faces.Count);
         Assert.All(selection.Faces, f => Assert.True(Float3.Dot(f.Normal(), Float3.UnitX) > 0.99f));
     }
+
+    [Fact]
+    public void HidingAFaceLeavesTheEdgesAndCornersOtherFacesUse()
+    {
+        GeometryData mesh = Box();
+        var selection = new ElementSelection();
+        selection.Faces.Add(Facing(mesh, Float3.UnitY));
+        Selecting.Normalize(selection, SelectMode.Face);
+        var hidden = new ElementSelection();
+
+        Selecting.Hide(hidden, selection, SelectMode.Face);
+
+        Assert.Single(hidden.Faces);
+        Assert.Empty(hidden.Edges);
+        Assert.Empty(hidden.Vertices);
+        Assert.True(selection.IsEmpty);
+    }
+
+    [Fact]
+    public void HidingAPointHidesItsEdgesAndFaces()
+    {
+        GeometryData mesh = Box();
+        var selection = new ElementSelection();
+        selection.Vertices.Add(mesh.Vertices[0]);
+        var hidden = new ElementSelection();
+
+        Selecting.Hide(hidden, selection, SelectMode.Vertex);
+
+        Assert.Single(hidden.Vertices);
+        Assert.Equal(3, hidden.Edges.Count);
+        Assert.Equal(3, hidden.Faces.Count);
+    }
+
+    [Fact]
+    public void CommandsLeaveHiddenElementsOut()
+    {
+        GeometryData mesh = Box();
+        var hidden = new ElementSelection();
+        hidden.Faces.Add(Facing(mesh, Float3.UnitY));
+        var selection = new ElementSelection();
+
+        Selecting.All(mesh, selection, SelectMode.Face);
+        Selecting.Without(selection, hidden, SelectMode.Face);
+
+        Assert.Equal(5, selection.Faces.Count);
+        Assert.DoesNotContain(Facing(mesh, Float3.UnitY), selection.Faces);
+    }
 }

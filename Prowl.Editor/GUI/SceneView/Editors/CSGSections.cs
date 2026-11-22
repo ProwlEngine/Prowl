@@ -126,13 +126,15 @@ internal static class CSGSections
     private static void AddEdit(List<Column> columns, CSGMeshTool tool)
     {
         columns.Add(new Column("csg_edit", "", null, (paper, font) =>
+        {
             Segments(paper, font, "csg_edit_mode",
             [
                 new Tile(EditorIcons.CircleDot, Loc.Get("csg.mode_vertex"), Loc.Get("csg.mode_vertex_tip"), () => tool.SetMode(SelectMode.Vertex), tool.Mode == SelectMode.Vertex),
                 new Tile(EditorIcons.Slash, Loc.Get("csg.mode_edge"), Loc.Get("csg.mode_edge_tip"), () => tool.SetMode(SelectMode.Edge), tool.Mode == SelectMode.Edge),
                 new Tile(EditorIcons.Square, Loc.Get("csg.mode_face"), Loc.Get("csg.mode_face_tip"), () => tool.SetMode(SelectMode.Face), tool.Mode == SelectMode.Face),
-            ], iconsOnly: true),
-            NarrowColumnWidth));
+            ], iconsOnly: true);
+            Chips(paper, font, "csg_edit_toggles", (Loc.Get("csg.xray"), tool.XRay, Loc.Get("csg.xray_tip"), () => tool.XRay = !tool.XRay));
+        }, NarrowColumnWidth));
     }
 
     private static void AddGenerate(List<Column> columns, CSGGenerateTool? tool)

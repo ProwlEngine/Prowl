@@ -42,6 +42,9 @@ public class SceneViewPanel : DockPanel
     private readonly CameraPreview _cameraPreview = new();
     private readonly SceneToolContext _toolContext;
     private EditorCamera? _editorCamera;
+
+    /// <summary>The camera this view is seen through.</summary>
+    internal EditorCamera? EditorCamera => _editorCamera;
     /// <summary>Includes restored settings before the camera is created on the first draw.</summary>
     internal bool ShowGizmos => _editorCamera?.ShowGizmos ?? _pendingGizmos ?? true;
     private Gizmo.TransformGizmo? _transformGizmo;

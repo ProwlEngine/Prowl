@@ -669,11 +669,6 @@ public class EditorCamera
             radius = 0.5f;
         }
 
-        // Distance that fits the object in the vertical FOV, with a little padding.
-        float fovRad = _camera.FieldOfView * MathF.PI / 180f;
-        float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
-        dist = MathF.Max(dist, 0.5f);
-
         // A UI-only selection is a flat rect, so the view swings around to face it from whichever side
         // the camera is already on. Anything with geometry keeps the angle it was viewed from.
         if (anyUI && !anyRenderer && Float3.LengthSquared(uiNormal) > 1e-8f)
@@ -682,6 +677,17 @@ public class EditorCamera
             if (Float3.Dot(facing, _position - target) < 0f) facing = -facing;
             FaceDirection(-facing);
         }
+
+        Frame(target, radius);
+    }
+
+    /// <summary>Moves the camera back along its view to fit a sphere, keeping the angle it looks from.</summary>
+    public void Frame(Float3 target, float radius)
+    {
+        // Distance that fits the object in the vertical FOV, with a little padding.
+        float fovRad = _camera.FieldOfView * MathF.PI / 180f;
+        float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
+        dist = MathF.Max(dist, 0.5f);
 
         // Set orbit distance and position camera to look at target
         ClearMovementSmoothing();

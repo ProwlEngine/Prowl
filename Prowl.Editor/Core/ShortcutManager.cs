@@ -395,6 +395,18 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("MeshEdit/VertexMode", "Vertex Mode", KeyCode.Number1);
         ShortcutManager.Register("MeshEdit/EdgeMode", "Edge Mode", KeyCode.Number2);
         ShortcutManager.Register("MeshEdit/FaceMode", "Face Mode", KeyCode.Number3);
+        ShortcutManager.Register("MeshEdit/SelectAll", "Select All Elements", KeyCode.A);
+        ShortcutManager.Register("MeshEdit/SelectNone", "Select No Elements", KeyCode.A, alt: true);
+        ShortcutManager.Register("MeshEdit/Invert", "Invert Element Selection", KeyCode.I, ctrl: true);
+        ShortcutManager.Register("MeshEdit/More", "Select More", KeyCode.Equal, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Less", "Select Less", KeyCode.Minus, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Linked", "Select Linked", KeyCode.L, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Similar", "Select Similar", KeyCode.G, shift: true);
+        ShortcutManager.Register("MeshEdit/XRay", "X Ray", KeyCode.Z, alt: true);
+        ShortcutManager.Register("MeshEdit/Hide", "Hide Elements", KeyCode.H);
+        ShortcutManager.Register("MeshEdit/HideUnselected", "Hide Unselected Elements", KeyCode.H, shift: true);
+        ShortcutManager.Register("MeshEdit/Reveal", "Reveal Elements", KeyCode.H, alt: true);
+        ShortcutManager.Register("MeshEdit/Frame", "Frame Selected Elements", KeyCode.F);
         ShortcutManager.Register("CSG/FlipX", "Flip On X", KeyCode.X, ctrl: true, alt: true);
         ShortcutManager.Register("CSG/FlipY", "Flip On Y", KeyCode.Y, ctrl: true, alt: true);
         ShortcutManager.Register("CSG/FlipZ", "Flip On Z", KeyCode.Z, ctrl: true, alt: true);

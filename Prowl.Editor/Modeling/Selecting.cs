@@ -255,6 +255,63 @@ public static class Selecting
         Normalize(selection, mode);
     }
 
+    /// <summary>
+    /// Hides the selection and empties it. What the mode leads with is hidden, along with what can no longer be seen
+    /// whole: in vertex mode the edges and faces at a hidden point, otherwise the edges and points every face or edge
+    /// using them is hidden, so hiding a face leaves its neighbours whole.
+    /// </summary>
+    public static void Hide(ElementSelection hidden, ElementSelection selection, SelectMode mode)
+    {
+        switch (mode)
+        {
+            case SelectMode.Vertex:
+                hidden.Vertices.UnionWith(selection.Vertices);
+                foreach (GeometryData.Vertex vertex in selection.Vertices)
+                {
+                    hidden.Edges.UnionWith(vertex.NeighborEdges());
+                    hidden.Faces.UnionWith(vertex.NeighborFaces());
+                }
+                break;
+
+            case SelectMode.Edge:
+                hidden.Edges.UnionWith(selection.Edges);
+                foreach (GeometryData.Edge edge in selection.Edges)
+                {
+                    hidden.Faces.UnionWith(edge.NeighborFaces());
+                    foreach (GeometryData.Vertex end in new[] { edge.Vert1, edge.Vert2 })
+                        if (AllIn(end.NeighborEdges(), hidden.Edges)) hidden.Vertices.Add(end);
+                }
+                break;
+
+            case SelectMode.Face:
+                hidden.Faces.UnionWith(selection.Faces);
+                foreach (GeometryData.Face face in selection.Faces)
+                {
+                    foreach (GeometryData.Edge edge in face.NeighborEdges())
+                        if (AllIn(edge.NeighborFaces(), hidden.Faces)) hidden.Edges.Add(edge);
+                    foreach (GeometryData.Vertex vertex in face.NeighborVertices())
+                        if (AllIn(vertex.NeighborFaces(), hidden.Faces)) hidden.Vertices.Add(vertex);
+                }
+                break;
+        }
+        selection.Clear();
+    }
+
+    /// <summary>Takes the hidden elements out of the selection, so commands over the whole mesh skip them.</summary>
+    public static void Without(ElementSelection selection, ElementSelection hidden, SelectMode mode)
+    {
+        Remove();
+        Normalize(selection, mode);
+        Remove();
+
+        void Remove()
+        {
+            selection.Vertices.ExceptWith(hidden.Vertices);
+            selection.Edges.ExceptWith(hidden.Edges);
+            selection.Faces.ExceptWith(hidden.Faces);
+        }
+    }
+
     private static GeometryData.Edge? Parallel(GeometryData.Face face, GeometryData.Edge from)
     {
         Float3 direction = Float3.NormalizeSafe(from.Vert2.Point - from.Vert1.Point, Float3.UnitY);
