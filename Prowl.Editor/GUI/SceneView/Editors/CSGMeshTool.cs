@@ -59,6 +59,71 @@ public sealed class CSGMeshTool : SceneTool
 
     public int SelectedCount => _vertices.Count;
 
+    public int SelectedFaceCount => _faces.Count;
+
+    /// <summary>How far the chamfer and extrude buttons cut and pull.</summary>
+    public float ChamferDistance { get; set; } = 0.25f;
+    public float ExtrudeDistance { get; set; } = 1f;
+
+    /// <summary>Cuts every selected edge, or every selected corner when no whole edge is selected, by <see cref="ChamferDistance"/>.</summary>
+    public void ChamferSelected()
+    {
+        if (Target.IsNotValid() || _mesh == null || ChamferDistance <= 1e-4f) return;
+
+        var planes = new List<Plane>(Target!.Planes);
+        int original = planes.Count;
+
+        foreach ((int a, int b) in _edges)
+        {
+            if (!_vertices.Contains(a) || !_vertices.Contains(b)) continue;
+            var normals = new List<Float3>();
+            foreach (int p in _mesh.PolygonsAtEdge(a, b)) normals.Add(_mesh.PolygonNormal(p));
+            if (CSGMeshEdit.ChamferPlane(normals, (_mesh.Points[a] + _mesh.Points[b]) * 0.5f, ChamferDistance, out Plane cut)) planes.Add(cut);
+        }
+
+        if (planes.Count == original)
+        {
+            foreach (int point in _vertices)
+            {
+                var normals = new List<Float3>();
+                foreach (int p in _mesh.PolygonsAtPoint(point)) normals.Add(_mesh.PolygonNormal(p));
+                if (CSGMeshEdit.ChamferPlane(normals, _mesh.Points[point], ChamferDistance, out Plane cut)) planes.Add(cut);
+            }
+        }
+
+        if (planes.Count == original) return;
+        if (!GeometryGenerator.ConvexFromPlanes(planes).IsValid)
+        {
+            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
+            return;
+        }
+
+        Undo.RecordObject(Target, "Chamfer CSG Brush");
+        Target.Planes = planes.ToArray();
+        for (int i = original; i < planes.Count; i++)
+            Target.SetSurface(i, CSGSelection.NearestSurface(Target, planes[i].Normal, original));
+        ClearSelection();
+        MarkDirty();
+    }
+
+    /// <summary>Pulls the one selected face out into a brush of its own by <see cref="ExtrudeDistance"/>.</summary>
+    public void ExtrudeSelected()
+    {
+        if (Target.IsNotValid() || _mesh == null || _faces.Count != 1) return;
+
+        int face = _faces[0];
+        _actionRing.Clear();
+        foreach (int i in _mesh.PolygonPoints(face)) _actionRing.Add(_mesh.Points[i]);
+        _actionCorner = _mesh.PolygonNormal(face);
+        int plane = PlaneOf(face);
+        _actionSurface = plane >= 0 ? Target!.Surfaces[plane] : SurfaceData.Default;
+        CommitExtrude(ExtrudeDistance);
+    }
+
+    public void SnapSelectedToGrid() => SnapSelection();
+
+    public void DeleteSelectedFaces() => DeleteFaces();
+
     /// <summary>One face is selected, so the bracket keys taper it instead of changing the grid.</summary>
     public bool TapersFace => Active && _faces.Count == 1;
 
@@ -484,7 +549,7 @@ public sealed class CSGMeshTool : SceneTool
 
         switch (_action)
         {
-            case Action.Extrude: CommitExtrude(ctx, amount); break;
+            case Action.Extrude: CommitExtrude(amount); break;
             case Action.Marquee: ApplyMarquee(ctx); break;
         }
 
@@ -563,7 +628,7 @@ public sealed class CSGMeshTool : SceneTool
     }
 
     /// <summary>Turns the pulled face into a sibling brush of its own.</summary>
-    private void CommitExtrude(SceneToolContext ctx, float amount)
+    private void CommitExtrude(float amount)
     {
         if (amount <= 1e-3f || !TryExtrudeRing(out List<Float3> ring, out Float3 normal)) return;
 

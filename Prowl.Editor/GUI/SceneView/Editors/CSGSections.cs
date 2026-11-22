@@ -244,6 +244,29 @@ internal static class CSGSections
         if (tool.Filter == CSGElementFilter.None)
             Hint(paper, font, "csg_mesh_warn", Loc.Get("csg.mesh_nothing_selectable"));
 
+        EditorGUI.SettingsRow(paper, "csg_mesh_chamfer", Loc.Get("csg.chamfer"), () =>
+            Origami.NumericField(paper, "csg_mesh_chamfer_v", tool.ChamferDistance, v => tool.ChamferDistance = MathF.Max(0f, v)).Show());
+        EditorGUI.SettingsRow(paper, "csg_mesh_extrude", Loc.Get("csg.extrude"), () =>
+            Origami.NumericField(paper, "csg_mesh_extrude_v", tool.ExtrudeDistance, v => tool.ExtrudeDistance = v).Show());
+
+        EditorGUI.SettingsRow(paper, "csg_mesh_actions", "", () =>
+            Origami.ButtonGroup(paper, "csg_mesh_actions_v", -1, idx =>
+                {
+                    switch (idx)
+                    {
+                        case 0: tool.ChamferSelected(); break;
+                        case 1: tool.ExtrudeSelected(); break;
+                        case 2: tool.SnapSelectedToGrid(); break;
+                        default: tool.DeleteSelectedFaces(); break;
+                    }
+                })
+                .Height(EditorTheme.RowHeight).FullWidth()
+                .Item(Loc.Get("csg.chamfer"), tooltip: Loc.Get("csg.chamfer_tip"))
+                .Item(Loc.Get("csg.extrude"), tooltip: Loc.Get("csg.extrude_tip"))
+                .Item(Loc.Get("csg.snap"), tooltip: ShortcutManager.GetTooltip(Loc.Get("csg.snap_tip"), "CSG/SnapToGrid"))
+                .Item(Loc.Get("csg.delete_face"), tooltip: Loc.Get("csg.delete_face_tip"))
+                .Show());
+
         paper.Box("csg_mesh_count").Height(18).Margin(Origami.Current.Metrics.PaddingLarge, 0, 2, 4)
             .Text(Loc.Get("csg.mesh_selected", new { count = tool.SelectedCount }), font)
             .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
