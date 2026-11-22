@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.Editor.Core;
@@ -132,6 +133,92 @@ public static class CSGSurfaceSelection
             for (int i = 0; i < surfaces.Length; i++)
                 if (ReferenceEquals(surfaces[i].Material, material) && brush.FaceCorners(i).Count > 0) _selected.Add(new CSGSurfaceRef(brush, i));
         }
+    }
+
+    /// <summary>Every surface of the model facing up, so all floors can be textured at once.</summary>
+    public static void SelectFloors() => SelectWhere(s => s.Normal.Y > 0.7f);
+
+    public static void SelectCeilings() => SelectWhere(s => s.Normal.Y < -0.7f);
+
+    public static void SelectWalls() => SelectWhere(s => MathF.Abs(s.Normal.Y) < 0.3f);
+
+    /// <summary>Every surface lying in the active surface's plane.</summary>
+    public static void SelectCoplanar()
+    {
+        if (!TryActiveFace(out ModelSurface active)) return;
+        SelectWhere(s => Float3.Dot(s.Normal, active.Normal) > 0.999f
+                      && MathF.Abs(Float3.Dot(s.Corners[0] - active.Corners[0], active.Normal)) < 1e-3f, active.Surface);
+    }
+
+    /// <summary>Every surface joined to the active one through shared edges, without turning a corner sharper than 45 degrees.</summary>
+    public static void SelectConnected()
+    {
+        if (!TryActiveFace(out ModelSurface active)) return;
+
+        List<ModelSurface> all = ModelSurfaces();
+        var found = new List<ModelSurface> { active };
+        for (int i = 0; i < found.Count; i++)
+        {
+            foreach (ModelSurface other in all)
+            {
+                if (found.Exists(f => f.Surface.Equals(other.Surface))) continue;
+                if (Float3.Dot(other.Normal, found[i].Normal) < 0.7f || !SharesEdge(found[i], other)) continue;
+                found.Add(other);
+            }
+        }
+
+        _selected.Clear();
+        foreach (ModelSurface surface in found.Skip(1)) _selected.Add(surface.Surface);
+        _selected.Add(active.Surface);
+    }
+
+    private readonly record struct ModelSurface(CSGSurfaceRef Surface, Float3 Normal, List<Float3> Corners);
+
+    private static List<ModelSurface> ModelSurfaces()
+    {
+        var result = new List<ModelSurface>();
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (model.IsNotValid()) return result;
+
+        foreach (CSGBrush brush in CSGSelection.BrushesIn(model!))
+        {
+            if (!brush.EnabledInHierarchy || CSGVisibility.IsHidden(brush)) continue;
+            for (int plane = 0; plane < brush.Planes.Length; plane++)
+            {
+                var surface = new CSGSurfaceRef(brush, plane);
+                List<Float3> corners = WorldCorners(surface);
+                if (corners.Count < 3) continue;
+                result.Add(new ModelSurface(surface, CSGSelection.WorldNormal(brush, plane), corners));
+            }
+        }
+        return result;
+    }
+
+    private static bool TryActiveFace(out ModelSurface active)
+    {
+        active = default;
+        if (Active is not CSGSurfaceRef surface || !surface.IsValid) return false;
+        List<Float3> corners = WorldCorners(surface);
+        if (corners.Count < 3) return false;
+        active = new ModelSurface(surface, CSGSelection.WorldNormal(surface.Brush, surface.PlaneIndex), corners);
+        return true;
+    }
+
+    private static void SelectWhere(Func<ModelSurface, bool> keep, CSGSurfaceRef? last = null)
+    {
+        _selected.Clear();
+        foreach (ModelSurface surface in ModelSurfaces())
+            if (keep(surface) && !surface.Surface.Equals(last)) _selected.Add(surface.Surface);
+        if (last is CSGSurfaceRef active) _selected.Add(active);
+    }
+
+    private static bool SharesEdge(ModelSurface a, ModelSurface b)
+    {
+        int shared = 0;
+        foreach (Float3 p in a.Corners)
+            foreach (Float3 q in b.Corners)
+                if (Float3.DistanceSquared(p, q) < 1e-6f && ++shared >= 2) return true;
+        return false;
     }
 
     /// <summary>Puts a material on the surface under the ray, or on the whole selection when that surface is selected.</summary>

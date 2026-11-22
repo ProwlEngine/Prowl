@@ -325,6 +325,26 @@ internal static class CSGSections
             Loc.Get(tool.Active ? "csg.surface_stop_tip" : "csg.surface_mode_tip"),
             () => CSGEditMode.Current = tool.Active ? CSGMode.Object : CSGMode.Surface);
 
+        EditorGUI.SettingsRow(paper, "csg_surf_pick", Loc.Get("csg.select"), () =>
+            Origami.ButtonGroup(paper, "csg_surf_pick_v", -1, idx =>
+                {
+                    switch (idx)
+                    {
+                        case 0: CSGSurfaceSelection.SelectFloors(); break;
+                        case 1: CSGSurfaceSelection.SelectWalls(); break;
+                        case 2: CSGSurfaceSelection.SelectCeilings(); break;
+                        case 3: CSGSurfaceSelection.SelectCoplanar(); break;
+                        default: CSGSurfaceSelection.SelectConnected(); break;
+                    }
+                })
+                .Height(EditorTheme.RowHeight).FullWidth()
+                .Item(Loc.Get("csg.floors"), tooltip: Loc.Get("csg.floors_tip"))
+                .Item(Loc.Get("csg.walls"), tooltip: Loc.Get("csg.walls_tip"))
+                .Item(Loc.Get("csg.ceilings"), tooltip: Loc.Get("csg.ceilings_tip"))
+                .Item(Loc.Get("csg.coplanar"), tooltip: Loc.Get("csg.coplanar_tip"))
+                .Item(Loc.Get("csg.connected"), tooltip: Loc.Get("csg.connected_tip"))
+                .Show());
+
         if (CSGSurfaceSelection.Active is not CSGSurfaceRef active || !active.IsValid)
         {
             Hint(paper, font, "csg_surf_hint",
