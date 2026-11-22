@@ -41,6 +41,8 @@
   "model.slot": "Slot {{index}}",
   "model.add_slot": "Add slot",
   "model.import": "Import",
+  "model.changed_title": "Model Changed On Disk",
+  "model.changed_body": "\"{{name}}\" changed on disk. Load it, dropping the changes made here?",
   "model.recover_title": "Recover Unsaved Model",
   "model.recover_body": "\"{{name}}\" has unsaved changes from a session that did not end. Restore them?",
   "model.collider": "Collider",

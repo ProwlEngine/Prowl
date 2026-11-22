@@ -84,8 +84,13 @@ public static class ModelEditingMode
 
         var session = new ModelSession(modelGuid, path, name);
         OpenDocument(document, session);
-        if (recovered && ReferenceEquals(IsolatedWorld.Current, session)) session.IsDirty = true;
+        if (!ReferenceEquals(IsolatedWorld.Current, session)) return;
+        session.Watch();
+        if (recovered) session.IsDirty = true;
     }
+
+    /// <summary>Whether the open model's file holds something other than what the session last read or wrote, as after a pull.</summary>
+    internal static bool ChangedOnDisk() => Session?.ChangedOnDisk() ?? false;
 
     // ================================================================
     //  Recovery copies
@@ -426,6 +431,50 @@ public static class ModelEditingMode
         public override (string Title, string Body) UnsavedQuestion
             => (Loc.Get("dialog.unsaved_model"), Loc.Get("dialog.unsaved_model_body", new { name = Name }));
 
+        // What the file held when last read or written, to tell its own saves from changes made outside
+        private byte[]? _known;
+
+        /// <summary>Starts noticing the file change on disk, from what it holds now.</summary>
+        public void Watch()
+        {
+            _known = FileHash();
+            if (EditorAssetBackend.Instance is { } backend) backend.OnAssetsImported += OnImported;
+        }
+
+        private void Unwatch()
+        {
+            if (EditorAssetBackend.Instance is { } backend) backend.OnAssetsImported -= OnImported;
+        }
+
+        private byte[]? FileHash()
+        {
+            if (Path == null || Project.Current == null) return null;
+            string file = System.IO.Path.Combine(Project.Current.AssetsPath, Path);
+            return File.Exists(file) ? System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file)) : null;
+        }
+
+        public bool ChangedOnDisk()
+        {
+            byte[]? now = FileHash();
+            return _known != null && now != null && !now.AsSpan().SequenceEqual(_known);
+        }
+
+        /// <summary>When the file was imported again with something new in it, asks whether to load it over the world.</summary>
+        private void OnImported(string[] paths)
+        {
+            if (Path == null || !ReferenceEquals(IsolatedWorld.Current, this) || !Array.Exists(paths, p => string.Equals(p, Path, StringComparison.OrdinalIgnoreCase))) return;
+            if (!ChangedOnDisk()) return;
+            _known = FileHash();
+            string file = System.IO.Path.Combine(Project.Current!.AssetsPath, Path);
+            OrigamiUI.Origami.Confirm(Loc.Get("model.changed_title"), Loc.Get("model.changed_body", new { name = Name }),
+                onYes: () =>
+                {
+                    Close();
+                    OpenFile(file, Guid, Path, Name, recovered: false);
+                },
+                onNo: () => IsDirty = true);
+        }
+
         public override bool Save()
         {
             if (Application.IsPlaying)
@@ -494,11 +543,14 @@ public static class ModelEditingMode
             }
 
             EditorAssetBackend? backend = EditorAssetBackend.Instance;
-            if (Path == null)
+            bool first = Path == null;
+            Path = relativePath;
+            _known = FileHash();
+            if (first)
             {
                 backend?.Refresh();
-                Path = relativePath;
                 Guid = backend?.GetEntry(relativePath)?.Guid ?? Guid.Empty;
+                Watch();
             }
             else backend?.Reimport(Guid);
 
@@ -526,6 +578,7 @@ public static class ModelEditingMode
 
         public override void Close()
         {
+            Unwatch();
             DeleteRecovery(Guid);
             IsolatedWorld.CloseWorld(this);
             IsolatedWorld.End(this);

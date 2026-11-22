@@ -239,4 +239,20 @@ public class ModelWorldTests : EditorTestHarness
         Assert.Equal(new Float3(0, 7, 0), lid.Transform.LocalPosition);
         ModelEditingMode.Exit();
     }
+
+    [Fact]
+    public void AChangeMadeOutsideIsToldFromTheModelsOwnSave()
+    {
+        Guid guid = WriteModel(out PMeshDocument document);
+        ModelEditingMode.Open(guid);
+        Assert.False(ModelEditingMode.ChangedOnDisk());
+
+        Assert.True(ModelEditingMode.Save());
+        Assert.False(ModelEditingMode.ChangedOnDisk());
+
+        document.Objects[0].Name = "Pulled";
+        File.WriteAllBytes(AssetAbsolutePath("Crate.pmesh"), document.Write());
+        Assert.True(ModelEditingMode.ChangedOnDisk());
+        ModelEditingMode.Exit();
+    }
 }
