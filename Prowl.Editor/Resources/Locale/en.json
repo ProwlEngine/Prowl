@@ -921,6 +921,8 @@
   "csg.status_invalid": "{{count}} invalid",
   "csg.status_invalid_tip": "Brushes whose planes no longer enclose a solid, so they add nothing. Click to select them.",
   "csg.status_not_convex": "That would not stay convex",
+  "csg.size": "Size",
+  "csg.position": "Centre",
   "csg.copy_surface": "Copy to selection",
   "csg.copy_surface_tip": "Applies the last picked surface's texturing to every other selected surface.",
   "csg.generate": "Generate",

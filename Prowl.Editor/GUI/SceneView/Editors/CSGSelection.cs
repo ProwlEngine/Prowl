@@ -307,6 +307,51 @@ public static class CSGSelection
         MarkDirty();
     }
 
+    /// <summary>A brush's solid as a box: its centre in the world and its size along its own axes in world units.</summary>
+    public static bool TryBox(CSGBrush brush, out Float3 centre, out Float3 size)
+    {
+        centre = size = Float3.Zero;
+        if (!brush.IsShapeValid) return false;
+
+        AABB local = CSGBrushGeometry.Bounds(brush.Shape);
+        Float3 scale = brush.Transform.LossyScale;
+        centre = Float4x4.TransformPoint((local.Min + local.Max) * 0.5f, brush.Transform.LocalToWorldMatrix);
+        Float3 extent = local.Max - local.Min;
+        size = new Float3(extent.X * MathF.Abs(scale.X), extent.Y * MathF.Abs(scale.Y), extent.Z * MathF.Abs(scale.Z));
+        return true;
+    }
+
+    /// <summary>Resizes a brush's solid about its own centre, reshaping it rather than scaling its transform.</summary>
+    public static void Resize(CSGBrush brush, Float3 size)
+    {
+        if (!TryBox(brush, out _, out Float3 current)) return;
+
+        AABB local = CSGBrushGeometry.Bounds(brush.Shape);
+        Float3 c = (local.Min + local.Max) * 0.5f;
+        Float3 factor = new(Ratio(size.X, current.X), Ratio(size.Y, current.Y), Ratio(size.Z, current.Z));
+        Float4x4 reshape = Float4x4.CreateTranslation(c) * Float4x4.CreateScale(factor) * Float4x4.CreateTranslation(-c);
+
+        Record("Resize CSG Brush", [brush.GameObject]);
+        if (brush.HasControlMesh)
+        {
+            brush.ControlMesh!.TransformPoints(reshape);
+            brush.ApplyControlMesh();
+        }
+        else brush.Planes = CSGBrushGeometry.Transform(brush.Planes, reshape);
+        MarkDirty();
+    }
+
+    private static float Ratio(float wanted, float current) => wanted > 1e-4f && current > 1e-6f ? wanted / current : 1f;
+
+    /// <summary>Moves a brush so the centre of its solid lands on <paramref name="centre"/>.</summary>
+    public static void MoveCentre(CSGBrush brush, Float3 centre)
+    {
+        if (!TryBox(brush, out Float3 current, out _)) return;
+        Record("Move CSG Brush", [brush.GameObject]);
+        brush.Transform.Position += centre - current;
+        MarkDirty();
+    }
+
     /// <summary>Makes the selected groups inert, so they organise the hierarchy without being a CSG boundary.</summary>
     public static void SetPassThrough()
     {

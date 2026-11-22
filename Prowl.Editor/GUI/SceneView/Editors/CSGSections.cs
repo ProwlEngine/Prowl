@@ -466,6 +466,16 @@ internal static class CSGSections
                 .Item(Loc.Get("csg.intersect"), tooltip: Loc.Get("csg.intersect_tip"))
                 .Show());
 
+        // One brush can be sized and placed by number, which reshapes it rather than scaling its transform
+        if (brushes.Count == 1 && groups.Count == 0 && CSGSelection.TryBox(brushes[0], out Float3 centre, out Float3 size))
+        {
+            CSGBrush brush = brushes[0];
+            EditorGUI.SettingsRow(paper, "csg_sel_size", Loc.Get("csg.size"), () =>
+                Origami.Float3Field(paper, "csg_sel_size_v", size, v => CSGSelection.Resize(brush, v)).Show());
+            EditorGUI.SettingsRow(paper, "csg_sel_pos", Loc.Get("csg.position"), () =>
+                Origami.Float3Field(paper, "csg_sel_pos_v", centre, v => CSGSelection.MoveCentre(brush, v)).Show());
+        }
+
         EditorGUI.SettingsRow(paper, "csg_sel_flip", Loc.Get("csg.flip"), () =>
             Origami.ButtonGroup(paper, "csg_sel_flip_v", -1, idx => CSGSelection.Flip(AxisFor(idx)))
                 .Height(EditorTheme.RowHeight).FullWidth()
