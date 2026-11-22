@@ -68,6 +68,7 @@ public class ModelExportTests : EditorTestHarness
         Assert.Equal(new[] { "Hip", "Spine" }, skinned.Bones!.Select(b => b!.GameObject.Name));
         Assert.True(Float3.Distance(skinned.Bones![1]!.LocalPosition, new Float3(0, 1, 0)) < 1e-4f);
         Assert.Equal("Bulge", mesh.GetBlendShapeName(0));
+        Assert.Equal(30f, skinned.GetBlendShapeWeight(0), 3);
         int bulging = Array.FindIndex(mesh.Vertices, p => Float3.Distance(p, new Float3(1, 1, 0)) < 1e-5f);
         Assert.True(Float3.Distance(mesh.BlendShapes[0].Frames[0].DeltaVertices[bulging], new Float3(0.5f, 0, 0)) < 1e-5f);
     }
