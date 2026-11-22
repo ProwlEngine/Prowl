@@ -884,7 +884,16 @@ public static class GeometryOperators
     /// <param name="offset">Where along the axis the plane stands, 0 for through the origin.</param>
     public static GeometryData MirrorCopy(GeometryData mesh, int axis = 0, float mergeDistance = 0.001f, float offset = 0f)
     {
-        return TopologyOp.Mirror(mesh, axis, mergeDistance, offset);
+        return TopologyOp.Mirror(mesh, axis, mergeDistance, offset, null);
+    }
+
+    /// <summary>
+    /// A mirrored copy as <see cref="MirrorCopy(GeometryData, int, float, float)"/> makes, naming in
+    /// <paramref name="mirrored"/> the faces of the copy that are mirror images, so their attributes can be turned too.
+    /// </summary>
+    public static GeometryData MirrorCopy(GeometryData mesh, int axis, float mergeDistance, float offset, List<GeometryData.Face> mirrored)
+    {
+        return TopologyOp.Mirror(mesh, axis, mergeDistance, offset, mirrored);
     }
 
     /// <summary>

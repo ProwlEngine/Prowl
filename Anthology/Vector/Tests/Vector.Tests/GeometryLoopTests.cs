@@ -294,6 +294,19 @@ public class GeometryLoopTests
     }
 
     [Fact]
+    public void MirrorCopy_NamesTheFacesItMirrored()
+    {
+        GeometryData mesh = Grid(2, 1);
+        var mirrored = new List<GeometryData.Face>();
+
+        GeometryData copy = GeometryOperators.MirrorCopy(mesh, 0, 0.001f, 0f, mirrored);
+
+        Assert.Equal(2, mirrored.Count);
+        Assert.All(mirrored, f => Assert.True(f.NeighborVertices().TrueForAll(v => v.Point.X <= 1e-5f)));
+        Assert.Equal(4, copy.Faces.Count);
+    }
+
+    [Fact]
     public void MirrorCopy_SharesVerticesOnThePlane()
     {
         GeometryData mesh = Grid(1, 1);

@@ -173,7 +173,7 @@ internal static class TopologyOp
     /// where along it the plane stands. Vertices within the merge distance of the plane are shared by both halves and put on it, and the mirrored
     /// faces are turned so they face outwards. Attributes are copied to the mirrored side.
     /// </summary>
-    internal static GeometryData Mirror(GeometryData source, int axis, float mergeDistance, float offset = 0f)
+    internal static GeometryData Mirror(GeometryData source, int axis, float mergeDistance, float offset, List<Face>? mirroredFaces)
     {
         var result = new GeometryData();
         CopyDefinitions(source, result);
@@ -222,7 +222,7 @@ internal static class TopologyOp
             // A face lying wholly in the plane is its own mirror image
             if (corners.All(c => mirrored[index[c.Vert]] == original[index[c.Vert]])) continue;
             corners.Reverse();
-            AddCopy(result, face, corners, mirrored, index);
+            if (AddCopy(result, face, corners, mirrored, index) is { } image) mirroredFaces?.Add(image);
         }
         return result;
     }
@@ -295,10 +295,10 @@ internal static class TopologyOp
         return result;
     }
 
-    private static void AddCopy(GeometryData result, Face face, List<Loop> corners, Vertex[] map, Dictionary<Vertex, int> index)
+    private static Face? AddCopy(GeometryData result, Face face, List<Loop> corners, Vertex[] map, Dictionary<Vertex, int> index)
     {
         Face? copy = result.AddFace(corners.Select(c => map[index[c.Vert]]).ToArray());
-        if (copy == null) return;
+        if (copy == null) return null;
         copy.Attributes = AttributeTransfer.Copy(face.Attributes);
         Loop corner = copy.Loop!;
         foreach (Loop from in corners)
@@ -306,6 +306,7 @@ internal static class TopologyOp
             corner.Attributes = AttributeTransfer.Copy(from.Attributes);
             corner = corner.Next!;
         }
+        return copy;
     }
 
     internal static void CopyDefinitions(GeometryData source, GeometryData target)
