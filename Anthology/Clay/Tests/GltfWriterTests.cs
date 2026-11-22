@@ -126,6 +126,7 @@ public sealed class GltfWriterTests
         Assert.Equal(0.5f, spine, 4);
         BlendShape shape = Assert.Single(mesh.BlendShapes);
         Assert.Equal("Smile", shape.Name);
+        Assert.Equal(25f, shape.DefaultWeight, 4);
         Assert.True(Float3.Distance(shape.Frames[0].DeltaVertices[smiling], new Float3(0.5f, 0, 0)) < 1e-5f);
     }
 }
