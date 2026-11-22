@@ -19,11 +19,7 @@ public class IdentifierIndexTests : RuntimeTestBase
         (WeakReference go, WeakReference component) = Spawn();
         world.Flush();
 
-        for (int i = 0; i < 3; i++)
-        {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-        }
+        CollectGarbage();
 
         Assert.False(go.IsAlive);
         Assert.False(component.IsAlive);
@@ -47,11 +43,7 @@ public class IdentifierIndexTests : RuntimeTestBase
         WeakReference component = Spawn();
         world.Flush();
 
-        for (int i = 0; i < 3; i++)
-        {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-        }
+        CollectGarbage();
 
         Assert.False(component.IsAlive);
         GC.KeepAlive(world);
