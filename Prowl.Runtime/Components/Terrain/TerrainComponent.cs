@@ -68,6 +68,7 @@ public class TerrainComponent : Component, IRenderSync
     [NonSerialized, NotHeld] private TerrainTreeInstances? _treeInstances;
     [NonSerialized, NotHeld] private TerrainProps? _trees;
     [NonSerialized] private int _layerSignature, _detailSignature, _treeSignature;
+    [NonSerialized] private Double3 _placedAt;
     [NonSerialized, NotHeld] private readonly Dictionary<object, (int Key, TerrainPropKind? Kind)> _kinds = new(ReferenceEqualityComparer.Instance);
 
     public float TerrainSize { get { TerrainData? d = Data; return d.IsValid() ? d.Size : 1024f; } }
@@ -114,6 +115,12 @@ public class TerrainComponent : Component, IRenderSync
         SyncDetails(renderer, world, data, terrain);
         SyncTrees(world, data, terrain);
 
+        if (terrain.Position != _placedAt)
+        {
+            _placedAt = terrain.Position;
+            _details?.Reset();
+            _trees?.Reset();
+        }
         IReadOnlyList<Double3> viewers = _surface.Viewers;
         Double3 viewer = viewers.Count > 0 ? viewers[0] : terrain.Position;
         _details?.Update(viewer);
