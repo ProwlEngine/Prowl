@@ -177,7 +177,8 @@ public sealed class CSGOverlayTool : SceneTool
     private static void MeshCommands(ContextBuilder menu, CSGMeshTool mesh)
     {
         bool any = false;
-        if (mesh.CanChamfer) { Command(menu, "csg.chamfer", mesh.ChamferSelected); any = true; }
+        if (mesh.CanBevel) { Command(menu, "csg.bevel", mesh.BevelSelected, "MeshEdit/Bevel"); any = true; }
+        if (mesh.Active) { Command(menu, "csg.loop_cut", mesh.LoopCut, "MeshEdit/LoopCut"); Command(menu, "csg.knife", mesh.Knife, "MeshEdit/Knife"); any = true; }
         if (mesh.CanExtrude) { Command(menu, "csg.extrude", mesh.ExtrudeSelected); any = true; }
         if (mesh.CanInset) { Command(menu, "csg.inset", mesh.InsetSelected); any = true; }
         if (mesh.CanExtrudeRegion) { Command(menu, "csg.extrude_region", mesh.ExtrudeRegionSelected, "MeshEdit/Extrude"); any = true; }

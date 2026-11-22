@@ -165,6 +165,62 @@ public static class Operators
             vertex.Point -= normal * Float3.Dot(vertex.Point - centre, normal);
     }
 
+    /// <summary>
+    /// Bevels edges into strips of faces, one segment a flat chamfer, more a rounded edge. Corners where bevelled
+    /// edges meet are capped. The strips and caps are selected after.
+    /// </summary>
+    public static void Bevel(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, float width, int segments, ElementSelection after)
+    {
+        if (edges.Count == 0 || width <= 0f) return;
+        var oldPoints = new HashSet<GeometryData.Vertex>(mesh.Vertices);
+        GeometryOperators.BevelEdges(mesh, [.. edges], width, Math.Max(1, segments));
+        SelectFacesOnNewPoints(mesh, oldPoints, after);
+    }
+
+    /// <summary>Cuts corners off, each replaced by a face through points a distance along its edges. The new faces are selected after.</summary>
+    public static void BevelPoints(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float distance, ElementSelection after)
+    {
+        if (vertices.Count == 0 || distance <= 0f) return;
+        var oldPoints = new HashSet<GeometryData.Vertex>(mesh.Vertices);
+        GeometryOperators.BevelVertices(mesh, [.. vertices], distance, relative: false);
+        SelectFacesOnNewPoints(mesh, oldPoints, after);
+    }
+
+    /// <summary>
+    /// Cuts loops across the ring of an edge, slid from -1 to 1 along the ring's edges. The new edges are selected after.
+    /// </summary>
+    public static void LoopCut(GeometryData mesh, GeometryData.Edge edge, int cuts, float slide, ElementSelection after)
+    {
+        List<GeometryData.Edge> made = GeometryOperators.LoopCut(mesh, edge, Math.Max(1, cuts), slide);
+        after.Clear();
+        after.Edges.UnionWith(made);
+    }
+
+    /// <summary>Slides the points of joined edges along the edges leaving them sideways, from -1 to 1.</summary>
+    public static void SlideEdges(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, float factor)
+    {
+        if (edges.Count == 0) return;
+        GeometryOperators.SlideEdges(mesh, [.. edges], factor);
+    }
+
+    /// <summary>
+    /// Cuts along a path of points, each stretch in its own plane, splitting the faces it crosses. The edges along the
+    /// cut are selected after. Refused when the cut meets nothing.
+    /// </summary>
+    /// <param name="along">How far along a stretch a point of its plane is, or null when it is not part of the cut.</param>
+    /// <param name="cuts">Which faces may be cut, all when null.</param>
+    public static void Knife(GeometryData mesh, IReadOnlyList<KnifePoint> points, IReadOnlyList<(Float3 Point, Float3 Normal)> planes,
+        Func<int, Float3, float?> along, Func<GeometryData.Face, bool>? cuts, ElementSelection after)
+    {
+        if (points.Count < 2) return;
+        List<GeometryData.Edge> made = GeometryOperators.KnifePath(mesh, points, planes, along, cuts);
+        if (made.Count == 0) throw new InvalidOperationException("The cut meets nothing of the mesh");
+
+        after.Clear();
+        foreach (GeometryData.Edge edge in made)
+            if (mesh.Contains(edge)) after.Edges.Add(edge);
+    }
+
     /// <summary>The edges in groups joined at their points.</summary>
     private static List<List<GeometryData.Edge>> Groups(IReadOnlyCollection<GeometryData.Edge> edges)
     {

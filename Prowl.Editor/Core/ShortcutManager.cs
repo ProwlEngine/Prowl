@@ -409,6 +409,9 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("MeshEdit/Frame", "Frame Selected Elements", KeyCode.F);
         ShortcutManager.Register("MeshEdit/Grab", "Grab", KeyCode.G);
         ShortcutManager.Register("MeshEdit/Extrude", "Extrude Region", KeyCode.E);
+        ShortcutManager.Register("MeshEdit/Bevel", "Bevel", KeyCode.B, ctrl: true);
+        ShortcutManager.Register("MeshEdit/LoopCut", "Loop Cut", KeyCode.R, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Knife", "Knife", KeyCode.K);
         ShortcutManager.Register("MeshEdit/Dissolve", "Dissolve", KeyCode.X);
         ShortcutManager.Register("MeshEdit/LimitedDissolve", "Limited Dissolve", KeyCode.X, ctrl: true);
         ShortcutManager.Register("MeshEdit/DeleteFace", "Delete Face", KeyCode.Delete, ctrl: true);

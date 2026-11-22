@@ -191,4 +191,108 @@ public class OperatorTests
         Assert.All(points, p => Assert.Equal(0f, Float3.Dot(p - points[0], normal), 3));
         Assert.Equal(1.1f, points.Average(p => p.Y), 3);
     }
+
+    private static CSGControlMesh Prism()
+    {
+        Float2[] outline = [new(-1, -1), new(1, -1), new(1, 1), new(-1, 1)];
+        var points = new List<Float3>();
+        foreach (Float2 p in outline) points.Add(new Float3(p.X, -1f, p.Y));
+        foreach (Float2 p in outline) points.Add(new Float3(p.X, 1f, p.Y));
+        var polygons = new List<int[]> { new[] { 0, 1, 2, 3 }, new[] { 7, 6, 5, 4 } };
+        for (int i = 0; i < 4; i++)
+        {
+            int j = (i + 1) % 4;
+            polygons.Add([j, i, 4 + i, 4 + j]);
+        }
+        CSGControlMesh mesh = CSGControlMesh.FromPolygons(points, polygons);
+        if (mesh.Volume() < 0) mesh.ReverseWinding();
+        return mesh;
+    }
+
+    [Fact]
+    public void BevellingAnEdgeCutsItOffAndSelectsTheStrip()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        GeometryData.Edge edge = EdgeBetween(target.Target.Mesh, new Float3(1, 1, 1), new Float3(-1, 1, 1));
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Bevel(mesh, [edge], 0.25f, 1, selected), after));
+
+        GeometryData.Face strip = Assert.Single(after.Faces);
+        Assert.True(strip.Normal().Y > 0.5f && strip.Normal().Z > 0.5f);
+        CSGControlMesh brush = Brush(target);
+        Assert.Equal(7, brush.Polygons.Count);
+        Assert.Equal(8f - 0.25f * 0.25f * 0.5f * 2f, brush.Volume(), 3);
+    }
+
+    [Fact]
+    public void BevellingACornerCapsIt()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        GeometryData.Vertex corner = VertexAt(target.Target.Mesh, new Float3(1, 1, 1));
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.BevelPoints(mesh, [corner], 0.5f, selected), after));
+
+        Assert.Single(after.Faces);
+        Assert.Equal(7, Brush(target).Polygons.Count);
+    }
+
+    [Fact]
+    public void ALoopCutGoesRoundTheRingAndSelectsTheNewEdges()
+    {
+        CSGControlMesh prism = Prism();
+        var target = new CSGBrushTarget(prism, Marked(prism));
+        GeometryData.Edge upright = EdgeBetween(target.Target.Mesh, new Float3(1, -1, 1), new Float3(1, 1, 1));
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.LoopCut(mesh, upright, 1, 0f, selected), after));
+
+        Assert.Equal(4, after.Edges.Count);
+        Assert.All(after.Edges, e => Assert.Equal(0f, e.Vert1.Point.Y, 4));
+        Assert.Equal(10, Brush(target).Polygons.Count);
+    }
+
+    [Fact]
+    public void SlidingACutLoopMovesItAlongTheRing()
+    {
+        CSGControlMesh prism = Prism();
+        var target = new CSGBrushTarget(prism, Marked(prism));
+        GeometryData.Edge upright = EdgeBetween(target.Target.Mesh, new Float3(1, -1, 1), new Float3(1, 1, 1));
+        var loop = new ElementSelection();
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.LoopCut(mesh, upright, 1, 0f, selected), loop));
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, _) => Operators.SlideEdges(mesh, [.. loop.Edges], 0.5f), new ElementSelection()));
+
+        float y = loop.Edges.First().Vert1.Point.Y;
+        Assert.Equal(0.5f, MathF.Abs(y), 3);
+        Assert.All(loop.Edges, e => Assert.Equal(y, e.Vert2.Point.Y, 3));
+        Assert.Equal(8f, Brush(target).Volume(), 3);
+    }
+
+    /// <summary>A knife drawn straight across the top, from edge to edge, splits it in two.</summary>
+    [Fact]
+    public void AKnifeAcrossTheTopSplitsIt()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        GeometryData mesh0 = target.Target.Mesh;
+        GeometryData.Edge front = EdgeBetween(mesh0, new Float3(1, 1, 1), new Float3(-1, 1, 1));
+        GeometryData.Edge back = EdgeBetween(mesh0, new Float3(1, 1, -1), new Float3(-1, 1, -1));
+        var points = new List<KnifePoint>
+        {
+            new() { Point = new Float3(0, 1, 1), Edge = front },
+            new() { Point = new Float3(0, 1, -1), Edge = back },
+        };
+        var planes = new List<(Float3, Float3)> { (new Float3(0, 1, 0), Float3.UnitX) };
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) =>
+            Operators.Knife(mesh, points, planes, (_, p) => MathF.Abs(p.Y - 1f) < 1e-3f ? (1f - p.Z) / 2f : null, null, selected), after));
+
+        Assert.NotEmpty(after.Edges);
+        Assert.Equal(7, Brush(target).Polygons.Count);
+    }
 }

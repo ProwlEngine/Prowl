@@ -64,7 +64,7 @@ public sealed class CSGMeshTool : SceneTool
     public int SelectedFaceCount => _faces.Count;
 
     /// <summary>Whether a chamfer has something to cut: a selected edge, or a selected corner.</summary>
-    public bool CanChamfer => Active && _vertices.Count > 0;
+    public bool CanBevel => Active && _vertices.Count > 0;
 
     /// <summary>Whether one whole face is selected to pull out.</summary>
     public bool CanExtrude => Active && _faces.Count == 1;
@@ -78,10 +78,28 @@ public sealed class CSGMeshTool : SceneTool
     public bool CanSnap => Active && _vertices.Count > 0;
 
     /// <summary>Starts cutting every selected edge, or every selected corner when no whole edge is selected, by as far as the mouse moves.</summary>
-    public void ChamferSelected()
+    public void BevelSelected()
     {
-        if (!CanChamfer) return;
+        if (!CanBevel) return;
         BeginAction(Context.Handles, Action.Chamfer, fromMenu: true);
+    }
+
+    /// <summary>Starts a loop cut: the ring under the mouse is shown cut, the wheel sets how many, a click picks it and slides it.</summary>
+    public void LoopCut()
+    {
+        if (!Active) return;
+        BeginAction(Context.Handles, Action.LoopCut, fromMenu: true);
+        _actionCount = 1;
+        _loopEdge = null;
+        _loopPicked = false;
+    }
+
+    /// <summary>Starts the knife: clicks place points along the cut, Backspace takes one back, Enter cuts.</summary>
+    public void Knife()
+    {
+        if (!Active) return;
+        BeginAction(Context.Handles, Action.Knife, fromMenu: true);
+        _knife.Clear();
     }
 
     /// <summary>Starts pulling the one selected face out into a brush of its own, by as far as the mouse moves.</summary>
@@ -288,7 +306,7 @@ public sealed class CSGMeshTool : SceneTool
     private readonly List<int> _faces = new();
 
     /// <summary>What a drag in progress is doing.</summary>
-    private enum Action { None, Marquee, Chamfer, Extrude, Inset, ExtrudeRegion, Subdivide, LimitedDissolve, Drag }
+    private enum Action { None, Marquee, Chamfer, Extrude, Inset, ExtrudeRegion, Subdivide, LimitedDissolve, LoopCut, EdgeSlide, Knife, Drag }
 
     // Pixels the cursor has to travel before a press becomes a chamfer, extrude or drag, so a click stays a click
     private const float DragThreshold = 4f;
@@ -359,6 +377,21 @@ public sealed class CSGMeshTool : SceneTool
     private int _actionCount;
     private float _previewKey = float.NaN;
 
+    // How a bevel cuts, chosen once when it starts: Vector's bevel where it can, else planes cut across the corners
+    private enum BevelKind { Planes, Edges, Points }
+    private BevelKind _bevelKind;
+
+    // A loop cut's edge in the start shape's numbering, whether a click has picked it, and where the slide starts
+    private (int A, int B)? _loopEdge;
+    private bool _loopPicked;
+    private List<(int a, int b)> _startEdges = new();
+
+    // An edge slide's +1 direction on screen
+    private Float2 _slideDirection;
+
+    // The knife's points, where each was clicked and what of the brush it sits on
+    private readonly List<(Float2 Pixel, KnifePoint Point)> _knife = new();
+
     // Points in the order they were clicked, for merging at the first
     private readonly List<int> _pickOrder = new();
 
@@ -416,14 +449,23 @@ public sealed class CSGMeshTool : SceneTool
             return;
         }
 
-        // Delete always belongs to the mesh tool here, so it never falls through to deleting the brush
-        if (handles.IsPressed("MeshEdit/DeleteFace")) DeleteFaces();
-        else if (handles.KeyDown(KeyCode.Delete) || handles.KeyDown(KeyCode.Backspace)) DissolveSelected();
-        if (handles.IsPressed("CSG/SnapToGrid")) SnapSelection();
-        if (handles.IsPressed("MeshEdit/VertexMode")) SetMode(SelectMode.Vertex);
-        if (handles.IsPressed("MeshEdit/EdgeMode")) SetMode(SelectMode.Edge);
-        if (handles.IsPressed("MeshEdit/FaceMode")) SetMode(SelectMode.Face);
-        if (_action == Action.None) SelectionKeys(ctx);
+        // Delete always belongs to the mesh tool here, so it never falls through to deleting the brush. While an action
+        // runs the keys are only taken, the action reads them itself, as the knife does Backspace
+        if (_action != Action.None)
+        {
+            handles.KeyDown(KeyCode.Delete);
+            handles.KeyDown(KeyCode.Backspace);
+        }
+        else
+        {
+            if (handles.IsPressed("MeshEdit/DeleteFace")) DeleteFaces();
+            else if (handles.KeyDown(KeyCode.Delete) || handles.KeyDown(KeyCode.Backspace)) DissolveSelected();
+            if (handles.IsPressed("CSG/SnapToGrid")) SnapSelection();
+            if (handles.IsPressed("MeshEdit/VertexMode")) SetMode(SelectMode.Vertex);
+            if (handles.IsPressed("MeshEdit/EdgeMode")) SetMode(SelectMode.Edge);
+            if (handles.IsPressed("MeshEdit/FaceMode")) SetMode(SelectMode.Face);
+            SelectionKeys(ctx);
+        }
 
         DrawElements(ctx);
 
@@ -570,6 +612,9 @@ public sealed class CSGMeshTool : SceneTool
         handles.IsPressed("Scene/ToolRotate");
 
         if (handles.IsPressed("MeshEdit/Extrude")) ExtrudeRegionSelected();
+        else if (handles.IsPressed("MeshEdit/Bevel")) BevelSelected();
+        else if (handles.IsPressed("MeshEdit/LoopCut")) LoopCut();
+        else if (handles.IsPressed("MeshEdit/Knife")) Knife();
         else if (handles.IsPressed("MeshEdit/LimitedDissolve")) LimitedDissolveSelected();
         else if (handles.IsPressed("MeshEdit/Dissolve")) DissolveSelected();
         else if (handles.IsPressed("MeshEdit/Merge")) ShowMergeMenu(handles);
@@ -807,7 +852,8 @@ public sealed class CSGMeshTool : SceneTool
         CancelSession();
         if (_action == Action.None) return;
         // Exactly the shape it started with, so the open undo record finds nothing changed and leaves no step
-        if (_action is Action.Chamfer or Action.Inset or Action.ExtrudeRegion or Action.Subdivide or Action.LimitedDissolve or Action.Drag
+        if (_action is Action.Chamfer or Action.Inset or Action.ExtrudeRegion or Action.Subdivide or Action.LimitedDissolve
+            or Action.LoopCut or Action.EdgeSlide or Action.Drag
             && _actionBrush.IsValid() && _startMesh != null)
             ApplyShape(_actionBrush!, _startMesh.Clone(), (SurfaceData[])_startSurfaces!.Clone());
         EndAction();
@@ -821,7 +867,7 @@ public sealed class CSGMeshTool : SceneTool
     }
 
     /// <summary>Whether the camera sees a point of the brush, rather than one of the brush's own faces in front of it.</summary>
-    private bool Seen(HandleContext handles, Float3 point)
+    private bool Seen(HandleContext handles, Float3 point, CSGControlMesh? mesh = null)
     {
         Camera camera = handles.Camera;
         Transform view = camera.GameObject.Transform;
@@ -834,7 +880,7 @@ public sealed class CSGMeshTool : SceneTool
         float length = Float3.Length(toPoint);
 
         return XRay || length < 1e-6f
-            || !_mesh!.Raycast(origin, toPoint / length, out float t, out _, bothSides: true, HiddenSkip)
+            || !(mesh ?? _mesh)!.Raycast(origin, toPoint / length, out float t, out _, bothSides: true, HiddenSkip)
             || t >= length - MathF.Max(1e-3f, length * 1e-4f);
     }
 
@@ -993,7 +1039,7 @@ public sealed class CSGMeshTool : SceneTool
     {
         _action = action;
         _fromMenu = fromMenu;
-        if (fromMenu)
+        if (fromMenu || action == Action.Chamfer)
         {
             handles.Modal = true;
             _modalHandles = handles;
@@ -1002,7 +1048,7 @@ public sealed class CSGMeshTool : SceneTool
         _actionEdges.Clear();
         _actionFaces.Clear();
         _previewKey = float.NaN;
-        if (fromMenu)
+        if (fromMenu || action == Action.Chamfer)
         {
             _actionPoints.UnionWith(_vertices);
             _actionEdges.AddRange(_selectedEdges);
@@ -1016,6 +1062,12 @@ public sealed class CSGMeshTool : SceneTool
         _actionBrush = Target;
         _startSurfaces = (SurfaceData[])Target!.Surfaces.Clone();
         _startMesh = Target.ControlMesh.Clone();
+        _startEdges = _startMesh.Edges();
+        if (action == Action.Chamfer)
+        {
+            _bevelKind = ChooseBevel();
+            _actionCount = 1;
+        }
         _actionNormals.Clear();
         _actionRing.Clear();
 
@@ -1202,7 +1254,17 @@ public sealed class CSGMeshTool : SceneTool
         TransformModal modal = _transform!;
 
         // G again while grabbing a single point slides it along an edge instead
-        if (modal.Kind == TransformKind.Translate && ctx.Handles.GetKeyDown(KeyCode.G) && StartSlide()) return;
+        if (modal.Kind == TransformKind.Translate && ctx.Handles.GetKeyDown(KeyCode.G))
+        {
+            if (StartSlide()) return;
+            if (Mode == SelectMode.Edge && _selectedEdges.Count > 0)
+            {
+                EndTransform();
+                CancelSession();
+                StartEdgeSlide(ctx.Handles);
+                return;
+            }
+        }
 
         ModalState state = modal.Tick(ctx);
         ctx.Draw.Label(_session!.Pivot, modal.Status, PickedColor);
@@ -1297,6 +1359,22 @@ public sealed class CSGMeshTool : SceneTool
 
         switch (_action)
         {
+            case Action.Chamfer when _bevelKind != BevelKind.Planes:
+            {
+                float wheel = Input.MouseWheelDelta;
+                if (wheel != 0f) _actionCount = Math.Clamp(_actionCount + (wheel > 0f ? 1 : -1), 1, 32);
+                float width = CSGSnap.Value(handles, amount);
+                int segments = _actionCount;
+                BevelKind kind = _bevelKind;
+                PreviewOperator("Bevel CSG Brush", width + segments * 10000f, width <= 1e-4f, (target, selected) =>
+                {
+                    if (kind == BevelKind.Edges) Operators.Bevel(target.Target.Mesh, EdgesOf(target, _actionEdges), width, segments, selected);
+                    else Operators.BevelPoints(target.Target.Mesh, PointsOf(target, _actionPoints), width, selected);
+                }, SelectMode.Face);
+                string text = kind == BevelKind.Edges ? Loc.Get("csg.bevel_amount", new { width = width.ToString("0.###"), count = segments }) : width.ToString("0.###");
+                ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, text, PickedColor);
+                break;
+            }
             case Action.Chamfer:
                 if (moved)
                 {
@@ -1351,6 +1429,25 @@ public sealed class CSGMeshTool : SceneTool
                 if (_dragStarted) DrawDistance(ctx, _dragAnchor, _dragAnchor - _dragAnchorStart);
                 break;
             case Action.Marquee: DrawMarquee(ctx); break;
+            case Action.LoopCut:
+                TickLoopCut(ctx, owner);
+                return;
+            case Action.Knife:
+                TickKnife(ctx, owner);
+                return;
+            case Action.EdgeSlide:
+            {
+                float length = Float2.Dot(_slideDirection, _slideDirection);
+                float factor = length > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - _dragOrigin, _slideDirection) / length, -1f, 1f) : 0f;
+                PreviewOperator("Slide CSG Edges", factor, MathF.Abs(factor) <= 1e-4f, (target, selected) =>
+                {
+                    List<GeometryData.Edge> edges = EdgesOf(target, _actionEdges);
+                    Operators.SlideEdges(target.Target.Mesh, edges, factor);
+                    selected.Edges.UnionWith(edges);
+                }, SelectMode.Edge);
+                ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, factor.ToString("0.###"), PickedColor);
+                break;
+            }
         }
 
         if (_fromMenu)
@@ -1370,7 +1467,9 @@ public sealed class CSGMeshTool : SceneTool
         {
             case Action.Extrude: CommitExtrude(amount); break;
             case Action.Marquee: ApplyMarquee(ctx); break;
+            case Action.Chamfer when _bevelKind != BevelKind.Planes: TakeActionResult(); break;
             case Action.Chamfer: ClearSelection(); break;
+            case Action.EdgeSlide: TakeActionResult(); break;
             case Action.Inset or Action.ExtrudeRegion or Action.Subdivide or Action.LimitedDissolve: TakeActionResult(); break;
             case Action.Drag: CommitSession("Move CSG Points"); break;
         }
@@ -1440,6 +1539,267 @@ public sealed class CSGMeshTool : SceneTool
         _faces.AddRange(_actionAfterFaces);
         SelectMode carried = _actionAfterLead == SelectMode.Face ? SelectMode.Face : SelectMode.Vertex;
         EditSelection(selection => Selecting.ToMode(selection, carried, Mode));
+    }
+
+    private static List<GeometryData.Vertex> PointsOf(CSGBrushTarget target, IEnumerable<int> points)
+    {
+        var vertices = target.Target.Mesh.Vertices;
+        var result = new List<GeometryData.Vertex>();
+        foreach (int i in points)
+            if (i >= 0 && i < vertices.Count) result.Add(vertices[i]);
+        return result;
+    }
+
+    /// <summary>
+    /// Bevels with Vector's operator when a small bevel of the selection works, edges first, then corners. Where it
+    /// cannot, the bevel cuts planes across the corners as the chamfer always has. Chosen once, so the amount keeps one
+    /// meaning for the whole drag.
+    /// </summary>
+    private BevelKind ChooseBevel()
+    {
+        const float Probe = 1e-3f;
+        var target = new CSGBrushTarget(_startMesh!, _startSurfaces!);
+        if (_actionEdges.Count > 0)
+        {
+            List<GeometryData.Edge> edges = EdgesOf(target, _actionEdges);
+            if (MeshEdit.Run(target.Target, (mesh, selected) => Operators.Bevel(mesh, edges, Probe, 1, selected), new ElementSelection()) == null)
+                return BevelKind.Edges;
+            return BevelKind.Planes;
+        }
+
+        List<GeometryData.Vertex> points = PointsOf(target, _actionPoints);
+        if (points.Count > 0 && MeshEdit.Run(target.Target, (mesh, selected) => Operators.BevelPoints(mesh, points, Probe, selected), new ElementSelection()) == null)
+            return BevelKind.Points;
+        return BevelKind.Planes;
+    }
+
+    /// <summary>Turns a grab of edges into a slide of them along the edges beside them, its direction found by trying it.</summary>
+    private void StartEdgeSlide(HandleContext handles)
+    {
+        BeginAction(handles, Action.EdgeSlide, fromMenu: true);
+        _slideDirection = Float2.Zero;
+
+        var probe = new CSGBrushTarget(_startMesh!, _startSurfaces!);
+        List<GeometryData.Edge> edges = EdgesOf(probe, _actionEdges);
+        if (edges.Count == 0) return;
+        GeometryData.Vertex end = edges[0].Vert1;
+        Float3 from = end.Point;
+        Operators.SlideEdges(probe.Target.Mesh, edges, 1f);
+        Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
+        if (handles.WorldToScreen(Float4x4.TransformPoint(from, toWorld)) is { } a && handles.WorldToScreen(Float4x4.TransformPoint(end.Point, toWorld)) is { } b)
+            _slideDirection = b - a;
+    }
+
+    /// <summary>
+    /// Before a click, shows the ring under the mouse cut and the wheel sets how many cuts. The click keeps the ring and
+    /// the mouse then slides the cuts along it, until a second click keeps them.
+    /// </summary>
+    private void TickLoopCut(SceneToolContext ctx, ControlID owner)
+    {
+        HandleContext handles = ctx.Handles;
+        float wheel = Input.MouseWheelDelta;
+        if (wheel != 0f) _actionCount = Math.Clamp(_actionCount + (wheel > 0f ? 1 : -1), 1, 64);
+
+        Float4x4 toWorld = _actionBrush!.Transform.LocalToWorldMatrix;
+        if (!_loopPicked) _loopEdge = NearestStartEdge(handles, toWorld);
+
+        float slide = 0f;
+        if (_loopPicked && _loopEdge is { } picked
+            && handles.WorldToScreen(Float4x4.TransformPoint(_startMesh!.Points[picked.A], toWorld)) is { } a
+            && handles.WorldToScreen(Float4x4.TransformPoint(_startMesh.Points[picked.B], toWorld)) is { } b)
+        {
+            Float2 along = b - a;
+            float length = Float2.Dot(along, along);
+            slide = length > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - _dragOrigin, along) / length * 2f, -1f, 1f) : 0f;
+        }
+
+        if (_loopEdge is { } edge)
+        {
+            int cuts = _actionCount;
+            float s = slide;
+            PreviewOperator("Loop Cut CSG Brush", HashCode.Combine(edge.A, edge.B, cuts, (int)MathF.Round(slide * 1000f)), false, (target, selected) =>
+            {
+                if (EdgesOf(target, [edge]) is [GeometryData.Edge ring]) Operators.LoopCut(target.Target.Mesh, ring, cuts, s, selected);
+            }, SelectMode.Edge);
+        }
+        else
+        {
+            RestoreStart();
+            _previewKey = float.NaN;
+        }
+        ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.cuts", new { count = _actionCount }), PickedColor);
+
+        if (handles.ViewportHovered && Input.GetMouseButtonDown(1))
+        {
+            CancelAction();
+            return;
+        }
+        if (!handles.IsNearest(owner) || !handles.TryBeginDrag(owner)) return;
+        handles.TryEndDrag(owner);
+
+        if (!_loopPicked)
+        {
+            if (_loopEdge == null) return;
+            _loopPicked = true;
+            _dragOrigin = handles.MousePosition;
+            return;
+        }
+        TakeActionResult();
+        EndAction();
+    }
+
+    /// <summary>The start shape's edge nearest the mouse on screen and in sight, as its two points, or null.</summary>
+    private (int A, int B)? NearestStartEdge(HandleContext handles, Float4x4 toWorld)
+    {
+        (int A, int B)? best = null;
+        float bestDistance = PickRadius * 2f;
+        Float2 mouse = handles.MousePosition;
+        foreach ((int a, int b) in _startEdges)
+        {
+            Float3 pa = _startMesh!.Points[a], pb = _startMesh.Points[b];
+            if (handles.WorldToScreen(Float4x4.TransformPoint(pa, toWorld)) is not { } from
+                || handles.WorldToScreen(Float4x4.TransformPoint(pb, toWorld)) is not { } to) continue;
+            Float2 along = to - from;
+            float lengthSq = Float2.Dot(along, along);
+            float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(mouse - from, along) / lengthSq, 0f, 1f) : 0f;
+            float distance = Float2.Distance(mouse, from + along * t);
+            if (distance >= bestDistance || !Seen(handles, pa + (pb - pa) * t, _startMesh)) continue;
+            bestDistance = distance;
+            best = (a, b);
+        }
+        return best;
+    }
+
+    /// <summary>Places knife points on clicks and cuts on Enter. Backspace takes the last point back.</summary>
+    private void TickKnife(SceneToolContext ctx, ControlID owner)
+    {
+        HandleContext handles = ctx.Handles;
+        (Float2 pixel, KnifePoint landed) = Land(handles);
+
+        Float3 Near(Float2 screen)
+        {
+            Ray ray = ctx.Camera.ScreenPointToRay(screen - (handles.MousePosition - handles.MouseLocal), handles.ViewportSize);
+            return ray.Origin + ray.Direction * MathF.Max(ctx.Camera.NearClipPlane * 4f, 0.05f);
+        }
+        var colour = new Color32(255, 220, 90, 255);
+        for (int i = 1; i < _knife.Count; i++) ctx.Draw.Line(Near(_knife[i - 1].Pixel), Near(_knife[i].Pixel), colour, 2f);
+        if (_knife.Count > 0) ctx.Draw.Line(Near(_knife[^1].Pixel), Near(pixel), new Color32(255, 220, 90, 140), 1.5f);
+        foreach ((Float2 placed, _) in _knife) ctx.Draw.Dot(Near(placed), colour, 7f);
+        ctx.Draw.Dot(Near(pixel), landed.Vertex != null ? new Color32(120, 255, 140, 255) : landed.Edge != null ? new Color32(90, 200, 255, 255) : colour, 9f);
+        ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.knife_status", new { count = _knife.Count }), PickedColor);
+
+        if (handles.GetKeyDown(KeyCode.Backspace) && _knife.Count > 0) _knife.RemoveAt(_knife.Count - 1);
+        if (handles.GetKeyDown(KeyCode.Enter) || handles.GetKeyDown(KeyCode.KeypadEnter))
+        {
+            CutWithKnife(ctx);
+            EndAction();
+            return;
+        }
+        if (handles.ViewportHovered && Input.GetMouseButtonDown(1))
+        {
+            CancelAction();
+            return;
+        }
+        if (!handles.IsNearest(owner) || !handles.TryBeginDrag(owner)) return;
+        handles.TryEndDrag(owner);
+        _knife.Add((pixel, landed));
+    }
+
+    /// <summary>What the mouse is on: a point near it, else an edge near it, else the face under it, else nothing, and where that is on screen.</summary>
+    private (Float2 Pixel, KnifePoint Point) Land(HandleContext handles)
+    {
+        var point = new KnifePoint();
+        GeometryData mesh = _target!.Target.Mesh;
+        Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix, toLocal = Target.Transform.WorldToLocalMatrix;
+        Float2 mouse = handles.MousePosition;
+        bool[] seen = SeenPoints(handles);
+
+        int nearest = -1;
+        float bestDistance = PickRadius;
+        for (int i = 0; i < _mesh!.Points.Count; i++)
+        {
+            if (!seen[i] || _hiddenPoints.Contains(i) || handles.WorldToScreen(Float4x4.TransformPoint(_mesh.Points[i], toWorld)) is not { } at) continue;
+            float distance = Float2.Distance(mouse, at);
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            nearest = i;
+        }
+        if (nearest >= 0 && nearest < mesh.Vertices.Count)
+        {
+            point.Vertex = mesh.Vertices[nearest];
+            point.Point = _mesh.Points[nearest];
+            return (handles.WorldToScreen(Float4x4.TransformPoint(point.Point, toWorld)) ?? mouse, point);
+        }
+
+        Ray sight = handles.MouseRay;
+        int edgeIndex = NearestEdge(handles, seen);
+        if (edgeIndex >= 0)
+        {
+            (int a, int b) = _edges[edgeIndex];
+            Float3 start = Float4x4.TransformPoint(_mesh.Points[a], toWorld), run = Float4x4.TransformPoint(_mesh.Points[b], toWorld) - start, toStart = start - sight.Origin;
+            float runRun = Float3.Dot(run, run), runSight = Float3.Dot(run, sight.Direction), sightSight = Float3.Dot(sight.Direction, sight.Direction);
+            float span = runRun * sightSight - runSight * runSight;
+            float t = span > 1e-12f ? Math.Clamp((runSight * Float3.Dot(sight.Direction, toStart) - sightSight * Float3.Dot(run, toStart)) / span, 0f, 1f) : 0f;
+            if (mesh.FindEdge(mesh.Vertices[a], mesh.Vertices[b]) is { } edge)
+            {
+                point.Edge = edge;
+                point.Point = _mesh.Points[a] + (_mesh.Points[b] - _mesh.Points[a]) * t;
+                return (handles.WorldToScreen(start + run * t) ?? mouse, point);
+            }
+        }
+
+        if (FaceUnderCursor(handles, out int polygon, out float hit))
+        {
+            List<GeometryData.Face> faces = _target.FacesOf([polygon]);
+            if (faces.Count > 0) point.Face = faces[0];
+            Float3 origin = Float4x4.TransformPoint(sight.Origin, toLocal);
+            point.Point = origin + Float4x4.TransformNormal(sight.Direction, toLocal) * hit;
+        }
+        return (mouse, point);
+    }
+
+    /// <summary>Cuts along the knife's points, each stretch in the plane of the lines of sight through its ends.</summary>
+    private void CutWithKnife(SceneToolContext ctx)
+    {
+        if (_knife.Count < 2 || _target == null) return;
+        HandleContext handles = ctx.Handles;
+        Camera camera = ctx.Camera;
+        Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix, toLocal = Target.Transform.WorldToLocalMatrix;
+        Float2 corner = handles.MousePosition - handles.MouseLocal;
+
+        var planes = new List<(Float3 Point, Float3 Normal)>();
+        for (int i = 1; i < _knife.Count; i++)
+        {
+            Ray sightA = camera.ScreenPointToRay(_knife[i - 1].Pixel - corner, handles.ViewportSize);
+            Ray sightB = camera.ScreenPointToRay(_knife[i].Pixel - corner, handles.ViewportSize);
+            Float3 origin = Float4x4.TransformPoint(sightA.Origin, toLocal);
+            Float3 first = Float4x4.TransformPoint(sightA.Origin + sightA.Direction, toLocal);
+            Float3 second = camera.IsOrthographic
+                ? Float4x4.TransformPoint(sightB.Origin, toLocal)
+                : Float4x4.TransformPoint(sightB.Origin + sightB.Direction, toLocal);
+            planes.Add((origin, Float3.Cross(first - origin, second - origin)));
+        }
+
+        var pixels = new List<Float2>();
+        var points = new List<KnifePoint>();
+        foreach ((Float2 pixel, KnifePoint point) in _knife)
+        {
+            pixels.Add(pixel);
+            points.Add(point);
+        }
+
+        float? Along(int stretch, Float3 local)
+        {
+            Float2 a = pixels[stretch], run = pixels[stretch + 1] - a;
+            float lengthSq = Float2.Dot(run, run);
+            if (lengthSq < 4f || handles.WorldToScreen(Float4x4.TransformPoint(local, toWorld)) is not { } at) return null;
+            float t = Float2.Dot(at - a, run) / lengthSq;
+            if (t < -0.002f || t > 1.002f || !Seen(handles, local)) return null;
+            return Math.Clamp(t, 0f, 1f);
+        }
+
+        bool Cuts(GeometryData.Face face) => !_hiddenFaces.Contains(CSGBrushTarget.PolygonOf(face));
+        RunEdit("Knife CSG Brush", selected => Operators.Knife(_target.Target.Mesh, points, planes, Along, Cuts, selected), SelectMode.Edge);
     }
 
     private static List<GeometryData.Edge> EdgesOf(CSGBrushTarget target, IEnumerable<(int A, int B)> pairs)

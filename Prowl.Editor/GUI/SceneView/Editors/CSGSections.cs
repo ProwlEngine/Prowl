@@ -154,14 +154,16 @@ internal static class CSGSections
         Add(tool.CanExtrudeRegion, EditorIcons.ArrowUpFromBracket, "csg.extrude_region", tool.ExtrudeRegionSelected, "MeshEdit/Extrude");
         Add(tool.CanInset, EditorIcons.SquareMinus, "csg.inset", tool.InsetSelected);
         Add(tool.CanExtrude, EditorIcons.ObjectUngroup, "csg.extrude", tool.ExtrudeSelected);
-        Add(tool.CanChamfer, EditorIcons.CropSimple, "csg.chamfer", tool.ChamferSelected);
+        Add(tool.CanBevel, EditorIcons.CropSimple, "csg.bevel", tool.BevelSelected, "MeshEdit/Bevel");
+        Add(tool.Active, EditorIcons.GripLines, "csg.loop_cut", tool.LoopCut, "MeshEdit/LoopCut");
+        Add(tool.Active, EditorIcons.Scissors, "csg.knife", tool.Knife, "MeshEdit/Knife");
         Add(tool.CanDissolve, EditorIcons.Eraser, "csg.dissolve", tool.DissolveSelected, "MeshEdit/Dissolve");
         Add(tool.Active, EditorIcons.Broom, "csg.limited_dissolve", tool.LimitedDissolveSelected, "MeshEdit/LimitedDissolve");
         Add(tool.CanMerge && tool.Mode == SelectMode.Vertex, EditorIcons.Compress, "csg.merge_centre", tool.MergeAtCentre, "MeshEdit/Merge");
         Add(tool.CanMergeAtFirst, EditorIcons.BackwardStep, "csg.merge_first", tool.MergeAtFirst);
         Add(tool.CanMergeAtActive, EditorIcons.ForwardStep, "csg.merge_active", tool.MergeAtActive);
         Add(tool.CanSubdivide, EditorIcons.Minimize, "csg.collapse", tool.CollapseSelected);
-        Add(tool.CanSubdivide, EditorIcons.Scissors, "csg.subdivide", tool.SubdivideSelected);
+        Add(tool.CanSubdivide, EditorIcons.DrawPolygon, "csg.subdivide", tool.SubdivideSelected);
         Add(tool.CanConnect, EditorIcons.Link, "csg.connect", tool.ConnectSelected, "MeshEdit/Connect");
         Add(tool.CanFlatten, EditorIcons.RulerHorizontal, "csg.flatten", tool.FlattenSelected, "MeshEdit/Flatten");
         Add(tool.CanSnap, EditorIcons.Magnet, "csg.snap", tool.SnapSelectedToGrid, "CSG/SnapToGrid");
