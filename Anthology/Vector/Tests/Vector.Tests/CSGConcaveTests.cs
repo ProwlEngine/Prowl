@@ -333,4 +333,29 @@ public class CSGConcaveTests
 
         Assert.Empty(output.Edges.Where(e => e.FaceCount == 1));
     }
+
+    /// <summary>A pit placed a fraction of a millimetre from a wall, close enough to weld but far enough to be cut apart.</summary>
+    [Fact]
+    public void FeaturesAlmostTouchingLeaveNoCrack()
+    {
+        GeometryData Scaled(Float3 at, float scale) => Prism(L.Select(p => new Float2(at.X + p.X * scale, at.Z + p.Y * scale)).ToArray(), at.Y, at.Y + scale);
+
+        GeometryData beside = Build(
+            (Scaled(new Float3(51f, 0f, 36f), 1f), CSGOperation.Additive),
+            (Scaled(new Float3(50.999733f, 0.3f, 37.341198f), 0.5f), CSGOperation.Subtractive));
+        Assert.Empty(beside.Edges.Where(e => e.FaceCount == 1));
+
+        GeometryData between = Build(
+            (Scaled(new Float3(6f, 0f, 33f), 1f), CSGOperation.Additive),
+            (Scaled(new Float3(6.23569f, 0.3f, 33.811516f), 0.5f), CSGOperation.Subtractive),
+            (Scaled(new Float3(5.708025f, 0.3f, 34.284336f), 0.5f), CSGOperation.Subtractive));
+        Assert.Empty(between.Edges.Where(e => e.FaceCount == 1));
+
+        // A pit whose front lies a hair inside the plane of a notch wall, across two overlapping brushes
+        GeometryData flush = Build(
+            (Scaled(new Float3(30f, 0f, 24f), 1f), CSGOperation.Additive),
+            (Scaled(new Float3(31.5f, 0f, 24f), 1f), CSGOperation.Additive),
+            (Scaled(new Float3(31.450562f, 0.3f, 24.999922f), 0.5f), CSGOperation.Subtractive));
+        Assert.Empty(flush.Edges.Where(e => e.FaceCount != 2));
+    }
 }

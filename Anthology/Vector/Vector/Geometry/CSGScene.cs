@@ -1161,9 +1161,11 @@ public sealed class CSGScene
     {
         flip = false;
 
-        // Two brushes sharing a surface would each emit it. The later one in traversal order owns it.
+        // Two brushes sharing a surface would each emit it, whichever way their faces point. The later one in traversal
+        // order owns it. The earlier one always meets the later one before its fragment is settled, so it is the one
+        // that can reliably step aside.
         foreach (var r in rels)
-            if (r.Relation == Relation.Aligned && r.Brush.EvalOrder > self.EvalOrder)
+            if (r.Relation != Relation.Interior && r.Brush.EvalOrder > self.EvalOrder)
                 return false;
 
         bool innerSolid = _flat ? FlatSolid(rels, self, inner: true) : EvaluateTree(_root, rels, self, inner: true);
@@ -1173,12 +1175,6 @@ public sealed class CSGScene
             return false; // both sides solid or both empty: not a boundary
 
         flip = !innerSolid && outerSolid; // solid is in front: the face must point the other way
-
-        // A face lying on an opposite facing brush face is visible from both brushes, one of them turned round, so both
-        // would come out facing the same way. The one turned round leaves it to the other.
-        if (flip)
-            foreach (var r in rels)
-                if (r.Relation == Relation.Opposite) return false;
 
         return true;
     }
@@ -1328,15 +1324,15 @@ public sealed class CSGScene
             return plain;
         }
 
-        // The point set the welder snaps against is global, so it is gathered from every brush -
-        // including ones whose own rings will not be re-welded.
-        var seen = new HashSet<SnapKey>();
+        // Points within the weld tolerance of each other become one point before anything else, the same way the
+        // emitted vertices weld, so every ring agrees on where a corner is before T-junctions are filled in. The set
+        // is global, gathered from every brush, including ones whose own rings will not be re-welded.
+        var representatives = new Dictionary<SnapKey, List<Float3>>();
         var points = new List<Float3>();
         foreach (var brush in _brushes)
             foreach (var frag in brush.Output)
                 foreach (var p in frag.Poly)
-                    if (seen.Add(new SnapKey(p, WeldTolerance)))
-                        points.Add(p);
+                    Representative(representatives, points, p);
 
         Bvh<Float3>? pointBvh = null;
         var candidates = new List<Float3>();
@@ -1351,10 +1347,19 @@ public sealed class CSGScene
                 brush.Welded.Clear();
                 foreach (var frag in brush.Output)
                 {
+                    var ring = new List<Float3>(frag.Poly.Length);
+                    foreach (var p in frag.Poly)
+                    {
+                        Float3 snapped = Representative(representatives, points, p);
+                        if (ring.Count == 0 || ring[^1] != snapped) ring.Add(snapped);
+                    }
+                    if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
+                    if (ring.Count < 3) continue;
+
                     brush.Welded.Add(new EmitItem
                     {
                         Brush = brush,
-                        Ring = InsertCollinearPoints(new List<Float3>(frag.Poly), pointBvh, candidates),
+                        Ring = InsertCollinearPoints(ring, pointBvh, candidates),
                         Source = frag.Source,
                         Flip = frag.Flip
                     });
@@ -1633,6 +1638,37 @@ public sealed class CSGScene
         var rounded = new int[dims];
         for (int d = 0; d < dims; d++) rounded[d] = (int)MathF.Round(acc[d]);
         return new GeometryData.IntAttributeValue { Data = rounded };
+    }
+
+    /// <summary>
+    /// The point already standing within the weld tolerance of this one, or this one, now standing for every later
+    /// point that close. Searched by grid as <see cref="GetOrAddVertex"/> does.
+    /// </summary>
+    private Float3 Representative(Dictionary<SnapKey, List<Float3>> grid, List<Float3> all, Float3 point)
+    {
+        float cell = WeldTolerance * 4;
+        int x0 = (int)MathF.Floor((point.X - WeldTolerance) / cell), x1 = (int)MathF.Floor((point.X + WeldTolerance) / cell);
+        int y0 = (int)MathF.Floor((point.Y - WeldTolerance) / cell), y1 = (int)MathF.Floor((point.Y + WeldTolerance) / cell);
+        int z0 = (int)MathF.Floor((point.Z - WeldTolerance) / cell), z1 = (int)MathF.Floor((point.Z + WeldTolerance) / cell);
+
+        for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++)
+                {
+                    if (!grid.TryGetValue(new SnapKey(x, y, z), out var bucket)) continue;
+                    foreach (var candidate in bucket)
+                    {
+                        Float3 d = candidate - point;
+                        if (MathF.Abs(d.X) <= WeldTolerance && MathF.Abs(d.Y) <= WeldTolerance && MathF.Abs(d.Z) <= WeldTolerance)
+                            return candidate;
+                    }
+                }
+
+        var home = new SnapKey((int)MathF.Floor(point.X / cell), (int)MathF.Floor(point.Y / cell), (int)MathF.Floor(point.Z / cell));
+        if (!grid.TryGetValue(home, out var list)) grid[home] = list = new List<Float3>(1);
+        list.Add(point);
+        all.Add(point);
+        return point;
     }
 
     // Finds the vertex already standing within the weld tolerance of a point, or adds one. Vertices are
