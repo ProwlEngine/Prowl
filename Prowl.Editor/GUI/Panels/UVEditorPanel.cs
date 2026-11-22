@@ -9,6 +9,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.GUI.SceneView.Editors;
 using Prowl.Editor.Modeling;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -51,6 +52,10 @@ public class UVEditorPanel : DockPanel
     private Float2 _from;
     private Float2 _pivot;
     private readonly List<(ModelObject Model, GeometryData.Loop Corner, Float2 UV)> _moving = new();
+
+    // With a pinned point moving, every shown corner as it started and the faces unwrapped again around the pins
+    private readonly List<(GeometryData.Loop Corner, Float2 UV)> _before = new();
+    private readonly List<Shown> _unwrapped = new();
 
     private readonly struct Shown(ModelObject model, GeometryData.Face face)
     {
@@ -139,6 +144,7 @@ public class UVEditorPanel : DockPanel
             Origami.Dropdown(paper, "uv_stretch", (int)_stretch, i => _stretch = (Stretch)i,
                 [Loc.Get("uv.stretch_off"), Loc.Get("uv.stretch_angle"), Loc.Get("uv.stretch_area")]).Width(110).Show();
             Origami.Button(paper, "uv_frame", Loc.Get("uv.frame"), Frame).Show();
+            Origami.Button(paper, "uv_export", Loc.Get("uv.export_layout"), () => ExportLayout(tool, faces)).Show();
         }
         using (paper.Row("uv_ops").Height(26).Gap(4).Padding(4, 4, 2, 2).Enter())
         {
@@ -182,6 +188,27 @@ public class UVEditorPanel : DockPanel
             List<GeometryData.Face> mine = [.. faces.Where(f => f.Model == model).Select(f => f.Face)];
             if (mine.Count > 0) run(mesh, mine);
         });
+
+    /// <summary>Writes the shown faces' UV edges to a PNG at the texture's size.</summary>
+    private static void ExportLayout(ModelMeshTool tool, List<Shown> faces)
+    {
+        (int width, int height) = TextureSize(tool);
+        byte[] pixels = UVs.LayoutImage(faces.Select(f => f.Face), width, height);
+        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
+        {
+            if (path == null) return;
+            if (!path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) path += ".png";
+            try
+            {
+                using Aperture.Image image = Aperture.Image.FromPixels(pixels, width, height, Aperture.PixelFormat.Rgba8);
+                image.Save(path, new Aperture.EncodeOptions { Format = Aperture.ImageFormat.Png });
+            }
+            catch (Exception e)
+            {
+                Debug.LogException("[UV] Writing the layout failed", e);
+            }
+        }, Project.Current?.AssetsPath, ["*.png"], [Loc.Get("uv.filter_png")]);
+    }
 
     private void Frame()
     {
@@ -456,6 +483,14 @@ public class UVEditorPanel : DockPanel
         foreach ((ModelObject model, GeometryData.Loop corner) in SelectedCorners(tool, faces))
             _moving.Add((model, corner, UVs.Get(corner)));
         if (_moving.Count == 0) return;
+        _before.Clear();
+        _unwrapped.Clear();
+        if (_moving.Exists(m => UVs.IsPinned(m.Corner)))
+        {
+            _unwrapped.AddRange(faces);
+            foreach (Shown shown in faces)
+                foreach (GeometryData.Loop corner in UVs.Corners(shown.Face)) _before.Add((corner, UVs.Get(corner)));
+        }
         Float2 sum = Float2.Zero;
         foreach ((_, _, Float2 uv) in _moving) sum += uv;
         _pivot = sum / _moving.Count;
@@ -499,29 +534,49 @@ public class UVEditorPanel : DockPanel
     /// <summary>Shows the moved points live, without recording anything.</summary>
     private void Preview(ModelMeshTool tool, Func<Float2, Float2> change)
     {
-        foreach ((ModelObject model, GeometryData.Loop corner, Float2 uv) in _moving) UVs.Set(corner, change(uv));
+        Move(_moving, _unwrapped, change);
         foreach (ModelObject model in _moving.Select(m => m.Model).Distinct()) model.RefreshPreview(dragging: true);
+    }
+
+    /// <summary>Sets the moved points, and unwraps the faces again around the pins when a pinned point is among them.</summary>
+    private static void Move(List<(ModelObject Model, GeometryData.Loop Corner, Float2 UV)> moving, List<Shown> unwrapped, Func<Float2, Float2> change, ModelObject? only = null)
+    {
+        foreach ((ModelObject model, GeometryData.Loop corner, Float2 uv) in moving)
+            if (ReferenceEquals(only, null) || ReferenceEquals(model, only)) UVs.Set(corner, change(uv));
+        foreach (IGrouping<ModelObject, Shown> group in unwrapped.GroupBy(f => f.Model))
+            if (ReferenceEquals(only, null) || ReferenceEquals(group.Key, only)) UVs.Unwrap(group.Key.Mesh, [.. group.Select(f => f.Face)]);
+    }
+
+    private void Restore()
+    {
+        foreach ((GeometryData.Loop corner, Float2 uv) in _before) UVs.Set(corner, uv);
+        foreach ((_, GeometryData.Loop corner, Float2 uv) in _moving) UVs.Set(corner, uv);
     }
 
     private void Cancel(ModelMeshTool tool)
     {
-        Preview(tool, uv => uv);
+        Restore();
+        foreach (ModelObject model in _moving.Select(m => m.Model).Distinct()) model.RefreshPreview();
         _moving.Clear();
+        _before.Clear();
+        _unwrapped.Clear();
         _gesture = Gesture.None;
     }
 
     /// <summary>Puts the points back, then moves them once more as one undo step.</summary>
     private void Commit(ModelMeshTool tool, Func<Float2, Float2> change)
     {
-        Preview(tool, uv => uv);
+        Restore();
         var moving = _moving.ToList();
+        var unwrapped = _unwrapped.ToList();
         _moving.Clear();
+        _before.Clear();
+        _unwrapped.Clear();
         _gesture = Gesture.None;
         tool.EditMeshes("Move UVs", (model, mesh, _) =>
         {
             UVs.EnsureUV(mesh);
-            foreach ((ModelObject owner, GeometryData.Loop corner, Float2 uv) in moving)
-                if (owner == model) UVs.Set(corner, change(uv));
+            Move(moving, unwrapped, change, model);
             mesh.MarkChanged();
         });
     }

@@ -217,4 +217,21 @@ public class UVTests
 
         Assert.True(Float2.Distance(UVOf(corners[2]), new Float2(0.1f, 0.5f)) < 1e-5f);
     }
+
+    [Fact]
+    public void TheLayoutImageDrawsFaceEdgesOnAClearBackground()
+    {
+        GeometryData mesh = Grid(1, 1);
+        UVs.Reset(mesh, [.. mesh.Faces]);
+        UVs.Transform(mesh, [.. Corners(mesh.Faces[0])], uv => uv * 0.5f + new Float2(0.25f));
+
+        byte[] image = UVs.LayoutImage([.. mesh.Faces], 64, 64);
+
+        byte Alpha(int x, int y) => image[(y * 64 + x) * 4 + 3];
+        Assert.Equal(64 * 64 * 4, image.Length);
+        Assert.Equal(255, Alpha(16, 32));
+        Assert.Equal(255, Alpha(32, 16));
+        Assert.Equal(0, Alpha(32, 32));
+        Assert.Equal(0, Alpha(4, 4));
+    }
 }

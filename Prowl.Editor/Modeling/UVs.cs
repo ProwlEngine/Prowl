@@ -476,4 +476,29 @@ public static class UVs
             Transform(mesh, corners, uv => centre + (uv - centre) * scale);
         }
     }
+
+    /// <summary>The faces' UV edges drawn as white lines on a clear image, rows from the top, four bytes a pixel.</summary>
+    public static byte[] LayoutImage(IEnumerable<GeometryData.Face> faces, int width, int height)
+    {
+        var pixels = new byte[width * height * 4];
+        void Plot(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= width || y >= height) return;
+            int at = (y * width + x) * 4;
+            pixels[at] = pixels[at + 1] = pixels[at + 2] = pixels[at + 3] = 255;
+        }
+        foreach (GeometryData.Face face in faces)
+            foreach (GeometryData.Loop corner in Corners(face))
+            {
+                Float2 a = Get(corner), b = Get(corner.Next!);
+                float ax = a.X * width, ay = (1f - a.Y) * height, bx = b.X * width, by = (1f - b.Y) * height;
+                int steps = (int)MathF.Ceiling(MathF.Max(MathF.Abs(bx - ax), MathF.Abs(by - ay))) + 1;
+                for (int i = 0; i <= steps; i++)
+                {
+                    float t = (float)i / steps;
+                    Plot((int)MathF.Floor(ax + (bx - ax) * t), (int)MathF.Floor(ay + (by - ay) * t));
+                }
+            }
+        return pixels;
+    }
 }

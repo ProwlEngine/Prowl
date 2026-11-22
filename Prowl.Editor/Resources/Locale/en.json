@@ -44,6 +44,8 @@
   "uv.stretch_angle": "Angle Stretch",
   "uv.stretch_area": "Area Stretch",
   "uv.frame": "Frame",
+  "uv.export_layout": "Export Layout",
+  "uv.filter_png": "PNG Image",
   "uv.pin": "Pin",
   "uv.unpin": "Unpin",
   "uv.flip_u": "Flip U",
