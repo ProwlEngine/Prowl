@@ -1162,6 +1162,9 @@ public class HierarchyPanel : DockPanel
         builder.Item(Loc.Get("hierarchy.create_prefab"), () => CreatePrefabsFrom(selectedGOs),
             icon: EditorIcons.Cubes);
 
+        if (!IsolatedWorld.IsOpen && ModelEditingMode.CanEditAsModel(selectedGOs))
+            builder.Item(Loc.Get("model.edit_as_model"), () => ModelEditingMode.EditAsModel(selectedGOs, clickedItem), icon: EditorIcons.Shapes);
+
         // Prefab operations, over every selected instance rather than only the first.
         List<GameObject> prefabRoots = PrefabInstanceRootsOf(selectedGOs);
         if (prefabRoots.Count > 0)
@@ -1174,8 +1177,11 @@ public class HierarchyPanel : DockPanel
 
                 // Straight into the prefab, rather than pinging the asset and leaving the user to
                 // find it in the project panel and double click it.
-                builder.Item(Loc.Get("hierarchy.open_prefab"), () => PrefabEditingMode.Enter(assetId),
-                    icon: EditorIcons.PenToSquare, enabled: PrefabUtility.IsEditablePrefab(assetId));
+                if (ModelEditingMode.IsModelAsset(assetId))
+                    builder.Item(Loc.Get("model.open_model"), () => ModelEditingMode.Open(assetId), icon: EditorIcons.PenToSquare);
+                else
+                    builder.Item(Loc.Get("hierarchy.open_prefab"), () => PrefabEditingMode.Enter(assetId),
+                        icon: EditorIcons.PenToSquare, enabled: PrefabUtility.IsEditablePrefab(assetId));
 
                 builder.Item(Loc.Get("hierarchy.select_prefab_asset"),
                     () => Selection.Ping(assetId), icon: EditorIcons.Cubes);

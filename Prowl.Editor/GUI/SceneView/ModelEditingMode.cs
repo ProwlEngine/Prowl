@@ -61,10 +61,16 @@ public static class ModelEditingMode
             return;
         }
 
+        OpenDocument(document, new ModelSession(modelGuid, entry.Path, Path.GetFileNameWithoutExtension(entry.Path)));
+    }
+
+    /// <summary>Builds a document's model world and makes it the open session, the edit world asleep under it.</summary>
+    private static void OpenDocument(PMeshDocument document, ModelSession session)
+    {
         Scene edit = EditorSceneManager.EditWorld;
         EditorSceneManager.ApplyPendingNow();
 
-        string name = Path.GetFileNameWithoutExtension(entry.Path);
+        string name = session.Name;
         Scene world = Scene.Create($"Editing: {name}", SceneMode.Edit);
         try
         {
@@ -81,7 +87,7 @@ public static class ModelEditingMode
         Selection.Clear();
         edit.Deactivate();
         world.Activate();
-        IsolatedWorld.Begin(new ModelSession(modelGuid, entry.Path), world, edit);
+        IsolatedWorld.Begin(session, world, edit);
         Debug.Log($"[Model] Entered editing mode: {name}");
     }
 
@@ -145,6 +151,59 @@ public static class ModelEditingMode
 
     /// <summary>Leaves the model world without saving.</summary>
     public static void Exit() => Session?.Close();
+
+    /// <summary>Whether an object draws a mesh made only of triangles, which is what can be edited as a model.</summary>
+    private static bool Drawable(GameObject go)
+    {
+        MeshRenderer? renderer = go.GetComponent<MeshRenderer>();
+        if (renderer.IsNotValid() || renderer!.Mesh is not { } mesh || mesh.IsNotValid()) return false;
+        for (int i = 0; i < mesh.SubMeshCount; i++)
+            if (mesh.GetSubMesh(i).Topology != Topology.Triangles) return false;
+        return true;
+    }
+
+    public static bool CanEditAsModel(IReadOnlyList<GameObject> objects)
+    {
+        foreach (GameObject go in objects)
+            if (go.IsValid() && Drawable(go)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Opens a new model made from copies of the objects that draw meshes, placed around the active one. Nothing in the
+    /// scene changes, and the model has no file until its first save asks where.
+    /// </summary>
+    public static void EditAsModel(IReadOnlyList<GameObject> objects, GameObject? active = null)
+    {
+        if (Application.IsPlaying)
+        {
+            Debug.LogWarning("[Model] Cannot edit as a model during play mode.");
+            return;
+        }
+
+        var drawn = new List<GameObject>();
+        foreach (GameObject go in objects)
+            if (go.IsValid() && Drawable(go)) drawn.Add(go);
+        if (drawn.Count == 0) return;
+        GameObject centre = active.IsValid() && drawn.Contains(active!) ? active! : drawn[0];
+
+        PMeshDocument document = PMeshDocument.FromObjects(drawn, centre);
+        IsolatedWorld.Replace(() => OpenDocument(document, new ModelSession(Guid.Empty, null, centre.Name)));
+    }
+
+    /// <summary>Whether an asset is a model document, whose instances open in the model world.</summary>
+    public static bool IsModelAsset(Guid asset)
+        => EditorAssetBackend.Instance?.GetEntry(asset) is { } entry && entry.Path.EndsWith(PMeshDocument.Extension, StringComparison.OrdinalIgnoreCase);
+
+    [MenuItem("SceneView/Edit as Model", priority: 40, SelectionWide = true)]
+    private static void EditSelectionAsModel()
+        => EditAsModel([.. Selection.GetSelected<GameObject>()], Selection.ActiveObject as GameObject);
+
+    [MenuItem("SceneView/Edit as Model", isValidate: true)]
+    private static bool CanEditSelectionAsModel() => !IsolatedWorld.IsOpen && CanEditAsModel([.. Selection.GetSelected<GameObject>()]);
+
+    /// <summary>Writes the open model to a path in the project, which becomes its file from then on.</summary>
+    internal static bool SaveAs(string relativePath) => Session?.SaveTo(relativePath) ?? false;
 
     /// <summary>Whether an asset can be made into a model: a mesh, or a model's prefab.</summary>
     public static bool CanCreateModelFrom(Guid asset)
@@ -248,13 +307,13 @@ public static class ModelEditingMode
         return true;
     }
 
-    /// <summary>A model open in its own world: which asset, and where it is written.</summary>
-    private sealed class ModelSession(Guid guid, string path) : IsolatedSession
+    /// <summary>A model open in its own world: which asset, and where it is written, none until a model made from objects is first saved.</summary>
+    private sealed class ModelSession(Guid guid, string? path, string name) : IsolatedSession
     {
-        public Guid Guid { get; } = guid;
-        public string Path { get; } = path;
+        public Guid Guid { get; private set; } = guid;
+        public string? Path { get; private set; } = path;
 
-        public override string Name => System.IO.Path.GetFileNameWithoutExtension(Path);
+        public override string Name => Path != null ? System.IO.Path.GetFileNameWithoutExtension(Path) : name;
 
         public override string SaveLabel => Loc.Get("save.model", new { name = Name });
 
@@ -270,23 +329,55 @@ public static class ModelEditingMode
                 Debug.LogWarning("[Model] Cannot save a model during play mode.");
                 return false;
             }
+            if (Path != null) return SaveTo(Path);
+            if (!SaveManager.IsAutoSave) PromptSaveAs(SaveManager.TakeAfterSaveAs());
+            return false;
+        }
+
+        /// <summary>Asks where to save a model with no file yet, offering Assets/Models and the model's name.</summary>
+        private void PromptSaveAs(System.Action? after)
+        {
+            if (Project.Current == null) return;
+            string folder = System.IO.Path.Combine(Project.Current.AssetsPath, "Models");
+            Directory.CreateDirectory(folder);
+            EditorApplication.OpenFileDialog(OrigamiUI.FileDialogMode.Save, chosen =>
+            {
+                if (chosen == null || Project.Current == null) return;
+                string relative = EditorAssetBackend.NormalizePath(System.IO.Path.GetRelativePath(Project.Current.AssetsPath, chosen));
+                if (!relative.EndsWith(PMeshDocument.Extension, StringComparison.OrdinalIgnoreCase)) relative += PMeshDocument.Extension;
+                if (SaveTo(relative)) after?.Invoke();
+            }, System.IO.Path.Combine(folder, name + PMeshDocument.Extension), ["*" + PMeshDocument.Extension], [Loc.Get("model.file_filter")]);
+        }
+
+        /// <summary>Writes the model to a path in the project and reimports it. The path becomes the model's file.</summary>
+        public bool SaveTo(string relativePath)
+        {
             if (IsolatedWorld.World is not { } world || Project.Current == null) return false;
 
             PMeshDocument document = Gather(world);
-            string absolutePath = System.IO.Path.Combine(Project.Current.AssetsPath, Path);
+            string absolutePath = System.IO.Path.Combine(Project.Current.AssetsPath, relativePath);
             try
             {
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(absolutePath)!);
                 File.WriteAllBytes(absolutePath, document.Write());
             }
             catch (Exception e)
             {
-                Debug.LogException($"[Model] Writing {Path} failed", e);
+                Debug.LogException($"[Model] Writing {relativePath} failed", e);
                 return false;
             }
 
-            EditorAssetBackend.Instance?.Reimport(Guid);
+            EditorAssetBackend? backend = EditorAssetBackend.Instance;
+            if (Path == null)
+            {
+                backend?.Refresh();
+                Path = relativePath;
+                Guid = backend?.GetEntry(relativePath)?.Guid ?? Guid.Empty;
+            }
+            else backend?.Reimport(Guid);
+
             IsDirty = false;
-            Debug.Log($"[Model] Saved model: {Path}");
+            Debug.Log($"[Model] Saved model: {relativePath}");
             return true;
         }
 
@@ -295,6 +386,11 @@ public static class ModelEditingMode
             if (Application.IsPlaying)
             {
                 Debug.LogWarning("[Model] Cannot save a model during play mode.");
+                return;
+            }
+            if (Path == null)
+            {
+                PromptSaveAs(Close);
                 return;
             }
             Save();

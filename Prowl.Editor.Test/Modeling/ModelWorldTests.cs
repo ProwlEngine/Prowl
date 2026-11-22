@@ -110,4 +110,38 @@ public class ModelWorldTests : EditorTestHarness
         Assert.Equal(document.Objects.Single(o => o.Name == "Body").Id, lid.Parent);
         Assert.Equal(new Float3(0, 1, 0), lid.Position);
     }
+
+    /// <summary>Objects in the scene become a new model with no file, the scene untouched, until its first save names one.</summary>
+    [Fact]
+    public void EditingSceneObjectsAsAModelLeavesTheSceneAlone()
+    {
+        Scene edit = EditorSceneManager.EditWorld;
+        GameObject crate = edit.Create("Crate");
+        crate.Transform.Position = new Float3(4, 0, 0);
+        crate.AddComponent<MeshRenderer>().Mesh = MeshGeometry.ToMesh(Triangulated(Quad()));
+        GameObject lamp = edit.Create("Lamp");
+
+        ModelEditingMode.EditAsModel([crate, lamp], crate);
+
+        Assert.True(ModelEditingMode.IsEditing);
+        Assert.Equal("Crate", IsolatedWorld.Current!.Name);
+        GameObject copy = ModelEditingMode.World!.FindObject("Crate")!;
+        Assert.Equal(Float3.Zero, copy.Transform.LocalPosition);
+        Assert.Null(ModelEditingMode.World.FindObject("Lamp"));
+
+        Assert.True(ModelEditingMode.SaveAs("Models/Crate.pmesh"));
+        Assert.True(File.Exists(AssetAbsolutePath("Models/Crate.pmesh")));
+        Assert.NotEqual(Guid.Empty, ModelEditingMode.EditingModelGuid);
+        ModelEditingMode.Exit();
+
+        Assert.False(crate.IsDisposed);
+        Assert.Equal(new Float3(4, 0, 0), crate.Transform.Position);
+        Assert.Null(crate.GetComponent<ModelObject>());
+    }
+
+    private static GeometryData Triangulated(GeometryData mesh)
+    {
+        GeometryOperators.Triangulate(mesh);
+        return mesh;
+    }
 }
