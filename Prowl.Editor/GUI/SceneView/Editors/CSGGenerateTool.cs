@@ -96,6 +96,8 @@ public sealed class CSGGenerateTool : SceneTool
         // A shape in progress belongs to the scene view it started in
         if (_stage != Stage.Idle && !ReferenceEquals(ctx.View, _stageView)) return;
 
+        if (_stage == Stage.Idle) PickShapeKey(handles);
+
         switch (_stage)
         {
             case Stage.Idle: TickIdle(ctx, id); break;
@@ -160,6 +162,15 @@ public sealed class CSGGenerateTool : SceneTool
 
         // The commit click is a raw press, so check the cursor is on the scene rather than a panel.
         if (ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered) Commit(ctx, OperationFor(ctx.Handles));
+    }
+
+    private void PickShapeKey(HandleContext handles)
+    {
+        if (handles.IsPressed("CSG/ShapeBox")) Generator = CSGGeneratorKind.Box;
+        else if (handles.IsPressed("CSG/ShapeCylinder")) Generator = CSGGeneratorKind.Cylinder;
+        else if (handles.IsPressed("CSG/ShapeSphere")) Generator = CSGGeneratorKind.Sphere;
+        else if (handles.IsPressed("CSG/ShapeLinearStairs")) Generator = CSGGeneratorKind.LinearStairs;
+        else if (handles.IsPressed("CSG/ShapeSpiralStairs")) Generator = CSGGeneratorKind.SpiralStairs;
     }
 
     /// <summary>Where a new brush would start: the surface under the cursor, or the grid plane.</summary>

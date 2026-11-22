@@ -410,5 +410,10 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("CSG/Smear", "Paint Surface Look (hold)", KeyCode.G);
         ShortcutManager.Register("CSG/ClipSwapSide", "Swap Kept Side", KeyCode.Tab);
         ShortcutManager.Register("CSG/Confirm", "Confirm Cut or Shape", KeyCode.Enter);
+        ShortcutManager.Register("CSG/ShapeBox", "Draw Box", KeyCode.Number1);
+        ShortcutManager.Register("CSG/ShapeCylinder", "Draw Cylinder", KeyCode.Number2);
+        ShortcutManager.Register("CSG/ShapeSphere", "Draw Sphere", KeyCode.Number3);
+        ShortcutManager.Register("CSG/ShapeLinearStairs", "Draw Stairs", KeyCode.Number4);
+        ShortcutManager.Register("CSG/ShapeSpiralStairs", "Draw Spiral Stairs", KeyCode.Number5);
     }
 }
