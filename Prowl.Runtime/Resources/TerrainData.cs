@@ -524,23 +524,27 @@ public sealed class TerrainData : Asset, ISerializable
             Attach(GTerrain.Load(stream));
     }
 
-    // Takes a new package, keeping where the old one stood, and lets the old one go once the frames using it are done
+    // Takes a new package, keeping where the old one stood. The old one reads from memory, so it needs no disposing and
+    // whatever still streams from it finishes on what it held.
     private void Attach(GTerrain terrain)
     {
         GTerrain? old = _terrain;
         if (old != null)
         {
             terrain.Position = old.Position;
-            old.Edited -= OnEdited;
-            old.TreesChanged -= OnTreesChanged;
+            Detach(old);
         }
-        _terrain = terrain;
         terrain.Edited += OnEdited;
         terrain.TreesChanged += OnTreesChanged;
+        _terrain = terrain;
         Interlocked.Increment(ref _version);
         Rebuilt?.Invoke();
-        if (old != null)
-            Graphics.DeferDispose(old);
+    }
+
+    private void Detach(GTerrain terrain)
+    {
+        terrain.Edited -= OnEdited;
+        terrain.TreesChanged -= OnTreesChanged;
     }
 
     private void OnEdited(TerrainEdited edited) => Interlocked.Increment(ref _version);
@@ -551,22 +555,17 @@ public sealed class TerrainData : Asset, ISerializable
 
     protected override void TakeContent(Asset staging)
     {
-        GTerrain? old = _terrain;
-        if (old != null)
-        {
-            old.Edited -= OnEdited;
-            old.TreesChanged -= OnTreesChanged;
-            Graphics.DeferDispose(old);
-        }
         base.TakeContent(staging);
         _terrain = null;
         Interlocked.Increment(ref _version);
         Rebuilt?.Invoke();
     }
 
+    // Lets go of the package without disposing it, as a surface still drawing it may read from it until it is replaced
     protected override void OnUnload()
     {
-        _terrain?.Dispose();
+        if (_terrain != null)
+            Detach(_terrain);
         _terrain = null;
     }
 
