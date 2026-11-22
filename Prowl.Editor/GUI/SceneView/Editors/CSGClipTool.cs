@@ -10,6 +10,7 @@ using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
@@ -339,18 +340,29 @@ public sealed class CSGClipTool : SceneTool
         // Leave a brush alone when the plane misses it.
         if (!CSGClip.Crosses(LocalCorners(brush), local)) return;
 
-        List<Plane[]> pieces = CSGClip.Clip(brush.Planes, local, Mode);
+        if (brush.Shape is not GeometryData shape) return;
+        GeometryOperators.Slice(shape, local, out GeometryData back, out GeometryData front);
+
+        var pieces = new List<(GeometryData Piece, Float3 CapNormal)>();
+        if (Mode != CSGClipMode.RemoveBack && back.Faces.Count > 0) pieces.Add((back, local.Normal));
+        if (Mode != CSGClipMode.RemoveFront && front.Faces.Count > 0) pieces.Add((front, -local.Normal));
         if (pieces.Count == 0) return;
 
+        // Taken before the brush changes, so every half is textured like the original
         SurfaceData[] surfaces = (SurfaceData[])brush.Surfaces.Clone();
-        int cutFace = brush.Planes.Length;
-        SurfaceData cutSurface = CSGSelection.NearestSurface(brush, pieces[0][cutFace].Normal, cutFace);
+        int[] faceToSurface = (int[])brush.FaceToPlane.Clone();
+        var halves = new List<(CSGControlMesh Mesh, SurfaceData[] Surfaces)>();
+        foreach ((GeometryData piece, Float3 capNormal) in pieces)
+        {
+            if (CSGSelection.PieceOf(piece, surfaces, faceToSurface, CSGSelection.NearestSurface(brush, capNormal, surfaces.Length)) is { } half)
+                halves.Add(half);
+        }
+        if (halves.Count == 0) return;
 
-        brush.Planes = pieces[0];
-        brush.SetSurface(cutFace, cutSurface);
+        brush.SetShape(halves[0].Mesh, halves[0].Surfaces);
 
-        // The other half of a split becomes the next sibling, textured like the original
-        for (int i = 1; i < pieces.Count; i++)
+        // The other half of a split becomes the next sibling
+        for (int i = 1; i < halves.Count; i++)
         {
             GameObject go = CSGSelection.CreateObject(brush.GameObject.Name, brush.GameObject.Parent);
             go.Transform.LocalPosition = brush.Transform.LocalPosition;
@@ -358,11 +370,9 @@ public sealed class CSGClipTool : SceneTool
             go.Transform.LocalScale = brush.Transform.LocalScale;
 
             CSGBrush half = go.AddComponent<CSGBrush>();
-            half.Planes = pieces[i];
+            half.SetShape(halves[i].Mesh, halves[i].Surfaces);
             half.Operation = brush.Operation;
             half.Flags = brush.Flags;
-            for (int s = 0; s < surfaces.Length; s++) half.SetSurface(s, surfaces[s]);
-            half.SetSurface(cutFace, cutSurface);
 
             CSGSelection.PlaceAfter(go, brush.GameObject);
             Undo.RegisterCreatedObjectUndo(go, "Split CSG Brush");

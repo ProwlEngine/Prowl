@@ -32,6 +32,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("The last opened scene remembered as a scene setup of that one scene", ctx => ctx.RewriteProjectSettings(SceneSetupMemory)),
         new("Camera background, depth and target saved behind properties", ctx => RenameSettings(ctx, s_cameraRenames)),
         new("The scene asset renamed to SceneAsset, as Scene now names the live world", ctx => ctx.RewriteEcho(SceneAssetName)),
+        new("CSG brushes saved as their points and faces instead of planes", ctx => ctx.RewriteEchoAssets(BrushesAsPoints)),
     ];
 
     private static readonly Dictionary<string, (string From, string To)[]> s_cameraRenames = new()

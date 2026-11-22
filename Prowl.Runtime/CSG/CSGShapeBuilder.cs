@@ -139,22 +139,14 @@ public static class CSGShapeBuilder
     }
 
     /// <summary>
-    /// The planes of a prism raised <paramref name="height"/> along +Y from an outline in the XZ plane. A brush is convex,
-    /// so an outline that is not is replaced by the convex outline around it. Null when it encloses no area.
+    /// A prism raised <paramref name="height"/> along +Y from an outline in the XZ plane, concave or not, downward when the
+    /// height is negative. Null when it encloses nothing.
     /// </summary>
-    public static Plane[]? PolygonPrism(IReadOnlyList<Float2> outline, float height)
+    public static CSGControlMesh? PolygonPrism(IReadOnlyList<Float2> outline, float height)
     {
-        List<Float2> hull = ConvexHull(outline);
-        if (hull.Count < 3) return null;
-
-        var ring = new List<Float3>(hull.Count);
-        foreach (Float2 p in hull) ring.Add(new Float3(p.X, 0f, p.Y));
-
-        // Wound so the normal of the outline points up
-        Float3 normal = Float3.Cross(ring[1] - ring[0], ring[2] - ring[0]);
-        if (normal.Y < 0f) ring.Reverse();
-
-        return CSGMeshEdit.ExtrudePrism(ring, Float3.UnitY, height);
+        var ring = new List<Float3>(outline.Count);
+        foreach (Float2 p in outline) ring.Add(new Float3(p.X, 0f, p.Y));
+        return CSGControlMesh.Prism(ring, new Float3(0f, height, 0f));
     }
 
     /// <summary>The convex outline around some points, by the monotone chain.</summary>

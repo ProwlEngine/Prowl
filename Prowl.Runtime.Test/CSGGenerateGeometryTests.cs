@@ -193,16 +193,16 @@ public class CSGGenerateGeometryTests
     }
 
     [Fact]
-    public void APolygonOutlineRisesIntoAPrismAroundItsConvexOutline()
+    public void APolygonOutlineRisesIntoAPrismOfExactlyThatOutline()
     {
-        // An L shape, whose notch the convex outline fills
+        // An L shape, which stays an L
         Float2[] outline = [new(0, 0), new(2, 0), new(2, 1), new(1, 1), new(1, 2), new(0, 2)];
 
-        Plane[] planes = CSGShapeBuilder.PolygonPrism(outline, 3f)!;
-        GeometryData solid = GeometryGenerator.ConvexFromPlanes(planes).Solid!;
+        CSGControlMesh prism = CSGShapeBuilder.PolygonPrism(outline, 3f)!;
 
-        Assert.Equal(3.5f * 3f, solid.Volume(), 3);
-        Assert.Equal(3f, solid.GetAABB().Max.Y, 3);
+        Assert.True(prism.IsValid());
+        Assert.Equal(3f * 3f, prism.Volume(), 3);
+        Assert.Equal(3f, prism.Points.Max(p => p.Y), 3);
     }
 
     [Fact]
@@ -210,12 +210,12 @@ public class CSGGenerateGeometryTests
     {
         Float2[] outline = [new(0, 0), new(2, 0), new(2, 2), new(0, 2)];
 
-        Plane[]? planes = CSGShapeBuilder.PolygonPrism(outline, -3f);
-        Assert.NotNull(planes);
+        CSGControlMesh? prism = CSGShapeBuilder.PolygonPrism(outline, -3f);
+        Assert.NotNull(prism);
 
-        GeometryData solid = GeometryGenerator.ConvexFromPlanes(planes!).Solid!;
-        Assert.Equal(4f * 3f, solid.Volume(), 3);
-        Assert.Equal(0f, solid.GetAABB().Max.Y, 3);
-        Assert.Equal(-3f, solid.GetAABB().Min.Y, 3);
+        Assert.True(prism!.IsValid());
+        Assert.Equal(4f * 3f, prism.Volume(), 3);
+        Assert.Equal(0f, prism.Points.Max(p => p.Y), 3);
+        Assert.Equal(-3f, prism.Points.Min(p => p.Y), 3);
     }
 }

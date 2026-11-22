@@ -440,8 +440,8 @@ public sealed class CSGGenerateTool : SceneTool
             // Whatever scale the parents carry, the shape lands in the world exactly as it was drawn
             Float4x4 drawn = Float4x4.CreateTRS(worldCentre + rotation * parts[i].Offset, rotation, Float3.One);
             CSGBrush brush = go.AddComponent<CSGBrush>();
-            brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, go.Transform.WorldToLocalMatrix * drawn);
-            CSGSelection.ApplySmoothing(brush, parts[i].SmoothPlanes);
+            brush.SetPlanes(CSGBrushGeometry.Transform(parts[i].Planes, go.Transform.WorldToLocalMatrix * drawn), null, out int[] planeOfFace);
+            CSGSelection.ApplySmoothing(brush, planeOfFace, parts[i].SmoothPlanes);
 
             // Parts of a shape carry their own operation, the group or the shape as a whole carries the drawn one
             brush.Operation = parts.Count > 1 ? parts[i].Operation : operation;
@@ -452,8 +452,8 @@ public sealed class CSGGenerateTool : SceneTool
 
     private GameObject? PlacePolygon(CSGModel model, Operation operation)
     {
-        Plane[]? planes = CSGShapeBuilder.PolygonPrism(_outline, _height);
-        if (planes == null) return null;
+        CSGControlMesh? prism = CSGShapeBuilder.PolygonPrism(_outline, _height);
+        if (prism == null) return null;
 
         GameObject go = CSGSelection.CreateObject(Generator.ToString(), ParentFor(model));
         go.Transform.Position = _planeOrigin;
@@ -461,7 +461,9 @@ public sealed class CSGGenerateTool : SceneTool
 
         Float4x4 drawn = Float4x4.CreateTRS(_planeOrigin, _planeRotation, Float3.One);
         CSGBrush brush = go.AddComponent<CSGBrush>();
-        brush.Planes = CSGBrushGeometry.Transform(planes, go.Transform.WorldToLocalMatrix * drawn);
+        prism.TransformPoints(go.Transform.WorldToLocalMatrix * drawn);
+        brush.SetShape(prism, new SurfaceData[prism.Polygons.Count]);
+        for (int i = 0; i < prism.Polygons.Count; i++) brush.SetSurface(i, SurfaceData.Default);
         brush.Operation = operation;
         return go;
     }
@@ -657,10 +659,10 @@ public sealed class CSGGenerateTool : SceneTool
     {
         if (Generator == CSGGeneratorKind.Polygon)
         {
-            Plane[]? prism = CSGShapeBuilder.PolygonPrism(_outline, _height);
-            if (prism == null || GeometryGenerator.ConvexFromPlanes(prism).Solid is not { } shape) return;
-            foreach (GeometryData.Edge edge in shape.Edges)
-                CSGGizmos.Line(ToWorld(edge.Vert1.Point), ToWorld(edge.Vert2.Point), color, 2f);
+            CSGControlMesh? prism = CSGShapeBuilder.PolygonPrism(_outline, _height);
+            if (prism == null) return;
+            foreach ((int a, int b) in prism.Edges())
+                CSGGizmos.Line(ToWorld(prism.Points[a]), ToWorld(prism.Points[b]), color, 2f);
             return;
         }
 

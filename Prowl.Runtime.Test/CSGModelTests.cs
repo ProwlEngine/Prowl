@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using Prowl.Runtime.CSG;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 using Xunit;
 
@@ -329,22 +330,27 @@ public class CSGModelTests : RuntimeTestBase
     /// face-to-plane map is what keeps surface data attached to the right face.
     /// </summary>
     [Fact]
-    public void RedundantPlanesDoNotShiftSurfaceAssignment()
+    public void RedundantPlanesMakeNoFaceAndSurfacesFollowTheirPlanes()
     {
         CreateModel();
         CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
 
-        // A plane far outside the box cuts nothing, so it produces no face.
-        var planes = new List<Plane>(brush.Planes) { new(Float3.UnitX, 50f) };
-        brush.Planes = planes.ToArray();
+        // A plane far outside the box cuts nothing, so it produces no face
+        var planes = new List<Plane>(GeometryGenerator.BoxPlanes(Float3.One * 2f)) { new(Float3.UnitX, 50f) };
+        var surfaces = new List<SurfaceData>();
+        for (int i = 0; i < planes.Count; i++) surfaces.Add(new SurfaceData { Scale = Float2.One, Offset = new Float2(i, 0f) });
 
-        Assert.Equal(7, brush.Planes.Length);
-        Assert.Equal(7, brush.Surfaces.Length);
-        Assert.Equal(6, brush.FaceToPlane.Length);
+        Assert.True(brush.SetPlanes(planes, surfaces, out int[] planeOfFace));
 
+        Assert.Equal(6, brush.Surfaces.Length);
+        Assert.DoesNotContain(6, planeOfFace);
         for (int face = 0; face < 6; face++)
-            Assert.Equal(face, brush.FaceToPlane[face]);
+            Assert.Equal(planeOfFace[face], (int)brush.Surfaces[face].Offset.X);
     }
+
+    /// <summary>Points and one face that enclose nothing.</summary>
+    private static void Break(CSGBrush brush)
+        => brush.SetShape(CSGControlMesh.FromPolygons([Float3.Zero, Float3.UnitX, Float3.UnitY], [[0, 1, 2]]), []);
 
     [Fact]
     public void ABrushWhosePlanesEncloseNothingIsSkipped()
@@ -353,8 +359,7 @@ public class CSGModelTests : RuntimeTestBase
         AddBrush(Float3.One * 2f, Float3.Zero);
         CSGBrush broken = AddBrush(Float3.One * 2f, new Float3(10, 0, 0));
 
-        // Two opposed planes that never meet cannot bound a solid.
-        broken.Planes = [new Plane(Float3.UnitX, 1f), new Plane(-Float3.UnitX, 1f)];
+        Break(broken);
 
         Update(_scene);
 
@@ -369,7 +374,7 @@ public class CSGModelTests : RuntimeTestBase
         CreateModel();
         AddBrush(Float3.One * 2f, Float3.Zero);
         AddGroup().PassThrough = true;
-        AddBrush(Float3.One, new Float3(5, 0, 0)).Planes = [new Plane(Float3.UnitX, 1f), new Plane(-Float3.UnitX, 1f)];
+        Break(AddBrush(Float3.One, new Float3(5, 0, 0)));
         AddBrush(Float3.One, new Float3(9, 0, 0)).Enabled = false;
 
         Update(_scene);
@@ -623,5 +628,38 @@ public class CSGModelTests : RuntimeTestBase
         Assert.True(_model.Raycast(down, out _, out _, out Float3 point, out Float3 normal));
         Assert.Equal(-1f, point.Y, 3);
         Assert.True(normal.Y > 0.99f, $"floor faces {normal}");
+    }
+
+    /// <summary>A brush is its points: lifting one corner bends its faces, and the model passes exactly through that corner.</summary>
+    [Fact]
+    public void AMovedPointIsExactlyWhereTheModelGoes()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
+
+        int corner = 0;
+        for (int i = 0; i < brush.ControlMesh.Points.Count; i++)
+            if (brush.ControlMesh.Points[i] is { X: > 0f, Y: > 0f, Z: > 0f }) corner = i;
+        brush.ControlMesh.SetPoint(corner, new Float3(1f, 1.75f, 1f));
+        brush.ApplyControlMesh();
+
+        Update(_scene);
+
+        Assert.True(brush.IsShapeValid);
+        Assert.Contains(_model.GeneratedMesh!.Vertices, v => Float3.Distance(v, new Float3(1f, 1.75f, 1f)) < 1e-3f);
+    }
+
+    /// <summary>A concave outline raised into a brush stays concave in the model.</summary>
+    [Fact]
+    public void AConcavePrismBrushBuildsItsOwnShape()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One, Float3.Zero);
+        CSGControlMesh prism = CSGShapeBuilder.PolygonPrism([new(0, 0), new(2, 0), new(2, 1), new(1, 1), new(1, 2), new(0, 2)], 1f)!;
+        brush.SetShape(prism, []);
+
+        Update(_scene);
+
+        Assert.Equal(3f, VolumeOf(_model.GeneratedMesh!), 2);
     }
 }

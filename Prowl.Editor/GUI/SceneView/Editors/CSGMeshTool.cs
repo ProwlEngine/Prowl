@@ -93,16 +93,17 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         if (planes.Count == original) return;
-        if (!GeometryGenerator.ConvexFromPlanes(planes).IsValid)
+
+        CSGControlMesh mesh = Target.ControlMesh.Clone();
+        SurfaceData[] surfaces = (SurfaceData[])Target.Surfaces.Clone();
+        for (int i = original; i < planes.Count; i++)
         {
-            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
-            return;
+            if (CSGSelection.CutAway(mesh, surfaces, planes[i], CSGSelection.NearestSurface(Target, planes[i].Normal, surfaces.Length)) is not { } cut) return;
+            (mesh, surfaces) = cut;
         }
 
         Undo.RecordObject(Target, "Chamfer CSG Brush");
-        Target.Planes = planes.ToArray();
-        for (int i = original; i < planes.Count; i++)
-            Target.SetSurface(i, CSGSelection.NearestSurface(Target, planes[i].Normal, original));
+        Target.SetShape(mesh, surfaces);
         ClearSelection();
         MarkDirty();
     }
@@ -147,8 +148,6 @@ public sealed class CSGMeshTool : SceneTool
 
     private CSGControlMesh? _mesh;
     private object? _meshSource;
-    private Plane[]? _previewPlanes;
-    private CSGControlMesh? _preview;
     private List<(int a, int b)> _edges = new();
     private bool _dragging;
 
@@ -166,7 +165,6 @@ public sealed class CSGMeshTool : SceneTool
     private Float2 _dragOrigin;
 
     // What a chamfer or extrude started on, captured when it began so later renumbering cannot move it
-    private Plane[]? _startPlanes;
     private CSGBrush? _actionBrush;
     private object? _actionView;
     private SurfaceData[]? _startSurfaces;
@@ -235,20 +233,10 @@ public sealed class CSGMeshTool : SceneTool
         List<CSGBrush> selected = CSGSelection.Brushes();
         CSGBrush? brush = selected.Count == 1 ? selected[0] : null;
 
-        if (!ReferenceEquals(brush, Target)) { Target = brush; ClearSelection(); _preview = null; }
+        if (!ReferenceEquals(brush, Target)) { Target = brush; ClearSelection(); }
         if (Target.IsNotValid()) { Target = null; return false; }
 
-        if (Target!.HasControlMesh) _mesh = Target.ControlMesh;
-        else
-        {
-            if (_preview == null || !ReferenceEquals(_previewPlanes, Target.Planes))
-            {
-                _preview = CSGControlMesh.FromPlanes(Target.Planes);
-                _previewPlanes = Target.Planes;
-            }
-            _mesh = _preview;
-        }
-        if (_mesh == null) { Target = null; return false; }
+        _mesh = Target!.ControlMesh;
 
         // New points after a plane edit or an undo, so old indices mean nothing
         if (!ReferenceEquals(_mesh, _meshSource))
@@ -260,7 +248,7 @@ public sealed class CSGMeshTool : SceneTool
         _faces.RemoveAll(f => f >= _mesh.Polygons.Count);
 
         _edges = _mesh.Edges();
-        NonPlanar = Target.HasControlMesh && !_mesh.IsPlanar();
+        NonPlanar = !_mesh.IsPlanar();
         return _mesh.Points.Count > 0;
     }
 
@@ -268,30 +256,24 @@ public sealed class CSGMeshTool : SceneTool
     private CSGControlMesh? BeginPointEdit(string name)
     {
         Undo.RecordObject(Target!, name);
-        CSGControlMesh? mesh = Target!.ControlMesh;
-        if (mesh == null) return null;
+        CSGControlMesh mesh = Target!.ControlMesh;
 
         _mesh = mesh;
         _meshSource = mesh;
         return mesh;
     }
 
-    /// <summary>The plane a polygon of the points belongs to. Committed points give each polygon its own plane.</summary>
-    private int PlaneOf(int polygon)
-    {
-        if (Target!.HasControlMesh) return polygon >= 0 && polygon < Target.Planes.Length ? polygon : -1;
-        int[] map = Target.FaceToPlane;
-        return polygon >= 0 && polygon < map.Length ? map[polygon] : -1;
-    }
+    /// <summary>The surface of a polygon of the points, which is the polygon's own index.</summary>
+    private int PlaneOf(int polygon) => polygon >= 0 && polygon < Target!.Surfaces.Length ? polygon : -1;
 
     /// <summary>Abandons a gesture in progress, putting back what a chamfer changed.</summary>
     private void CancelAction()
     {
         if (_action == Action.None) return;
         // Exactly the shape it started with, so the open undo record finds nothing changed and leaves no step
-        if (_action is Action.Chamfer or Action.Drag && _actionBrush.IsValid() && _startPlanes != null)
+        if (_action is Action.Chamfer or Action.Drag && _actionBrush.IsValid() && _startMesh != null)
         {
-            _actionBrush!.SetShape(_startPlanes, _startSurfaces!, _startMesh);
+            _actionBrush!.SetShape(_startMesh.Clone(), (SurfaceData[])_startSurfaces!.Clone());
             MarkDirty();
         }
         EndAction();
@@ -420,7 +402,7 @@ public sealed class CSGMeshTool : SceneTool
         Target.ApplyControlMesh();
         if (!Target.IsShapeValid)
         {
-            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
+            CSGStatus.Flash(Loc.Get("csg.status_inside_out"));
             mesh.MovePoints(moving, -delta);
             Target.ApplyControlMesh();
             return;
@@ -446,9 +428,8 @@ public sealed class CSGMeshTool : SceneTool
         _passedThreshold = false;
         _clickedPoints = null;
         _actionBrush = Target;
-        _startPlanes = (Plane[])Target!.Planes.Clone();
-        _startSurfaces = (SurfaceData[])Target.Surfaces.Clone();
-        _startMesh = Target.HasControlMesh ? Target.ControlMesh!.Clone() : null;
+        _startSurfaces = (SurfaceData[])Target!.Surfaces.Clone();
+        _startMesh = Target.ControlMesh.Clone();
         _actionNormals.Clear();
         _actionRing.Clear();
 
@@ -486,10 +467,7 @@ public sealed class CSGMeshTool : SceneTool
         Float3 origin = Float4x4.TransformPoint(handles.MouseRay.Origin, toLocal);
         Float3 direction = Float4x4.TransformNormal(handles.MouseRay.Direction, toLocal);
 
-        if (!CSGBrushGeometry.Raycast(Target.Planes, origin, direction, out float t, out int plane)) return false;
-
-        polygon = Target.HasControlMesh ? plane : Array.IndexOf(Target.FaceToPlane, plane);
-        if (polygon < 0 || polygon >= _mesh!.Polygons.Count) return false;
+        if (!_mesh!.Raycast(origin, direction, out float t, out polygon)) return false;
 
         id = handles.GetControlID(FaceControl, polygon);
         handles.AddControl(id, HandleContext.BodyDistance, t);
@@ -590,22 +568,20 @@ public sealed class CSGMeshTool : SceneTool
         // Back at the start there is no cut, so the brush goes back to how it began
         if (amount <= 1e-4f || !CSGMeshEdit.ChamferPlane(_actionNormals, _actionCorner, amount, out Plane cut))
         {
-            if (!ReferenceEquals(Target!.Planes, _startPlanes) && Target.Planes.Length != _startPlanes!.Length)
+            if (!ReferenceEquals(Target!.ControlMesh, _startMesh))
             {
-                Target.SetShape(_startPlanes, _startSurfaces!, _startMesh);
+                Target.SetShape(_startMesh!.Clone(), (SurfaceData[])_startSurfaces!.Clone());
                 MarkDirty();
             }
             return;
         }
 
-        Plane[] array = [.. _startPlanes!, cut];
-        if (!GeometryGenerator.ConvexFromPlanes(array).IsValid) return;
+        // The new face takes the look of the face nearest its direction
+        SurfaceData cap = CSGSelection.NearestSurface(Target!, cut.Normal, _startSurfaces!.Length);
+        if (CSGSelection.CutAway(_startMesh!, _startSurfaces, cut, cap) is not { } chamfered) return;
 
         Undo.RecordObject(Target!, "Chamfer CSG Brush");
-        Target!.Planes = array;
-
-        // The new face takes the look of the face nearest its direction
-        Target.SetSurface(array.Length - 1, CSGSelection.NearestSurface(Target, cut.Normal, array.Length - 1));
+        Target!.SetShape(chamfered.Mesh, chamfered.Surfaces);
         MarkDirty();
     }
 
@@ -641,7 +617,7 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (amount <= 1e-3f || !TryExtrudeRing(out List<Float3> ring, out Float3 normal)) return;
 
-        Plane[]? prism = CSGMeshEdit.ExtrudePrism(ring, normal, amount);
+        CSGControlMesh? prism = CSGControlMesh.Prism(ring, normal * amount);
         if (prism == null) return;
 
         GameObject go = CSGSelection.CreateObject(Target!.GameObject.Name, Target.GameObject.Parent);
@@ -650,10 +626,11 @@ public sealed class CSGMeshTool : SceneTool
         go.Transform.LocalScale = Target.Transform.LocalScale;
 
         CSGBrush extruded = go.AddComponent<CSGBrush>();
-        extruded.Planes = prism;
+        var faces = new SurfaceData[prism.Polygons.Count];
+        Array.Fill(faces, _actionSurface);
+        extruded.SetShape(prism, faces);
         extruded.Operation = Target.Operation;
         extruded.Flags = Target.Flags;
-        for (int i = 0; i < prism.Length; i++) extruded.SetSurface(i, _actionSurface);
 
         CSGSelection.PlaceAfter(go, Target.GameObject);
         Undo.RegisterCreatedObjectUndo(go, "Extrude CSG Face");
@@ -716,7 +693,6 @@ public sealed class CSGMeshTool : SceneTool
     private void EndAction()
     {
         _action = Action.None;
-        _startPlanes = null;
         _startSurfaces = null;
         _startMesh = null;
         _actionBrush = null;
@@ -791,7 +767,7 @@ public sealed class CSGMeshTool : SceneTool
         // A move that stops the points enclosing a solid is taken back, and the drag waits where it was
         if (!Target.IsShapeValid)
         {
-            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
+            CSGStatus.Flash(Loc.Get("csg.status_inside_out"));
             mesh.MovePoints(moving, -delta);
             Target.ApplyControlMesh();
             _dragApplied -= step;
@@ -837,7 +813,7 @@ public sealed class CSGMeshTool : SceneTool
         Target!.ApplyControlMesh();
         if (!Target.IsShapeValid)
         {
-            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
+            CSGStatus.Flash(Loc.Get("csg.status_inside_out"));
             mesh.ScalePolygon(_faces[0], 1f / factor);
             Target.ApplyControlMesh();
         }
@@ -872,7 +848,7 @@ public sealed class CSGMeshTool : SceneTool
         Target!.ApplyControlMesh();
         if (!Target.IsShapeValid)
         {
-            CSGStatus.Flash(Loc.Get("csg.status_not_convex"));
+            CSGStatus.Flash(Loc.Get("csg.status_inside_out"));
             mesh.RotatePoints(others, (a + b) * 0.5f, axis, -degrees);
             Target.ApplyControlMesh();
         }
@@ -899,6 +875,13 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (_faces.Count == 0 || Target.IsNotValid()) return;
 
+        // Dropping a face lets its neighbours grow over the gap, which only has a meaning for a convex brush
+        if (!Target!.ControlMesh.IsConvex())
+        {
+            CSGStatus.Flash(Loc.Get("csg.status_delete_concave"));
+            return;
+        }
+
         Undo.RecordObject(Target!, "Remove CSG Face");
 
         // Planes found first, then removed highest first, so removing one does not renumber the others
@@ -910,10 +893,7 @@ public sealed class CSGMeshTool : SceneTool
         for (int i = planes.Count - 1; i >= 0; i--)
         {
             if (CSGMeshEdit.RemoveFace(Target!.Planes, planes[i], out Plane[] fewer, out SurfaceData[] surfaces, Target.Surfaces))
-            {
-                Target.Planes = fewer;
-                for (int s = 0; s < surfaces.Length; s++) Target.SetSurface(s, surfaces[s]);
-            }
+                Target.SetPlanes(fewer, surfaces, out _);
         }
 
         ClearSelection();

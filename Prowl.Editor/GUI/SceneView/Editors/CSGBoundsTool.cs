@@ -52,7 +52,7 @@ public sealed class CSGBoundsTool : SceneTool
     }
 
     /// <summary>A brush as the drag found it, and how its space relates to the bounds' frame.</summary>
-    private readonly record struct Start(CSGBrush Brush, Plane[] Planes, SurfaceData[] Surfaces, CSGControlMesh? Mesh, Float4x4 ToFrame);
+    private readonly record struct Start(CSGBrush Brush, SurfaceData[] Surfaces, CSGControlMesh Mesh, Float4x4 ToFrame);
 
     private readonly List<Start> _start = new();
     private string _dragControl = "";
@@ -169,8 +169,7 @@ public sealed class CSGBoundsTool : SceneTool
         Float4x4 toRoot = root.Transform.WorldToLocalMatrix;
         foreach (CSGBrush brush in Brushes(root))
         {
-            _start.Add(new Start(brush, (Plane[])brush.Planes.Clone(), (SurfaceData[])brush.Surfaces.Clone(),
-                brush.HasControlMesh ? brush.ControlMesh!.Clone() : null, toRoot * brush.Transform.LocalToWorldMatrix));
+            _start.Add(new Start(brush, (SurfaceData[])brush.Surfaces.Clone(), brush.ControlMesh.Clone(), toRoot * brush.Transform.LocalToWorldMatrix));
         }
     }
 
@@ -229,10 +228,9 @@ public sealed class CSGBoundsTool : SceneTool
 
             Float4x4 local = start.ToFrame.Invert() * inFrame * start.ToFrame;
             Undo.RecordObject(start.Brush, "Resize CSG Brush");
-            CSGControlMesh? mesh = start.Mesh?.Clone();
-            mesh?.TransformPoints(local);
-            start.Brush.SetShape(mesh != null ? mesh.ToPlanes() : CSGBrushGeometry.Transform(start.Planes, local),
-                (SurfaceData[])start.Surfaces.Clone(), mesh);
+            CSGControlMesh mesh = start.Mesh.Clone();
+            mesh.TransformPoints(local);
+            start.Brush.SetShape(mesh, (SurfaceData[])start.Surfaces.Clone());
         }
 
         CSGModel? model = CSGSelection.ActiveModel();

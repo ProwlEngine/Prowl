@@ -11,6 +11,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 using Operation = Prowl.Vector.Geometry.CSGOperation;
 
@@ -236,13 +237,11 @@ public static class CSGSelection
             CSGBrush brush = brushes[i];
             Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
 
-            // Edited points mirror themselves, so a bent brush stays bent
-            if (brush.HasControlMesh && CSGBrushGeometry.TryMirrorMatrix(axis, toWorld, out Float4x4 local))
+            if (CSGBrushGeometry.TryMirrorMatrix(axis, toWorld, out Float4x4 local))
             {
-                brush.ControlMesh!.TransformPoints(local);
+                brush.ControlMesh.TransformPoints(local);
                 brush.ApplyControlMesh();
             }
-            else brush.Planes = CSGBrushGeometry.Mirror(brush.Planes, axis, toWorld);
 
             brush.Transform.Position = targets[i];
         }
@@ -250,7 +249,6 @@ public static class CSGSelection
         MarkDirty();
     }
 
-    /// <summary>Moves each pivot onto its solid's centre without moving the geometry.</summary>
     /// <summary>Moves a brush's pivot to a point in its own space, the shape and any children staying where they are in the world.</summary>
     public static void MovePivot(CSGBrush brush, Float3 local)
     {
@@ -259,12 +257,8 @@ public static class CSGSelection
         var children = brush.GameObject.Children.Select(c => (c, c.Transform.Position, c.Transform.Rotation)).ToList();
 
         Float3 pivot = Float4x4.TransformPoint(local, brush.Transform.LocalToWorldMatrix);
-        if (brush.HasControlMesh)
-        {
-            brush.ControlMesh!.TransformPoints(Float4x4.CreateTranslation(-local));
-            brush.ApplyControlMesh();
-        }
-        else brush.Planes = CSGBrushGeometry.Translate(brush.Planes, -local);
+        brush.ControlMesh.TransformPoints(Float4x4.CreateTranslation(-local));
+        brush.ApplyControlMesh();
         brush.Transform.Position = pivot;
 
         foreach ((GameObject child, Float3 position, Quaternion rotation) in children)
@@ -274,6 +268,7 @@ public static class CSGSelection
         }
     }
 
+    /// <summary>Moves each pivot onto its solid's centre without moving the geometry.</summary>
     public static void CentrePivot()
     {
         List<CSGBrush> brushes = Brushes();
@@ -334,12 +329,8 @@ public static class CSGSelection
         Float4x4 reshape = Float4x4.CreateTranslation(c) * Float4x4.CreateScale(factor) * Float4x4.CreateTranslation(-c);
 
         Record("Resize CSG Brush", [brush.GameObject]);
-        if (brush.HasControlMesh)
-        {
-            brush.ControlMesh!.TransformPoints(reshape);
-            brush.ApplyControlMesh();
-        }
-        else brush.Planes = CSGBrushGeometry.Transform(brush.Planes, reshape);
+        brush.ControlMesh.TransformPoints(reshape);
+        brush.ApplyControlMesh();
         MarkDirty();
     }
 
@@ -420,18 +411,50 @@ public static class CSGSelection
         MarkDirty();
     }
 
+    /// <summary>
+    /// A cut piece of a brush as points, faces and surfaces: each face keeps the surface of the face it came from, and
+    /// the cap the cut made takes <paramref name="capSurface"/>. Null when the piece encloses nothing.
+    /// </summary>
+    internal static (CSGControlMesh Mesh, SurfaceData[] Surfaces)? PieceOf(GeometryData piece, SurfaceData[] surfaces, int[] faceToSurface, SurfaceData capSurface)
+    {
+        CSGControlMesh? mesh = CSGControlMesh.FromMesh(piece);
+        if (mesh == null || !mesh.IsValid()) return null;
+
+        var result = new List<SurfaceData>(mesh.Polygons.Count);
+        foreach (GeometryData.Face face in piece.Faces)
+        {
+            if (face.VertCount < 3) continue;
+            int source = GeometryOperators.SliceSourceFace(face);
+            int surface = source >= 0 && source < faceToSurface.Length ? faceToSurface[source] : -1;
+            result.Add(surface >= 0 && surface < surfaces.Length ? surfaces[surface] : capSurface);
+        }
+        return (mesh, [.. result]);
+    }
+
+    /// <summary>
+    /// A brush's shape with everything in front of a plane cut away and the cut closed with a cap of
+    /// <paramref name="capSurface"/>. Null when nothing would be left.
+    /// </summary>
+    internal static (CSGControlMesh Mesh, SurfaceData[] Surfaces)? CutAway(CSGControlMesh mesh, SurfaceData[] surfaces, Plane plane, SurfaceData capSurface)
+    {
+        GeometryData shape = mesh.ToMesh(out int[] faceToPolygon);
+        GeometryOperators.Slice(shape, plane, out GeometryData back, out _);
+        return back.Faces.Count == 0 ? null : PieceOf(back, surfaces, faceToPolygon, capSurface);
+    }
+
     /// <summary>Puts a generated brush's curved faces in one smoothing group of their own.</summary>
-    internal static void ApplySmoothing(CSGBrush brush, int smoothPlanes)
+    internal static void ApplySmoothing(CSGBrush brush, int[] planeOfFace, int smoothPlanes)
     {
         if (smoothPlanes <= 0) return;
 
         int group = CSGSurfaceSelection.UnusedSmoothingGroup();
         SurfaceData[] surfaces = brush.Surfaces;
-        for (int i = 0; i < smoothPlanes && i < surfaces.Length; i++)
+        for (int face = 0; face < surfaces.Length && face < planeOfFace.Length; face++)
         {
-            SurfaceData data = surfaces[i];
+            if (planeOfFace[face] >= smoothPlanes) continue;
+            SurfaceData data = surfaces[face];
             data.SmoothingGroup = group;
-            brush.SetSurface(i, data);
+            brush.SetSurface(face, data);
         }
     }
 

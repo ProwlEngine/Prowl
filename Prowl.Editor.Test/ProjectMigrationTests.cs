@@ -987,4 +987,87 @@ public class ProjectMigrationTests : IDisposable
         Assert.True(entry.IsLoaded);
         Assert.True(entry.IsActive);
     }
+
+    private static EchoObject PlaneEcho(float x, float y, float z, float d)
+    {
+        var normal = EchoObject.NewCompound();
+        normal["X"] = new EchoObject(x);
+        normal["Y"] = new EchoObject(y);
+        normal["Z"] = new EchoObject(z);
+        var plane = EchoObject.NewCompound();
+        plane["Normal"] = normal;
+        plane["D"] = new EchoObject(d);
+        return plane;
+    }
+
+    private static EchoObject ArrayEcho(IEnumerable<EchoObject> items)
+    {
+        var list = EchoObject.NewList();
+        foreach (EchoObject item in items) list.ListAdd(item);
+        var array = EchoObject.NewCompound();
+        array["array"] = list;
+        return array;
+    }
+
+    private static EchoObject SurfaceEcho(float marker)
+    {
+        var offset = EchoObject.NewCompound();
+        offset["X"] = new EchoObject(marker);
+        offset["Y"] = new EchoObject(0f);
+        var surface = EchoObject.NewCompound();
+        surface["Offset"] = offset;
+        return surface;
+    }
+
+    [Fact]
+    public void BrushesSavedAsPlanesAreSavedAsPointsAndFaces()
+    {
+        // A two unit box, and a seventh plane far outside it that makes no face. Each surface is marked with its plane.
+        EchoObject[] planes =
+        [
+            PlaneEcho(1, 0, 0, 1), PlaneEcho(-1, 0, 0, 1), PlaneEcho(0, 1, 0, 1),
+            PlaneEcho(0, -1, 0, 1), PlaneEcho(0, 0, 1, 1), PlaneEcho(0, 0, -1, 1), PlaneEcho(1, 0, 0, 50),
+        ];
+        string scene = WriteAsset("Main.scene", Scene(OldComponent("CSG.CSGBrush", Guid.NewGuid(),
+            ("planes", ArrayEcho(planes)),
+            ("surfaces", ArrayEcho(Enumerable.Range(0, 7).Select(i => SurfaceEcho(i)))))), "SceneImporter");
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject brush = Item(scene)[0];
+        Assert.False(brush.TryGet("planes", out _));
+
+        EchoObject mesh = brush["controlMesh"];
+        Assert.Equal(8, mesh["points"]["$values"].List.Count);
+        Assert.Equal(6, mesh["polygons"]["$values"].List.Count);
+
+        // Each face keeps the surface of the plane it lies on, the empty plane's surface is gone
+        var markers = brush["surfaces"]["array"].List.Select(s => (int)s["Offset"]["X"].FloatValue).ToList();
+        Assert.Equal(6, markers.Count);
+        Assert.DoesNotContain(6, markers);
+        Assert.Equal(6, markers.Distinct().Count());
+
+        // And it loads back as the same box
+        var loaded = Serializer.Deserialize<Prowl.Runtime.CSG.CSGBrush>(brush)!;
+        Assert.True(loaded.IsShapeValid);
+        Assert.Equal(8f, loaded.ControlMesh.Volume(), 3);
+    }
+
+    [Fact]
+    public void BrushesAlreadySavedWithPointsKeepThem()
+    {
+        var points = EchoObject.NewCompound();
+        points["$values"] = EchoObject.NewList();
+        var mesh = EchoObject.NewCompound();
+        mesh["points"] = points;
+        string scene = WriteAsset("Main.scene", Scene(OldComponent("CSG.CSGBrush", Guid.NewGuid(),
+            ("planes", ArrayEcho([PlaneEcho(1, 0, 0, 1)])),
+            ("controlMesh", mesh))), "SceneImporter");
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject brush = Item(scene)[0];
+        Assert.False(brush.TryGet("planes", out _));
+        Assert.True(brush["controlMesh"].TryGet("points", out _));
+    }
 }

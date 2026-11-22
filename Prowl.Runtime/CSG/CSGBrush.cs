@@ -44,16 +44,15 @@ public struct SurfaceData
     public static SurfaceData Default => new() { Scale = Float2.One };
 }
 
-/// <summary>One convex brush, defined by a set of outward facing planes.</summary>
+/// <summary>One brush: a closed solid given by its points and faces. It can be any shape, concave or with bent faces.</summary>
 [AddComponentMenu("CSG/CSG Brush")]
 public sealed class CSGBrush : Component
 {
     [SerializeField] private CSGOperation operation = CSGOperation.Additive;
-    [SerializeField] private Plane[] planes = GeometryGenerator.BoxPlanes(Float3.One);
-    [SerializeField] private SurfaceData[] surfaces = [];
+    [SerializeField] private CSGControlMesh controlMesh = CSGControlMesh.FromPlanes(GeometryGenerator.BoxPlanes(Float3.One))!;
 
-    /// <summary>Set once the brush has been point edited, its planes are then derived from it.</summary>
-    [SerializeField] private CSGControlMesh? controlMesh;
+    /// <summary>Texture and flag data, one per face of <see cref="controlMesh"/>.</summary>
+    [SerializeField] private SurfaceData[] surfaces = [];
 
     public CSGBrushFlags Flags;
 
@@ -61,8 +60,9 @@ public sealed class CSGBrush : Component
     public bool HiddenInEditor;
 
     [SerializeIgnore] private GeometryData? _shape;
+    [SerializeIgnore] private Plane[]? _planes;
     [SerializeIgnore] private int[] _faceToPlane = [];
-    [SerializeIgnore] private ConvexSolidStatus _status = ConvexSolidStatus.Valid;
+    [SerializeIgnore] private bool _valid;
 
     public CSGOperation Operation
     {
@@ -75,28 +75,18 @@ public sealed class CSGBrush : Component
         }
     }
 
-    /// <summary>Outward facing half spaces defining the solid. Assigning resizes <see cref="Surfaces"/> to match.</summary>
-    public Plane[] Planes
-    {
-        get => planes;
-        set
-        {
-            planes = value ?? [];
+    /// <summary>The points and faces that are the brush. Change them, then call <see cref="ApplyControlMesh"/>.</summary>
+    public CSGControlMesh ControlMesh => controlMesh;
 
-            // New planes no longer match the points, so drop the control mesh to be derived again.
-            controlMesh = null;
+    /// <summary>One outward plane per face, fitted through its corners. Derived from the points, for texturing and face directions.</summary>
+    public Plane[] Planes => _planes ??= controlMesh.ToPlanes();
 
-            ResizeSurfaces();
-            InvalidateShape();
-        }
-    }
-
-    /// <summary>Texture and flag data, parallel to <see cref="Planes"/>.</summary>
+    /// <summary>Texture and flag data, one per face.</summary>
     public SurfaceData[] Surfaces
     {
         get
         {
-            if (surfaces.Length != planes.Length) ResizeSurfaces();
+            if (surfaces.Length != controlMesh.Polygons.Count) ResizeSurfaces();
             return surfaces;
         }
     }
@@ -104,106 +94,68 @@ public sealed class CSGBrush : Component
     /// <summary>Bumped by any edit that changes the CSG result.</summary>
     public int Version { get; private set; } = 1;
 
-    /// <summary>Why the plane set failed to enclose a solid, if it did.</summary>
-    public ConvexSolidStatus Status
+    /// <summary>Whether the faces enclose a solid: closed, facing out, with room inside.</summary>
+    public bool IsShapeValid
     {
-        get { EnsureShape(); return _status; }
+        get { EnsureShape(); return _valid; }
     }
 
-    public bool IsShapeValid => Status == ConvexSolidStatus.Valid;
-
-    /// <summary>The derived convex solid in brush local space, or null when the planes enclose nothing.</summary>
+    /// <summary>The solid as a mesh in brush local space, one face per face of the brush, or null when it encloses nothing.</summary>
     public GeometryData? Shape
     {
         get { EnsureShape(); return _shape; }
     }
 
-    /// <summary>Maps an output face index back to its plane. Redundant planes produce no face.</summary>
+    /// <summary>Maps a face of <see cref="Shape"/> to the brush face, and so the surface, it came from.</summary>
     public int[] FaceToPlane
     {
         get { EnsureShape(); return _faceToPlane; }
     }
 
-    /// <summary>Corners of the face a plane produced in brush local space, empty when the plane is redundant.</summary>
-    public List<Float3> FaceCorners(int planeIndex)
+    /// <summary>Corners of one face in brush local space.</summary>
+    public List<Float3> FaceCorners(int face)
     {
         var result = new List<Float3>();
-
-        GeometryData? shape = Shape;
-        if (shape == null) return result;
-
-        for (int face = 0; face < _faceToPlane.Length && face < shape.Faces.Count; face++)
-        {
-            if (_faceToPlane[face] != planeIndex) continue;
-
-            foreach (GeometryData.Vertex v in shape.Faces[face].NeighborVertices())
-                result.Add(v.Point);
-            break;
-        }
-
+        foreach (int i in controlMesh.PolygonPoints(face)) result.Add(controlMesh.Points[i]);
         return result;
     }
 
-    /// <summary>Whether the brush already has editable points. Deriving them reorders the planes into polygon order.</summary>
-    public bool HasControlMesh => controlMesh != null;
-
-    /// <summary>Editable points, derived from the planes on first access and kept. Null when the planes enclose nothing.</summary>
-    public CSGControlMesh? ControlMesh
+    /// <summary>
+    /// Makes the brush the convex solid a plane set encloses. Surfaces follow their planes where given, and the result
+    /// says which plane each face lies on. False, and nothing changed, when the planes enclose nothing.
+    /// </summary>
+    public bool SetPlanes(IReadOnlyList<Plane> planes, IReadOnlyList<SurfaceData>? surfacesByPlane, out int[] planeOfFace)
     {
-        get
+        CSGControlMesh? built = CSGControlMesh.FromPlanes(planes, out planeOfFace);
+        if (built == null) return false;
+
+        var resurfaced = new SurfaceData[built.Polygons.Count];
+        for (int face = 0; face < resurfaced.Length; face++)
         {
-            if (controlMesh != null) return controlMesh;
-
-            CSGControlMesh? derived = CSGControlMesh.FromPlanes(planes);
-            if (derived == null) return null;
-
-            EnsureShape();
-            if (derived.Polygons.Count != _faceToPlane.Length) return null;
-
-            // Same planes in face order, so the shape does not drift and every surface stays on its face
-            var reorderedPlanes = new Plane[_faceToPlane.Length];
-            var reorderedSurfaces = new SurfaceData[_faceToPlane.Length];
-            for (int face = 0; face < _faceToPlane.Length; face++)
-            {
-                int plane = _faceToPlane[face];
-                reorderedPlanes[face] = planes[plane];
-                reorderedSurfaces[face] = plane < surfaces.Length ? surfaces[plane] : SurfaceData.Default;
-            }
-
-            controlMesh = derived;
-            planes = reorderedPlanes;
-            surfaces = reorderedSurfaces;
-
-            InvalidateShape();
-            return controlMesh;
+            int plane = planeOfFace[face];
+            resurfaced[face] = surfacesByPlane != null && plane < surfacesByPlane.Count ? surfacesByPlane[plane] : SurfaceData.Default;
         }
+
+        SetShape(built, resurfaced);
+        return true;
     }
 
-    /// <summary>Writes edited points back, rederiving the planes. Surface indices are kept.</summary>
+    /// <summary>Makes the brush the convex solid a plane set encloses, every face with the default surface.</summary>
+    public bool SetPlanes(IReadOnlyList<Plane> planes) => SetPlanes(planes, null, out _);
+
+    /// <summary>Called after the points or faces of <see cref="ControlMesh"/> were changed in place.</summary>
     public void ApplyControlMesh()
     {
-        if (controlMesh == null) return;
-
-        planes = controlMesh.ToPlanes();
         ResizeSurfaces();
         InvalidateShape();
     }
 
-    /// <summary>Puts back a whole shape taken earlier, its edited points included, as a cancelled edit does.</summary>
-    public void SetShape(Plane[] newPlanes, SurfaceData[] newSurfaces, CSGControlMesh? points)
+    /// <summary>Puts a whole shape in place, its points and its surfaces, as an edit or a cancelled edit does.</summary>
+    public void SetShape(CSGControlMesh points, SurfaceData[] newSurfaces)
     {
-        planes = newPlanes;
-        surfaces = newSurfaces;
         controlMesh = points;
+        surfaces = newSurfaces;
         ResizeSurfaces();
-        InvalidateShape();
-    }
-
-    /// <summary>Replaces one plane, keeping its surface data.</summary>
-    public void SetPlane(int index, Plane plane)
-    {
-        if (index < 0 || index >= planes.Length) throw new ArgumentOutOfRangeException(nameof(index));
-        planes[index] = plane;
         InvalidateShape();
     }
 
@@ -214,17 +166,15 @@ public sealed class CSGBrush : Component
         Version++;
     }
 
-    /// <summary>Rebuilds the box's planes, discarding any face edits.</summary>
-    public void ResetToBox(Float3 size)
-    {
-        Planes = GeometryGenerator.BoxPlanes(size);
-    }
+    /// <summary>Makes the brush a box of the given size about its origin.</summary>
+    public void ResetToBox(Float3 size) => SetPlanes(GeometryGenerator.BoxPlanes(size));
 
     public override void OnValidate() => InvalidateShape();
 
     private void InvalidateShape()
     {
         _shape = null;
+        _planes = null;
         Version++;
     }
 
@@ -232,40 +182,17 @@ public sealed class CSGBrush : Component
     {
         if (_shape != null) return;
 
-        ConvexSolidResult result = GeometryGenerator.ConvexFromPlanes(planes);
-        _status = result.Status;
-        _shape = result.Solid;
-        _faceToPlane = result.IsValid ? BuildFaceMap(result) : [];
-    }
-
-    /// <summary>Each face's plane, found by matching the face against the planes rather than by counting them.</summary>
-    private int[] BuildFaceMap(ConvexSolidResult result)
-    {
-        GeometryData solid = result.Solid!;
-        var map = new int[solid.Faces.Count];
-
-        for (int face = 0; face < map.Length; face++)
-        {
-            Float3 normal = solid.Faces[face].Normal();
-            Float3 centre = solid.Faces[face].Center();
-            float best = float.MaxValue;
-            map[face] = -1;
-
-            for (int plane = 0; plane < planes.Length; plane++)
-            {
-                float score = (1f - Float3.Dot(normal, planes[plane].Normal)) + MathF.Abs(planes[plane].GetSignedDistanceToPoint(centre));
-                if (score >= best) continue;
-                best = score;
-                map[face] = plane;
-            }
-        }
-
-        return map;
+        _valid = controlMesh.IsValid();
+        _shape = _valid ? controlMesh.ToMesh(out _faceToPlane) : null;
+        if (!_valid) _faceToPlane = [];
     }
 
     private void ResizeSurfaces()
     {
-        var resized = new SurfaceData[planes.Length];
+        int count = controlMesh.Polygons.Count;
+        if (surfaces.Length == count) return;
+
+        var resized = new SurfaceData[count];
         for (int i = 0; i < resized.Length; i++)
             resized[i] = i < surfaces.Length ? surfaces[i] : SurfaceData.Default;
         surfaces = resized;
