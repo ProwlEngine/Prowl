@@ -560,7 +560,11 @@ public sealed class CSGModel : Component
     /// <summary>Swaps in the freshly built meshes, keeping any that are identical so a loaded mesh keeps its lightmap UVs.</summary>
     private void ApplyMeshes(CSGMeshes meshes)
     {
+        Mesh? previous = _visible;
         _visible = KeepOrReplace(_visible, meshes.Visible, ref _visibleKey);
+
+        // A new mesh carries no unwrap, even when its geometry matches the one that was unwrapped
+        if (!ReferenceEquals(previous, _visible)) lightmapUVHash = 0;
         _collision = KeepOrReplace(_collision, meshes.Collision, ref _collisionKey);
         visibleHash = _visibleKey;
         collisionHash = _collisionKey;

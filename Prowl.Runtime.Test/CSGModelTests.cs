@@ -503,4 +503,21 @@ public class CSGModelTests : RuntimeTestBase
             CSGModel.EditorHidden = null;
         }
     }
+
+    [Fact]
+    public void MovingABrushAndBackLeavesLightmapUVsStale()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
+        _model.GenerateLightmapUVs = true;
+        Update(_scene);
+        _model.RebuildLightmapUVs();
+
+        brush.Transform.Position = new Float3(1, 0, 0);
+        Update(_scene);
+        brush.Transform.Position = Float3.Zero;
+        Update(_scene);
+
+        Assert.True(_model.LightmapUVsStale);
+    }
 }
