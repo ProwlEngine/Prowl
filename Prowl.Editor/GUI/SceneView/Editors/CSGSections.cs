@@ -260,7 +260,11 @@ internal static class CSGSections
         {
             Segments(paper, font, "csg_gen_shape", ShapeTiles(tool), iconsOnly: true);
             Note(paper, font, "csg_gen_name", ShapeName(tool.Generator));
-            Segments(paper, font, "csg_gen_op", OperationTiles((int)tool.Operation, op => tool.Operation = op));
+            Segments(paper, font, "csg_gen_op",
+            [
+                new Tile(EditorIcons.WandMagicSparkles, Loc.Get("csg.auto"), Loc.Get("csg.auto_tip"), () => tool.AutoOperation = true, tool.AutoOperation),
+                .. OperationTiles(tool.AutoOperation ? -1 : (int)tool.Operation, op => tool.Operation = op),
+            ]);
         }));
 
         if (HasSettings(tool.Generator))

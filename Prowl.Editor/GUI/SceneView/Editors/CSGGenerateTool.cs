@@ -19,7 +19,7 @@ using SColor = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
-/// <summary>Draws new brushes: pick a work plane, drag out a footprint on it, then pull the height.</summary>
+/// <summary>Draws new brushes: click or drag a footprint on a surface or the grid, move to set the height, click to place.</summary>
 [GlobalSceneTool(Group = "CSG")]
 public sealed class CSGGenerateTool : SceneTool
 {
@@ -51,8 +51,20 @@ public sealed class CSGGenerateTool : SceneTool
     /// <summary>Whether drawing is the CSG mode in force.</summary>
     public bool Drawing => CSGEditMode.Is(CSGMode.Generate);
 
-    /// <summary>Operation the next brush is created with.</summary>
-    public Operation Operation { get; set; } = Operation.Additive;
+    /// <summary>Operation the next brush is created with. Choosing one turns <see cref="AutoOperation"/> off.</summary>
+    public Operation Operation
+    {
+        get => _operation;
+        set
+        {
+            _operation = value;
+            AutoOperation = false;
+        }
+    }
+    private Operation _operation = Operation.Additive;
+
+    /// <summary>Add when pulled out of the surface the brush was drawn on, subtract when pushed into it.</summary>
+    public bool AutoOperation { get; set; } = true;
 
     /// <summary>Which shape the next drag produces.</summary>
     public CSGGeneratorKind Generator { get; set; } = CSGGeneratorKind.Box;
@@ -67,6 +79,12 @@ public sealed class CSGGenerateTool : SceneTool
     private Float3 _cornerA;
     private Float3 _cornerB;
     private float _height;
+
+    // The height the last brush was placed with, which Shift reuses
+    private float _lastHeight;
+
+    // The base was started with a click rather than a drag, so a second click finishes it
+    private bool _clickedBase;
 
     // Started on a model surface, so pulling into it means digging
     private bool _onSurface;
@@ -129,7 +147,7 @@ public sealed class CSGGenerateTool : SceneTool
         _planeOrigin = snapped - normal * Float3.Dot(snapped - point, normal);
 
         DrawWorkGrid(ctx, _planeOrigin);
-        DrawCursor(ctx, _planeOrigin, normal, Tint(ctx.Handles));
+        DrawCursor(ctx, _planeOrigin, normal, Tint());
 
         if (!ctx.Handles.IsNearest(id) || !ctx.Handles.TryBeginDrag(id)) return;
 
@@ -137,6 +155,7 @@ public sealed class CSGGenerateTool : SceneTool
         _cornerA = Float3.Zero;
         _cornerB = Float3.Zero;
         _height = 0f;
+        _clickedBase = false;
         _onSurface = _hoverOnSurface;
         _stage = Stage.Footprint;
         _stageView = ctx.View;
@@ -163,7 +182,7 @@ public sealed class CSGGenerateTool : SceneTool
         Float3 first = ToWorld(new Float3(_outline[0].X, 0f, _outline[0].Y));
         bool nearFirst = _outline.Count >= 3 && handles.WorldToScreen(first) is Float2 screen && Float2.Distance(screen, handles.MousePosition) < 10f;
 
-        var tint = Tint(handles);
+        var tint = Tint();
         DrawWorkGrid(ctx, ToWorld(new Float3(cursor.X, 0f, cursor.Y)));
         var ring = new List<Float3>(_outline.Count + 1);
         foreach (Float2 p in _outline) ring.Add(ToWorld(new Float3(p.X, 0f, p.Y)));
@@ -187,7 +206,7 @@ public sealed class CSGGenerateTool : SceneTool
         foreach (Float2 p in _outline) { min = Maths.Min(min, p); max = Maths.Max(max, p); }
         _cornerA = new Float3(min.X, 0f, min.Y);
         _cornerB = new Float3(max.X, 0f, max.Y);
-        _stage = Stage.Extrude;
+        BeginHeight(ctx);
     }
 
     private void TickFootprint(SceneToolContext ctx, ControlID id)
@@ -197,21 +216,29 @@ public sealed class CSGGenerateTool : SceneTool
 
         HandleTyping(ctx.Handles);
         DrawWorkGrid(ctx, ToWorld(_cornerB));
-        DrawFootprint(ctx, Tint(ctx.Handles));
+        DrawFootprint(ctx, Tint());
         DrawTyped(ctx);
 
-        if (!ctx.Handles.PrimaryUp) return;
-
-        ctx.Handles.TryEndDrag(id);
-
-        // A press without a drag is a misclick, not a zero size brush.
-        if (!FootprintIsValid())
+        // A press released without a drag leaves the base following the cursor until a second click
+        if (!_clickedBase && ctx.Handles.PrimaryUp)
         {
-            _stage = Stage.Idle;
+            ctx.Handles.TryEndDrag(id);
+            if (FootprintIsValid()) BeginHeight(ctx);
+            else _clickedBase = true;
             return;
         }
 
+        if (_clickedBase && ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered && FootprintIsValid()) BeginHeight(ctx);
+    }
+
+    /// <summary>The base is done. Shift places it straight away at the last height, else the height follows the cursor.</summary>
+    private void BeginHeight(SceneToolContext ctx)
+    {
         _stage = Stage.Extrude;
+        if (!ctx.Handles.Shift || _lastHeight == 0f) return;
+
+        _height = _lastHeight;
+        Commit(ctx, OperationFor());
     }
 
     private void TickExtrude(SceneToolContext ctx)
@@ -219,14 +246,14 @@ public sealed class CSGGenerateTool : SceneTool
         _height = CSGSnap.Value(ctx.Handles, HeightUnderCursor(ctx));
 
         HandleTyping(ctx.Handles);
-        UpdateGhost(OperationFor(ctx.Handles));
-        DrawPreview(ctx, Tint(ctx.Handles));
+        UpdateGhost(OperationFor());
+        DrawPreview(ctx, Tint());
         DrawTyped(ctx);
 
-        if (ctx.Handles.IsPressed("CSG/Confirm")) { Commit(ctx, OperationFor(ctx.Handles)); return; }
+        if (ctx.Handles.IsPressed("CSG/Confirm")) { Commit(ctx, OperationFor()); return; }
 
         // The commit click is a raw press, so check the cursor is on the scene rather than a panel.
-        if (ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered) Commit(ctx, OperationFor(ctx.Handles));
+        if (ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered) Commit(ctx, OperationFor());
     }
 
     private void PickShapeKey(HandleContext handles)
@@ -325,27 +352,16 @@ public sealed class CSGGenerateTool : SceneTool
         return model.GameObject;
     }
 
-    /// <summary>
-    /// The operation the brush will get. Pulling an additive brush into the surface it started on digs, and holding
-    /// Shift swaps add and subtract for one brush.
-    /// </summary>
-    private Operation OperationFor(HandleContext handles)
+    /// <summary>The operation the brush will get. In auto, pushing into the surface it was drawn on digs.</summary>
+    private Operation OperationFor()
     {
-        Operation operation = Operation == Operation.Additive && _onSurface && _stage == Stage.Extrude && _height < 0f
-            ? Operation.Subtractive
-            : Operation;
-
-        return !handles.Shift ? operation : operation switch
-        {
-            Operation.Additive => Operation.Subtractive,
-            Operation.Subtractive => Operation.Additive,
-            _ => operation,
-        };
+        if (!AutoOperation) return Operation;
+        return _onSurface && _stage == Stage.Extrude && _height < 0f ? Operation.Subtractive : Operation.Additive;
     }
 
-    private (Color32 Color, string Label) Tint(HandleContext handles)
+    private (Color32 Color, string Label) Tint()
     {
-        Operation operation = OperationFor(handles);
+        Operation operation = OperationFor();
         return (CSGObjectTool.ColorFor(operation), Loc.Get(CSGSections.OperationLabel(operation)));
     }
 
@@ -375,7 +391,11 @@ public sealed class CSGGenerateTool : SceneTool
         Undo.RegisterCreatedObjectUndo(created, "Create CSG Brush");
         Selection.Select(created);
         model!.SetDirty();
+        _lastHeight = _height;
         Cancel();
+
+        // Straight to editing what was placed, as most brushes are adjusted right after
+        CSGEditMode.Current = CSGMode.Object;
     }
 
     /// <summary>Builds the drawn shape into the model and returns the object that holds it, or null when it encloses nothing.</summary>
