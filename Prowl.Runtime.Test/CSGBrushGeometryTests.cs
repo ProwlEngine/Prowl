@@ -175,4 +175,30 @@ public class CSGBrushGeometryTests
     {
         Assert.True(SurfaceData.Default.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture));
     }
+
+    /// <summary>Fitting a face's texture to the UVs it showed before its frame turned, moved or mirrored about it gives the same UVs.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FittedUVsMatchTheUVsTheFaceShowedBefore(bool mirrored)
+    {
+        var data = new SurfaceData { Scale = new Float2(1.5f, 0.75f), Offset = new Float2(0.3f, -0.2f), Rotation = 20f, Flags = CSGSurfaceFlags.WorldSpaceTexture };
+        Float3 normal = Float3.UnitZ;
+        Float3[] before = [new(0f, 0f, 0.5f), new(2f, 0f, 0.5f), new(2f, 1.5f, 0.5f), new(0f, 1.5f, 0.5f)];
+        Float2[] uvs = before.Select(p => CSGSurfaceGeometry.UVAt(data, normal, p, 2f)).ToArray();
+
+        Float4x4 move = Float4x4.CreateTRS(new Float3(3f, -1f, 2f), Quaternion.FromEuler(new Float3(0f, 0f, 0.7f)), mirrored ? new Float3(-1f, 1f, 1f) : Float3.One);
+        Float3[] after = before.Select(p => Float4x4.TransformPoint(p, move)).ToArray();
+        Float3 moved = Float3.Normalize(Float4x4.TransformNormal(normal, move));
+
+        SurfaceData fitted = CSGSurfaceGeometry.FitUVs(data, moved, after, uvs, 2f);
+
+        Assert.Equal(data.Flags, fitted.Flags);
+        for (int i = 0; i < after.Length; i++)
+        {
+            Float2 uv = CSGSurfaceGeometry.UVAt(fitted, moved, after[i], 2f);
+            Assert.Equal(uvs[i].X, uv.X, 3);
+            Assert.Equal(uvs[i].Y, uv.Y, 3);
+        }
+    }
 }

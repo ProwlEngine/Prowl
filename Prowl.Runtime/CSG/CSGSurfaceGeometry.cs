@@ -173,6 +173,64 @@ public static class CSGSurfaceGeometry
         return data;
     }
 
+    /// <summary>The UV a surface gives a point, the point and the normal picking the basis given in the space it projects in.</summary>
+    public static Float2 UVAt(in SurfaceData data, Float3 normal, Float3 point, float texelScale)
+    {
+        Basis(normal, data.Rotation, out Float3 u, out Float3 v);
+        Float2 scale = Effective(data, texelScale);
+        return new Float2(Float3.Dot(point, u) / scale.X, Float3.Dot(point, v) / scale.Y) + data.Offset;
+    }
+
+    /// <summary>
+    /// The offset, rotation and scale that give each point the UV wanted there, or as near as those three can, the points
+    /// on one face and given in the space it projects in. A mirror becomes a negative scale. Everything else is kept.
+    /// </summary>
+    public static SurfaceData FitUVs(SurfaceData data, Float3 normal, IReadOnlyList<Float3> points, IReadOnlyList<Float2> uvs, float texelScale)
+    {
+        if (points.Count < 3 || uvs.Count != points.Count) return data;
+        SurfaceTexSpace.BasisFor(normal, out Float3 u0, out Float3 v0);
+
+        // Least squares of uv = M * (a, b) + t, where a and b are the points along the unrotated basis
+        double saa = 0, sab = 0, sbb = 0, sa = 0, sb = 0;
+        double sau = 0, sbu = 0, su = 0, sav = 0, sbv = 0, sv = 0;
+        for (int i = 0; i < points.Count; i++)
+        {
+            double a = Float3.Dot(points[i], u0), b = Float3.Dot(points[i], v0);
+            saa += a * a; sab += a * b; sbb += b * b; sa += a; sb += b;
+            sau += a * uvs[i].X; sbu += b * uvs[i].X; su += uvs[i].X;
+            sav += a * uvs[i].Y; sbv += b * uvs[i].Y; sv += uvs[i].Y;
+        }
+
+        if (!Solve3(saa, sab, sa, sab, sbb, sb, sa, sb, points.Count, sau, sbu, su, out double m00, out double m01, out double tu)) return data;
+        if (!Solve3(saa, sab, sa, sab, sbb, sb, sa, sb, points.Count, sav, sbv, sv, out double m10, out double m11, out double tv)) return data;
+
+        // The first row is (cos, sin) / scale U, the second (-sin, cos) / scale V
+        double rowU = Math.Sqrt(m00 * m00 + m01 * m01);
+        if (rowU < 1e-12) return data;
+        double angle = Math.Atan2(m01, m00);
+        double c = Math.Cos(angle), s = Math.Sin(angle);
+        double inverseV = -s * m10 + c * m11;
+        if (Math.Abs(inverseV) < 1e-12) return data;
+
+        data.Rotation = (float)(angle * (180.0 / Math.PI));
+        data.Scale = FromEffective(new Float2((float)(1.0 / rowU), (float)(1.0 / inverseV)), texelScale);
+        data.Offset = new Float2((float)tu, (float)tv);
+        return data;
+    }
+
+    private static bool Solve3(double a00, double a01, double a02, double a10, double a11, double a12, double a20, double a21, double a22,
+                               double b0, double b1, double b2, out double x, out double y, out double z)
+    {
+        double det = a00 * (a11 * a22 - a12 * a21) - a01 * (a10 * a22 - a12 * a20) + a02 * (a10 * a21 - a11 * a20);
+        x = y = z = 0;
+        if (Math.Abs(det) < 1e-18) return false;
+
+        x = (b0 * (a11 * a22 - a12 * a21) - a01 * (b1 * a22 - a12 * b2) + a02 * (b1 * a21 - a11 * b2)) / det;
+        y = (a00 * (b1 * a22 - a12 * b2) - b0 * (a10 * a22 - a12 * a20) + a02 * (a10 * b2 - b1 * a20)) / det;
+        z = (a00 * (a11 * b2 - b1 * a21) - a01 * (a10 * b2 - b1 * a20) + b0 * (a10 * a21 - a11 * a20)) / det;
+        return true;
+    }
+
     /// <summary>The scale the projection uses, the surface's tile scale combined with the model's texel scale.</summary>
     internal static Float2 Effective(in SurfaceData data, float texelScale)
     {
