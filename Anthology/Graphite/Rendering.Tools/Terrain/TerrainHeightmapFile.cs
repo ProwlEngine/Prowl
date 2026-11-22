@@ -22,25 +22,9 @@ public sealed class TerrainHeightmapOptions
     public bool FlipZ { get; init; }
 }
 
-/// <summary>A grid of heights over the terrain's range, 0 at its bottom and 65535 at its top, row by row from z 0.</summary>
-public sealed class TerrainHeightmap
+/// <summary>Reads heightmap files into <see cref="TerrainHeightmap"/>s.</summary>
+public static class TerrainHeightmapFile
 {
-    public TerrainHeightmap(int width, int height, ushort[] samples)
-    {
-        if (width < 2 || height < 2 || samples.Length != width * height)
-            throw new ArgumentException("A heightmap needs at least 2 by 2 samples, one per texel.");
-        Width = width;
-        Height = height;
-        Samples = samples;
-    }
-
-    public int Width { get; }
-    public int Height { get; }
-    public ushort[] Samples { get; }
-
-    /// <summary>Cut out quads, one per sample for the quad whose lowest corner it is, or null for none.</summary>
-    public bool[]? Holes { get; set; }
-
     /// <summary>
     /// Loads a 16 bit little endian .raw, a 32 bit float .r32, or any image Aperture reads (16 bit PNG and TIFF,
     /// EXR and the rest), taking the first channel of colour images.
@@ -75,54 +59,14 @@ public sealed class TerrainHeightmap
         return Map(frame.Width, frame.Height, options, i => samples[i] / 65535.0);
     }
 
-    /// <summary>Loads tiles laid out [row along z, column along x] and joins them, see <see cref="Join"/>.</summary>
+    /// <summary>Loads tiles laid out [row along z, column along x] and joins them, see <see cref="TerrainHeightmap.Join"/>.</summary>
     public static TerrainHeightmap LoadTiles(string[,] paths, int overlap, TerrainHeightmapOptions? options = null)
     {
         TerrainHeightmap[,] tiles = new TerrainHeightmap[paths.GetLength(0), paths.GetLength(1)];
         for (int row = 0; row < tiles.GetLength(0); row++)
             for (int column = 0; column < tiles.GetLength(1); column++)
                 tiles[row, column] = Load(paths[row, column], options);
-        return Join(tiles, overlap);
-    }
-
-    /// <summary>
-    /// Joins tiles laid out [row along z, column along x] into one map, each sharing <paramref name="overlap"/> samples
-    /// with its neighbours, 1 for exports whose tiles repeat their seam.
-    /// </summary>
-    public static TerrainHeightmap Join(TerrainHeightmap[,] tiles, int overlap)
-    {
-        int rows = tiles.GetLength(0), columns = tiles.GetLength(1);
-        int width = overlap, height = overlap;
-        for (int column = 0; column < columns; column++)
-            width += tiles[0, column].Width - overlap;
-        for (int row = 0; row < rows; row++)
-            height += tiles[row, 0].Height - overlap;
-
-        ushort[] samples = new ushort[width * height];
-        bool[]? holes = null;
-        int z0 = 0;
-        for (int row = 0; row < rows; row++)
-        {
-            int x0 = 0;
-            for (int column = 0; column < columns; column++)
-            {
-                TerrainHeightmap tile = tiles[row, column];
-                if (tile.Height != tiles[row, 0].Height || tile.Width != tiles[0, column].Width)
-                    throw new ArgumentException("Tiles in a row must share a height and tiles in a column a width.");
-                for (int z = 0; z < tile.Height; z++)
-                {
-                    tile.Samples.AsSpan(z * tile.Width, tile.Width).CopyTo(samples.AsSpan((z0 + z) * width + x0));
-                    if (tile.Holes != null)
-                    {
-                        holes ??= new bool[width * height];
-                        tile.Holes.AsSpan(z * tile.Width, tile.Width).CopyTo(holes.AsSpan((z0 + z) * width + x0));
-                    }
-                }
-                x0 += tile.Width - overlap;
-            }
-            z0 += tiles[row, 0].Height - overlap;
-        }
-        return new TerrainHeightmap(width, height, samples) { Holes = holes };
+        return TerrainHeightmap.Join(tiles, overlap);
     }
 
     private static (int Width, int Height) RawSize(int count, int width)

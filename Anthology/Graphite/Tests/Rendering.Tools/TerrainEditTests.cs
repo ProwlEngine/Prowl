@@ -280,4 +280,86 @@ public sealed class TerrainEditTests
         TerrainEdited result = data.Apply(new TerrainEdit(TerrainBrush.Raise, new Double2(-500, -500), 10, 5));
         Assert.Empty(result.Pages);
     }
+
+    private static TerrainEdit[] SurfaceEdits =>
+    [
+        new(TerrainBrush.Raise, new Double2(140, 150), 18, 6),
+        new(TerrainBrush.Paint, new Double2(145, 150), 9, 0.8, Layer: 3),
+        new(TerrainBrush.Hole, new Double2(290, 290), 6, 1),
+        new(TerrainBrush.Detail, new Double2(150, 140), 12, 0.4),
+    ];
+
+    private static void AssertSamePages(TerrainData a, TerrainData b)
+    {
+        Assert.Equal(a.Header, b.Header);
+        foreach (TerrainPageKey key in a.PageKeys)
+        {
+            TerrainPage x = a.GetPage(key)!, y = b.GetPage(key)!;
+            Assert.Equal(x.Heights, y.Heights);
+            Assert.Equal(x.NormalAo, y.NormalAo);
+            Assert.Equal(x.Splat, y.Splat);
+            Assert.Equal(x.Holes?.Any(h => h != 0) == true ? x.Holes : null, y.Holes?.Any(h => h != 0) == true ? y.Holes : null);
+            Assert.Equal(x.Details?.Any(d => d != 0) == true ? x.Details : null, y.Details?.Any(d => d != 0) == true ? y.Details : null);
+            for (int q = 0; q < 4; q++)
+            {
+                a.TryGetQuarterBounds(key, q, out double minA, out double maxA);
+                b.TryGetQuarterBounds(key, q, out double minB, out double maxB);
+                Assert.Equal((minA, maxA), (minB, maxB));
+            }
+        }
+    }
+
+    [Fact]
+    public void Save_KeepsEditsAndTrees()
+    {
+        using TerrainData data = Load(Rolling());
+        foreach (TerrainEdit edit in SurfaceEdits)
+            data.Apply(edit);
+        data.AddTree(new TerrainTree(1, new Double3(10, 20, 30), 0.5f, 1.2f, 0.9f, TerrainTree.White));
+        MemoryStream stream = new();
+        data.Save(stream);
+        stream.Position = 0;
+        using TerrainData saved = TerrainData.Load(stream);
+        AssertSamePages(data, saved);
+        Assert.Equal(data.Trees, saved.Trees);
+    }
+
+    [Fact]
+    public void Restore_PutsBackWhatWasCaptured_AndSaysWhichPagesChanged()
+    {
+        using TerrainData data = Load(Rolling()), untouched = Load(Rolling());
+        TerrainState before = data.Capture();
+        foreach (TerrainEdit edit in SurfaceEdits)
+            data.Apply(edit);
+        data.AddTree(new TerrainTree(0, new Double3(5, 0, 5), 0, 1, 1, TerrainTree.White));
+        TerrainState after = data.Capture();
+        using TerrainData edited = Load(Rolling());
+        foreach (TerrainEdit edit in SurfaceEdits)
+            edited.Apply(edit);
+
+        List<TerrainEdited> raised = new();
+        data.Edited += raised.Add;
+        data.Restore(before);
+        AssertSamePages(untouched, data);
+        Assert.Empty(data.Trees);
+        Assert.Contains(new TerrainPageKey(0, 1, 1), raised.Single().Pages);
+
+        data.Restore(after);
+        AssertSamePages(edited, data);
+        Assert.Single(data.Trees);
+    }
+
+    [Fact]
+    public void Export_BuildsBackTheSameTerrain()
+    {
+        using TerrainData data = Load(Rolling());
+        foreach (TerrainEdit edit in SurfaceEdits)
+            data.Apply(edit);
+        TerrainExport export = data.Export();
+        MemoryStream stream = new();
+        TerrainImporter.Import(export.Heights, export.Settings, stream);
+        stream.Position = 0;
+        using TerrainData rebuilt = TerrainData.Load(stream);
+        AssertSamePages(data, rebuilt);
+    }
 }

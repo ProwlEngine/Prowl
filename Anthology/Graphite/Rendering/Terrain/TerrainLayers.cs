@@ -77,7 +77,7 @@ public sealed class TerrainLayers : IDisposable
     public Texture Data { get; }
 
     // Uploads a layer and its mips, each a box filter of the one above, colour averaged in linear light
-    private static void Upload(GraphicsDevice device, Texture texture, uint layer, byte[] pixels, int size, bool srgb)
+    internal static void Upload(GraphicsDevice device, Texture texture, uint layer, byte[] pixels, int size, bool srgb)
     {
         byte[] level = pixels;
         for (uint mip = 0; ; mip++)
@@ -119,4 +119,31 @@ public sealed class TerrainLayers : IDisposable
         Surface.Dispose();
         Data.Dispose();
     }
+}
+
+/// <summary>Grass cards on the GPU for <see cref="TerrainSurface.GrassCards"/>: RGBA8 sRGB cards of one power of two size with mips, one a slice.</summary>
+public sealed class TerrainCards : IDisposable
+{
+    public TerrainCards(Renderer renderer, int size, IReadOnlyList<byte[]> cards)
+    {
+        if (cards.Count == 0 || (size & (size - 1)) != 0 || size <= 0)
+            throw new ArgumentException("Cards need one power of two size and at least one card.", nameof(cards));
+        foreach (byte[] card in cards)
+        {
+            if (card.Length != size * size * 4)
+                throw new ArgumentException("Every card needs RGBA8 texels of the given size.", nameof(cards));
+        }
+        GraphicsDevice device = renderer.Device;
+        Texture = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D((uint)size, (uint)size, (uint)Math.Log2(size) + 1, (uint)cards.Count, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.Sampled));
+        Texture.Name = "Graphite Grass Cards";
+        for (int i = 0; i < cards.Count; i++)
+            TerrainLayers.Upload(device, Texture, (uint)i, cards[i], size, srgb: true);
+        Count = cards.Count;
+    }
+
+    public int Count { get; }
+
+    public Texture Texture { get; }
+
+    public void Dispose() => Texture.Dispose();
 }

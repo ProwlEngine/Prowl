@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace Prowl.Graphite.Rendering.Tools;
+namespace Prowl.Graphite.Rendering;
 
 /// <summary>Where a heightmap sits in the world and what the package keeps over it.</summary>
 public sealed class TerrainImportSettings
@@ -58,6 +58,9 @@ public sealed class TerrainWeightMap
         double a = Values[z0 * Width + x0], b = Values[z0 * Width + x1], c = Values[z1 * Width + x0], d = Values[z1 * Width + x1];
         return (a + (b - a) * fx) * (1 - fz) + (c + (d - c) * fx) * fz;
     }
+
+    // A map the size of the heightmap is read one value per sample, so exports build back exactly
+    internal double At(int x, int z, int width, int height, double u, double v) => Width == width && Height == height ? Values[z * Width + x] : Sample(u, v);
 }
 
 /// <summary>
@@ -167,7 +170,7 @@ public static class TerrainImporter
                     {
                         double total = 0;
                         for (int l = 0; l < layers; l++)
-                            total += weights[l] = settings.Layers[l].Sample(x * du, z * dv);
+                            total += weights[l] = settings.Layers[l].At(x, z, map.Width, map.Height, x * du, z * dv);
                         int i = z * map.Width + x;
                         for (int l = 0; l < layers; l++)
                         {
@@ -186,7 +189,7 @@ public static class TerrainImporter
                     TerrainWeightMap density = settings.Details[d];
                     for (int z = 0; z < map.Height; z++)
                         for (int x = 0; x < map.Width; x++)
-                            details[d * samples + z * map.Width + x] = (byte)Math.Round(density.Sample(x * du, z * dv));
+                            details[d * samples + z * map.Width + x] = (byte)Math.Round(density.At(x, z, map.Width, map.Height, x * du, z * dv));
                 });
                 Details = details;
             }

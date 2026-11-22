@@ -247,7 +247,7 @@ public sealed class TerrainTests
             for (int i = 0; i < 33 * 33; i++)
                 BitConverter.TryWriteBytes(bytes.AsSpan(i * 2), (ushort)(i * 50));
             File.WriteAllBytes(path, bytes);
-            TerrainHeightmap map = TerrainHeightmap.Load(path);
+            TerrainHeightmap map = TerrainHeightmapFile.Load(path);
             Assert.Equal(33, map.Width);
             Assert.Equal(33, map.Height);
             Assert.Equal((ushort)(34 * 50), map.Samples[34]);
@@ -268,7 +268,7 @@ public sealed class TerrainTests
             for (int i = 0; i < 17 * 17; i++)
                 BitConverter.TryWriteBytes(bytes.AsSpan(i * 4), i % 2 == 0 ? 200f : 300f);
             File.WriteAllBytes(path, bytes);
-            TerrainHeightmap map = TerrainHeightmap.Load(path, new TerrainHeightmapOptions { SourceMin = 100f, SourceMax = 300f });
+            TerrainHeightmap map = TerrainHeightmapFile.Load(path, new TerrainHeightmapOptions { SourceMin = 100f, SourceMax = 300f });
             Assert.Equal(17, map.Width);
             Assert.Equal((ushort)32768, map.Samples[0]);
             Assert.Equal((ushort)65535, map.Samples[1]);
@@ -290,7 +290,7 @@ public sealed class TerrainTests
                 pixels[i] = (ushort)(i * 53);
             using (Image image = Image.FromPixels(System.Runtime.InteropServices.MemoryMarshal.AsBytes(pixels.AsSpan()), 40, 30, Prowl.Aperture.PixelFormat.L16))
                 image.Save(path);
-            TerrainHeightmap map = TerrainHeightmap.Load(path);
+            TerrainHeightmap map = TerrainHeightmapFile.Load(path);
             Assert.Equal(40, map.Width);
             Assert.Equal(30, map.Height);
             Assert.Equal(pixels, map.Samples);

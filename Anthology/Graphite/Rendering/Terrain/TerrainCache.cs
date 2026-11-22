@@ -259,7 +259,6 @@ internal sealed class TerrainCache : IDisposable
 
     public void Dispose()
     {
-        _program.Dispose();
         _point.Dispose();
         _linear.Dispose();
         foreach (Sampler sampler in _layerSamplers.Values)

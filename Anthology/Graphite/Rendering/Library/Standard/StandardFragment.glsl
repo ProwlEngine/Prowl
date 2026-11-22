@@ -89,6 +89,9 @@ void Graphite_StandardFragment()
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Surface(p, i);
 #endif
+#ifdef GRAPHITE_STANDARD_FINISH
+    GRAPHITE_STANDARD_FINISH(p, i);
+#endif
     Graphite_ApplyDecals(vRelativePos, i.geometryNormal, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
 #ifdef _SURFACE_CUTOUT
     if (p.geometryOpacity < alpha_cutoff)

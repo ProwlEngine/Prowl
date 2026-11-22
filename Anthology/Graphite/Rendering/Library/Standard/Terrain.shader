@@ -4,6 +4,7 @@
 // a Vertex block's SurfaceVertex seeing object space in quads of the node's level. The normal and tangent frame come from
 // the normal pages per pixel, see Graphite/Terrain/TerrainFragment.glsl. TerrainSurface sets the _Terrain properties.
 // TERRAIN_HOLES, on only for the nodes whose page has holes, discards the quads whose hole bit is set in every pass.
+// The lit passes tint the circle of TerrainSurface.Brush when it is shown.
 Shader "Graphite/Terrain"
 {
     Properties
@@ -97,6 +98,8 @@ Shader "Graphite/Terrain"
         _TerrainCacheSurface("Terrain Cache Surface", Texture2DArray) = "white" {}
         _TerrainCacheLevels("Terrain Cache Levels", Texture2D) = "black" {}
         _TerrainCacheParams("Terrain Cache Params", Vector) = (0, 1024, 0, 0)
+        _TerrainBrush("Terrain Brush", Vector) = (0, 0, 0, 0.5)
+        _TerrainBrushColor("Terrain Brush Color", Color) = (0.2, 0.8, 0.6, 0)
     }
 
     Pass
@@ -108,6 +111,7 @@ Shader "Graphite/Terrain"
         {
             #define GRAPHITE_STANDARD_FORWARD
             #define GRAPHITE_STANDARD_INPUTS Terrain_Inputs
+            #define GRAPHITE_STANDARD_FINISH Terrain_Brush
             #pragma variant TERRAIN_HOLES
             #pragma variant global PBR_TIER FULL LITE
             #pragma variant PBR_COAT
@@ -235,6 +239,7 @@ Shader "Graphite/Terrain"
             #define GRAPHITE_STANDARD_FORWARD
             #define GRAPHITE_STANDARD_DEBUG
             #define GRAPHITE_STANDARD_INPUTS Terrain_Inputs
+            #define GRAPHITE_STANDARD_FINISH Terrain_Brush
             #pragma variant TERRAIN_HOLES
             #pragma variant global PBR_TIER FULL LITE
             #pragma variant PBR_COAT

@@ -26,7 +26,10 @@ public interface ITerrainInstances
     event Action<Double2, Double2>? Changed;
 }
 
-/// <summary>The terrain's trees, see <see cref="TerrainData.Trees"/>, sorted into cells, following the trees as they change.</summary>
+/// <summary>
+/// The terrain's trees, see <see cref="TerrainData.Trees"/>, sorted into cells, each standing on the ground under it, and
+/// following the trees and the ground as they change.
+/// </summary>
 public sealed class TerrainTreeInstances : ITerrainInstances, IDisposable
 {
     private readonly TerrainData _data;
@@ -38,6 +41,7 @@ public sealed class TerrainTreeInstances : ITerrainInstances, IDisposable
         CellSize = cellSize;
         Sort();
         data.TreesChanged += OnTreesChanged;
+        data.Edited += OnEdited;
     }
 
     public double CellSize { get; }
@@ -48,7 +52,17 @@ public sealed class TerrainTreeInstances : ITerrainInstances, IDisposable
 
     public IReadOnlyList<TerrainInstance> Cell(int x, int z) => _cells.TryGetValue((x, z), out TerrainInstance[]? cell) ? cell : [];
 
-    public void Dispose() => _data.TreesChanged -= OnTreesChanged;
+    public void Dispose()
+    {
+        _data.TreesChanged -= OnTreesChanged;
+        _data.Edited -= OnEdited;
+    }
+
+    private void OnEdited(TerrainEdited edited)
+    {
+        Sort();
+        Changed?.Invoke(edited.Min, edited.Max);
+    }
 
     private void OnTreesChanged()
     {
@@ -66,7 +80,10 @@ public sealed class TerrainTreeInstances : ITerrainInstances, IDisposable
             (int, int) cell = ((int)Math.Floor(tree.Position.X / CellSize), (int)Math.Floor(tree.Position.Z / CellSize));
             if (!cells.TryGetValue(cell, out List<TerrainInstance>? list))
                 cells[cell] = list = new List<TerrainInstance>();
-            list.Add(new TerrainInstance((ulong)i, tree.Prototype, _data.Position + tree.Position, tree.Yaw,
+            Double3 at = _data.Position + tree.Position;
+            if (_data.TryGetHeight(new Double2(at.X, at.Z), out double ground))
+                at = new Double3(at.X, ground, at.Z);
+            list.Add(new TerrainInstance((ulong)i, tree.Prototype, at, tree.Yaw,
                 new Float3(tree.WidthScale, tree.HeightScale, tree.WidthScale), new Float3(0f, 1f, 0f), tree.Tint));
         }
         Dictionary<(int, int), TerrainInstance[]> sorted = new(cells.Count);

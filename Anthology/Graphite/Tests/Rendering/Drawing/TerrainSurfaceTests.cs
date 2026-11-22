@@ -106,6 +106,73 @@ public sealed class TerrainSurfaceTests : IDisposable
         Assert.All(_harness.Frame(view), p => Assert.True(p.X > 0.99f, $"{p}"));
     }
 
+    // The brush tints the ground under its circle red and leaves the ground outside it alone, and nothing once it is gone
+    [Fact]
+    public void Brush_TintsTheGroundUnderIt()
+    {
+        using TerrainData data = Flat(600);
+        TerrainSurface surface = new(_harness.Renderer, data);
+        _harness.Owned.Add(surface);
+        _harness.World.Providers.Add(surface);
+        _harness.World.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(1, 1, 1, 1), Fog = default };
+
+        RenderView view = _harness.View();
+        Float4x4 down = new(new Float4(1, 0, 0, 0), new Float4(0, 0, -1, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 0, 1));
+        view.Camera = new ViewCamera(new ViewLayer { View = down, Projection = RendererHarness.Projection, Position = new Double3(300, 60, 220) });
+        float Redness(Float4[] pixels, int x, int y)
+        {
+            Float4 p = pixels[y * RendererHarness.Size + x];
+            return p.X - (p.Y + p.Z) * 0.5f;
+        }
+
+        Float4[] plain = _harness.Frame(view);
+        surface.Brush = new TerrainBrushOverlay(new Double2(300, 220), 4, 0.5f, new Float3(1, 0, 0), 1f);
+        Float4[] brushed = _harness.Frame(view);
+        int cx = RendererHarness.Size / 2, cy = RendererHarness.Size / 2;
+        Assert.True(Redness(brushed, cx, cy) > Redness(plain, cx, cy) + 0.1f, $"{brushed[cy * RendererHarness.Size + cx]} {plain[cy * RendererHarness.Size + cx]}");
+        Assert.Equal(plain[0], brushed[0]);
+
+        surface.Brush = null;
+        Assert.Equal(plain[cy * RendererHarness.Size + cx], _harness.Frame(view)[cy * RendererHarness.Size + cx]);
+    }
+
+    // A terrain made after another was removed and disposed from the same world draws lit like the first
+    [Fact]
+    public void Surface_DrawsAfterAnotherIsRemoved()
+    {
+        _harness.World.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(1, 1, 1, 1), Fog = default };
+        RenderView view = _harness.View();
+        Float4x4 down = new(new Float4(1, 0, 0, 0), new Float4(0, 0, -1, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 0, 1));
+        view.Camera = new ViewCamera(new ViewLayer { View = down, Projection = RendererHarness.Projection, Position = new Double3(300, 60, 220) });
+        const int size = 4;
+        byte[] grey = new byte[size * size * 4], flat = new byte[size * size * 4];
+        for (int i = 0; i < size * size; i++)
+        {
+            (grey[i * 4], grey[i * 4 + 1], grey[i * 4 + 2], grey[i * 4 + 3]) = (128, 128, 128, 128);
+            (flat[i * 4], flat[i * 4 + 1], flat[i * 4 + 2], flat[i * 4 + 3]) = (128, 128, 230, 255);
+        }
+
+        float Draw()
+        {
+            using TerrainData data = Flat(600);
+            TerrainLayers layers = new(_harness.Renderer, [new TerrainLayerDesc { Size = size, Albedo = grey, Surface = flat }]);
+            TerrainSurface surface = new(_harness.Renderer, data) { Layers = layers };
+            _harness.World.Providers.Add(surface);
+            FrameUntilFine(surface, view);
+            float brightness = Brightness(view);
+            _harness.World.Providers.Remove(surface);
+            _harness.Frame(view);
+            surface.Dispose();
+            layers.Dispose();
+            return brightness;
+        }
+
+        float first = Draw();
+        float second = Draw();
+        Assert.True(first > 0.1f, $"first {first}");
+        Assert.True(second > first * 0.9f, $"second {second} first {first}");
+    }
+
     // Renders until the finest level has pages in, as they load on worker threads
     private void FrameUntilFine(TerrainSurface surface, RenderView view)
     {
