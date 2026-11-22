@@ -64,8 +64,8 @@ public sealed class CSGOverlayTool : SceneTool
             // The mesh tool tapers a selected face on the same keys
             if (SceneToolManager.Get<CSGMeshTool>() is not { TapersFace: true })
             {
-                if (ctx.Handles.IsPressed("CSG/HalveGrid")) SceneTools.StepMoveSnap(-1);
-                else if (ctx.Handles.IsPressed("CSG/DoubleGrid")) SceneTools.StepMoveSnap(1);
+                if (ctx.Handles.IsPressed("CSG/HalveGrid")) StepGrid(-1);
+                else if (ctx.Handles.IsPressed("CSG/DoubleGrid")) StepGrid(1);
             }
         }
 
@@ -109,6 +109,12 @@ public sealed class CSGOverlayTool : SceneTool
         if (handles.IsPressed("CSG/RotateRight")) { RotateBySnap(1f); return; }
 
         HandleNudge(handles);
+    }
+
+    private static void StepGrid(int direction)
+    {
+        SceneTools.StepMoveSnap(direction);
+        CSGStatus.Flash(Loc.Get("csg.status_grid", new { size = SceneTools.MoveSnap.ToString(SceneTools.CurrentMoveSnapFormat) }));
     }
 
     /// <summary>Sets the selection's operation, and while drawing also the operation the next brush gets.</summary>
