@@ -754,6 +754,7 @@ public sealed class CSGMeshTool : SceneTool
         handles.IsPressed("Scene/ToolRotate");
 
         if (handles.IsPressed("MeshEdit/Extrude")) ExtrudeRegionSelected();
+        else if (handles.IsPressed("MeshEdit/Inset")) InsetSelected();
         else if (handles.IsPressed("MeshEdit/Bevel")) BevelSelected();
         else if (handles.IsPressed("MeshEdit/LoopCut")) LoopCut();
         else if (handles.IsPressed("MeshEdit/Knife")) Knife();

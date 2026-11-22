@@ -78,6 +78,13 @@ public sealed class ModelMeshTool : SceneTool
     public SelectMode Mode { get; private set; } = SelectMode.Vertex;
     public bool XRay { get; set; }
 
+    /// <summary>Moved points snap to the corners, edges and faces of every model object under the mouse.</summary>
+    public bool SnapToObjects { get; set; }
+
+    /// <summary>Unselected points near the selection move with it, less the further they are.</summary>
+    public bool Proportional { get; set; }
+    public float ProportionalRadius { get; set; } = 1f;
+
     /// <summary>Whether edit mode is on.</summary>
     public bool Editing => _edited.Count > 0;
 
@@ -219,6 +226,9 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Linked")) Command((_, s) => Selecting.Linked(s, Mode));
         else if (handles.IsPressed("MeshEdit/Similar")) Command((mesh, s) => Selecting.Similar(mesh, s, Mode));
         else if (handles.IsPressed("MeshEdit/XRay")) XRay = !XRay;
+        else if (handles.IsPressed("MeshEdit/SnapToBrushes")) SnapToObjects = !SnapToObjects;
+        else if (handles.IsPressed("MeshEdit/Proportional")) Proportional = !Proportional;
+        else if (handles.IsPressed("MeshEdit/Inset")) Inset(ctx);
         else if (handles.IsPressed("MeshEdit/HideUnselected")) Hide(unselected: true);
         else if (handles.IsPressed("MeshEdit/Reveal")) foreach (ModelObject model in _edited) _hidden[model] = new ElementSelection();
         else if (handles.IsPressed("MeshEdit/Hide")) Hide(unselected: false);
@@ -340,6 +350,88 @@ public sealed class ModelMeshTool : SceneTool
             Undo.RegisterCreatedObjectUndo(go, Name);
         }
         HoldSelection();
+    }
+
+    private void Inset(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Inset Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.Inset(mesh, [.. s.Faces], d, s), SelectMode.Face));
+
+    private void Subdivide(SceneToolContext ctx)
+    {
+        if (Mode == SelectMode.Face)
+            StartOperator(ctx, new AmountOperator("Subdivide Model Faces", false, _ => 0f, "0", (mesh, s, _, cuts) =>
+                Operators.SubdivideFaces(mesh, [.. s.Faces], cuts, s), SelectMode.Face, 1, 16));
+        else
+            StartOperator(ctx, new AmountOperator("Subdivide Model Edges", false, _ => 0f, "0", (mesh, s, _, cuts) =>
+                Operators.SubdivideEdges(mesh, [.. s.Edges], cuts, s), SelectMode.Vertex, 1, 64));
+    }
+
+    /// <summary>
+    /// What a moved point snaps to with the mouse at a screen point: a corner, a point of an edge or a face of any model
+    /// object, the edited ones included. Selected points, their edges and faces, and hidden parts are never targets.
+    /// </summary>
+    private Float3? FindSnap(HandleContext handles, Float2 mouse)
+    {
+        if (ModelEditingMode.World is not { } world) return null;
+        var corners = new List<Float3>();
+        var edges = new List<(Float3, Float3)>();
+        Float3? face = null;
+        float nearest = float.MaxValue;
+        foreach (GameObject go in world.Objects)
+        {
+            if (go.GetComponent<ModelObject>() is not { } model || model.IsNotValid()) continue;
+            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+            ElementSelection? selected = _selection.TryGetValue(model, out ElementSelection? s) ? s : null;
+            ElementSelection? hidden = _hidden.TryGetValue(model, out ElementSelection? h) ? h : null;
+            foreach (GeometryData.Vertex vertex in model.Mesh.Vertices)
+                if (selected?.Vertices.Contains(vertex) != true && hidden?.Vertices.Contains(vertex) != true) corners.Add(Float4x4.TransformPoint(vertex.Point, toWorld));
+            foreach (GeometryData.Edge edge in model.Mesh.Edges)
+            {
+                if (selected != null && (selected.Vertices.Contains(edge.Vert1) || selected.Vertices.Contains(edge.Vert2)) || hidden?.Edges.Contains(edge) == true) continue;
+                edges.Add((Float4x4.TransformPoint(edge.Vert1.Point, toWorld), Float4x4.TransformPoint(edge.Vert2.Point, toWorld)));
+            }
+            Func<GeometryData.Face, bool>? skip = selected == null ? null
+                : f => hidden?.Faces.Contains(f) == true || f.NeighborVertices().Exists(selected.Vertices.Contains);
+            if (MeshPicking.Raycast(model.Mesh, toWorld, handles.MouseRay, out _, out float distance, skip) && distance < nearest)
+            {
+                nearest = distance;
+                face = handles.MouseRay.Origin + handles.MouseRay.Direction * distance;
+            }
+        }
+        return Snapping.Find(corners, edges, face, handles.WorldToScreen, mouse, out Float3 point) ? point : null;
+    }
+
+    // ================================================================
+    //  Right click menu
+    // ================================================================
+
+    public override bool ReplacesSceneContextMenu => Editing;
+
+    public override void OnSceneContextMenu(SceneToolContext ctx, OrigamiUI.ContextBuilder menu)
+    {
+        if (!Editing) return;
+        menu.Title(Loc.Get("model.edit_mode"));
+        menu.Item(Loc.Get("csg.extrude_region"), () => StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s), SelectMode.Face)));
+        menu.Item(Loc.Get("csg.inset"), () => Inset(ctx));
+        menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)));
+        menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
+        menu.Item(Loc.Get("csg.dissolve"), () => Edit("Dissolve Model Elements", (mesh, s) => Operators.Dissolve(mesh, s, Mode, s), SelectMode.Face));
+        menu.Item(Loc.Get("csg.merge_centre"), () => Edit("Merge Model Points", MergeAtCentre, SelectMode.Vertex));
+        menu.Item(Loc.Get("csg.connect"), () => Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge));
+        menu.Item(Loc.Get("csg.triangulate"), () => Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face));
+        menu.Item(Loc.Get("csg.flatten"), () => Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s)));
+        menu.Item(Loc.Get("csg.bridge"), () => Edit("Bridge Model Faces", Bridge, SelectMode.Face));
+        menu.Item(Loc.Get("csg.separate"), SeparateSelected);
+        for (int axis = 0; axis < 3; axis++)
+        {
+            int chosen = axis;
+            string name = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
+            menu.Item(Loc.Get("csg.symmetrize") + "  " + Loc.Get("csg.symmetrize_side", new { from = "+" + name, to = "-" + name }),
+                () => Edit("Symmetrize Model", (mesh, s) => { Operators.Symmetrize(mesh, chosen, true, 0f); s.Clear(); }));
+        }
+        menu.Separator();
+        menu.Item(Loc.Get("csg.xray"), () => XRay = !XRay, on: XRay);
+        menu.Item(Loc.Get("csg.snap_brushes"), () => SnapToObjects = !SnapToObjects, on: SnapToObjects);
+        menu.Item(Loc.Get("csg.proportional"), () => Proportional = !Proportional, on: Proportional);
     }
 
     private static void MergeAtCentre(GeometryData mesh, ElementSelection selection)
@@ -583,7 +675,7 @@ public sealed class ModelMeshTool : SceneTool
             if (_selection[model].Vertices.Count > 0)
                 parts.Add((new EditTarget(model.Mesh, model.Transform.LocalToWorldMatrix), _selection[model]));
         if (parts.Count == 0) return null;
-        _session = new TransformSession(parts) { Individual = SceneTools.Pivot == PivotMode.Individual };
+        _session = new TransformSession(parts, Proportional ? ProportionalRadius : 0f) { Individual = SceneTools.Pivot == PivotMode.Individual };
         _sessionMove = null;
         return _session;
     }
@@ -639,7 +731,10 @@ public sealed class ModelMeshTool : SceneTool
     private void StartModal(SceneToolContext ctx, TransformKind kind)
     {
         if (StartSession() is not { } session) return;
-        _modal = new TransformModal(kind, session, Quaternion.Identity, null);
+        _modal = new TransformModal(kind, session, Quaternion.Identity, null)
+        {
+            Snap = SnapToObjects ? mouse => FindSnap(ctx.Handles, mouse) : null,
+        };
         ctx.Handles.Modal = true;
         _modalHandles = ctx.Handles;
     }
@@ -647,6 +742,16 @@ public sealed class ModelMeshTool : SceneTool
     private void TickModal(SceneToolContext ctx)
     {
         TransformModal modal = _modal!;
+        if (Proportional && _session != null)
+        {
+            float wheel = Input.MouseWheelDelta;
+            if (wheel != 0f)
+            {
+                ProportionalRadius = Math.Clamp(ProportionalRadius * MathF.Pow(1.15f, wheel), 0.01f, 1000f);
+                _session.Falloff = ProportionalRadius;
+            }
+            ctx.Draw.Circle(_session.Pivot, ctx.Camera.GameObject.Transform.Forward, ProportionalRadius, new Color32(255, 255, 255, 150), 1f);
+        }
         ModalState state = modal.Tick(ctx);
         ctx.Draw.Label(_session!.Pivot, modal.Status, PickedColor);
         if (state == ModalState.Running)

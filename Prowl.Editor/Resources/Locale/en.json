@@ -33,6 +33,7 @@
   "model.file_filter": "Model",
   "model.edit_as_model": "Edit as Model",
   "model.join": "Join Into Active",
+  "model.edit_mode": "Model Edit",
   "model.origin_to_geometry": "Origin to Geometry",
   "model.stats": "{{vertices}} points, {{faces}} faces",
   "model.smoothing": "Smoothing angle",
