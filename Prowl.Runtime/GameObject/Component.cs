@@ -666,6 +666,9 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     private protected override void OnDisposed()
     {
+        SceneInstance? world = OwningScene;
+        if (world.IsValid()) world.ComponentDisposed(this);
+
         CancellationTokenSource? cancellation = Interlocked.Exchange(ref _destroyCancellation, null);
         if (cancellation == null) return;
 
