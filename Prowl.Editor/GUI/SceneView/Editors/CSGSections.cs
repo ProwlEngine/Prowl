@@ -27,7 +27,7 @@ internal static class CSGSections
     /// <summary>A button: an icon, a short label, and what it does. Lit while <see cref="On"/>.</summary>
     internal readonly record struct Tile(string Icon, string Label, string Tip, System.Action Run, bool On = false);
 
-    /// <summary>One column of the panel. The tip shows on its title.</summary>
+    /// <summary>One column of the panel. The tip shows on its title. An empty title leaves the title out.</summary>
     internal sealed record Column(string Id, string Title, string? Tip, Action<Paper, Scribe.FontFile> Body, float Width = ColumnWidth);
 
     internal const float ColumnWidth = 250f;
@@ -96,11 +96,14 @@ internal static class CSGSections
                     Column column = columns[i];
                     using (paper.Column(column.Id).Width(column.Width).Height(UnitValue.Auto).Padding(10, 10, 6, 8).Gap(4).Enter())
                     {
-                        ElementBuilder title = paper.Box($"{column.Id}_t").Height(18)
-                            .Text(column.Title.ToUpperInvariant(), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.AccentText)
-                            .FontSize(Small - 1f).Alignment(TextAlignment.MiddleCenter);
-                        if (column.Tip != null) title.Tooltip(column.Title, column.Tip);
-                        else title.IsNotInteractable();
+                        if (column.Title.Length > 0)
+                        {
+                            ElementBuilder title = paper.Box($"{column.Id}_t").Height(18)
+                                .Text(column.Title.ToUpperInvariant(), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.AccentText)
+                                .FontSize(Small - 1f).Alignment(TextAlignment.MiddleCenter);
+                            if (column.Tip != null) title.Tooltip(column.Title, column.Tip);
+                            else title.IsNotInteractable();
+                        }
 
                         column.Body(paper, font);
                     }
@@ -112,7 +115,7 @@ internal static class CSGSections
 
     private static void AddSelect(List<Column> columns)
     {
-        columns.Add(new Column("csg_sel", Loc.Get("csg.mode_select"), null, (paper, font) =>
+        columns.Add(new Column("csg_sel", "", null, (paper, font) =>
             Actions(paper, font, "csg_sel_pivot", 1,
                 new Tile(EditorIcons.Crosshairs, Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot)),
             NarrowColumnWidth));
