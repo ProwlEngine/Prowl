@@ -83,6 +83,9 @@ public sealed class CSGMeshTool : SceneTool
     private bool _dragStarted;
     private bool _passedThreshold;
 
+    // Points pressed while already selected, so the press drags the whole selection and a plain click narrows to them
+    private int[]? _clickedPoints;
+
     private Action _action;
     private Float2 _dragOrigin;
 
@@ -250,8 +253,11 @@ public sealed class CSGMeshTool : SceneTool
 
                 if (handles.IsNearest(id) && handles.TryBeginDrag(id))
                 {
-                    SelectEdge(handles, i);
+                    (int a, int b) = _edges[i];
+                    bool keep = !handles.Shift && !handles.Ctrl && _vertices.Contains(a) && _vertices.Contains(b);
+                    if (!keep) SelectEdge(handles, i);
                     BeginAction(handles, handles.Shift ? Action.Chamfer : Action.Drag, edge: i);
+                    if (keep) _clickedPoints = [a, b];
                     return;
                 }
             }
@@ -266,8 +272,10 @@ public sealed class CSGMeshTool : SceneTool
 
                 if (handles.IsNearest(id) && handles.TryBeginDrag(id))
                 {
-                    SelectVertex(handles, i);
+                    bool keep = !handles.Shift && !handles.Ctrl && _vertices.Contains(i);
+                    if (!keep) SelectVertex(handles, i);
                     BeginAction(handles, handles.Shift ? Action.Chamfer : Action.Drag, point: i);
+                    if (keep) _clickedPoints = [i];
                     return;
                 }
             }
@@ -343,6 +351,7 @@ public sealed class CSGMeshTool : SceneTool
         _dragOrigin = handles.MousePosition;
         _dragStarted = false;
         _passedThreshold = false;
+        _clickedPoints = null;
         _actionBrush = Target;
         _startPlanes = (Plane[])Target!.Planes.Clone();
         _startSurfaces = (SurfaceData[])Target.Surfaces.Clone();
@@ -445,6 +454,13 @@ public sealed class CSGMeshTool : SceneTool
         {
             case Action.Extrude: CommitExtrude(ctx, amount); break;
             case Action.Marquee: ApplyMarquee(ctx); break;
+        }
+
+        // A click on part of a selection, with no drag, narrows the selection to what was clicked
+        if (_action == Action.Drag && !_passedThreshold && _clickedPoints != null)
+        {
+            ClearSelection();
+            foreach (int point in _clickedPoints) _vertices.Add(point);
         }
 
         EndAction();
