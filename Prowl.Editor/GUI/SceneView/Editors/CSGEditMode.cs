@@ -22,6 +22,8 @@ public enum CSGMode
     UVRotate,
     /// <summary>Scale the texture of selected surfaces.</summary>
     UVScale,
+    /// <summary>Move a brush's pivot without moving its shape.</summary>
+    Pivot,
 }
 
 /// <summary>The one CSG tool in force, exclusive since every tool wants the primary button.</summary>

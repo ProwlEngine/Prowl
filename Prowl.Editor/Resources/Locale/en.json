@@ -815,6 +815,8 @@
   "csg.mode_uv_rotate_tip": "Turn the texture of the selected surfaces about where the drag starts.",
   "csg.mode_uv_scale": "UV Scale",
   "csg.mode_uv_scale_tip": "Scale the texture of the selected surfaces about where the drag starts.",
+  "csg.mode_pivot": "Pivot",
+  "csg.mode_pivot_tip": "Drag a brush's pivot to a new place, snapping to its corners or the grid. The brush stays where it is.",
   "csg.cut_with_plane": "Cut With Plane",
   "csg.repeat_clone": "Repeat Clone",
   "csg.flip_x": "Flip X",

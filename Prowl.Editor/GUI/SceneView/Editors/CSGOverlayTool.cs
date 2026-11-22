@@ -36,6 +36,7 @@ public sealed class CSGOverlayTool : SceneTool
         (CSGMode.UVMove, "csg.mode_uv_move", "csg.mode_uv_move_tip", "CSG/ModeUVMove", EditorIcons.ArrowsUpDownLeftRight),
         (CSGMode.UVRotate, "csg.mode_uv_rotate", "csg.mode_uv_rotate_tip", "CSG/ModeUVRotate", EditorIcons.RotateRight),
         (CSGMode.UVScale, "csg.mode_uv_scale", "csg.mode_uv_scale_tip", "CSG/ModeUVScale", EditorIcons.Expand),
+        (CSGMode.Pivot, "csg.mode_pivot", "csg.mode_pivot_tip", "CSG/ModePivot", EditorIcons.Bullseye),
     };
 
     private static readonly (CSGGeneratorKind Kind, string Shortcut)[] ShapeKeys =

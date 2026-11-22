@@ -263,6 +263,29 @@ public static class CSGSelection
     }
 
     /// <summary>Moves each pivot onto its solid's centre without moving the geometry.</summary>
+    /// <summary>Moves a brush's pivot to a point in its own space, the shape and any children staying where they are in the world.</summary>
+    public static void MovePivot(CSGBrush brush, Float3 local)
+    {
+        if (Float3.LengthSquared(local) < 1e-9f) return;
+
+        var children = brush.GameObject.Children.Select(c => (c, c.Transform.Position, c.Transform.Rotation)).ToList();
+
+        Float3 pivot = Float4x4.TransformPoint(local, brush.Transform.LocalToWorldMatrix);
+        if (brush.HasControlMesh)
+        {
+            brush.ControlMesh!.TransformPoints(Float4x4.CreateTranslation(-local));
+            brush.ApplyControlMesh();
+        }
+        else brush.Planes = CSGBrushGeometry.Translate(brush.Planes, -local);
+        brush.Transform.Position = pivot;
+
+        foreach ((GameObject child, Float3 position, Quaternion rotation) in children)
+        {
+            child.Transform.Position = position;
+            child.Transform.Rotation = rotation;
+        }
+    }
+
     public static void CentrePivot()
     {
         List<CSGBrush> brushes = Brushes();
@@ -273,28 +296,7 @@ public static class CSGSelection
             .SelectMany(go => go.Children.Prepend(go)));
 
         foreach (CSGBrush brush in brushes)
-        {
-            Float3 centroid = CSGBrushGeometry.Centroid(brush.Shape);
-            if (Float3.LengthSquared(centroid) < 1e-9f) continue;
-
-            // Children stay where they are in the world while their parent's pivot moves
-            var children = brush.GameObject.Children.Select(c => (c, c.Transform.Position, c.Transform.Rotation)).ToList();
-
-            Float3 pivot = Float4x4.TransformPoint(centroid, brush.Transform.LocalToWorldMatrix);
-            if (brush.HasControlMesh)
-            {
-                brush.ControlMesh!.TransformPoints(Float4x4.CreateTranslation(-centroid));
-                brush.ApplyControlMesh();
-            }
-            else brush.Planes = CSGBrushGeometry.Translate(brush.Planes, -centroid);
-            brush.Transform.Position = pivot;
-
-            foreach ((GameObject child, Float3 position, Quaternion rotation) in children)
-            {
-                child.Transform.Position = position;
-                child.Transform.Rotation = rotation;
-            }
-        }
+            MovePivot(brush, CSGBrushGeometry.Centroid(brush.Shape));
 
         // A group's pivot goes to the middle of the brushes inside it, which stay where they are
         foreach (CSGGroup group in groups)

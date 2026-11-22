@@ -386,6 +386,7 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("CSG/ModeUVMove", "UV Move Tool", KeyCode.Number4, alt: true);
         ShortcutManager.Register("CSG/ModeUVRotate", "UV Rotate Tool", KeyCode.Number5, alt: true);
         ShortcutManager.Register("CSG/ModeUVScale", "UV Scale Tool", KeyCode.Number6, alt: true);
+        ShortcutManager.Register("CSG/ModePivot", "Pivot Tool", KeyCode.Number7, alt: true);
         ShortcutManager.Register("CSG/SetAdditive", "Set Additive", KeyCode.Equal);
         ShortcutManager.Register("CSG/SetSubtractive", "Set Subtractive", KeyCode.Minus);
         ShortcutManager.Register("CSG/SetIntersecting", "Set Intersecting", KeyCode.BackSlash);
