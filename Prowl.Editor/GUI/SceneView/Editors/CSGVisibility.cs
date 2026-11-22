@@ -13,7 +13,14 @@ public static class CSGVisibility
 {
     private static readonly HashSet<CSGBrush> _hidden = new();
 
-    public static int HiddenCount => _hidden.Count;
+    public static int HiddenCount
+    {
+        get
+        {
+            Prune();
+            return _hidden.Count;
+        }
+    }
 
     public static bool IsHidden(CSGBrush brush) => _hidden.Contains(brush);
 
