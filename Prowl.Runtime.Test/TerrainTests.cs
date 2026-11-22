@@ -1,12 +1,11 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 //
-// Every terrain test lives here: physics raycasts, the coordinate conventions the maps share, and
-// the cascade math behind procedural details.
+// Every terrain test lives here: physics raycasts, the terrain data over its Graphite package, and the collider.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 using Jitter2.LinearMath;
 
@@ -18,12 +17,11 @@ using Prowl.Vector;
 
 using Xunit;
 
+using TerrainBrush = Prowl.Graphite.Rendering.TerrainBrush;
+
 namespace Prowl.Runtime.Test;
 
-/// <summary>
-/// Every terrain test: the physics raycast, the coordinate conventions the height, splat and detail
-/// maps share, and the cascade math behind procedural details.
-/// </summary>
+/// <summary>Every terrain test: the physics raycast and the terrain data over its Graphite package.</summary>
 public class TerrainTests
 {
     #region Physics: heightmap raycasts
@@ -170,585 +168,188 @@ public class TerrainTests
 
     #endregion
 
-    #region Coordinate conventions shared by the maps
+    #region Data
 
-    // Guards the coordinate conventions the terrain maps share. Heights are a vertex grid, splats and
-    // details are cell grids, and every consumer (surface shader, grass placement, physics holes) has
-    // to agree on where a given index lands in UV or the maps drift apart on screen.
     private const int kRes = 33;
 
-    /// <summary>Terrain whose normalized height equals U everywhere, so height at UV is analytically known.</summary>
+    /// <summary>A 32 metre terrain of 33 samples a side, 100 metres tall, whose height rises with U from 0 to 1.</summary>
     private static TerrainData RampTerrain()
     {
         var data = new TerrainData { Size = 32f, Height = 100f };
         data.ResizeHeightmap(kRes);
+        float[] heights = new float[kRes * kRes];
         for (int z = 0; z < kRes; z++)
             for (int x = 0; x < kRes; x++)
-                data.SetHeight(x, z, x / (float)(kRes - 1));
+                heights[z * kRes + x] = x / (float)(kRes - 1);
+        data.SetHeights(heights);
         return data;
     }
 
-    [Theory]
-    [InlineData(TerrainInterpolation.Bilinear)]
-    [InlineData(TerrainInterpolation.Bicubic)]
-    public void InterpolatedHeightFollowsTheVertexGrid(TerrainInterpolation mode)
+    private static TerrainData Small()
+    {
+        var data = new TerrainData { Size = 32f, Height = 100f };
+        data.ResizeHeightmap(kRes);
+        return data;
+    }
+
+    [Fact]
+    public void InterpolatedHeightFollowsTheSamples()
     {
         using TerrainData data = RampTerrain();
-        data.Interpolation = mode;
-
-        // Both filters reproduce a linear ramp exactly, so any drift here is a convention shift.
         for (float u = 0.1f; u <= 0.9f; u += 0.05f)
+            Assert.Equal(u * data.Height, data.GetInterpolatedHeight(u, 0.5f), 1);
+        Assert.Equal(50f, data.GetHeight(16, 3), 2);
+    }
+
+    [Fact]
+    public void HeightsRoundTripThroughThePackage()
+    {
+        using TerrainData data = RampTerrain();
+        float[] heights = data.GetHeights();
+        for (int x = 0; x < kRes; x++)
+            Assert.Equal(x / (float)(kRes - 1), heights[5 * kRes + x], 1f / 65535f);
+    }
+
+    [Fact]
+    public void ResizingResamplesTheHeights()
+    {
+        using TerrainData data = RampTerrain();
+        data.ResizeHeightmap(65);
+        Assert.Equal(65, data.HeightmapResolution);
+        Assert.Equal(0.5f, data.Spacing, 4);
+        for (float u = 0.1f; u <= 0.9f; u += 0.1f)
             Assert.Equal(u * data.Height, data.GetInterpolatedHeight(u, 0.5f), 1);
     }
 
     [Fact]
-    public void DetailCellsSitInsideTheSplatTexelTheyOverlap()
+    public void ChangingTheHeightScalesTheGround()
     {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(data.SplatmapResolution * 2);
-
-        // Two detail cells per splat texel, both must resolve to that same texel.
-        for (int k = 0; k < data.SplatmapResolution; k += 37)
-        {
-            for (int sub = 0; sub < 2; sub++)
-            {
-                Float2 uv = data.DetailToUV(k * 2 + sub, 0);
-                Assert.Equal(k, (int)(uv.X * data.SplatmapResolution));
-            }
-        }
+        using TerrainData data = RampTerrain();
+        data.Height = 50f;
+        Assert.Equal(25f, data.GetInterpolatedHeight(0.5f, 0.5f), 1);
     }
 
     [Fact]
-    public void SplatTexelUVResolvesBackToItself()
+    public void RaisingLiftsTheGroundUnderTheBrushOnly()
     {
-        using var data = new TerrainData();
-        for (int x = 0; x < data.SplatmapResolution; x += 53)
-        {
-            Float2 uv = data.SplatmapToUV(x, x);
-            Assert.Equal(x, (int)(uv.X * data.SplatmapResolution));
-            Assert.Equal(x, (int)(uv.Y * data.SplatmapResolution));
-        }
+        using TerrainData data = Small();
+        int before = data.Version;
+        data.Edit(TerrainBrush.Raise, new Float2(16, 16), 4f, 5f);
+        Assert.Equal(5f, data.GetHeight(16, 16), 2);
+        Assert.Equal(0f, data.GetHeight(2, 2));
+        Assert.NotEqual(before, data.Version);
     }
 
     [Fact]
-    public void HoleLookupHitsTheSplatTexelUnderTheHeightCell()
+    public void FlattenPullsTowardItsHeightAboveTheBase()
     {
-        using var data = new TerrainData();
-        int last = data.SplatmapResolution - 1;
-
-        data.SetHole(0, 0, 0);
-        data.SetHole(last, last, 0);
-
-        Assert.True(data.IsCellHole(0, 0));
-        Assert.True(data.IsCellHole(last, last));
-        Assert.False(data.IsCellHole(1, 1));
-        Assert.False(data.IsCellHole(last - 1, last - 1));
+        using TerrainData data = Small();
+        data.Edit(TerrainBrush.Flatten, new Float2(16, 16), 4f, 1f, 30f);
+        Assert.Equal(30f, data.GetHeight(16, 16), 1);
     }
 
     [Fact]
-    public void DetailEditsBumpTheVersionRenderersWatch()
+    public void HolesCutAndFillUnderTheBrush()
     {
-        using var data = new TerrainData();
-        int before = data.DetailsVersion;
+        using TerrainData data = Small();
+        data.Edit(TerrainBrush.Hole, new Float2(16, 16), 2f, 1f);
+        Assert.True(data.IsCellHole(15, 15));
+        Assert.True(data.IsHoleAt(15.5f / 32f, 15.5f / 32f));
+        Assert.False(data.IsCellHole(2, 2));
 
-        data.SetDetailDensity(0, 4, 4, 1f);
-
-        Assert.NotEqual(before, data.DetailsVersion);
+        data.Edit(TerrainBrush.Hole, new Float2(16, 16), 2f, -1f);
+        Assert.False(data.IsCellHole(15, 15));
     }
 
     [Fact]
-    public void HeightEditsBumpTheVersionRenderersWatch()
+    public void PaintPutsItsLayerUnderTheBrush()
     {
-        using var data = new TerrainData();
-        int before = data.HeightsVersion;
-
-        data.SetHeight(4, 4, 0.5f);
-
-        Assert.NotEqual(before, data.HeightsVersion);
-    }
-
-    #endregion
-
-    #region Procedural detail scatter
-
-    // Covers the cascade math behind procedural details. Placement itself runs in the vertex shader,
-    // but the guarantees that keep it stable are decided here: a grid that does not slide under the
-    // camera, cascades that are strict subsets of each other, and bands that tile the draw distance.
-
-    private const float kDensity = 2f;   // cells per metre, so half-metre cells
-    private const float kDistance = 150f;
-    private const int kCascades = 4;
-
-    [Fact]
-    public void OneCellPerMetreIsOneMetreCells()
-    {
-        // The density knob is cells per metre: 1 puts a blade in every square metre.
-        Assert.Equal(1f, TerrainDetailRenderer.CascadeCellSize(1f, 0), 4);
-        Assert.Equal(0.5f, TerrainDetailRenderer.CascadeCellSize(2f, 0), 4);
+        using TerrainData data = Small();
+        data.Edit(TerrainBrush.Paint, new Float2(16, 16), 4f, 1f, layer: 2);
+        Assert.Equal(1f, data.GetSplat(16, 16, 2), 2);
+        Assert.Equal(0f, data.GetSplat(16, 16, 0), 2);
+        Assert.Equal(1f, data.GetSplat(2, 2, 0), 2);
     }
 
     [Fact]
-    public void EachCascadeDoublesItsCellSize()
+    public void DetailBrushGrowsAndThinsItsPrototype()
     {
-        float near = TerrainDetailRenderer.CascadeCellSize(kDensity, 0);
-
-        Assert.Equal(near * 2f, TerrainDetailRenderer.CascadeCellSize(kDensity, 1), 4);
-        Assert.Equal(near * 4f, TerrainDetailRenderer.CascadeCellSize(kDensity, 2), 4);
-        Assert.Equal(near * 8f, TerrainDetailRenderer.CascadeCellSize(kDensity, 3), 4);
+        using TerrainData data = Small();
+        data.Edit(TerrainBrush.Detail, new Float2(16, 16), 4f, 1f);
+        Assert.Equal(1f, data.GetDetailDensity(0, 16, 16), 2);
+        data.Edit(TerrainBrush.Detail, new Float2(16, 16), 4f, -0.5f);
+        Assert.Equal(0.5f, data.GetDetailDensity(0, 16, 16), 1);
+        Assert.Equal(0f, data.GetDetailDensity(0, 2, 2));
     }
 
     [Fact]
-    public void BandsSplitTheDistanceEvenlyAndMeet()
+    public void AddingALayerKeepsThePaint()
     {
-        float previousOuter = 0f;
-        for (int cascade = 0; cascade < kCascades; cascade++)
-        {
-            TerrainDetailRenderer.CascadeBand(kDistance, kCascades, cascade, out float inner, out float outer);
-
-            Assert.Equal(previousOuter, inner, 4);
-            Assert.Equal(kDistance / kCascades, outer - inner, 4);
-            previousOuter = outer;
-        }
-
-        Assert.Equal(kDistance, previousOuter, 4);
+        using TerrainData data = Small();
+        data.Edit(TerrainBrush.Paint, new Float2(16, 16), 4f, 1f, layer: 3);
+        data.AddLayer(new TerrainLayer());
+        Assert.Equal(5, data.LayerCount);
+        Assert.Equal(1f, data.GetSplat(16, 16, 3), 2);
+        Assert.Equal(1f, data.GetSplat(2, 2, 0), 2);
+        Assert.Equal(0f, data.GetSplat(2, 2, 4), 2);
     }
 
     [Fact]
-    public void CascadeGridDoesNotSlideWithTheCamera()
+    public void RemovingALayerMovesTheLaterLayersDown()
     {
-        // Any camera inside one cell must resolve to the same origin, or the whole field crawls.
-        int cells = TerrainDetailRenderer.CascadeCellsPerSide(kDensity, kDistance, kCascades, 0);
-        Int2 a = TerrainDetailRenderer.CascadeOriginCell(10.0f, 10.0f, kDensity, 0, cells);
-        Int2 b = TerrainDetailRenderer.CascadeOriginCell(10.4f, 10.4f, kDensity, 0, cells);
-
-        Assert.Equal(a.X, b.X);
-        Assert.Equal(a.Y, b.Y);
+        using TerrainData data = Small();
+        data.Edit(TerrainBrush.Paint, new Float2(16, 16), 4f, 1f, layer: 2);
+        data.RemoveLayer(1);
+        Assert.Equal(3, data.LayerCount);
+        Assert.Equal(1f, data.GetSplat(16, 16, 1), 2);
     }
 
     [Fact]
-    public void CascadeOriginTracksTheCameraOneCellAtATime()
+    public void OneLayerLeftPaintsEverythingWithIt()
     {
-        int cells = TerrainDetailRenderer.CascadeCellsPerSide(kDensity, kDistance, kCascades, 0);
-        Int2 a = TerrainDetailRenderer.CascadeOriginCell(10.0f, 0f, kDensity, 0, cells);
-        Int2 b = TerrainDetailRenderer.CascadeOriginCell(10.6f, 0f, kDensity, 0, cells);
-
-        Assert.Equal(a.X + 1, b.X);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(3)]
-    public void CoarseCascadesLandOnFineCells(int cascade)
-    {
-        // Cascade N samples every 2^N-th fine cell, so its origin has to be a multiple of that
-        // stride for its blades to coincide with cascade 0's. Otherwise LOD would move blades
-        // instead of thinning them.
-        int stride = 1 << cascade;
-        int cells = TerrainDetailRenderer.CascadeCellsPerSide(kDensity, kDistance, kCascades, cascade);
-
-        for (float camera = -37.3f; camera < 37.3f; camera += 1.7f)
-        {
-            Int2 origin = TerrainDetailRenderer.CascadeOriginCell(camera, camera * 0.5f, kDensity, cascade, cells);
-
-            Assert.Equal(0, origin.X % stride);
-            Assert.Equal(0, origin.Y % stride);
-        }
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(3)]
-    public void CascadeSquareCoversItsBand(int cascade)
-    {
-        // The square of instances snaps to the cascade's grid while the band is a circle centred on
-        // the camera, so the square has to hold the circle at the worst snapping offset, plus room
-        // for blades that jitter in from just outside. Falling short leaves a sliver of missing
-        // grass that slides around as the camera moves.
-        TerrainDetailRenderer.CascadeBand(kDistance, kCascades, cascade, out _, out float outer);
-        float cell = TerrainDetailRenderer.CascadeCellSize(kDensity, cascade);
-        float maxWander = (1 << 3) * 0.5f * TerrainDetailRenderer.CascadeCellSize(kDensity, 0);
-
-        int cells = TerrainDetailRenderer.CascadeCellsPerSide(kDensity, kDistance, kCascades, cascade);
-        float squareHalfWidth = cells * 0.5f * cell;
-
-        Assert.True(squareHalfWidth >= outer + cell + maxWander,
-            $"cascade {cascade}: {squareHalfWidth} does not cover {outer + cell + maxWander}");
+        using TerrainData data = Small();
+        data.RemoveLayer(3);
+        data.RemoveLayer(2);
+        data.RemoveLayer(1);
+        Assert.Equal(1, data.LayerCount);
+        Assert.Equal(1f, data.GetSplat(16, 16, 0));
+        data.AddLayer(new TerrainLayer());
+        Assert.Equal(1f, data.GetSplat(16, 16, 0), 2);
+        Assert.Equal(0f, data.GetSplat(16, 16, 1), 2);
     }
 
     [Fact]
-    public void CascadeCellCountIsEven()
+    public void AddingAndRemovingDetailPrototypesKeepsTheDensities()
     {
-        // An odd square has no centre cell for the camera to sit on
-        for (int cascade = 0; cascade < kCascades; cascade++)
-            Assert.Equal(0, TerrainDetailRenderer.CascadeCellsPerSide(kDensity, kDistance, kCascades, cascade) % 2);
-    }
-
-    [Fact]
-    public void AbsurdDensityStaysAffordable()
-    {
-        // Density and distance multiply out into instance counts, so the square is capped rather
-        // than letting one slider allocate an unbounded draw.
-        int cells = TerrainDetailRenderer.CascadeCellsPerSide(500f, 2000f, 1, 0);
-
-        Assert.True(cells <= 512, $"{cells} cells per side is {cells * cells} instances");
-    }
-
-    [Fact]
-    public void DetailDensitiesPackIntoRGBATextures()
-    {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(32);
-        data.DetailPrototypes.Clear();
-        for (int i = 0; i < 5; i++)
-            data.AddDetailPrototype(new DetailPrototype());
-
-        IReadOnlyList<Texture2D> textures = data.GetDetailTextures();
-
-        Assert.Equal(2, textures.Count); // 4 prototypes per texture, so 5 needs two
-        Assert.Equal(32u, textures[0].Width);
-    }
-
-    [Fact]
-    public void DetailTexturesRepackInPlaceWhenDensitiesChange()
-    {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(32);
-        Texture2D first = data.GetDetailTextures()[0];
-        Assert.False(data.TryGetDetailBounds(0, out _));
-
-        data.SetDetailDensity(0, 4, 4, 1f);
-
-        // Materials keep the texture they were given, so the repack writes into the same one
-        Assert.Same(first, data.GetDetailTextures()[0]);
-        Assert.True(data.TryGetDetailBounds(0, out _));
-    }
-
-    [Fact]
-    public void ResizingDetailMapsKeepsWhatWasPainted()
-    {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(64);
-        for (int z = 0; z < 64; z++)
-            for (int x = 0; x < 32; x++)
-                data.SetDetailDensity(0, x, z, 1f); // left half solid, right half empty
-
-        data.ResizeDetailMaps(128);
-
-        Assert.Equal(128, data.DetailResolution);
-        Assert.Equal(1f, data.GetDetailDensity(0, 20, 64), 2);   // deep in the painted half
-        Assert.Equal(0f, data.GetDetailDensity(0, 100, 64), 2);  // deep in the empty half
-    }
-
-    [Fact]
-    public void ResizingDetailMapsDownKeepsWhatWasPainted()
-    {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(128);
-        for (int z = 0; z < 128; z++)
-            for (int x = 0; x < 64; x++)
-                data.SetDetailDensity(0, x, z, 1f);
-
-        data.ResizeDetailMaps(64);
-
-        Assert.Equal(1f, data.GetDetailDensity(0, 10, 32), 2);
-        Assert.Equal(0f, data.GetDetailDensity(0, 50, 32), 2);
-    }
-
-    [Fact]
-    public void ResizingDetailMapsCanStartClean()
-    {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(64);
-        data.SetDetailDensity(0, 10, 10, 1f);
-
-        data.ResizeDetailMaps(64, resample: false);
-
-        Assert.Equal(0f, data.GetDetailDensity(0, 10, 10));
-    }
-
-    [Fact]
-    public void ResizingDetailMapsRebuildsTheTexture()
-    {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(64);
-        Texture2D before = data.GetDetailTextures()[0];
-
-        data.ResizeDetailMaps(128);
-        Texture2D after = data.GetDetailTextures()[0];
-
-        Assert.NotSame(before, after);
-        Assert.Equal(128u, after.Width);
-    }
-
-    [Fact]
-    public void DensityRoundTripsThroughByteStorage()
-    {
-        // Densities are stored as bytes, so a value survives to within half a step of 1/255
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(32);
-
-        foreach (float density in new[] { 0f, 0.25f, 0.5f, 0.75f, 1f })
-        {
-            data.SetDetailDensity(0, 4, 4, density);
-            Assert.Equal(density, data.GetDetailDensity(0, 4, 4), 2);
-        }
-    }
-
-    [Fact]
-    public void FullDensityIsExactlyOne()
-    {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(32);
-        data.SetDetailDensity(0, 1, 1, 1f);
-
-        Assert.Equal(1f, data.GetDetailDensity(0, 1, 1));
-    }
-
-    [Fact]
-    public void DetailDensitySurvivesSerialization()
-    {
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(64);
-        data.SetDetailDensity(0, 10, 20, 1f);
-        data.SetDetailDensity(0, 11, 20, 0.5f);
-
-        using TerrainData clone = Serializer.Deserialize<TerrainData>(Serializer.Serialize(data))!;
-
-        Assert.Equal(64, clone.DetailResolution);
-        Assert.Equal(1f, clone.GetDetailDensity(0, 10, 20), 2);
-        Assert.Equal(0.5f, clone.GetDetailDensity(0, 11, 20), 2);
-        Assert.Equal(0f, clone.GetDetailDensity(0, 12, 20));
-    }
-
-    [Fact]
-    public void MismatchedLayerDataIsDiscarded()
-    {
-        // A layer whose length does not match the resolution is not this asset's data, and reading
-        // it anyway would scatter grass from whatever the bytes happened to be.
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(64);
-        data.SetDetailDensity(0, 5, 5, 1f);
-
-        EchoObject echo = Serializer.Serialize(data);
-        echo.Get("DetailResolution")!.Value = 32;
-
-        using TerrainData clone = Serializer.Deserialize<TerrainData>(echo)!;
-
-        Assert.Equal(32, clone.DetailResolution);
-        Assert.Equal(32 * 32, clone.DetailLayers[0].Length);
-    }
-
-    [Fact]
-    public void PaintedBoundsFollowTerrainSize()
-    {
-        // Bounds are kept in UV, because Size can change without touching the detail version and
-        // baked world bounds would then point at the wrong part of the terrain.
-        using var data = new TerrainData { Size = 640f };
-        data.ResizeDetailMaps(64);
-        data.SetDetailDensity(0, 10, 20, 1f);
-        data.TryGetDetailBounds(0, out Float4 before);
-
-        data.Size = 1280f;
-        data.TryGetDetailBounds(0, out Float4 after);
-
-        Assert.Equal(before.X * 2f, after.X, 2);
-        Assert.Equal(before.W * 2f, after.W, 2);
-    }
-
-    [Fact]
-    public void EmptyLayersNeverReportAPatchAtTheOrigin()
-    {
-        // A layer the pack skips must read as unpainted. Left at its default it would be a
-        // zero-area rect at the terrain origin, so grass would come and go with the camera.
-        using var data = new TerrainData();
-        data.ResizeDetailMaps(32);
+        using TerrainData data = Small();
         data.AddDetailPrototype(new DetailPrototype());
-        data.DetailLayers[1] = [];  // wrong length for the resolution
-
-        Assert.False(data.TryGetDetailBounds(0, out _));
-        Assert.False(data.TryGetDetailBounds(1, out _));
+        data.Edit(TerrainBrush.Detail, new Float2(16, 16), 4f, 1f, layer: 1);
+        data.RemoveDetailPrototype(0);
+        Assert.Single(data.DetailPrototypes);
+        Assert.Equal(1f, data.GetDetailDensity(0, 16, 16), 2);
     }
 
     [Fact]
-    public void PaintedBoundsCoverThePaintedCells()
+    public void TreesKeepWhereTheyWerePlaced()
     {
-        using var data = new TerrainData { Size = 640f };
-        data.ResizeDetailMaps(64);        // 10 world units per cell
-        data.SetDetailDensity(0, 10, 20, 1f);
-        data.SetDetailDensity(0, 12, 24, 1f);
-
-        Assert.True(data.TryGetDetailBounds(0, out Float4 rect));
-        Assert.Equal(100f, rect.X, 2);    // cell 10 starts at 100
-        Assert.Equal(200f, rect.Y, 2);    // cell 20 starts at 200
-        Assert.Equal(130f, rect.Z, 2);    // cell 12 ends at 130
-        Assert.Equal(250f, rect.W, 2);    // cell 24 ends at 250
-    }
-
-    [Fact]
-    public void PaintedBoundsFollowFurtherPainting()
-    {
-        using var data = new TerrainData { Size = 640f };
-        data.ResizeDetailMaps(64);
-        data.SetDetailDensity(0, 10, 10, 1f);
-        data.TryGetDetailBounds(0, out Float4 before);
-
-        data.SetDetailDensity(0, 30, 30, 1f);
-        data.TryGetDetailBounds(0, out Float4 after);
-
-        Assert.True(after.Z > before.Z);
-        Assert.True(after.W > before.W);
-    }
-
-    [Fact]
-    public void CascadeSkipsBandsThatMissThePaintedArea()
-    {
-        var painted = new Float4(0f, 0f, 10f, 10f);
-
-        // Camera on the patch: the near band has work, a far band has already passed it
-        Assert.True(TerrainDetailRenderer.CascadeTouchesBounds(new Float2(5f, 5f), 0f, 20f, painted, 0f));
-        Assert.False(TerrainDetailRenderer.CascadeTouchesBounds(new Float2(5f, 5f), 100f, 200f, painted, 0f));
-
-        // Camera far away: every band is out of reach
-        Assert.False(TerrainDetailRenderer.CascadeTouchesBounds(new Float2(500f, 500f), 0f, 20f, painted, 0f));
-
-        // Camera far away but the band reaches back to the patch
-        Assert.True(TerrainDetailRenderer.CascadeTouchesBounds(new Float2(500f, 5f), 400f, 600f, painted, 0f));
-    }
-
-    [Fact]
-    public void CascadeBoundsTestAllowsForBladesThatWander()
-    {
-        var painted = new Float4(0f, 0f, 10f, 10f);
-
-        // Just out of reach of the rect, but a blade that wandered out is still visible
-        Assert.False(TerrainDetailRenderer.CascadeTouchesBounds(new Float2(16f, 5f), 0f, 5f, painted, 0f));
-        Assert.True(TerrainDetailRenderer.CascadeTouchesBounds(new Float2(16f, 5f), 0f, 5f, painted, 2f));
-    }
-
-    [Fact]
-    public void GrassShaderResolvesTheScatterInclude()
-    {
-        // A missing include only fails when the variant compiles on a device, so check it resolves headless
-        Assert.Contains("#include \"Prowl/TerrainScatter.glsl\"", Shader.LoadDefault(DefaultShader.Grass).Source);
-        Assert.Contains("scatterResolve", BuiltInShaders.Resolve("Prowl/TerrainScatter.glsl"));
-    }
-
-    [Fact]
-    public void EveryScatterUniformIsAGrassPropertyTheRendererWrites()
-    {
-        // Tripwire: a uniform added to TerrainScatter.glsl must be a Grass property and set by TerrainDetailRenderer,
-        // or it reads as zero and quietly breaks placement. Add it to both, then to this list.
-        string[] expected = ["_ScatterCellSize", "_ScatterMaxLevel"];
-
-        string source = BuiltInShaders.Resolve("Prowl/TerrainScatter.glsl")!;
-        string[] declared = [.. Regex.Matches(source, @"uniform\s+\w+\s+(_Scatter\w+)\s*;")
-            .Select(m => m.Groups[1].Value)
-            .Distinct()
-            .OrderBy(n => n)];
-
-        Assert.Equal(expected.OrderBy(n => n).ToArray(), declared);
-        Shader grass = Shader.LoadDefault(DefaultShader.Grass);
-        foreach (string name in declared)
-            Assert.NotNull(grass.FindProperty(name));
-    }
-
-    #endregion
-
-    #region Mesh detail scatter
-
-    // Mesh prototypes render with user materials, so they cannot be placed in the shader. They get
-    // one camera-relative instance buffer instead of one per patch, rebuilt only once the camera
-    // has spent the slack the buffer was built with.
-
-    [Fact]
-    public void MeshBuildSurvivesSmallCameraMoves()
-    {
-        var origin = new Float2(100f, 100f);
-
-        Assert.False(TerrainMeshDetailRenderer.BuildIsStale(origin, 150f, origin, 150f));
-        Assert.False(TerrainMeshDetailRenderer.BuildIsStale(origin, 150f, new Float2(110f, 100f), 150f));
-    }
-
-    [Fact]
-    public void MeshBuildGoesStaleOnceTheSlackIsSpent()
-    {
-        var origin = new Float2(100f, 100f);
-        float slack = TerrainMeshDetailRenderer.BuildRadius(150f) - 150f;
-
-        Assert.True(TerrainMeshDetailRenderer.BuildIsStale(origin, 150f, new Float2(100f + slack * 1.1f, 100f), 150f));
-    }
-
-    [Fact]
-    public void MeshBuildGoesStaleWhenTheDistanceChanges()
-    {
-        var origin = new Float2(100f, 100f);
-
-        Assert.True(TerrainMeshDetailRenderer.BuildIsStale(origin, 150f, origin, 300f));
-    }
-
-    #endregion
-
-    #region Data integrity
-
-    [Fact]
-    public void BicubicReachesTheOuterSamples()
-    {
-        // A ridge one sample outside the cell still pulls a Catmull Rom curve by its outer weight
-        using var data = new TerrainData { Size = 32f, Height = 100f, Interpolation = TerrainInterpolation.Bicubic };
-        data.ResizeHeightmap(kRes);
-        for (int z = 0; z < kRes; z++)
-            data.SetHeight(10, z, 1f);
-
-        float u = 11.5f / (kRes - 1);
-        Assert.Equal(-0.0625f * data.Height, data.GetInterpolatedHeight(u, 0.5f), 3);
-    }
-
-    [Theory]
-    [InlineData(TerrainInterpolation.Bilinear)]
-    [InlineData(TerrainInterpolation.Bicubic)]
-    public void InterpolationPassesThroughEverySample(TerrainInterpolation mode)
-    {
-        using var data = new TerrainData { Size = 32f, Height = 100f, Interpolation = mode };
-        data.ResizeHeightmap(kRes);
-        for (int z = 0; z < kRes; z++)
-            for (int x = 0; x < kRes; x++)
-                data.SetHeight(x, z, ((x * 7 + z * 13) % 10) / 10f);
-
-        for (int z = 0; z < kRes; z += 3)
-            for (int x = 0; x < kRes; x += 3)
-            {
-                Float2 uv = data.HeightmapToUV(x, z);
-                Assert.Equal(data.GetHeight(x, z) * data.Height, data.GetInterpolatedHeight(uv.X, uv.Y), 2);
-            }
-    }
-
-    [Fact]
-    public void ResizingTheSplatmapKeepsHoles()
-    {
-        using var data = new TerrainData();
-        data.ResizeSplatmap(64);
-        data.SetHole(10, 20, 0);
-
-        data.ResizeSplatmap(128);
-
-        Assert.Equal(128 * 128, data.Holes!.Length);
-        Assert.False(data.IsHoleSolid(20, 40));
-        Assert.False(data.IsHoleSolid(21, 41));
-        Assert.True(data.IsHoleSolid(22, 42));
+        using TerrainData data = Small();
+        data.TreePrototypes.Add(new TreePrototype());
+        data.AddTree(new TreeInstance { Position = new Float2(0.25f, 0.75f), Rotation = 1f, WidthScale = 2f, HeightScale = 3f, Tint = Color.Red });
+        TreeInstance tree = Assert.Single(data.Trees);
+        Assert.Equal(0.25f, tree.Position.X, 4);
+        Assert.Equal(0.75f, tree.Position.Y, 4);
+        Assert.Equal((1f, 2f, 3f), (tree.Rotation, tree.WidthScale, tree.HeightScale));
+        Assert.Equal(Color.Red, tree.Tint);
+        Assert.Equal(1, data.RemoveTrees(new Float2(0.25f, 0.75f), 0.01f));
+        Assert.Empty(data.Trees);
     }
 
     [Fact]
     public void RemovingATreePrototypeRemapsTheTreesAfterIt()
     {
-        using var data = new TerrainData();
+        using TerrainData data = Small();
         data.TreePrototypes.AddRange([new TreePrototype(), new TreePrototype(), new TreePrototype()]);
-        data.Trees.Add(new TreeInstance { PrototypeIndex = 0 });
-        data.Trees.Add(new TreeInstance { PrototypeIndex = 1 });
-        data.Trees.Add(new TreeInstance { PrototypeIndex = 2 });
+        data.SetTrees([new TreeInstance { PrototypeIndex = 0 }, new TreeInstance { PrototypeIndex = 1 }, new TreeInstance { PrototypeIndex = 2 }]);
 
         data.RemoveTreePrototype(1);
 
@@ -757,94 +358,156 @@ public class TerrainTests
     }
 
     [Fact]
-    public void AddingALayerToAFreshAssetKeepsTheDefaultSplat()
+    public void TreesFollowTheTerrainWhenItGrows()
     {
-        using var data = new TerrainData();
-        data.AddLayer(new TerrainLayer());
-
-        Assert.Equal(data.SplatmapResolution * data.SplatmapResolution * 5, data.Splats.Length);
-        for (int x = 0; x < data.SplatmapResolution; x += 37)
-        {
-            Assert.Equal(1f, data.GetSplat(x, x, 0));
-            Assert.Equal(0f, data.GetSplat(x, x, 4));
-        }
+        using TerrainData data = Small();
+        data.AddTree(new TreeInstance { Position = new Float2(0.5f, 0.5f) });
+        data.Size = 64f;
+        Assert.Equal(0.5f, Assert.Single(data.Trees).Position.X, 4);
     }
 
     [Fact]
-    public void RemovingALayerFromAFreshAssetKeepsTheDefaultSplat()
+    public void EverythingSurvivesSerialization()
     {
-        using var data = new TerrainData();
-        data.RemoveLayer(3);
+        using TerrainData data = RampTerrain();
+        data.Edit(TerrainBrush.Paint, new Float2(16, 16), 4f, 1f, layer: 2);
+        data.Edit(TerrainBrush.Hole, new Float2(8, 8), 2f, 1f);
+        data.Edit(TerrainBrush.Detail, new Float2(24, 24), 4f, 1f);
+        data.TreePrototypes.Add(new TreePrototype());
+        data.AddTree(new TreeInstance { Position = new Float2(0.5f, 0.25f) });
+        data.Layers[1].Tiling = 3f;
+        data.DetailPrototypes[0].Density = 12f;
 
-        Assert.Equal(data.SplatmapResolution * data.SplatmapResolution * 3, data.Splats.Length);
-        Assert.Equal(1f, data.GetSplat(5, 5, 0));
-    }
+        using TerrainData clone = Serializer.Deserialize<TerrainData>(Serializer.Serialize(data))!;
 
-    [Fact]
-    public void HeightsThatDisagreeWithTheResolutionAreReset()
-    {
-        using var data = new TerrainData();
-        data.ResizeHeightmap(33);
-
-        EchoObject echo = Serializer.Serialize(data);
-        echo.Get("HeightmapResolution")!.Value = 65;
-        using TerrainData clone = Serializer.Deserialize<TerrainData>(echo)!;
-
-        Assert.Equal(65 * 65, clone.Heights.Length);
-        Assert.Equal(0f, clone.GetInterpolatedHeight(0.99f, 0.99f));
-    }
-
-    [Fact]
-    public void SplatsAndHolesThatDisagreeWithTheResolutionAreReset()
-    {
-        using var data = new TerrainData();
-        data.SetHole(3, 3, 0);
-
-        EchoObject echo = Serializer.Serialize(data);
-        echo.Get("SplatmapResolution")!.Value = 64;
-        using TerrainData clone = Serializer.Deserialize<TerrainData>(echo)!;
-
-        Assert.Equal(64 * 64 * clone.LayerCount, clone.Splats.Length);
-        Assert.Null(clone.Holes);
+        Assert.Equal(data.GetHeights(), clone.GetHeights());
+        Assert.Equal(1f, clone.GetSplat(16, 16, 2), 2);
+        Assert.True(clone.IsCellHole(7, 7));
+        Assert.Equal(1f, clone.GetDetailDensity(0, 24, 24), 2);
+        Assert.Equal(0.25f, Assert.Single(clone.Trees).Position.Y, 4);
+        Assert.Equal(3f, clone.Layers[1].Tiling);
+        Assert.Equal(12f, clone.DetailPrototypes[0].Density);
     }
 
     [Fact]
     public void MissingColorsFallBackToTheirDefaults()
     {
-        using var data = new TerrainData();
-        data.TreePrototypes.Add(new TreePrototype());
-        data.Trees.Add(new TreeInstance { Tint = Color.Red });
-
+        using TerrainData data = Small();
         EchoObject echo = Serializer.Serialize(data);
         echo.Get("DetailPrototypes")!.List[0].Remove("HealthyColor");
         echo.Get("DetailPrototypes")!.List[0].Remove("DryColor");
-        echo.Get("Trees")!.List[0].Remove("Tint");
         using TerrainData clone = Serializer.Deserialize<TerrainData>(echo)!;
 
         var defaults = new DetailPrototype();
         Assert.Equal(defaults.HealthyColor, clone.DetailPrototypes[0].HealthyColor);
         Assert.Equal(defaults.DryColor, clone.DetailPrototypes[0].DryColor);
-        Assert.Equal(Color.White, clone.Trees[0].Tint);
+    }
+
+    // A terrain as it was saved before terrains were packages: 16 bit heights, float splats over a splat grid, holes
+    // over the splat grid with 0 for a hole, detail bytes over a detail grid, and trees across the terrain
+    private static EchoObject LegacyEcho()
+    {
+        const int res = 33, splat = 32, detail = 64;
+        short[] heights = new short[res * res];
+        for (int z = 0; z < res; z++)
+            for (int x = 0; x < res; x++)
+                heights[z * res + x] = (short)(x / (float)(res - 1) * 32766);
+        float[] splats = new float[splat * splat * 4];
+        for (int i = 0; i < splat * splat; i++)
+            splats[i * 4 + (i % splat < splat / 2 ? 0 : 1)] = 1f;
+        byte[] holes = Enumerable.Repeat((byte)255, splat * splat).ToArray();
+        holes[0] = 0;
+        byte[] density = new byte[detail * detail];
+        Array.Fill(density, (byte)255);
+
+        static string Bytes<T>(T[] values) where T : struct => Convert.ToBase64String(System.Runtime.InteropServices.MemoryMarshal.AsBytes(values.AsSpan()).ToArray());
+
+        EchoObject echo = EchoObject.NewCompound();
+        echo.Add("Name", new EchoObject("Old"));
+        echo.Add("HeightmapResolution", new EchoObject(res));
+        echo.Add("SplatmapResolution", new EchoObject(splat));
+        echo.Add("Size", new EchoObject(32f));
+        echo.Add("Height", new EchoObject(100f));
+        EchoObject layers = EchoObject.NewList();
+        for (int l = 0; l < 4; l++)
+        {
+            EchoObject layer = EchoObject.NewCompound();
+            layer.Add("Tiling", new EchoObject(10f));
+            layers.ListAdd(layer);
+        }
+        echo.Add("Layers", layers);
+        echo.Add("Heights16", new EchoObject(Bytes(heights)));
+        echo.Add("Splats", new EchoObject(Bytes(splats)));
+        echo.Add("Holes", new EchoObject(Convert.ToBase64String(holes)));
+        echo.Add("DetailResolution", new EchoObject(detail));
+        EchoObject prototypes = EchoObject.NewList();
+        EchoObject prototype = EchoObject.NewCompound();
+        prototype.Add("RenderMode", new EchoObject(1));
+        prototype.Add("BendFactor", new EchoObject(0.2f));
+        prototypes.ListAdd(prototype);
+        echo.Add("DetailPrototypes", prototypes);
+        EchoObject densities = EchoObject.NewList();
+        densities.ListAdd(new EchoObject(Convert.ToBase64String(density)));
+        echo.Add("DetailLayers", densities);
+        echo.Add("TreePrototypes", EchoObject.NewList());
+        EchoObject trees = EchoObject.NewList();
+        EchoObject tree = EchoObject.NewCompound();
+        tree.Add("PosX", new EchoObject(0.5f));
+        tree.Add("PosY", new EchoObject(0.25f));
+        tree.Add("Proto", new EchoObject(0));
+        tree.Add("Scale", new EchoObject(2f));
+        tree.Add("Tint", Serializer.Serialize(default(Color)));
+        trees.ListAdd(tree);
+        echo.Add("Trees", trees);
+        return echo;
     }
 
     [Fact]
-    public void TreesSavedWithAZeroTint_LoadWhite_AndNewTreesStartWhite()
+    public void OldTerrainsBecomePackagesOnLoad()
     {
-        using var data = new TerrainData();
-        data.TreePrototypes.Add(new TreePrototype());
-        data.Trees.Add(new TreeInstance { Tint = default });
+        using TerrainData data = Serializer.Deserialize<TerrainData>(LegacyEcho())!;
 
-        using TerrainData clone = Serializer.Deserialize<TerrainData>(Serializer.Serialize(data))!;
+        Assert.Equal(33, data.HeightmapResolution);
+        Assert.Equal(50f, data.GetInterpolatedHeight(0.5f, 0.5f), 1);
+        Assert.Equal(1f, data.GetSplat(4, 16, 0), 2);
+        Assert.Equal(1f, data.GetSplat(28, 16, 1), 2);
+        Assert.True(data.IsCellHole(0, 0));
+        Assert.False(data.IsCellHole(5, 5));
+        Assert.Equal(1f, data.GetDetailDensity(0, 16, 16), 2);
+        Assert.Equal(DetailRenderMode.Grass, data.DetailPrototypes[0].RenderMode);
+        Assert.Equal(0.8f, data.DetailPrototypes[0].Stiffness, 4);
 
-        Assert.Equal(Color.White, clone.Trees[0].Tint);
-        Assert.Equal(Color.White, new TreeInstance().Tint);
-        Assert.Equal(1f, new TreeInstance().WidthScale);
+        TreeInstance tree = Assert.Single(data.Trees);
+        Assert.Equal(0.25f, tree.Position.Y, 4);
+        Assert.Equal(2f, tree.HeightScale);
+        Assert.Equal(Color.White, tree.Tint);
+    }
+
+    [Fact]
+    public void RestoringACaptureUndoesTheEditsSinceAndRedoesThem()
+    {
+        using TerrainData data = Small();
+        TerrainSnapshot before = data.Capture();
+        data.Edit(TerrainBrush.Raise, new Float2(16, 16), 4f, 5f);
+        data.AddTree(new TreeInstance { Position = new Float2(0.5f, 0.5f) });
+        TerrainSnapshot after = data.Capture();
+
+        Assert.True(data.Restore(before));
+        Assert.Equal(0f, data.GetHeight(16, 16));
+        Assert.Empty(data.Trees);
+
+        Assert.True(data.Restore(after));
+        Assert.Equal(5f, data.GetHeight(16, 16), 2);
+        Assert.Single(data.Trees);
+
+        data.ResizeHeightmap(65);
+        Assert.False(data.Restore(before));
     }
 
     #endregion
 }
 
-/// <summary>Terrain behaviour that needs a live scene: vegetation placement and the collider.</summary>
+/// <summary>Terrain behaviour that needs a live scene: the collider.</summary>
 public class TerrainSceneTests : RuntimeTestBase
 {
     private TerrainComponent AddTerrain(SceneInstance scene, TerrainData data, Float3 position)
@@ -855,106 +518,6 @@ public class TerrainSceneTests : RuntimeTestBase
         TerrainComponent terrain = go.AddComponent<TerrainComponent>();
         terrain.Data = data;
         return terrain;
-    }
-
-    /// <summary>Flat 64 metre terrain with one metre detail cells and a single mesh detail prototype.</summary>
-    private static TerrainData MeshDetailTerrain()
-    {
-        var data = new TerrainData { Size = 64f, Height = 10f };
-        data.ResizeHeightmap(65);
-        data.ResizeDetailMaps(64);
-        data.DetailPrototypes[0].RenderMode = DetailRenderMode.Mesh;
-        data.DetailPrototypes[0].Mesh = Mesh.CreateCube(Float3.One);
-        return data;
-    }
-
-    private static void PaintDetail(TerrainData data, int minX, int minZ, int maxX, int maxZ, float density)
-    {
-        for (int z = minZ; z <= maxZ; z++)
-            for (int x = minX; x <= maxX; x++)
-                data.SetDetailDensity(0, x, z, density);
-    }
-
-    private static List<Float3> CollectMeshDetails(SceneInstance scene, TerrainComponent terrain, Float3 cameraPosition)
-    {
-        var positions = new List<Float3>();
-        foreach (var build in new TerrainMeshDetailRenderer().Collect(terrain.Data!, terrain, 0, cameraPosition))
-            foreach (Double4x4 t in build.Transforms)
-                positions.Add(new Float3((float)t.c3.X, (float)t.c3.Y, (float)t.c3.Z));
-        return positions;
-    }
-
-    [Fact]
-    public void MeshDetailsFollowTheTerrainTransform()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        TerrainData data = MeshDetailTerrain();
-        PaintDetail(data, 30, 30, 33, 33, 1f);
-        var origin = new Float3(1000f, 50f, -300f);
-        TerrainComponent terrain = AddTerrain(scene, data, origin);
-
-        List<Float3> positions = CollectMeshDetails(scene, terrain, origin + new Float3(32f, 5f, 32f));
-
-        Assert.NotEmpty(positions);
-        foreach (Float3 p in positions)
-        {
-            Assert.InRange(p.X, origin.X + 30f, origin.X + 34f);
-            Assert.InRange(p.Z, origin.Z + 30f, origin.Z + 34f);
-            Assert.Equal(origin.Y, p.Y, 3);
-        }
-    }
-
-    [Fact]
-    public void FaintCellsDoNotHideTheRestOfTheirRow()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        TerrainData data = MeshDetailTerrain();
-
-        // Too faint for an instance at the first dither slot, followed by solid cells on the same row
-        data.SetDetailDensity(0, 8, 8, 3f / 255f);
-        PaintDetail(data, 9, 8, 11, 8, 1f);
-        TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
-
-        List<Float3> positions = CollectMeshDetails(scene, terrain, new Float3(10f, 5f, 8.5f));
-
-        Assert.Contains(positions, p => p.X >= 9f && p.X < 12f);
-    }
-
-    [Fact]
-    public void MeshDetailsOverTheirBudgetKeepTheNearestToTheCamera()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        TerrainData data = MeshDetailTerrain();
-
-        // Solid everywhere is far more instances than one prototype may place
-        PaintDetail(data, 0, 0, 63, 63, 1f);
-        TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
-
-        var camera = new Float2(60f, 60f);
-        List<Float3> positions = CollectMeshDetails(scene, terrain, new Float3(camera.X, 5f, camera.Y));
-
-        Assert.NotEmpty(positions);
-        float nearest = positions.Min(p => Float2.Distance(new Float2(p.X, p.Z), camera));
-        float furthest = positions.Max(p => Float2.Distance(new Float2(p.X, p.Z), camera));
-        Assert.True(nearest < 2f, $"nearest instance is {nearest} m from the camera");
-        // The budget covers about a quarter disc of 40 metres around the corner, so nothing much further is placed
-        Assert.True(furthest < 45f, $"furthest instance is {furthest} m from the camera");
-    }
-
-    [Fact]
-    public void MeshDetailsSkipHoles()
-    {
-        SceneInstance scene = CreateScene(enable: true);
-        TerrainData data = MeshDetailTerrain();
-        PaintDetail(data, 30, 30, 33, 33, 1f);
-
-        // Splat texels are an eighth of a metre on this terrain, so cells 30 to 33 are texels 240 to 271
-        for (int z = 240; z < 272; z++)
-            for (int x = 240; x < 272; x++)
-                data.SetHole(x, z, 0);
-        TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
-
-        Assert.Empty(CollectMeshDetails(scene, terrain, new Float3(32f, 5f, 32f)));
     }
 
     [Fact]
@@ -1036,5 +599,22 @@ public class TerrainSceneTests : RuntimeTestBase
         Update(scene);
         Assert.Equal(2f, collider.CellSize, 4);
         Assert.Equal(65, collider.Width);
+    }
+
+    [Fact]
+    public void ColliderFollowsASculptedBump()
+    {
+        SceneInstance scene = CreateScene(enable: true);
+        var data = new TerrainData { Size = 64f, Height = 10f };
+        data.ResizeHeightmap(33);
+        TerrainComponent terrain = AddTerrain(scene, data, new Float3(10, 2, 10));
+        TerrainCollider collider = terrain.GameObject.AddComponent<TerrainCollider>();
+        Update(scene);
+        Assert.Equal(2f, collider.GetWorldHeight(42, 42), 3);
+
+        data.Edit(TerrainBrush.Raise, new Float2(32, 32), 6f, 4f);
+        Update(scene);
+        Assert.Equal(6f, collider.GetWorldHeight(42, 42), 2);
+        Assert.True(scene.Physics.CheckSphere(new Float3(42, 5.5f, 42), 1f));
     }
 }

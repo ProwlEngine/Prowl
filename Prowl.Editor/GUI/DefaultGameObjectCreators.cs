@@ -67,7 +67,6 @@ internal static class DefaultGameObjectCreators
     {
         GameObject go = HierarchyPanel.CreateGameObject("Terrain", MenuContext.ActiveGameObject);
         TerrainComponent terrain = go.AddComponent<TerrainComponent>();
-        terrain.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Terrain));
         go.AddComponent<TerrainCollider>();
 
         var terrainData = new TerrainData();

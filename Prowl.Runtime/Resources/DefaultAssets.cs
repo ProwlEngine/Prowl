@@ -25,8 +25,6 @@ public enum DefaultShader
     Line,
     Invalid,
     Particle,
-    Terrain,
-    Grass,
     Refraction,
     DefaultUI,
     DefaultText,
@@ -51,8 +49,6 @@ public enum DefaultMaterial
 {
     Standard,
     Particle,
-    Terrain,
-    Grass,
 }
 
 /// <summary>

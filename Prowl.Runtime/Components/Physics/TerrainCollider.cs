@@ -13,7 +13,7 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Provides physics collision for terrain using heightmap-based collision detection.
-/// Samples height data directly from the TerrainData asset (no separate cache).
+/// Samples heights directly from the TerrainData's package, the finest samples the terrain draws.
 /// </summary>
 [RequireComponent(typeof(TerrainComponent))]
 [AddComponentMenu("Physics/Colliders/Terrain Collider")]
@@ -43,9 +43,8 @@ public class TerrainCollider : Component, ITerrainHeightProvider
     /// broad phase samples this from Jitter's worker threads, and Transform's cached world matrix is not
     /// safe to touch concurrently; caching also keeps the per-sample height lookup off it entirely.
     /// <para/>
-    /// The grid is defined in terrain-local space, so position, rotation and scale all live in these
-    /// matrices rather than being baked into the samples. That is what lets terrain be turned to any
-    /// orientation and still collide correctly.
+    /// The grid is defined in terrain-local space and placed at the terrain's position, which like the
+    /// terrain it draws is never turned or scaled.
     /// </summary>
     public Float4x4 LocalToWorld => _localToWorld;
 
@@ -62,8 +61,9 @@ public class TerrainCollider : Component, ITerrainHeightProvider
 
     private void RefreshPlacement()
     {
-        _localToWorld = Transform.LocalToWorldMatrix;
-        _worldToLocal = Transform.WorldToLocalMatrix;
+        Float3 position = Transform.Position;
+        _localToWorld = Float4x4.CreateTranslation(position);
+        _worldToLocal = Float4x4.CreateTranslation(-position);
 
         TerrainData? data = _terrain.IsValid() ? _terrain.Data : null;
         if (data.IsNotValid() || data.HeightmapResolution < 2)
@@ -103,12 +103,12 @@ public class TerrainCollider : Component, ITerrainHeightProvider
     {
         height = 0;
         TerrainData? data = _terrain.IsValid() ? _terrain.Data : null;
-        if (data.IsNotValid() || data.Heights == null) return false;
+        if (data.IsNotValid()) return false;
 
         int res = data.HeightmapResolution;
         if (x < 0 || x >= res || z < 0 || z >= res) return false;
 
-        height = (float)data.Heights[z * res + x] / TerrainData.kMaxHeight * data.Height;
+        height = data.GetHeight(x, z);
         return true;
     }
 
@@ -248,12 +248,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
         TerrainData? data = _terrain.IsValid() ? _terrain.Data : null;
         if (data.IsNotValid()) return 0;
 
-        Float3 localPos = Transform.InverseTransformPoint(new Float3(worldX, 0, worldZ));
-        float u = (float)(localPos.X / data.Size);
-        float v = (float)(localPos.Z / data.Size);
-
-        // Sampled in local space, so the result has to come back out through the transform.
-        Float3 localHit = new(localPos.X, data.GetInterpolatedHeight(u, v), localPos.Z);
-        return Float4x4.TransformPoint(localHit, Transform.LocalToWorldMatrix).Y;
+        Float3 position = Transform.Position;
+        return position.Y + data.GetInterpolatedHeight((worldX - position.X) / data.Size, (worldZ - position.Z) / data.Size);
     }
 }

@@ -16,8 +16,6 @@ internal sealed partial class Release_1_0
     // BuiltInAssets.GuidFor of the shaders and placeholder textures
     internal static readonly Guid LitShader = new("63d5be44-f531-7354-a255-717cb71004bb");
     internal static readonly Guid UnlitShader = new("d782631b-1c8c-dc5c-a4ab-2269e945dac5");
-    internal static readonly Guid GrassShader = new("a95b73d2-d6fb-b25b-8918-a1ad5616656c");
-    internal static readonly Guid TerrainShader = new("96a4f4ef-53bf-7a5e-a12c-fec5060898f7");
 
     internal static readonly Guid ProceduralSkyShader = new("73295c5c-0e55-4550-ae74-f13cd62796d2");
 
@@ -108,7 +106,7 @@ internal sealed partial class Release_1_0
 
     /// <summary>
     /// Lit and Unlit materials move onto Graphite's OpenPBR names, sky exposure becomes intensity, in nits for the
-    /// texture skies, grass takes Lit's alpha cutoff and drops its old translucency, terrain drops the holes toggle.
+    /// texture skies.
     /// </summary>
     internal static bool AdoptOpenPbr(RawMaterial m)
     {
@@ -116,13 +114,6 @@ internal sealed partial class Release_1_0
         if (shader == LitShader || shader == UnlitShader) AdoptOpenPbr(m, shader == LitShader);
         else if (shader == ProceduralSkyShader) m.Move("_Exposure", "intensity");
         else if (shader is { } sky && TextureSkyShaders.Contains(sky)) TextureSkyIntensity(m);
-        else if (shader == GrassShader)
-        {
-            m.Move("_AlphaCutoff", "alpha_cutoff");
-            foreach (string name in (string[])["_MainTex", "_Translucency", "_ScatterPower", "_ScatterDistortion", "_ScatterScale"])
-                m.Forget(name);
-        }
-        else if (shader == TerrainShader) m.Forget("_HasHoles");
         return m.Changed;
     }
 

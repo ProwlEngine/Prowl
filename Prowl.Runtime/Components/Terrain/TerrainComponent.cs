@@ -3,119 +3,54 @@
 
 using System;
 using System.Collections.Generic;
-using System.Threading;
+using System.Runtime.CompilerServices;
 
-using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using GMaterial = Prowl.Graphite.Rendering.Material;
-using GShader = Prowl.Graphite.Rendering.Shader;
-using GTexture = Prowl.Graphite.Texture;
-using SamplerDescription = Prowl.Graphite.SamplerDescription;
+using GTerrain = Prowl.Graphite.Rendering.TerrainData;
 using Material = Prowl.Runtime.Resources.Material;
 using Mesh = Prowl.Runtime.Resources.Mesh;
 
 namespace Prowl.Runtime.Terrain;
 
 /// <summary>
-/// Quadtree LOD terrain drawn through a render provider. Every view picks its own chunk LODs, grass cascades and
-/// details around its camera on the render thread, and the heightmap is sampled in the vertex shader for displacement.
-/// References a TerrainData asset for height/splat/layer configuration.
+/// Draws a <see cref="TerrainData"/> through Graphite's terrain: the ground streamed and level of detail picked per view,
+/// its layers from the data's textures, grass cards grown on the GPU, and mesh details and trees placed around the
+/// camera. The terrain stands at its GameObject's position, unturned and unscaled.
 /// </summary>
 [ExecuteAlways]
 [AddComponentMenu("Terrain/Terrain")]
-[ComponentIcon("\uf6fc")] // Mountain
+[ComponentIcon("")] // Mountain
 public class TerrainComponent : Component, IRenderSync
 {
-    #region Configuration
-
-    /// <summary>The terrain data asset containing heightmap, splatmap, and layer configuration.</summary>
     public TerrainData? Data;
 
-    /// <summary>Base material. Terrain draws with a child of it holding its own properties.</summary>
+    /// <summary>A material whose shader has Surface "Terrain", or null for the ground's own.</summary>
     public Material? Material;
 
-    /// <summary>Maximum LOD subdivision levels for the quadtree.</summary>
-    public int MaxLODLevel = 4;
+    /// <summary>How far out finer levels reach, at least 1.5. Higher keeps more detail in the distance.</summary>
+    public float LODQuality = 2f;
 
-    /// <summary>Resolution of the base mesh grid (vertices per side).</summary>
-    public int MeshResolution = 32;
-
-    /// <summary>
-    /// LOD quality multiplier. Controls the distance at which the quadtree subdivides.
-    /// 1.0 = default, higher = more detail at distance, lower = less detail.
-    /// </summary>
-    public float LODQuality = 1f;
-
-    /// <summary>Detail material override. If null, uses the built-in Grass material.</summary>
-    public Material? DetailMaterial;
-
-    /// <summary>How far details are drawn, in world units.</summary>
+    /// <summary>The metres around the camera mesh details are placed.</summary>
     public float DetailDistance = 150f;
 
-    /// <summary>
-    /// Detail cells per metre. 1 gives one cell every metre, so one blade per square metre where
-    /// the detail map is painted solid; 2 gives four. Cost scales with the square of this.
-    /// </summary>
-    public float DetailDensity = 2f;
-
-    /// <summary>
-    /// Quality bands between the camera and <see cref="DetailDistance"/>, split evenly. Each band
-    /// out doubles its cell size, drawing a quarter as many blades as the one before it.
-    /// </summary>
-    public int DetailCascades = 4;
-
-    /// <summary>Maximum render distance for trees.</summary>
+    /// <summary>The metres around the camera trees are placed.</summary>
     public float TreeDistance = 500f;
 
-    #endregion
-
-    /// <summary>Shadow casting of the terrain, its details and its trees.</summary>
+    /// <summary>Shadow casting of the details and trees.</summary>
     public ShadowCasting ShadowCasting = ShadowCasting.On;
     public bool ReceiveShadows = true;
 
-    /// <summary>The renderable flags the terrain, its details and its trees draw with.</summary>
-    internal RenderableFlags RenderFlags => RenderableState.FlagsFor(GameObject, false, ReceiveShadows) | ShadowCasting.ToFlags();
-
-    #region State
-
-    [NonSerialized, NotHeld] private Mesh? _baseMesh;
-    [NonSerialized, NotHeld] private int _baseMeshResolution;
-    [NonSerialized, NotHeld] private TerrainProvider? _provider;
-    [NonSerialized, NotHeld] private TerrainMaterial? _material;
-    [NonSerialized, NotHeld] private TerrainMeshDetailRenderer? _meshDetailRenderer;
-    [NonSerialized, NotHeld] private TerrainDetailRenderer? _detailRenderer;
-    [NonSerialized, NotHeld] private TerrainTreeRenderer? _treeRenderer;
-    [NonSerialized, NotHeld] private readonly List<(int ViewId, Double3 Position)> _cameras = [];
-
-    // Wind zones nearest the camera, refreshed each frame
-    [NonSerialized, NotHeld] private readonly WindZone?[] _windZones = new WindZone?[WindZone.kMaxShaderZones];
-    [NonSerialized] private int _windZoneCount;
-
-    [NonSerialized] private static Material? s_defaultTerrainMat;
-    [NonSerialized] private static Material? s_defaultDetailMat;
-
-    private static readonly string[] s_splatNames = ["_Splatmap0", "_Splatmap1"];
-    private static readonly string[] s_layerNames = LayerNames("");
-    private static readonly string[] s_layerNormalNames = LayerNames("Normal");
-    private static readonly string[] s_layerTilingNames = LayerNames("Tiling");
-    private static readonly string[] s_layerRoughnessNames = LayerNames("Roughness");
-    private static readonly string[] s_layerMetallicNames = LayerNames("Metallic");
-
-    private static string[] LayerNames(string suffix)
-    {
-        string[] names = new string[8];
-        for (int i = 0; i < names.Length; i++) names[i] = $"_Layer{i}{suffix}";
-        return names;
-    }
-
-    #endregion
+    /// <summary>The renderable flags the details and trees draw with.</summary>
+    internal RenderableFlags RenderFlags => RenderableState.FlagsFor(GameObject, false, ReceiveShadows) | ShadowCasting.ToFlags() | RenderableFlags.Static;
 
     #region Brush Preview (set by editor each frame)
 
+    /// <summary>The brush's middle and radius across the terrain from 0 to 1, and the share of the radius it softens over.</summary>
     [NonSerialized] public Float2 BrushPosition;
     [NonSerialized] public float BrushRadius;
     [NonSerialized] public float BrushFalloff;
@@ -123,199 +58,258 @@ public class TerrainComponent : Component, IRenderSync
 
     #endregion
 
-    #region Public Accessors
+    [NonSerialized, NotHeld] private RenderWorld? _world;
+    [NonSerialized, NotHeld] private TerrainSurface? _surface;
+    [NonSerialized, NotHeld] private GTerrain? _built;
+    [NonSerialized, NotHeld] private TerrainLayers? _layers;
+    [NonSerialized, NotHeld] private TerrainCards? _cards;
+    [NonSerialized, NotHeld] private TerrainDetailInstances? _detailInstances;
+    [NonSerialized, NotHeld] private TerrainProps? _details;
+    [NonSerialized, NotHeld] private TerrainTreeInstances? _treeInstances;
+    [NonSerialized, NotHeld] private TerrainProps? _trees;
+    [NonSerialized] private int _layerSignature, _detailSignature, _treeSignature;
 
-    /// <summary>Invalidate cached mesh-detail patches (call after painting detail density).</summary>
-    public void InvalidateDetailCache() => _meshDetailRenderer?.InvalidateCache();
-
-    /// <summary>Shortcut to terrain size from the data asset.</summary>
     public float TerrainSize { get { TerrainData? d = Data; return d.IsValid() ? d.Size : 1024f; } }
-
-    /// <summary>Shortcut to terrain height from the data asset.</summary>
     public float TerrainHeight { get { TerrainData? d = Data; return d.IsValid() ? d.Height : 100f; } }
 
-    /// <summary>Transform a point from terrain-local space to world space.</summary>
-    public Float3 TerrainToWorld(Float3 localPoint) =>
-        Float4x4.TransformPoint(localPoint, Transform.LocalToWorldMatrix);
+    public Float3 TerrainToWorld(Float3 localPoint) => localPoint + Transform.Position;
+    public Float3 WorldToTerrain(Float3 worldPoint) => worldPoint - Transform.Position;
 
-    /// <summary>Transform a point from world space to terrain-local space.</summary>
-    public Float3 WorldToTerrain(Float3 worldPoint) =>
-        Float4x4.TransformPoint(worldPoint, Transform.WorldToLocalMatrix);
-
-    #endregion
+    /// <summary>The ground the terrain draws, null before it first syncs.</summary>
+    public TerrainSurface? Surface => _surface;
 
     #region Rendering
 
-    [System.NonSerialized, NotHeld] private ProbeAnchorHandle _probeAnchor;
-
-    /// <summary>Where the light probes light the terrain's draws, the middle of its bounds.</summary>
-    internal ProbeAnchorHandle ProbeAnchor => _probeAnchor;
-
-    private void SyncProbeAnchor(RenderWorld world)
-    {
-        TerrainData? data = Data;
-        float size = data.IsValid() ? data.Size : 0f, height = data.IsValid() ? data.Height : 0f;
-        Float3 centre = Float4x4.TransformPoint(new Float3(size * 0.5f, height * 0.5f, size * 0.5f), Transform.LocalToWorldMatrix);
-        Double3 position = new(centre.X, centre.Y, centre.Z);
-        if (!_probeAnchor.IsValid || !world.IsAlive(_probeAnchor)) _probeAnchor = world.AddProbeAnchor(position);
-        else world.SetProbeAnchor(_probeAnchor, position);
-    }
-
     bool IRenderSync.Sync(RenderWorld world)
     {
-        SyncProbeAnchor(world);
-        _provider ??= new TerrainProvider();
-        world.Providers.Add(_provider);
-        _provider.GetCameras(_cameras);
+        TerrainData? data = Data;
+        Renderer? renderer = Graphics.Renderer;
+        if (data.IsNotValid() || renderer == null)
+        {
+            Release(world);
+            return false;
+        }
 
-        TerrainFrame? frame = null;
-        try { frame = BuildFrame(); }
-        finally { _provider.Publish(frame); }
+        GTerrain terrain = data.Terrain;
+        Float3 position = Transform.Position;
+        terrain.Position = new Double3(position.X, position.Y, position.Z);
+        if (_surface == null || _world != world || !ReferenceEquals(_built, terrain))
+        {
+            Release(world);
+            _world = world;
+            _built = terrain;
+            _surface = new TerrainSurface(renderer, terrain);
+            world.Providers.Add(_surface);
+        }
+
+        if (Material.IsValid() && GpuMaterialOf(Material) is { } material && !ReferenceEquals(_surface.Material, material))
+            _surface.Material = material;
+        _surface.LodQuality = Math.Max(LODQuality, 1.5);
+        _surface.Brush = BrushVisible && BrushRadius > 0
+            ? new TerrainBrushOverlay(new Double2(terrain.Position.X + BrushPosition.X * data.Size, terrain.Position.Z + BrushPosition.Y * data.Size), BrushRadius * data.Size, BrushFalloff, new Float3(0.2f, 0.8f, 0.6f))
+            : null;
+
+        SyncLayers(renderer, data);
+        SyncDetails(renderer, world, data, terrain);
+        SyncTrees(world, data, terrain);
+
+        IReadOnlyList<Double3> viewers = _surface.Viewers;
+        Double3 viewer = viewers.Count > 0 ? viewers[0] : terrain.Position;
+        _details?.Update(viewer);
+        _trees?.Update(viewer);
         return false;
     }
 
-    void IRenderSync.Detach(RenderWorld world)
+    void IRenderSync.Detach(RenderWorld world) => Release(world);
+
+    private void Release(RenderWorld world)
     {
-        if (_probeAnchor.IsValid && world.IsAlive(_probeAnchor)) world.RemoveProbeAnchor(_probeAnchor);
-        _probeAnchor = default;
-        if (_provider != null)
+        if (_surface != null)
         {
-            world.Providers.Remove(_provider);
-            _provider.Publish(null);
-            _provider = null;
+            (_world ?? world).Providers.Remove(_surface);
+            Graphics.DeferDispose(_surface);
         }
-        _material?.Release();
-        _material = null;
-        _detailRenderer?.Dispose();
-        _detailRenderer = null;
-        _meshDetailRenderer?.Dispose();
-        _meshDetailRenderer = null;
-        _treeRenderer = null;
-        if (_baseMesh.IsValid()) _baseMesh.Dispose();
-        _baseMesh = null;
+        _details?.Dispose();
+        _detailInstances?.Dispose();
+        _trees?.Dispose();
+        _treeInstances?.Dispose();
+        Graphics.DeferDispose(_layers);
+        Graphics.DeferDispose(_cards);
+        (_surface, _built, _world, _layers, _cards) = (null, null, null, null, null);
+        (_details, _detailInstances, _trees, _treeInstances) = (null, null, null, null);
+        (_layerSignature, _detailSignature, _treeSignature) = (0, 0, 0);
     }
 
-    private TerrainFrame? BuildFrame()
+    private void SyncLayers(Renderer renderer, TerrainData data)
     {
-        TerrainData? data = Data;
-        if (data.IsNotValid()) return null;
-
-        Material? source = Material;
-        if (source.IsNotValid())
+        HashCode hash = new();
+        bool ready = true;
+        foreach (TerrainLayer layer in data.Layers)
         {
-            if (s_defaultTerrainMat.IsNotValid()) s_defaultTerrainMat = Resources.Material.LoadDefault(DefaultMaterial.Terrain);
-            source = s_defaultTerrainMat;
+            ready &= Ready(layer.Albedo, ref hash) & Ready(layer.NormalMap, ref hash);
+            hash.Add((layer.Tiling, layer.Roughness, layer.HeightBlend, layer.HexTiling, layer.MacroVariation));
         }
+        int signature = hash.ToHashCode() | 1;
+        if (!ready || signature == _layerSignature)
+            return;
 
-        _material ??= new TerrainMaterial();
-        GMaterial? gpu = _material.Bind(source);
-        GpuMesh? baseMesh = BaseMesh();
-        if (gpu == null || baseMesh == null) return null;
-
-        Float4x4 terrainToWorld = Transform.LocalToWorldMatrix;
-        GameObject go = GameObject;
-        var frame = new TerrainFrame
+        int size = 4;
+        foreach (TerrainLayer layer in data.Layers)
+            size = Math.Max(size, TerrainTextures.SizeFor(1024, layer.Albedo, layer.NormalMap));
+        List<TerrainLayerDesc> descs = new(data.Layers.Count);
+        foreach (TerrainLayer layer in data.Layers)
         {
-            Frame = Graphics.FrameIndex,
-            TerrainToWorld = (Double4x4)terrainToWorld,
-            WorldToTerrain = Transform.WorldToLocalMatrix,
-            MaxScale = MaxScale(terrainToWorld),
-            Size = data.Size,
-            MinHeight = -0.05f * data.Height,
-            MaxHeight = 1.05f * data.Height,
-            MaxLOD = MaxLODLevel,
-            LODQuality = LODQuality,
-            BaseMesh = baseMesh,
-            Material = gpu,
-            Flags = RenderFlags,
-            LayerMask = RenderableState.LayerBit(go.LayerIndex),
-            ObjectId = (uint)InstanceID,
-            Probe = _probeAnchor,
-        };
-
-        ApplyTerrainProperties(_material, data);
-        PickWindZones();
-
-        Material? detailSource = DetailMaterial;
-        if (detailSource.IsNotValid())
-        {
-            if (s_defaultDetailMat.IsNotValid()) s_defaultDetailMat = Resources.Material.LoadDefault(DefaultMaterial.Grass);
-            detailSource = s_defaultDetailMat;
-        }
-
-        _detailRenderer ??= new TerrainDetailRenderer();
-        frame.Grass = _detailRenderer.Prepare(data, this, detailSource);
-
-        _meshDetailRenderer ??= new TerrainMeshDetailRenderer();
-        frame.MeshDetails = _meshDetailRenderer.Prepare(data, this, _cameras);
-
-        _treeRenderer ??= new TerrainTreeRenderer();
-        frame.Trees = _treeRenderer.Prepare(data, this);
-        return frame;
-    }
-
-    private void ApplyTerrainProperties(TerrainMaterial material, TerrainData data)
-    {
-        material.SetKeyword("TERRAIN_8_LAYERS", data.LayerCount > 4);
-        ApplyHeightfield(material, data);
-        material.SetSurface(data.GetHolesTexture().IsValid() ? new SurfaceSettings(SurfaceType.Cutout) : null);
-
-        IReadOnlyList<Texture2D> splatmaps = data.GetSplatmapTextures();
-        for (int i = 0; i < splatmaps.Count && i < s_splatNames.Length; i++)
-            material.SetTexture(s_splatNames[i], splatmaps[i]);
-
-        int layerCount = Math.Min(data.LayerCount, s_layerNames.Length);
-        material.SetInt("_LayerCount", layerCount);
-        for (int i = 0; i < layerCount; i++)
-        {
-            TerrainLayer layer = data.Layers[i];
-            material.SetTexture(s_layerNames[i], layer.Albedo);
-            material.SetTexture(s_layerNormalNames[i], layer.NormalMap);
-            material.SetFloat(s_layerTilingNames[i], layer.Tiling);
-            material.SetFloat(s_layerRoughnessNames[i], layer.Roughness);
-            material.SetFloat(s_layerMetallicNames[i], layer.Metallic);
-        }
-
-        material.SetVector("_BrushPosition", new Float4(BrushPosition.X, BrushPosition.Y, 0, 0), 2);
-        material.SetFloat("_BrushRadius", BrushRadius);
-        material.SetFloat("_BrushFalloff", BrushFalloff);
-        material.SetFloat("_BrushVisible", BrushVisible ? 1f : 0f);
-    }
-
-    /// <summary>The height field every terrain shader samples: heightmap, holes, size and interpolation.</summary>
-    internal static void ApplyHeightfield(TerrainMaterial material, TerrainData data)
-    {
-        material.SetKeyword("TERRAIN_BICUBIC", data.Interpolation == TerrainInterpolation.Bicubic);
-        material.SetTexture("_Heightmap", data.GetHeightmapTexture());
-        material.SetTexture("_HolesMap", data.GetHolesTexture());
-        material.SetFloat("_TerrainSize", data.Size);
-        material.SetFloat("_TerrainHeight", data.Height);
-    }
-
-    // Wind zones nearest the camera that drew most recently, or the terrain when none has
-    private void PickWindZones()
-    {
-        Float3 near = _cameras.Count > 0 ? (Float3)_cameras[0].Position : Transform.Position;
-        _windZoneCount = WindZone.GetNearest(GameObject.Scene, near, _windZones);
-    }
-
-    /// <summary>Gives a grass material the wind zones picked this frame.</summary>
-    internal void ApplyWindZones(TerrainMaterial material)
-    {
-        material.SetInt("_WindZoneCount", _windZoneCount);
-        for (int i = 0; i < WindZone.kMaxShaderZones; i++)
-        {
-            Float4 sphere = Float4.Zero, parameters = Float4.Zero;
-            WindZone? zone = i < _windZoneCount ? _windZones[i] : null;
-            if (zone.IsValid())
+            byte rough = (byte)Math.Clamp(MathF.Round(layer.Roughness * 255f), 0, 255);
+            byte[] albedo = layer.Albedo.IsValid() ? TerrainTextures.Read(layer.Albedo, size) ?? TerrainTextures.Solid(size, 128, 128, 128, 128) : TerrainTextures.Solid(size, 128, 128, 128, 128);
+            byte[] surface = TerrainTextures.Solid(size, 128, 128, rough, 255);
+            if (layer.NormalMap.IsValid() && TerrainTextures.Read(layer.NormalMap, size) is { } normal)
+                for (int i = 0; i < size * size; i++)
+                    (surface[i * 4], surface[i * 4 + 1]) = (normal[i * 4], normal[i * 4 + 1]);
+            descs.Add(new TerrainLayerDesc
             {
-                Float3 centre = zone.Transform.Position;
-                sphere = new Float4(centre.X, centre.Y, centre.Z, MathF.Max(zone.Radius, 1e-4f));
-                parameters = new Float4(zone.WindMain, zone.Turbulence, zone.PulseMagnitude, zone.PulseFrequency);
-            }
-            material.SetVector(TerrainMaterial.WindSphereNames[i], sphere, 4);
-            material.SetVector(TerrainMaterial.WindParamNames[i], parameters, 4);
+                Size = size,
+                Albedo = albedo,
+                Surface = surface,
+                TileSize = layer.Tiling,
+                HeightBlend = layer.HeightBlend,
+                HexTiling = layer.HexTiling,
+                MacroVariation = layer.MacroVariation,
+            });
         }
+        TerrainLayers? old = _layers;
+        _layers = descs.Count > 0 ? new TerrainLayers(renderer, descs) : null;
+        _surface!.Layers = _layers;
+        Graphics.DeferDispose(old);
+        _layerSignature = signature;
+    }
+
+    private void SyncDetails(Renderer renderer, RenderWorld world, TerrainData data, GTerrain terrain)
+    {
+        HashCode hash = new();
+        hash.Add(DetailDistance);
+        hash.Add(RenderFlags);
+        bool ready = true;
+        foreach (DetailPrototype p in data.DetailPrototypes)
+        {
+            hash.Add((p.RenderMode, p.Density, p.Range, p.MinWidth, p.MaxWidth, p.MinHeight, p.MaxHeight, p.NoiseSize));
+            hash.Add((p.HealthyColor, p.DryColor, p.RootColor, p.TipColor, p.GroundTint, p.Stiffness, p.AlignToNormal));
+            if (p.RenderMode == DetailRenderMode.Grass)
+                ready &= Ready(p.Texture, ref hash);
+            else
+                hash.Add(KindOf(p.Mesh, p.Materials) != null);
+        }
+        int signature = hash.ToHashCode() | 1;
+        if (!ready || signature == _detailSignature)
+            return;
+
+        List<byte[]> cards = [];
+        int cardSize = 4;
+        foreach (DetailPrototype p in data.DetailPrototypes)
+            if (p.RenderMode == DetailRenderMode.Grass)
+                cardSize = Math.Max(cardSize, TerrainTextures.SizeFor(512, p.Texture));
+
+        TerrainDetailPrototype[] prototypes = new TerrainDetailPrototype[data.DetailPrototypes.Count];
+        TerrainPropKind?[] kinds = new TerrainPropKind?[prototypes.Length];
+        for (int i = 0; i < prototypes.Length; i++)
+        {
+            DetailPrototype p = data.DetailPrototypes[i];
+            bool grass = p.RenderMode == DetailRenderMode.Grass;
+            kinds[i] = grass ? null : KindOf(p.Mesh, p.Materials);
+            if (grass)
+                cards.Add(p.Texture.IsValid() ? TerrainTextures.Read(p.Texture, cardSize) ?? TerrainTextures.Solid(cardSize, 255, 255, 255, 255) : TerrainTextures.Solid(cardSize, 255, 255, 255, 255));
+            prototypes[i] = new TerrainDetailPrototype
+            {
+                Mesh = kinds[i],
+                Density = grass || kinds[i] != null ? p.Density : 0f,
+                Range = p.Range,
+                MinWidth = p.MinWidth,
+                MaxWidth = p.MaxWidth,
+                MinHeight = p.MinHeight,
+                MaxHeight = p.MaxHeight,
+                NoiseSize = p.NoiseSize,
+                HealthyColor = p.HealthyColor.ToFloat4(),
+                DryColor = p.DryColor.ToFloat4(),
+                RootColor = new Float3(p.RootColor.R, p.RootColor.G, p.RootColor.B),
+                TipColor = new Float3(p.TipColor.R, p.TipColor.G, p.TipColor.B),
+                GroundTint = p.GroundTint,
+                Stiffness = p.Stiffness,
+                AlignToGround = p.AlignToNormal ? 1f : 0f,
+                Card = grass ? cards.Count - 1 : 0,
+            };
+        }
+
+        TerrainCards? oldCards = _cards;
+        _cards = cards.Count > 0 ? new TerrainCards(renderer, cardSize, cards) : null;
+        _surface!.GrassCards = _cards?.Texture;
+        _surface.Details = prototypes;
+        Graphics.DeferDispose(oldCards);
+
+        _details?.Dispose();
+        _detailInstances?.Dispose();
+        _detailInstances = new TerrainDetailInstances(terrain, prototypes);
+        _details = new TerrainProps(world, _detailInstances, kinds) { Range = DetailDistance, CellsPerUpdate = 16 };
+        _detailSignature = signature;
+    }
+
+    private void SyncTrees(RenderWorld world, TerrainData data, GTerrain terrain)
+    {
+        HashCode hash = new();
+        hash.Add(TreeDistance);
+        hash.Add(RenderFlags);
+        TerrainPropKind?[] kinds = new TerrainPropKind?[data.TreePrototypes.Count];
+        for (int i = 0; i < kinds.Length; i++)
+        {
+            kinds[i] = KindOf(data.TreePrototypes[i].Mesh, data.TreePrototypes[i].Materials);
+            hash.Add(kinds[i]?.Mesh);
+            foreach (GMaterial m in kinds[i]?.Materials ?? [])
+                hash.Add(m);
+        }
+        int signature = hash.ToHashCode() | 1;
+        if (signature == _treeSignature)
+            return;
+        _trees?.Dispose();
+        _treeInstances?.Dispose();
+        _treeInstances = new TerrainTreeInstances(terrain);
+        _trees = new TerrainProps(world, _treeInstances, kinds) { Range = TreeDistance, CellsPerUpdate = 64 };
+        _treeSignature = signature;
+    }
+
+    // Whether a texture is ready to read, loading it when it is not, adding what it holds to the hash
+    private static bool Ready(Texture2D? texture, ref HashCode hash)
+    {
+        if (texture.IsNotValid())
+        {
+            hash.Add(0);
+            return true;
+        }
+        if (!texture.IsLoaded)
+        {
+            if (texture.State == AssetState.Unloaded)
+                _ = texture.LoadAsync();
+            return false;
+        }
+        hash.Add(RuntimeHelpers.GetHashCode(texture));
+        hash.Add(texture.ContentVersion);
+        return true;
+    }
+
+    // What a prop draws as: the mesh with a material for each submesh, null while any of it loads
+    private TerrainPropKind? KindOf(Mesh? mesh, List<Material?> materials)
+    {
+        if (GpuMeshOf(mesh) is not { } gpu)
+            return null;
+        int count = mesh!.SubMeshCount;
+        GMaterial[] resolved = new GMaterial[count];
+        for (int s = 0; s < count; s++)
+        {
+            Material? material = s < materials.Count ? materials[s] : null;
+            if (material.IsNotValid())
+                material = materials.Find(m => m.IsValid());
+            if ((material.IsValid() ? GpuMaterialOf(material) : RenderableState.DefaultGpuMaterial) is not { } ready)
+                return null;
+            resolved[s] = ready;
+        }
+        return new TerrainPropKind { Mesh = gpu, Materials = resolved, Flags = RenderFlags };
     }
 
     /// <summary>The Graphite material of a Prowl material ready to draw, loading it when it is not. Null while it cannot.</summary>
@@ -343,448 +337,24 @@ public class TerrainComponent : Component, IRenderSync
         return mesh.GpuIfLoaded;
     }
 
-    /// <summary>The largest scale a matrix gives any axis, for bounding spheres.</summary>
-    internal static float MaxScale(Float4x4 m)
-    {
-        float x = Float3.Length(new Float3(m[0, 0], m[1, 0], m[2, 0]));
-        float y = Float3.Length(new Float3(m[0, 1], m[1, 1], m[2, 1]));
-        float z = Float3.Length(new Float3(m[0, 2], m[1, 2], m[2, 2]));
-        return MathF.Max(x, MathF.Max(y, z));
-    }
-
-    private GpuMesh? BaseMesh()
-    {
-        if (_baseMesh.IsNotValid() || _baseMeshResolution != MeshResolution)
-        {
-            if (_baseMesh.IsValid()) _baseMesh.Dispose();
-            _baseMesh = CreateBaseMesh(Math.Max(1, MeshResolution));
-            _baseMeshResolution = MeshResolution;
-        }
-        _baseMesh.Upload();
-        return _baseMesh.GpuIfLoaded;
-    }
-
     #endregion
 
-    #region Raycast
-
-    /// <summary>
-    /// Raycast against the terrain heightmap surface.
-    /// Returns true if the ray hits the terrain, with the world-space hit point and terrain UV.
-    /// </summary>
+    /// <summary>Casts a ray at the ground, giving where it hits in the world and across the terrain from 0 to 1.</summary>
     public bool Raycast(Ray ray, out Float3 hitPoint, out Float2 terrainUV)
     {
         hitPoint = Float3.Zero;
         terrainUV = Float2.Zero;
-
-        TerrainData? terrainData = Data;
-        if (terrainData.IsNotValid() || terrainData.Heights == null) return false;
-
-        float size = terrainData.Size;
-        Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
-
-        // Transform ray into terrain-local space
-        Float3 localOrigin = Float4x4.TransformPoint(ray.Origin, worldToLocal);
-        Float3 localDir = Float3.Normalize(Float4x4.TransformPoint(ray.Origin + ray.Direction, worldToLocal) - localOrigin);
-
-        float stepSize = size / terrainData.HeightmapResolution * 0.5f;
-        float maxDist = size * 2f;
-        float t = 0f;
-
-        float prevDiff = GetHeightDiffLocal(localOrigin, terrainData);
-        bool prevAbove = prevDiff > 0;
-
-        while (t < maxDist)
-        {
-            t += stepSize;
-            Float3 localPoint = localOrigin + localDir * t;
-            float diff = GetHeightDiffLocal(localPoint, terrainData);
-            bool above = diff > 0;
-
-            if (!above && prevAbove)
-            {
-                float tLo = t - stepSize;
-                float tHi = t;
-                for (int i = 0; i < 8; i++)
-                {
-                    float tMid = (tLo + tHi) * 0.5f;
-                    Float3 mid = localOrigin + localDir * tMid;
-                    if (GetHeightDiffLocal(mid, terrainData) > 0)
-                        tLo = tMid;
-                    else
-                        tHi = tMid;
-                }
-
-                Float3 localHit = localOrigin + localDir * ((tLo + tHi) * 0.5f);
-                terrainUV = new Float2((float)(localHit.X / size), (float)(localHit.Z / size));
-                hitPoint = TerrainToWorld(localHit);
-                return true;
-            }
-
-            prevDiff = diff;
-            prevAbove = above;
-        }
-
-        return false;
-    }
-
-    private static float GetHeightDiffLocal(Float3 localPoint, TerrainData data)
-    {
-        float u = (float)(localPoint.X / data.Size);
-        float v = (float)(localPoint.Z / data.Size);
-        if (u < 0 || u > 1 || v < 0 || v > 1) return 1f;
-        float terrainY = data.GetInterpolatedHeight(u, v);
-        return (float)localPoint.Y - terrainY;
-    }
-
-    #endregion
-
-    #region Mesh Creation
-
-    /// <summary>A unit grid in XZ the shader places as each chunk: (0, 0) to (1, 1), resolution quads a side.</summary>
-    private static Mesh CreateBaseMesh(int resolution)
-    {
-        int vertexCount = (resolution + 1) * (resolution + 1);
-        int indexCount = resolution * resolution * 6;
-
-        Float3[] vertices = new Float3[vertexCount];
-        Float2[] uvs = new Float2[vertexCount];
-        uint[] indices = new uint[indexCount];
-
-        for (int z = 0; z <= resolution; z++)
-        {
-            for (int x = 0; x <= resolution; x++)
-            {
-                int index = z * (resolution + 1) + x;
-                float u = x / (float)resolution;
-                float v = z / (float)resolution;
-                vertices[index] = new Float3(u, 0, v);
-                uvs[index] = new Float2(u, v);
-            }
-        }
-
-        int triIndex = 0;
-        for (int z = 0; z < resolution; z++)
-        {
-            for (int x = 0; x < resolution; x++)
-            {
-                // Split along the (x, z) to (x+1, z+1) diagonal, the same one physics and the navmesh use
-                uint a = (uint)(z * (resolution + 1) + x);
-                uint b = a + 1;
-                uint d = a + (uint)resolution + 1;
-                uint c = d + 1;
-                indices[triIndex++] = a;
-                indices[triIndex++] = d;
-                indices[triIndex++] = c;
-                indices[triIndex++] = a;
-                indices[triIndex++] = c;
-                indices[triIndex++] = b;
-            }
-        }
-
-        var mesh = new Mesh
-        {
-            Vertices = vertices,
-            UV = uvs,
-            Indices = indices,
-        };
-        mesh.RecalculateBounds();
-        mesh.Upload();
-        return mesh;
-    }
-
-    #endregion
-}
-
-/// <summary>What the render thread draws a terrain with for a frame, copied on the host and not changed after.</summary>
-internal sealed class TerrainFrame
-{
-    public ulong Frame;
-    public Double4x4 TerrainToWorld;
-    public Float4x4 WorldToTerrain;
-    public float MaxScale;
-    public float Size, MinHeight, MaxHeight;
-    public int MaxLOD;
-    public float LODQuality;
-    public GpuMesh BaseMesh = null!;
-    public GMaterial Material = null!;
-    public RenderableFlags Flags;
-    public uint LayerMask;
-    public uint ObjectId;
-    public ProbeAnchorHandle Probe;
-    public TerrainDetailRenderer.Frame? Grass;
-    public TerrainMeshDetailRenderer.Frame? MeshDetails;
-    public TerrainTreeRenderer.Frame? Trees;
-
-    public DrawItem Item(Float4 custom0 = default, Float4 custom1 = default) => new()
-    {
-        Transform = TerrainToWorld,
-        Custom0 = custom0,
-        Custom1 = custom1,
-        LayerMask = LayerMask,
-        ObjectId = ObjectId,
-        Flags = Flags,
-        Probe = Probe,
-    };
-
-    /// <summary>A terrain local box as a world bounding sphere.</summary>
-    public (Double3 Center, float Radius) Sphere(Float3 localMin, Float3 localMax)
-    {
-        Float3 centre = (localMin + localMax) * 0.5f;
-        float radius = Float3.Length(localMax - localMin) * 0.5f * MaxScale;
-        return (Double4x4.TransformPoint((Double3)centre, TerrainToWorld), radius);
-    }
-
-    public Float3 ToLocal(Double3 world) => Float4x4.TransformPoint((Float3)world, WorldToTerrain);
-}
-
-/// <summary>
-/// Draws one terrain into each view on the render thread: the chunks its camera's quadtree picks, the grass cascades
-/// around it, and the mesh details and trees it can see. Shadow views draw for the cameras that drew recently.
-/// </summary>
-internal sealed class TerrainProvider : RenderProvider
-{
-    // Views not drawn for this many frames lose their state
-    private const ulong kForgetFrames = 120;
-
-    private TerrainFrame? _pending;
-    private TerrainFrame? _current;
-
-    private readonly object _cameraLock = new();
-    private readonly Dictionary<int, (Double3 Position, ulong Frame)> _cameras = [];
-
-    // Render thread
-    private readonly Dictionary<int, (TerrainQuadtree Tree, ulong Frame)> _trees = [];
-    private readonly List<Float3> _positions = [];
-    private readonly List<int> _stale = [];
-    private ulong _prunedFrame = ulong.MaxValue;
-
-    /// <summary>The frame the next SubmitFrame hands the render thread. Host thread.</summary>
-    public void Publish(TerrainFrame? frame) => _pending = frame;
-
-    public override void Extract() => Volatile.Write(ref _current, _pending);
-
-    /// <summary>The cameras that drew the terrain recently, most recent first. Host thread.</summary>
-    public void GetCameras(List<(int ViewId, Double3 Position)> into)
-    {
-        into.Clear();
-        int newest = 0;
-        ulong newestFrame = 0;
-        lock (_cameraLock)
-        {
-            foreach (KeyValuePair<int, (Double3 Position, ulong Frame)> camera in _cameras)
-            {
-                if (camera.Value.Frame > newestFrame)
-                {
-                    newestFrame = camera.Value.Frame;
-                    newest = into.Count;
-                }
-                into.Add((camera.Key, camera.Value.Position));
-            }
-        }
-        if (newest > 0) (into[0], into[newest]) = (into[newest], into[0]);
-    }
-
-    public override void Cull(in ProviderView view, DrawItemSink sink)
-    {
-        TerrainFrame? frame = Volatile.Read(ref _current);
-        if (frame == null) return;
-        Prune(frame.Frame);
-
-        FeatureView info = view.View;
-        bool shadow = info.Kind == ViewKind.Shadow;
-        bool camera = ((ViewKinds)(1 << (int)info.Kind) & ViewKinds.Cameras) != 0;
-
-        int viewId = Graphics.ViewId(info.RenderView);
-        _positions.Clear();
-        lock (_cameraLock)
-        {
-            if (camera) _cameras[viewId] = (view.Camera, frame.Frame);
-            if (shadow)
-                foreach ((Double3 position, ulong _) in _cameras.Values) _positions.Add(frame.ToLocal(position));
-        }
-        if (_positions.Count == 0) _positions.Add(frame.ToLocal(view.Camera));
-
-        CullChunks(frame, viewId, view, sink);
-        frame.Grass?.Cull(frame, _positions, view, sink);
-        frame.MeshDetails?.Cull(shadow ? -1 : viewId, view, sink);
-        frame.Trees?.Cull(_positions, view, sink);
-    }
-
-    private void CullChunks(TerrainFrame frame, int viewId, in ProviderView view, DrawItemSink sink)
-    {
-        if (!_trees.TryGetValue(viewId, out (TerrainQuadtree Tree, ulong Frame) entry)
-            || MathF.Abs(entry.Tree.ChunkSize - frame.Size) > 0.01f || entry.Tree.MaxLODLevel != frame.MaxLOD)
-        {
-            entry.Tree = new TerrainQuadtree(Float3.Zero, frame.Size, frame.MaxLOD);
-        }
-        _trees[viewId] = (entry.Tree, frame.Frame);
-
-        Span<Float3> flat = _positions.Count <= 16 ? stackalloc Float3[_positions.Count] : new Float3[_positions.Count];
-        for (int i = 0; i < flat.Length; i++) flat[i] = new Float3(_positions[i].X, 0, _positions[i].Z);
-        entry.Tree.Update(flat, frame.LODQuality);
-
-        foreach (TerrainChunk chunk in entry.Tree.VisibleChunks)
-        {
-            Float3 min = new(chunk.Position.X, frame.MinHeight, chunk.Position.Z);
-            Float3 max = new(chunk.Position.X + chunk.Size, frame.MaxHeight, chunk.Position.Z + chunk.Size);
-            (Double3 centre, float radius) = frame.Sphere(min, max);
-            if (!view.Sees(centre, radius)) continue;
-            sink.Add(frame.BaseMesh, 0, frame.Material, frame.Item(new Float4(chunk.Position.X, chunk.Position.Z, chunk.Size, 0)));
-        }
-    }
-
-    private void Prune(ulong frame)
-    {
-        if (frame == _prunedFrame) return;
-        _prunedFrame = frame;
-
-        _stale.Clear();
-        foreach (KeyValuePair<int, (TerrainQuadtree Tree, ulong Frame)> tree in _trees)
-            if (tree.Value.Frame + kForgetFrames < frame) _stale.Add(tree.Key);
-        foreach (int key in _stale) _trees.Remove(key);
-
-        _stale.Clear();
-        lock (_cameraLock)
-        {
-            foreach (KeyValuePair<int, (Double3 Position, ulong Frame)> camera in _cameras)
-                if (camera.Value.Frame + kForgetFrames < frame) _stale.Add(camera.Key);
-            foreach (int key in _stale) _cameras.Remove(key);
-        }
-    }
-}
-
-/// <summary>
-/// A Graphite child of a Prowl material that a terrain renderer sets its own values on, each given again only when it
-/// changes. Values it never sets come from the source material, so edits to the asset show at once.
-/// </summary>
-internal sealed class TerrainMaterial
-{
-    public static readonly string[] WindSphereNames = ["_WindZoneSphere0", "_WindZoneSphere1", "_WindZoneSphere2", "_WindZoneSphere3"];
-    public static readonly string[] WindParamNames = ["_WindZoneParams0", "_WindZoneParams1", "_WindZoneParams2", "_WindZoneParams3"];
-
-    private GMaterial? _parent;
-    private GShader? _shader;
-    private readonly Dictionary<string, Float4> _vectors = [];
-    private readonly Dictionary<string, int> _ints = [];
-    private readonly Dictionary<string, (GTexture? Texture, SamplerDescription Sampler)> _textures = [];
-    private readonly Dictionary<string, bool> _keywords = [];
-    private readonly Dictionary<string, int> _channels = [];
-    private SurfaceSettings? _surface;
-    private bool _surfaceSet;
-
-    public GMaterial? Gpu { get; private set; }
-
-    /// <summary>Follows a source material, making the child again when its Graphite material or shader changed. Null while it cannot draw.</summary>
-    public GMaterial? Bind(Material? source)
-    {
-        GMaterial? parent = TerrainComponent.GpuMaterialOf(source);
-        // A material still waiting for its shader draws the Invalid stand in, which has none of the terrain's properties
-        if (parent == null || parent.IsDisposed || parent.Shader == Prowl.Runtime.Resources.Shader.GetDefault(DefaultShader.Invalid).GpuIfLoaded)
-        {
-            Release();
-            return null;
-        }
-        if (Gpu == null || _parent != parent || _shader != parent.Shader)
-        {
-            Release();
-            Gpu = parent.CreateChild();
-            _parent = parent;
-            _shader = parent.Shader;
-        }
-        return Gpu;
-    }
-
-    public void Release()
-    {
-        Graphics.DeferDispose(Gpu);
-        Gpu = null;
-        _parent = null;
-        _shader = null;
-        _vectors.Clear();
-        _ints.Clear();
-        _textures.Clear();
-        _keywords.Clear();
-        _channels.Clear();
-        _surface = null;
-        _surfaceSet = false;
-    }
-
-    public void SetFloat(string name, float value)
-    {
-        if (Gpu == null || (_vectors.TryGetValue(name, out Float4 old) && old.X == value)) return;
-        _vectors[name] = new Float4(value, 0, 0, 0);
-        Gpu.SetFloat(name, value);
-    }
-
-    /// <summary>Sets a vector property of 2 or 4 components.</summary>
-    public void SetVector(string name, Float4 value, int components)
-    {
-        if (Gpu == null || (_vectors.TryGetValue(name, out Float4 old) && old == value)) return;
-        _vectors[name] = value;
-        if (components == 2) Gpu.SetFloat2(name, new Float2(value.X, value.Y));
-        else Gpu.SetFloat4(name, value);
-    }
-
-    public void SetColor(string name, Color value)
-    {
-        Float4 v = new(value.R, value.G, value.B, value.A);
-        if (Gpu == null || (_vectors.TryGetValue(name, out Float4 old) && old == v)) return;
-        _vectors[name] = v;
-        Gpu.SetColor(name, v);
-    }
-
-    public void SetInt(string name, int value)
-    {
-        if (Gpu == null || (_ints.TryGetValue(name, out int old) && old == value)) return;
-        _ints[name] = value;
-        Gpu.SetInt(name, value);
-    }
-
-    /// <summary>Sets a texture, the shader's default while it is null or not loaded.</summary>
-    public void SetTexture(string name, Texture2D? texture)
-    {
-        if (Gpu == null) return;
-        GTexture? gpu = null;
-        SamplerDescription sampler = SamplerDescription.Linear;
-        if (texture.IsValid())
-        {
-            if (texture.IsLoaded)
-            {
-                gpu = texture.GpuIfLoaded;
-                sampler = texture.SamplerUnchecked;
-            }
-            else if (texture.State == AssetState.Unloaded)
-            {
-                _ = texture.LoadAsync();
-            }
-        }
-        if (_textures.TryGetValue(name, out (GTexture? Texture, SamplerDescription Sampler) old) && old.Texture == gpu && old.Sampler.Equals(sampler)) return;
-        _textures[name] = (gpu, sampler);
-        Gpu.SetTexture(name, gpu, sampler);
-    }
-
-    /// <summary>Picks the channel a scalar map reads.</summary>
-    public void SetTextureChannel(string name, int channel)
-    {
-        if (Gpu == null || (_channels.TryGetValue(name, out int old) && old == channel)) return;
-        _channels[name] = channel;
-        Gpu.SetTextureChannel(name, channel);
-    }
-
-    /// <summary>Sets the surface over the source material's, null to take the source's.</summary>
-    public void SetSurface(SurfaceSettings? surface)
-    {
-        if (Gpu == null || (_surfaceSet && _surface == surface)) return;
-        _surfaceSet = true;
-        _surface = surface;
-        Gpu.Surface = surface?.ToGraphite();
-    }
-
-    public void SetKeyword(string axis, bool value)
-    {
-        if (Gpu == null || (_keywords.TryGetValue(axis, out bool old) && old == value)) return;
-        _keywords[axis] = value;
-        if (Material.FindAxis(Gpu.Shader, axis) is { } gpuAxis) Gpu.Set(gpuAxis, value);
+        TerrainData? data = Data;
+        if (data.IsNotValid())
+            return false;
+        GTerrain terrain = data.Terrain;
+        Float3 position = Transform.Position;
+        terrain.Position = new Double3(position.X, position.Y, position.Z);
+        Float3 direction = Float3.Normalize(ray.Direction);
+        if (!terrain.Raycast(new Double3(ray.Origin.X, ray.Origin.Y, ray.Origin.Z), direction, data.Size * 4.0 + data.Height, out TerrainHit hit))
+            return false;
+        hitPoint = new Float3((float)hit.Position.X, (float)hit.Position.Y, (float)hit.Position.Z);
+        terrainUV = new Float2((hitPoint.X - position.X) / data.Size, (hitPoint.Z - position.Z) / data.Size);
+        return true;
     }
 }

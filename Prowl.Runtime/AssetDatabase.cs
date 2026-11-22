@@ -392,7 +392,7 @@ public static class AssetDatabase
         => new(withDependencies ? WithDependencies(assets) : [.. assets.Distinct()]);
 
     /// <summary>Loads a scene's stored data and everything it depends on, without instantiating it.</summary>
-    public static AssetGroup Preload(Scene scene) => LoadGroup([scene]);
+    public static AssetGroup Preload(SceneAsset scene) => LoadGroup([scene]);
 
     private static List<Asset> WithDependencies(IEnumerable<Asset> assets)
     {

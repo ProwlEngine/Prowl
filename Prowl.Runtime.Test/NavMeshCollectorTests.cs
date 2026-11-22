@@ -149,9 +149,11 @@ public class NavMeshCollectorTests : RuntimeTestBase
         if (normalizedHeight != null)
         {
             float cell = TerrainSize / (res - 1);
+            float[] heights = new float[res * res];
             for (int z = 0; z < res; z++)
                 for (int x = 0; x < res; x++)
-                    data.SetHeight(x, z, normalizedHeight(x * cell, z * cell));
+                    heights[z * res + x] = normalizedHeight(x * cell, z * cell);
+            data.SetHeights(heights);
         }
 
         TerrainComponent terrain = go.AddComponent<TerrainComponent>();
@@ -212,10 +214,10 @@ public class NavMeshCollectorTests : RuntimeTestBase
 
         NavMeshWorld world = BakeTerrain(scene);
 
-        // Scaled to 128 a side from a corner at -32, so the far edge reaches +96.
-        Assert.True(world.SamplePosition(new Float3(90, 25, 90), out NavMeshHit hit, 2f, NavMeshAreaMask.Everything));
+        // The terrain stands at its position unscaled, as it draws, so its far edge stays at +32.
+        Assert.True(world.SamplePosition(new Float3(28, 25, 28), out NavMeshHit hit, 2f, NavMeshAreaMask.Everything));
         Assert.True(Math.Abs(hit.Position.Y - 25) < 1f, $"terrain baked at y={hit.Position.Y}, expected 25");
-        Assert.False(world.SamplePosition(new Float3(110, 25, 110), out _, 2f, NavMeshAreaMask.Everything));
+        Assert.False(world.SamplePosition(new Float3(60, 25, 60), out _, 2f, NavMeshAreaMask.Everything));
     }
 
     /// <summary>

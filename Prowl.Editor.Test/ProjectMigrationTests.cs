@@ -416,8 +416,6 @@ public class ProjectMigrationTests : IDisposable
     {
         Assert.Equal(GuidOf(DefaultShader.Lit), Release_1_0.LitShader);
         Assert.Equal(GuidOf(DefaultShader.Unlit), Release_1_0.UnlitShader);
-        Assert.Equal(GuidOf(DefaultShader.Grass), Release_1_0.GrassShader);
-        Assert.Equal(GuidOf(DefaultShader.Terrain), Release_1_0.TerrainShader);
         Assert.Equal(new[] { GuidOf(DefaultShader.ProceduralSky), GuidOf(DefaultShader.CubemapSky), GuidOf(DefaultShader.PanoramaSky), GuidOf(DefaultShader.SixSidedSky) },
             Release_1_0.ExposedSkyShaders);
         Assert.Equal(new[] { BuiltInAssets.GuidFor(DefaultTexture.White), BuiltInAssets.GuidFor(DefaultTexture.Gray18), BuiltInAssets.GuidFor(DefaultTexture.Normal),
@@ -564,33 +562,19 @@ public class ProjectMigrationTests : IDisposable
     }
 
     [Fact]
-    public void GrassSkyAndTerrainMaterials_TakeTheirNewNames()
+    public void SkyMaterials_TakeTheirNewNames()
     {
-        string grass = WriteMaterial("Grass.mat", OldMaterial(DefaultShader.Grass, m =>
-        {
-            m.SetFloat("_AlphaCutoff", 0.3f);
-            m.SetFloat("_Translucency", 0.5f);
-            m.SetFloat("_WindStrength", 0.2f);
-        }));
         string sky = WriteMaterial("Sky.mat", OldMaterial(DefaultShader.PanoramaSky, m => m.SetFloat("_Exposure", 2f)));
         string cubemap = WriteMaterial("Cubemap.mat", OldMaterial(DefaultShader.CubemapSky, m => m.SetFloat("_Rotation", 90f)));
         string procedural = WriteMaterial("Procedural.mat", OldMaterial(DefaultShader.ProceduralSky, m => m.SetFloat("_Exposure", 3f)));
-        string terrain = WriteMaterial("Terrain.mat", OldMaterial(DefaultShader.Terrain, m => { m.SetInt("_HasHoles", 1); m.SetFloat("_TerrainSize", 512f); }));
 
         ProjectMigration.Migrate(Project.Open(_root));
 
-        Material grassMaterial = ReadMaterial(grass);
-        Assert.Equal(0.3f, grassMaterial.GetFloat("alpha_cutoff"));
-        Assert.False(grassMaterial._properties.HasFloat("_Translucency"));
-        Assert.Equal(0.2f, grassMaterial.GetFloat("_WindStrength"));
         Material skyMaterial = ReadMaterial(sky);
         Assert.Equal(2f * Release_1_0.LegacyLuminance, skyMaterial.GetFloat("intensity"));
         Assert.False(skyMaterial._properties.HasFloat("_Exposure"));
         Assert.Equal(Release_1_0.LegacyLuminance, ReadMaterial(cubemap).GetFloat("intensity"));
         Assert.Equal(3f, ReadMaterial(procedural).GetFloat("intensity"));
-        Material terrainMaterial = ReadMaterial(terrain);
-        Assert.False(terrainMaterial._properties.HasInt("_HasHoles"));
-        Assert.Equal(512f, terrainMaterial.GetFloat("_TerrainSize"));
     }
 
     private static EchoObject OldScene(SceneEnvironment environment, params EchoObject[] items)

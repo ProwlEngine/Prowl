@@ -13,8 +13,8 @@ namespace Prowl.Runtime;
 /// Spherical zone of wind shaped like a downwash: air comes down through the middle, spreads out
 /// across the ground and dies at the rim. The middle is calm, not the strongest point, which is what
 /// makes it read as something hovering rather than a starburst.
-/// Terrain grass blends the nearest <see cref="kMaxShaderZones"/> zones per frame, particle systems
-/// take the single nearest one.
+/// Foliage and grass blend the nearest <see cref="kMaxShaderZones"/> zones to the main camera each frame,
+/// particle systems take the single nearest one.
 /// </summary>
 [AddComponentMenu("Effects/Wind Zone")]
 [ComponentIcon("\uf863")] // Fan

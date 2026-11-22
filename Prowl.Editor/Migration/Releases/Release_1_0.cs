@@ -22,7 +22,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("Texture import types: masks become linear Default textures, sprites need the Sprite type, sizes kept", ctx => ctx.RewriteImporterSettings("TextureImporter", TextureImportTypes)),
         new("Camera tonemapping moved into the camera's base profile as a Tonemapping volume component", CameraTonemappingToProfile),
         new("Materials of the standard shaders from before Graphite moved onto Lit and Unlit", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptLegacyShader))),
-        new("Lit, Unlit, sky, grass and terrain materials moved onto Graphite's OpenPBR property names", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptOpenPbr))),
+        new("Lit, Unlit and sky materials moved onto Graphite's OpenPBR property names", ctx => ctx.RewriteEcho(echo => ConvertMaterials(echo, AdoptOpenPbr))),
         new("Light, ambient and fog intensities carried onto physical units", ctx => ctx.RewriteEchoAssets(PhysicalLightUnits)),
         new("Custom shaders using the old Lit property names are listed for hand edits", WarnOldShaderNames),
         new("Light spot cones saved as an angle and softness, ranges made automatic, colours kept off colour temperature", LightConesAndTemperature),

@@ -178,18 +178,16 @@ public class AssetDatabaseTests : RuntimeTestBase
     }
 
     [Fact]
-    public void TerrainVersions_KeepMovingForward_AcrossARefill()
+    public void TerrainVersion_KeepsMovingForward_AcrossARefill()
     {
         Guid id = _backend.Add(new TerrainData(), "Ground.terrain");
         TerrainData terrain = AssetDatabase.Load<TerrainData>(id)!;
-        terrain.SetHeightmapDirty();
-        terrain.SetDetailsDirty();
-        int heights = terrain.HeightsVersion, details = terrain.DetailsVersion;
+        terrain.Edit(Prowl.Graphite.Rendering.TerrainBrush.Raise, new Prowl.Vector.Float2(8, 8), 4f, 1f);
+        int version = terrain.Version;
 
         AssetDatabase.Refill(terrain, ReloadReason.Revert);
 
-        Assert.True(terrain.HeightsVersion > heights);
-        Assert.True(terrain.DetailsVersion > details);
+        Assert.True(terrain.Version > version);
     }
 
     [Fact]

@@ -350,16 +350,15 @@ public static class NavMeshGeometryCollector
         if (res < 2) return;
 
         // The stored heights span the full 0..Height band, so sculpting can never leave these bounds.
-        Float4x4 localToWorld = terrain.Transform.LocalToWorldMatrix;
+        // The terrain stands at its position, unturned and unscaled, as it draws.
+        Float3 position = terrain.Transform.Position;
+        Float4x4 localToWorld = Float4x4.CreateTranslation(position);
         if (bounds is AABB filter
             && !TransformedBoundsIntersect(Float3.Zero, new Float3(data.Size, data.Height, data.Size), localToWorld, filter))
             return;
 
-        // The sample budget is a world-space distance, so it converts to grid steps through the
-        // scale the terrain is drawn at.
         float cellSize = data.Size / (res - 1);
-        Float3 scale = terrain.Transform.LossyScale;
-        float localVoxelSize = voxelSize / Math.Max(1e-4f, Math.Max(MathF.Abs(scale.X), MathF.Abs(scale.Z)));
+        float localVoxelSize = voxelSize;
         // Capped at res - 1 because a wider stride samples nothing beyond the two edges anyway,
         // and an unbounded one (cellSize of a zero-sized terrain saturates the cast) overflows
         // the round-up in SampleCeil.
@@ -370,9 +369,7 @@ public static class NavMeshGeometryCollector
         int x0 = 0, x1 = res - 1, z0 = 0, z1 = res - 1;
         if (bounds is AABB clip)
         {
-            // Corner-transformed, not a box transform: under rotation the local box of a world
-            // box is not that box with its axes swapped around.
-            AABB local = terrain.Transform.InverseTransformAABB(clip);
+            AABB local = new(clip.Min - position, clip.Max - position);
             x0 = SampleFloor(local.Min.X, cellSize, stride, res);
             x1 = SampleCeil(local.Max.X, cellSize, stride, res);
             z0 = SampleFloor(local.Min.Z, cellSize, stride, res);
@@ -395,7 +392,7 @@ public static class NavMeshGeometryCollector
             for (int xi = 0; xi < nx; xi++)
             {
                 int x = xSteps[xi], z = zSteps[zi];
-                vertices[zi * nx + xi] = new Float3(x * cellSize, data.GetHeight(x, z) * data.Height, z * cellSize);
+                vertices[zi * nx + xi] = new Float3(x * cellSize, data.GetHeight(x, z), z * cellSize);
             }
         }
 

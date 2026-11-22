@@ -307,12 +307,39 @@ public sealed class SceneRendering : IDisposable
         EnvironmentDesc env = world.Environment;
         _scene.Environment.ApplyTo(env);
         env.FogVolumes = FogVolumes(_scene.Environment.VolumetricFog.Density);
+        env.WindZones = WindZones();
         SyncClouds(world);
 
         DirectionalLight? sun = null;
         foreach (DirectionalLight light in _directionals)
             if (light.Handle.IsValid && (sun.IsNotValid() || light.Intensity > sun.Intensity)) sun = light;
         env.Sun = sun.IsValid() ? sun.Handle : default;
+    }
+
+    private readonly WindZone?[] _windZones = new WindZone?[WindZone.kMaxShaderZones];
+
+    // The wind zones nearest the main camera, or the scene's origin without one
+    private Graphite.Rendering.WindZoneDesc[] WindZones()
+    {
+        Camera? camera = _scene.MainCamera;
+        Float3 near = camera.IsValid() ? camera.Transform.Position : Float3.Zero;
+        int count = WindZone.GetNearest(_scene, near, _windZones);
+        Graphite.Rendering.WindZoneDesc[] zones = new Graphite.Rendering.WindZoneDesc[count];
+        for (int i = 0; i < count; i++)
+        {
+            WindZone zone = _windZones[i]!;
+            Float3 centre = zone.Transform.Position;
+            zones[i] = new Graphite.Rendering.WindZoneDesc
+            {
+                Center = new Double3(centre.X, centre.Y, centre.Z),
+                Radius = zone.Radius,
+                Strength = zone.WindMain,
+                Turbulence = zone.Turbulence,
+                PulseMagnitude = zone.PulseMagnitude,
+                PulseFrequency = zone.PulseFrequency,
+            };
+        }
+        return zones;
     }
 
     /// <summary>Whether the scene draws a sky material, which a camera clearing to its sky shows.</summary>
