@@ -154,55 +154,55 @@ public class Mesh : Asset, ISerializable
 
     public Float3[] Normals
     {
-        get => ReadVertexData(normals ?? []);
+        get => ReadVertexData(() => normals ?? []);
         set => WriteVertexData(ref normals, CopyArray(value), value.Length);
     }
 
     public Float4[] Tangents
     {
-        get => ReadVertexData(tangents ?? []);
+        get => ReadVertexData(() => tangents ?? []);
         set => WriteVertexData(ref tangents, CopyArray(value), value.Length);
     }
 
     public Color[] Colors
     {
-        get => ReadVertexData(colors ?? []);
+        get => ReadVertexData(() => colors ?? []);
         set => WriteVertexData(ref colors, CopyArray(value), value.Length);
     }
 
     public Color32[] Colors32
     {
-        get => ReadVertexData(colors32 ?? []);
+        get => ReadVertexData(() => colors32 ?? []);
         set => WriteVertexData(ref colors32, CopyArray(value), value.Length);
     }
 
     public Float2[] UV
     {
-        get => ReadVertexData(uv ?? []);
+        get => ReadVertexData(() => uv ?? []);
         set => WriteVertexData(ref uv, CopyArray(value), value.Length);
     }
 
     public Float2[] UV2
     {
-        get => ReadVertexData(uv2 ?? []);
+        get => ReadVertexData(() => uv2 ?? []);
         set => WriteVertexData(ref uv2, CopyArray(value), value.Length);
     }
 
     public uint[] Indices
     {
-        get => ReadVertexData(indices ?? []);
+        get => ReadVertexData(() => indices ?? []);
         set => WriteVertexData(ref indices, CopyArray(value), value.Length, false);
     }
 
     public Float4[] BoneIndices
     {
-        get => ReadVertexData(boneIndices ?? []);
+        get => ReadVertexData(() => boneIndices ?? []);
         set => WriteVertexData(ref boneIndices, CopyArray(value), value.Length);
     }
 
     public Float4[] BoneWeights
     {
-        get => ReadVertexData(boneWeights ?? []);
+        get => ReadVertexData(() => boneWeights ?? []);
         set => WriteVertexData(ref boneWeights, CopyArray(value), value.Length);
     }
 
@@ -1081,12 +1081,13 @@ public class Mesh : Asset, ISerializable
         _gpuMesh = null;
     }
 
-    private T ReadVertexData<T>(T value)
+    // The field is read only after loading, so the first read of a mesh not yet loaded sees its data
+    private T ReadVertexData<T>(Func<T> value)
     {
         EnsureLoaded();
         if (isReadable == false)
             throw new InvalidOperationException("Mesh is not readable");
-        return value;
+        return value();
     }
 
     private void WriteVertexData<T>(ref T target, T value, int length, bool mustMatchLength = true)
