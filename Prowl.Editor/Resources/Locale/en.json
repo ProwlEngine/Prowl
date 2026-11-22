@@ -926,7 +926,7 @@
   "csg.generate": "Generate",
   "csg.draw_box": "Draw box",
   "csg.draw_box_tip": "Drag out a footprint on a surface or the grid, then pull its height. Escape cancels.",
-  "csg.draw_active": "Drag a footprint, pull the height, then click to place it. Hold Shift on that click to swap add and subtract for one brush.",
+  "csg.draw_active": "Drag a footprint, pull the height, then click to place it. Type a size for exact width, Tab for depth and height, Enter to place. Hold Shift on the click to swap add and subtract.",
   "csg.draw_inactive": "Turn on Draw box, then drag out a footprint in the scene view.",
   "csg.shape": "Shape",
   "csg.sides": "Sides",

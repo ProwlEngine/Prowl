@@ -135,15 +135,16 @@ public sealed class CSGGenerateTool : SceneTool
         if (TryPlanePoint(ctx, out Float3 local))
             _cornerB = new Float3(CSGSnap.Value(ctx.Handles, local.X), local.Y, CSGSnap.Value(ctx.Handles, local.Z));
 
+        HandleTyping(ctx.Handles);
         DrawFootprint(ctx, Tint(ctx.Handles));
+        DrawTyped(ctx);
 
         if (!ctx.Handles.PrimaryUp) return;
 
         ctx.Handles.TryEndDrag(id);
 
         // A press without a drag is a misclick, not a zero size brush.
-        if (MathF.Abs(_cornerB.X - _cornerA.X) < MinimumFootprint ||
-            MathF.Abs(_cornerB.Z - _cornerA.Z) < MinimumFootprint)
+        if (!FootprintIsValid())
         {
             _stage = Stage.Idle;
             return;
@@ -156,7 +157,9 @@ public sealed class CSGGenerateTool : SceneTool
     {
         _height = CSGSnap.Value(ctx.Handles, HeightUnderCursor(ctx));
 
+        HandleTyping(ctx.Handles);
         DrawPreview(ctx, Tint(ctx.Handles));
+        DrawTyped(ctx);
 
         if (ctx.Handles.IsPressed("CSG/Confirm")) { Commit(ctx, OperationFor(ctx.Handles)); return; }
 
@@ -332,6 +335,7 @@ public sealed class CSGGenerateTool : SceneTool
         model.SetDirty();
 
         _stage = Stage.Idle;
+        ClearTyped();
     }
 
     /// <summary>Puts the shape's curved faces in one smoothing group, unique per generated brush.</summary>
@@ -351,7 +355,74 @@ public sealed class CSGGenerateTool : SceneTool
     }
 
     /// <summary>Abandons an in progress brush, leaving the tool armed.</summary>
-    public void Cancel() => _stage = Stage.Idle;
+    public void Cancel()
+    {
+        _stage = Stage.Idle;
+        ClearTyped();
+    }
+
+    // Sizes typed while drawing: width, depth and height, and which one the keys go to
+    private readonly string[] _typed = ["", "", ""];
+    private int _field = -1;
+
+    private void ClearTyped()
+    {
+        _typed[0] = _typed[1] = _typed[2] = "";
+        _field = -1;
+    }
+
+    /// <summary>
+    /// Digits set an exact size while drawing: width first, Tab moves to depth and then height, Backspace corrects and
+    /// Enter places the brush. A typed size overrides the cursor, which still picks the direction.
+    /// </summary>
+    private void HandleTyping(HandleContext handles)
+    {
+        if (handles.KeysActive)
+        {
+            foreach (char c in Input.InputString)
+            {
+                if (!char.IsDigit(c) && c != '.' && c != '-') continue;
+                if (_field < 0) _field = 0;
+                _typed[_field] += c;
+            }
+
+            if (_field >= 0 && handles.KeyDown(KeyCode.Backspace) && _typed[_field].Length > 0)
+                _typed[_field] = _typed[_field][..^1];
+
+            if (handles.KeyDown(KeyCode.Tab))
+            {
+                _field = (_field + 1) % 3;
+                if (_field == 2 && _stage == Stage.Footprint && FootprintIsValid()) _stage = Stage.Extrude;
+            }
+        }
+
+        if (Typed(0, out float width)) _cornerB = new Float3(_cornerA.X + Side(_cornerB.X - _cornerA.X) * width, _cornerB.Y, _cornerB.Z);
+        if (Typed(1, out float depth)) _cornerB = new Float3(_cornerB.X, _cornerB.Y, _cornerA.Z + Side(_cornerB.Z - _cornerA.Z) * depth);
+        if (_stage == Stage.Extrude && Typed(2, out float height)) _height = Side(_height) * height;
+    }
+
+    private bool Typed(int field, out float value)
+        => float.TryParse(_typed[field], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value) && value > 0f;
+
+    private static float Side(float value) => value < 0f ? -1f : 1f;
+
+    private bool FootprintIsValid()
+        => MathF.Abs(_cornerB.X - _cornerA.X) >= MinimumFootprint && MathF.Abs(_cornerB.Z - _cornerA.Z) >= MinimumFootprint;
+
+    /// <summary>The typed sizes beside the shape, the one being typed into in brackets.</summary>
+    private void DrawTyped(SceneToolContext ctx)
+    {
+        if (_field < 0) return;
+
+        string Field(int i, string name)
+        {
+            string value = _typed[i].Length > 0 ? _typed[i] : "_";
+            return i == _field ? $"[{name} {value}]" : $"{name} {value}";
+        }
+
+        Float3 at = ToWorld(new Float3(_cornerB.X, _height, _cornerB.Z));
+        ctx.Draw.Label(at, $"{Field(0, "W")}  {Field(1, "D")}  {Field(2, "H")}", GuideColor);
+    }
 
     private void DrawCursor(SceneToolContext ctx, Float3 point, Float3 normal, (Color32 Color, string Label) tint)
     {
