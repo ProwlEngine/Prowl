@@ -68,6 +68,7 @@ public class TerrainComponent : Component, IRenderSync
     [NonSerialized, NotHeld] private TerrainTreeInstances? _treeInstances;
     [NonSerialized, NotHeld] private TerrainProps? _trees;
     [NonSerialized] private int _layerSignature, _detailSignature, _treeSignature;
+    [NonSerialized, NotHeld] private readonly Dictionary<object, (int Key, TerrainPropKind? Kind)> _kinds = new(ReferenceEqualityComparer.Instance);
 
     public float TerrainSize { get { TerrainData? d = Data; return d.IsValid() ? d.Size : 1024f; } }
     public float TerrainHeight { get { TerrainData? d = Data; return d.IsValid() ? d.Height : 100f; } }
@@ -138,6 +139,7 @@ public class TerrainComponent : Component, IRenderSync
         (_surface, _built, _world, _layers, _cards) = (null, null, null, null, null);
         (_details, _detailInstances, _trees, _treeInstances) = (null, null, null, null);
         (_layerSignature, _detailSignature, _treeSignature) = (0, 0, 0);
+        _kinds.Clear();
     }
 
     private void SyncLayers(Renderer renderer, TerrainData data)
@@ -196,7 +198,7 @@ public class TerrainComponent : Component, IRenderSync
             if (p.RenderMode == DetailRenderMode.Grass)
                 ready &= Ready(p.Texture, ref hash);
             else
-                hash.Add(KindOf(p.Mesh, p.Materials) != null);
+                hash.Add(KindKey(p.Mesh, p.Materials));
         }
         int signature = hash.ToHashCode() | 1;
         if (!ready || signature == _detailSignature)
@@ -214,7 +216,7 @@ public class TerrainComponent : Component, IRenderSync
         {
             DetailPrototype p = data.DetailPrototypes[i];
             bool grass = p.RenderMode == DetailRenderMode.Grass;
-            kinds[i] = grass ? null : KindOf(p.Mesh, p.Materials);
+            kinds[i] = grass ? null : KindOf(p, p.Mesh, p.Materials);
             if (grass)
                 cards.Add(p.Texture.IsValid() ? TerrainTextures.Read(p.Texture, cardSize) ?? TerrainTextures.Solid(cardSize, 255, 255, 255, 255) : TerrainTextures.Solid(cardSize, 255, 255, 255, 255));
             prototypes[i] = new TerrainDetailPrototype
@@ -256,17 +258,14 @@ public class TerrainComponent : Component, IRenderSync
         HashCode hash = new();
         hash.Add(TreeDistance);
         hash.Add(RenderFlags);
-        TerrainPropKind?[] kinds = new TerrainPropKind?[data.TreePrototypes.Count];
-        for (int i = 0; i < kinds.Length; i++)
-        {
-            kinds[i] = KindOf(data.TreePrototypes[i].Mesh, data.TreePrototypes[i].Materials);
-            hash.Add(kinds[i]?.Mesh);
-            foreach (GMaterial m in kinds[i]?.Materials ?? [])
-                hash.Add(m);
-        }
+        foreach (TreePrototype p in data.TreePrototypes)
+            hash.Add(KindKey(p.Mesh, p.Materials));
         int signature = hash.ToHashCode() | 1;
         if (signature == _treeSignature)
             return;
+        TerrainPropKind?[] kinds = new TerrainPropKind?[data.TreePrototypes.Count];
+        for (int i = 0; i < kinds.Length; i++)
+            kinds[i] = KindOf(data.TreePrototypes[i], data.TreePrototypes[i].Mesh, data.TreePrototypes[i].Materials);
         _trees?.Dispose();
         _treeInstances?.Dispose();
         _treeInstances = new TerrainTreeInstances(terrain);
@@ -293,23 +292,50 @@ public class TerrainComponent : Component, IRenderSync
         return true;
     }
 
-    // What a prop draws as: the mesh with a material for each submesh, null while any of it loads
-    private TerrainPropKind? KindOf(Mesh? mesh, List<Material?> materials)
+    // What a prop draws as: the mesh with a material for each submesh, null while any of it loads, kept per prototype
+    // until what it is made of changes
+    private TerrainPropKind? KindOf(object prototype, Mesh? mesh, List<Material?> materials)
     {
-        if (GpuMeshOf(mesh) is not { } gpu)
-            return null;
-        int count = mesh!.SubMeshCount;
-        GMaterial[] resolved = new GMaterial[count];
-        for (int s = 0; s < count; s++)
+        int key = KindKey(mesh, materials);
+        if (_kinds.TryGetValue(prototype, out (int Key, TerrainPropKind? Kind) kept) && kept.Key == key)
+            return kept.Kind;
+        TerrainPropKind? kind = null;
+        if (GpuMeshOf(mesh) is { } gpu)
         {
-            Material? material = s < materials.Count ? materials[s] : null;
-            if (material.IsNotValid())
-                material = materials.Find(m => m.IsValid());
-            if ((material.IsValid() ? GpuMaterialOf(material) : RenderableState.DefaultGpuMaterial) is not { } ready)
-                return null;
-            resolved[s] = ready;
+            GMaterial[] resolved = new GMaterial[mesh!.SubMeshCount];
+            for (int s = 0; s < resolved.Length && kind == null; s++)
+            {
+                if (SubMeshMaterial(materials, s) is not { } ready)
+                    break;
+                resolved[s] = ready;
+                if (s == resolved.Length - 1)
+                    kind = new TerrainPropKind { Mesh = gpu, Materials = resolved, Flags = RenderFlags };
+            }
         }
-        return new TerrainPropKind { Mesh = gpu, Materials = resolved, Flags = RenderFlags };
+        _kinds[prototype] = (key, kind);
+        return kind;
+    }
+
+    // What a prop is made of as the GPU has it, changing when its mesh or a material is swapped or finishes loading
+    private int KindKey(Mesh? mesh, List<Material?> materials)
+    {
+        HashCode hash = new();
+        hash.Add(RenderFlags);
+        GpuMesh? gpu = GpuMeshOf(mesh);
+        hash.Add(gpu);
+        if (gpu != null)
+            for (int s = 0; s < mesh!.SubMeshCount; s++)
+                hash.Add(SubMeshMaterial(materials, s));
+        return hash.ToHashCode();
+    }
+
+    // A submesh's material, the first one set standing in where it has none, the default where none is set
+    private static GMaterial? SubMeshMaterial(List<Material?> materials, int submesh)
+    {
+        Material? material = submesh < materials.Count ? materials[submesh] : null;
+        for (int i = 0; material.IsNotValid() && i < materials.Count; i++)
+            material = materials[i];
+        return material.IsValid() ? GpuMaterialOf(material) : RenderableState.DefaultGpuMaterial;
     }
 
     /// <summary>The Graphite material of a Prowl material ready to draw, loading it when it is not. Null while it cannot.</summary>
