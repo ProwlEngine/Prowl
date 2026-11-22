@@ -40,12 +40,12 @@ public sealed class CSGOverlayTool : SceneTool
     };
 
     // The keys each mode answers to, shown under its options
-    private static readonly string[] SelectionKeys = ["CSG/PieMenu", "CSG/Hide", "CSG/UnhideAll", "CSG/SetAdditive", "CSG/SetSubtractive", "Scene/Duplicate"];
+    private static readonly string[] SelectionKeys = ["CSG/Hide", "CSG/UnhideAll", "CSG/SetAdditive", "CSG/SetSubtractive", "Scene/Duplicate"];
     private static readonly string[] ObjectKeys = [.. SelectionKeys, "CSG/RepeatClone", "CSG/GroupSelection", "CSG/Earlier", "CSG/Later", "CSG/SnapToGrid", "CSG/RotateLeft", "CSG/RotateRight", "CSG/NudgeLeft", "CSG/NudgeUp"];
-    private static readonly string[] GenerateKeys = ["CSG/PieMenu", "CSG/ShapeBox", "CSG/ShapeCylinder", "CSG/ShapeSphere", "CSG/ShapeLinearStairs", "CSG/ShapeSpiralStairs", "CSG/ShapeRoom", "CSG/ShapePolygon", "CSG/SetAdditive", "CSG/SetSubtractive", "CSG/SetIntersecting", "CSG/Confirm"];
-    private static readonly string[] SurfaceKeys = ["CSG/PieMenu", "CSG/Smear", "CSG/Hide", "CSG/UnhideAll"];
-    private static readonly string[] ClipKeys = ["CSG/PieMenu", "CSG/ClipSwapSide", "CSG/Confirm"];
-    private static readonly string[] MeshKeys = ["CSG/PieMenu", "CSG/HalveGrid", "CSG/DoubleGrid", "CSG/RotateLeft", "CSG/SnapToGrid"];
+    private static readonly string[] GenerateKeys = ["CSG/ShapeBox", "CSG/ShapeCylinder", "CSG/ShapeSphere", "CSG/ShapeLinearStairs", "CSG/ShapeSpiralStairs", "CSG/ShapeRoom", "CSG/ShapePolygon", "CSG/SetAdditive", "CSG/SetSubtractive", "CSG/SetIntersecting", "CSG/Confirm"];
+    private static readonly string[] SurfaceKeys = ["CSG/Smear", "CSG/Hide", "CSG/UnhideAll"];
+    private static readonly string[] ClipKeys = ["CSG/ClipSwapSide", "CSG/Confirm"];
+    private static readonly string[] MeshKeys = ["CSG/HalveGrid", "CSG/DoubleGrid", "CSG/RotateLeft", "CSG/SnapToGrid"];
 
     private bool _collapsed;
 
@@ -69,22 +69,64 @@ public sealed class CSGOverlayTool : SceneTool
             }
         }
 
-        TickPie(ctx.Handles);
-        if (!_pieOpen) HandleShortcuts(ctx.Handles);
+        HandleShortcuts(ctx.Handles);
 
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsValid()) CSGHelperSurfaces.Draw(ctx, model!);
     }
 
-    // The pie menu: open while its key is held, around where the cursor was when it opened
-    private bool _pieOpen;
-    private Float2 _pieCentre;
-    private Float2 _pieViewport;
-    private int _pieChoice = -1;
-    private const float PieRadius = 90f;
+    /// <summary>While a model is being worked on, the scene view's right click menu is the CSG one.</summary>
+    public override bool ReplacesSceneContextMenu => true;
 
-    /// <summary>The current mode's main commands, laid around the cursor.</summary>
-    private static List<(string Label, System.Action Run)> PieItems()
+    /// <summary>In object mode the brush under the cursor is selected, other modes keep what they have.</summary>
+    public override bool OnSceneContextPick(SceneToolContext ctx)
+    {
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (!CSGEditMode.Is(CSGMode.Object) || model.IsNotValid()) return true;
+
+        if (CSGSelection.PickBrush(model!, CSGSelection.BrushesIn(model!), ctx.Handles.MouseRay, out CSGBrush brush, out _)
+            && !Selection.IsSelected(brush.GameObject))
+            Selection.Select(brush.GameObject);
+        return true;
+    }
+
+    public override void OnSceneContextMenu(SceneToolContext ctx, ContextBuilder menu)
+    {
+        menu.Title($"{Loc.Get("csg.title")}  {Loc.Get(ModeLabel(CSGEditMode.Current))}");
+        foreach ((string label, System.Action run) in ModeCommands()) menu.Item(label, run);
+
+        if (!CSGEditMode.Is(CSGMode.Object))
+            menu.Submenu(Loc.Get("csg.selection"), sub =>
+            {
+                foreach ((string label, System.Action run) in SelectionCommands()) sub.Item(label, run);
+            });
+
+        menu.Submenu(Loc.Get("csg.mode"), sub =>
+        {
+            foreach ((CSGMode mode, string label, _, string shortcut) in Modes)
+            {
+                string keys = ShortcutManager.Find(shortcut) is { } def ? ShortcutManager.GetDisplayString(def.Binding) : "";
+                sub.Item(Loc.Get(label), () => CSGEditMode.Current = mode, shortcut: keys, on: CSGEditMode.Is(mode));
+            }
+        });
+        menu.Separator();
+    }
+
+    private static List<(string Label, System.Action Run)> SelectionCommands() =>
+    [
+        (Loc.Get("csg.additive"), () => SetOperation(Operation.Additive)),
+        (Loc.Get("csg.subtractive"), () => SetOperation(Operation.Subtractive)),
+        (Loc.Get("csg.intersect"), () => SetOperation(Operation.Intersect)),
+        (Loc.Get("csg.duplicate"), CSGSelection.Duplicate),
+        (Loc.Get("csg.group_selection"), CSGMenuItems.GroupSelection),
+        (Loc.Get("csg.hide_selected"), () => CSGVisibility.Hide(CSGSelection.Brushes())),
+        (Loc.Get("csg.unhide_all", new { count = CSGVisibility.HiddenCount }), CSGVisibility.UnhideAll),
+        (Loc.Get("csg.centre_pivot"), CSGSelection.CentrePivot),
+        (Loc.Get("csg.clone_array"), CSGSelection.CloneArray),
+    ];
+
+    /// <summary>The current mode's main commands.</summary>
+    private static List<(string Label, System.Action Run)> ModeCommands()
     {
         CSGGenerateTool? generate = SceneToolManager.Get<CSGGenerateTool>();
         CSGClipTool? clip = SceneToolManager.Get<CSGClipTool>();
@@ -126,65 +168,8 @@ public sealed class CSGOverlayTool : SceneTool
                 (Loc.Get("csg.snap"), mesh.SnapSelectedToGrid),
                 (Loc.Get("csg.delete_face"), mesh.DeleteSelectedFaces),
             ],
-            _ =>
-            [
-                (Loc.Get("csg.additive"), () => SetOperation(Operation.Additive)),
-                (Loc.Get("csg.subtractive"), () => SetOperation(Operation.Subtractive)),
-                (Loc.Get("csg.intersect"), () => SetOperation(Operation.Intersect)),
-                (Loc.Get("csg.duplicate"), CSGSelection.Duplicate),
-                (Loc.Get("csg.group_selection"), CSGMenuItems.GroupSelection),
-                (Loc.Get("csg.hide_selected"), () => CSGVisibility.Hide(CSGSelection.Brushes())),
-                (Loc.Get("csg.centre_pivot"), CSGSelection.CentrePivot),
-                (Loc.Get("csg.clone_array"), CSGSelection.CloneArray),
-            ],
+            _ => SelectionCommands(),
         };
-    }
-
-    /// <summary>Opens the pie while its key is held, tracks which item the cursor points at, and runs it on release.</summary>
-    private void TickPie(HandleContext handles)
-    {
-        bool held = handles.IsHeld("CSG/PieMenu");
-        if (held && !_pieOpen)
-        {
-            _pieOpen = true;
-            _pieCentre = handles.MousePosition;
-            _pieViewport = new Float2((float)handles.Viewport.Min.X, (float)handles.Viewport.Min.Y);
-        }
-        if (!_pieOpen) return;
-
-        int count = PieItems().Count;
-        Float2 offset = handles.MousePosition - _pieCentre;
-        _pieChoice = Float2.Length(offset) < 20f || count == 0 ? -1
-            : (int)MathF.Round((MathF.Atan2(offset.Y, offset.X) + MathF.PI * 2f) % (MathF.PI * 2f) / (MathF.PI * 2f) * count) % count;
-
-        if (handles.KeyDown(KeyCode.Escape)) { _pieOpen = false; return; }
-        if (held) return;
-
-        _pieOpen = false;
-        List<(string Label, System.Action Run)> items = PieItems();
-        if (_pieChoice >= 0 && _pieChoice < items.Count) items[_pieChoice].Run();
-    }
-
-    private void DrawPie(Paper paper, Scribe.FontFile font, string id)
-    {
-        if (!_pieOpen) return;
-
-        List<(string Label, System.Action Run)> items = PieItems();
-        Float2 centre = _pieCentre - _pieViewport;
-        for (int i = 0; i < items.Count; i++)
-        {
-            float angle = i / (float)items.Count * MathF.PI * 2f;
-            Float2 at = centre + new Float2(MathF.Cos(angle), MathF.Sin(angle)) * PieRadius;
-            bool on = i == _pieChoice;
-            paper.Box($"{id}_pie_{i}")
-                .PositionType(PositionType.SelfDirected).Position(at.X - 45, at.Y - 12)
-                .Width(90).Height(24).Rounded(12)
-                .BackgroundColor(on ? EditorTheme.Accent : EditorTheme.Glass)
-                .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                .Text(items[i].Label, font).TextColor(on ? SColor.White : EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                .IsNotInteractable();
-        }
     }
 
     /// <summary>Selection shortcuts, in every mode. The mesh tool keeps rotate and snap for its own points.</summary>
@@ -264,7 +249,6 @@ public sealed class CSGOverlayTool : SceneTool
         float maxHeight = MathF.Max(120f, viewportSize.Y - 90f);
 
         DrawStatus(paper, font, id, viewportSize);
-        DrawPie(paper, font, id);
 
         using (paper.Column($"{id}_panel")
                    .PositionType(PositionType.SelfDirected)

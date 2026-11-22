@@ -36,8 +36,13 @@ public static class SceneViewMenu
         Scene = scene;
         Point = SceneViewPanel.GetDropPosition(scene, camera, mouseLocal, panelSize);
 
-        GameObject? hit = SceneViewPanel.PickObjectAt(scene, camera, mouseLocal, panelSize, pickGizmos: true);
-        if (hit.IsValid() && !Selection.IsSelected(hit!)) Selection.Select(hit!);
+        SceneTool? picking = SceneToolManager.Live.FirstOrDefault(t => t.ReplacesSceneContextMenu);
+        if (picking != null) ctx.CurrentTool = picking;
+        if (picking == null || !picking.OnSceneContextPick(ctx))
+        {
+            GameObject? hit = SceneViewPanel.PickObjectAt(scene, camera, mouseLocal, panelSize, pickGizmos: true);
+            if (hit.IsValid() && !Selection.IsSelected(hit!)) Selection.Select(hit!);
+        }
         MenuContext.SetMany([.. Selection.GetSelected<GameObject>()]);
         _spawnPending = true;
         _closedFrames = 0;
