@@ -58,13 +58,15 @@ public sealed class CSGOverlayTool : SceneTool
 
     public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
-        using IDisposable group = EditorGUI.ToolStripGroup(paper, $"{id}_modes");
-        for (int i = 0; i < Modes.Length; i++)
+        EditorGUI.ToolStripGroup(paper, $"{id}_modes", () =>
         {
-            (CSGMode mode, string label, _, string shortcut, _) = Modes[i];
-            EditorGUI.ToolStripButton(paper, $"{id}_{mode}", ModeIcons[i], ShortcutManager.GetTooltip(Loc.Get(label), shortcut),
-                CSGEditMode.Is(mode), () => CSGEditMode.Current = mode);
-        }
+            for (int i = 0; i < Modes.Length; i++)
+            {
+                (CSGMode mode, string label, _, string shortcut, _) = Modes[i];
+                EditorGUI.ToolStripButton(paper, $"{id}_{mode}", ModeIcons[i], ShortcutManager.GetTooltip(Loc.Get(label), shortcut),
+                    CSGEditMode.Is(mode), () => CSGEditMode.Current = mode);
+            }
+        }, () => DrawOptions(ctx, paper, $"{id}_options"));
     }
 
     public override void OnSceneInput(SceneToolContext ctx)
@@ -274,28 +276,21 @@ public sealed class CSGOverlayTool : SceneTool
     private static void RotateBySnap(float sign)
         => CSGSelection.RotateBy(new Float3(0f, SceneTools.RotateSnap * sign, 0f), CSGSelection.SelectionCentre(), clone: false);
 
-    public override void OnSceneOverlayGUI(SceneToolContext ctx, Paper paper, string id, Float2 viewportSize)
+    /// <summary>The options of the tool in use, opening beside the tool buttons.</summary>
+    private void DrawOptions(SceneToolContext ctx, Paper paper, string id)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
         List<CSGSections.Column> columns = _collapsed ? [] : CSGSections.Columns();
-        float available = MathF.Max(CSGSections.ColumnWidth, viewportSize.X - 80f);
+        float available = MathF.Max(CSGSections.ColumnWidth, ctx.Handles.ViewportSize.X - 100f);
         float width = MathF.Min(available, MathF.Max(HeaderWidth, columns.Count * CSGSections.ColumnWidth));
 
-        using (paper.Column($"{id}_panel")
-                   .PositionType(PositionType.SelfDirected)
-                   .AnchorLeft(0).AnchorBottom(0)
-                   .Width(width).Height(UnitValue.Auto)
-                   .Rounded(0, 10, 0, 0)
-                   .BackgroundColor(EditorTheme.Glass)
-                   .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                   .Enter())
+        using (paper.Column(id).Width(width).Height(UnitValue.Auto).Enter())
         {
             DrawHeader(paper, font, id, _collapsed, () => _collapsed = !_collapsed);
-            if (_collapsed) return;
+            if (_collapsed || columns.Count == 0) return;
 
-            if (columns.Count == 0) return;
             paper.Box($"{id}_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
             CSGSections.DrawColumns(paper, font, $"{id}_cols", columns, width);
         }

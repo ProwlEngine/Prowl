@@ -394,7 +394,7 @@ public class SceneViewPanel : DockPanel
         using (paper.Column("sv_tools")
             .PositionType(PositionType.SelfDirected)
             .Position(12, 12)
-            .Width(32).Height(UnitValue.Auto).Gap(6)
+            .Width(UnitValue.Auto).Height(UnitValue.Auto).Gap(6)
             .Enter())
         {
             // The viewport owns the strip and draws the built-in buttons, so they exist even with no

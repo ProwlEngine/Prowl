@@ -444,11 +444,28 @@ public static class EditorGUI
     /// <summary>One floating box of the scene view tool strip. Each group stands apart from the others, so wrap every set of related buttons in its own.</summary>
     public static IDisposable ToolStripGroup(Paper paper, string id)
         => paper.Column(id)
-            .Width(UnitValue.StretchOne).Height(UnitValue.Auto)
+            .Width(32).Height(UnitValue.Auto)
             .Rounded(Origami.Current.Metrics.ContainerRounding)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter();
+
+    /// <summary>A tool strip group with a panel opening beside it, for the options of the tool in use. A null expansion leaves it closed.</summary>
+    public static void ToolStripGroup(Paper paper, string id, Action buttons, Action? expansion)
+    {
+        using (paper.Row($"{id}_row").Width(UnitValue.Auto).Height(UnitValue.Auto).Gap(4).Enter())
+        {
+            using (ToolStripGroup(paper, id)) buttons();
+            if (expansion == null) return;
+
+            using (paper.Column($"{id}_expansion").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                       .Rounded(Origami.Current.Metrics.ContainerRounding)
+                       .BackgroundColor(EditorTheme.Glass)
+                       .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+                       .Enter())
+                expansion();
+        }
+    }
 
     public static void ToolStripButton(Paper paper, string id, IOrigamiIcon icon, string tooltip, bool active, Action onClick)
     {
