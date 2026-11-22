@@ -365,9 +365,15 @@ public sealed class CSGGenerateTool : SceneTool
             root.Transform.Position = worldCentre;
             root.Transform.Rotation = rotation;
 
-            CSGGroup group = root.AddComponent<CSGGroup>();
-            group.HoldsShape = true;
-            group.Operation = operation;
+            // A hollow shape drawn subtractive digs itself in: its parts act on the model directly, so the walls stay
+            // and the inside is carved out of whatever was there, rather than the whole shell being cut away
+            bool digs = operation == Operation.Subtractive && parts.Exists(p => p.Operation == Operation.Subtractive);
+            if (!digs)
+            {
+                CSGGroup group = root.AddComponent<CSGGroup>();
+                group.HoldsShape = true;
+                group.Operation = operation;
+            }
         }
         else root = ParentFor(model!);
 
@@ -388,7 +394,7 @@ public sealed class CSGGenerateTool : SceneTool
             brush.Planes = CSGBrushGeometry.Transform(parts[i].Planes, go.Transform.WorldToLocalMatrix * drawn);
             CSGSelection.ApplySmoothing(brush, parts[i].SmoothPlanes);
 
-            // Children of a group fold into it, so the group carries the operation instead.
+            // Parts of a shape carry their own operation, the group or the shape as a whole carries the drawn one
             brush.Operation = parts.Count > 1 ? parts[i].Operation : operation;
         }
 
