@@ -474,11 +474,8 @@ internal static class CSGSections
                 .Item("Z", tooltip: Loc.Get("csg.flip_tip"))
                 .Show());
 
-        if (brushes.Count > 0)
-        {
-            LabelledButton(paper, font, "csg_sel_pivot", Loc.Get("csg.centre_pivot"),
-                Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
-        }
+        LabelledButton(paper, font, "csg_sel_pivot", Loc.Get("csg.centre_pivot"),
+            Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
 
         LabelledButton(paper, font, "csg_sel_dup", Loc.Get("csg.duplicate"),
             Loc.Get("csg.duplicate_tip"), CSGSelection.Duplicate);

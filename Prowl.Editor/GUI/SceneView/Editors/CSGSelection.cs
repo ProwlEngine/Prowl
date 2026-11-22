@@ -241,9 +241,11 @@ public static class CSGSelection
     public static void CentrePivot()
     {
         List<CSGBrush> brushes = Brushes();
-        if (brushes.Count == 0) return;
+        List<CSGGroup> groups = Groups().Where(g => g.GetComponent<CSGBrush>().IsNotValid()).ToList();
+        if (brushes.Count == 0 && groups.Count == 0) return;
 
-        Record("Centre CSG Pivot", brushes.SelectMany(b => b.GameObject.Children.Prepend(b.GameObject)));
+        Record("Centre CSG Pivot", brushes.Select(b => b.GameObject).Concat(groups.Select(g => g.GameObject))
+            .SelectMany(go => go.Children.Prepend(go)));
 
         foreach (CSGBrush brush in brushes)
         {
@@ -262,6 +264,26 @@ public static class CSGSelection
             else brush.Planes = CSGBrushGeometry.Translate(brush.Planes, -centroid);
             brush.Transform.Position = pivot;
 
+            foreach ((GameObject child, Float3 position, Quaternion rotation) in children)
+            {
+                child.Transform.Position = position;
+                child.Transform.Rotation = rotation;
+            }
+        }
+
+        // A group's pivot goes to the middle of the brushes inside it, which stay where they are
+        foreach (CSGGroup group in groups)
+        {
+            List<CSGBrush> inside = BrushesUnder([group.GameObject]);
+            if (inside.Count == 0) continue;
+
+            Float3 centre = Float3.Zero;
+            foreach (CSGBrush brush in inside)
+                centre += Float4x4.TransformPoint(CSGBrushGeometry.Centroid(brush.Shape), brush.Transform.LocalToWorldMatrix);
+            centre /= inside.Count;
+
+            var children = group.GameObject.Children.Select(c => (c, c.Transform.Position, c.Transform.Rotation)).ToList();
+            group.Transform.Position = centre;
             foreach ((GameObject child, Float3 position, Quaternion rotation) in children)
             {
                 child.Transform.Position = position;
