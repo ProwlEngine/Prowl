@@ -662,4 +662,26 @@ public class CSGModelTests : RuntimeTestBase
 
         Assert.Equal(3f, VolumeOf(_model.GeneratedMesh!), 2);
     }
+
+    /// <summary>Changing the model's texel scale reaches every face's UVs, not only those of brushes that moved.</summary>
+    [Fact]
+    public void ChangingTheTexelScaleReachesTheMesh()
+    {
+        CreateModel();
+        AddBrush(Float3.One * 2f, Float3.Zero);
+        Update(_scene);
+        Float2[] before = _model.GeneratedMesh!.UV;
+
+        _model.DefaultTexelScale = 2f;
+        _model.OnValidate();
+        Update(_scene);
+
+        Float2[] after = _model.GeneratedMesh!.UV;
+        Assert.Equal(before.Length, after.Length);
+        for (int i = 0; i < before.Length; i++)
+        {
+            Assert.Equal(before[i].X * 2f, after[i].X, 3);
+            Assert.Equal(before[i].Y * 2f, after[i].Y, 3);
+        }
+    }
 }

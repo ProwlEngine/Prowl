@@ -82,6 +82,7 @@ public sealed class CSGModel : Component
 
     [SerializeIgnore] private GeometryData? _geometry;
     [SerializeIgnore] private int _geometryVersion;
+    [SerializeIgnore] private float _builtTexelScale = float.NaN;
     [SerializeIgnore] private Mesh? _visible;
     [SerializeIgnore] private Mesh? _collision;
     [SerializeIgnore] private bool _dirty = true;
@@ -271,6 +272,14 @@ public sealed class CSGModel : Component
         }
 
         _scene.InvertOutput = SubtractiveWorkflow;
+
+        // Every face's UVs depend on the texel scale, so a change reprojects the whole model
+        if (!_builtTexelScale.Equals(DefaultTexelScale))
+        {
+            _builtTexelScale = DefaultTexelScale;
+            _scene.InvalidateOutput();
+        }
+
         GeometryData geometry = _scene.Build();
         BrushCount = _scene.Count;
 
