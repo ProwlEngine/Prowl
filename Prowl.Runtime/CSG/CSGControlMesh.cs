@@ -141,6 +141,12 @@ public sealed class CSGControlMesh
             if (i >= 0 && i < points.Count) points[i] += delta;
     }
 
+    /// <summary>Puts every point through a transform, as a mirror or a pivot move does.</summary>
+    public void TransformPoints(Float4x4 transform)
+    {
+        for (int i = 0; i < points.Count; i++) points[i] = Float4x4.TransformPoint(points[i], transform);
+    }
+
     public void SetPoint(int index, Float3 position)
     {
         if (index >= 0 && index < points.Count) points[index] = position;

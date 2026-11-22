@@ -221,7 +221,15 @@ public static class CSGSelection
         for (int i = 0; i < brushes.Count; i++)
         {
             CSGBrush brush = brushes[i];
-            brush.Planes = CSGBrushGeometry.Mirror(brush.Planes, axis, brush.Transform.LocalToWorldMatrix);
+            Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
+
+            // Edited points mirror themselves, so a bent brush stays bent
+            if (brush.HasControlMesh && CSGBrushGeometry.TryMirrorMatrix(axis, toWorld, out Float4x4 local))
+            {
+                brush.ControlMesh!.TransformPoints(local);
+                brush.ApplyControlMesh();
+            }
+            else brush.Planes = CSGBrushGeometry.Mirror(brush.Planes, axis, toWorld);
 
             brush.Transform.Position = targets[i];
         }
@@ -246,7 +254,12 @@ public static class CSGSelection
             var children = brush.GameObject.Children.Select(c => (c, c.Transform.Position, c.Transform.Rotation)).ToList();
 
             Float3 pivot = Float4x4.TransformPoint(centroid, brush.Transform.LocalToWorldMatrix);
-            brush.Planes = CSGBrushGeometry.Translate(brush.Planes, -centroid);
+            if (brush.HasControlMesh)
+            {
+                brush.ControlMesh!.TransformPoints(Float4x4.CreateTranslation(-centroid));
+                brush.ApplyControlMesh();
+            }
+            else brush.Planes = CSGBrushGeometry.Translate(brush.Planes, -centroid);
             brush.Transform.Position = pivot;
 
             foreach ((GameObject child, Float3 position, Quaternion rotation) in children)

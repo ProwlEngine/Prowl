@@ -107,20 +107,8 @@ public static class CSGBrushGeometry
     /// </summary>
     public static Plane[] Mirror(IReadOnlyList<Plane> planes, Float3 axis, Float4x4 localToWorld)
     {
-        Float4x4 linear = localToWorld;
-        linear.c3 = new Float4(0, 0, 0, 1);
-
-        Float3 n = Float3.Normalize(axis);
-        Float4x4 reflect = Float4x4.Identity;
-        reflect.c0 = new Float4(1 - 2 * n.X * n.X, -2 * n.Y * n.X, -2 * n.Z * n.X, 0);
-        reflect.c1 = new Float4(-2 * n.X * n.Y, 1 - 2 * n.Y * n.Y, -2 * n.Z * n.Y, 0);
-        reflect.c2 = new Float4(-2 * n.X * n.Z, -2 * n.Y * n.Z, 1 - 2 * n.Z * n.Z, 0);
-
         // A flattened transform has no inverse and nothing to mirror
-        if (MathF.Abs(Float4x4.Determinant(linear)) < 1e-12f) return [.. planes];
-
-        // The reflection seen from the brush's own space. It is its own inverse, so normals go through its transpose
-        Float4x4 local = linear.Invert() * reflect * linear;
+        if (!TryMirrorMatrix(axis, localToWorld, out Float4x4 local)) return [.. planes];
 
         var result = new Plane[planes.Count];
         for (int i = 0; i < planes.Count; i++)
@@ -132,6 +120,27 @@ public static class CSGBrushGeometry
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// The reflection along a world <paramref name="axis"/> through the brush's origin, as seen in the brush's own space.
+    /// It is its own inverse. False when the transform is flattened and has no inverse.
+    /// </summary>
+    public static bool TryMirrorMatrix(Float3 axis, Float4x4 localToWorld, out Float4x4 local)
+    {
+        Float4x4 linear = localToWorld;
+        linear.c3 = new Float4(0, 0, 0, 1);
+        local = Float4x4.Identity;
+        if (MathF.Abs(Float4x4.Determinant(linear)) < 1e-12f) return false;
+
+        Float3 n = Float3.Normalize(axis);
+        Float4x4 reflect = Float4x4.Identity;
+        reflect.c0 = new Float4(1 - 2 * n.X * n.X, -2 * n.Y * n.X, -2 * n.Z * n.X, 0);
+        reflect.c1 = new Float4(-2 * n.X * n.Y, 1 - 2 * n.Y * n.Y, -2 * n.Z * n.Y, 0);
+        reflect.c2 = new Float4(-2 * n.X * n.Z, -2 * n.Y * n.Z, 1 - 2 * n.Z * n.Z, 0);
+
+        local = linear.Invert() * reflect * linear;
+        return true;
     }
 
     /// <summary>Shifts every plane so the solid moves by <paramref name="offset"/> in local space.</summary>
