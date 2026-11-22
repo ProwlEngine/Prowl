@@ -263,7 +263,7 @@ public sealed class CSGOverlayTool : SceneTool
 
     private static readonly SColor InvalidText = SColor.FromArgb(255, 255, 120, 110);
 
-    private static void DrawModeTabs(Paper paper, Scribe.FontFile font, string id)
+    internal static void DrawModeTabs(Paper paper, Scribe.FontFile font, string id)
     {
         using (paper.Row($"{id}_modes").Height(24).Padding(6, 6, 0, 6).Gap(3).Enter())
         {
@@ -284,7 +284,7 @@ public sealed class CSGOverlayTool : SceneTool
         }
     }
 
-    private static void DrawModeBody(Paper paper, Scribe.FontFile font)
+    internal static void DrawModeBody(Paper paper, Scribe.FontFile font)
     {
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return;

@@ -35,16 +35,12 @@ public class CSGPanel : DockPanel
             return;
         }
 
-        Origami.ScrollView(paper, "csg_scroll", width, height).Body(() =>
+        // The same tabs and sections as the scene view's panel, with room to breathe
+        CSGOverlayTool.DrawModeTabs(paper, font, "csg_dock");
+        Origami.ScrollView(paper, "csg_scroll", width, height - 32).Body(() =>
         {
             using (paper.Column("csg_content").Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
-            {
-                CSGSections.DrawModelSection(paper, font, model!);
-                CSGSections.DrawGenerateSection(paper, font, SceneToolManager.Get<CSGGenerateTool>());
-                CSGSections.DrawSurfaceSection(paper, font, SceneToolManager.Get<CSGSurfaceTool>());
-                CSGSections.DrawSelectionSection(paper, font, SceneToolManager.Get<CSGObjectTool>());
-                CSGSections.DrawVisibilitySection(paper, font, SceneToolManager.Get<CSGObjectTool>());
-            }
+                CSGOverlayTool.DrawModeBody(paper, font);
         });
     }
 }
