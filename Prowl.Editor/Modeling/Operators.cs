@@ -471,6 +471,64 @@ public static class Operators
         foreach (GeometryData.Vertex vertex in loose) mesh.RemoveVertex(vertex);
     }
 
+    /// <summary>
+    /// Copies another mesh into a target, moved into the target's space. A transform that mirrors flips the copy's faces
+    /// so they still face out. Material slots are merged by material, the copy's faces renumbered to the target's slots,
+    /// and a corner color one mesh lacks is white rather than black.
+    /// </summary>
+    /// <param name="targetSlots">The target's slots, gaining any material only the other has.</param>
+    public static void Join(GeometryData target, List<Guid> targetSlots, GeometryData other, IReadOnlyList<Guid> otherSlots, Float4x4 otherToTarget)
+    {
+        const string SubMesh = Prowl.Runtime.Resources.MeshGeometry.SubMesh, Color = Prowl.Runtime.Resources.MeshGeometry.VertexColor;
+        const string Normal = Prowl.Runtime.Resources.MeshGeometry.Normal, Tangent = Prowl.Runtime.Resources.MeshGeometry.Tangent;
+
+        var copy = new GeometryData();
+        copy.Restore(other.Capture());
+        foreach (GeometryData.Vertex vertex in copy.Vertices) vertex.Point = Float4x4.TransformPoint(vertex.Point, otherToTarget);
+        foreach (GeometryData.Loop loop in copy.Loops)
+            foreach (string name in new[] { Normal, Tangent })
+                if (loop.TryGetAttribute(name, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue { Data.Length: >= 3 } f)
+                {
+                    Float3 turned = Float3.NormalizeSafe(Float4x4.TransformNormal(new Float3(f.Data[0], f.Data[1], f.Data[2]), otherToTarget), Float3.UnitY);
+                    float[] data = (float[])f.Data.Clone();
+                    data[0] = turned.X;
+                    data[1] = turned.Y;
+                    data[2] = turned.Z;
+                    loop.SetAttribute(name, new GeometryData.FloatAttributeValue(data));
+                }
+        if (Float4x4.Determinant(otherToTarget) < 0f) GeometryOperators.FlipFaces(copy, [.. copy.Faces]);
+
+        var slotOf = new int[Math.Max(1, otherSlots.Count)];
+        for (int i = 0; i < otherSlots.Count; i++)
+        {
+            int at = targetSlots.IndexOf(otherSlots[i]);
+            if (at < 0)
+            {
+                at = targetSlots.Count;
+                targetSlots.Add(otherSlots[i]);
+            }
+            slotOf[i] = at;
+        }
+        if (otherSlots.Count == 0) slotOf[0] = 0;
+        foreach (GeometryData.Face face in copy.Faces)
+        {
+            int slot = face.TryGetAttribute(SubMesh, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue n && n.Data.Length > 0 ? n.Data[0] : 0;
+            face.SetAttribute(SubMesh, new GeometryData.IntAttributeValue(slot >= 0 && slot < slotOf.Length ? slotOf[slot] : 0));
+        }
+
+        bool targetColored = target.HasLoopAttribute(Color), otherColored = copy.HasLoopAttribute(Color);
+        int existingLoops = target.Loops.Count;
+        GeometryOperators.Merge(target, copy);
+        if (targetColored != otherColored)
+        {
+            for (int i = 0; i < target.Loops.Count; i++)
+            {
+                bool lacked = i < existingLoops ? !targetColored : !otherColored;
+                if (lacked) target.Loops[i].SetAttribute(Color, new GeometryData.FloatAttributeValue(1f, 1f, 1f, 1f));
+            }
+        }
+    }
+
     /// <summary>The edges in groups joined at their points.</summary>
     private static List<List<GeometryData.Edge>> Groups(IReadOnlyCollection<GeometryData.Edge> edges)
     {

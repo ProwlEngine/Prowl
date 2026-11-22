@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.Modeling;
@@ -11,6 +12,7 @@ using Prowl.Editor.Projects;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Editor.GUI.SceneView;
 
@@ -131,18 +133,28 @@ public static class ModelEditingMode
     internal static PMeshDocument Gather(Scene world)
     {
         var document = new PMeshDocument();
+        var ids = new HashSet<Guid>();
         foreach (GameObject root in world.Roots)
         {
             if (root.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
-            Collect(root, document);
+            Collect(root, document, ids);
         }
         return document;
     }
 
-    private static void Collect(GameObject go, PMeshDocument document)
+    // A duplicated object copies its original's id, so the second to be written takes a new one
+    private static void Collect(GameObject go, PMeshDocument document, HashSet<Guid> ids)
     {
-        if (go.GetComponent<ModelObject>() is { } model) document.Objects.Add(model.ToDocumentObject());
-        foreach (GameObject child in go.Children) Collect(child, document);
+        if (go.GetComponent<ModelObject>() is { } model && model.IsValid())
+        {
+            if (!ids.Add(model.Id))
+            {
+                model.Id = Guid.NewGuid();
+                ids.Add(model.Id);
+            }
+            document.Objects.Add(model.ToDocumentObject());
+        }
+        foreach (GameObject child in go.Children) Collect(child, document, ids);
     }
 
     public static bool Save() => Session?.Save() ?? false;
@@ -189,6 +201,52 @@ public static class ModelEditingMode
 
         PMeshDocument document = PMeshDocument.FromObjects(drawn, centre);
         IsolatedWorld.Replace(() => OpenDocument(document, new ModelSession(Guid.Empty, null, centre.Name)));
+    }
+
+    /// <summary>
+    /// Merges the selected model objects into the active one, as one undo step. Their meshes move into its space, their
+    /// material slots merge into its slots, and their children move under it, keeping where they are.
+    /// </summary>
+    public static void Join(IReadOnlyList<GameObject> selected, GameObject active)
+    {
+        const string Name = "Join Model Objects";
+        if (!IsEditing || active.GetComponent<ModelObject>() is not { } target || target.IsNotValid()) return;
+
+        var others = new List<ModelObject>();
+        foreach (GameObject go in selected)
+            if (go != active && go.GetComponent<ModelObject>() is { } model && model.IsValid()) others.Add(model);
+        if (others.Count == 0) return;
+
+        Undo.RecordObject(target, Name);
+        Float4x4 toTarget = active.Transform.WorldToLocalMatrix;
+        foreach (ModelObject other in others)
+        {
+            Operators.Join(target.Mesh, target.Materials, other.Mesh, other.Materials, toTarget * other.Transform.LocalToWorldMatrix);
+            foreach (GameObject child in other.GameObject.Children.ToList())
+                if (!others.Exists(o => o.GameObject == child)) Undo.SetTransformParent(child, active, true, Name);
+        }
+        foreach (ModelObject other in others) Undo.DestroyObjectImmediate(other.GameObject);
+        target.RefreshPreview();
+        Selection.Select(active);
+    }
+
+    /// <summary>Moves an object's origin to the middle of its mesh, the mesh staying where it is in the world.</summary>
+    public static void OriginToGeometry(IReadOnlyList<GameObject> selected)
+    {
+        const string Name = "Origin To Geometry";
+        foreach (GameObject go in selected)
+        {
+            if (go.GetComponent<ModelObject>() is not { } model || model.IsNotValid() || model.Mesh.Vertices.Count == 0) continue;
+            Float3 centre = Float3.Zero;
+            foreach (Vector.Geometry.GeometryData.Vertex vertex in model.Mesh.Vertices) centre += vertex.Point;
+            centre /= model.Mesh.Vertices.Count;
+
+            Undo.RecordObject(model, Name);
+            Undo.RecordObject(go, Name);
+            foreach (Vector.Geometry.GeometryData.Vertex vertex in model.Mesh.Vertices) vertex.Point -= centre;
+            go.Transform.Position = go.Transform.TransformPoint(centre);
+            model.RefreshPreview();
+        }
     }
 
     /// <summary>Whether an asset is a model document, whose instances open in the model world.</summary>

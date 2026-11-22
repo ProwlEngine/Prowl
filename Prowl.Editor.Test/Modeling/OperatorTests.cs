@@ -523,4 +523,24 @@ public class OperatorTests
         Assert.True(part.Faces[0].Normal().Y > 0.99f);
         Assert.Equal(8, mesh.Vertices.Count);
     }
+
+    /// <summary>A mesh joined into another lands where it was in the world, its slots merged by material and its faces facing out still.</summary>
+    [Fact]
+    public void JoiningMovesTheOtherMeshIntoTheTargetsSpace()
+    {
+        GeometryData target = Primitives.Make(PrimitiveKind.Cube);
+        GeometryData other = Primitives.Make(PrimitiveKind.Cube);
+        Guid shared = Guid.NewGuid(), own = Guid.NewGuid();
+        foreach (GeometryData.Face face in other.Faces) face.Attributes[MeshGeometry.SubMesh] = new GeometryData.IntAttributeValue(1);
+        var targetSlots = new List<Guid> { shared };
+        Float4x4 otherToTarget = Float4x4.CreateTranslation(new Float3(3, 0, 0)) * Float4x4.CreateScale(new Float3(-1, 1, 1));
+
+        Operators.Join(target, targetSlots, other, [own, shared], otherToTarget);
+
+        Assert.Equal(12, target.Faces.Count);
+        Assert.Equal(new List<Guid> { shared, own }, targetSlots);
+        var moved = target.Faces.Skip(6).ToList();
+        Assert.All(moved, f => Assert.Equal(0, ((GeometryData.IntAttributeValue)f.Attributes[MeshGeometry.SubMesh]).Data[0]));
+        Assert.All(moved, f => Assert.True(Float3.Dot(f.Normal(), f.Center() - new Float3(3, 0, 0)) > 0f));
+    }
 }

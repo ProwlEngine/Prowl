@@ -166,4 +166,40 @@ public class ModelWorldTests : EditorTestHarness
         Assert.Equal(4, model.Mesh.Vertices.Count);
         ModelEditingMode.Exit();
     }
+
+    [Fact]
+    public void JoiningMergesObjectsIntoTheActiveOne()
+    {
+        Guid guid = WriteModel(out _);
+        ModelEditingMode.Open(guid);
+        GameObject body = ModelEditingMode.World!.FindObject("Body")!;
+        GameObject lid = body.Transform.Find("Lid")!.GameObject;
+
+        ModelEditingMode.Join([body, lid], body);
+
+        Assert.True(lid.IsDisposed);
+        ModelObject model = body.GetComponent<ModelObject>()!;
+        Assert.Equal(8, model.Mesh.Vertices.Count);
+        Assert.Contains(model.Mesh.Vertices, v => MathF.Abs(v.Point.Y - 1f) < 1e-4f);
+        ModelEditingMode.Exit();
+    }
+
+    [Fact]
+    public void ADuplicatedObjectSavesWithAnIdOfItsOwn()
+    {
+        Guid guid = WriteModel(out PMeshDocument document);
+        ModelEditingMode.Open(guid);
+        GameObject body = ModelEditingMode.World!.FindObject("Body")!;
+        var copy = new GameObject("Copy");
+        ModelEditingMode.World.Add(copy);
+        ModelObject twin = copy.AddComponent<ModelObject>();
+        twin.Id = body.GetComponent<ModelObject>()!.Id;
+
+        Assert.True(ModelEditingMode.Save());
+        ModelEditingMode.Exit();
+
+        PMeshDocument saved = PMeshDocument.Read(File.ReadAllBytes(AssetAbsolutePath("Crate.pmesh")));
+        Assert.Equal(3, saved.Objects.Select(o => o.Id).Distinct().Count());
+        Assert.Equal(document.Objects[0].Id, saved.Objects.Single(o => o.Name == "Body").Id);
+    }
 }

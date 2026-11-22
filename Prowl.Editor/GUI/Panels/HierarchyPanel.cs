@@ -1162,6 +1162,13 @@ public class HierarchyPanel : DockPanel
         builder.Item(Loc.Get("hierarchy.create_prefab"), () => CreatePrefabsFrom(selectedGOs),
             icon: EditorIcons.Cubes);
 
+        if (ModelEditingMode.IsEditing)
+        {
+            builder.Item(Loc.Get("model.join"), () => ModelEditingMode.Join(selectedGOs, clickedItem), enabled: selectedGOs.Count > 1,
+                icon: EditorIcons.ObjectGroup);
+            builder.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selectedGOs), icon: EditorIcons.Crosshairs);
+        }
+
         if (!IsolatedWorld.IsOpen && ModelEditingMode.CanEditAsModel(selectedGOs))
             builder.Item(Loc.Get("model.edit_as_model"), () => ModelEditingMode.EditAsModel(selectedGOs, clickedItem), icon: EditorIcons.Shapes);
 

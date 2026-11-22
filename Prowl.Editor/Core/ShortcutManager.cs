@@ -415,6 +415,7 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("MeshEdit/SnapToBrushes", "Snap To Brushes", KeyCode.Tab, shift: true);
         ShortcutManager.Register("MeshEdit/Proportional", "Proportional Editing", KeyCode.O);
         ShortcutManager.Register("ModelEdit/Toggle", "Model Edit Mode", KeyCode.Tab);
+        ShortcutManager.Register("ModelEdit/Join", "Join Model Objects", KeyCode.J, ctrl: true);
         ShortcutManager.Register("MeshEdit/Triangulate", "Triangulate Faces", KeyCode.T, ctrl: true);
         ShortcutManager.Register("MeshEdit/TrisToQuads", "Triangles To Quads", KeyCode.J, alt: true);
         ShortcutManager.Register("MeshEdit/Bridge", "Bridge Faces", KeyCode.E, ctrl: true);

@@ -142,7 +142,12 @@ public sealed class ModelMeshTool : SceneTool
             else Enter();
             return;
         }
-        if (!Editing) return;
+        if (!Editing)
+        {
+            if (handles.IsPressed("ModelEdit/Join") && Selection.ActiveObject is GameObject active)
+                ModelEditingMode.Join([.. Selection.GetSelected<GameObject>()], active);
+            return;
+        }
 
         _edited.RemoveAll(m => m.IsNotValid());
         if (_edited.Count == 0)
