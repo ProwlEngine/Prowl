@@ -356,6 +356,13 @@ public sealed class CSGMeshTool : SceneTool
         MarkDirty();
     }
 
+    /// <summary>How far a drag has moved, beside what is being moved.</summary>
+    private static void DrawDistance(SceneToolContext ctx, Float3 at, Float3 moved)
+    {
+        if (Float3.LengthSquared(moved) < 1e-10f) return;
+        ctx.Draw.Label(at, $"{Float3.Length(moved):0.###}  ({moved.X:0.###}, {moved.Y:0.###}, {moved.Z:0.###})", PickedColor);
+    }
+
     private void BeginAction(HandleContext handles, Action action, int point = -1, int edge = -1, int face = -1)
     {
         _action = action;
@@ -462,8 +469,14 @@ public sealed class CSGMeshTool : SceneTool
                     ctx.Draw.Label(Float4x4.TransformPoint(_actionCorner, _actionBrush!.Transform.LocalToWorldMatrix), amount.ToString("0.###"), PickedColor);
                 }
                 break;
-            case Action.Extrude: if (moved) PreviewExtrude(ctx, amount); break;
-            case Action.Drag: if (moved) DragPoints(ctx); break;
+            case Action.Extrude:
+                amount = CSGSnap.Value(handles, amount);
+                if (moved) PreviewExtrude(ctx, amount);
+                break;
+            case Action.Drag:
+                if (moved) DragPoints(ctx);
+                if (_dragStarted) DrawDistance(ctx, _dragAnchor, _dragAnchor - _dragAnchorStart);
+                break;
             case Action.Marquee: DrawMarquee(ctx); break;
         }
 
@@ -539,6 +552,7 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         ctx.Draw.Polyline(top, PickedColor, 2f, closed: true);
+        ctx.Draw.Label(top[0], amount.ToString("0.###"), PickedColor);
     }
 
     private bool TryExtrudeRing(out List<Float3> ring, out Float3 normal)
@@ -649,6 +663,7 @@ public sealed class CSGMeshTool : SceneTool
         bool moved = TransformHandles.PositionHandle(handles, MoveHandle, ref centre, out bool hot);
         if (hot && !_dragging) _dragRaw = _dragApplied = Float3.Zero;
         _dragging = hot;
+        if (hot) DrawDistance(ctx, centre, _dragApplied);
 
         if (!moved) return;
 
