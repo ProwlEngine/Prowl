@@ -87,6 +87,7 @@ public sealed class CSGMeshTool : SceneTool
 
     // What a chamfer or extrude started on, captured when it began so later renumbering cannot move it
     private Plane[]? _startPlanes;
+    private CSGBrush? _actionBrush;
     private Float3 _actionCorner;
     private readonly List<Float3> _actionNormals = new();
     private readonly List<Float3> _actionRing = new();
@@ -199,9 +200,9 @@ public sealed class CSGMeshTool : SceneTool
     private void CancelAction()
     {
         if (_action == Action.None) return;
-        if (_action == Action.Chamfer && Target.IsValid() && _startPlanes != null && !ReferenceEquals(Target!.Planes, _startPlanes))
+        if (_action == Action.Chamfer && _actionBrush.IsValid() && _startPlanes != null && !ReferenceEquals(_actionBrush!.Planes, _startPlanes))
         {
-            Target.Planes = _startPlanes;
+            _actionBrush.Planes = _startPlanes;
             MarkDirty();
         }
         EndAction();
@@ -337,6 +338,7 @@ public sealed class CSGMeshTool : SceneTool
         _action = action;
         _dragOrigin = handles.MousePosition;
         _dragStarted = false;
+        _actionBrush = Target;
         _startPlanes = (Plane[])Target!.Planes.Clone();
         _actionNormals.Clear();
         _actionRing.Clear();
@@ -575,6 +577,7 @@ public sealed class CSGMeshTool : SceneTool
     {
         _action = Action.None;
         _startPlanes = null;
+        _actionBrush = null;
     }
 
     private void MoveSelection(SceneToolContext ctx)
