@@ -51,6 +51,12 @@ public sealed class ModelObject : Component
 
     [NonSerialized] private Mesh? _preview;
 
+    // The point of the mesh each preview vertex sits on, and the mesh and version it was built from, so a drag that only
+    // moves points rewrites the preview's positions instead of building it again
+    [NonSerialized] private int[]? _previewSources;
+    [NonSerialized] private GeometryData? _previewFrom;
+    [NonSerialized] private int _previewVersion;
+
     public override void OnEnable()
     {
         if (_previewStale || _preview.IsNotValid()) RefreshPreview();
@@ -73,8 +79,12 @@ public sealed class ModelObject : Component
     {
         MeshRenderer? renderer = GameObject.GetComponent<MeshRenderer>();
         if (renderer.IsNotValid()) renderer = GameObject.AddComponent<MeshRenderer>();
+        if (dragging && MovePreviewPoints(renderer!)) return;
+
         Mesh? old = _preview;
-        _preview = PMeshImporter.BuildMesh(ToDocumentObject(), dragging);
+        _preview = PMeshImporter.BuildMesh(ToDocumentObject(), dragging, out _previewSources);
+        _previewFrom = Mesh;
+        _previewVersion = Mesh.Version;
         _previewStale = false;
         renderer!.Mesh = _preview;
 
@@ -85,6 +95,27 @@ public sealed class ModelObject : Component
         renderer.Materials = materials;
 
         if (old.IsValid()) old!.Dispose();
+    }
+
+    /// <summary>
+    /// Rewrites the positions of the shown preview when only points moved since it was built, its normals left as they
+    /// were until the drag ends. False when it has to be built again.
+    /// </summary>
+    private bool MovePreviewPoints(MeshRenderer renderer)
+    {
+        if (_previewSources is not { } sources || _preview.IsNotValid() || !ReferenceEquals(renderer.Mesh, _preview)) return false;
+        if (!ReferenceEquals(_previewFrom, Mesh) || Mesh.Version != _previewVersion || Modifiers.Exists(m => m.Enabled)) return false;
+        var positions = new Float3[sources.Length];
+        var vertices = Mesh.Vertices;
+        for (int i = 0; i < sources.Length; i++)
+        {
+            if (sources[i] >= vertices.Count) return false;
+            positions[i] = vertices[sources[i]].Point;
+        }
+        _preview!.Vertices = positions;
+        _preview.RecalculateBounds();
+        _previewStale = false;
+        return true;
     }
 
     private static Material StandardMaterial => BuiltInAssets.Load<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard))!;

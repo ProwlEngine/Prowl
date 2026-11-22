@@ -1774,9 +1774,9 @@ public static class MeshGeometry
     /// <paramref name="template"/> supplies what geometry does not carry: name, bind poses, bone names,
     /// blend shape names and frame weights, whether colors were bytes, and the submesh count, so a submesh
     /// that lost every triangle still keeps its slot and the material order holds. Without one, byte colors
-    /// come back as float colors.
+    /// come back as float colors. <paramref name="sources"/>, when given, gets the geometry vertex of each mesh vertex.
     /// </summary>
-    public static Mesh ToMesh(GeometryData geometry, Mesh? template = null)
+    public static Mesh ToMesh(GeometryData geometry, Mesh? template = null, List<GeometryData.Vertex>? sources = null)
     {
         Mesh? source = template.IsValid() ? template : null;
         bool hasNormals = geometry.HasLoopAttribute(Normal), hasTangents = geometry.HasLoopAttribute(Tangent);
@@ -1839,6 +1839,7 @@ public static class MeshGeometry
             list.Add((loop, created));
 
             positions.Add(vertex.Point);
+            sources?.Add(vertex);
             if (hasNormals) normals.Add(Float3Of(loop, Normal));
             if (hasTangents) tangents.Add(Float4Of(loop, Tangent));
             if (hasUV) uv.Add(Float2Of(loop, UV));

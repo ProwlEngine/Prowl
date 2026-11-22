@@ -184,6 +184,30 @@ public class ModelWorldTests : EditorTestHarness
         ModelEditingMode.Exit();
     }
 
+    /// <summary>While dragging, a preview whose faces did not change only has its positions rewritten, in the same mesh.</summary>
+    [Fact]
+    public void DraggingRewritesOnlyThePositionsOfThePreview()
+    {
+        Guid guid = WriteModel(out _);
+        ModelEditingMode.Open(guid);
+        ModelObject model = ModelEditingMode.World!.FindObject("Body")!.GetComponent<ModelObject>()!;
+        MeshRenderer renderer = model.GameObject.GetComponent<MeshRenderer>()!;
+        model.RefreshPreview();
+        Mesh before = renderer.Mesh!;
+
+        model.Mesh.Vertices[0].Point += new Float3(0f, 5f, 0f);
+        model.RefreshPreview(dragging: true);
+
+        Assert.Same(before, renderer.Mesh);
+        Assert.Contains(renderer.Mesh!.Vertices, p => MathF.Abs(p.Y - model.Mesh.Vertices[0].Point.Y) < 1e-5f && p.Y > 4f);
+
+        model.Mesh.AddVertex(9f, 9f, 9f);
+        model.Mesh.MarkChanged();
+        model.RefreshPreview(dragging: true);
+        Assert.NotSame(before, renderer.Mesh);
+        ModelEditingMode.Exit();
+    }
+
     [Fact]
     public void MovingTheOriginLeavesTheMeshWhereItIsInTheWorld()
     {

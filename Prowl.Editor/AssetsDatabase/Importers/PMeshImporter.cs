@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Modeling;
@@ -100,7 +101,13 @@ public class PMeshImporter : AssetImporter
     /// has none or a modifier ran, softened by its smoothing angle when no edge is flagged at all. The mesh cuts its faces
     /// into triangles, ear clipping the concave ones. While dragging, modifiers too slow for every frame are left out.
     /// </summary>
-    internal static Mesh BuildMesh(PMeshObject item, bool dragging = false)
+    internal static Mesh BuildMesh(PMeshObject item, bool dragging = false) => BuildMesh(item, dragging, out _);
+
+    /// <summary>
+    /// Builds the mesh as <see cref="BuildMesh(PMeshObject, bool)"/> does, giving the index of the object's point each
+    /// mesh vertex sits on, or null when a modifier ran and the mesh is no longer the object's points.
+    /// </summary>
+    internal static Mesh BuildMesh(PMeshObject item, bool dragging, out int[]? sources)
     {
         GeometryData geometry = ModelModifier.Run(item.Mesh, item.Modifiers, dragging);
         bool modified = !ReferenceEquals(geometry, item.Mesh);
@@ -119,8 +126,10 @@ public class PMeshImporter : AssetImporter
             Operators.CornerNormals(geometry);
         }
 
-        Mesh mesh = MeshGeometry.ToMesh(geometry);
+        var emitted = new List<GeometryData.Vertex>();
+        Mesh mesh = MeshGeometry.ToMesh(geometry, null, modified ? null : emitted);
         mesh.Name = item.Name;
+        sources = modified ? null : [.. emitted.Select(v => v.Index)];
         return mesh;
     }
 
