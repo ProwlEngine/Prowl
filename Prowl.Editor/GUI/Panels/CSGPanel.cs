@@ -35,7 +35,7 @@ public class CSGPanel : DockPanel
             return;
         }
 
-        CSGOverlayTool.DrawHeader(paper, font, "csg_dock", false, null);
+        CSGOverlayTool.DrawHeader(paper, font, "csg_dock");
         Origami.ScrollView(paper, "csg_scroll", width, height - 30).Body(() =>
             CSGSections.DrawColumns(paper, font, "csg_dock_cols", CSGSections.Columns(), width));
     }

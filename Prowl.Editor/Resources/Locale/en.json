@@ -855,8 +855,6 @@
   "csg.duplicate": "Duplicate",
   "csg.hide_selected": "Hide selected",
   "csg.unhide_all": "Unhide all ({{count}})",
-  "csg.collapse": "Collapse",
-  "csg.collapse_tip": "Folds the panel down to its title bar.",
   "csg.helpers": "Helpers",
   "csg.helper_collision": "Collision",
   "csg.helper_inert": "Inert",

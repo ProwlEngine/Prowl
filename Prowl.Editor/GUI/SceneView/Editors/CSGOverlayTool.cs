@@ -52,7 +52,6 @@ public sealed class CSGOverlayTool : SceneTool
         (CSGGeneratorKind.Polygon, "CSG/ShapePolygon"),
     };
 
-    private bool _collapsed;
 
     public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
 
@@ -282,26 +281,24 @@ public sealed class CSGOverlayTool : SceneTool
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        List<CSGSections.Column> columns = _collapsed ? [] : CSGSections.Columns();
+        List<CSGSections.Column> columns = CSGSections.Columns();
         float available = MathF.Max(CSGSections.ColumnWidth, ctx.Handles.ViewportSize.X - 100f);
-        float width = MathF.Min(available, MathF.Max(HeaderWidth, columns.Count * CSGSections.ColumnWidth));
+        float width = MathF.Min(available, columns.Count * CSGSections.ColumnWidth);
 
-        using (paper.Column(id).Width(width).Height(UnitValue.Auto).Enter())
+        using (paper.Column(id).Width(UnitValue.Auto).Height(UnitValue.Auto).Enter())
         {
-            DrawHeader(paper, font, id, _collapsed, () => _collapsed = !_collapsed);
-            if (_collapsed || columns.Count == 0) return;
+            DrawHeader(paper, font, id);
+            if (columns.Count == 0) return;
 
-            paper.Box($"{id}_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            paper.Box($"{id}_div").Width(width).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
             CSGSections.DrawColumns(paper, font, $"{id}_cols", columns, width);
         }
     }
 
-    private const float HeaderWidth = 460f;
-
-    /// <summary>The active tool's name along the top, with the operation buttons and any warning about the model.</summary>
-    internal static void DrawHeader(Paper paper, Scribe.FontFile font, string id, bool collapsed, System.Action? toggle)
+    /// <summary>The active tool's name, any warning about the model, the centre pivot button and the helper surfaces menu.</summary>
+    internal static void DrawHeader(Paper paper, Scribe.FontFile font, string id)
     {
-        using (paper.Row($"{id}_head").Height(30).Padding(8, 6, 0, 0).Gap(3).Enter())
+        using (paper.Row($"{id}_head").Width(UnitValue.Auto).Height(30).Padding(8, 6, 0, 0).Gap(3).Enter())
         {
             // The tool these options belong to, picked from the scene view tool strip
             (_, string label, string tip, _, string icon) = Array.Find(Modes, m => CSGEditMode.Is(m.mode));
@@ -313,21 +310,9 @@ public sealed class CSGOverlayTool : SceneTool
                 .Text(Loc.Get(label ?? "csg.title"), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
-            paper.Box($"{id}_head_gap").Height(30).IsNotInteractable();
             DrawWarnings(paper, font, id);
 
-            // The selection's operation, lit when every selected brush and group shares it, or in Create the next brush's
-            bool create = CSGEditMode.Is(CSGMode.Create);
-            int shared = create
-                ? SceneToolManager.Get<CSGGenerateTool>() is { AutoOperation: false } next ? (int)next.Operation : -1
-                : CSGSections.OperationIndex(CSGSelection.Brushes(), CSGSelection.Groups());
-            HeaderButton(paper, font, $"{id}_op_add", EditorIcons.SquarePlus, shared == (int)Operation.Additive,
-                ShortcutManager.GetTooltip(Loc.Get("csg.additive"), "CSG/SetAdditive"), Loc.Get("csg.additive_tip"), () => SetOperation(Operation.Additive));
-            HeaderButton(paper, font, $"{id}_op_sub", EditorIcons.SquareMinus, shared == (int)Operation.Subtractive,
-                ShortcutManager.GetTooltip(Loc.Get("csg.subtractive"), "CSG/SetSubtractive"), Loc.Get("csg.subtractive_tip"), () => SetOperation(Operation.Subtractive));
-            HeaderButton(paper, font, $"{id}_op_int", EditorIcons.CropSimple, shared == (int)Operation.Intersect,
-                ShortcutManager.GetTooltip(Loc.Get("csg.intersect"), "CSG/SetIntersecting"), Loc.Get("csg.intersect_tip"), () => SetOperation(Operation.Intersect));
-            if (!create)
+            if (!CSGEditMode.Is(CSGMode.Create))
                 HeaderButton(paper, font, $"{id}_pivot", EditorIcons.Crosshairs, false,
                     Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
 
@@ -339,15 +324,6 @@ public sealed class CSGOverlayTool : SceneTool
                 .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall - 2f).Alignment(TextAlignment.MiddleCenter)
                 .Tooltip(Loc.Get("csg.helpers"), Loc.Get("csg.helpers_hint"))
                 .OnClick(paper, (p, _) => Origami.ContextMenu((float)p.PointerPos.X, (float)p.PointerPos.Y, HelperMenu));
-
-            if (toggle == null) return;
-            paper.Box($"{id}_head_c")
-                .Width(22).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-                .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Text(collapsed ? EditorIcons.ChevronUp : EditorIcons.ChevronDown, font)
-                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall - 4f).Alignment(TextAlignment.MiddleCenter)
-                .Tooltip(Loc.Get("csg.collapse"), Loc.Get("csg.collapse_tip"))
-                .OnClick(toggle, (t, _) => t());
         }
     }
 
