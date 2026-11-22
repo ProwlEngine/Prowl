@@ -301,9 +301,9 @@ public static class CliEditorCommands
         static string Require(string value, string arg)
             => value.Length > 0 ? value : throw new CliException($"Give --{arg}{(arg == "path" ? ", relative to the Assets folder" : "")}.");
 
-        static Scene SceneAt(string path)
+        static SceneAsset SceneAt(string path)
         {
-            Scene? asset = EditorSceneManager.SceneAt(CliRefs.AssetPath(path));
+            SceneAsset? asset = EditorSceneManager.SceneAt(CliRefs.AssetPath(path));
             return asset.IsValid() ? asset : throw new CliException($"No scene at '{path}'.");
         }
 
@@ -339,7 +339,7 @@ public static class CliEditorCommands
 
         if (root.Length > 0) return starts.Select(g => Node(g, Math.Max(0, depth), components)).ToList();
 
-        SceneInstance world = CliRefs.Scene;
+        Scene world = CliRefs.Scene;
         return world.Sections
             .Where(s => !s.IsPersistent || !s.Roots.IsEmpty)
             .Select(s => new JsonObject
@@ -395,7 +395,7 @@ public static class CliEditorCommands
         [CliArg("scene", "For create without a parent: the open scene to create in, the active scene by default")] string inScene = "")
     {
         await CliEdit.WaitForEditor();
-        SceneInstance scene = CliRefs.Scene;
+        Scene scene = CliRefs.Scene;
         switch (action)
         {
             case GoAction.Create:
@@ -1122,18 +1122,18 @@ public static class CliEditorCommands
                 break;
             case PlayAction.Pause:
                 RequirePlaying();
-                SceneInstance.Main.Paused = true;
+                Scene.Main.Paused = true;
                 break;
             case PlayAction.Resume:
                 RequirePlaying();
-                SceneInstance.Main.Paused = false;
+                Scene.Main.Paused = false;
                 break;
             case PlayAction.Step:
                 RequirePlaying();
                 for (int i = 0; i < Math.Clamp(frames, 1, 600); i++)
                 {
                     EditorApplication.StepOneFrame();
-                    if (!await CliServer.WaitUntil(() => !SceneInstance.HasMain || !SceneInstance.Main.IsStepPending, TimeSpan.FromSeconds(10))) break;
+                    if (!await CliServer.WaitUntil(() => !Scene.HasMain || !Scene.Main.IsStepPending, TimeSpan.FromSeconds(10))) break;
                 }
                 break;
             case PlayAction.Wait:

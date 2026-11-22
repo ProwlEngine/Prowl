@@ -127,7 +127,7 @@ public class HierarchyPanel : DockPanel
 
         UpdateScriptHoverSelection(paper.DeltaTime);
 
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
 
         using (paper.Column("hier_root")
             .Size(width, height)
@@ -442,7 +442,7 @@ public class HierarchyPanel : DockPanel
                     }
                     else if (_assetDropTarget)
                     {
-                        if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
+                        if (assetDrop.AssetType == typeof(Runtime.Resources.SceneAsset))
                         {
                             AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
                             if (entry != null && EditorSceneManager.SceneAt(entry.Path) is { } dropped && EditorSceneManager.CanEditScenes)
@@ -531,7 +531,7 @@ public class HierarchyPanel : DockPanel
 
     // One header per open scene in the edit world, per section in the play world (Persistent once it holds anything),
     // and none in the prefab world, which is one prefab.
-    internal void BuildSceneNodes(SceneInstance world, List<TreeNode> nodes)
+    internal void BuildSceneNodes(Scene world, List<TreeNode> nodes)
     {
         if (PrefabEditingMode.IsEditing)
         {
@@ -749,7 +749,7 @@ public class HierarchyPanel : DockPanel
     /// <summary>
     /// The section a new object goes into: its parent's, else a scene header menu's, else the selected object's scene, else the active scene.
     /// </summary>
-    internal static SceneSection SectionForNew(SceneInstance world, GameObject? parent)
+    internal static SceneSection SectionForNew(Scene world, GameObject? parent)
     {
         if (parent.IsValid() && parent.Section is { } parentSection && ReferenceEquals(parentSection.Instance, world)) return parentSection;
         if (MenuContext.Section is { IsLoaded: true } pinned && ReferenceEquals(pinned.Instance, world)) return pinned;
@@ -956,7 +956,7 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Below:
                     if (targetIsRoot)
                     {
-                        SceneInstance scene = EditorSceneManager.EditedWorld;
+                        Scene scene = EditorSceneManager.EditedWorld;
                         if (scene.IsNotValid()) break;
 
                         // Unparent if needed, then into the target's scene
@@ -1254,7 +1254,7 @@ public class HierarchyPanel : DockPanel
     /// so they don't steal selection / rename focus from the object the user actually asked for.</param>
     internal static GameObject CreateGameObject(string name, GameObject? parent, bool select = true, bool beginRename = true)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return new GameObject(name);
 
         var go = new GameObject(name);
@@ -1303,7 +1303,7 @@ public class HierarchyPanel : DockPanel
     /// </summary>
     internal static void CreateEmptyParent()
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         // Only the top-level selection moves: an object whose ancestor is also selected already
@@ -1322,7 +1322,7 @@ public class HierarchyPanel : DockPanel
 
     private static void CreateEmptyParentCore(List<GameObject> targets)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         // The first selected object anchors the group: the new parent drops into its place in the
@@ -1429,7 +1429,7 @@ public class HierarchyPanel : DockPanel
 
     internal static void DeleteOneGameObject(GameObject go)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         Undo.DestroyObjectImmediate(go);
@@ -1475,7 +1475,7 @@ public class HierarchyPanel : DockPanel
     /// Search all GameObjects in the scene for any that reference the given GUID.
     /// Checks each component's AssetID and all AssetRef fields.
     /// </summary>
-    private static void FindGameObjectsWithGuid(SceneInstance scene, Guid guid, HashSet<GameObject> results)
+    private static void FindGameObjectsWithGuid(Scene scene, Guid guid, HashSet<GameObject> results)
     {
         foreach (GameObject go in scene.Objects)
         {
@@ -1515,7 +1515,7 @@ public class HierarchyPanel : DockPanel
 
     public static void SpawnAssetInScene(AssetDragPayload payload, GameObject? parent, Float3 position)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         Asset? asset = Runtime.AssetDatabase.Get(payload.AssetGuid);
@@ -1569,7 +1569,7 @@ public class HierarchyPanel : DockPanel
 
     /// <summary>Put a prefab into the scene, as an instance or as a copy of its contents with no link.</summary>
     private static void SpawnPrefab(AssetDragPayload payload, GameObject? parent, Float3 position,
-        Runtime.Resources.SceneInstance scene, bool flatten)
+        Runtime.Resources.Scene scene, bool flatten)
     {
         GameObject? instance = PrefabUtility.InstantiatePrefab(payload.AssetGuid);
         if (instance.IsNotValid()) return;

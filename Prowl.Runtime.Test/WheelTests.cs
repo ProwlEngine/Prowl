@@ -25,14 +25,14 @@ public class WheelTests : RuntimeTestBase
         base.Dispose();
     }
 
-    private SceneInstance CreatePhysicsScene()
+    private Scene CreatePhysicsScene()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false; // deterministic stepping
         return scene;
     }
 
-    private GameObject AddStaticBox(SceneInstance scene, Float3 position, Float3 size, int layer = 0)
+    private GameObject AddStaticBox(Scene scene, Float3 position, Float3 size, int layer = 0)
     {
         GameObject go = CreateGameObject("StaticBox");
         go.Transform.Position = position;
@@ -42,7 +42,7 @@ public class WheelTests : RuntimeTestBase
         return go;
     }
 
-    private Rigidbody3D AddDynamicBox(SceneInstance scene, Float3 position, Float3 size, float mass = 50f)
+    private Rigidbody3D AddDynamicBox(Scene scene, Float3 position, Float3 size, float mass = 50f)
     {
         GameObject go = CreateGameObject("DynamicBox");
         go.Transform.Position = position;
@@ -60,7 +60,7 @@ public class WheelTests : RuntimeTestBase
 
     /// <summary>Builds a 4-wheel car at <paramref name="pos"/>/<paramref name="rot"/>. Wheel mounts sit
     /// in the chassis plane; wheels hang along the chassis -up.</summary>
-    private (Rigidbody3D chassis, WheelCollider[] wheels) BuildCar(SceneInstance scene, Float3 pos, Quaternion rot, Float3? chassisSize = null)
+    private (Rigidbody3D chassis, WheelCollider[] wheels) BuildCar(Scene scene, Float3 pos, Quaternion rot, Float3? chassisSize = null)
     {
         GameObject chassis = CreateGameObject("Chassis");
         chassis.Transform.Position = pos;
@@ -97,7 +97,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Car_AtRest_DoesNotJitterOrCreep()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[] _) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
 
@@ -121,7 +121,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Slip_IsSmallWhileRolling_AndLargeWhileSlidingSideways()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         Tick(scene, 200);
@@ -145,7 +145,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Car_CoastingOnAHugeFloor_RidesSmoothly()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(4000, 1, 4000));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, -100f), Quaternion.Identity);
         Tick(scene, 200);
@@ -163,7 +163,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Car_AtSpeed_StaysLevel()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(100, 1, 3000));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, -1400f), Quaternion.Identity);
         Tick(scene, 200);
@@ -182,7 +182,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void HeavyTruck_CruisesSmoothly_AndBrakesHard()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(100, 1, 400));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 1.2f, -150f), Quaternion.Identity);
         rb.Mass = 6500f;
@@ -219,7 +219,7 @@ public class WheelTests : RuntimeTestBase
     {
         // Heavier car, big wheels, dropped from a height, then driven with high torque: speed must stay
         // physical, not diverge.
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
 
         GameObject chassis = CreateGameObject("Car");
@@ -261,7 +261,7 @@ public class WheelTests : RuntimeTestBase
     {
         // A car goes airborne, its free wheels spin up under throttle, then it lands: the large
         // rim-vs-ground slip on landing must not lurch the car. It must land and stay physical.
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
 
         GameObject chassis = CreateGameObject("Car");
@@ -300,7 +300,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Wheel_SidewaysOrientation_SettlesAgainstWall()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         // "Down" is -X: a wall at x=0 acts as the floor, and the car's up points +X (rotate -90 about Z
         // takes local +Y to world +X). The car falls onto the wall and its sideways wheels hold it.
         scene.Physics.Gravity = new Float3(-9.81f, 0, 0);
@@ -324,7 +324,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Wheel_UpsideDown_SettlesUnderCeiling()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         // Gravity points UP; a ceiling above (its -Y face at y=0) is the "floor". The car is flipped so
         // its up axis is -Y, hanging its wheels upward against the ceiling.
         scene.Physics.Gravity = new Float3(0, 9.81f, 0);
@@ -342,7 +342,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Wheel_OnSphericalPlanet_StaysOnCurvedSurface()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         // A big static sphere is the planet; the car sits at the top pole with normal downward gravity.
         // This exercises the spherecast against a curved surface (driving a planet is then the same
         // physics rotated, which the sideways/upside-down cases already cover).
@@ -367,7 +367,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void EightWheelFlipCar_ManualSprungMass_WorksBothWaysUp()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50)); // ground top at y=0
 
         // An 8-wheel car: 4 wheels hang down (up = +Y) and 4 hang up (up = -Y, rotated 180). Sprung mass
@@ -418,7 +418,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Car_OnSideSlope_DoesNotCreepSideways()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         // ~10 degree side tilt: gravity has a lateral (+X) component. The car's lateral axis is X, so this
         // is the "slides sideways on a slope" case - lateral grip + gravity feed-forward must hold it.
         float g = 9.81f, ang = Maths.PI / 180f * 10f;
@@ -439,7 +439,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Car_DriveThenBrake_StopsAndHoldsWithoutSpinningOrJittering()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
 
@@ -476,7 +476,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Car_DrivesOverKerb_DoesNotLaunch()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
         AddStaticBox(scene, new Float3(0, 0.2f, 8f), new Float3(20, 0.4f, 1f)); // a low kerb across the path
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -496,7 +496,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Car_DrivesIntoRigidbody_DoesNotLaunch()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
         AddDynamicBox(scene, new Float3(0, 0.5f, 6f), new Float3(1, 1, 1), mass: 40f); // a crate in the path
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -520,7 +520,7 @@ public class WheelTests : RuntimeTestBase
     [InlineData(2f)]
     public void Car_DrivingOverLightCrates_DoesNotFlingThem(float crateMass)
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
         var crates = new List<Rigidbody3D>();
         for (int i = 0; i < 6; i++)
@@ -558,7 +558,7 @@ public class WheelTests : RuntimeTestBase
     [InlineData(20f)]
     public void Braked_OnASlope_HoldsStill(float degrees)
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         scene.Physics.Gravity = Tilted(degrees, sideways: false);
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -574,7 +574,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Parked_PushedSideways_DoesNotSlide()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         Brake(wheels, 8000f);
@@ -593,7 +593,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void SprungMassSetByHand_DoesNotPushTheCarUpASlope()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         scene.Physics.Gravity = Tilted(10f, sideways: true);
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -609,7 +609,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void WithoutGravity_ThereIsNoPhantomSidewaysPush()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[] _) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         rb.AffectedByGravity = false;
@@ -628,7 +628,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void WithAlmostNoGrip_ACarSlidesDownASlope()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         scene.Physics.Gravity = Tilted(20f, sideways: true);
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(100, 1, 100));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -643,7 +643,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void ASurfaceWithLittleGrip_LetsABrakedCarSlide()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         scene.Physics.Gravity = Tilted(20f, sideways: false);
         GameObject ground = AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(100, 1, 100));
         ground.AddComponent<WheelSurface>().Grip = 0.1f;
@@ -657,7 +657,7 @@ public class WheelTests : RuntimeTestBase
 
     // ---- Moving ground ----
 
-    private Rigidbody3D AddPlatform(SceneInstance scene, Float3 position, Float3 size)
+    private Rigidbody3D AddPlatform(Scene scene, Float3 position, Float3 size)
     {
         GameObject go = CreateGameObject("Platform");
         go.Transform.Position = position;
@@ -671,7 +671,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Braked_OnAnAcceleratingPlatform_RidesAlong()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -5f, 0), new Float3(50, 1, 50));
         Rigidbody3D platform = AddPlatform(scene, new Float3(0, -0.25f, 0), new Float3(10, 0.5f, 10));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -691,7 +691,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Braked_OnATurntable_KeepsItsRadius()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -5f, 0), new Float3(50, 1, 50));
         Rigidbody3D table = AddPlatform(scene, new Float3(0, -0.25f, 0), new Float3(16, 0.5f, 16));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(4f, 0.6f, 0), Quaternion.Identity);
@@ -708,7 +708,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void ACarParkedOnAnotherCar_StaysOnItWhileItDrives()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(100, 1, 100));
         (Rigidbody3D? bottom, WheelCollider[]? bottomWheels) = BuildCar(scene, new Float3(0, 0.6f, -20f), Quaternion.Identity);
         Tick(scene, 120);
@@ -729,7 +729,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void ACarParkedOnATowedTrailer_RidesThroughACorner()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
         (Rigidbody3D? car, WheelCollider[]? carWheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
 
@@ -775,7 +775,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void DrivingOffASleepingPlank_KicksItBack()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         GameObject plankGo = CreateGameObject("Plank");
         plankGo.Transform.Position = new Float3(0f, 0.05f, -1.2f);
@@ -797,7 +797,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void ACarParkedOnALooseSlab_AndTheSlab_BothFallAsleep()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         GameObject slabGo = CreateGameObject("Slab");
         slabGo.Transform.Position = new Float3(0f, 0.1f, 0f);
@@ -815,7 +815,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void ACarAsleepOnAPlatform_WakesWhenThePlatformMoves()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -5f, 0), new Float3(50, 1, 50));
         Rigidbody3D platform = AddPlatform(scene, new Float3(0, -0.25f, 0), new Float3(10, 0.5f, 10));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -835,7 +835,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Wheels_DoNotClimbAWall()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         AddStaticBox(scene, new Float3(0, 1.5f, 8f), new Float3(10, 3, 1));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity, new Float3(1.6f, 0.4f, 2f));
@@ -855,7 +855,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void OnASlope_TheWheelTouchesTheSurfaceExactly()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         GameObject ground = CreateGameObject("Slope");
         Quaternion tilt = Quaternion.FromEuler(new Float3(0f, 0f, 15f));
         ground.Transform.Rotation = tilt;
@@ -879,7 +879,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void OnFlatGround_TheContactSitsUnderTheMiddleOfTheTyre()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D _, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         Tick(scene, 200);
@@ -897,7 +897,7 @@ public class WheelTests : RuntimeTestBase
     {
         float Rest(int rays)
         {
-            SceneInstance scene = CreatePhysicsScene();
+            Scene scene = CreatePhysicsScene();
             AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
             (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
             foreach (WheelCollider w in wheels) w.ForwardRayCount = rays;
@@ -910,7 +910,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void ATinySuspensionTravel_StillGripsAndDrives()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(100, 1, 100));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.4f, 0), Quaternion.Identity);
         foreach (WheelCollider w in wheels) w.SuspensionDistance = 0f;
@@ -925,7 +925,7 @@ public class WheelTests : RuntimeTestBase
     [InlineData(25f)]
     public void StiffSprings_SettleWithoutHopping(float hertz)
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         foreach (WheelCollider w in wheels) { w.SuspensionFrequency = hertz; w.SuspensionDampingRatio = 0.3f; }
@@ -943,7 +943,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void UnderHeavyGravity_ABottomedOutWheelDoesNotSink()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         scene.Physics.Gravity = new Float3(0f, -30f, 0f);
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -960,7 +960,7 @@ public class WheelTests : RuntimeTestBase
         {
             CollisionMatrix.Reset();
             if (matrixIgnoresPlate) CollisionMatrix.SetLayerCollision(Car, Plate, false);
-            SceneInstance scene = CreatePhysicsScene();
+            Scene scene = CreatePhysicsScene();
             AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
             AddStaticBox(scene, new Float3(0, 0.5f, 0), new Float3(50, 1, 50), Plate);
             GameObject chassis = CreateGameObject("Chassis");
@@ -997,7 +997,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void WheelsOnAChildBody_DoNotShareTheParentsWeight()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
 
@@ -1024,7 +1024,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void AWheelMovedToAnotherBody_DrivesThatBody()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? a, WheelCollider[]? wheelsA) = BuildCar(scene, new Float3(-4f, 0.6f, 0), Quaternion.Identity);
         (Rigidbody3D? b, WheelCollider[] _) = BuildCar(scene, new Float3(4f, 0.6f, 0), Quaternion.Identity);
@@ -1044,7 +1044,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Camber_LeansTheSameWayWhateverTheSteering()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         WheelCollider frontRight = wheels[0];
@@ -1068,7 +1068,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void AParkedCar_FallsAsleep_AndWakesWhenDriven()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         TickUntil(scene, () => !rb.IsActive, 900);
@@ -1088,7 +1088,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Spin_IsCapped_AndANegativeBrakeDoesNothing()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 500f, 0), Quaternion.Identity);
         rb.AffectedByGravity = false;
         wheels[0].MotorTorque = 5000f;
@@ -1103,7 +1103,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Parked_WithOnlyTheRearBraked_TheFrontWheelsStayStill()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         rb.Mass = 6500f;
@@ -1123,7 +1123,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void ANoseHeavyCar_CoastingOnTheFlat_NeverSpeedsUp()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 600));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, -250f), Quaternion.Identity);
         wheels[2].Transform.LocalPosition = new Float3(0.7f, 0f, -2.2f);
@@ -1142,7 +1142,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void AGentleBrake_LetsAWheelKeepRollingAtWalkingPace()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 200));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, -50f), Quaternion.Identity);
         rb.Mass = 6500f;
@@ -1159,7 +1159,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Rpm_MatchesTheRollingSpeed()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 400));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, -150f), Quaternion.Identity);
         Tick(scene, 120);
@@ -1175,7 +1175,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Slips_HaveTheDocumentedSigns()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(100, 1, 400));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, -150f), Quaternion.Identity);
         Tick(scene, 120);
@@ -1199,7 +1199,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void GroundHit_ReportsTheColliderAndTheLoad()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         GameObject ground = AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D _, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         Tick(scene, 300);
@@ -1216,7 +1216,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void GroundHit_ReportsHowFastTheGroundMoves()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -5f, 0), new Float3(50, 1, 50));
         Rigidbody3D platform = AddPlatform(scene, new Float3(0, -0.25f, 0), new Float3(10, 0.5f, 10));
         (Rigidbody3D _, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
@@ -1232,7 +1232,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void GroundedAndAirTime_Count()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D _, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 6f, 0), Quaternion.Identity);
         Tick(scene, 30);
@@ -1244,7 +1244,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void Preload_CarriesTheWeightBeforeTheSpringCompresses()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
         (Rigidbody3D _, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         foreach (WheelCollider w in wheels) w.Preload = 1f;
@@ -1274,7 +1274,7 @@ public class WheelTests : RuntimeTestBase
     [Fact]
     public void ASidewaysSlide_IsHeldBackByTheSlidingGrip_NotThePeak()
     {
-        SceneInstance scene = CreatePhysicsScene();
+        Scene scene = CreatePhysicsScene();
         AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
         (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
         Tick(scene, 120);
@@ -1293,7 +1293,7 @@ public class WheelTests : RuntimeTestBase
     {
         float Dive(float transfer)
         {
-            SceneInstance scene = CreatePhysicsScene();
+            Scene scene = CreatePhysicsScene();
             AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 400));
             (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, -150f), Quaternion.Identity);
             foreach (WheelCollider w in wheels) w.WeightTransfer = transfer;
@@ -1313,7 +1313,7 @@ public class WheelTests : RuntimeTestBase
     {
         float Roll(bool bar)
         {
-            SceneInstance scene = CreatePhysicsScene();
+            Scene scene = CreatePhysicsScene();
             AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 50));
             (Rigidbody3D? rb, WheelCollider[]? wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
             if (bar)
@@ -1343,7 +1343,7 @@ public class WheelTests : RuntimeTestBase
     {
         float Sideways(float thrust)
         {
-            SceneInstance scene = CreatePhysicsScene();
+            Scene scene = CreatePhysicsScene();
             AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(50, 1, 400));
             GameObject body = CreateGameObject("Bike");
             Quaternion lean = Quaternion.FromEuler(new Float3(0f, 0f, -20f));

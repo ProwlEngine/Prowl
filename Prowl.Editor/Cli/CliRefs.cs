@@ -35,7 +35,7 @@ public static class CliRefs
     private static readonly Regex s_componentSuffix = new(@":(?<type>[A-Za-z_][A-Za-z0-9_.]*)(\[(?<index>\d+)\])?$", RegexOptions.Compiled);
     private static readonly Regex s_indexedName = new(@"^(?<name>.*)\[(?<index>\d+)\]$", RegexOptions.Compiled);
 
-    public static SceneInstance Scene => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld : throw new CliException("No scene is open.");
+    public static Scene Scene => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld : throw new CliException("No scene is open.");
 
     // The section a scene: prefix narrowed the lookup to, while the rest of that ref resolves.
     [ThreadStatic] private static SceneSection? t_section;

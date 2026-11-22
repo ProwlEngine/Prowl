@@ -19,12 +19,12 @@ public class HeadlessRunTests
     /// <summary>A Game that loads a scene on Initialize and counts its update steps.</summary>
     private sealed class CountingHeadlessGame : Game
     {
-        private readonly SceneInstance _scene;
+        private readonly Scene _scene;
         public int UpdateCount;
 
-        public CountingHeadlessGame(SceneInstance scene) => _scene = scene;
+        public CountingHeadlessGame(Scene scene) => _scene = scene;
 
-        protected override SceneInstance CreateMainWorld()
+        protected override Scene CreateMainWorld()
         {
             _scene.Activate();
             return _scene;
@@ -37,7 +37,7 @@ public class HeadlessRunTests
     {
         try
         {
-            var scene = new SceneInstance();
+            var scene = new Scene();
             var game = new CountingHeadlessGame(scene);
 
             game.RunHeadless(new HeadlessRunOptions { MaxFrames = 10, TargetFrameRate = 0 });

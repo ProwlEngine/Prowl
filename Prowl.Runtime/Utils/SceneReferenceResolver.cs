@@ -53,7 +53,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// has to say so, or its references resolve against whatever scene happens to be open and bind to
     /// the wrong objects or to nothing.
     /// </summary>
-    public SceneInstance? ResolveIn { get; init; }
+    public Scene? ResolveIn { get; init; }
 
     /// <summary>
     /// Detached content a link resolves against instead of a world, as an identifier map from
@@ -83,7 +83,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// Context for reading data back, binding every link to the live object it names.
     /// </summary>
     /// <param name="scene">The scene to resolve in, or null for the open one.</param>
-    public static SerializationContext ContextForLinking(SceneInstance? scene = null)
+    public static SerializationContext ContextForLinking(Scene? scene = null)
         => new() { ExternalReferences = new SceneReferenceResolver { ResolveIn = scene } };
 
     /// <summary>Context for reading data back, binding every link to the object it names in detached content.</summary>
@@ -162,7 +162,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
                 GameObject go => go.Name,
                 Component component => component.GameObject.IsValid() ? $"{component.GameObject.Name}/{component.GetType().Name}" : component.GetType().Name,
                 Transform transform => transform.GameObject.IsValid() ? transform.GameObject.Name : "Transform",
-                SceneInstance world => world.Name,
+                Scene world => world.Name,
                 _ => null,
             };
             if (name == null || _captured.Contains(value)) return null;
@@ -215,7 +215,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
             return found;
         }
 
-        SceneInstance? target = ResolveIn.IsValid() ? ResolveIn : SceneInstance.HasMain ? SceneInstance.Main : null;
+        Scene? target = ResolveIn.IsValid() ? ResolveIn : Scene.HasMain ? Scene.Main : null;
         if (key is not Guid id || target is not { } scene) return null;
 
         // A Transform key is its GameObject's id, so this resolves the GameObject and hands back its Transform.

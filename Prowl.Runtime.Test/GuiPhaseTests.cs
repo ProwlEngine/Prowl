@@ -14,9 +14,9 @@ public class GuiPhaseTests : RuntimeTestBase
     public enum Phase { Begin, Gui, End }
 
     /// <summary>A host whose GUI runs in a world of its own and throws in one phase, as an editor panel can.</summary>
-    private sealed class ThrowingGuiGame(SceneInstance guiWorld, Phase throwIn) : Game
+    private sealed class ThrowingGuiGame(Scene guiWorld, Phase throwIn) : Game
     {
-        protected override SceneInstance? GuiWorld => guiWorld;
+        protected override Scene? GuiWorld => guiWorld;
         protected override bool PresentsWorlds => false;
         public override void BeginGui(Paper paper) => ThrowIf(Phase.Begin);
         public override void OnGui(Paper paper) => ThrowIf(Phase.Gui);
@@ -35,25 +35,25 @@ public class GuiPhaseTests : RuntimeTestBase
     [InlineData(Phase.End)]
     public void RunGui_ThatThrows_PutsTheAmbientWorldBack(Phase throwIn)
     {
-        SceneInstance edited = CreateScene(enable: true);
+        Scene edited = CreateScene(enable: true);
 
         Assert.Throws<InvalidOperationException>(() => new ThrowingGuiGame(edited, throwIn).RunGui(null!));
         edited.Dispose();
 
-        Assert.Same(SceneInstance.Main, SceneInstance.Active);
+        Assert.Same(Scene.Main, Scene.Active);
         Time.TimeScale = 0.5f; // as an input action callback that pauses the game does
     }
 
     [Fact]
     public void RunGui_ThatThrows_PutsBackAWorldThatWasAlreadyAmbient()
     {
-        SceneInstance prior = CreateScene(enable: true);
-        SceneInstance edited = CreateScene(enable: true);
+        Scene prior = CreateScene(enable: true);
+        Scene edited = CreateScene(enable: true);
 
         using (prior.Enter())
         {
             Assert.Throws<InvalidOperationException>(() => new ThrowingGuiGame(edited, Phase.Gui).RunGui(null!));
-            Assert.Same(prior, SceneInstance.Active);
+            Assert.Same(prior, Scene.Active);
         }
     }
 }

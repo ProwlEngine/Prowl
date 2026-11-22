@@ -23,7 +23,7 @@ public abstract class RuntimeTestBase : IDisposable
     private readonly bool _prevIsPlaying;
     private readonly bool _prevIsEditor;
 
-    private readonly List<SceneInstance> _scenes = [];
+    private readonly List<Scene> _scenes = [];
     private readonly List<GameObject> _gameObjects = [];
 
     protected RuntimeTestBase()
@@ -35,10 +35,10 @@ public abstract class RuntimeTestBase : IDisposable
         Application.IsPlaying = true;
         Application.IsEditor = false;
 
-        SceneInstance main = SceneInstance.Create("Test");
+        Scene main = Scene.Create("Test");
         main.Clock.Advance(FrameDelta);
         main.Activate();
-        SceneInstance.Main = main;
+        Scene.Main = main;
     }
 
     /// <summary> The fixed timestep used by physics, mirrored from <see cref="Time.FixedDeltaTime"/>. </summary>
@@ -86,11 +86,11 @@ public abstract class RuntimeTestBase : IDisposable
 
     /// <summary>
     /// Creates a tracked world, an edit world inside <see cref="EditMode"/>. Pass <paramref name="enable"/> to activate
-    /// it at once, otherwise it stays dormant so component OnEnable is deferred until <see cref="SceneInstance.Activate"/>.
+    /// it at once, otherwise it stays dormant so component OnEnable is deferred until <see cref="Scene.Activate"/>.
     /// </summary>
-    protected SceneInstance CreateScene(bool enable = false)
+    protected Scene CreateScene(bool enable = false)
     {
-        var scene = new SceneInstance(_createMode);
+        var scene = new Scene(_createMode);
         scene.Clock.Advance(FrameDelta);
         _scenes.Add(scene);
         if (enable)
@@ -109,10 +109,10 @@ public abstract class RuntimeTestBase : IDisposable
     }
 
     /// <summary>Binds <paramref name="world"/> as Main, running, the way a host binds the world it shows.</summary>
-    protected static void Bind(SceneInstance world)
+    protected static void Bind(Scene world)
     {
         world.Activate();
-        SceneInstance.Main = world;
+        Scene.Main = world;
     }
 
     /// <summary> Creates a tracked GameObject that will be disposed when the test ends. </summary>
@@ -124,11 +124,11 @@ public abstract class RuntimeTestBase : IDisposable
     }
 
     /// <summary>
-    /// Advances one full frame: steps physics (<see cref="SceneInstance.FixedUpdate"/>) then runs the
-    /// per-frame update (<see cref="SceneInstance.Update"/>). This mirrors the order the real game loop uses
+    /// Advances one full frame: steps physics (<see cref="Scene.FixedUpdate"/>) then runs the
+    /// per-frame update (<see cref="Scene.Update"/>). This mirrors the order the real game loop uses
     /// so components that read back physics state in Update (e.g. Rigidbody3D) stay in sync.
     /// </summary>
-    protected void Tick(SceneInstance scene, int steps = 1)
+    protected void Tick(Scene scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
@@ -139,8 +139,8 @@ public abstract class RuntimeTestBase : IDisposable
         }
     }
 
-    /// <summary> Runs <see cref="SceneInstance.Update"/> the given number of times (no physics step). </summary>
-    protected void Update(SceneInstance scene, int frames = 1)
+    /// <summary> Runs <see cref="Scene.Update"/> the given number of times (no physics step). </summary>
+    protected void Update(Scene scene, int frames = 1)
     {
         for (int i = 0; i < frames; i++)
         {
@@ -150,8 +150,8 @@ public abstract class RuntimeTestBase : IDisposable
         }
     }
 
-    /// <summary> Steps physics via <see cref="SceneInstance.FixedUpdate"/> the given number of times. </summary>
-    protected void StepPhysics(SceneInstance scene, int steps = 1)
+    /// <summary> Steps physics via <see cref="Scene.FixedUpdate"/> the given number of times. </summary>
+    protected void StepPhysics(Scene scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
@@ -172,9 +172,9 @@ public abstract class RuntimeTestBase : IDisposable
 
     /// <summary> A flat collider floor with its top surface at y=0, plus a surface configured
     /// for a fast bake. Pass <paramref name="bake"/> to bake and register it immediately. </summary>
-    protected (SceneInstance scene, NavMeshSurface surface) CreateFloorScene(float size = 20f, bool bake = false)
+    protected (Scene scene, NavMeshSurface surface) CreateFloorScene(float size = 20f, bool bake = false)
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
 
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
@@ -193,7 +193,7 @@ public abstract class RuntimeTestBase : IDisposable
 
     /// <summary> Tick until <paramref name="condition"/> holds — incremental cache updates
     /// process a bounded slice per frame. Returns the ticks taken, or -1 on timeout. </summary>
-    protected int TickUntil(SceneInstance scene, Func<bool> condition, int maxTicks = 240)
+    protected int TickUntil(Scene scene, Func<bool> condition, int maxTicks = 240)
     {
         for (int i = 0; i < maxTicks; i++)
         {
@@ -207,9 +207,9 @@ public abstract class RuntimeTestBase : IDisposable
     {
         // Main, a pending load and anything preserved are static state the next test must not see. Immediate
         // teardown: no frame follows to drain a destroy queue.
-        SceneInstance.Shutdown();
+        Scene.Shutdown();
 
-        foreach (SceneInstance scene in _scenes)
+        foreach (Scene scene in _scenes)
         {
             if (scene.IsDisposed) continue;
             if (scene.State == SceneState.Running)

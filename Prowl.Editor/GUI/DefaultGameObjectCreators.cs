@@ -452,7 +452,7 @@ internal static class DefaultGameObjectCreators
         return go;
     }
 
-    private static void EnsureEventSystem(SceneInstance? scene)
+    private static void EnsureEventSystem(Scene? scene)
     {
         if (scene.IsNotValid()) scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
@@ -467,7 +467,7 @@ internal static class DefaultGameObjectCreators
         GameCanvas? canvas = parent.IsValid() ? parent.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
         if (canvas.IsValid()) return parent!;
 
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsValid())
         {
             foreach (GameCanvas? c in scene.GetAll<GameCanvas>(includeDisabled: true))

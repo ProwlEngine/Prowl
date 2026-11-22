@@ -136,7 +136,7 @@ public static partial class PrefabUtility
         return null;
     }
 
-    private static void ApplyFieldValue(object target, string memberPath, EchoObject value, SceneInstance? resolveIn)
+    private static void ApplyFieldValue(object target, string memberPath, EchoObject value, Scene? resolveIn)
     {
         string[] parts = memberPath.Split('.');
         if (!TraverseToParent(target, parts, out object? parent)) return;
@@ -174,7 +174,7 @@ public static partial class PrefabUtility
 
         // Not Scene.Current: a build brings a scene it read off disk up to date, and that is not the
         // scene that happens to be open.
-        SceneInstance? resolveIn = root.Scene;
+        Scene? resolveIn = root.Scene;
 
         foreach (PropertyOverride ov in overrides)
         {

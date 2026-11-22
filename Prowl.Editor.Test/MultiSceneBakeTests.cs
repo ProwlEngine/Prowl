@@ -20,9 +20,9 @@ public class MultiSceneBakeTests : EditorTestHarness
     public MultiSceneBakeTests() => Core.Undo.ClearAll();
 
     // A scene with a static cube, and optionally probes and a baked sun.
-    private Scene Author(string path, Float3 at, bool probes = false, bool sun = false)
+    private SceneAsset Author(string path, Float3 at, bool probes = false, bool sun = false)
     {
-        var world = new SceneInstance(SceneMode.Edit);
+        var world = new Scene(SceneMode.Edit);
         GameObject cube = world.Create("Cube");
         cube.IsStatic = true;
         cube.Transform.Position = at;
@@ -38,14 +38,14 @@ public class MultiSceneBakeTests : EditorTestHarness
             light.BakeMode = LightBakeMode.Baked;
             light.Transform.LocalEulerAngles = new Float3(50, 30, 0);
         }
-        return AssetDatabase.Get<Scene>(CreateSceneAsset(world, path))!;
+        return AssetDatabase.Get<SceneAsset>(CreateSceneAsset(world, path))!;
     }
 
-    private static (OpenScene A, OpenScene B) OpenBoth(Scene a, Scene b)
+    private static (OpenScene A, OpenScene B) OpenBoth(SceneAsset a, SceneAsset b)
     {
         OpenScene first = EditorSceneManager.Open(a, force: true);
         OpenScene second = EditorSceneManager.OpenAdditive(b);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         return (first, second);
     }
 
@@ -65,8 +65,8 @@ public class MultiSceneBakeTests : EditorTestHarness
     [Fact]
     public void OneBake_GivesEachLoadedSceneItsOwnPagesPlacementsAndProbes_AndSavesNothing()
     {
-        Scene aAsset = Author("A.scene", Float3.Zero, sun: true);
-        Scene bAsset = Author("B.scene", new Float3(4, 0, 0), probes: true);
+        SceneAsset aAsset = Author("A.scene", Float3.Zero, sun: true);
+        SceneAsset bAsset = Author("B.scene", new Float3(4, 0, 0), probes: true);
         string aOnDisk = File.ReadAllText(AssetAbsolutePath("A.scene"));
         (OpenScene a, OpenScene b) = OpenBoth(aAsset, bAsset);
 
@@ -123,7 +123,7 @@ public class MultiSceneBakeTests : EditorTestHarness
     {
         (OpenScene a, OpenScene b) = OpenBoth(Author("A.scene", Float3.Zero), Author("B.scene", new Float3(4, 0, 0)));
         OpenScene untitled = EditorSceneManager.New(additive: true);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         var service = new LightmapBakeService();
         Assert.Same(untitled, LightmapBakeService.UntitledScene(EditorSceneManager.EditWorld));
@@ -131,7 +131,7 @@ public class MultiSceneBakeTests : EditorTestHarness
 
         EditorSceneManager.Remove(untitled, force: true);
         EditorSceneManager.Unload(b);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Assert.True(service.Start(EditorSceneManager.EditWorld, Quick()));
         BakeToEnd(service);
 

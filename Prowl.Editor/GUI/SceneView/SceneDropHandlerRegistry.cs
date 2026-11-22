@@ -21,7 +21,7 @@ public class SceneDropHandlerAttribute : Attribute
 
 public struct SceneDropContext
 {
-    public SceneInstance Scene;
+    public Scene Scene;
     public EditorCamera Camera;
     public Float2 MouseLocal;
     public Float2 PanelSize;
@@ -183,7 +183,7 @@ public static class SceneDrop
 //  Built-in scene drop handlers
 // ================================================================
 
-[SceneDropHandler(typeof(Scene), Order = 0)]
+[SceneDropHandler(typeof(SceneAsset), Order = 0)]
 internal class SceneAssetDropHandler : ISceneDropHandler
 {
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to open scene";

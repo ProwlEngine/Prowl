@@ -31,6 +31,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("Scenes stored as SceneContent, SceneAsset renamed to Scene and the scene lighting types moved to top level", ctx => ctx.RewriteEchoAssets(SceneContentLayout)),
         new("The last opened scene remembered as a scene setup of that one scene", ctx => ctx.RewriteProjectSettings(SceneSetupMemory)),
         new("Camera background, depth and target saved behind properties", ctx => RenameSettings(ctx, s_cameraRenames)),
+        new("The scene asset renamed to SceneAsset, as Scene now names the live world", ctx => ctx.RewriteEcho(SceneAssetName)),
     ];
 
     private static readonly Dictionary<string, (string From, string To)[]> s_cameraRenames = new()
@@ -812,6 +813,20 @@ internal sealed partial class Release_1_0 : MigrationRelease
         return true;
     }
 
+    /// <summary>The scene asset's type name, Scene since the step before, becomes SceneAsset. Scene now names the live world.</summary>
+    internal static EchoObject? SceneAssetName(EchoObject echo)
+    {
+        bool changed = false;
+        ForEachCompound(echo, tag =>
+        {
+            if (!tag.TryGet("$type", out EchoObject? type) || type!.TagType != EchoType.String) return;
+            string renamed = Regex.Replace(type.StringValue, @"Prowl\.Runtime\.Resources\.Scene(?=[,\]]|$)", "Prowl.Runtime.Resources.SceneAsset");
+            if (renamed == type.StringValue) return;
+            tag["$type"] = new EchoObject(renamed);
+            changed = true;
+        });
+        return changed ? echo : null;
+    }
     private static string RenameSceneTypes(string typeName)
     {
         foreach ((string old, string now) in s_sceneTypeRenames)

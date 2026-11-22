@@ -41,7 +41,7 @@ public interface IRenderSync
 /// </summary>
 public sealed class SceneRendering : IDisposable
 {
-    private readonly SceneInstance _scene;
+    private readonly Scene _scene;
     private readonly List<IRenderSync> _members = [];
     private readonly HashSet<IRenderSync> _memberSet = [];
 
@@ -68,7 +68,7 @@ public sealed class SceneRendering : IDisposable
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<DirectionalLight> _directionals = [];
 
-    internal SceneRendering(SceneInstance scene)
+    internal SceneRendering(Scene scene)
     {
         _scene = scene;
         _onMeshChanged = _changedMeshes.Enqueue;
@@ -232,12 +232,12 @@ public sealed class SceneRendering : IDisposable
         RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }
 
-    private SceneInstance.ProbeSet? _probesFrom;
+    private Scene.ProbeSet? _probesFrom;
     private int _probesVersion = -1;
 
     private void SyncProbes(RenderWorld world)
     {
-        SceneInstance.ProbeSet? baked = _scene.Probes;
+        Scene.ProbeSet? baked = _scene.Probes;
         if (baked == _probesFrom && _scene.BakedLightingVersion == _probesVersion) return;
         _probesFrom = baked;
         _probesVersion = _scene.BakedLightingVersion;

@@ -762,9 +762,9 @@ public static class AssetDatabase
         int epoch = ++s_epoch;
         s_walker.Begin(epoch, s_lastWalk);
 
-        foreach (SceneInstance scene in SceneInstance.Live)
+        foreach (Scene scene in Scene.Live)
             s_walker.Visit(scene);
-        foreach (object pending in SceneInstance.PendingContent)
+        foreach (object pending in Scene.PendingContent)
             s_walker.Visit(pending);
 
         lock (s_holdLock)

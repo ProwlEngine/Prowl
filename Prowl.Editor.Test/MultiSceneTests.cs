@@ -27,17 +27,17 @@ public class MultiSceneTests : EditorTestHarness
     }
 
     // A second file with the same content, so every identifier in it is shared with the first.
-    private Scene Duplicate(string from, string to)
+    private SceneAsset Duplicate(string from, string to)
     {
         File.Copy(AssetAbsolutePath(from), AssetAbsolutePath(to));
-        return AssetDatabase.Get<Scene>(Assets.ImportFile(to))!;
+        return AssetDatabase.Get<SceneAsset>(Assets.ImportFile(to))!;
     }
 
-    private Scene Author(string path, params string[] roots)
+    private SceneAsset Author(string path, params string[] roots)
     {
-        var world = new SceneInstance(SceneMode.Edit);
+        var world = new Scene(SceneMode.Edit);
         foreach (string root in roots) world.Create(root).AddComponent<Marker>();
-        return AssetDatabase.Get<Scene>(CreateSceneAsset(world, path))!;
+        return AssetDatabase.Get<SceneAsset>(CreateSceneAsset(world, path))!;
     }
 
     private static GameObject Root(OpenScene scene) => Assert.Single(scene.Section!.Roots);
@@ -59,7 +59,7 @@ public class MultiSceneTests : EditorTestHarness
             Assert.False(second.IsLoaded);
             Assert.Null(second.Section);
 
-            SceneInstance.ProcessPendingLoad();
+            Scene.ProcessPendingLoad();
 
             Assert.True(second.IsLoaded);
             Assert.True(second.IsActive);
@@ -80,7 +80,7 @@ public class MultiSceneTests : EditorTestHarness
     public void OpenAdditive_AddsASectionAfter_AndNeverListsOneSceneTwice()
     {
         OpenScene a = Open(Author("A.scene", "a"));
-        Scene bAsset = Author("B.scene", "b");
+        SceneAsset bAsset = Author("B.scene", "b");
         OpenScene b = Additive(bAsset);
 
         Assert.Equal([a, b], EditorSceneManager.OpenScenes);
@@ -97,13 +97,13 @@ public class MultiSceneTests : EditorTestHarness
         OpenScene c = Additive(Author("C.scene", "c"));
 
         EditorSceneManager.Unload(b);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Assert.False(b.IsLoaded);
         Assert.Equal([a, b, c], EditorSceneManager.OpenScenes);
         Assert.DoesNotContain(EditorSceneManager.EditWorld.Objects, go => go.Name == "b");
 
         EditorSceneManager.Load(b);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Assert.Equal([EditorSceneManager.EditWorld.Persistent, a.Section, b.Section, c.Section], EditorSceneManager.EditWorld.Sections);
     }
 
@@ -128,7 +128,7 @@ public class MultiSceneTests : EditorTestHarness
 
         EditorSceneManager.Unload(a);
         Assert.Throws<InvalidOperationException>(() => EditorSceneManager.Unload(b));
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.True(b.IsLoaded);
         Assert.True(b.IsActive);
@@ -141,7 +141,7 @@ public class MultiSceneTests : EditorTestHarness
         OpenScene b = EditorSceneManager.OpenAdditive(Author("B.scene", "b"));
 
         EditorSceneManager.Unload(b);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.False(b.IsLoaded);
         Assert.DoesNotContain(EditorSceneManager.EditWorld.Objects, go => go.Name == "b");
@@ -154,7 +154,7 @@ public class MultiSceneTests : EditorTestHarness
         OpenScene b = EditorSceneManager.Open(Author("B.scene", "b"));
 
         Assert.Throws<InvalidOperationException>(() => EditorSceneManager.Remove(b));
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.True(b.IsLoaded);
         Assert.Equal("b", Root(b).Name);
@@ -172,7 +172,7 @@ public class MultiSceneTests : EditorTestHarness
         Assert.Throws<InvalidOperationException>(() => EditorSceneManager.Open(a.Scene!));
 
         EditorSceneManager.Unload(b, force: true);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Assert.False(b.IsLoaded);
         Assert.False(b.IsDirty);
     }
@@ -185,7 +185,7 @@ public class MultiSceneTests : EditorTestHarness
         Undo.DestroyObjectImmediate(Root(b));
 
         EditorSceneManager.Unload(b, force: true);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Undo.FlushUndoRecordObjects();
 
         Assert.Empty(Undo.UndoSteps);
@@ -204,7 +204,7 @@ public class MultiSceneTests : EditorTestHarness
         Assert.Single(Undo.UndoSteps);
 
         EditorSceneManager.Unload(b, force: true);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Assert.Empty(Undo.UndoSteps);
     }
 
@@ -248,7 +248,7 @@ public class MultiSceneTests : EditorTestHarness
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         EditorSceneManager.Unload(b, force: true);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Equal(["Edit A"], Undo.UndoSteps.Select(s => s.Name));
     }
@@ -275,9 +275,9 @@ public class MultiSceneTests : EditorTestHarness
     [Fact]
     public void ASetup_RoundTrips_SkippingAMissingScene()
     {
-        Scene aAsset = Author("A.scene", "a");
-        Scene bAsset = Author("B.scene", "b");
-        Scene cAsset = Author("C.scene", "c");
+        SceneAsset aAsset = Author("A.scene", "a");
+        SceneAsset bAsset = Author("B.scene", "b");
+        SceneAsset cAsset = Author("C.scene", "c");
         Open(aAsset);
         OpenScene b = Additive(bAsset);
         Additive(cAsset, load: false);
@@ -286,7 +286,7 @@ public class MultiSceneTests : EditorTestHarness
 
         Open(Author("Other.scene", "o"));
         EditorSceneManager.RestoreSetup([.. setup, new SceneSetup { Asset = Guid.NewGuid(), Path = "Gone.scene", IsLoaded = true }]);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Equal(["A", "B", "C"], EditorSceneManager.OpenScenes.Select(o => o.Name));
         Assert.Equal([true, true, false], EditorSceneManager.OpenScenes.Select(o => o.IsLoaded));
@@ -309,8 +309,8 @@ public class MultiSceneTests : EditorTestHarness
     [Fact]
     public void ASetup_WithAnUnreadableScene_ListsItUnloaded()
     {
-        Scene aAsset = Author("A.scene", "a");
-        Scene bAsset = Author("B.scene", "b");
+        SceneAsset aAsset = Author("A.scene", "a");
+        SceneAsset bAsset = Author("B.scene", "b");
         Open(aAsset);
         Additive(bAsset);
         SceneSetup[] setup = EditorSceneManager.GetSetup();
@@ -318,7 +318,7 @@ public class MultiSceneTests : EditorTestHarness
         File.WriteAllText(AssetAbsolutePath("B.scene"), "{ not a scene");
 
         EditorSceneManager.RestoreSetup(setup);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Equal(["A", "B"], EditorSceneManager.OpenScenes.Select(o => o.Name));
         Assert.Equal([true, false], EditorSceneManager.OpenScenes.Select(o => o.IsLoaded));
@@ -329,7 +329,7 @@ public class MultiSceneTests : EditorTestHarness
     {
         Open(Author("A.scene", "a"));
         OpenScene untitled = EditorSceneManager.New(additive: true);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.True(untitled.IsLoaded);
         Assert.Null(untitled.Path);
@@ -356,7 +356,7 @@ public class MultiSceneTests : EditorTestHarness
         Additive(Author("C.scene", "c"), load: false);
         EditorSceneManager.SetActive(b);
 
-        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        Scene play = EditorSceneManager.BuildPlayWorld();
         try
         {
             Assert.Equal(["A", "B"], play.Sections.Skip(1).Select(s => s.Name));
@@ -452,10 +452,10 @@ public class MultiSceneTests : EditorTestHarness
     [Fact]
     public void AMove_ClearsReferencesThatWouldCrossScenes_AndUndoBringsThemBack()
     {
-        var world = new SceneInstance(SceneMode.Edit);
+        var world = new Scene(SceneMode.Edit);
         GameObject door = world.Create("door");
         world.Create("holder").AddComponent<Marker>().Target = door;
-        OpenScene a = Open(AssetDatabase.Get<Scene>(CreateSceneAsset(world, "A.scene"))!);
+        OpenScene a = Open(AssetDatabase.Get<SceneAsset>(CreateSceneAsset(world, "A.scene"))!);
         OpenScene b = Additive(Author("B.scene", "b"));
         Marker holder = a.Section!.Roots.Single(r => r.Name == "holder").GetComponent<Marker>()!;
         GameObject liveDoor = holder.Target!;
@@ -474,7 +474,7 @@ public class MultiSceneTests : EditorTestHarness
     {
         OpenScene a = Open(Author("A.scene", "a"));
         OpenScene b = Additive(Author("B.scene", "b"));
-        SceneInstance world = EditorSceneManager.EditWorld;
+        Scene world = EditorSceneManager.EditWorld;
         Marker holder = Root(a).GetComponent<Marker>()!;
         GameObject character = world.Create(a.Section!, "Character");
         GameObject helper = world.Create("Helper", owner: character.AddComponent<Marker>());
@@ -598,14 +598,14 @@ public class MultiSceneTests : EditorTestHarness
         Assert.Equal(Graphite.Rendering.RenderableFlags.SceneViewHidden, Runtime.Rendering.RenderableState.ViewFlagsFor(inB));
 
         EditorSceneManager.Unload(b);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         EditorSceneManager.Load(b);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.True(b.Section!.HiddenInSceneView);
         Assert.Equal(Graphite.Rendering.RenderableFlags.SceneViewHidden, Runtime.Rendering.RenderableState.ViewFlagsFor(Root(b)));
 
-        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        Scene play = EditorSceneManager.BuildPlayWorld();
         try { Assert.All(play.Sections, s => Assert.False(s.HiddenInSceneView)); }
         finally { play.Dispose(); }
     }
@@ -613,7 +613,7 @@ public class MultiSceneTests : EditorTestHarness
     [Fact]
     public void OpeningAListedSceneAgain_PingsItsHeader()
     {
-        Scene bAsset = Author("B.scene", "b");
+        SceneAsset bAsset = Author("B.scene", "b");
         Open(Author("A.scene", "a"));
         Additive(bAsset);
 
@@ -634,7 +634,7 @@ public class MultiSceneTests : EditorTestHarness
         Assert.Same(inCopy, panel.FindComponent().comp);
 
         EditorSceneManager.Unload(copy, force: true);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Null(panel.FindComponent().comp);
         Assert.True(a.IsLoaded);
@@ -647,7 +647,7 @@ public class MultiSceneTests : EditorTestHarness
         OpenScene copy = Additive(Duplicate("A.scene", "Copy.scene"));
         var panel = GUI.Panels.ComponentPopoutPanel.For(Root(copy), Root(copy).GetComponent<Marker>()!);
 
-        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        Scene play = EditorSceneManager.BuildPlayWorld();
         using (EnterPlayMode())
         {
             EditorSceneManager.EnterPlayWorld(play);

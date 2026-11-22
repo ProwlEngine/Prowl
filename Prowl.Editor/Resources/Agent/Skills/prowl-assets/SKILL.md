@@ -32,7 +32,7 @@ using Prowl.Runtime.Resources;
 public class Spawner : Component
 {
     public PrefabAsset Enemy;                // held and loaded with the scene
-    public AssetRef<Scene> NextLevel;        // only a reference, loads when asked
+    public AssetRef<SceneAsset> NextLevel;        // only a reference, loads when asked
     [NotHeld] public Texture2D DebugTex;     // referenced, but allowed to unload
 
     public override void Start()
@@ -78,7 +78,7 @@ Builds only ship the scenes in the build, everything they reference (plain field
 - Spawn a prefab with `GameObject.Instantiate(prefab)`, with overloads for position, rotation, parent and scene.
 - Prefabs do not nest. A prefab instance inside another prefab is flattened into plain objects when the outer prefab is saved.
 - The prefab a model imports as is read only. To change it, instantiate it, edit the instance, and save a new prefab with `prefab create`.
-- `Scene` is the saved scene asset. `SceneInstance` is a live world. `level.Load()` replaces Main's content with the level, `level.LoadAdditive()` adds it as another section, `level.Open()` makes a new dormant world from it. Each returns a `SceneLoad`: await it for the loaded `SceneSection`, read `Phase` and `Progress`, or call `Wait()` to block until it is ready. Loads apply at the end of the frame. `AssetRef<Scene>` has the same three methods.
+- `SceneAsset` is the saved scene asset. `Scene` is a live world. `level.Load()` replaces Main's content with the level, `level.LoadAdditive()` adds it as another section, `level.Open()` makes a new dormant world from it. Each returns a `SceneLoad`: await it for the loaded `SceneSection`, read `Phase` and `Progress`, or call `Wait()` to block until it is ready. Loads apply at the end of the frame. `AssetRef<SceneAsset>` has the same three methods.
 
 ## Creating and saving assets (editor code only)
 
@@ -87,7 +87,7 @@ Builds only ship the scenes in the build, everything they reference (plain field
 ## Gotchas
 
 - Never use `?.`, `??`, `??=`, `== null`, `!= null`, `is null` or `is not null` on an asset or any `EngineObject`. They are compile errors (PROWLEO001, PROWLEO002, PROWLEO003). Use `x.IsValid()` and `x.IsNotValid()`.
-- A scene field on a component is `AssetRef<Scene>`. A plain `Scene` field loads the scene and everything it uses with the component (warning PROWLSC002).
+- A scene field on a component is `AssetRef<SceneAsset>`. A plain `SceneAsset` field loads the scene and everything it uses with the component (warning PROWLSC002).
 - Never block on a task in a script with `.Result`, `.Wait()` or `GetAwaiter().GetResult()` (PROWLTH001). Loads finish on the main thread, so the wait never returns. `await` instead, or call the blocking `Load()`.
 - Blocking loads hitch the frame. Use the async calls or `LoadGroup` for large content.
 - `Material.LoadDefault(...)` returns a new copy you own. The other built in `LoadDefault` calls return a shared asset.

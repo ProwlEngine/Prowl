@@ -17,7 +17,7 @@ public class ChangingGravityTests() : ControllerTestBase(Gravity.Upright)
 {
     private const float Fall = 20f;
 
-    private CharacterController Place(SceneInstance scene, Float3 at, ColliderShape shape)
+    private CharacterController Place(Scene scene, Float3 at, ColliderShape shape)
     {
         GameObject go = CreateGameObject("Player");
         go.Transform.Position = at;
@@ -48,7 +48,7 @@ public class ChangingGravityTests() : ControllerTestBase(Gravity.Upright)
     public void WalkingRoundAPlanetComesBackToTheStart(ColliderShape shape)
     {
         const float Radius = 6f;
-        SceneInstance scene = World();
+        Scene scene = World();
         GameObject planet = CreateGameObject("Planet");
         planet.AddComponent<SphereCollider>().Radius = Radius;
         scene.Add(planet);
@@ -85,7 +85,7 @@ public class ChangingGravityTests() : ControllerTestBase(Gravity.Upright)
     [InlineData(ColliderShape.Cylinder)]
     public void FlippingGravityDropsItOntoTheCeilingFeetFirst(ColliderShape shape)
     {
-        SceneInstance scene = WorldWithFloor();
+        Scene scene = WorldWithFloor();
         Box(scene, new Float3(0f, 4.5f, 0f), new Float3(20f, 1f, 20f), name: "Ceiling");
         CharacterController controller = Place(scene, Float3.Zero, shape);
         float rising = 0f;
@@ -108,7 +108,7 @@ public class ChangingGravityTests() : ControllerTestBase(Gravity.Upright)
     [InlineData(ColliderShape.Cylinder, 70f, false)]
     public void TiltingGravityTurnsTheFloorIntoASlope(ColliderShape shape, float tilt, bool holds)
     {
-        SceneInstance scene = WorldWithFloor(200f);
+        Scene scene = WorldWithFloor(200f);
         CharacterController controller = Place(scene, Float3.Zero, shape);
         float rising = 0f;
         for (int i = 0; i < 30; i++) Step(controller, Float3.UnitY, Float3.Zero, ref rising);

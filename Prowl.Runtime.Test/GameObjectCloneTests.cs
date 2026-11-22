@@ -263,7 +263,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Clone_IsDetachedFromAnyScene()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject source = Build("root", out _);
         scene.Add(source);
 
@@ -383,7 +383,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void CopyTo_LeavesTheTargetInItsScene()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject source = Build("source", out _);
         GameObject target = Build("target", out _);
         scene.Add(target);
@@ -508,7 +508,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Instantiate_RunsTheLifecycleOnTheCopy()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         Bind(scene);
 
         var original = new GameObject("orig");
@@ -529,7 +529,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void Instantiate_IntoAParentPlacesItRelativeToThatParent()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         Bind(scene);
 
         var parent = new GameObject("parent");
@@ -562,7 +562,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     [Fact]
     public void InstantiateUnderAParent_JoinsTheParentsSection_WithTheParentInOnEnable()
     {
-        SceneInstance world = CreateScene(enable: true);
+        Scene world = CreateScene(enable: true);
         GameObject player = world.Create("Player");
         player.Persistent = true;
         var weapon = new GameObject("Weapon");

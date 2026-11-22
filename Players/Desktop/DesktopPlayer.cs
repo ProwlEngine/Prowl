@@ -58,12 +58,12 @@ public sealed class DesktopPlayer : Game, IDisposable
         PlayerSettingsLoader.Apply(settingsDir);
 
         SceneBuild.Set(_manifest.Scenes
-            .Select(id => Guid.TryParse(id, out Guid guid) ? AssetDatabase.Get<Scene>(guid) : null)
+            .Select(id => Guid.TryParse(id, out Guid guid) ? AssetDatabase.Get<SceneAsset>(guid) : null)
             .Where(scene => scene.IsValid())!);
 
         // Blocks until the scene and everything it uses is loaded, and activates it before the first frame, so the
         // first frame shows all of it.
-        if (AssetDatabase.Get<Scene>(_manifest.DefaultSceneGuid) is { IsMissing: false } scene)
+        if (AssetDatabase.Get<SceneAsset>(_manifest.DefaultSceneGuid) is { IsMissing: false } scene)
             scene.Load().Wait();
         else
             Debug.LogError($"[Player] Failed to load the default scene {_manifest.DefaultSceneGuid}.");

@@ -44,7 +44,7 @@ public sealed class LightmapBakeService
     private readonly List<SceneBake> _scenes = [];
     private readonly Dictionary<Guid, BakeTexture?> _texCache = []; // diffuse albedo, deduped per texture asset
     private int _bakeTexCounter;                                       // unique names for Photonic textures (its registry is name-keyed)
-    private SceneInstance? _world;
+    private Scene? _world;
     private LightmapBakeSettings _settings = new();
     private int _targetIterations;
 
@@ -53,20 +53,20 @@ public sealed class LightmapBakeService
     public string Status { get; private set; } = "Idle";
 
     /// <summary>The world the in-flight bake belongs to, or null when idle. Only one bake runs at a time.</summary>
-    public SceneInstance? TargetScene => _world;
+    public Scene? TargetScene => _world;
 
     /// <summary>The loaded scenes of <paramref name="world"/> a bake covers, in order. Empty outside the edit world.</summary>
-    public static List<OpenScene> BakedScenes(SceneInstance world)
+    public static List<OpenScene> BakedScenes(Scene world)
         => [.. EditorSceneManager.OpenScenes.Where(o => o.Section is { IsLoaded: true } s && ReferenceEquals(s.Instance, world))];
 
     /// <summary>A loaded scene with no file yet, which blocks a bake since its pages would have nowhere to go.</summary>
-    public static OpenScene? UntitledScene(SceneInstance world) => BakedScenes(world).FirstOrDefault(o => o.Path == null);
+    public static OpenScene? UntitledScene(Scene world) => BakedScenes(world).FirstOrDefault(o => o.Path == null);
 
     /// <summary>
     /// Begin one bake of every loaded scene of <paramref name="world"/> with the active scene's
     /// <paramref name="settings"/>. Returns false, with a logged reason, when there is nothing to bake or a scene is untitled.
     /// </summary>
-    public bool Start(SceneInstance world, LightmapBakeSettings settings)
+    public bool Start(Scene world, LightmapBakeSettings settings)
     {
         if (IsBaking) return false;
         if (Application.IsPlaying)
@@ -223,7 +223,7 @@ public sealed class LightmapBakeService
     }
 
     /// <summary>Whether any loaded scene of the world has baked lightmap pages or probes to clear.</summary>
-    public static bool HasBakedData(SceneInstance world)
+    public static bool HasBakedData(Scene world)
         => world.Sections.Any(s => !s.IsPersistent && (s.Lighting.HasLightmaps || s.Lighting.HasProbes));
 
     // The folder a scene's pages live in, beside its file.
@@ -238,7 +238,7 @@ public sealed class LightmapBakeService
     /// Removes every loaded scene's baked lighting: deletes each one's lightmaps folder and drops its pages, placements
     /// and probes, marking each dirty. Unloaded scenes keep theirs. Saves nothing.
     /// </summary>
-    public void Clear(SceneInstance world)
+    public void Clear(Scene world)
     {
         if (IsBaking) return;
         EditorAssetBackend? db = EditorAssetBackend.Instance;
@@ -257,13 +257,13 @@ public sealed class LightmapBakeService
     }
 
     /// <summary>The scene's ambient light reaching an upward surface, as a flat sky radiance for rays that miss.</summary>
-    private static Float3 SceneSkyRadiance(SceneInstance scene) => scene.Rendering.Ambient(Float3.UnitY);
+    private static Float3 SceneSkyRadiance(Scene scene) => scene.Rendering.Ambient(Float3.UnitY);
 
     private void FinalizeBake()
     {
         Status = "Writing lightmaps...";
         LightmapBaker baker = _baker!;
-        SceneInstance world = _world!;
+        Scene world = _world!;
         baker.Cancel();        // stop the progressive job
         baker.Job?.Wait();     // ensure the worker stopped writing before we read the atlas buffers
 

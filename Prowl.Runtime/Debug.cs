@@ -495,7 +495,7 @@ public static class Debug
     #region Gizmos
 
     // Draw calls land in the scene whose code is running, so a preview never draws the game's lines.
-    private static GizmoBuilder s_gizmoBuilder => Resources.SceneInstance.Active.Gizmos;
+    private static GizmoBuilder s_gizmoBuilder => Resources.Scene.Active.Gizmos;
 
     // Built games draw no gizmos, so their draw calls return before touching a scene
     private static GizmoBatch? Gizmos => Application.IsEditor ? s_gizmoBuilder.Batch : null;
@@ -514,12 +514,12 @@ public static class Debug
     /// <summary>Clears every scene's gizmos for the next frame, handing the frame's to the renderer.</summary>
     public static void ClearGizmos()
     {
-        foreach (Resources.SceneInstance scene in Resources.SceneInstance.Live)
+        foreach (Resources.Scene scene in Resources.Scene.Live)
             scene.Gizmos.Clear();
     }
 
     /// <summary>Shows a scene's gizmos for this frame in the views of a world that draw gizmos.</summary>
-    internal static void SubmitGizmos(Resources.SceneInstance? scene, RenderWorld world)
+    internal static void SubmitGizmos(Resources.Scene? scene, RenderWorld world)
     {
         if (scene.IsNotValid() || !Application.IsEditor) return;
         scene.Gizmos.Submit(world, GizmoFeature);

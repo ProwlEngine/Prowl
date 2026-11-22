@@ -97,7 +97,7 @@ public static class PlayerSettingsLoader
             };
 
             // Settings load before the first scene, but worlds already made get them too.
-            foreach (SceneInstance world in SceneInstance.All)
+            foreach (Scene world in Scene.All)
                 world.Physics.ApplySettings(PhysicsWorld.Defaults);
 
             // Collision matrix (uint[] serializes as a compound holding an "array" list)
@@ -182,7 +182,7 @@ public static class PlayerSettingsLoader
             Time.FixedDeltaTime = fixedDt;
             Time.MaxFixedIterations = maxIter;
             SceneClock.Defaults = new SceneClockSettings { TimeScale = timeScale };
-            foreach (SceneInstance world in SceneInstance.All)
+            foreach (Scene world in Scene.All)
                 world.Clock.TimeScale = timeScale;
             Debug.Log("[PlayerSettings] Time applied.");
         }

@@ -155,10 +155,10 @@ public class Camera : Component
     }
 
     /// <summary>
-    /// The main camera of <see cref="SceneInstance.Active"/>, the scene whose code is running: the enabled camera with the
+    /// The main camera of <see cref="Scene.Active"/>, the scene whose code is running: the enabled camera with the
     /// highest <see cref="Depth"/> that draws to the screen. Null when there is none.
     /// </summary>
-    public static Camera? Main => Resources.SceneInstance.Active.MainCamera;
+    public static Camera? Main => Resources.Scene.Active.MainCamera;
 
     /// <summary>
     /// The render texture asset this camera draws into. None means it draws wherever the render it takes part in is
@@ -246,13 +246,13 @@ public class Camera : Component
             disposable.Dispose();
     }
 
-    internal override void JoinWorld(SceneInstance world)
+    internal override void JoinWorld(Scene world)
     {
         if (!world.Cameras.Contains(this)) world.Cameras.Add(this);
         MainCameraChanged();
     }
 
-    internal override void LeaveWorld(SceneInstance world)
+    internal override void LeaveWorld(Scene world)
     {
         world.Cameras.Remove(this);
         MainCameraChanged();
@@ -363,7 +363,7 @@ public class Camera : Component
     /// </summary>
     public void Render(in CameraRenderOptions options = default)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         using Diagnostics.FrameStatScope stats = Diagnostics.FrameStats.Render.Scope();
         // A preview always draws through the forward path: a custom pipeline knows nothing of the caller's view, and
         // would overwrite the camera's screen size and history with the preview's.
@@ -397,7 +397,7 @@ public class Camera : Component
     internal void RenderForward(in CameraRenderOptions options)
     {
         if (Graphics.Renderer == null || !GameObject.IsValid() || !GameObject.Scene.IsValid()) return;
-        SceneInstance scene = GameObject.Scene;
+        Scene scene = GameObject.Scene;
         scene.Rendering.Sync();
         RenderWorld? world = scene.Rendering.World;
         if (world == null) return;

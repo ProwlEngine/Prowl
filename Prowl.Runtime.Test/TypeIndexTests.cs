@@ -21,7 +21,7 @@ public class TypeIndexTests : RuntimeTestBase
     [InlineData(true)]
     public void AComponentDestroyedAfterItsTypeWasQueried_IsNotKeptAliveByItsWorld(bool componentAlone)
     {
-        SceneInstance world = CreateScene();
+        Scene world = CreateScene();
         GameObject kept = world.Create("Kept");
         // Queried once, by class, by interface and by base class, and never again.
         Assert.Empty(world.GetAll<Marked>(includeDisabled: true));
@@ -52,7 +52,7 @@ public class TypeIndexTests : RuntimeTestBase
     [Fact]
     public void QueriesAnswerTheSame_BeforeAndAfterTheFlushThatDropsTheDestroyed()
     {
-        SceneInstance world = CreateScene();
+        Scene world = CreateScene();
         Marked first = world.Create("First").AddComponent<Marked>();
         Marked second = world.Create("Second").AddComponent<Marked>();
         Marked third = world.Create("Third").AddComponent<Marked>();

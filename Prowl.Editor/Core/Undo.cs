@@ -1027,7 +1027,7 @@ public static class Undo
     /// <summary>A level loaded by play code ends the play history, as opening a scene ends the edit history.</summary>
     internal static void OnSectionLoaded(SceneLoadedArgs args)
     {
-        if (Application.IsPlaying && !args.Additive && ReferenceEquals(args.Section.Instance, SceneInstance.Main)) Clear();
+        if (Application.IsPlaying && !args.Additive && ReferenceEquals(args.Section.Instance, Scene.Main)) Clear();
     }
 
     /// <summary>Keeps dirty assets and assets the history records loaded, so a save or an undo never reloads them from disk.</summary>
@@ -1235,7 +1235,7 @@ public static class Undo
 
     private static GameObject? FindGO(Guid identifier)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         return scene.IsValid() ? scene.FindObject<GameObject>(identifier) : null;
     }
 
@@ -1320,7 +1320,7 @@ public static class Undo
 
         public bool IsAsset => _kind == KeyKind.Asset;
 
-        public object? Resolve(SceneInstance? scene)
+        public object? Resolve(Scene? scene)
         {
             switch (_kind)
             {
@@ -1796,7 +1796,7 @@ public static class Undo
     }
 
     // An object by identifier in an open scene's section when one is named, otherwise anywhere in the world.
-    private static EngineObject? FindIn(SceneInstance? world, OpenScene? scene, Guid id)
+    private static EngineObject? FindIn(Scene? world, OpenScene? scene, Guid id)
     {
         if (scene != null) return scene.Section is { IsLoaded: true } section ? section.Instance.FindObject(section, id) : null;
         return world.IsValid() ? world.FindObject<EngineObject>(id) : null;
@@ -2113,7 +2113,7 @@ public static class Undo
     private sealed class Restore : IExternalReferenceResolver
     {
         public readonly bool IsUndo;
-        public readonly SceneInstance? Scene = EditorSceneManager.EditedWorld;
+        public readonly Scene? Scene = EditorSceneManager.EditedWorld;
         public readonly List<object> Touched = [];
 
         /// <summary>The open scene of the record applying, so a lookup prefers its section over a duplicate in another.</summary>
@@ -2314,7 +2314,7 @@ public static class Undo
     // destruction gives the same object back to everything that held it.
     internal static class ReferenceRebinder
     {
-        public static void Rebind(SceneInstance scene, HashSet<Guid> recreated)
+        public static void Rebind(Scene scene, HashSet<Guid> recreated)
         {
             var live = new Dictionary<Guid, EngineObject>();
             foreach (GameObject go in scene.Objects)

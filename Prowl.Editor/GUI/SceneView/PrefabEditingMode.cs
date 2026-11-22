@@ -33,7 +33,7 @@ public static class PrefabEditingMode
     public static string? EditingPrefabPath { get; private set; }
     public static string? OriginalSceneName { get; private set; }
 
-    private static SceneInstance? _world;
+    private static Scene? _world;
     // The edit world's undo history, parked for the session. The session's own steps address objects that
     // stop existing when it ends, so the two histories cannot be one.
     private static object? _savedSceneUndo;
@@ -42,7 +42,7 @@ public static class PrefabEditingMode
     private static GameObject? _editingRoot;
 
     /// <summary>The world the prefab is edited in, with its viewing camera and light, while a session runs.</summary>
-    public static SceneInstance? World => _world.IsValid() ? _world : null;
+    public static Scene? World => _world.IsValid() ? _world : null;
 
 
     /// <summary>
@@ -105,11 +105,11 @@ public static class PrefabEditingMode
 
         // Reconciled first: the edit world refreshes its instances when the session saves, which would otherwise
         // drop any edit nothing had recorded yet.
-        SceneInstance edit = EditorSceneManager.EditWorld;
+        Scene edit = EditorSceneManager.EditWorld;
         EditorSceneManager.ApplyPendingNow();
         PrefabUtility.ReconcileOpenScene();
 
-        SceneInstance editScene = SceneInstance.Create($"Editing: {prefab.Name}", SceneMode.Edit);
+        Scene editScene = Scene.Create($"Editing: {prefab.Name}", SceneMode.Edit);
         try
         {
             Build(editScene, go, edit, prefabGuid);
@@ -137,7 +137,7 @@ public static class PrefabEditingMode
     }
 
     // Fills the prefab world with the prefab and the viewing rig, then swaps it in over the edit world.
-    private static void Build(SceneInstance editScene, GameObject go, SceneInstance edit, Guid prefabGuid)
+    private static void Build(Scene editScene, GameObject go, Scene edit, Guid prefabGuid)
     {
         // We're editing the source, not an instance, so drop this prefab's own instance data. Nested
         // instances of other prefabs keep theirs, otherwise saving would flatten them permanently.
@@ -209,7 +209,7 @@ public static class PrefabEditingMode
             return false;
         }
 
-        SceneInstance? scene = World;
+        Scene? scene = World;
         if (scene.IsNotValid()) return false;
 
         // The tracked prefab root, and only that: it is what skips the editor-only camera and light.
@@ -322,7 +322,7 @@ public static class PrefabEditingMode
     // Destroys the prefab world and wakes the edit world underneath, refreshing instances of prefabs imported meanwhile.
     private static void Close()
     {
-        SceneInstance? world = _world;
+        Scene? world = _world;
         _world = null;
         if (world.IsValid()) world.Dispose();
         EditorSceneManager.EditWorld.Activate();

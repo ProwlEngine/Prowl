@@ -1168,7 +1168,7 @@ public static class GameObjectInspector
 
         private void MoveTo(int index)
         {
-            Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
+            Runtime.Resources.Scene scene = EditorSceneManager.EditedWorld;
             if (scene.IsNotValid()) return;
             Component? c = scene.FindObject<Component>(component);
             if (c.IsValid()) c.SetSiblingIndex(index);
@@ -1571,7 +1571,7 @@ public static class GameObjectInspector
 
         Origami.Button(paper, id, label, () =>
             {
-                Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
+                Runtime.Resources.Scene scene = EditorSceneManager.EditedWorld;
                 GameObject? live = scene.IsValid() ? scene.FindObject<GameObject>(rootId) : null;
                 if (live.IsValid()) act(live!);
             })
@@ -1738,7 +1738,7 @@ public static class GameObjectInspector
                 // A compile already running when the file was written lacks it; ours is still queued, so wait.
                 if (type == null && ScriptAssemblyManager.IsCompiling) return;
                 ScriptAssemblyManager.CompileFinished -= OnCompiled;
-                Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
+                Runtime.Resources.Scene scene = EditorSceneManager.EditedWorld;
                 GameObject? live = scene.IsValid() ? scene.FindObject<GameObject>(targetId) : null;
                 if (type != null && live.IsValid())
                     Undo.AddComponent(live!, type);

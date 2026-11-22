@@ -19,14 +19,14 @@ public class HierarchyPanelTests : EditorTestHarness
     private readonly HierarchyPanel _panel = new();
     private readonly List<TreeNode> _nodes = [];
 
-    private Scene Author(string path, params string[] roots)
+    private SceneAsset Author(string path, params string[] roots)
     {
-        var world = new SceneInstance(SceneMode.Edit);
+        var world = new Scene(SceneMode.Edit);
         foreach (string root in roots) world.Create(root);
-        return AssetDatabase.Get<Scene>(CreateSceneAsset(world, path))!;
+        return AssetDatabase.Get<SceneAsset>(CreateSceneAsset(world, path))!;
     }
 
-    private List<TreeNode> Build(SceneInstance? world = null)
+    private List<TreeNode> Build(Scene? world = null)
     {
         _nodes.Clear();
         _panel.BuildSceneNodes(world ?? EditorSceneManager.EditedWorld, _nodes);
@@ -34,7 +34,7 @@ public class HierarchyPanelTests : EditorTestHarness
     }
 
     // Every object row carries the id the rest of the panel asks for by object: ping, drag hover and rename match on it.
-    private void AssertRowIds(int rows, SceneInstance? world = null)
+    private void AssertRowIds(int rows, Scene? world = null)
     {
         List<TreeNode> objects = [.. Build(world).Where(node => node.UserData is GameObject)];
         Assert.Equal(rows, objects.Count);
@@ -47,7 +47,7 @@ public class HierarchyPanelTests : EditorTestHarness
     public void BuildingTheRows_MakesNoGarbagePerObject()
     {
         OpenScene scene = Open(Author("A.scene", "a"));
-        SceneInstance world = EditorSceneManager.EditWorld;
+        Scene world = EditorSceneManager.EditWorld;
         const int Roots = 500;
         for (int i = 0; i < Roots; i++)
             world.Create("child", world.Create(scene.Section!, "root"));
@@ -102,7 +102,7 @@ public class HierarchyPanelTests : EditorTestHarness
     [Fact]
     public void ARowsId_FollowsASectionsName_InAWorldWithNoOpenScenes()
     {
-        SceneInstance play = SceneInstance.Create("Play");
+        Scene play = Scene.Create("Play");
         try
         {
             SceneSection level = play.CreateSection("Level");
@@ -125,7 +125,7 @@ public class HierarchyPanelTests : EditorTestHarness
     public void HiddenObjects_GetNoRow_AndAParentOfOnlyHiddenChildren_ShowsNoArrow()
     {
         OpenScene scene = Open(Author("A.scene", "a"));
-        SceneInstance world = EditorSceneManager.EditWorld;
+        Scene world = EditorSceneManager.EditWorld;
         GameObject root = Assert.Single(scene.Section!.Roots);
         world.Create("hidden", root).HideFlags = HideFlags.Hide;
         world.Create(scene.Section!, "hiddenRoot").HideFlags = HideFlags.HideAndDontSave;

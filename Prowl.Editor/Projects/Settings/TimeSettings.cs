@@ -25,7 +25,7 @@ public class TimeSettings : ProjectSettingsBase
         Runtime.SceneClock.Defaults = new Runtime.SceneClockSettings { TimeScale = DefaultTimeScale };
         // Editor worlds made already take it too. Game worlds and anything during play belong to the game's own code.
         if (Runtime.Application.IsPlaying) return;
-        foreach (Runtime.Resources.SceneInstance world in Runtime.Resources.SceneInstance.All)
+        foreach (Runtime.Resources.Scene world in Runtime.Resources.Scene.All)
             if (world.Mode != Runtime.Resources.SceneMode.Game)
                 world.Clock.TimeScale = DefaultTimeScale;
     }

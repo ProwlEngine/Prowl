@@ -418,7 +418,7 @@ public class SceneViewPanel : DockPanel
         uint rtHeight = (uint)MathF.Max(1, height);
         _editorCamera.EnsureRenderTarget(rtWidth, rtHeight);
 
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         RenderTexture? rt = _editorCamera.RenderTarget;
 
         if (scene.IsNotValid())
@@ -705,7 +705,7 @@ public class SceneViewPanel : DockPanel
     private const float GizmoLinePickPixels = 6f;
     private const float GizmoMinPickPixels = 8f;
 
-    internal static GameObject? PickObjectAt(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize, bool pickGizmos = true)
+    internal static GameObject? PickObjectAt(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize, bool pickGizmos = true)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
 
@@ -856,7 +856,7 @@ public class SceneViewPanel : DockPanel
     /// click-select, a press that drags out a rectangle is a box-select. Registered as the default
     /// control, so it only runs when no handle anywhere in the viewport claimed the cursor.
     /// </summary>
-    private void UpdatePickControl(SceneInstance scene, Float2 panelSize)
+    private void UpdatePickControl(Scene scene, Float2 panelSize)
     {
         ControlID pick = _handles.GetControlID(PickControl);
         _handles.AddDefaultControl(pick);
@@ -900,7 +900,7 @@ public class SceneViewPanel : DockPanel
     /// Select everything whose screen-projected bounds centre falls inside the marquee. Shift adds to
     /// the selection, Ctrl removes from it, plain replaces.
     /// </summary>
-    private void ApplyMarquee(SceneInstance scene, Float2 panelSize)
+    private void ApplyMarquee(Scene scene, Float2 panelSize)
     {
         Float2 a = _marqueeStart, b = _handles.MousePosition;
         float minX = MathF.Min(a.X, b.X), maxX = MathF.Max(a.X, b.X);
@@ -956,7 +956,7 @@ public class SceneViewPanel : DockPanel
         return true;
     }
 
-    private void PickObject(SceneInstance scene, Float2 screenPos, Float2 panelSize)
+    private void PickObject(Scene scene, Float2 screenPos, Float2 panelSize)
     {
         GameObject? picked = PickObjectAt(scene, _editorCamera!, screenPos, panelSize);
 
@@ -1046,7 +1046,7 @@ public class SceneViewPanel : DockPanel
     /// <summary>
     /// Raycast into the scene to find a drop position. Falls back to the XZ plane at Y=0.
     /// </summary>
-    internal static Float3 GetDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    internal static Float3 GetDropPosition(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
         Float3 p = RaycastDropPosition(scene, camera, screenPos, panelSize);
         // Same toggle and Ctrl inversion as the move gizmo. Y stays on the surface hit so the drop doesn't sink into it.
@@ -1056,7 +1056,7 @@ public class SceneViewPanel : DockPanel
     }
 
     /// <summary>Nearest point where <paramref name="ray"/> hits a visible mesh in the scene, or null.</summary>
-    internal static Float3? RaycastSurface(SceneInstance scene, Ray ray)
+    internal static Float3? RaycastSurface(Scene scene, Ray ray)
     {
         float bestDist = float.MaxValue;
         Float3? best = null;
@@ -1076,7 +1076,7 @@ public class SceneViewPanel : DockPanel
         return best;
     }
 
-    private static Float3 RaycastDropPosition(SceneInstance scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
+    private static Float3 RaycastDropPosition(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
         Ray ray = camera.ScreenPointToRay(screenPos, panelSize);
         if (RaycastSurface(scene, ray) is { } hitPos) return hitPos;
@@ -1094,7 +1094,7 @@ public class SceneViewPanel : DockPanel
     }
 
     /// <summary>Called only by views that are drawing; disabled gizmos do not consume the frame's shared pass.</summary>
-    internal void DrawSceneGizmos(EditorApplication? editor, SceneInstance scene)
+    internal void DrawSceneGizmos(EditorApplication? editor, Scene scene)
     {
         if (!ShowGizmos) return;
         editor?.DrawSceneGizmos(scene);
@@ -1111,12 +1111,12 @@ public class SceneViewPanel : DockPanel
     // be built, so it isn't retried every frame.
     private readonly List<(GameObject Ghost, Float3 Offset)> _dropGhosts = [];
     private AssetDragPayload? _dropGhostPayload;
-    private SceneInstance? _dropGhostScene;
+    private Scene? _dropGhostScene;
     private bool _dropGhostTouched;
     private static readonly List<SceneViewPanel> s_ghostOwners = [];
     private static Material? s_meshGhostMaterial;
 
-    private void UpdateDropPreview(SceneInstance scene, AssetDragPayload payload, Float3 dropPos)
+    private void UpdateDropPreview(Scene scene, AssetDragPayload payload, Float3 dropPos)
     {
         _dropGhostTouched = true;
         if (!ReferenceEquals(payload, _dropGhostPayload) || !ReferenceEquals(scene, _dropGhostScene))

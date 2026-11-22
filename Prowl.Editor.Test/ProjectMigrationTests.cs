@@ -174,7 +174,7 @@ public class ProjectMigrationTests : IDisposable
     public void CameraBackgroundDepthAndTarget_MoveBehindTheirProperties()
     {
         string scene = WriteAsset("Cam.scene", Scene(OldComponent("Camera", Guid.NewGuid(), ("Depth", new EchoObject(3L)), ("Background", new EchoObject(2L)))), "SceneImporter");
-        WriteProwlFile("1.0", appliedSteps: ProjectMigration.StepCount(Project.CurrentVersion) - 1);
+        WriteProwlFile("1.0", appliedSteps: Array.FindIndex(new Release_1_0().Steps, s => s.Name.StartsWith("Camera background")));
 
         ProjectMigration.Migrate(Project.Open(_root));
 
@@ -653,7 +653,7 @@ public class ProjectMigrationTests : IDisposable
 
     private static EchoObject BakedScene(float lightmapScale)
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         scene.Lighting.ProbePositions = [Float3.Zero];
         scene.Lighting.ProbeSH = [new SphericalHarmonicsL2 { C0 = new Float3(1f, 2f, 3f), C8 = new Float3(0.5f, 0.5f, 0.5f) }];
         scene.Lighting.LightmapScale = lightmapScale;
@@ -661,7 +661,7 @@ public class ProjectMigrationTests : IDisposable
     }
 
     // A scene as engines before SceneContent saved it: the live scene itself, with a flat serializeObj array.
-    internal static EchoObject LegacyScene(SceneInstance scene)
+    internal static EchoObject LegacyScene(Scene scene)
     {
         EchoObject echo = scene.ActiveSection.CaptureTree();
         scene.Dispose();
@@ -700,13 +700,13 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal(Float3.Zero, lighting.ProbePositions[0]);
 
         Assert.False(Release_1_0.NeedsRebake(BakedScene(3f)));
-        Assert.False(Release_1_0.NeedsRebake(LegacyScene(new SceneInstance(SceneMode.Edit))));
+        Assert.False(Release_1_0.NeedsRebake(LegacyScene(new Scene(SceneMode.Edit))));
     }
 
     [Fact]
     public void LegacyScenes_BecomeSceneContent_WithTheSameObjectsAndIdentifiers()
     {
-        var world = new SceneInstance(SceneMode.Edit);
+        var world = new Scene(SceneMode.Edit);
         var parent = new GameObject("Parent");
         var child = new GameObject("Child");
         child.SetParent(parent);
@@ -735,7 +735,7 @@ public class ProjectMigrationTests : IDisposable
         Assert.Equal(5, content.LightmapBake.Bounces);
 
         EchoObject renamed = EchoObject.ReadFromString(File.ReadAllText(prefab));
-        Assert.Equal("Prowl.Runtime.Resources.Scene, Prowl.Runtime", renamed["$type"].StringValue);
+        Assert.Equal("Prowl.Runtime.Resources.SceneAsset, Prowl.Runtime", renamed["$type"].StringValue);
         Assert.Contains("[Prowl.Runtime.Resources.LightmapPlacement, Prowl.Runtime]", renamed["Placements"]["$type"].StringValue);
     }
 

@@ -27,7 +27,7 @@ public class SectionIdentifierTests : RuntimeTestBase
     }
 
 
-    private readonly SceneInstance _world;
+    private readonly Scene _world;
     private readonly SceneSection _other;
 
     public SectionIdentifierTests()
@@ -261,7 +261,7 @@ public class SectionIdentifierTests : RuntimeTestBase
     public void MovingToAnotherWorld_ChecksTheSectionItLandsIn()
     {
         (GameObject holder, GameObject mover, Guid shared) = Twins();
-        SceneInstance to = CreateScene();
+        Scene to = CreateScene();
         GameObject there = to.Create("There");
         there.SetIdentifier(shared);
         SceneSection side = to.CreateSection("Side");
@@ -363,13 +363,13 @@ public class SectionIdentifierTests : RuntimeTestBase
     [Fact]
     public void AnUnloadedSectionsObjects_NoLongerCount()
     {
-        SceneInstance world = CreateScene(enable: true);
+        Scene world = CreateScene(enable: true);
         Bind(world);
         SceneSection level = world.CreateSection("Level");
         GameObject holder = world.Create(level, "Holder");
         Guid shared = holder.Identifier;
         level.Unload();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Assert.False(level.IsLoaded);
 
         SceneSection next = world.CreateSection("Next");

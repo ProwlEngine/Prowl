@@ -15,7 +15,7 @@ public class IdentifierIndexTests : RuntimeTestBase
     [Fact]
     public void ADestroyedObject_IsNotKeptAliveByItsWorld()
     {
-        SceneInstance world = CreateScene();
+        Scene world = CreateScene();
         (WeakReference go, WeakReference component) = Spawn();
         world.Flush();
 
@@ -39,7 +39,7 @@ public class IdentifierIndexTests : RuntimeTestBase
     [Fact]
     public void AComponentDisposedOnItsOwn_IsNotKeptAliveByItsWorld()
     {
-        SceneInstance world = CreateScene();
+        Scene world = CreateScene();
         WeakReference component = Spawn();
         world.Flush();
 
@@ -66,7 +66,7 @@ public class IdentifierIndexTests : RuntimeTestBase
     [Fact]
     public void ARemovedComponent_IsStillFound_UntilItIsDisposed()
     {
-        SceneInstance world = CreateScene();
+        Scene world = CreateScene();
         GameObject go = world.Create("Go");
         PlainComponent removed = go.AddComponent<PlainComponent>();
 
@@ -81,7 +81,7 @@ public class IdentifierIndexTests : RuntimeTestBase
     [Fact]
     public void WithTheFirstHolderDestroyed_ALookupAnswersWithTheNextOne_AndAnotherJoinerDoesNotTakeItsPlace()
     {
-        SceneInstance world = CreateScene();
+        Scene world = CreateScene();
         SceneSection other = world.CreateSection("Other");
         GameObject first = world.Create(other, "First");
         var second = new GameObject("Second");

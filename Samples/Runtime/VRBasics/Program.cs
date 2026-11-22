@@ -33,7 +33,7 @@ public sealed class VRBasicsGame : Game
 {
     public override void Initialize()
     {
-        SceneInstance scene = SceneInstance.Main;
+        Scene scene = Scene.Main;
 
         var sun = new GameObject("Sun");
         DirectionalLight sunLight = sun.AddComponent<DirectionalLight>();

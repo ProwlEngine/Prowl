@@ -44,12 +44,12 @@ public sealed class WindZone : Component
     private static readonly string[] s_paramUniforms =
         ["_WindZoneParams0", "_WindZoneParams1", "_WindZoneParams2", "_WindZoneParams3"];
 
-    internal override void JoinWorld(SceneInstance world)
+    internal override void JoinWorld(Scene world)
     {
         if (!world.WindZoneList.Contains(this)) world.WindZoneList.Add(this);
     }
 
-    internal override void LeaveWorld(SceneInstance world) => world.WindZoneList.Remove(this);
+    internal override void LeaveWorld(Scene world) => world.WindZoneList.Remove(this);
 
     /// <summary>Wind velocity this zone applies at a world position, using the current time.</summary>
     public Float3 SampleWind(Float3 worldPosition) => SampleWind(worldPosition, Time.TimeSinceStartup);
@@ -109,7 +109,7 @@ public sealed class WindZone : Component
     }
 
     /// <summary>The zone in <paramref name="world"/> reaching <paramref name="worldPosition"/> from closest range, or null if there are none.</summary>
-    public static WindZone? GetNearest(SceneInstance? world, Float3 worldPosition)
+    public static WindZone? GetNearest(Scene? world, Float3 worldPosition)
     {
         WindZone? nearest = null;
         float nearestKey = float.MaxValue;
@@ -135,7 +135,7 @@ public sealed class WindZone : Component
     /// Fills <paramref name="destination"/> with the zones in <paramref name="world"/> reaching <paramref name="worldPosition"/>
     /// from closest range, nearest first, and returns how many were written.
     /// </summary>
-    public static int GetNearest(SceneInstance? world, Float3 worldPosition, Span<WindZone?> destination)
+    public static int GetNearest(Scene? world, Float3 worldPosition, Span<WindZone?> destination)
     {
         if (destination.Length == 0 || world.IsNotValid()) return 0;
 

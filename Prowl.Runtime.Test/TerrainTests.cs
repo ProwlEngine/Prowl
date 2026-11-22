@@ -510,7 +510,7 @@ public class TerrainTests
 /// <summary>Terrain behaviour that needs a live scene: the collider.</summary>
 public class TerrainSceneTests : RuntimeTestBase
 {
-    private TerrainComponent AddTerrain(SceneInstance scene, TerrainData data, Float3 position)
+    private TerrainComponent AddTerrain(Scene scene, TerrainData data, Float3 position)
     {
         GameObject go = CreateGameObject("Terrain");
         scene.Add(go);
@@ -523,7 +523,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void OverlapQueries_ReportTerrain()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         var data = new TerrainData { Size = 64f, Height = 10f };
         data.ResizeHeightmap(33);
         TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
@@ -551,7 +551,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void Collision_AgainstTerrain_NamesTheTerrainOnBothSides()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         scene.Physics.UseMultithreading = false;
         var data = new TerrainData { Size = 64f, Height = 10f };
         data.ResizeHeightmap(33);
@@ -578,7 +578,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void ColliderFollowsTheDataWhenItChanges()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         var data = new TerrainData { Size = 64f, Height = 10f };
         data.ResizeHeightmap(33);
         TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
@@ -604,7 +604,7 @@ public class TerrainSceneTests : RuntimeTestBase
     [Fact]
     public void ColliderFollowsASculptedBump()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         var data = new TerrainData { Size = 64f, Height = 10f };
         data.ResizeHeightmap(33);
         TerrainComponent terrain = AddTerrain(scene, data, new Float3(10, 2, 10));
