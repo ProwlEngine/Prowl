@@ -113,4 +113,37 @@ public class SkinnedModelTests : EditorTestHarness
         Assert.Equal(40f, Assert.Single(item.Shapes).Weight);
         Assert.True(item.Mesh.HasLoopAttribute(MeshGeometry.BoneIndices));
     }
+
+    /// <summary>The bone weighing most at a corner, and the corner's weights added up.</summary>
+    private static (int Bone, float Weight) Skin(GeometryData.Loop corner)
+    {
+        if (!corner.TryGetAttribute(MeshGeometry.BoneIndices, out GeometryData.AttributeValue? i) || i is not GeometryData.IntAttributeValue ids) return (-1, 0f);
+        if (!corner.TryGetAttribute(MeshGeometry.BoneWeights, out GeometryData.AttributeValue? w) || w is not GeometryData.FloatAttributeValue ws) return (-1, 0f);
+        int heaviest = Array.IndexOf(ws.Data, ws.Data.Max());
+        return (ids.Data[heaviest], ws.Data.Sum());
+    }
+
+    [Fact]
+    public void FacesMadeFromNothingTakeTheSkinAndShapesOfThePointsTheyGrewFrom()
+    {
+        GeometryData mesh = MeshGeometry.ToGeometryData(SkinnedStrip());
+        var before = mesh.Vertices.ToDictionary(v => v, v => v.Point);
+        var facesBefore = new HashSet<GeometryData.Face>(mesh.Faces);
+        GeometryData.Vertex side = mesh.Vertices.First(v => v.Point == new Float3(1, 1, 0));
+        GeometryData.Vertex corner = mesh.Vertices.First(v => v.Point == new Float3(1, 2, 0));
+        GeometryData.Vertex grown = mesh.AddVertex(1.5f, 1f, 0f);
+        GeometryData.Face made = mesh.AddFace(side, grown, corner)!;
+
+        Operators.FinishEdit(mesh, before, facesBefore);
+
+        foreach (GeometryData.Loop at in UVs.Corners(made))
+        {
+            (int bone, float weight) = Skin(at);
+            Assert.True(MathF.Abs(weight - 1f) < 1e-4f, $"weight {weight} at {at.Vert.Point}");
+            Assert.Equal(1, bone);
+        }
+        GeometryData.Loop fromSide = UVs.CornerAt(made, grown)!;
+        Assert.True(fromSide.TryGetAttribute(MeshGeometry.BlendShapePosition(0, 0), out GeometryData.AttributeValue? delta)
+                    && delta is GeometryData.FloatAttributeValue d && MathF.Abs(d.Data[0] - 0.5f) < 1e-5f);
+    }
 }

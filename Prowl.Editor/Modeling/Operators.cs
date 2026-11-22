@@ -538,7 +538,8 @@ public static class Operators
     /// Tidies a mesh after an edit, from where its points were and which faces it had before. Corner normals are worked
     /// out again around every point that moved or is new, when the mesh has normals. A face made from nothing takes the
     /// material slot of the old face sharing most edges with it, the texture coordinates of old corners at the same
-    /// points or else a flat projection, and white where it has no color.
+    /// points or else a flat projection, and white where it has no color. Its skin weights and blend shape deltas come
+    /// from an old corner at the same point, or for a new point from the nearest old point it is joined to by an edge.
     /// </summary>
     public static void FinishEdit(GeometryData mesh, IReadOnlyDictionary<GeometryData.Vertex, Float3> pointsBefore, IReadOnlySet<GeometryData.Face> facesBefore)
     {
@@ -571,6 +572,7 @@ public static class Operators
             if (mesh.HasLoopAttribute(Color) && AllCorners(face, Color, IsZero))
                 ForEachCorner(face, loop => loop.SetAttribute(Color, new GeometryData.FloatAttributeValue(1f, 1f, 1f, 1f)));
         }
+        CarryFromOldCorners(mesh, made, pointsBefore, facesBefore);
 
         if (!mesh.HasLoopAttribute(Normal)) return;
         var moved = new HashSet<GeometryData.Vertex>();
@@ -584,6 +586,58 @@ public static class Operators
         foreach (GeometryData.Vertex vertex in moved)
             foreach (GeometryData.Face face in vertex.NeighborFaces()) dirty.UnionWith(face.NeighborVertices());
         CornerNormals(mesh, dirty);
+    }
+
+    /// <summary>
+    /// Gives the corners of new faces the skin and blend shape values an old corner holds: one at the same point, or
+    /// for a point the edit made, one at the nearest old point an edge joins it to. Weights are only filled where a
+    /// corner has none, deltas wherever they are all zero.
+    /// </summary>
+    private static void CarryFromOldCorners(GeometryData mesh, List<GeometryData.Face> made, IReadOnlyDictionary<GeometryData.Vertex, Float3> pointsBefore,
+                                            IReadOnlySet<GeometryData.Face> facesBefore)
+    {
+        const string Indices = Prowl.Runtime.Resources.MeshGeometry.BoneIndices, Weights = Prowl.Runtime.Resources.MeshGeometry.BoneWeights;
+        var names = new List<string>();
+        bool skinned = mesh.HasLoopAttribute(Indices) && mesh.HasLoopAttribute(Weights);
+        if (skinned) names.AddRange([Indices, Weights]);
+        foreach (GeometryData.AttributeDefinition definition in mesh.LoopAttributes)
+            if (definition.Name.StartsWith(Prowl.Runtime.Resources.MeshGeometry.BlendShapePrefix, StringComparison.Ordinal)) names.Add(definition.Name);
+        if (names.Count == 0) return;
+
+        foreach (GeometryData.Face face in made)
+            ForEachCorner(face, loop =>
+            {
+                bool needsSkin = skinned && IsZeroAt(loop, Weights);
+                if (!needsSkin && !names.Exists(n => n != Indices && n != Weights && IsZeroAt(loop, n))) return;
+                if (SourceCorner(loop.Vert, pointsBefore, facesBefore) is not { } source) return;
+                foreach (string name in names)
+                {
+                    bool skin = name == Indices || name == Weights;
+                    if (skin ? !needsSkin : !IsZeroAt(loop, name)) continue;
+                    if (source.TryGetAttribute(name, out GeometryData.AttributeValue? value)) loop.SetAttribute(name, GeometryData.AttributeValue.Copy(value!));
+                }
+            });
+    }
+
+    private static bool IsZeroAt(GeometryData.Loop loop, string name)
+        => !loop.TryGetAttribute(name, out GeometryData.AttributeValue? value) || IsZero(value!);
+
+    // An old corner at the point, or at the nearest old point joined to it by an edge
+    private static GeometryData.Loop? SourceCorner(GeometryData.Vertex vertex, IReadOnlyDictionary<GeometryData.Vertex, Float3> pointsBefore, IReadOnlySet<GeometryData.Face> facesBefore)
+    {
+        if (pointsBefore.ContainsKey(vertex) && OldCornerAt(vertex, null, facesBefore) is { } here) return here;
+        GeometryData.Loop? best = null;
+        float nearest = float.MaxValue;
+        foreach (GeometryData.Edge edge in vertex.NeighborEdges())
+        {
+            GeometryData.Vertex other = edge.OtherVertex(vertex);
+            if (!pointsBefore.ContainsKey(other)) continue;
+            float distance = Float3.Distance(other.Point, vertex.Point);
+            if (distance >= nearest || OldCornerAt(other, null, facesBefore) is not { } corner) continue;
+            nearest = distance;
+            best = corner;
+        }
+        return best;
     }
 
     private static GeometryData.Face? OldNeighbour(GeometryData.Face face, IReadOnlySet<GeometryData.Face> old)
