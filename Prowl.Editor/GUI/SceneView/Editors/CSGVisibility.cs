@@ -5,6 +5,7 @@ using System.Collections.Generic;
 
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
@@ -20,12 +21,18 @@ public static class CSGVisibility
         foreach (CSGModel model in Models()) model.SetDirty();
     }
 
+    /// <summary>Models in the edit world and in whatever world is being edited now, a prefab or play world included.</summary>
     private static IEnumerable<CSGModel> Models()
     {
-        foreach (GameObject go in EditorSceneManager.EditedWorld.Objects)
+        Scene edited = EditorSceneManager.EditedWorld;
+        Scene? edit = EditorSceneManager.EditWorldOrNull;
+        foreach (Scene world in ReferenceEquals(edit, edited) || edit.IsNotValid() ? [edited] : new[] { edited, edit! })
         {
-            CSGModel model = go.GetComponent<CSGModel>();
-            if (model.IsValid()) yield return model;
+            foreach (GameObject go in world.Objects)
+            {
+                CSGModel model = go.GetComponent<CSGModel>();
+                if (model.IsValid()) yield return model;
+            }
         }
     }
 
