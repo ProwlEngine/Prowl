@@ -47,6 +47,7 @@ public sealed class CSGMeshTool : SceneTool
     private static readonly Color32 IdleColor = new(150, 190, 230, 200);
     private static readonly Color32 PickedColor = new(255, 210, 80, 255);
     private static readonly Color32 FaceFill = new(255, 200, 90, 60);
+    private static readonly Color32 EdgeHandleColor = new(150, 190, 230, 140);
 
     public bool Active => CSGEditMode.Is(CSGMode.Mesh);
 
@@ -816,9 +817,12 @@ public sealed class CSGMeshTool : SceneTool
             foreach ((int a, int b) in _edges)
             {
                 bool picked = _vertices.Contains(a) && _vertices.Contains(b);
-                ctx.Draw.Line(Float4x4.TransformPoint(_mesh!.Points[a], toWorld),
-                              Float4x4.TransformPoint(_mesh.Points[b], toWorld),
-                              picked ? PickedColor : IdleColor, picked ? 2.5f : 1f);
+                Float3 from = Float4x4.TransformPoint(_mesh!.Points[a], toWorld);
+                Float3 to = Float4x4.TransformPoint(_mesh.Points[b], toWorld);
+                ctx.Draw.Line(from, to, picked ? PickedColor : IdleColor, picked ? 2.5f : 1f);
+
+                // Edges are picked at their middle, so that is where their handle is
+                ctx.Draw.Dot((from + to) * 0.5f, picked ? PickedColor : EdgeHandleColor, 5f);
             }
         }
 
