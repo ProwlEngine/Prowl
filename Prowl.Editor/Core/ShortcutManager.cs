@@ -376,5 +376,27 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("GraphEditor/FrameSelection", "Frame Selection", KeyCode.F);
         ShortcutManager.Register("GraphEditor/Recenter", "Recenter View", KeyCode.Space);
         ShortcutManager.Register("GraphEditor/GroupSelection", "Group Selected", KeyCode.G, ctrl: true);
+
+        ShortcutManager.Register("CSG/ModeObject", "Object Mode", KeyCode.Number1, alt: true);
+        ShortcutManager.Register("CSG/ModeGenerate", "Generate Mode", KeyCode.Number2, alt: true);
+        ShortcutManager.Register("CSG/ModeMesh", "Mesh Mode", KeyCode.Number3, alt: true);
+        ShortcutManager.Register("CSG/ModeClip", "Clip Mode", KeyCode.Number4, alt: true);
+        ShortcutManager.Register("CSG/ModeSurface", "Surface Mode", KeyCode.Number5, alt: true);
+        ShortcutManager.Register("CSG/SetAdditive", "Set Additive", KeyCode.Equal);
+        ShortcutManager.Register("CSG/SetSubtractive", "Set Subtractive", KeyCode.Minus);
+        ShortcutManager.Register("CSG/SetIntersecting", "Set Intersecting", KeyCode.BackSlash);
+        ShortcutManager.Register("CSG/SetPassThrough", "Set Pass Through", KeyCode.Slash);
+        ShortcutManager.Register("CSG/SnapToGrid", "Snap Selection To Grid", KeyCode.End, ctrl: true);
+        ShortcutManager.Register("CSG/FlipX", "Flip On X", KeyCode.X, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/FlipY", "Flip On Y", KeyCode.Y, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/FlipZ", "Flip On Z", KeyCode.Z, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/RotateLeft", "Rotate Anticlockwise", KeyCode.Comma, ctrl: true);
+        ShortcutManager.Register("CSG/RotateRight", "Rotate Clockwise", KeyCode.Period, ctrl: true);
+        ShortcutManager.Register("CSG/Hide", "Hide Selected", KeyCode.H);
+        ShortcutManager.Register("CSG/HideUnselected", "Hide Unselected", KeyCode.H, ctrl: true);
+        ShortcutManager.Register("CSG/ToggleVisibility", "Toggle Visibility", KeyCode.H, shift: true);
+        ShortcutManager.Register("CSG/UnhideAll", "Unhide All", KeyCode.U);
+        ShortcutManager.Register("CSG/HalveGrid", "Halve Grid", KeyCode.LeftBracket);
+        ShortcutManager.Register("CSG/DoubleGrid", "Double Grid", KeyCode.RightBracket);
     }
 }

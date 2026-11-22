@@ -118,7 +118,7 @@ public class SceneViewPanel : DockPanel
 
     // The scene view toolbar lives in the leaf's tab-bar header (right side): handle orientation, gizmos,
     // rotation and grid snapping, then the view settings.
-    public override float HeaderWidth => 356f;
+    public override float HeaderWidth => 386f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
@@ -137,6 +137,7 @@ public class SceneViewPanel : DockPanel
                 HeaderToggle(paper, font, "sv_hdr_orient", global ? EditorIcons.Globe : EditorIcons.Cube,
                     Loc.Get(global ? "scene.orientation_global" : "scene.orientation_local"), global,
                     () => SceneTools.Orientation = global ? PivotOrientation.Local : PivotOrientation.Global);
+                PivotButton(paper, font);
             }
 
             using (HeaderGroup(paper, "sv_hdr_gizmo_grp"))
@@ -221,6 +222,33 @@ public class SceneViewPanel : DockPanel
             .IsNotFocusable()
             .OnClick(_ => onClick());
     }
+
+    // Opens a menu of the pivot modes, showing the current one's icon.
+    private static void PivotButton(Paper paper, Scribe.FontFile font)
+    {
+        PivotMode mode = SceneTools.Pivot;
+        paper.Box("sv_hdr_pivot").Size(ToggleSize, ToggleSize).Rounded(EditorTheme.Roundness)
+            .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Text(PivotIcon(mode), font).TextColor(EditorTheme.Ink300)
+            .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
+            .Tooltip(Loc.Get(PivotLabel(mode)))
+            .IsNotFocusable()
+            .OnClick(e => ContextMenu.Show((float)e.ElementRect.Min.X, (float)e.ElementRect.Max.Y + 4f, b =>
+            {
+                foreach (PivotMode m in Enum.GetValues<PivotMode>())
+                    b.Item(Loc.Get(PivotLabel(m)), () => SceneTools.Pivot = m, icon: PivotIcon(m), on: SceneTools.Pivot == m);
+            }));
+    }
+
+    private static string PivotIcon(PivotMode mode) => mode switch
+    {
+        PivotMode.Active => EditorIcons.Crosshairs,
+        PivotMode.Individual => EditorIcons.Cubes,
+        _ => EditorIcons.CircleDot,
+    };
+
+    private static string PivotLabel(PivotMode mode) => $"scene.pivot_{mode.ToString().ToLowerInvariant()}";
 
     // Up and down arrows stacked beside a value field. They step through the field's preset values rather than
     // adding a fixed amount, so the grid doubles and halves.
@@ -307,11 +335,6 @@ public class SceneViewPanel : DockPanel
                 b.Toggle(Loc.Get("scene.navmesh_show_vertices"),
                     () => NavMeshDebugDisplay.ShowVertices = !NavMeshDebugDisplay.ShowVertices,
                     () => NavMeshDebugDisplay.ShowVertices);
-
-                b.Header(Loc.Get("scene.tool_handles"));
-                b.Toggle(Loc.Get("scene.pivot_center"),
-                    () => SceneTools.Pivot = SceneTools.Pivot == PivotMode.Center ? PivotMode.Pivot : PivotMode.Center,
-                    () => SceneTools.Pivot == PivotMode.Center);
             }));
     }
 
@@ -386,6 +409,16 @@ public class SceneViewPanel : DockPanel
                 _toolContext.CurrentTool = tool;
                 tool.OnToolStripGUI(_toolContext, paper, $"sv_tool_{tool.GetType().Name}");
             }
+        }
+    }
+
+    private void DrawToolOverlays(Paper paper, float width, float height)
+    {
+        foreach (SceneTool tool in SceneToolManager.Live)
+        {
+            _toolContext.CurrentTool = tool;
+            try { tool.OnSceneOverlayGUI(_toolContext, paper, $"sv_ov_{tool.GetType().Name}", new Float2(width, height)); }
+            catch (Exception ex) { Runtime.Debug.LogError($"[SceneTool] {tool.GetType().Name}.OnSceneOverlayGUI threw: {ex.Message}"); }
         }
     }
 
@@ -581,7 +614,7 @@ public class SceneViewPanel : DockPanel
                 new Float2(width, height));
 
             // Scene view keyboard shortcuts (only when hovered and not right-click flying)
-            if (isHovered && !ShortcutManager.IsRebinding && !Input.GetMouseButton(1))
+            if (isHovered && !_handles.KeysUsed && !ShortcutManager.IsRebinding && !Input.GetMouseButton(1))
             {
                 if (ShortcutManager.IsPressed("Scene/Delete"))
                 {
@@ -688,6 +721,7 @@ public class SceneViewPanel : DockPanel
 
             // Floating transform-tools panel (top-left)
             DrawTransformTools(paper);
+            DrawToolOverlays(paper, width, height);
 
             // Speed indicator (shows briefly when scroll changes fly speed)
             DrawSpeedIndicator(paper, font, width, height);
@@ -999,6 +1033,7 @@ public class SceneViewPanel : DockPanel
         state["navShowDetail"] = NavMeshDebugDisplay.ShowDetail;
         state["navShowVertices"] = NavMeshDebugDisplay.ShowVertices;
         state["orientation"] = SceneTools.Orientation.ToString();
+        state["pivot"] = SceneTools.Pivot.ToString();
         state["gridSnap"] = SceneTools.GridSnap;
         state["gridSize"] = SceneTools.MoveSnap;
         state["rotationSnap"] = SceneTools.RotationSnap;
@@ -1031,6 +1066,7 @@ public class SceneViewPanel : DockPanel
 
         // Tool settings are editor wide; whichever Scene view restores last wins, as they all saved the same values.
         if (Enum.TryParse(state["orientation"]?.GetValue<string>(), out PivotOrientation orientation)) SceneTools.Orientation = orientation;
+        if (Enum.TryParse(state["pivot"]?.GetValue<string>(), out PivotMode pivot)) SceneTools.Pivot = pivot;
         if (state["gridSnap"]?.GetValue<bool>() is bool gridSnap) SceneTools.GridSnap = gridSnap;
         if (state["gridSize"]?.GetValue<float>() is float gridSize && gridSize > 0f) SceneTools.MoveSnap = gridSize;
         if (state["rotationSnap"]?.GetValue<bool>() is bool rotationSnap) SceneTools.RotationSnap = rotationSnap;
@@ -1442,9 +1478,9 @@ public class SceneViewPanel : DockPanel
         _transformGizmo ??= new Gizmo.TransformGizmo(SceneTools.GizmoMode);
         _transformGizmo.GizmoSize = 100f;
 
-        // Pivot mode picks what the handle sits on: the selection's centre, or the active object.
+        // The handle sits on the active object in Active mode, else on the selection's centre.
         Float3 center;
-        if (SceneTools.Pivot == PivotMode.Pivot)
+        if (SceneTools.Pivot == PivotMode.Active)
         {
             center = firstGO.Transform.Position;
         }
@@ -1594,19 +1630,30 @@ public class SceneViewPanel : DockPanel
                     if (go.IsValid()) go.Transform.Position += step;
             }
 
-            // Apply rotation
+            // Rotation and scale move each object's origin about the drag's pivot, unless each pivots on itself.
+            bool aroundPivot = SceneTools.Pivot != PivotMode.Individual;
+            Float3 pivot = _moveStart;
+
             if (r.RotationDelta.HasValue && r.RotationAxis.HasValue)
             {
                 var rotDelta = Quaternion.AxisAngle(r.RotationAxis.Value, r.RotationDelta.Value);
                 foreach (GameObject go in targets)
-                    if (go.IsValid()) go.Transform.Rotation = rotDelta * go.Transform.Rotation;
+                {
+                    if (!go.IsValid()) continue;
+                    go.Transform.Rotation = rotDelta * go.Transform.Rotation;
+                    if (aroundPivot) go.Transform.Position = pivot + rotDelta * (go.Transform.Position - pivot);
+                }
             }
 
-            // Apply scale
-            if (r.ScaleDelta.HasValue)
+            if (r.ScaleDelta is { } scaleBy)
             {
+                Quaternion toHandle = Quaternion.Inverse(handleSpace);
                 foreach (GameObject go in targets)
-                    if (go.IsValid()) go.Transform.LocalScale *= r.ScaleDelta.Value;
+                {
+                    if (!go.IsValid()) continue;
+                    go.Transform.LocalScale *= scaleBy;
+                    if (aroundPivot) go.Transform.Position = pivot + handleSpace * (toHandle * (go.Transform.Position - pivot) * scaleBy);
+                }
             }
         }
 

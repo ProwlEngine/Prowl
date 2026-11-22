@@ -3,8 +3,10 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.SceneView.Editors;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
+using Prowl.Runtime.CSG;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -204,6 +206,15 @@ internal class MaterialDropHandler : ISceneDropHandler
         if (hitGO.IsNotValid()) return;
         var mat = Runtime.AssetDatabase.Get(payload.AssetGuid) as Material;
         if (mat.IsNotValid()) return;
+
+        // A CSG model regenerates its renderer, so the material goes on the surface under the cursor
+        CSGModel? model = hitGO.GetComponent<CSGModel>();
+        if (model.IsValid())
+        {
+            CSGSurfaceSelection.AssignMaterial(model!, context.Camera.ScreenPointToRay(context.MouseLocal, context.PanelSize), mat!);
+            return;
+        }
+
         MeshRenderer? meshRenderer = hitGO.GetComponent<MeshRenderer>();
         if (meshRenderer.IsNotValid()) return;
         Undo.RecordObject(meshRenderer, "Assign Material");

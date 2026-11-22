@@ -103,6 +103,28 @@ public sealed class HandleContext
     /// <summary>Key-held that yields to text editing. See <see cref="GetKeyDown"/>.</summary>
     public bool GetKey(KeyCode key) => !KeyboardCaptured && Input.GetKey(key);
 
+    /// <summary>Tool keys belong to this view: the pointer is over it, nothing is typing and the camera is not flying.</summary>
+    public bool KeysActive => ViewportHovered && !KeyboardCaptured && !Input.GetMouseButton(1) && !Input.GetMouseButton(2);
+
+    /// <summary>A tool acted on a key this frame, so the viewport's own shortcuts stand down.</summary>
+    public bool KeysUsed { get; private set; }
+
+    /// <summary>A shortcut for this view, marked as used when it fires.</summary>
+    public bool IsPressed(string shortcut)
+    {
+        if (!KeysActive || !ShortcutManager.IsPressed(shortcut)) return false;
+        KeysUsed = true;
+        return true;
+    }
+
+    /// <summary>A raw key for this view, marked as used when it fires.</summary>
+    public bool KeyDown(KeyCode key)
+    {
+        if (!KeysActive || !Input.GetKeyDown(key)) return false;
+        KeysUsed = true;
+        return true;
+    }
+
     /// <summary>
     /// Cursor shape requested by handles this frame, or <see cref="PaperCursor.Inherit"/> when none
     /// asked. The viewport applies it to its own element, so Paper resolves it exactly like any UI
@@ -161,6 +183,7 @@ public sealed class HandleContext
         Alt = Input.IsAltPressed;
         Blocked = Input.IsAltPressed || Input.GetMouseButton(1) || Input.GetMouseButton(2);
         KeyboardCaptured = EditorApplication.Instance?.PaperInstance?.WantsCaptureKeyboard == true;
+        KeysUsed = false;
         Cursor = PaperCursor.Inherit;
 
         // A drag whose owner never saw the release (viewport lost focus mid-drag) would otherwise

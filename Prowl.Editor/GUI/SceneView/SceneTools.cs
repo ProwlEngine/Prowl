@@ -20,10 +20,12 @@ public enum TransformTool
 /// <summary>Where a multi-object manipulation pivots.</summary>
 public enum PivotMode
 {
-    /// <summary>Pivot on the centre of the whole selection.</summary>
+    /// <summary>Rotate and scale the selection about the centre of its origins.</summary>
     Center,
-    /// <summary>Pivot on the active object's own origin.</summary>
-    Pivot,
+    /// <summary>Rotate and scale the selection about the active object's origin.</summary>
+    Active,
+    /// <summary>Rotate and scale each object about its own origin.</summary>
+    Individual,
 }
 
 /// <summary>Which frame handle axes align to.</summary>
