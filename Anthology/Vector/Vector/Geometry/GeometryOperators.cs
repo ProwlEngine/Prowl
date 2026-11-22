@@ -439,6 +439,60 @@ public static class GeometryOperators
         return SplitFaceOp.SplitFace(mesh, face, vert1, vert2, out newEdge);
     }
 
+    /// <summary>Face attribute <see cref="Slice"/> writes: the index of the face it came from, or -1 for a cap.</summary>
+    public const string SliceFaceAttribute = "slice:face";
+
+    /// <summary>
+    /// Cuts a closed mesh by a plane into the part behind it and the part in front, each closed with a flat cap where
+    /// the cut was. Works on concave meshes, and caps the cut whatever shape it is. Each output face records the face
+    /// of the original it came from, read with <see cref="SliceSourceFace"/>.
+    /// </summary>
+    public static void Slice(GeometryData closed, Plane plane, out GeometryData back, out GeometryData front)
+    {
+        back = SliceHalf(closed, plane);
+        front = SliceHalf(closed, new Plane(-plane.Normal, -plane.D));
+    }
+
+    /// <summary>The face of the original a <see cref="Slice"/> output face came from, or -1 for a cap.</summary>
+    public static int SliceSourceFace(GeometryData.Face face)
+        => face.Attributes.TryGetValue(SliceFaceAttribute, out var value) && value is GeometryData.IntAttributeValue i ? i.Data[0] : -1;
+
+    /// <summary>The mesh intersected with a box filling everything behind the plane and well past the mesh.</summary>
+    private static GeometryData SliceHalf(GeometryData closed, Plane plane)
+    {
+        AABB bounds = closed.GetAABB();
+        Float3 reach = (bounds.Max - bounds.Min) + new Float3(1f);
+        Float3 min = bounds.Min - reach, max = bounds.Max + reach;
+
+        Plane[] half =
+        [
+            plane,
+            new(Float3.UnitX, max.X), new(-Float3.UnitX, -min.X),
+            new(Float3.UnitY, max.Y), new(-Float3.UnitY, -min.Y),
+            new(Float3.UnitZ, max.Z), new(-Float3.UnitZ, -min.Z),
+        ];
+
+        var result = new GeometryData();
+        result.AddFaceAttribute(SliceFaceAttribute, GeometryData.AttributeBaseType.Int, 1);
+        if (GeometryGenerator.ConvexFromPlanes(half).Solid is not GeometryData box) return result;
+
+        var scene = new CSGScene();
+        CSGBrushHandle source = scene.Add(closed);
+        scene.Add(box, CSGOperation.Intersect);
+        GeometryData built = scene.Build();
+
+        var vertices = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
+        foreach (var face in built.Faces)
+        {
+            var ring = face.NeighborVertices().Select(v => vertices.TryGetValue(v, out var copy) ? copy : vertices[v] = result.AddVertex(v.Point)).ToArray();
+            var added = result.AddFace(ring);
+            if (added == null) continue;
+            int index = CSGScene.GetBrushId(face) == source.Id ? CSGScene.GetSourceFaceIndex(face) : -1;
+            added.Attributes[SliceFaceAttribute] = new GeometryData.IntAttributeValue(index);
+        }
+        return result;
+    }
+
     /// <summary>
     /// Bisect a mesh with a plane, splitting edges and faces that cross the plane.
     /// </summary>

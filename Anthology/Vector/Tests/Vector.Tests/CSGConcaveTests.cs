@@ -292,4 +292,30 @@ public class CSGConcaveTests
         Assert.Equal(64f - 4f, output.Volume(), Tolerance);
         Assert.True(output.IsClosed());
     }
+
+    [Fact]
+    public void SlicingAConcaveBrushClosesBothHalves()
+    {
+        GeometryOperators.Slice(Prism(L, 0, 1), new Plane(Float3.UnitX, 0.5f), out GeometryData back, out GeometryData front);
+
+        Assert.Equal(1f, back.Volume(), Tolerance);
+        Assert.Equal(2f, front.Volume(), Tolerance);
+        Assert.True(back.IsClosed());
+        Assert.True(front.IsClosed());
+
+        // Each face says which face of the original it came from, or -1 for the cap
+        Assert.Contains(back.Faces, f => GeometryOperators.SliceSourceFace(f) == -1);
+        Assert.Contains(back.Faces, f => GeometryOperators.SliceSourceFace(f) >= 0);
+    }
+
+    [Fact]
+    public void SlicingAcrossAConcaveOutlineCapsItWithTheConcaveShape()
+    {
+        GeometryOperators.Slice(Prism(U, -1, 2), new Plane(Float3.UnitY, 0.5f), out GeometryData back, out GeometryData front);
+
+        Assert.Equal(7.5f, back.Volume(), Tolerance);
+        Assert.Equal(7.5f, front.Volume(), Tolerance);
+        Assert.True(back.IsClosed());
+        Assert.True(front.IsClosed());
+    }
 }
