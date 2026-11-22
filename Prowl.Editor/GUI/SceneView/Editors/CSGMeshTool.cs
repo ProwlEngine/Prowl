@@ -95,14 +95,24 @@ public sealed class CSGMeshTool : SceneTool
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
-        if (!Active) return;
+        if (!Active)
+        {
+            CancelAction();
+            return;
+        }
 
-        if (!ResolveTarget()) return;
+        CSGBrush? before = Target;
+        if (!ResolveTarget() || !ReferenceEquals(before, Target))
+        {
+            CancelAction();
+            if (Target.IsNotValid()) return;
+        }
 
         HandleContext handles = ctx.Handles;
 
         if (handles.KeyDown(KeyCode.Escape))
         {
+            if (_action != Action.None) { CancelAction(); return; }
             if (_vertices.Count == 0) CSGEditMode.Current = CSGMode.Object;
             ClearSelection();
             return;
@@ -178,6 +188,18 @@ public sealed class CSGMeshTool : SceneTool
         if (Target!.HasControlMesh) return polygon >= 0 && polygon < Target.Planes.Length ? polygon : -1;
         int[] map = Target.FaceToPlane;
         return polygon >= 0 && polygon < map.Length ? map[polygon] : -1;
+    }
+
+    /// <summary>Abandons a gesture in progress, putting back what a chamfer changed.</summary>
+    private void CancelAction()
+    {
+        if (_action == Action.None) return;
+        if (_action == Action.Chamfer && Target.IsValid() && _startPlanes != null && !ReferenceEquals(Target!.Planes, _startPlanes))
+        {
+            Target.Planes = _startPlanes;
+            MarkDirty();
+        }
+        EndAction();
     }
 
     private void ClearSelection()
@@ -355,7 +377,7 @@ public sealed class CSGMeshTool : SceneTool
             case Action.Marquee: DrawMarquee(ctx); break;
         }
 
-        if (!handles.PrimaryUp) return;
+        if (!handles.PrimaryUp && handles.PrimaryHeld) return;
 
         switch (_action)
         {
