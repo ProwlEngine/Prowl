@@ -83,6 +83,11 @@ public static class CSGSelection
 
     public static List<CSGBrush> Brushes() => Components<CSGBrush>();
 
+    /// <summary>The selected brushes and groups, without any that sit inside another selected one.</summary>
+    public static List<GameObject> Roots()
+        => GameObjectClipboard.FilterToRoots(Selection.GetSelected<GameObject>()
+            .Where(go => go.IsValid() && (go.GetComponent<CSGBrush>().IsValid() || go.GetComponent<CSGGroup>().IsValid())));
+
     /// <summary>
     /// The brush under a ray. Generated surfaces come first, so the walls of a carved room pick their subtractive brush.
     /// Brushes that produce no visible surface fall back to their own volume. Hidden brushes are seen through.

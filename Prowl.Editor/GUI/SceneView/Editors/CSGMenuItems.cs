@@ -48,12 +48,13 @@ public static class CSGMenuItems
     [MenuItem("GameObject/CSG/Group Selection", priority: 43)]
     private static void GroupSelection()
     {
-        List<GameObject> selected = Selection.GetSelected<GameObject>()
-            .Where(go => go.IsValid() && go.GetComponent<CSGBrush>().IsValid()).ToList();
-
+        List<GameObject> selected = CSGSelection.Roots();
         if (selected.Count == 0) return;
 
+        // Sibling order is CSG order, so the group takes the place of the first object and keeps their order inside
         GameObject? parent = selected[0].Parent;
+        selected.Sort((a, b) => a.SiblingIndex.CompareTo(b.SiblingIndex));
+        int index = selected.Where(go => ReferenceEquals(go.Parent, parent)).Min(go => go.SiblingIndex);
 
         Float3 centre = Float3.Zero;
         foreach (GameObject go in selected) centre += go.Transform.Position;
@@ -62,6 +63,7 @@ public static class CSGMenuItems
         GameObject group = CSGSelection.CreateObject("Group", parent);
         group.Transform.Position = centre;
         group.AddComponent<CSGGroup>();
+        group.SiblingIndex = index;
         Undo.RegisterCreatedObjectUndo(group, "Group CSG Selection");
 
         foreach (GameObject go in selected) Undo.SetTransformParent(go, group, worldPositionStays: true, "Group CSG Selection");
