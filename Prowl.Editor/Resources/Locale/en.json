@@ -863,6 +863,8 @@
   "csg.helper_collision": "Collision",
   "csg.helper_inert": "Inert",
   "csg.helper_discarded": "Discarded",
+  "csg.outline_subtractive": "Subtractive Outlines",
+  "csg.outline_intersect": "Intersect Outlines",
   "csg.rebuild": "Rebuild",
   "csg.lightmap_rebuild_uvs": "Rebuild Lightmap UVs",
   "csg.rebuild_tip": "Regenerates this model's meshes from its brushes.",

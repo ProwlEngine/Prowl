@@ -238,6 +238,8 @@ public sealed class CSGObjectTool : SceneTool
             }
 
             bool selected = Selection.IsSelected(brush.GameObject);
+            if (!selected && brush.Operation == Operation.Subtractive && !CSGHelperSurfaces.SubtractiveOutlines) continue;
+            if (!selected && brush.Operation == Operation.Intersect && !CSGHelperSurfaces.IntersectOutlines) continue;
             Color32 color = selected ? SelectedColor : ColorFor(brush.Operation);
 
             DrawBrushEdges(ctx, brush, color, selected ? 2f : 1f);

@@ -38,6 +38,10 @@ public static class CSGHelperSurfaces
 
     public static void Set(CSGHelperFlags flag, bool on) => Flags = on ? Flags | flag : Flags & ~flag;
 
+    /// <summary>Whether unselected subtractive and intersecting brushes are outlined. Selected ones always are.</summary>
+    public static bool SubtractiveOutlines { get; set; } = true;
+    public static bool IntersectOutlines { get; set; } = true;
+
     /// <summary>Draw every brush face whose flags put it in one of the enabled categories.</summary>
     public static void Draw(SceneToolContext ctx, CSGModel model)
     {

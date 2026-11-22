@@ -366,6 +366,10 @@ public sealed class CSGOverlayTool : SceneTool
         HelperItem(menu, "csg.helper_collision", CSGHelperFlags.CollisionOnly);
         HelperItem(menu, "csg.helper_inert", CSGHelperFlags.Inert);
         HelperItem(menu, "csg.helper_discarded", CSGHelperFlags.Discarded);
+        menu.Separator();
+        bool subtractive = CSGHelperSurfaces.SubtractiveOutlines, intersect = CSGHelperSurfaces.IntersectOutlines;
+        menu.Item(Loc.Get("csg.outline_subtractive"), () => CSGHelperSurfaces.SubtractiveOutlines = !subtractive, on: subtractive);
+        menu.Item(Loc.Get("csg.outline_intersect"), () => CSGHelperSurfaces.IntersectOutlines = !intersect, on: intersect);
     }
 
     private static void HelperItem(ContextBuilder menu, string label, CSGHelperFlags flag)
