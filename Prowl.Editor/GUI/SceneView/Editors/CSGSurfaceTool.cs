@@ -27,7 +27,8 @@ public sealed class CSGSurfaceTool : SceneTool
     private const string SurfaceControl = "csg_surface";
     private const string EmptyControl = "csg_surface_empty";
 
-    private static readonly Color32 HoverColor = new(255, 240, 160, 60);
+    private static readonly Color32 HoverColor = new(255, 240, 160, 50);
+    private static readonly Color32 HoverEdge = new(255, 245, 190, 255);
     private static readonly Color32 SelectedFill = new(255, 200, 90, 70);
     private static readonly Color32 SelectedEdge = new(255, 220, 120, 255);
 
@@ -35,6 +36,13 @@ public sealed class CSGSurfaceTool : SceneTool
     public bool Active => CSGEditMode.Is(CSGMode.Surface);
 
     private CSGSurfaceRef _lastSmeared;
+
+    // A Shift or Ctrl drag paints every surface it passes over into or out of the selection
+    private enum Paint { None, Add, Remove }
+    private Paint _paint;
+
+    // What the model shows this frame, by the surface each piece came from
+    private readonly Dictionary<CSGSurfaceRef, List<Float3[]>> _pieces = new();
 
     public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
 
@@ -58,8 +66,20 @@ public sealed class CSGSurfaceTool : SceneTool
             return;
         }
 
+        CollectPieces(model!);
         PickSurface(ctx, model!);
-        DrawSelection(ctx);
+        DrawSelection();
+    }
+
+    private void CollectPieces(CSGModel model)
+    {
+        _pieces.Clear();
+        foreach (CSGModelFace face in model.Faces())
+        {
+            var surface = new CSGSurfaceRef(face.Brush, face.PlaneIndex);
+            if (!_pieces.TryGetValue(surface, out List<Float3[]>? list)) _pieces[surface] = list = new List<Float3[]>();
+            list.Add(face.Corners);
+        }
     }
 
     /// <summary>Picks against the model's generated surfaces so carved out faces are selectable.</summary>
@@ -76,17 +96,26 @@ public sealed class CSGSurfaceTool : SceneTool
             return;
         }
 
+        if (_paint != Paint.None && !handles.PrimaryHeld)
+        {
+            _paint = Paint.None;
+            handles.TryEndDrag(handles.GetControlID(SurfaceControl));
+        }
+
         if (!model.Raycast(handles.MouseRay, out CSGBrush brush, out int plane, out Float3 point, b => !CSGVisibility.IsHidden(b))) return;
         if (plane < 0) return;
 
         var hit = new CSGSurfaceRef(brush, plane);
         if (!hit.IsValid) return;
 
+        if (_paint == Paint.Add) CSGSurfaceSelection.Add(hit);
+        else if (_paint == Paint.Remove) CSGSurfaceSelection.Remove(hit);
+
         ControlID id = handles.GetControlID(SurfaceControl);
         handles.AddControl(id, HandleContext.BodyDistance, Float3.Distance(handles.MouseRay.Origin, point));
         handles.RequestCursor(id, PaperCursor.Pointer);
 
-        DrawSurface(ctx, hit, HoverColor, default, 0f);
+        DrawSurface(hit, HoverColor, HoverEdge, 1.5f);
 
         // Holding the smear key paints the last picked surface's look onto whatever is under the cursor.
         if (handles.IsHeld("CSG/Smear"))
@@ -102,24 +131,37 @@ public sealed class CSGSurfaceTool : SceneTool
 
         if (!handles.IsNearest(id) || !handles.TryBeginDrag(id)) return;
 
-        if (handles.Shift) CSGSurfaceSelection.Add(hit);
-        else if (handles.Ctrl) CSGSurfaceSelection.Toggle(hit);
-        else CSGSurfaceSelection.Select(hit);
+        if (handles.Shift)
+        {
+            CSGSurfaceSelection.Add(hit);
+            _paint = Paint.Add;
+        }
+        else if (handles.Ctrl)
+        {
+            CSGSurfaceSelection.Toggle(hit);
+            _paint = CSGSurfaceSelection.IsSelected(hit) ? Paint.Add : Paint.Remove;
+        }
+        else
+        {
+            CSGSurfaceSelection.Select(hit);
+            handles.TryEndDrag(id);
+        }
     }
 
-    private static void DrawSelection(SceneToolContext ctx)
+    private void DrawSelection()
     {
         foreach (CSGSurfaceRef surface in CSGSurfaceSelection.Selected)
-            DrawSurface(ctx, surface, SelectedFill, SelectedEdge, 2f);
+            DrawSurface(surface, SelectedFill, SelectedEdge, 2f);
     }
 
-    private static void DrawSurface(SceneToolContext ctx, CSGSurfaceRef surface,
-                                    Color32 fill, Color32 edge, float thickness)
+    /// <summary>Draws the pieces of a surface the model shows, which a carving brush may have cut down.</summary>
+    private void DrawSurface(CSGSurfaceRef surface, Color32 fill, Color32 edge, float thickness)
     {
-        List<Float3> corners = CSGSurfaceSelection.WorldCorners(surface);
-        if (corners.Count < 3) return;
-
-        CSGGizmos.Polygon(corners.ToArray(), fill);
-        if (thickness > 0f) CSGGizmos.Polyline(corners.ToArray(), edge, thickness, closed: true);
+        if (!_pieces.TryGetValue(surface, out List<Float3[]>? pieces)) return;
+        foreach (Float3[] corners in pieces)
+        {
+            CSGGizmos.Polygon(corners, fill);
+            CSGGizmos.Polyline(corners, edge, thickness, closed: true);
+        }
     }
 }

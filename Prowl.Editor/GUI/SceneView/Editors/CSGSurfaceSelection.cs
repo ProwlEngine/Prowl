@@ -91,6 +91,8 @@ public static class CSGSurfaceSelection
         if (surface.IsValid && !_selected.Contains(surface)) _selected.Add(surface);
     }
 
+    public static void Remove(CSGSurfaceRef surface) => _selected.Remove(surface);
+
     public static void Toggle(CSGSurfaceRef surface)
     {
         if (!_selected.Remove(surface)) Add(surface);
