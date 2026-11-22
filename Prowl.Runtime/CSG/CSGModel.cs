@@ -129,8 +129,14 @@ public sealed class CSGModel : Component
 
     public override void Update()
     {
-        // A player keeps the meshes saved with the scene unless asked to rebuild
-        if (_built && !Application.IsEditor && !RebuildAtRuntime) return;
+        // Outside edit mode the meshes saved with the scene are used as they are, unless asked to rebuild
+        bool live = RebuildAtRuntime || (Application.IsEditor && !Application.IsPlaying);
+        if (!live)
+        {
+            if (_built) return;
+            AdoptSerialisedMeshes();
+            if (_visible.IsValid() || _collision.IsValid()) { _built = true; return; }
+        }
 
         if (!_dirty && !AnyComponentChanged())
         {
