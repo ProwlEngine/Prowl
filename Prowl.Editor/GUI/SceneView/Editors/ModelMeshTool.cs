@@ -157,6 +157,7 @@ public sealed class ModelMeshTool : SceneTool
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
+        _trees.Clear();
         HandleContext handles = ctx.Handles;
         if (!ModelEditingMode.IsEditing)
         {
@@ -427,7 +428,7 @@ public sealed class ModelMeshTool : SceneTool
             }
             Func<GeometryData.Face, bool>? skip = selected == null ? null
                 : f => hidden?.Faces.Contains(f) == true || f.NeighborVertices().Exists(selected.Vertices.Contains);
-            if (MeshPicking.Raycast(model.Mesh, toWorld, handles.MouseRay, out _, out float distance, skip) && distance < nearest)
+            if (Tree(model.Mesh).Raycast(toWorld, handles.MouseRay, out _, out float distance, skip) && distance < nearest)
             {
                 nearest = distance;
                 face = handles.MouseRay.Origin + handles.MouseRay.Direction * distance;
@@ -708,6 +709,7 @@ public sealed class ModelMeshTool : SceneTool
     /// </summary>
     private void Edit(string name, Action<GeometryData, ElementSelection> edit, SelectMode? selects = null)
     {
+        _trees.Clear();
         HoldSelection();
         Undo.RecordObject(_held, UndoOwner.OfSession, name);
         foreach (ModelObject model in _edited)
@@ -1221,7 +1223,7 @@ public sealed class ModelMeshTool : SceneTool
         ModelObject? under = null;
         float nearest = float.MaxValue;
         foreach (ModelObject model in _edited)
-            if (MeshPicking.Raycast(model.Mesh, model.Transform.LocalToWorldMatrix, ctx.Handles.MouseRay, out _, out float distance) && distance < nearest)
+            if (Tree(model.Mesh).Raycast(model.Transform.LocalToWorldMatrix, ctx.Handles.MouseRay, out _, out float distance) && distance < nearest)
             {
                 nearest = distance;
                 under = model;
@@ -1336,7 +1338,7 @@ public sealed class ModelMeshTool : SceneTool
             return (handles.WorldToScreen(a + run * t) ?? mouse, point);
         }
 
-        if (MeshPicking.Raycast(model.Mesh, toWorld, sight, out GeometryData.Face? face, out float hit, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null))
+        if (Tree(model.Mesh).Raycast(toWorld, sight, out GeometryData.Face? face, out float hit, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null))
         {
             point.Face = face;
             point.Point = Float4x4.TransformPoint(sight.Origin + sight.Direction * hit, toLocal);
@@ -1454,13 +1456,22 @@ public sealed class ModelMeshTool : SceneTool
     // ================================================================
 
     /// <summary>The nearest distance along a ray to a shown face of any edited object.</summary>
+    // The picking tree of each mesh looked at this frame, found again next frame in case points moved
+    private readonly Dictionary<GeometryData, MeshBvh> _trees = new();
+
+    private MeshBvh Tree(GeometryData mesh)
+    {
+        if (!_trees.TryGetValue(mesh, out MeshBvh? tree)) _trees[mesh] = tree = MeshBvh.For(mesh);
+        return tree;
+    }
+
     private float NearestHit(Ray ray)
     {
         float nearest = float.MaxValue;
         foreach (ModelObject model in _edited)
         {
             ElementSelection hidden = _hidden[model];
-            if (MeshPicking.Raycast(model.Mesh, model.Transform.LocalToWorldMatrix, ray, out _, out float distance, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null))
+            if (Tree(model.Mesh).Raycast(model.Transform.LocalToWorldMatrix, ray, out _, out float distance, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null))
                 nearest = MathF.Min(nearest, distance);
         }
         return nearest;
@@ -1487,7 +1498,7 @@ public sealed class ModelMeshTool : SceneTool
             ElementSelection hidden = _hidden[model];
             GeometryData mesh = model.Mesh;
 
-            if (Mode == SelectMode.Face && MeshPicking.Raycast(mesh, toWorld, handles.MouseRay, out GeometryData.Face? face, out float distance, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null))
+            if (Mode == SelectMode.Face && Tree(mesh).Raycast(toWorld, handles.MouseRay, out GeometryData.Face? face, out float distance, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null))
             {
                 ControlID id = handles.GetControlID(FaceControl, o * 1_000_003 + face!.Index);
                 handles.AddControl(id, HandleContext.BodyDistance, distance);
@@ -1637,8 +1648,13 @@ public sealed class ModelMeshTool : SceneTool
     //  Drawing
     // ================================================================
 
+    /// <summary>
+    /// Draws the edited meshes into the scene's gizmos, which the renderer draws in one batch and tests against the
+    /// scene's depth, so the parts behind the surface show dashed without testing each against the mesh here.
+    /// </summary>
     private void DrawElements(SceneToolContext ctx)
     {
+        Prowl.Graphite.Rendering.GizmoBatch batch = Runtime.Resources.Scene.Active.Gizmos.Batch;
         foreach (ModelObject model in _edited)
         {
             Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
@@ -1647,17 +1663,16 @@ public sealed class ModelMeshTool : SceneTool
             foreach (GeometryData.Face face in selection.Faces)
             {
                 if (hidden.Faces.Contains(face)) continue;
-                List<GeometryData.Vertex> ring = face.NeighborVertices();
-                var corners = new Float3[ring.Count];
-                for (int i = 0; i < ring.Count; i++) corners[i] = Float4x4.TransformPoint(ring[i].Point, toWorld);
-                ctx.Draw.Polygon(corners, FaceFill);
+                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in UVs.Triangles(face))
+                    batch.Triangle(Float4x4.TransformPoint(a.Vert.Point, toWorld), Float4x4.TransformPoint(b.Vert.Point, toWorld),
+                        Float4x4.TransformPoint(c.Vert.Point, toWorld), FaceFill);
             }
 
             foreach (GeometryData.Edge edge in model.Mesh.Edges)
             {
                 if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
                 bool picked = selection.Edges.Contains(edge), seam = UVs.IsSeam(edge);
-                ctx.Draw.Line(Float4x4.TransformPoint(edge.Vert1.Point, toWorld), Float4x4.TransformPoint(edge.Vert2.Point, toWorld),
+                batch.Line(Float4x4.TransformPoint(edge.Vert1.Point, toWorld), Float4x4.TransformPoint(edge.Vert2.Point, toWorld),
                     picked ? PickedColor : seam ? SeamColor : IdleColor, picked || seam ? 2.5f : 1f);
             }
 
@@ -1667,9 +1682,7 @@ public sealed class ModelMeshTool : SceneTool
                 {
                     if (hidden.Vertices.Contains(vertex)) continue;
                     bool picked = selection.Vertices.Contains(vertex);
-                    Float3 p = Float4x4.TransformPoint(vertex.Point, toWorld);
-                    if (!picked && !Seen(ctx, p)) continue;
-                    ctx.Draw.Dot(p, picked ? PickedColor : IdleColor, picked ? 8f : 6f);
+                    batch.Point(Float4x4.TransformPoint(vertex.Point, toWorld), picked ? PickedColor : IdleColor, picked ? 8f : 6f);
                 }
             }
             else if (Mode == SelectMode.Face)
@@ -1678,9 +1691,7 @@ public sealed class ModelMeshTool : SceneTool
                 {
                     if (hidden.Faces.Contains(face) || !IsFirstOfItsFace(face)) continue;
                     bool picked = selection.Faces.Contains(face);
-                    Float3 p = Float4x4.TransformPoint(Centre(face.LogicalFace()), toWorld);
-                    if (!picked && !Seen(ctx, p)) continue;
-                    ctx.Draw.Dot(p, picked ? PickedColor : IdleColor, picked ? 7f : 5f);
+                    batch.Point(Float4x4.TransformPoint(Centre(face.LogicalFace()), toWorld), picked ? PickedColor : IdleColor, picked ? 7f : 5f);
                 }
             }
         }
