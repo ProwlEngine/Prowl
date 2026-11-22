@@ -728,13 +728,13 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     }
 }
 
-/// <summary>What <see cref="TerrainSurface.DebugView"/> shows on the default material.</summary>
 /// <summary>
 /// An editor brush drawn over the ground: its centre at a world x and z, its radius in metres, the share of the radius
 /// it softens over, its tint, and how strongly the inside takes the tint while the rim takes it fully.
 /// </summary>
 public readonly record struct TerrainBrushOverlay(Double2 Center, double Radius, float Falloff, Float3 Color, float Strength = 0.3f);
 
+/// <summary>What <see cref="TerrainSurface.DebugView"/> shows on the default material.</summary>
 public enum TerrainDebugView
 {
     None,
