@@ -128,6 +128,53 @@ public static class ModelExport
 
     private static Float2 Flip(Float2 uv) => new(uv.X, 1f - uv.Y);
 
+    /// <summary>
+    /// The metalness and roughness maps as glTF keeps them, roughness in green and metalness in blue of one image. A
+    /// map already packed that way is used as it is, others are packed into a new image, a missing one reading full.
+    /// </summary>
+    private static int MetallicRoughness(ExportModel model, Material material, Texture2D? metalness, Texture2D? roughness, Func<Texture2D, byte[]?> png,
+                                         Dictionary<Texture2D, int> textureOf)
+    {
+        bool hasMetal = metalness.IsValid(), hasRough = roughness.IsValid();
+        if (!hasMetal && !hasRough) return -1;
+        int metalChannel = hasMetal ? material.GetTextureChannel("base_metalness_map") : 0;
+        int roughChannel = hasRough ? material.GetTextureChannel("specular_roughness_map") : 0;
+        if (hasMetal && ReferenceEquals(metalness, roughness) && metalChannel == 2 && roughChannel == 1)
+        {
+            if (textureOf.TryGetValue(metalness!, out int found)) return found;
+            if (png(metalness!) is not { } bytes) return -1;
+            textureOf[metalness!] = model.Textures.Count;
+            model.Textures.Add(new ExportTexture { Name = metalness!.Name, Png = bytes });
+            return model.Textures.Count - 1;
+        }
+
+        Aperture.Image? Decode(Texture2D? texture) => texture.IsValid() && png(texture!) is { } bytes
+            ? Aperture.Image.Load(bytes, new Aperture.DecodeOptions { TargetPixelFormat = Aperture.PixelFormat.Rgba8 })
+            : null;
+        using Aperture.Image? metal = Decode(metalness), rough = Decode(roughness);
+        if (metal == null && rough == null) return -1;
+        int width = Math.Max(metal?.Info.Width ?? 1, rough?.Info.Width ?? 1), height = Math.Max(metal?.Info.Height ?? 1, rough?.Info.Height ?? 1);
+        static byte Sample(Aperture.Image? image, int x, int y, int width, int height, int channel)
+        {
+            if (image == null) return 255;
+            int sx = x * image.Info.Width / width, sy = y * image.Info.Height / height;
+            return image.Pixels[(sy * image.Info.Width + sx) * 4 + channel];
+        }
+        var pixels = new byte[width * height * 4];
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int at = (y * width + x) * 4;
+                pixels[at] = 255;
+                pixels[at + 1] = Sample(rough, x, y, width, height, roughChannel);
+                pixels[at + 2] = Sample(metal, x, y, width, height, metalChannel);
+                pixels[at + 3] = 255;
+            }
+        using Aperture.Image packed = Aperture.Image.FromPixels(pixels, width, height, Aperture.PixelFormat.Rgba8);
+        model.Textures.Add(new ExportTexture { Name = material.Name + " Metal Rough", Png = packed.Encode(new Aperture.EncodeOptions { Format = Aperture.ImageFormat.Png }) });
+        return model.Textures.Count - 1;
+    }
+
     private static int MaterialIndex(ExportModel model, PMeshObject item, int slot, Func<Guid, Material?> materials, Func<Texture2D, byte[]?> png,
                                      Dictionary<Guid, int> materialOf, Dictionary<Texture2D, int> textureOf)
     {
@@ -166,7 +213,7 @@ public static class ModelExport
             Metallic = material.GetFloat("base_metalness"),
             Roughness = material.GetFloat("specular_roughness"),
             BaseColorTexture = Texture("base_color_map"),
-            MetallicRoughnessTexture = metalness.IsValid() && ReferenceEquals(metalness, roughness) ? Texture("base_metalness_map") : -1,
+            MetallicRoughnessTexture = MetallicRoughness(model, material, metalness, roughness, png, textureOf),
             NormalTexture = Texture("geometry_normal_map"),
             NormalScale = material.GetFloat("normal_scale"),
             Emission = new Float3(emission.R, emission.G, emission.B),

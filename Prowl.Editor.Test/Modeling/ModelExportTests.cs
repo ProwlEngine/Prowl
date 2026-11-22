@@ -71,4 +71,35 @@ public class ModelExportTests : EditorTestHarness
         int bulging = Array.FindIndex(mesh.Vertices, p => Float3.Distance(p, new Float3(1, 1, 0)) < 1e-5f);
         Assert.True(Float3.Distance(mesh.BlendShapes[0].Frames[0].DeltaVertices[bulging], new Float3(0.5f, 0, 0)) < 1e-5f);
     }
+
+    private static byte[] Png(byte r, byte g, byte b)
+    {
+        var pixels = new byte[2 * 2 * 4];
+        for (int i = 0; i < 4; i++) (pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3]) = (r, g, b, 255);
+        using Aperture.Image image = Aperture.Image.FromPixels(pixels, 2, 2, Aperture.PixelFormat.Rgba8);
+        return image.Encode(new Aperture.EncodeOptions { Format = Aperture.ImageFormat.Png });
+    }
+
+    [Fact]
+    public void SeparateMetalnessAndRoughnessMapsArePackedIntoOneImage()
+    {
+        var material = new Material(Shader.GetDefault(DefaultShader.Lit)) { Name = "Metal" };
+        var metal = new Texture2D(2, 2) { Name = "Metal" };
+        var rough = new Texture2D(2, 2) { Name = "Rough" };
+        material.SetTexture("base_metalness_map", metal);
+        material.SetTexture("specular_roughness_map", rough);
+        material.SetTextureChannel("specular_roughness_map", 1);
+        var pngs = new Dictionary<Texture2D, byte[]> { [metal] = Png(200, 0, 0), [rough] = Png(0, 60, 0) };
+        Guid id = Guid.NewGuid();
+        PMeshObject item = Strip();
+        item.Materials.Add(id);
+
+        Clay.ExportModel model = ModelExport.Build(new PMeshDocument { Objects = { item } }, g => g == id ? material : null, t => pngs[t]);
+
+        Clay.ExportMaterial exported = Assert.Single(model.Materials);
+        Assert.True(exported.MetallicRoughnessTexture >= 0);
+        using Aperture.Image packed = Aperture.Image.Load(model.Textures[exported.MetallicRoughnessTexture].Png, new Aperture.DecodeOptions { TargetPixelFormat = Aperture.PixelFormat.Rgba8 });
+        Assert.Equal(60, packed.Pixels[1]);
+        Assert.Equal(200, packed.Pixels[2]);
+    }
 }
