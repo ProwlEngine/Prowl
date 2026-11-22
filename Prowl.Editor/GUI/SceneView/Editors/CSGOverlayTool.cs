@@ -71,12 +71,12 @@ public sealed class CSGOverlayTool : SceneTool
     public override bool ReplacesSceneContextMenu => true;
 
     /// <summary>In object mode the brush under the cursor is selected, other modes keep what they have.</summary>
-    public override bool OnSceneContextPick(SceneToolContext ctx)
+    public override bool OnSceneContextPick(SceneToolContext ctx, Ray ray)
     {
         CSGModel? model = CSGSelection.ActiveModel();
         if (!CSGEditMode.Is(CSGMode.Object) || model.IsNotValid()) return true;
 
-        if (CSGSelection.PickBrush(model!, CSGSelection.BrushesIn(model!), ctx.Handles.MouseRay, out CSGBrush brush, out _)
+        if (CSGSelection.PickBrush(model!, CSGSelection.BrushesIn(model!), ray, out CSGBrush brush, out _)
             && !Selection.IsSelected(brush.GameObject))
             Selection.Select(brush.GameObject);
         return true;

@@ -84,8 +84,8 @@ public abstract class SceneTool
     /// <summary>Replace the scene view's right click menu with <see cref="OnSceneContextMenu"/>, the usual items moving to a submenu.</summary>
     public virtual bool ReplacesSceneContextMenu => false;
 
-    /// <summary>Selects what was right clicked before the menu opens, in place of the scene's own pick. True when handled.</summary>
-    public virtual bool OnSceneContextPick(SceneToolContext ctx) => false;
+    /// <summary>Selects what <paramref name="ray"/> right clicked before the menu opens, in place of the scene's own pick. True when handled.</summary>
+    public virtual bool OnSceneContextPick(SceneToolContext ctx, Ray ray) => false;
 
     /// <summary>Items for the scene view's right click menu, added after the usual ones unless <see cref="ReplacesSceneContextMenu"/> is set.</summary>
     public virtual void OnSceneContextMenu(SceneToolContext ctx, OrigamiUI.ContextBuilder menu) { }

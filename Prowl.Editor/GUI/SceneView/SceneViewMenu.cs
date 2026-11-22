@@ -38,7 +38,7 @@ public static class SceneViewMenu
 
         SceneTool? picking = SceneToolManager.Live.FirstOrDefault(t => t.ReplacesSceneContextMenu);
         if (picking != null) ctx.CurrentTool = picking;
-        if (picking == null || !picking.OnSceneContextPick(ctx))
+        if (picking == null || !picking.OnSceneContextPick(ctx, camera.ScreenPointToRay(mouseLocal, panelSize)))
         {
             GameObject? hit = SceneViewPanel.PickObjectAt(scene, camera, mouseLocal, panelSize, pickGizmos: true);
             if (hit.IsValid() && !Selection.IsSelected(hit!)) Selection.Select(hit!);

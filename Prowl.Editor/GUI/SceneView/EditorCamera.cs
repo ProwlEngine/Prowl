@@ -63,6 +63,9 @@ public class EditorCamera
     private float _rightDownYaw, _rightDownPitch;
     private bool _rightClicked;
 
+    /// <summary>Where the pointer was when the right button went down, before the look lock pinned it.</summary>
+    public Float2 RightClickPointer { get; private set; }
+
     /// <summary>True once after a right click that was not a camera look, which opens the scene view's menu.</summary>
     public bool TakeRightClick()
     {
@@ -481,6 +484,7 @@ public class EditorCamera
         if (Input.GetMouseButtonDown(1))
         {
             _rightDownAt = Runtime.Time.UnscaledTotalTime;
+            RightClickPointer = mousePos;
             _rightTravel = 0f;
             _rightMoved = false;
             _rightDownYaw = _yaw;
