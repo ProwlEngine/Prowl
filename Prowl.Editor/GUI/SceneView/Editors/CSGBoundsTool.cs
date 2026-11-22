@@ -127,6 +127,12 @@ public sealed class CSGBoundsTool : SceneTool
         Float3 centre = (bounds.Min + bounds.Max) * 0.5f, half = (bounds.Max - bounds.Min) * 0.5f;
         Float3 World(Float3 local) => Float4x4.TransformPoint(centre + local, toWorld);
 
+        foreach ((Float3 a, Float3 b) in Edges)
+        {
+            Float3 along = Float3.One - a * a - b * b;
+            CSGGizmos.Line(World((a + b - along) * half), World((a + b + along) * half), HandleColor, 1.5f);
+        }
+
         for (int face = 0; face < 6; face++)
         {
             Float3 world = World(FaceAxes[face] * half);
