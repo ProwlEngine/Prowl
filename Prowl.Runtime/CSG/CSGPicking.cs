@@ -97,8 +97,9 @@ public static class CSGPicking
         normal = face.Normal();
         if (Float3.LengthSquared(normal) < 0.5f) return false;
 
+        // Back faces are seen through, which is what lets a ray from inside a solid reach the room around it
         float denom = Float3.Dot(normal, direction);
-        if (MathF.Abs(denom) < 1e-9f) return false;
+        if (denom > -1e-9f) return false;
 
         float d = Float3.Dot(normal, ring[0].Point);
         distance = (d - Float3.Dot(normal, origin)) / denom;
