@@ -19,6 +19,8 @@ public enum CSGGeneratorKind
     SpiralStairs,
     /// <summary>A hollow box: walls, floor and ceiling of <see cref="CSGGeneratorSettings.WallThickness"/>.</summary>
     Room,
+    /// <summary>A prism raised from an outline clicked out on the work plane.</summary>
+    Polygon,
 }
 
 /// <summary>Settings shared by the generators. Each uses the ones that apply to it.</summary>
@@ -134,6 +136,50 @@ public static class CSGShapeBuilder
             case CSGGeneratorKind.Room: return Room(half * 2f, settings);
             default: return Single(GeometryGenerator.BoxPlanes(half * 2f), 0);
         }
+    }
+
+    /// <summary>
+    /// The planes of a prism raised <paramref name="height"/> along +Y from an outline in the XZ plane. A brush is convex,
+    /// so an outline that is not is replaced by the convex outline around it. Null when it encloses no area.
+    /// </summary>
+    public static Plane[]? PolygonPrism(IReadOnlyList<Float2> outline, float height)
+    {
+        List<Float2> hull = ConvexHull(outline);
+        if (hull.Count < 3) return null;
+
+        var ring = new List<Float3>(hull.Count);
+        foreach (Float2 p in hull) ring.Add(new Float3(p.X, 0f, p.Y));
+
+        // Wound so the normal of the outline points up
+        Float3 normal = Float3.Cross(ring[1] - ring[0], ring[2] - ring[0]);
+        if (normal.Y < 0f) ring.Reverse();
+
+        return CSGMeshEdit.ExtrudePrism(ring, Float3.UnitY, height);
+    }
+
+    /// <summary>The convex outline around some points, by the monotone chain.</summary>
+    public static List<Float2> ConvexHull(IReadOnlyList<Float2> points)
+    {
+        var sorted = new List<Float2>(points);
+        sorted.Sort((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y));
+        if (sorted.Count < 3) return sorted;
+
+        static float Cross(Float2 o, Float2 a, Float2 b) => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
+
+        var hull = new List<Float2>(sorted.Count * 2);
+        foreach (Float2 p in sorted)
+        {
+            while (hull.Count >= 2 && Cross(hull[^2], hull[^1], p) <= 1e-9f) hull.RemoveAt(hull.Count - 1);
+            hull.Add(p);
+        }
+        int lower = hull.Count + 1;
+        for (int i = sorted.Count - 2; i >= 0; i--)
+        {
+            while (hull.Count >= lower && Cross(hull[^2], hull[^1], sorted[i]) <= 1e-9f) hull.RemoveAt(hull.Count - 1);
+            hull.Add(sorted[i]);
+        }
+        hull.RemoveAt(hull.Count - 1);
+        return hull;
     }
 
     /// <summary>A solid box with a smaller box carved out of it, leaving walls of the set thickness.</summary>
