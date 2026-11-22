@@ -126,6 +126,15 @@ public sealed class CSGScene
     private bool _flat;                  // no groups and no Intersect: the last brush containing a point decides it
     private GeometryData? _cachedOutput;
 
+    // The assembled mesh, kept between builds and patched where brushes changed
+    private GeometryData? _output;
+    private bool _reassemble = true;
+    private bool _hasAttributes;
+    private readonly Dictionary<SnapKey, List<GeometryData.Vertex>> _vertexGrid = new();
+    private readonly Dictionary<SnapKey, List<RepPoint>> _representatives = new();
+    private Bvh<Float3>? _representativeBvh;
+    private bool _representativesChanged;
+
     private bool _weldTJunctions = true;
     private bool _keepDiscarded;
     private bool _invertOutput;
@@ -224,6 +233,7 @@ public sealed class CSGScene
     private void InvalidateOutput(bool reweld)
     {
         _cachedOutput = null;
+        _reassemble = true;
         if (!reweld) return;
         foreach (var brush in _brushes) brush.WeldDirty = true;
     }
@@ -419,7 +429,8 @@ public sealed class CSGScene
 
     /// <summary>
     /// Evaluates the scene into a single mesh. Only brushes flagged dirty since the last call are
-    /// re-evaluated; the rest reuse their cached surface. The merged mesh is rebuilt each call.
+    /// re-evaluated; the rest reuse their cached surface. The merged mesh is kept and only the faces of changed
+    /// brushes and their neighbours are replaced, so each call hands back the same object with a new Version.
     /// </summary>
     /// <summary>
     /// Read the brush id an output face was attributed to, or -1 if the face did not come from a
@@ -486,6 +497,7 @@ public sealed class CSGScene
             Recompute(brush, bvh, neighborBuffer);
             brush.Dirty = false;
             brush.WeldDirty = true;
+            brush.OutputChanged = true;
             changed.Add(brush);
             recomputed++;
         }
@@ -1292,8 +1304,34 @@ public sealed class CSGScene
 
     private GeometryData Assemble()
     {
+        bool fresh = _output == null || _reassemble || _brushes.TrueForAll(b => b.WeldDirty);
+        if (fresh) StartAssembly();
+
+        var output = _output!;
+        if (WeldTJunctions)
+            foreach (var brush in _brushes)
+                if (brush.OutputChanged) Reference(brush);
+
+        foreach (var brush in _brushes)
+        {
+            brush.OutputChanged = false;
+            if (!brush.WeldDirty) continue;
+            brush.WeldDirty = false;
+
+            if (!fresh) RemoveEmitted(output, brush);
+            Reweld(brush);
+            foreach (var item in brush.Welded)
+                EmitPolygon(output, _vertexGrid, item, _hasAttributes);
+        }
+
+        return output;
+    }
+
+    // Drops everything assembled so far and starts an empty mesh every brush emits into again.
+    private void StartAssembly()
+    {
         var result = new GeometryData();
-        bool hasAttributes = RegisterAttributes(result);
+        _hasAttributes = RegisterAttributes(result);
 
         // Written for every face regardless of what attributes the source shapes declare.
         result.AddFaceAttribute(BrushIdAttribute, GeometryData.AttributeBaseType.Int, 1);
@@ -1302,75 +1340,114 @@ public sealed class CSGScene
         if (SurfaceUV != null && !result.HasLoopAttribute(UVAttributeName))
             result.AddLoopAttribute(UVAttributeName, GeometryData.AttributeBaseType.Float, 2);
 
-        var items = BuildEmitItems();
-
-        var weld = new Dictionary<SnapKey, List<GeometryData.Vertex>>();
-        foreach (var item in items)
-            EmitPolygon(result, weld, item, hasAttributes);
-
-        return result;
+        _output = result;
+        _reassemble = false;
+        _vertexGrid.Clear();
+        _representatives.Clear();
+        _representativeBvh = null;
+        _representativesChanged = true;
+        foreach (var brush in _brushes)
+        {
+            brush.Emitted.Clear();
+            brush.References.Clear();
+            brush.OutputChanged = true;
+            brush.WeldDirty = true;
+        }
     }
 
-    /// <summary>Collect the polygons to emit, re-welding only brushes whose rings could have
-    /// changed. Anything untouched, and not neighbouring something touched, keeps its cached rings.</summary>
-    private List<EmitItem> BuildEmitItems()
+    // Points within the weld tolerance of each other become one point before anything else, the same way the
+    // emitted vertices weld, so every ring agrees on where a corner is before T-junctions are filled in. Each brush
+    // holds the representative of every corner of its output, and a representative lives while anything holds it.
+    private void Reference(SceneBrush brush)
     {
+        foreach (var held in brush.References) Release(held);
+        brush.References.Clear();
+
+        foreach (var frag in brush.Output)
+            foreach (var p in frag.Poly)
+                brush.References.Add(Representative(p));
+    }
+
+    // Rebuilds a brush's rings after T-junction welding from its output and the representatives it holds.
+    private void Reweld(SceneBrush brush)
+    {
+        brush.Welded.Clear();
         if (!WeldTJunctions)
         {
-            var plain = new List<EmitItem>();
-            foreach (var brush in _brushes)
-                foreach (var frag in brush.Output)
-                    plain.Add(new EmitItem { Brush = brush, Ring = new List<Float3>(frag.Poly), Source = frag.Source, Flip = frag.Flip });
-            return plain;
-        }
-
-        // Points within the weld tolerance of each other become one point before anything else, the same way the
-        // emitted vertices weld, so every ring agrees on where a corner is before T-junctions are filled in. The set
-        // is global, gathered from every brush, including ones whose own rings will not be re-welded.
-        var representatives = new Dictionary<SnapKey, List<Float3>>();
-        var points = new List<Float3>();
-        foreach (var brush in _brushes)
             foreach (var frag in brush.Output)
-                foreach (var p in frag.Poly)
-                    Representative(representatives, points, p);
-
-        Bvh<Float3>? pointBvh = null;
-        var candidates = new List<Float3>();
-        var items = new List<EmitItem>();
-
-        foreach (var brush in _brushes)
-        {
-            if (brush.WeldDirty)
-            {
-                pointBvh ??= new Bvh<Float3>(points, p => new AABB(p, p).Expanded(WeldTolerance), BvhBuildSettings.Default);
-
-                brush.Welded.Clear();
-                foreach (var frag in brush.Output)
-                {
-                    var ring = new List<Float3>(frag.Poly.Length);
-                    foreach (var p in frag.Poly)
-                    {
-                        Float3 snapped = Representative(representatives, points, p);
-                        if (ring.Count == 0 || ring[^1] != snapped) ring.Add(snapped);
-                    }
-                    if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
-                    if (ring.Count < 3) continue;
-
-                    brush.Welded.Add(new EmitItem
-                    {
-                        Brush = brush,
-                        Ring = InsertCollinearPoints(ring, pointBvh, candidates),
-                        Source = frag.Source,
-                        Flip = frag.Flip
-                    });
-                }
-                brush.WeldDirty = false;
-            }
-
-            items.AddRange(brush.Welded);
+                brush.Welded.Add(new EmitItem { Brush = brush, Ring = new List<Float3>(frag.Poly), Source = frag.Source, Flip = frag.Flip });
+            return;
         }
 
-        return items;
+        if (_representativesChanged || _representativeBvh == null)
+        {
+            var points = new List<Float3>();
+            foreach (var bucket in _representatives.Values)
+                foreach (var rep in bucket)
+                    points.Add(rep.Point);
+            _representativeBvh = new Bvh<Float3>(points, p => new AABB(p, p).Expanded(WeldTolerance), BvhBuildSettings.Default);
+            _representativesChanged = false;
+        }
+
+        var candidates = new List<Float3>();
+        int held = 0;
+        foreach (var frag in brush.Output)
+        {
+            var ring = new List<Float3>(frag.Poly.Length);
+            for (int i = 0; i < frag.Poly.Length; i++)
+            {
+                Float3 snapped = brush.References[held++].Point;
+                if (ring.Count == 0 || ring[^1] != snapped) ring.Add(snapped);
+            }
+            if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
+            if (ring.Count < 3) continue;
+
+            brush.Welded.Add(new EmitItem
+            {
+                Brush = brush,
+                Ring = InsertCollinearPoints(ring, _representativeBvh, candidates),
+                Source = frag.Source,
+                Flip = frag.Flip
+            });
+        }
+    }
+
+    // Takes a brush's faces out of the mesh, with the edges and vertices nothing else uses any more.
+    private void RemoveEmitted(GeometryData output, SceneBrush brush)
+    {
+        if (brush.Emitted.Count == 0) return;
+
+        var edges = new List<GeometryData.Edge>();
+        var verts = new List<GeometryData.Vertex>();
+        foreach (var face in brush.Emitted)
+        {
+            if (face.Owner != output) continue;
+            var loop = face.Loop;
+            if (loop != null)
+            {
+                do
+                {
+                    edges.Add(loop.Edge);
+                    verts.Add(loop.Vert);
+                    loop = loop.Next;
+                } while (loop != null && loop != face.Loop);
+            }
+            output.RemoveFace(face);
+        }
+        brush.Emitted.Clear();
+
+        foreach (var edge in edges)
+            if (edge.Owner == output && edge.Loop == null)
+                output.RemoveEdge(edge);
+
+        foreach (var vertex in verts)
+        {
+            if (vertex.Owner != output || vertex.Edge != null) continue;
+            var home = VertexHome(vertex.Point);
+            if (_vertexGrid.TryGetValue(home, out var bucket) && bucket.Remove(vertex) && bucket.Count == 0)
+                _vertexGrid.Remove(home);
+            output.RemoveVertex(vertex);
+        }
     }
 
     // Inserts existing vertices that lie on the interior of another polygon's edge, removing the
@@ -1469,6 +1546,7 @@ public sealed class CSGScene
         var face = result.AddFace(verts.ToArray());
         if (face == null)
             return;
+        item.Brush.Emitted.Add(face);
 
         face.Attributes[BrushIdAttribute] = new GeometryData.IntAttributeValue(item.Brush.Id);
         face.Attributes[SourceFaceAttribute] = new GeometryData.IntAttributeValue(item.Source.SourceIndex);
@@ -1641,10 +1719,10 @@ public sealed class CSGScene
     }
 
     /// <summary>
-    /// The point already standing within the weld tolerance of this one, or this one, now standing for every later
-    /// point that close. Searched by grid as <see cref="GetOrAddVertex"/> does.
+    /// The representative already standing within the weld tolerance of this point, or a new one for it, now standing
+    /// for every later point that close. Held once more either way. Searched by grid as <see cref="GetOrAddVertex"/> does.
     /// </summary>
-    private Float3 Representative(Dictionary<SnapKey, List<Float3>> grid, List<Float3> all, Float3 point)
+    private RepPoint Representative(Float3 point)
     {
         float cell = WeldTolerance * 4;
         int x0 = (int)MathF.Floor((point.X - WeldTolerance) / cell), x1 = (int)MathF.Floor((point.X + WeldTolerance) / cell);
@@ -1655,20 +1733,44 @@ public sealed class CSGScene
             for (int y = y0; y <= y1; y++)
                 for (int z = z0; z <= z1; z++)
                 {
-                    if (!grid.TryGetValue(new SnapKey(x, y, z), out var bucket)) continue;
+                    if (!_representatives.TryGetValue(new SnapKey(x, y, z), out var bucket)) continue;
                     foreach (var candidate in bucket)
                     {
-                        Float3 d = candidate - point;
+                        Float3 d = candidate.Point - point;
                         if (MathF.Abs(d.X) <= WeldTolerance && MathF.Abs(d.Y) <= WeldTolerance && MathF.Abs(d.Z) <= WeldTolerance)
+                        {
+                            candidate.Count++;
                             return candidate;
+                        }
                     }
                 }
 
-        var home = new SnapKey((int)MathF.Floor(point.X / cell), (int)MathF.Floor(point.Y / cell), (int)MathF.Floor(point.Z / cell));
-        if (!grid.TryGetValue(home, out var list)) grid[home] = list = new List<Float3>(1);
-        list.Add(point);
-        all.Add(point);
-        return point;
+        var rep = new RepPoint { Point = point, Home = VertexHome(point), Count = 1 };
+        if (!_representatives.TryGetValue(rep.Home, out var list)) _representatives[rep.Home] = list = new List<RepPoint>(1);
+        list.Add(rep);
+        _representativesChanged = true;
+        return rep;
+    }
+
+    private void Release(RepPoint rep)
+    {
+        if (--rep.Count > 0) return;
+        if (_representatives.TryGetValue(rep.Home, out var bucket) && bucket.Remove(rep) && bucket.Count == 0)
+            _representatives.Remove(rep.Home);
+        _representativesChanged = true;
+    }
+
+    private SnapKey VertexHome(Float3 point)
+    {
+        float cell = WeldTolerance * 4;
+        return new SnapKey((int)MathF.Floor(point.X / cell), (int)MathF.Floor(point.Y / cell), (int)MathF.Floor(point.Z / cell));
+    }
+
+    internal sealed class RepPoint
+    {
+        public Float3 Point;
+        public SnapKey Home;
+        public int Count;
     }
 
     // Finds the vertex already standing within the weld tolerance of a point, or adds one. Vertices are
@@ -1696,13 +1798,13 @@ public sealed class CSGScene
                 }
 
         var vertex = result.AddVertex(point);
-        var home = new SnapKey((int)MathF.Floor(point.X / cell), (int)MathF.Floor(point.Y / cell), (int)MathF.Floor(point.Z / cell));
+        var home = VertexHome(point);
         if (!weld.TryGetValue(home, out var list)) weld[home] = list = new List<GeometryData.Vertex>(1);
         list.Add(vertex);
         return vertex;
     }
 
-    private readonly struct SnapKey : IEquatable<SnapKey>
+    internal readonly struct SnapKey : IEquatable<SnapKey>
     {
         private readonly int _x, _y, _z;
         public SnapKey(int x, int y, int z) { _x = x; _y = y; _z = z; }
@@ -1779,6 +1881,13 @@ public sealed class CSGScene
         /// depends on points from brushes it overlaps, so an untouched brush keeps its result.</summary>
         public readonly List<EmitItem> Welded = new();
         public bool WeldDirty = true;
+
+        /// <summary>Faces this brush put in the assembled mesh, taken out again when it is re-welded.</summary>
+        public readonly List<GeometryData.Face> Emitted = new();
+
+        /// <summary>The representative of every corner of <see cref="Output"/>, in order.</summary>
+        public readonly List<RepPoint> References = new();
+        public bool OutputChanged = true;
     }
 
     #endregion

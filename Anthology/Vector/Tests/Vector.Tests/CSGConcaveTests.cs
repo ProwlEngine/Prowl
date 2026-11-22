@@ -358,4 +358,41 @@ public class CSGConcaveTests
             (Scaled(new Float3(31.450562f, 0.3f, 24.999922f), 0.5f), CSGOperation.Subtractive));
         Assert.Empty(flush.Edges.Where(e => e.FaceCount != 2));
     }
+
+    /// <summary>Edits patch the kept mesh, which ends up the same as assembling the whole scene again.</summary>
+    [Fact]
+    public void EditsPatchTheMeshTheSameAsAFullAssembly()
+    {
+        GeometryData Scaled(Float3 at, float scale) => Prism(L.Select(p => new Float2(at.X + p.X * scale, at.Z + p.Y * scale)).ToArray(), at.Y, at.Y + scale);
+
+        var scene = new CSGScene();
+        var brushes = new List<CSGBrushHandle>();
+        var random = new Random(3);
+        for (int x = 0; x < 4; x++)
+            for (int z = 0; z < 4; z++)
+                brushes.Add(scene.Add(Scaled(new Float3(x * 1.5f, 0f, z * 1.5f), 1f)));
+        for (int i = 0; i < 6; i++)
+            brushes.Add(scene.Add(Scaled(new Float3((float)random.NextDouble() * 6f, 0.3f, (float)random.NextDouble() * 6f), 0.5f), CSGOperation.Subtractive));
+
+        GeometryData first = scene.Build();
+        for (int i = 0; i < 12; i++)
+        {
+            int version = first.Version;
+            scene.SetTransform(brushes[random.Next(brushes.Count)], Float4x4.CreateTranslation(new Float3((float)random.NextDouble() * 0.4f, 0f, (float)random.NextDouble() * 0.4f)));
+            GeometryData patched = scene.Build();
+            Assert.Same(first, patched);
+            Assert.NotEqual(version, patched.Version);
+
+            var (faces, vertices, edges, volume) = (patched.Faces.Count, patched.Vertices.Count, patched.Edges.Count, patched.Volume());
+            Assert.Empty(patched.Edges.Where(e => e.FaceCount == 1));
+
+            scene.InvalidateOutput();
+            GeometryData full = scene.Build();
+            Assert.Equal(faces, full.Faces.Count);
+            Assert.Equal(vertices, full.Vertices.Count);
+            Assert.Equal(edges, full.Edges.Count);
+            Assert.Equal(volume, full.Volume(), 3);
+            first = full;
+        }
+    }
 }
