@@ -318,4 +318,19 @@ public class CSGConcaveTests
         Assert.True(back.IsClosed());
         Assert.True(front.IsClosed());
     }
+
+    /// <summary>Overlapping concave brushes with concave pits cut into them, where several cuts meet within a millimetre.</summary>
+    [Fact]
+    public void CutsMeetingCloseTogetherLeaveNoCrack()
+    {
+        GeometryData Scaled(Float3 at, float scale) => Prism(L.Select(p => new Float2(at.X + p.X * scale, at.Z + p.Y * scale)).ToArray(), at.Y, at.Y + scale);
+
+        GeometryData output = Build(
+            (Scaled(new Float3(6f, 0f, 12f), 1f), CSGOperation.Additive),
+            (Scaled(new Float3(7.5f, 0f, 12f), 1f), CSGOperation.Additive),
+            (Scaled(new Float3(6.694235f, 0.3f, 12.6450615f), 0.5f), CSGOperation.Subtractive),
+            (Scaled(new Float3(6.4705153f, 0.3f, 12.340155f), 0.5f), CSGOperation.Subtractive));
+
+        Assert.Empty(output.Edges.Where(e => e.FaceCount == 1));
+    }
 }

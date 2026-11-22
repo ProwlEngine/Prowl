@@ -862,7 +862,8 @@ public sealed class CSGScene
 
     /// <summary>
     /// Joins pieces of one face back together where cutting by a concave neighbour split more than it had to: two
-    /// pieces facing the same way that share an edge become one, as long as the result stays convex.
+    /// pieces facing the same way that share an edge become one, as long as the result stays convex. Every corner is
+    /// kept, even where it is now in a straight line, as a neighbouring piece may still meet the face there.
     /// </summary>
     private static void MergePieces(List<OutFrag> output, int start)
     {
@@ -900,13 +901,7 @@ public sealed class CSGScene
                 for (int n = 1; n <= p.Length; n++) ring.Add(p[(i + n) % p.Length]);
                 for (int n = 2; n < q.Length; n++) ring.Add(q[(k + n) % q.Length]);
 
-                for (int n = ring.Count - 1; n >= 0 && ring.Count > 3; n--)
-                {
-                    Float3 before = ring[(n + ring.Count - 1) % ring.Count], after = ring[(n + 1) % ring.Count];
-                    if (Float3.LengthSquared(Float3.Cross(ring[n] - before, after - ring[n])) < 1e-12f) ring.RemoveAt(n);
-                }
-
-                if (!IsConvex(ring.ToArray(), normal)) return false;
+                if (!IsConvex(ring.ToArray(), normal) || DoublesBack(ring)) return false;
                 joined = ring.ToArray();
                 return true;
             }
@@ -915,6 +910,18 @@ public sealed class CSGScene
     }
 
     private static bool Same(Float3 a, Float3 b) => Float3.DistanceSquared(a, b) < 1e-10f;
+
+    /// <summary>Whether a ring turns straight back on itself anywhere, which a convexity test alone lets through.</summary>
+    private static bool DoublesBack(List<Float3> ring)
+    {
+        for (int i = 0; i < ring.Count; i++)
+        {
+            Float3 before = ring[(i + ring.Count - 1) % ring.Count], at = ring[i], after = ring[(i + 1) % ring.Count];
+            Float3 into = at - before, outOf = after - at;
+            if (Float3.Dot(into, outOf) < 0f && Float3.LengthSquared(Float3.Cross(into, outOf)) <= 1e-12f * Float3.LengthSquared(into) * Float3.LengthSquared(outOf)) return true;
+        }
+        return false;
+    }
 
     // Whether every corner of a polygon lies on a plane. Measured at the corners themselves, because
     // two planes through the same points can still differ in their constants by rounding.
