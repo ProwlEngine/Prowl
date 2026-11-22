@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Modeling;
 using Prowl.Runtime;
@@ -143,5 +144,26 @@ public class ModelWorldTests : EditorTestHarness
     {
         GeometryOperators.Triangulate(mesh);
         return mesh;
+    }
+
+    /// <summary>A model object's mesh is saved with it, so undo puts back the mesh an edit replaced.</summary>
+    [Fact]
+    public void UndoPutsBackAModelObjectsMesh()
+    {
+        Guid guid = WriteModel(out _);
+        ModelEditingMode.Open(guid);
+        ModelObject model = ModelEditingMode.World!.FindObject("Body")!.GetComponent<ModelObject>()!;
+
+        Undo.RecordObject(model, "Grow");
+        model.Mesh = Primitives.Make(PrimitiveKind.Cube);
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        Assert.Equal(8, model.Mesh.Vertices.Count);
+        Assert.True(IsolatedWorld.IsDirty);
+
+        Undo.PerformUndo();
+
+        Assert.Equal(4, model.Mesh.Vertices.Count);
+        ModelEditingMode.Exit();
     }
 }

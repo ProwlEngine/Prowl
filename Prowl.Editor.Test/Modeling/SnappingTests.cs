@@ -3,6 +3,7 @@
 
 using Prowl.Editor.Modeling;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 using Xunit;
 
@@ -45,5 +46,21 @@ public class SnappingTests
         Assert.Equal(hit, point);
 
         Assert.False(Snapping.Find([new Float3(200, 200, 0)], [], null, Screen, new Float2(5, 5), out _));
+    }
+}
+
+public class MeshPickingTests
+{
+    [Fact]
+    public void ARayFromAboveHitsTheTopOfAMovedBox()
+    {
+        GeometryData box = Prowl.Vector.Geometry.GeometryGenerator.Box(new Float3(2f));
+        Float4x4 toWorld = Float4x4.CreateTranslation(new Float3(0, 5, 0));
+
+        Assert.True(MeshPicking.Raycast(box, toWorld, new Ray(new Float3(0.2f, 20, 0.3f), -Float3.UnitY), out GeometryData.Face? face, out float distance));
+
+        Assert.True(face!.Normal().Y > 0.99f);
+        Assert.Equal(14f, distance, 3);
+        Assert.False(MeshPicking.Raycast(box, toWorld, new Ray(new Float3(5, 20, 0), -Float3.UnitY), out _, out _));
     }
 }

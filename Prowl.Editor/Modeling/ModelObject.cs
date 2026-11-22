@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Echo;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
@@ -26,7 +25,17 @@ public sealed class ModelObject : Component
     /// <summary>The editable mesh. Saved with the component as packed columns, so undo, redo and duplicating keep it.</summary>
     [NonSerialized] public GeometryData Mesh = new();
 
-    [SerializeField] private byte[]? _meshData;
+    /// <summary>The mesh as packed columns, read and written whenever the component is saved or recorded for undo.</summary>
+    [System.Runtime.Serialization.DataMember]
+    private byte[] MeshData
+    {
+        get => PMeshDocument.MeshToBytes(Mesh);
+        set
+        {
+            Mesh = PMeshDocument.MeshFromBytes(value);
+            _previewStale = true;
+        }
+    }
 
     // Set when the mesh came back from being saved, so the preview is rebuilt once the object is live
     [NonSerialized] private bool _previewStale = true;
@@ -39,19 +48,19 @@ public sealed class ModelObject : Component
 
     [NonSerialized] private Mesh? _preview;
 
-    public override void OnBeforeSerialize() => _meshData = PMeshDocument.MeshToBytes(Mesh);
-
-    public override void OnAfterDeserialize()
-    {
-        if (_meshData != null) Mesh = PMeshDocument.MeshFromBytes(_meshData);
-        _meshData = null;
-        _previewStale = true;
-    }
-
     public override void OnEnable()
     {
         if (_previewStale || _preview.IsNotValid()) RefreshPreview();
     }
+
+    // An undo puts back the mesh without enabling the object again, so the preview catches up here
+    public override void Update()
+    {
+        if (_previewStale) RefreshPreview();
+    }
+
+    /// <summary>Marks the preview out of date, to be rebuilt on the next update.</summary>
+    public void MarkPreviewStale() => _previewStale = true;
 
     /// <summary>Builds the mesh drawn for the geometry as the import would, and shows it on the renderer.</summary>
     public void RefreshPreview()
