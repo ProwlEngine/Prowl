@@ -97,7 +97,7 @@ public sealed class CSGObjectTool : SceneTool
 
         if (!handles.IsNearest(id) || !handles.TryBeginDrag(id)) return;
 
-        GameObject target = SelectionTargetFor(hit);
+        GameObject target = SelectionTargetFor(Cycle(model, handles, hit));
         if (handles.Shift) Selection.AddToSelection(target);
         else if (handles.Ctrl)
         {
@@ -212,6 +212,35 @@ public sealed class CSGObjectTool : SceneTool
         return MathF.Abs(denominator) < 1e-6f ? d : (d - b * e) / denominator;
     }
 
+    // Brushes under the last click, nearest first, and which of them that click took
+    private readonly List<CSGBrush> _underClick = new();
+    private int _cycle;
+    private Float2 _lastClick = new(float.NaN);
+
+    /// <summary>
+    /// Clicking the same spot again takes the next brush behind, so buried and carving brushes can be reached. A click
+    /// anywhere else starts over from the nearest.
+    /// </summary>
+    private CSGBrush Cycle(CSGModel model, HandleContext handles, CSGBrush nearest)
+    {
+        bool samePlace = Float2.Distance(handles.MousePosition, _lastClick) <= 2f;
+        _lastClick = handles.MousePosition;
+
+        if (!samePlace || _underClick.Count == 0 || !ReferenceEquals(_underClick[0], nearest))
+        {
+            _underClick.Clear();
+            _underClick.Add(nearest);
+            while (_underClick.Count < 32 && model.Raycast(handles.MouseRay, out CSGBrush behind, out _, out _,
+                       b => !CSGVisibility.IsHidden(b) && !_underClick.Contains(b)))
+                _underClick.Add(behind);
+            _cycle = 0;
+            return nearest;
+        }
+
+        _cycle = (_cycle + 1) % _underClick.Count;
+        return _underClick[_cycle];
+    }
+
     // A marquee in progress: where it started, and whether it has moved far enough to be one
     private bool _marquee;
     private Float2 _marqueeStart;
@@ -233,15 +262,32 @@ public sealed class CSGObjectTool : SceneTool
         if (!handles.Shift && !handles.Ctrl) Selection.Clear();
         if (!dragged) return true;
 
+        // Only what lies wholly inside counts, and a group handled as one only when all of its brushes do
         Float2 min = Maths.Min(_marqueeStart, handles.MousePosition), max = Maths.Max(_marqueeStart, handles.MousePosition);
+        var inside = new Dictionary<GameObject, bool>();
         foreach (CSGBrush brush in _brushes)
         {
-            if (CSGVisibility.IsHidden(brush) || !CSGSelection.TryBox(brush, out Float3 centre, out _)) continue;
-            if (handles.WorldToScreen(centre) is not Float2 p || p.X < min.X || p.X > max.X || p.Y < min.Y || p.Y > max.Y) continue;
-
+            if (CSGVisibility.IsHidden(brush) || !brush.IsShapeValid) continue;
             GameObject target = SelectionTargetFor(brush);
+            inside[target] = (!inside.TryGetValue(target, out bool sofar) || sofar) && Contained(handles, brush, min, max);
+        }
+
+        foreach ((GameObject target, bool contained) in inside)
+        {
+            if (!contained) continue;
             if (handles.Ctrl) Selection.RemoveFromSelection(target);
             else Selection.AddToSelection(target);
+        }
+        return true;
+    }
+
+    private static bool Contained(HandleContext handles, CSGBrush brush, Float2 min, Float2 max)
+    {
+        Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
+        foreach (GeometryData.Vertex vertex in brush.Shape!.Vertices)
+        {
+            if (handles.WorldToScreen(Float4x4.TransformPoint(vertex.Point, toWorld)) is not Float2 p) return false;
+            if (p.X < min.X || p.X > max.X || p.Y < min.Y || p.Y > max.Y) return false;
         }
         return true;
     }
