@@ -362,4 +362,26 @@ public sealed class TerrainEditTests
         using TerrainData rebuilt = TerrainData.Load(stream);
         AssertSamePages(data, rebuilt);
     }
+
+    [Fact]
+    public void Trees_StandOnTheGround_FollowHeightEdits_AndMoveWithTheTerrain()
+    {
+        using TerrainData data = Load(Rolling());
+        data.AddTree(new TerrainTree(0, new Double3(150, 0, 140), 0, 1, 1, TerrainTree.White));
+        using TerrainTreeInstances trees = new(data);
+        int cx = (int)Math.Floor(150 / trees.CellSize), cz = (int)Math.Floor(140 / trees.CellSize);
+        data.TryGetHeight(new Double2(150, 140), out double ground);
+        Assert.Equal(ground, trees.Cell(cx, cz)[0].Position.Y, 6);
+
+        List<(Double2, Double2)> changed = new();
+        trees.Changed += (min, max) => changed.Add((min, max));
+        data.Apply(new TerrainEdit(TerrainBrush.Paint, new Double2(150, 140), 8, 1, Layer: 1));
+        Assert.Empty(changed);
+        data.Apply(new TerrainEdit(TerrainBrush.Raise, new Double2(150, 140), 8, 4));
+        Assert.Single(changed);
+        Assert.Equal(ground + 4, trees.Cell(cx, cz)[0].Position.Y, 2);
+
+        data.Position = new Double3(1000, 0, 0);
+        Assert.Equal(1150, trees.Cell(cx, cz)[0].Position.X, 6);
+    }
 }
