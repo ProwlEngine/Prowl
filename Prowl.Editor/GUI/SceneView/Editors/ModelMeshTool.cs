@@ -389,9 +389,11 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited)
         {
             Undo.RecordObject(model, name);
+            var (points, faces) = Before(model.Mesh);
             try
             {
                 edit(model.Mesh, _selection[model]);
+                Operators.FinishEdit(model.Mesh, points, faces);
             }
             catch (InvalidOperationException e)
             {
@@ -404,6 +406,13 @@ public sealed class ModelMeshTool : SceneTool
             model.RefreshPreview();
         }
         HoldSelection();
+    }
+
+    private static (Dictionary<GeometryData.Vertex, Float3> Points, HashSet<GeometryData.Face> Faces) Before(GeometryData mesh)
+    {
+        var points = new Dictionary<GeometryData.Vertex, Float3>(mesh.Vertices.Count);
+        foreach (GeometryData.Vertex vertex in mesh.Vertices) points[vertex] = vertex.Point;
+        return (points, new HashSet<GeometryData.Face>(mesh.Faces));
     }
 
     /// <summary>The selection by index, which is what survives the mesh being put back by undo.</summary>
@@ -602,10 +611,17 @@ public sealed class ModelMeshTool : SceneTool
         }
         HoldSelection();
         Undo.RecordObject(_held, UndoOwner.OfSession, name);
-        foreach (ModelObject model in _edited) Undo.RecordObject(model, name);
+        var before = new Dictionary<ModelObject, (Dictionary<GeometryData.Vertex, Float3>, HashSet<GeometryData.Face>)>();
+        foreach (ModelObject model in _edited)
+        {
+            Undo.RecordObject(model, name);
+            before[model] = Before(model.Mesh);
+        }
         move();
         foreach (ModelObject model in _edited)
         {
+            (Dictionary<GeometryData.Vertex, Float3> points, HashSet<GeometryData.Face> faces) = before[model];
+            Operators.FinishEdit(model.Mesh, points, faces);
             model.Mesh.MarkChanged();
             model.RefreshPreview();
         }

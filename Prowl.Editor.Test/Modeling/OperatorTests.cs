@@ -543,4 +543,52 @@ public class OperatorTests
         Assert.All(moved, f => Assert.Equal(0, ((GeometryData.IntAttributeValue)f.Attributes[MeshGeometry.SubMesh]).Data[0]));
         Assert.All(moved, f => Assert.True(Float3.Dot(f.Normal(), f.Center() - new Float3(3, 0, 0)) > 0f));
     }
+
+    private static (Dictionary<GeometryData.Vertex, Float3> Points, HashSet<GeometryData.Face> Faces) Before(GeometryData mesh)
+        => (mesh.Vertices.ToDictionary(v => v, v => v.Point), new HashSet<GeometryData.Face>(mesh.Faces));
+
+    /// <summary>Normals a mesh came with are worked out again only around points an edit moved.</summary>
+    [Fact]
+    public void MovingAPointWorksOutNormalsAroundItAgain()
+    {
+        GeometryData mesh = Primitives.Make(PrimitiveKind.Cube);
+        GeometryOperators.SoftenByAngle(mesh, mesh.Edges, 30f);
+        Operators.CornerNormals(mesh);
+        var (points, faces) = Before(mesh);
+        GeometryData.Vertex corner = mesh.Vertices.First(v => v.Point == new Float3(0.5f, 0.5f, 0.5f));
+        GeometryData.Face bottom = mesh.Faces.First(f => f.Normal().Y < -0.99f);
+
+        corner.Point = new Float3(0.5f, 1.5f, 0.5f);
+        Operators.FinishEdit(mesh, points, faces);
+
+        GeometryData.Face top = mesh.Faces.First(f => f.NeighborVertices().Contains(corner) && f.Normal().Y > 0.3f);
+        Assert.True(CornerNormal(top.Loop!).Y < 0.99f);
+        Assert.True(CornerNormal(bottom.Loop!).Y < -0.99f);
+    }
+
+    /// <summary>A face made from nothing takes the slot of its neighbour and the texture coordinates of the corners it stands on.</summary>
+    [Fact]
+    public void AFaceMadeFromNothingTakesItsNeighboursSlotAndCorners()
+    {
+        GeometryData mesh = Primitives.Make(PrimitiveKind.Cube);
+        foreach (GeometryData.Face face in mesh.Faces) face.SetAttribute(MeshGeometry.SubMesh, new GeometryData.IntAttributeValue(2));
+        GeometryData.Face top = mesh.Faces.First(f => f.Normal().Y > 0.99f);
+        GeometryData.Vertex[] ring = [.. top.NeighborVertices()];
+        GeometryOperators.DeleteFaces(mesh, [top]);
+        var (points, faces) = Before(mesh);
+
+        GeometryData.Face made = mesh.AddFace(ring)!;
+        Operators.FinishEdit(mesh, points, faces);
+
+        Assert.Equal(2, ((GeometryData.IntAttributeValue)made.Attributes[MeshGeometry.SubMesh]).Data[0]);
+        GeometryData.Loop loop = made.Loop!;
+        bool anyNonZero = false;
+        do
+        {
+            float[] uv = ((GeometryData.FloatAttributeValue)loop.Attributes[MeshGeometry.UV]).Data;
+            anyNonZero |= uv[0] != 0f || uv[1] != 0f;
+            loop = loop.Next!;
+        } while (loop != made.Loop);
+        Assert.True(anyNonZero);
+    }
 }

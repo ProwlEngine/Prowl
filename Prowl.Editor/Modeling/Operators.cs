@@ -389,7 +389,7 @@ public static class Operators
     /// Gives every corner a normal: the faces around its point that are joined to its face across soft edges, averaged by
     /// area, so the surface is smooth across soft edges and creased across any other.
     /// </summary>
-    public static void CornerNormals(GeometryData mesh)
+    public static void CornerNormals(GeometryData mesh, ISet<GeometryData.Vertex>? only = null)
     {
         const string Normal = Prowl.Runtime.Resources.MeshGeometry.Normal;
         if (!mesh.HasLoopAttribute(Normal)) mesh.AddLoopAttribute(Normal, GeometryData.AttributeBaseType.Float, 3);
@@ -405,6 +405,11 @@ public static class Operators
             do
             {
                 GeometryData.Vertex point = loop.Vert;
+                if (only != null && !only.Contains(point))
+                {
+                    loop = loop.Next!;
+                    continue;
+                }
                 fan.Clear();
                 fan.Add(face);
                 stack.Push(face);
@@ -527,6 +532,120 @@ public static class Operators
                 if (lacked) target.Loops[i].SetAttribute(Color, new GeometryData.FloatAttributeValue(1f, 1f, 1f, 1f));
             }
         }
+    }
+
+    /// <summary>
+    /// Tidies a mesh after an edit, from where its points were and which faces it had before. Corner normals are worked
+    /// out again around every point that moved or is new, when the mesh has normals. A face made from nothing takes the
+    /// material slot of the old face sharing most edges with it, the texture coordinates of old corners at the same
+    /// points or else a flat projection, and white where it has no color.
+    /// </summary>
+    public static void FinishEdit(GeometryData mesh, IReadOnlyDictionary<GeometryData.Vertex, Float3> pointsBefore, IReadOnlySet<GeometryData.Face> facesBefore)
+    {
+        const string SubMesh = Prowl.Runtime.Resources.MeshGeometry.SubMesh, UV = Prowl.Runtime.Resources.MeshGeometry.UV;
+        const string Color = Prowl.Runtime.Resources.MeshGeometry.VertexColor, Normal = Prowl.Runtime.Resources.MeshGeometry.Normal;
+
+        var made = new List<GeometryData.Face>();
+        foreach (GeometryData.Face face in mesh.Faces)
+            if (!facesBefore.Contains(face)) made.Add(face);
+
+        foreach (GeometryData.Face face in made)
+        {
+            GeometryData.Face? neighbour = OldNeighbour(face, facesBefore);
+            if (!face.TryGetAttribute(SubMesh, out _) && neighbour != null && neighbour.TryGetAttribute(SubMesh, out GeometryData.AttributeValue? slot))
+                face.SetAttribute(SubMesh, slot!);
+
+            if (mesh.HasLoopAttribute(UV) && AllCorners(face, UV, IsZero))
+            {
+                Float3 normal = face.Normal();
+                ForEachCorner(face, loop =>
+                {
+                    if (OldCornerAt(loop.Vert, neighbour, facesBefore) is { } old && old.TryGetAttribute(UV, out GeometryData.AttributeValue? uv)) loop.SetAttribute(UV, uv!);
+                    else
+                    {
+                        Float2 flat = Projected(loop.Vert.Point, normal);
+                        loop.SetAttribute(UV, new GeometryData.FloatAttributeValue(flat.X, flat.Y));
+                    }
+                });
+            }
+            if (mesh.HasLoopAttribute(Color) && AllCorners(face, Color, IsZero))
+                ForEachCorner(face, loop => loop.SetAttribute(Color, new GeometryData.FloatAttributeValue(1f, 1f, 1f, 1f)));
+        }
+
+        if (!mesh.HasLoopAttribute(Normal)) return;
+        var moved = new HashSet<GeometryData.Vertex>();
+        foreach (GeometryData.Vertex vertex in mesh.Vertices)
+            if (!pointsBefore.TryGetValue(vertex, out Float3 was) || was != vertex.Point) moved.Add(vertex);
+        foreach (GeometryData.Face face in made) moved.UnionWith(face.NeighborVertices());
+        if (moved.Count == 0) return;
+
+        // A point's normal turns with every face round it, so the points of those faces are worked out again too
+        var dirty = new HashSet<GeometryData.Vertex>(moved);
+        foreach (GeometryData.Vertex vertex in moved)
+            foreach (GeometryData.Face face in vertex.NeighborFaces()) dirty.UnionWith(face.NeighborVertices());
+        CornerNormals(mesh, dirty);
+    }
+
+    private static GeometryData.Face? OldNeighbour(GeometryData.Face face, IReadOnlySet<GeometryData.Face> old)
+    {
+        var shared = new Dictionary<GeometryData.Face, int>();
+        foreach (GeometryData.Edge edge in face.NeighborEdges())
+            foreach (GeometryData.Face other in edge.NeighborFaces())
+                if (other != face && old.Contains(other)) shared[other] = shared.TryGetValue(other, out int n) ? n + 1 : 1;
+        GeometryData.Face? best = null;
+        int most = 0;
+        foreach ((GeometryData.Face other, int count) in shared)
+            if (count > most) (best, most) = (other, count);
+        return best;
+    }
+
+    private static GeometryData.Loop? OldCornerAt(GeometryData.Vertex vertex, GeometryData.Face? preferred, IReadOnlySet<GeometryData.Face> old)
+    {
+        if (preferred != null && CornerOf(preferred, vertex) is { } corner) return corner;
+        foreach (GeometryData.Face face in vertex.NeighborFaces())
+            if (old.Contains(face) && CornerOf(face, vertex) is { } found) return found;
+        return null;
+    }
+
+    private static GeometryData.Loop? CornerOf(GeometryData.Face face, GeometryData.Vertex vertex)
+    {
+        GeometryData.Loop loop = face.Loop!;
+        do
+        {
+            if (loop.Vert == vertex) return loop;
+            loop = loop.Next!;
+        } while (loop != face.Loop);
+        return null;
+    }
+
+    private static Float2 Projected(Float3 point, Float3 normal)
+    {
+        Float3 size = new(MathF.Abs(normal.X), MathF.Abs(normal.Y), MathF.Abs(normal.Z));
+        return size.X >= size.Y && size.X >= size.Z ? new Float2(point.Z, point.Y) : size.Y >= size.Z ? new Float2(point.X, point.Z) : new Float2(point.X, point.Y);
+    }
+
+    private static bool IsZero(GeometryData.AttributeValue? value)
+        => value is not GeometryData.FloatAttributeValue f || Array.TrueForAll(f.Data, x => x == 0f);
+
+    private static bool AllCorners(GeometryData.Face face, string name, Func<GeometryData.AttributeValue?, bool> test)
+    {
+        GeometryData.Loop loop = face.Loop!;
+        do
+        {
+            if (!test(loop.TryGetAttribute(name, out GeometryData.AttributeValue? value) ? value : null)) return false;
+            loop = loop.Next!;
+        } while (loop != face.Loop);
+        return true;
+    }
+
+    private static void ForEachCorner(GeometryData.Face face, Action<GeometryData.Loop> act)
+    {
+        GeometryData.Loop loop = face.Loop!;
+        do
+        {
+            act(loop);
+            loop = loop.Next!;
+        } while (loop != face.Loop);
     }
 
     /// <summary>The edges in groups joined at their points.</summary>

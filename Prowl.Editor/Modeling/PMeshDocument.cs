@@ -153,6 +153,9 @@ public sealed class PMeshDocument
 
             Transform transform = go.Transform;
             var item = new PMeshObject { Id = id, Name = go.Name, Mesh = MeshGeometry.ToGeometryData(renderer.Mesh!, JoinDegrees) };
+
+            // The mesh brings its own normals, and edges flagged by the smoothing angle say how those are worked out again after an edit
+            GeometryOperators.SoftenByAngle(item.Mesh, item.Mesh.Edges, item.SmoothingAngle);
             if (parent.IsValid())
             {
                 Transform above = parent!.Transform;
