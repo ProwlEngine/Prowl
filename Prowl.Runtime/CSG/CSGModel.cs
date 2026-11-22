@@ -79,6 +79,7 @@ public sealed class CSGModel : Component
     [SerializeIgnore] private int _rootChildCount;
 
     [SerializeIgnore] private GeometryData? _geometry;
+    [SerializeIgnore] private int _geometryVersion;
     [SerializeIgnore] private Mesh? _visible;
     [SerializeIgnore] private Mesh? _collision;
     [SerializeIgnore] private bool _dirty = true;
@@ -271,9 +272,10 @@ public sealed class CSGModel : Component
         GeometryData geometry = _scene.Build();
         BrushCount = _scene.Count;
 
-        // The scene hands back its cached output when nothing moved, so the meshes are already right
-        if (!force && ReferenceEquals(geometry, _geometry)) return;
+        // The scene patches and hands back the same mesh, unchanged when nothing moved
+        if (!force && ReferenceEquals(geometry, _geometry) && geometry.Version == _geometryVersion) return;
         _geometry = geometry;
+        _geometryVersion = geometry.Version;
 
         BuildCount++;
         CSGMeshes meshes = CSGMeshBuilder.Build(geometry, ResolveSurface, GameObject.Name);
