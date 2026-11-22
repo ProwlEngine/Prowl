@@ -227,6 +227,74 @@ internal static class TopologyOp
         return result;
     }
 
+    /// <summary>
+    /// A copy of the mesh given thickness: an outer and an inner shell, apart by the thickness along each vertex's
+    /// normal, joined by side faces along open borders. The offset from -1 to 1 places the shells, -1 keeping the outer
+    /// one on the surface and 1 the inner one. The inner shell faces inwards.
+    /// </summary>
+    internal static GeometryData Solidify(GeometryData source, float thickness, float offset)
+    {
+        var result = new GeometryData();
+        CopyDefinitions(source, result);
+
+        int count = source.Vertices.Count;
+        var outer = new Vertex[count];
+        var inner = new Vertex[count];
+        var index = new Dictionary<Vertex, int>(count);
+        float outward = thickness * (1f + offset) * 0.5f, inward = thickness * (1f - offset) * 0.5f;
+        for (int i = 0; i < count; i++)
+        {
+            Vertex vertex = source.Vertices[i];
+            index[vertex] = i;
+            Float3 normal = Float3.Zero;
+            foreach (Face face in vertex.NeighborFaces()) normal += face.Normal();
+            if (Float3.LengthSquared(normal) > 1e-12f) normal = Float3.Normalize(normal);
+            outer[i] = result.AddVertex(vertex.Point + normal * outward);
+            outer[i].Attributes = AttributeTransfer.Copy(vertex.Attributes);
+            inner[i] = result.AddVertex(vertex.Point - normal * inward);
+            inner[i].Attributes = AttributeTransfer.Copy(vertex.Attributes);
+        }
+
+        foreach (Edge edge in source.Edges)
+        {
+            int a = index[edge.Vert1], b = index[edge.Vert2];
+            result.AddEdge(outer[a], outer[b]).Attributes = AttributeTransfer.Copy(edge.Attributes);
+            result.AddEdge(inner[a], inner[b]).Attributes = AttributeTransfer.Copy(edge.Attributes);
+        }
+
+        foreach (Face face in source.Faces)
+        {
+            var corners = new List<Loop>(face.VertCount);
+            Loop loop = face.Loop!;
+            do
+            {
+                corners.Add(loop);
+                loop = loop.Next!;
+            } while (loop != face.Loop);
+
+            AddCopy(result, face, corners, outer, index);
+            for (int i = 0; i < corners.Count; i++)
+            {
+                Loop from = corners[i], to = corners[(i + 1) % corners.Count];
+                Edge? edge = source.FindEdge(from.Vert, to.Vert);
+                if (edge == null || edge.NeighborFaces().Count != 1) continue;
+                int a = index[from.Vert], b = index[to.Vert];
+                Face? side = result.AddFace(outer[b], outer[a], inner[a], inner[b]);
+                if (side == null) continue;
+                side.Attributes = AttributeTransfer.Copy(face.Attributes);
+                Loop corner = side.Loop!;
+                foreach (Loop like in (Loop[])[to, from, from, to])
+                {
+                    corner.Attributes = AttributeTransfer.Copy(like.Attributes);
+                    corner = corner.Next!;
+                }
+            }
+            corners.Reverse();
+            AddCopy(result, face, corners, inner, index);
+        }
+        return result;
+    }
+
     private static void AddCopy(GeometryData result, Face face, List<Loop> corners, Vertex[] map, Dictionary<Vertex, int> index)
     {
         Face? copy = result.AddFace(corners.Select(c => map[index[c.Vert]]).ToArray());

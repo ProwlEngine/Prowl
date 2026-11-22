@@ -888,6 +888,16 @@ public static class GeometryOperators
     }
 
     /// <summary>
+    /// A copy of the mesh given thickness: an outer and an inner shell along the vertex normals, joined along open
+    /// borders. The offset from -1 to 1 places the shells, -1 keeping the outer one on the surface. The mesh given is
+    /// not changed.
+    /// </summary>
+    public static GeometryData Solidify(GeometryData mesh, float thickness, float offset = -1f)
+    {
+        return TopologyOp.Solidify(mesh, thickness, offset);
+    }
+
+    /// <summary>
     /// Catmull Clark subdivision as a new mesh: each level turns every face into one four sided face per corner and
     /// smooths the surface. Borders and edges flagged sharp keep their line. Attributes are carried over, with
     /// float loop attributes such as texture coordinates interpolated across each face. The mesh given is not changed.

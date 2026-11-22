@@ -309,6 +309,35 @@ public class GeometryLoopTests
     }
 
     [Fact]
+    public void Solidify_OfAnOpenQuad_IsAClosedSlabOfTheThickness()
+    {
+        GeometryData mesh = Grid(1, 1);
+
+        GeometryData slab = GeometryOperators.Solidify(mesh, 0.25f, -1f);
+
+        Assert.Equal(8, slab.Vertices.Count);
+        Assert.Equal(6, slab.Faces.Count);
+        Assert.All(slab.Edges, e => Assert.Equal(2, e.NeighborFaces().Count));
+        Assert.Equal(4, slab.Vertices.Count(v => MathF.Abs(v.Point.Z) < 1e-5f));
+        Assert.Equal(4, slab.Vertices.Count(v => MathF.Abs(v.Point.Z + 0.25f) < 1e-5f));
+        Assert.Contains(slab.Faces, f => f.Normal().Z > 0.99f);
+        Assert.Contains(slab.Faces, f => f.Normal().Z < -0.99f);
+        Assert.Single(mesh.Faces);
+    }
+
+    [Fact]
+    public void Solidify_OfAClosedCube_IsTwoShellsWithNoSides_AndOffsetMovesBoth()
+    {
+        GeometryData cube = Cube();
+
+        GeometryData shells = GeometryOperators.Solidify(cube, 0.5f, 0f);
+
+        Assert.Equal(16, shells.Vertices.Count);
+        Assert.Equal(12, shells.Faces.Count);
+        Assert.Equal(8, shells.Vertices.Count(v => MathF.Abs(MathF.Abs(v.Point.X) - (1f + 0.25f / MathF.Sqrt(3f))) < 1e-4f));
+    }
+
+    [Fact]
     public void SubdivideSmooth_OfACube_IsAllQuads_AndRounder()
     {
         GeometryData cube = Cube();
