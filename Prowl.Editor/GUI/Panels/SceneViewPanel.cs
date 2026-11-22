@@ -606,6 +606,7 @@ public class SceneViewPanel : DockPanel
 
             // Camera input
             bool isHovered = paper.IsParentHovered;
+            _handles.PanelHovered = isHovered;
             _editorCamera.ProcessInput(
                 (float)Time.UnscaledDeltaTime,
                 isHovered,
