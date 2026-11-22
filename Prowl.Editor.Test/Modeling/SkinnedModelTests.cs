@@ -182,4 +182,31 @@ public class SkinnedModelTests : EditorTestHarness
         Assert.True(at.TryGetAttribute(MeshGeometry.BlendShapePosition(1, 0), out GeometryData.AttributeValue? smile) && smile is GeometryData.FloatAttributeValue d && MathF.Abs(d.Data[0] - 0.5f) < 1e-5f);
         Assert.True(!at.TryGetAttribute(MeshGeometry.BlendShapePosition(0, 0), out GeometryData.AttributeValue? bulge) || bulge is GeometryData.FloatAttributeValue z && z.Data.All(x => x == 0f));
     }
+
+    [Fact]
+    public void SubdividingBlendsSkinAcrossBoneBorders()
+    {
+        PMeshObject item = SkinnedItem();
+        item.Modifiers.Add(new SubdivideModifier { Levels = 1 });
+
+        GeometryData result = ModelModifier.Run(item.Mesh, item.Modifiers);
+
+        bool mixed = false;
+        foreach (GeometryData.Loop corner in result.Loops)
+        {
+            (_, float weight) = Skin(corner);
+            Assert.True(MathF.Abs(weight - 1f) < 1e-4f, $"weight {weight} at {corner.Vert.Point}");
+            var ids = (GeometryData.IntAttributeValue)corner.Attributes[MeshGeometry.BoneIndices];
+            var ws = (GeometryData.FloatAttributeValue)corner.Attributes[MeshGeometry.BoneWeights];
+            float hip = 0f, spine = 0f;
+            for (int k = 0; k < 4; k++)
+            {
+                if (ids.Data[k] == 0) hip += ws.Data[k];
+                if (ids.Data[k] == 1) spine += ws.Data[k];
+            }
+            mixed |= hip > 0.2f && spine > 0.2f;
+        }
+        Assert.True(mixed);
+        Assert.True(item.Mesh.HasLoopAttribute(MeshGeometry.BoneIndices));
+    }
 }

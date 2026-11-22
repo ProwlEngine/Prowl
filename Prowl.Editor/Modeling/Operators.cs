@@ -534,6 +534,69 @@ public static class Operators
         }
     }
 
+    /// <summary>The corner attribute holding a mesh's skin as one weights value while an edit runs, so it blends whole.</summary>
+    public const string Skin = "skin";
+
+    /// <summary>
+    /// Turns a mesh's bone index and weight attributes into one weights value a corner, which operators blend as a whole
+    /// rather than mixing weights apart from their bones. False when the mesh has no skin.
+    /// </summary>
+    public static bool SkinToWeights(GeometryData mesh)
+    {
+        const string Indices = Prowl.Runtime.Resources.MeshGeometry.BoneIndices, Weights = Prowl.Runtime.Resources.MeshGeometry.BoneWeights;
+        if (!mesh.HasLoopAttribute(Indices) || !mesh.HasLoopAttribute(Weights)) return false;
+        var groups = new List<int>(4);
+        var weights = new List<float>(4);
+        foreach (GeometryData.Loop loop in mesh.Loops)
+        {
+            groups.Clear();
+            weights.Clear();
+            if (loop.TryGetAttribute(Indices, out GeometryData.AttributeValue? i) && i is GeometryData.IntAttributeValue ids
+                && loop.TryGetAttribute(Weights, out GeometryData.AttributeValue? w) && w is GeometryData.FloatAttributeValue ws)
+                for (int k = 0; k < Math.Min(ids.Data.Length, ws.Data.Length); k++)
+                {
+                    if (ws.Data[k] <= 0f) continue;
+                    int at = groups.IndexOf(ids.Data[k]);
+                    if (at >= 0) weights[at] += ws.Data[k];
+                    else
+                    {
+                        groups.Add(ids.Data[k]);
+                        weights.Add(ws.Data[k]);
+                    }
+                }
+            loop.SetAttribute(Skin, new GeometryData.WeightsAttributeValue([.. groups], [.. weights]));
+        }
+        mesh.RemoveLoopAttribute(Indices);
+        mesh.RemoveLoopAttribute(Weights);
+        return true;
+    }
+
+    /// <summary>
+    /// Puts a skin held as weights values back into bone index and weight attributes: the four heaviest bones of each
+    /// corner, scaled to add up to one. A corner with no weights value is left with none, for the edit's tidy up to fill.
+    /// </summary>
+    public static void WeightsToSkin(GeometryData mesh)
+    {
+        const string Indices = Prowl.Runtime.Resources.MeshGeometry.BoneIndices, Weights = Prowl.Runtime.Resources.MeshGeometry.BoneWeights;
+        mesh.AddLoopAttribute(Indices, GeometryData.AttributeBaseType.Int, 4);
+        mesh.AddLoopAttribute(Weights, GeometryData.AttributeBaseType.Float, 4);
+        foreach (GeometryData.Loop loop in mesh.Loops)
+        {
+            if (!loop.TryGetAttribute(Skin, out GeometryData.AttributeValue? value) || value is not GeometryData.WeightsAttributeValue skin) continue;
+            loop.Attributes.Remove(Skin);
+            var slots = new (int Bone, float Weight)[skin.Groups.Length];
+            for (int k = 0; k < slots.Length; k++) slots[k] = (skin.Groups[k], skin.Weights[k]);
+            Array.Sort(slots, (a, b) => b.Weight.CompareTo(a.Weight));
+            var kept = new (int Bone, float Weight)[4];
+            float total = 0f;
+            for (int k = 0; k < Math.Min(4, slots.Length); k++) total += slots[k].Weight;
+            for (int k = 0; k < 4; k++) kept[k] = k < slots.Length && total > 0f ? (slots[k].Bone, slots[k].Weight / total) : (0, 0f);
+            Array.Sort(kept, (a, b) => a.Bone != b.Bone ? a.Bone.CompareTo(b.Bone) : a.Weight.CompareTo(b.Weight));
+            loop.SetAttribute(Indices, new GeometryData.IntAttributeValue(kept[0].Bone, kept[1].Bone, kept[2].Bone, kept[3].Bone));
+            loop.SetAttribute(Weights, new GeometryData.FloatAttributeValue(kept[0].Weight, kept[1].Weight, kept[2].Weight, kept[3].Weight));
+        }
+    }
+
     /// <summary>
     /// Readies another object's skeleton and blend shapes to join a target's, before their meshes join. Bones and shapes
     /// are matched by name and the other's missing ones added, a bone moved into the target's space. The other mesh's

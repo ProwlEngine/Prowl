@@ -718,15 +718,17 @@ public sealed class ModelMeshTool : SceneTool
         {
             Undo.RecordObject(model, name);
             var (points, faces) = Before(model.Mesh);
+            bool skinned = Operators.SkinToWeights(model.Mesh);
             try
             {
                 edit(model.Mesh, _selection[model]);
-                Operators.FinishEdit(model.Mesh, points, faces);
             }
             catch (InvalidOperationException e)
             {
                 CSGStatus.Flash(e.Message);
             }
+            if (skinned) Operators.WeightsToSkin(model.Mesh);
+            Operators.FinishEdit(model.Mesh, points, faces);
             ElementSelection selection = _selection[model];
             if (selects is { } lead) Selecting.ToMode(selection, lead, Mode);
             Selecting.Without(selection, _hidden[model], Mode);

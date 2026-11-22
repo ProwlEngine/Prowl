@@ -31,6 +31,7 @@ public abstract class ModelModifier
     public static GeometryData Run(GeometryData mesh, IReadOnlyList<ModelModifier> stack, bool dragging = false)
     {
         GeometryData result = mesh;
+        bool skinned = false;
         foreach (ModelModifier modifier in stack)
         {
             if (!modifier.Enabled || dragging && modifier.SkipWhileDragging) continue;
@@ -38,9 +39,11 @@ public abstract class ModelModifier
             {
                 result = new GeometryData();
                 result.Restore(mesh.Capture());
+                skinned = Operators.SkinToWeights(result);
             }
             result = modifier.Apply(result);
         }
+        if (skinned) Operators.WeightsToSkin(result);
         return result;
     }
 
