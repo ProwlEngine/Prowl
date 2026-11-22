@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
@@ -1303,6 +1304,8 @@ public class ProjectPanel : DockPanel
             builder.Item(Loc.Get("project.copy_path"), () => paper_SetClipboard(item.RelativePath), icon: EditorIcons.Copy);
             if (!item.IsFolder && item.Guid != Guid.Empty)
                 builder.Item(Loc.Get("project.copy_guid"), () => paper_SetClipboard(item.Guid.ToString()), icon: EditorIcons.Fingerprint);
+            if (!item.IsFolder && item.Guid != Guid.Empty && ModelEditingMode.CanCreateModelFrom(item.Guid))
+                builder.Item(Loc.Get("project.create_model_from"), () => ModelEditingMode.CreateModelFrom(item.Guid), icon: EditorIcons.Shapes);
             if (!item.IsFolder)
                 builder.Item(Loc.Get("project.reimport"), () =>
                 {

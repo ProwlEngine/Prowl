@@ -338,7 +338,7 @@ public class InspectorPanel : DockPanel
     {
         if (!DragDrop.IsDragging && !DragDrop.IsDropFrame) return;
         if (DragDrop.Payload is not AssetDragPayload payload) return;
-        if (!ScriptComponentResolver.IsScriptAsset(payload)) return;
+        if (!ScriptComponentResolver.IsScriptAsset(payload) || ModelEditingMode.IsEditing) return;
         if (Selection.ActiveObject is not GameObject) return;
 
         var gos = Selection.GetSelected<GameObject>().Where(g => g.IsValid()).ToList();

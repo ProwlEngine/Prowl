@@ -668,7 +668,7 @@ public class HierarchyPanel : DockPanel
                     b.Header(Loc.Get("hierarchy.create"));
                     // Creates into this header's scene, whatever is selected.
                     MenuContext.SetSection(header.Section);
-                    MenuItemAttribute.BuildContextMenu(b, "GameObject");
+                    BuildCreateItems(b);
                 }));
         }
     }
@@ -1224,6 +1224,13 @@ public class HierarchyPanel : DockPanel
     //  Create Menu
     // ================================================================
 
+    /// <summary>What can be created: in the model world only model objects, which is all a model saves, otherwise the GameObject menu.</summary>
+    private static void BuildCreateItems(ContextBuilder builder)
+    {
+        if (ModelEditingMode.IsEditing) ModelEditingMode.BuildCreateMenu(builder);
+        else MenuItemAttribute.BuildContextMenu(builder, "GameObject");
+    }
+
     /// <summary>Create menu for a menu that knows what it was opened over: <paramref name="parent"/>
     /// for a GameObject row, null for empty space (meaning the scene root).</summary>
     private static void BuildCreateMenuFor(ContextBuilder builder, GameObject? parent) =>
@@ -1232,7 +1239,7 @@ public class HierarchyPanel : DockPanel
     private static void BuildCreateMenuFor(ContextBuilder builder, IReadOnlyList<GameObject> parents)
     {
         MenuContext.SetMany(parents);
-        MenuItemAttribute.BuildContextMenu(builder, "GameObject");
+        BuildCreateItems(builder);
     }
 
     /// <summary>Create menu with no object of its own - new objects land under the active selection,
@@ -1240,7 +1247,7 @@ public class HierarchyPanel : DockPanel
     private static void BuildCreateMenuForSelection(ContextBuilder builder)
     {
         MenuContext.Clear();
-        MenuItemAttribute.BuildContextMenu(builder, "GameObject");
+        BuildCreateItems(builder);
     }
 
     /// <summary>

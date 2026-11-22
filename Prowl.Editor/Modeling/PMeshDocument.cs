@@ -7,6 +7,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
+using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
@@ -106,6 +108,75 @@ public sealed class PMeshDocument
         foreach (EchoObject material in o["materials"].List) item.Materials.Add(Guid.Parse(material.StringValue));
         item.Mesh = ReadMesh(o["mesh"]);
         return item;
+    }
+
+    /// <summary>One mesh on its own in the document's format, for whatever keeps a mesh as bytes.</summary>
+    internal static byte[] MeshToBytes(GeometryData mesh)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream)) WriteMesh(mesh).WriteToBinary(writer);
+        return stream.ToArray();
+    }
+
+    internal static GeometryData MeshFromBytes(byte[] bytes)
+    {
+        using var reader = new BinaryReader(new MemoryStream(bytes));
+        return ReadMesh(EchoObject.ReadFromBinary(reader));
+    }
+
+    /// <summary>
+    /// A model made from copies of objects that draw meshes. Objects keep where they are relative to the active one and
+    /// hang under the nearest of the others they were under. Each gets its own copy of its mesh, and material slots keep
+    /// their materials, a material that is not an asset left empty with a warning. Objects drawing nothing are left out.
+    /// </summary>
+    public static PMeshDocument FromObjects(IReadOnlyList<GameObject> objects, GameObject active)
+    {
+        var document = new PMeshDocument();
+        var ids = new Dictionary<GameObject, Guid>();
+        foreach (GameObject go in objects)
+        {
+            MeshRenderer? drawn = go.GetComponent<MeshRenderer>();
+            if (drawn.IsValid() && drawn!.Mesh.IsValid()) ids[go] = Guid.NewGuid();
+        }
+
+        Transform frame = active.Transform;
+        foreach (GameObject go in objects)
+        {
+            if (!ids.TryGetValue(go, out Guid id)) continue;
+            MeshRenderer renderer = go.GetComponent<MeshRenderer>()!;
+
+            GameObject? parent = go.Parent;
+            while (parent.IsValid() && !ids.ContainsKey(parent!)) parent = parent!.Parent;
+
+            Transform transform = go.Transform;
+            var item = new PMeshObject { Id = id, Name = go.Name, Mesh = MeshGeometry.ToGeometryData(renderer.Mesh!) };
+            if (parent.IsValid())
+            {
+                Transform above = parent!.Transform;
+                item.Parent = ids[parent];
+                item.Position = above.InverseTransformPoint(transform.Position);
+                item.Rotation = Quaternion.Inverse(above.Rotation) * transform.Rotation;
+                item.Scale = transform.LossyScale / above.LossyScale;
+            }
+            else
+            {
+                item.Position = frame.InverseTransformPoint(transform.Position);
+                item.Rotation = Quaternion.Inverse(frame.Rotation) * transform.Rotation;
+                item.Scale = transform.LossyScale / frame.LossyScale;
+            }
+
+            foreach (Material material in renderer.Materials)
+            {
+                if (material.IsValid() && material.AssetID != Guid.Empty) item.Materials.Add(material.AssetID);
+                else
+                {
+                    item.Materials.Add(Guid.Empty);
+                    Debug.LogWarning($"[Model] A material of '{go.Name}' is not an asset, so its slot is left empty.");
+                }
+            }
+            document.Objects.Add(item);
+        }
+        return document;
     }
 
     // ================================================================

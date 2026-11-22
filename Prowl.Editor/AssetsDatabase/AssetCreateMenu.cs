@@ -62,6 +62,16 @@ public static class AssetCreateMenu
         return false;
     }
 
+    [MenuItem("Assets/Create/Model", priority: 101, Icon = EditorIcons.Shapes)]
+    static void CreateModelItem() => CreateAssetTask.Begin(GetCurrentFolder(), "New Model", Modeling.PMeshDocument.Extension, WriteModel);
+
+    private static bool WriteModel(string path, string name)
+    {
+        var cube = new Modeling.PMeshObject { Name = name, Mesh = Modeling.Primitives.Make(Modeling.PrimitiveKind.Cube) };
+        File.WriteAllBytes(path, new Modeling.PMeshDocument { Objects = { cube } }.Write());
+        return true;
+    }
+
     [MenuItem("Assets/Create/Shader", priority: 1000, Icon = EditorIcons.WandMagicSparkles, Separator = true)]
     static void CreateShaderItem() => CreateAssetTask.Begin(GetCurrentFolder(), "New Shader", ".shader", WriteShader);
 

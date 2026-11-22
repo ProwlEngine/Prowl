@@ -146,6 +146,101 @@ public static class ModelEditingMode
     /// <summary>Leaves the model world without saving.</summary>
     public static void Exit() => Session?.Close();
 
+    /// <summary>Whether an asset can be made into a model: a mesh, or a model's prefab.</summary>
+    public static bool CanCreateModelFrom(Guid asset)
+    {
+        Type? type = AssetDatabase.GetAssetType(asset);
+        return type == typeof(Mesh) || type == typeof(PrefabAsset) && AssetDatabase.Load<PrefabAsset>(asset) is { InstanceType: PrefabInstanceType.Model };
+    }
+
+    /// <summary>
+    /// Writes a model made from a mesh or a model's objects beside it, then opens it. The source is not changed.
+    /// Returns the new model, or empty when nothing could be made.
+    /// </summary>
+    public static Guid CreateModelFrom(Guid asset, bool open = true)
+    {
+        EditorAssetBackend? backend = EditorAssetBackend.Instance;
+        if (backend?.GetEntry(asset) is not { } entry || Project.Current == null) return Guid.Empty;
+
+        PMeshDocument document;
+        try
+        {
+            document = DocumentOf(asset);
+        }
+        catch (Exception e)
+        {
+            Debug.LogException("[Model] Making a model from the asset failed", e);
+            return Guid.Empty;
+        }
+        if (document.Objects.Count == 0)
+        {
+            Debug.LogWarning("[Model] The asset draws no mesh to make a model from.");
+            return Guid.Empty;
+        }
+
+        string folder = Path.GetDirectoryName(entry.Path)?.Replace(Path.DirectorySeparatorChar, '/') ?? "";
+        string absoluteFolder = AssetCreateMenu.GetAbsoluteFolder(folder);
+        string name = AssetCreateMenu.FindUniqueName(absoluteFolder, Path.GetFileNameWithoutExtension(entry.Path), PMeshDocument.Extension);
+        File.WriteAllBytes(Path.Combine(absoluteFolder, name), document.Write());
+        backend.Refresh();
+
+        string relative = folder.Length > 0 ? $"{folder}/{name}" : name;
+        if (backend.GetEntry(relative) is not { } created) return Guid.Empty;
+        if (open) Open(created.Guid);
+        return created.Guid;
+    }
+
+    private static PMeshDocument DocumentOf(Guid asset)
+    {
+        if (AssetDatabase.Load<Mesh>(asset) is { } mesh && mesh.IsValid())
+        {
+            var item = new PMeshObject { Name = mesh.Name, Mesh = MeshGeometry.ToGeometryData(mesh) };
+            return new PMeshDocument { Objects = { item } };
+        }
+
+        PrefabAsset prefab = AssetDatabase.Load<PrefabAsset>(asset)!;
+        GameObject root = GameObject.InstantiateDetached(prefab);
+        try
+        {
+            var objects = new List<GameObject>();
+            Collect(root, objects);
+            return PMeshDocument.FromObjects(objects, root);
+        }
+        finally
+        {
+            root.Dispose();
+        }
+
+        static void Collect(GameObject go, List<GameObject> into)
+        {
+            into.Add(go);
+            foreach (GameObject child in go.Children) Collect(child, into);
+        }
+    }
+
+    /// <summary>The model world's Create menu: an empty object and the primitives, each a model object.</summary>
+    internal static void BuildCreateMenu(OrigamiUI.ContextBuilder builder)
+    {
+        builder.Item(Loc.Get("model.create_empty"), () => CreateObject(Loc.Get("model.create_empty"), null), icon: Theming.EditorIcons.Cube);
+        foreach (PrimitiveKind kind in Enum.GetValues<PrimitiveKind>())
+        {
+            PrimitiveKind chosen = kind;
+            builder.Item(Loc.Get($"model.primitive_{kind.ToString().ToLowerInvariant()}"), () => CreateObject(Loc.Get($"model.primitive_{chosen.ToString().ToLowerInvariant()}"), chosen),
+                icon: Theming.EditorIcons.Shapes);
+        }
+    }
+
+    /// <summary>Makes a model object under the menu's object, from a primitive or empty, selected and recorded for undo.</summary>
+    internal static GameObject CreateObject(string name, PrimitiveKind? kind)
+    {
+        GameObject? parent = MenuContext.ActiveGameObject;
+        GameObject go = Panels.HierarchyPanel.CreateGameObject(name, parent.IsValid() && parent!.GetComponent<ModelObject>().IsValid() ? parent : null);
+        ModelObject model = go.AddComponent<ModelObject>();
+        if (kind is { } primitive) model.Mesh = Primitives.Make(primitive);
+        model.RefreshPreview();
+        return go;
+    }
+
     [AssetDoubleClickHandler(PMeshDocument.Extension)]
     private static bool OpenModelHandler(string relativePath, Guid guid)
     {

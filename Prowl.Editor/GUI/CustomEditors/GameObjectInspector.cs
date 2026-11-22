@@ -974,7 +974,7 @@ public static class GameObjectInspector
         if (DragDrop.Payload is ComponentDragPayload { Component: var comp }
             && comp.IsValid() && comp.GameObject == go && comp is not RectTransform)
             moving = comp;
-        else if (DragDrop.Payload is AssetDragPayload assetPayload && ScriptComponentResolver.IsScriptAsset(assetPayload))
+        else if (DragDrop.Payload is AssetDragPayload assetPayload && ScriptComponentResolver.IsScriptAsset(assetPayload) && !ModelEditingMode.IsEditing)
             asset = assetPayload;
         else
             return false;
@@ -1210,6 +1210,8 @@ public static class GameObjectInspector
 
     private static void DrawAddComponentButton(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
+        // A model saves model objects and nothing else, so nothing is added to them
+        if (ModelEditingMode.IsEditing) return;
         using (paper.Row("gi_add_comp_row").Height(28).PaddingLeft(20).PaddingRight(20).Enter())
         {
             ElementBuilder trigger = paper.Box("gi_add_comp")

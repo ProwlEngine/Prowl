@@ -93,4 +93,21 @@ public class ModelWorldTests : EditorTestHarness
         Assert.True(PrefabEditingMode.IsEditing);
         PrefabEditingMode.Exit();
     }
+
+    [Fact]
+    public void AModelCanBeMadeFromAnotherModelsAsset()
+    {
+        Guid source = WriteModel(out _);
+        Assert.True(ModelEditingMode.CanCreateModelFrom(source));
+
+        Guid made = ModelEditingMode.CreateModelFrom(source, open: false);
+
+        Assert.NotEqual(Guid.Empty, made);
+        AssetEntry entry = Assets.GetEntry(made)!;
+        PMeshDocument document = PMeshDocument.Read(File.ReadAllBytes(AssetAbsolutePath(entry.Path)));
+        Assert.Equal(2, document.Objects.Count);
+        PMeshObject lid = document.Objects.Single(o => o.Name == "Lid");
+        Assert.Equal(document.Objects.Single(o => o.Name == "Body").Id, lid.Parent);
+        Assert.Equal(new Float3(0, 1, 0), lid.Position);
+    }
 }

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Echo;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
@@ -16,13 +17,19 @@ namespace Prowl.Editor.Modeling;
 /// An object of a model being edited in the model world: its persistent id, its editable mesh and what it is drawn with.
 /// A <see cref="MeshRenderer"/> on the same object shows the mesh, so the hierarchy, selection and tools work as anywhere.
 /// </summary>
+[ExecuteAlways]
 public sealed class ModelObject : Component
 {
     /// <summary>Kept through renames and moves. What the imported model keys everything of this object on.</summary>
     public Guid Id = Guid.NewGuid();
 
-    /// <summary>The editable mesh. Edits to it are undone by the model world's own steps, not by recording the component.</summary>
+    /// <summary>The editable mesh. Saved with the component as packed columns, so undo, redo and duplicating keep it.</summary>
     [NonSerialized] public GeometryData Mesh = new();
+
+    [SerializeField] private byte[]? _meshData;
+
+    // Set when the mesh came back from being saved, so the preview is rebuilt once the object is live
+    [NonSerialized] private bool _previewStale = true;
 
     /// <summary>The material asset of each slot, empty for a slot with none.</summary>
     public List<Guid> Materials = new();
@@ -30,7 +37,21 @@ public sealed class ModelObject : Component
     /// <summary>Edges whose faces meet at less than this many degrees are smooth when normals are worked out.</summary>
     public float SmoothingAngle = 30f;
 
-    private Mesh? _preview;
+    [NonSerialized] private Mesh? _preview;
+
+    public override void OnBeforeSerialize() => _meshData = PMeshDocument.MeshToBytes(Mesh);
+
+    public override void OnAfterDeserialize()
+    {
+        if (_meshData != null) Mesh = PMeshDocument.MeshFromBytes(_meshData);
+        _meshData = null;
+        _previewStale = true;
+    }
+
+    public override void OnEnable()
+    {
+        if (_previewStale || _preview.IsNotValid()) RefreshPreview();
+    }
 
     /// <summary>Builds the mesh drawn for the geometry as the import would, and shows it on the renderer.</summary>
     public void RefreshPreview()
@@ -39,6 +60,7 @@ public sealed class ModelObject : Component
         if (renderer.IsNotValid()) renderer = GameObject.AddComponent<MeshRenderer>();
         Mesh? old = _preview;
         _preview = PMeshImporter.BuildMesh(ToDocumentObject());
+        _previewStale = false;
         renderer!.Mesh = _preview;
 
         var materials = new List<Material>();

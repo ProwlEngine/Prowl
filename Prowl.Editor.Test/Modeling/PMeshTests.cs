@@ -153,4 +153,43 @@ public class PMeshTests : EditorTestHarness
         Mesh mesh = body.GetComponent<MeshRenderer>()!.Mesh!;
         Assert.Equal(mesh.VertexCount, mesh.UV2.Length);
     }
+
+    private static GameObject Drawn(string name, Float3 position)
+    {
+        var go = new GameObject(name);
+        go.Transform.Position = position;
+        MeshRenderer renderer = go.AddComponent<MeshRenderer>();
+        GeometryData quad = new();
+        var a = quad.AddVertex(0, 0, 0);
+        var b = quad.AddVertex(1, 0, 0);
+        var c = quad.AddVertex(1, 0, 1);
+        var d = quad.AddVertex(0, 0, 1);
+        quad.AddFace(a, d, c, b);
+        GeometryOperators.Triangulate(quad);
+        renderer.Mesh = MeshGeometry.ToMesh(quad);
+        return go;
+    }
+
+    /// <summary>Objects made into a model keep where they are relative to the active one, each with a copy of its mesh.</summary>
+    [Fact]
+    public void ObjectsBecomeAModelAroundTheActiveOne()
+    {
+        GameObject active = Drawn("Active", new Float3(1, 0, 0));
+        GameObject other = Drawn("Other", new Float3(3, 0, 0));
+        GameObject child = Drawn("Child", new Float3(3, 2, 0));
+        child.SetParent(other, true);
+
+        PMeshDocument document = PMeshDocument.FromObjects([active, other, child], active);
+
+        Assert.Equal(3, document.Objects.Count);
+        PMeshObject first = document.Objects.Single(o => o.Name == "Active");
+        PMeshObject second = document.Objects.Single(o => o.Name == "Other");
+        PMeshObject third = document.Objects.Single(o => o.Name == "Child");
+        Assert.Equal(Float3.Zero, first.Position);
+        Assert.Equal(new Float3(2, 0, 0), second.Position);
+        Assert.Equal(second.Id, third.Parent);
+        Assert.Equal(new Float3(0, 2, 0), third.Position);
+        Assert.Equal(2, second.Mesh.Faces.Count);
+        Assert.NotSame(first.Mesh, second.Mesh);
+    }
 }
