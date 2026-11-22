@@ -305,4 +305,20 @@ public class UVTests
         Assert.Empty(UVs.OverlappingFaces([.. cube.Faces]));
         Assert.All(cube.Faces, f => Assert.True(MathF.Abs(UVArea(f)) > 1e-3f));
     }
+
+    [Fact]
+    public void SeamsAndPinsAreSavedWithTheModel()
+    {
+        GeometryData mesh = Grid(2, 1);
+        UVs.Reset(mesh, [.. mesh.Faces]);
+        UVs.SetSeams(mesh, [mesh.FindEdge(mesh.Vertices[1], mesh.Vertices[4])!], true);
+        UVs.SetPinned([mesh.Faces[0].Loop!], true);
+        var document = new PMeshDocument { Objects = { new PMeshObject { Name = "Body", Mesh = mesh } } };
+
+        GeometryData read = PMeshDocument.Read(document.Write()).Objects[0].Mesh;
+
+        Assert.Single(read.Edges, UVs.IsSeam);
+        Assert.True(UVs.IsSeam(read.FindEdge(read.Vertices[1], read.Vertices[4])!));
+        Assert.Single(read.Faces.SelectMany(Corners), UVs.IsPinned);
+    }
 }
