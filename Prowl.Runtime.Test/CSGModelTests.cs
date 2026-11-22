@@ -462,4 +462,20 @@ public class CSGModelTests : RuntimeTestBase
 
         Assert.NotEqual(before, _model.GeneratedMesh!.UV);
     }
+
+    [Fact]
+    public void ReorderingSiblingsRebuildsTheModel()
+    {
+        CreateModel();
+        CSGBrush solid = AddBrush(Float3.One * 2f, Float3.Zero);
+        CSGBrush hole = AddBrush(Float3.One, Float3.Zero, Operation.Subtractive);
+        Update(_scene);
+        float carved = VolumeOf(_model.GeneratedMesh!);
+
+        hole.GameObject.SiblingIndex = 0;
+        Update(_scene);
+
+        Assert.True(carved < 7.5f);
+        Assert.Equal(8f, VolumeOf(_model.GeneratedMesh!), 2);
+    }
 }

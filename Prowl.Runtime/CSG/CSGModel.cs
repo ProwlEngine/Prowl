@@ -218,6 +218,7 @@ public sealed class CSGModel : Component
             if (brush.IsNotValid()) return true;
             if (brush.Version != link.Version) return true;
             if (brush.EnabledInHierarchy != link.Enabled) return true;
+            if (!ReferenceEquals(brush.GameObject.Parent, link.ParentObject) || brush.GameObject.SiblingIndex != link.Sibling) return true;
             Float4x4 world = brush.Transform.LocalToWorldMatrix;
             if (!world.Equals(link.WorldMatrix) && !(toModel * world).Equals(link.LocalMatrix)) return true;
         }
@@ -227,6 +228,7 @@ public sealed class CSGModel : Component
             if (group.IsNotValid()) return true;
             if (group.Version != link.Version) return true;
             if (group.EnabledInHierarchy != link.Enabled) return true;
+            if (!ReferenceEquals(group.GameObject.Parent, link.ParentObject) || group.GameObject.SiblingIndex != link.Sibling) return true;
         }
 
         return CountSynced(GameObject) != _brushes.Count + _groups.Count;
@@ -313,6 +315,8 @@ public sealed class CSGModel : Component
 
         link.Parent = parent;
         link.Index = index;
+        link.ParentObject = group.GameObject.Parent;
+        link.Sibling = group.GameObject.SiblingIndex;
         link.Version = group.Version;
         link.Enabled = group.EnabledInHierarchy;
     }
@@ -368,6 +372,8 @@ public sealed class CSGModel : Component
 
         link.Parent = parent;
         link.Index = index;
+        link.ParentObject = brush.GameObject.Parent;
+        link.Sibling = brush.GameObject.SiblingIndex;
         link.Version = brush.Version;
         link.Enabled = brush.EnabledInHierarchy;
         link.WorldMatrix = world;
@@ -609,11 +615,15 @@ public sealed class CSGModel : Component
         public int Version = -1;
         public bool Enabled = true;
         public Float4x4 WorldMatrix;
+        public GameObject? ParentObject;
+        public int Sibling = -1;
         public Float4x4 LocalMatrix;
     }
 
     private sealed class GroupLink
     {
+        public GameObject? ParentObject;
+        public int Sibling = -1;
         public CSGGroupHandle Handle = null!;
         public CSGGroup? Parent;
         public int Index = -1;
