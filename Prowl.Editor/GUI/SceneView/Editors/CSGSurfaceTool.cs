@@ -169,6 +169,7 @@ public sealed class CSGSurfaceTool : SceneTool
     private Float3 _pressPoint, _pressNormal;
     private Float2 _pressScreen;
     private float _startAngle, _startDistance;
+    private Float3 _rotateFrom;
 
     private const float DeadZone = 12f;
 
@@ -216,12 +217,14 @@ public sealed class CSGSurfaceTool : SceneTool
                 {
                     if (Float2.Distance(handles.MousePosition, _pressScreen) < DeadZone) break;
                     _startAngle = CSGSurfaceSelection.AngleOnSurface(_pressNormal, _pressPoint, at);
+                    _rotateFrom = at;
                     _started = true;
                 }
 
+                float snap = SceneTools.RotationSnap != handles.Ctrl ? SceneTools.RotateSnap : 0f;
                 float angle = CSGSurfaceSelection.AngleOnSurface(_pressNormal, _pressPoint, at) - _startAngle;
-                if (SceneTools.RotationSnap != handles.Ctrl) angle = MathF.Round(angle / SceneTools.RotateSnap) * SceneTools.RotateSnap;
-                CSGSurfaceSelection.RotateTextures(_pressPoint, angle);
+                if (snap > 0f) angle = MathF.Round(angle / snap) * snap;
+                CSGSurfaceSelection.RotateTextures(_pressPoint, _rotateFrom, at, snap);
 
                 CSGGizmos.Circle(_pressPoint, _pressNormal, radius, colour, 1.5f);
                 CSGGizmos.Line(_pressPoint, at, colour, 1.5f);

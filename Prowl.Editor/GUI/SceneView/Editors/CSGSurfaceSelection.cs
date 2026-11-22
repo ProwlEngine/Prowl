@@ -340,11 +340,33 @@ public static class CSGSurfaceSelection
     }
 
     public static void SetFlag(CSGSurfaceFlags flag, bool on)
-        => Edit("Set CSG Surface Flag", (data, _, _) =>
+    {
+        if (flag != CSGSurfaceFlags.WorldSpaceTexture)
         {
-            data.Flags = on ? data.Flags | flag : data.Flags & ~flag;
-            return data;
-        });
+            Edit("Set CSG Surface Flag", (data, _, _) =>
+            {
+                data.Flags = on ? data.Flags | flag : data.Flags & ~flag;
+                return data;
+            });
+            return;
+        }
+
+        // Switching between brush and world space keeps the texture where it is on the face
+        Prune();
+        foreach (CSGSurfaceRef surface in _selected) Undo.RecordObject(surface.Brush, "Set CSG Texture Lock");
+        foreach (CSGSurfaceRef surface in _selected)
+        {
+            int polygon = surface.PlaneIndex;
+            KeepTextures(surface.Brush, (p, _) => p == polygon, () => { }, data =>
+            {
+                data.Flags = on ? data.Flags | flag : data.Flags & ~flag;
+                return data;
+            });
+        }
+
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (model.IsValid()) model!.SetDirty();
+    }
 
     public static void Fit(bool u, bool v)
         => Edit("Fit CSG Texture", (data, extent, texel) =>
@@ -393,17 +415,100 @@ public static class CSGSurfaceSelection
     /// </summary>
     public static void AlignToActive()
     {
+        Prune();
         if (Active is not CSGSurfaceRef source || !source.IsValid) return;
 
-        SurfaceData template = source.Data;
-        Edit("Align CSG Textures", (data, _, _) =>
+        // The active surface stays as it is, its texture expressed in world space for the others to copy
+        CSGModel? model = CSGSelection.ActiveModel();
+        SurfaceData template = InWorldSpace(source.Brush, source.PlaneIndex, model);
+
+        foreach (CSGSurfaceRef surface in _selected)
+            if (!surface.Equals(source)) Undo.RecordObject(surface.Brush, "Align CSG Textures");
+
+        foreach (CSGSurfaceRef surface in _selected)
         {
+            if (surface.Equals(source)) continue;
+            SurfaceData data = surface.Data;
             data.Offset = template.Offset;
             data.Scale = template.Scale;
             data.Rotation = template.Rotation;
             data.Flags |= CSGSurfaceFlags.WorldSpaceTexture;
-            return data;
-        });
+            surface.Brush.SetSurface(surface.PlaneIndex, data);
+        }
+
+        if (model.IsValid()) model!.SetDirty();
+    }
+
+    /// <summary>A face's surface as it would be projected in world space, showing the same texture where it is.</summary>
+    private static SurfaceData InWorldSpace(CSGBrush brush, int polygon, CSGModel? model)
+    {
+        SurfaceData data = brush.Surfaces[polygon];
+        if (data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture)) return data;
+
+        float texel = Texel(model);
+        (int[] points, Float2[] uvs) = CornerUVs(brush, polygon, data, model, texel);
+
+        data.Flags |= CSGSurfaceFlags.WorldSpaceTexture;
+        (Float4x4 toFrame, Float3 normal) = Frame(brush, polygon, data, model);
+        return CSGSurfaceGeometry.FitUVs(data, normal, points.Select(i => Float4x4.TransformPoint(brush.ControlMesh.Points[i], toFrame)).ToList(), uvs, texel);
+    }
+
+    private static float Texel(CSGModel? model) => model.IsValid() && model!.DefaultTexelScale > 0f ? model.DefaultTexelScale : 1f;
+
+    /// <summary>The space a face's UVs project in, reached from its brush's own space, and the normal that picks its axes.</summary>
+    private static (Float4x4 BrushToFrame, Float3 Normal) Frame(CSGBrush brush, int polygon, in SurfaceData data, CSGModel? model)
+    {
+        if (!data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture))
+            return (Float4x4.Identity, brush.Planes[polygon].Normal);
+
+        // Column vector convention: brush local to world first, then world to model space
+        Float4x4 toModel = brush.Transform.LocalToWorldMatrix;
+        if (model.IsValid()) toModel = model!.Transform.WorldToLocalMatrix * toModel;
+
+        List<Float3> corners = brush.FaceCorners(polygon);
+        for (int i = 0; i < corners.Count; i++) corners[i] = Float4x4.TransformPoint(corners[i], toModel);
+        return (toModel, NormalOf(corners));
+    }
+
+    /// <summary>The UVs a face shows at its corners, with the points they sit on.</summary>
+    private static (int[] Points, Float2[] UVs) CornerUVs(CSGBrush brush, int polygon, in SurfaceData data, CSGModel? model, float texel)
+    {
+        int[] points = [.. brush.ControlMesh.PolygonPoints(polygon)];
+        (Float4x4 toFrame, Float3 normal) = Frame(brush, polygon, data, model);
+
+        var uvs = new Float2[points.Length];
+        for (int i = 0; i < points.Length; i++)
+            uvs[i] = CSGSurfaceGeometry.UVAt(data, normal, Float4x4.TransformPoint(brush.ControlMesh.Points[points[i]], toFrame), texel);
+        return (points, uvs);
+    }
+
+    /// <summary>
+    /// Runs a change to a brush, then refits the chosen faces' textures so each corner keeps the UV it had: the texture
+    /// moves with the points. <paramref name="reframe"/> can change a face's projection settings as part of the change.
+    /// </summary>
+    internal static void KeepTextures(CSGBrush brush, Func<int, SurfaceData, bool> chosen, System.Action change, Func<SurfaceData, SurfaceData>? reframe = null)
+    {
+        CSGModel? model = CSGSelection.ModelOf(brush.GameObject);
+        float texel = Texel(model);
+
+        var kept = new List<(int Polygon, int[] Points, Float2[] UVs)>();
+        for (int p = 0; p < brush.Surfaces.Length; p++)
+        {
+            if (!chosen(p, brush.Surfaces[p])) continue;
+            (int[] points, Float2[] uvs) = CornerUVs(brush, p, brush.Surfaces[p], model, texel);
+            kept.Add((p, points, uvs));
+        }
+
+        change();
+
+        foreach ((int polygon, int[] points, Float2[] uvs) in kept)
+        {
+            if (polygon >= brush.Surfaces.Length) continue;
+            SurfaceData data = reframe != null ? reframe(brush.Surfaces[polygon]) : brush.Surfaces[polygon];
+            (Float4x4 toFrame, Float3 normal) = Frame(brush, polygon, data, model);
+            var placed = points.Select(i => Float4x4.TransformPoint(brush.ControlMesh.Points[i], toFrame)).ToList();
+            brush.SetSurface(polygon, CSGSurfaceGeometry.FitUVs(data, normal, placed, uvs, texel));
+        }
     }
 
     /// <summary>Copies the active surface's texturing onto every other selected surface.</summary>
@@ -515,6 +620,9 @@ public static class CSGSurfaceSelection
     private static readonly List<DragStart> _drag = new();
     private static float _dragTexel = 1f;
 
+    // The model shows its faces from inside, which mirrors U, so a turn on screen is the other way in texture space
+    private static bool _dragInverted;
+
     /// <summary>Remembers every selected surface as it is, so a drag is always applied to where it started.</summary>
     public static void BeginTextureDrag()
     {
@@ -522,6 +630,7 @@ public static class CSGSurfaceSelection
         _drag.Clear();
         CSGModel? model = CSGSelection.ActiveModel();
         _dragTexel = model.IsValid() && model!.DefaultTexelScale > 0f ? model.DefaultTexelScale : 1f;
+        _dragInverted = model.IsValid() && model!.SubtractiveWorkflow;
 
         foreach (CSGSurfaceRef surface in _selected)
         {
@@ -556,10 +665,26 @@ public static class CSGSurfaceSelection
         });
     }
 
-    /// <summary>Turns every dragged texture about a world point, which keeps its place on the texture.</summary>
-    public static void RotateTextures(Float3 worldPivot, float degrees)
+    /// <summary>
+    /// Turns every dragged texture about a world point, which keeps its place on the texture, by the angle the cursor
+    /// swept from <paramref name="worldFrom"/> to <paramref name="worldTo"/>. The angle is measured in each surface's own
+    /// projection space, so the texture turns with the cursor however that space is turned or mirrored.
+    /// </summary>
+    public static void RotateTextures(Float3 worldPivot, Float3 worldFrom, Float3 worldTo, float snapDegrees)
         => ApplyDrag("Rotate CSG Texture", start =>
         {
+            Float3 pivot = Float4x4.TransformPoint(worldPivot, start.ToProjection);
+            CSGSurfaceGeometry.Basis(start.Normal, 0f, out Float3 u, out Float3 v);
+            float Angle(Float3 world)
+            {
+                Float3 w = Float4x4.TransformPoint(world, start.ToProjection) - pivot;
+                return MathF.Atan2(Float3.Dot(w, v), Float3.Dot(w, u)) * (180f / MathF.PI);
+            }
+
+            float degrees = Angle(worldTo) - Angle(worldFrom);
+            if (_dragInverted) degrees = -degrees;
+            if (snapDegrees > 0f) degrees = MathF.Round(degrees / snapDegrees) * snapDegrees;
+
             SurfaceData data = start.Data;
             data.Rotation = start.Data.Rotation + degrees;
             return KeepPivot(start, data, worldPivot);

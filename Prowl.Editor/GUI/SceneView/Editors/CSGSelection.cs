@@ -236,14 +236,19 @@ public static class CSGSelection
         {
             CSGBrush brush = brushes[i];
             Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
+            Float3 target = targets[i];
 
-            if (CSGBrushGeometry.TryMirrorMatrix(axis, toWorld, out Float4x4 local))
+            // Locked textures mirror with the points they are fixed to, each corner keeping its UV
+            CSGSurfaceSelection.KeepTextures(brush, (_, data) => !data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture), () =>
             {
-                brush.ControlMesh.TransformPoints(local);
-                brush.ApplyControlMesh();
-            }
+                if (CSGBrushGeometry.TryMirrorMatrix(axis, toWorld, out Float4x4 local))
+                {
+                    brush.ControlMesh.TransformPoints(local);
+                    brush.ApplyControlMesh();
+                }
 
-            brush.Transform.Position = targets[i];
+                brush.Transform.Position = target;
+            });
         }
 
         MarkDirty();
@@ -257,9 +262,14 @@ public static class CSGSelection
         var children = brush.GameObject.Children.Select(c => (c, c.Transform.Position, c.Transform.Rotation)).ToList();
 
         Float3 pivot = Float4x4.TransformPoint(local, brush.Transform.LocalToWorldMatrix);
-        brush.ControlMesh.TransformPoints(Float4x4.CreateTranslation(-local));
-        brush.ApplyControlMesh();
-        brush.Transform.Position = pivot;
+
+        // Locked textures project in brush space, so they are refitted to stay where they were on the faces
+        CSGSurfaceSelection.KeepTextures(brush, (_, data) => !data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture), () =>
+        {
+            brush.ControlMesh.TransformPoints(Float4x4.CreateTranslation(-local));
+            brush.ApplyControlMesh();
+            brush.Transform.Position = pivot;
+        });
 
         foreach ((GameObject child, Float3 position, Quaternion rotation) in children)
         {
