@@ -1296,6 +1296,7 @@ public sealed class CSGMeshTool : SceneTool
         _passedThreshold = false;
         _clicked = -1;
         _actionBrush = Target;
+        _pendingLast = null;
         _startSurfaces = (SurfaceData[])Target!.Surfaces.Clone();
         _startMesh = Target.ControlMesh.Clone();
         _startEdges = _startMesh.Edges();
@@ -1620,10 +1621,12 @@ public sealed class CSGMeshTool : SceneTool
                 float width = CSGSnap.Value(handles, amount);
                 int segments = _actionCount;
                 BevelKind kind = _bevelKind;
-                PreviewOperator("Bevel CSG Brush", width + segments * 10000f, width <= 1e-4f, (target, selected) =>
+                List<(int A, int B)> edges = [.. _actionEdges];
+                List<int> points = [.. _actionPoints];
+                PreviewOperator("Bevel CSG Brush", width, segments, kind == BevelKind.Edges ? 32 : 1, width <= 1e-4f, (w, n) => (target, selected) =>
                 {
-                    if (kind == BevelKind.Edges) Operators.Bevel(target.Target.Mesh, EdgesOf(target, _actionEdges), width, segments, selected);
-                    else Operators.BevelPoints(target.Target.Mesh, PointsOf(target, _actionPoints), width, selected);
+                    if (kind == BevelKind.Edges) Operators.Bevel(target.Target.Mesh, EdgesOf(target, edges), w, n, selected);
+                    else Operators.BevelPoints(target.Target.Mesh, PointsOf(target, points), w, selected);
                 }, SelectMode.Face);
                 string text = kind == BevelKind.Edges ? Loc.Get("csg.bevel_amount", new { width = width.ToString("0.###"), count = segments }) : width.ToString("0.###");
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, text, PickedColor);
@@ -1641,16 +1644,18 @@ public sealed class CSGMeshTool : SceneTool
             case Action.ExtrudeRegion:
             {
                 float distance = CSGSnap.Value(handles, amount) * ExtrudeSign(handles);
-                PreviewOperator("Extrude CSG Faces", distance, MathF.Abs(distance) <= 1e-4f,
-                    (target, selected) => Operators.ExtrudeRegion(target.Target.Mesh, target.FacesOf(_actionFaces), distance, selected), SelectMode.Face);
+                List<int> faces = [.. _actionFaces];
+                PreviewOperator("Extrude CSG Faces", distance, 1, 1, MathF.Abs(distance) <= 1e-4f,
+                    (d, _) => (target, selected) => Operators.ExtrudeRegion(target.Target.Mesh, target.FacesOf(faces), d, selected), SelectMode.Face);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, distance.ToString("0.###"), PickedColor);
                 break;
             }
             case Action.Inset:
             {
                 float width = CSGSnap.Value(handles, amount);
-                PreviewOperator("Inset CSG Face", width, width <= 1e-4f,
-                    (target, selected) => Operators.Inset(target.Target.Mesh, target.FacesOf(_actionFaces), width, selected), SelectMode.Face);
+                List<int> faces = [.. _actionFaces];
+                PreviewOperator("Inset CSG Face", width, 1, 1, width <= 1e-4f,
+                    (w, _) => (target, selected) => Operators.Inset(target.Target.Mesh, target.FacesOf(faces), w, selected), SelectMode.Face);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, width.ToString("0.###"), PickedColor);
                 break;
             }
@@ -1662,14 +1667,16 @@ public sealed class CSGMeshTool : SceneTool
                 {
                     _actionCount = Math.Min(_actionCount, MaxFaceCuts);
                     int faceCuts = _actionCount;
-                    PreviewOperator("Subdivide CSG Faces", faceCuts, false,
-                        (target, selected) => Operators.SubdivideFaces(target.Target.Mesh, target.FacesOf(_actionFaces), faceCuts, selected), SelectMode.Face);
+                    List<int> faces = [.. _actionFaces];
+                    PreviewOperator("Subdivide CSG Faces", float.NaN, faceCuts, MaxFaceCuts, false,
+                        (_, n) => (target, selected) => Operators.SubdivideFaces(target.Target.Mesh, target.FacesOf(faces), n, selected), SelectMode.Face);
                     ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.cuts", new { count = faceCuts }), PickedColor);
                     break;
                 }
                 int cuts = _actionCount;
-                PreviewOperator("Subdivide CSG Edges", cuts, false,
-                    (target, selected) => Operators.SubdivideEdges(target.Target.Mesh, EdgesOf(target, _actionEdges), cuts, selected), SelectMode.Vertex);
+                List<(int A, int B)> edges = [.. _actionEdges];
+                PreviewOperator("Subdivide CSG Edges", float.NaN, cuts, 64, false,
+                    (_, n) => (target, selected) => Operators.SubdivideEdges(target.Target.Mesh, EdgesOf(target, edges), n, selected), SelectMode.Vertex);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.cuts", new { count = cuts }), PickedColor);
                 break;
             }
@@ -1677,9 +1684,9 @@ public sealed class CSGMeshTool : SceneTool
             {
                 float degrees = Math.Clamp(LimitedDissolveDegrees + pixels * DegreesPerPixel, 0f, 90f);
                 if (CSGSnap.Active(handles)) degrees = MathF.Round(degrees / 5f) * 5f;
-                List<(int A, int B)>? scope = _actionEdges.Count > 0 ? _actionEdges : null;
-                PreviewOperator("Limited Dissolve CSG Brush", degrees, false,
-                    (target, selected) => Operators.LimitedDissolve(target.Target.Mesh, scope == null ? null : EdgesOf(target, scope), degrees, selected), SelectMode.Face);
+                List<(int A, int B)>? scope = _actionEdges.Count > 0 ? [.. _actionEdges] : null;
+                PreviewOperator("Limited Dissolve CSG Brush", degrees, 1, 1, false,
+                    (d, _) => (target, selected) => Operators.LimitedDissolve(target.Target.Mesh, scope == null ? null : EdgesOf(target, scope), d, selected), SelectMode.Face);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.degrees", new { degrees = degrees.ToString("0.#") }), PickedColor);
                 break;
             }
@@ -1696,18 +1703,18 @@ public sealed class CSGMeshTool : SceneTool
             {
                 float degrees = Math.Clamp(TrisToQuadsDegrees + pixels * DegreesPerPixel, 0f, 180f);
                 if (CSGSnap.Active(handles)) degrees = MathF.Round(degrees / 5f) * 5f;
-                bool all = _actionFaces.Count == 0;
-                PreviewOperator("Join CSG Triangles", degrees, false,
-                    (target, selected) => Operators.TrisToQuads(target.Target.Mesh, all ? null : target.FacesOf(_actionFaces), degrees, selected), SelectMode.Face);
+                List<int>? faces = _actionFaces.Count == 0 ? null : [.. _actionFaces];
+                PreviewOperator("Join CSG Triangles", degrees, 1, 1, false,
+                    (d, _) => (target, selected) => Operators.TrisToQuads(target.Target.Mesh, faces == null ? null : target.FacesOf(faces), d, selected), SelectMode.Face);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.degrees", new { degrees = degrees.ToString("0.#") }), PickedColor);
                 break;
             }
             case Action.MergeByDistance:
             {
                 float distance = CSGSnap.Value(handles, amount);
-                bool all = _actionPoints.Count == 0;
-                PreviewOperator("Merge CSG Points By Distance", distance, distance <= 1e-5f,
-                    (target, selected) => Operators.MergeByDistance(target.Target.Mesh, all ? null : PointsOf(target, _actionPoints), distance, selected), SelectMode.Vertex);
+                List<int>? points = _actionPoints.Count == 0 ? null : [.. _actionPoints];
+                PreviewOperator("Merge CSG Points By Distance", distance, 1, 1, distance <= 1e-5f,
+                    (d, _) => (target, selected) => Operators.MergeByDistance(target.Target.Mesh, points == null ? null : PointsOf(target, points), d, selected), SelectMode.Vertex);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, distance.ToString("0.###"), PickedColor);
                 break;
             }
@@ -1715,10 +1722,11 @@ public sealed class CSGMeshTool : SceneTool
             {
                 float strength = Math.Clamp(pixels * StrengthPerPixel, 0f, 1f);
                 bool relax = _action == Action.Relax;
-                PreviewOperator(relax ? "Relax CSG Points" : "Smooth CSG Points", strength, strength <= 1e-4f, (target, selected) =>
+                List<int> points = [.. _actionPoints];
+                PreviewOperator(relax ? "Relax CSG Points" : "Smooth CSG Points", strength, 1, 1, strength <= 1e-4f, (f, _) => (target, selected) =>
                 {
-                    if (relax) Operators.Relax(target.Target.Mesh, PointsOf(target, _actionPoints), strength, selected);
-                    else Operators.Smooth(target.Target.Mesh, PointsOf(target, _actionPoints), strength, selected);
+                    if (relax) Operators.Relax(target.Target.Mesh, PointsOf(target, points), f, selected);
+                    else Operators.Smooth(target.Target.Mesh, PointsOf(target, points), f, selected);
                 }, SelectMode.Vertex);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, strength.ToString("0.##"), PickedColor);
                 break;
@@ -1728,10 +1736,11 @@ public sealed class CSGMeshTool : SceneTool
                 float wheel = Input.MouseWheelDelta;
                 if (wheel != 0f) _actionCount = Math.Clamp(_actionCount + (wheel > 0f ? 1 : -1), 1, 64);
                 int segments = _actionCount;
-                PreviewOperator("Bridge CSG Faces", segments, false, (target, selected) =>
+                List<int> faces = [.. _actionFaces];
+                PreviewOperator("Bridge CSG Faces", float.NaN, segments, 64, false, (_, n) => (target, selected) =>
                 {
-                    List<GeometryData.Face> ends = target.FacesOf(_actionFaces);
-                    if (ends.Count == 2) Operators.Bridge(target.Target.Mesh, ends[0], ends[1], segments, selected);
+                    List<GeometryData.Face> ends = target.FacesOf(faces);
+                    if (ends.Count == 2) Operators.Bridge(target.Target.Mesh, ends[0], ends[1], n, selected);
                 }, SelectMode.Face);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.segments", new { count = segments }), PickedColor);
                 break;
@@ -1746,10 +1755,11 @@ public sealed class CSGMeshTool : SceneTool
             {
                 float length = Float2.Dot(_slideDirection, _slideDirection);
                 float factor = length > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - _dragOrigin, _slideDirection) / length, -1f, 1f) : 0f;
-                PreviewOperator("Slide CSG Edges", factor, MathF.Abs(factor) <= 1e-4f, (target, selected) =>
+                List<(int A, int B)> slid = [.. _actionEdges];
+                PreviewOperator("Slide CSG Edges", factor, 1, 1, MathF.Abs(factor) <= 1e-4f, (f, _) => (target, selected) =>
                 {
-                    List<GeometryData.Edge> edges = EdgesOf(target, _actionEdges);
-                    Operators.SlideEdges(target.Target.Mesh, edges, factor);
+                    List<GeometryData.Edge> edges = EdgesOf(target, slid);
+                    Operators.SlideEdges(target.Target.Mesh, edges, f);
                     selected.Edges.UnionWith(edges);
                 }, SelectMode.Edge);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, factor.ToString("0.###"), PickedColor);
@@ -1774,11 +1784,11 @@ public sealed class CSGMeshTool : SceneTool
         {
             case Action.Extrude: CommitExtrude(amount); break;
             case Action.Marquee: ApplyMarquee(ctx); break;
-            case Action.Chamfer when _bevelKind != BevelKind.Planes: TakeActionResult(); break;
+            case Action.Chamfer when _bevelKind != BevelKind.Planes: TakeActionResult(); KeepLast(); break;
             case Action.Chamfer: ClearSelection(); break;
-            case Action.EdgeSlide: TakeActionResult(); break;
+            case Action.EdgeSlide: TakeActionResult(); KeepLast(); break;
             case Action.Inset or Action.ExtrudeRegion or Action.Subdivide or Action.LimitedDissolve
-                or Action.TrisToQuads or Action.MergeByDistance or Action.Smooth or Action.Relax or Action.Bridge: TakeActionResult(); break;
+                or Action.TrisToQuads or Action.MergeByDistance or Action.Smooth or Action.Relax or Action.Bridge: TakeActionResult(); KeepLast(); break;
             case Action.Drag: CommitSession("Move CSG Points"); break;
         }
 
@@ -1799,9 +1809,9 @@ public sealed class CSGMeshTool : SceneTool
     /// Runs again only when <paramref name="key"/> changes. What the operator selects, filled into the set
     /// <paramref name="lead"/> names, is kept for when the action ends.
     /// </summary>
-    private void PreviewOperator(string name, float key, bool unchanged, Action<CSGBrushTarget, ElementSelection> run, SelectMode lead)
+    private bool PreviewOperator(string name, float key, bool unchanged, Action<CSGBrushTarget, ElementSelection> run, SelectMode lead)
     {
-        if (key == _previewKey) return;
+        if (key == _previewKey) return true;
         _previewKey = key;
 
         if (!unchanged)
@@ -1812,7 +1822,7 @@ public sealed class CSGMeshTool : SceneTool
             if (problem != null)
             {
                 CSGStatus.Flash(Loc.Get(problem));
-                return;
+                return false;
             }
 
             Selecting.Normalize(after, lead);
@@ -1821,11 +1831,96 @@ public sealed class CSGMeshTool : SceneTool
             else KeepActionResult(points, faces, lead);
             Undo.RecordObject(Target!, name);
             ApplyShape(Target!, mesh, surfaces);
-            return;
+            return true;
         }
 
         RestoreStart();
         KeepActionResult(_actionPoints, _actionFaces, Mode);
+        return true;
+    }
+
+    /// <summary>
+    /// Previews an operator made from an amount and a count, NaN for an operator with no amount, keeping how to make it
+    /// so it can be run again with other settings once the action ends.
+    /// </summary>
+    private void PreviewOperator(string name, float amount, int count, int maxCount, bool unchanged,
+                                 Func<float, int, Action<CSGBrushTarget, ElementSelection>> make, SelectMode lead)
+    {
+        float key = (float.IsNaN(amount) ? 0f : amount) + count * 100000f;
+        if (PreviewOperator(name, key, unchanged, make(amount, count), lead))
+            _pendingLast = unchanged ? null : new LastOperator(name, amount, count, maxCount, make, lead, _startMesh!, _startSurfaces!, Target!, null);
+    }
+
+    // ================================================================
+    //  Adjust last
+    // ================================================================
+
+    // How to run the last operator again from the shape before it, and the shape it left, so a later change ends it
+    private sealed record LastOperator(string Name, float Amount, int Count, int MaxCount, Func<float, int, Action<CSGBrushTarget, ElementSelection>> Make,
+                                       SelectMode Lead, CSGControlMesh Start, SurfaceData[] StartSurfaces, CSGBrush Brush, CSGControlMesh? Left);
+    private LastOperator? _pendingLast, _last;
+
+    private void KeepLast()
+    {
+        _last = _pendingLast is { } pending && Target.IsValid() ? pending with { Left = Target!.ControlMesh } : null;
+        _pendingLast = null;
+    }
+
+    /// <summary>The last operator run, while its brush still has the shape it left. A NaN amount means it has none.</summary>
+    public (string Name, float Amount, int Count, int MaxCount)? Last
+        => _last is { } last && LastStillHolds(last) ? (last.Name, last.Amount, last.Count, last.MaxCount) : null;
+
+    private bool LastStillHolds(LastOperator last)
+        => _action == Action.None && ReferenceEquals(last.Brush, Target) && last.Brush.IsValid() && ReferenceEquals(last.Brush.ControlMesh, last.Left);
+
+    /// <summary>Runs the last operator again from the shape before it with a new amount and count, as one undo step.</summary>
+    public void AdjustLast(float amount, int count)
+    {
+        if (_last is not { } last || !LastStillHolds(last)) return;
+        count = Math.Clamp(count, 1, Math.Max(1, last.MaxCount));
+        var target = new CSGBrushTarget(last.Start.Clone(), (SurfaceData[])last.StartSurfaces.Clone());
+        var after = new ElementSelection();
+        Action<CSGBrushTarget, ElementSelection> run = last.Make(amount, count);
+        string? problem = MeshEdit.Run(target.Target, (_, selected) => run(target, selected), after);
+        if (problem != null)
+        {
+            CSGStatus.Flash(Loc.Get(problem));
+            return;
+        }
+
+        Selecting.Normalize(after, last.Lead);
+        (CSGControlMesh mesh, SurfaceData[] surfaces) = target.ToBrush(after, out HashSet<int> points, out List<int> faces);
+        Undo.RecordObject(last.Brush, last.Name);
+        ApplyShape(last.Brush, mesh, surfaces);
+        KeepActionResult(points, faces, last.Lead);
+        TakeActionResult();
+        _last = last with { Amount = amount, Count = count, Left = last.Brush.ControlMesh };
+    }
+
+    // ================================================================
+    //  Selection as numbers
+    // ================================================================
+
+    /// <summary>The middle of the selected points in the world, or null with nothing selected.</summary>
+    public Float3? SelectionMedian
+    {
+        get
+        {
+            if (_vertices.Count == 0 || Target.IsNotValid() || _mesh == null) return null;
+            Float3 centre = Float3.Zero;
+            foreach (int i in _vertices) centre += _mesh.Points[i];
+            return Float4x4.TransformPoint(centre / _vertices.Count, Target!.Transform.LocalToWorldMatrix);
+        }
+    }
+
+    /// <summary>Moves the selected points so their middle lands on a point in the world, as one checked edit.</summary>
+    public void MoveSelectionTo(Float3 world)
+    {
+        if (_action != Action.None || _transform != null || SelectionMedian is not { } median) return;
+        Float3 delta = world - median;
+        if (StartSession() is not { } session) return;
+        _sessionMove = () => session.Translate(delta);
+        CommitSession("Move CSG Points");
     }
 
     private void KeepActionResult(IEnumerable<int> points, IEnumerable<int> faces, SelectMode lead)

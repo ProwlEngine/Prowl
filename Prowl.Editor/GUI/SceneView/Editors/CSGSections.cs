@@ -141,6 +141,26 @@ internal static class CSGSections
             Tile[] operators = OperatorTiles(tool);
             if (operators.Length > 0) IconGrid(paper, font, "csg_edit_ops", 4, operators);
         }, NarrowColumnWidth));
+
+        if (tool.Last == null && tool.SelectionMedian == null) return;
+        columns.Add(new Column("csg_adjust", "", null, (paper, font) =>
+        {
+            if (tool.Last is { } last)
+            {
+                Heading(paper, font, "csg_last_h", last.Name);
+                if (!float.IsNaN(last.Amount))
+                    Line(paper, font, "csg_last_amount", Loc.Get("csg.amount"), () => Number(paper, "csg_last_amount_v", last.Amount, v => tool.AdjustLast(v, last.Count)));
+                if (last.MaxCount > 1)
+                    Line(paper, font, "csg_last_count", Loc.Get("csg.count"), () => Number(paper, "csg_last_count_v", last.Count, v => tool.AdjustLast(last.Amount, v)));
+            }
+            if (tool.SelectionMedian is { } median)
+            {
+                Heading(paper, font, "csg_median_h", Loc.Get("csg.median"));
+                Line(paper, font, "csg_median_x", "X", () => Number(paper, "csg_median_xv", median.X, v => tool.MoveSelectionTo(new Float3(v, median.Y, median.Z))));
+                Line(paper, font, "csg_median_y", "Y", () => Number(paper, "csg_median_yv", median.Y, v => tool.MoveSelectionTo(new Float3(median.X, v, median.Z))));
+                Line(paper, font, "csg_median_z", "Z", () => Number(paper, "csg_median_zv", median.Z, v => tool.MoveSelectionTo(new Float3(median.X, median.Y, v))));
+            }
+        }, NarrowColumnWidth));
     }
 
     /// <summary>The operators the mode and selection allow, each named by its tooltip with its key.</summary>
