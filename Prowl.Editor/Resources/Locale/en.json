@@ -833,7 +833,7 @@
   "csg.hide_selected": "Hide selected",
   "csg.hide_selected_tip": "Hides the selected brushes in the viewport. Shortcut: H",
   "csg.unhide_all": "Unhide all ({{count}})",
-  "csg.unhide_all_tip": "Shows every hidden brush again. Shortcut: Shift+H",
+  "csg.unhide_all_tip": "Shows every hidden brush again. Shortcut: U, and Shift+H swaps hidden and shown",
   "csg.mode_object": "Object",
   "csg.mode_object_tip": "Select and move whole brushes.",
   "csg.mode_generate": "Generate",
