@@ -29,6 +29,7 @@ public sealed class GltfWriterTests
         Positions = [new(0, 0, 0), new(1, 0, 0), new(1, 0, 1), new(0, 0, 1)],
         Normals = [Float3.UnitY, Float3.UnitY, Float3.UnitY, Float3.UnitY],
         UV0 = [new(0, 0), new(1, 0), new(1, 1), new(0, 1)],
+        Tangents = [new(1, 0, 0, -1), new(1, 0, 0, -1), new(1, 0, 0, -1), new(1, 0, 0, -1)],
         Primitives = { new ExportPrimitive { Indices = [0, 2, 1, 0, 3, 2], Material = 0 } },
     };
 
@@ -66,6 +67,7 @@ public sealed class GltfWriterTests
         Assert.Equal(4, mesh.VertexCount);
         Assert.All(model.Meshes[0].Positions, p => Assert.Contains(mesh.Vertices, q => Float3.Distance(p, q) < 1e-5f));
         Assert.All(mesh.Normals!, n => Assert.True(Float3.Distance(n, Float3.UnitY) < 1e-5f));
+        Assert.All(mesh.Tangents!, t => Assert.True(Float4.Distance(t, new Float4(1, 0, 0, -1)) < 1e-5f, $"tangent {t}"));
         uint[] indices = mesh.Indices;
         for (int i = 0; i < indices.Length; i += 3)
             Assert.True(Facing(mesh.Vertices[indices[i]], mesh.Vertices[indices[i + 1]], mesh.Vertices[indices[i + 2]], Float3.UnitY)
