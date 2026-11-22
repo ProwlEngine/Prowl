@@ -44,7 +44,7 @@ internal static class CSGSections
 
     internal static void DrawModelSection(Paper paper, Scribe.FontFile font, CSGModel model)
     {
-        EditorGUI.SectionHeader(paper, "csg_model_h", Loc.Get("csg.model"), first: true);
+        if (!Fold(paper, font, "csg_model_h", Loc.Get("csg.model"), ref _modelOpen)) return;
 
         EditorGUI.SettingsRow(paper, "csg_model_mat", Loc.Get("csg.default_material"), () =>
             PropertyGridUtils.DrawField(paper, "csg_model_mat_v", "", typeof(Material),
@@ -79,25 +79,50 @@ internal static class CSGSections
 
         LabelledButton(paper, font, "csg_model_rebuild", Loc.Get("csg.rebuild"), Loc.Get("csg.rebuild_tip"), model.Rebuild);
 
-        DrawHelperSection(paper);
+        DrawHelperSection(paper, font);
         DrawLightmapSection(paper, font, model);
     }
 
-    private static void DrawHelperSection(Paper paper)
+    // The model's own settings are rarely touched while building, so they start folded away
+    private static bool _modelOpen, _helpersOpen, _lightmapOpen;
+
+    /// <summary>A section header that folds its section away when clicked. True while open.</summary>
+    private static bool Fold(Paper paper, Scribe.FontFile font, string id, string title, ref bool open)
     {
-        EditorGUI.SectionHeader(paper, "csg_help_h", Loc.Get("csg.helpers"));
+        bool isOpen = open;
+        paper.Box(id).Height(24).Margin(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 6, 2)
+            .Rounded(4).Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Text($"{(isOpen ? EditorIcons.ChevronDown : EditorIcons.ChevronRight)}  {title}", font)
+            .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
+            .OnClick(id, (key, _) => Toggle(key));
+        return open;
+    }
+
+    private static void Toggle(string id)
+    {
+        switch (id)
+        {
+            case "csg_model_h": _modelOpen = !_modelOpen; break;
+            case "csg_help_h": _helpersOpen = !_helpersOpen; break;
+            case "csg_lm_h": _lightmapOpen = !_lightmapOpen; break;
+        }
+    }
+
+    private static void DrawHelperSection(Paper paper, Scribe.FontFile font)
+    {
+        if (!Fold(paper, font, "csg_help_h", Loc.Get("csg.helpers"), ref _helpersOpen)) return;
 
         ToggleRow(paper, "csg_help_col", Loc.Get("csg.helper_collision"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.CollisionOnly),
             v => CSGHelperSurfaces.Set(CSGHelperFlags.CollisionOnly, v));
         ToggleRow(paper, "csg_help_inert", Loc.Get("csg.helper_inert"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Inert),
             v => CSGHelperSurfaces.Set(CSGHelperFlags.Inert, v));
-        Hint(paper, EditorTheme.DefaultFont!, "csg_help_hint", Loc.Get("csg.helpers_hint"));
+        Hint(paper, font, "csg_help_hint", Loc.Get("csg.helpers_hint"));
     }
 
     /// <summary>Lightmap UVs are opt in and deferred. Stale UVs show a rebuild button rather than unwrapping mid edit.</summary>
     private static void DrawLightmapSection(Paper paper, Scribe.FontFile font, CSGModel model)
     {
-        EditorGUI.SectionHeader(paper, "csg_lm_h", Loc.Get("csg.lightmapping"));
+        if (!Fold(paper, font, "csg_lm_h", Loc.Get("csg.lightmapping"), ref _lightmapOpen)) return;
 
         EditorGUI.SettingsRow(paper, "csg_lm_on", Loc.Get("csg.lightmap_uvs"), () =>
             Origami.Toggle(paper, "csg_lm_on_v", model.GenerateLightmapUVs,
