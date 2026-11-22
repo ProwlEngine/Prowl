@@ -385,6 +385,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/peremunoz">
+                    <img src="https://avatars.githubusercontent.com/u/73690199?v=4" width="100;" alt="peremunoz"/>
+                    <br />
+                    <sub><b>Pere Muñoz</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/mrunion">
                     <img src="https://avatars.githubusercontent.com/u/5022458?v=4" width="100;" alt="mrunion"/>
                     <br />
@@ -392,33 +399,26 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/japsuu">
-                    <img src="https://avatars.githubusercontent.com/u/55388432?v=4" width="100;" alt="japsuu"/>
+                <a href="https://github.com/treviasxk">
+                    <img src="https://avatars.githubusercontent.com/u/24716901?v=4" width="100;" alt="treviasxk"/>
                     <br />
-                    <sub><b>Jasper Honkasalo</b></sub>
+                    <sub><b>Trevias Xk</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/UBTL">
-                    <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
+                <a href="https://github.com/recore67">
+                    <img src="https://avatars.githubusercontent.com/u/29689492?v=4" width="100;" alt="recore67"/>
                     <br />
-                    <sub><b>Uncle Bane</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/draxxris">
-                    <img src="https://avatars.githubusercontent.com/u/24984408?v=4" width="100;" alt="draxxris"/>
-                    <br />
-                    <sub><b>draxxris</b></sub>
+                    <sub><b>salman ameeri</b></sub>
                 </a>
             </td>
 		</tr>
 		<tr>
             <td align="center">
-                <a href="https://github.com/JothamR">
-                    <img src="https://avatars.githubusercontent.com/u/5410231?v=4" width="100;" alt="JothamR"/>
+                <a href="https://github.com/notgiven688">
+                    <img src="https://avatars.githubusercontent.com/u/37874600?v=4" width="100;" alt="notgiven688"/>
                     <br />
-                    <sub><b>Jotham</b></sub>
+                    <sub><b>notgiven688</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -429,24 +429,24 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/notgiven688">
-                    <img src="https://avatars.githubusercontent.com/u/37874600?v=4" width="100;" alt="notgiven688"/>
+                <a href="https://github.com/JothamR">
+                    <img src="https://avatars.githubusercontent.com/u/5410231?v=4" width="100;" alt="JothamR"/>
                     <br />
-                    <sub><b>notgiven688</b></sub>
+                    <sub><b>Jotham</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/recore67">
-                    <img src="https://avatars.githubusercontent.com/u/29689492?v=4" width="100;" alt="recore67"/>
+                <a href="https://github.com/draxxris">
+                    <img src="https://avatars.githubusercontent.com/u/24984408?v=4" width="100;" alt="draxxris"/>
                     <br />
-                    <sub><b>salman ameeri</b></sub>
+                    <sub><b>draxxris</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/treviasxk">
-                    <img src="https://avatars.githubusercontent.com/u/24716901?v=4" width="100;" alt="treviasxk"/>
+                <a href="https://github.com/UBTL">
+                    <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
                     <br />
-                    <sub><b>Trevias Xk</b></sub>
+                    <sub><b>Uncle Bane</b></sub>
                 </a>
             </td>
 		</tr>
