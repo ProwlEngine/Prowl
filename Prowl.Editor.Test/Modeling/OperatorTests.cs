@@ -339,7 +339,7 @@ public class OperatorTests
         GeometryData.Face[] ends = [.. inner.Faces];
         var after = new ElementSelection();
 
-        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Bridge(mesh, ends[0], ends[1], selected), after));
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Bridge(mesh, ends[0], ends[1], 1, selected), after));
 
         Assert.Equal(4, after.Faces.Count);
         Assert.Equal(6f, Brush(target).Volume(), 3);
@@ -408,5 +408,53 @@ public class OperatorTests
         Assert.Equal(8f, kept.Mesh.Volume(), 3);
         Assert.Equal(8f, separated.Mesh.Volume(), 3);
         Assert.Equal(kept.Mesh.Polygons.Count, kept.Surfaces.Length);
+    }
+
+    [Fact]
+    public void ABridgeOfTwoSegmentsHasTwoRingsOfFaces()
+    {
+        CSGControlMesh box = Box();
+        int top = TopOf(box), bottom = Enumerable.Range(0, box.Polygons.Count).First(p => box.PolygonNormal(p).Y < -0.99f);
+        var target = new CSGBrushTarget(box, Marked(box));
+        var inner = new ElementSelection();
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Inset(mesh, target.FacesOf([top, bottom]), 0.5f, selected), inner));
+        GeometryData.Face[] ends = [.. inner.Faces];
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Bridge(mesh, ends[0], ends[1], 2, selected), after));
+
+        Assert.Equal(8, after.Faces.Count);
+        Assert.Equal(6f, Brush(target).Volume(), 3);
+    }
+
+    [Fact]
+    public void SubdividingAFaceByThreeCutsMakesAGrid()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.SubdivideFaces(mesh, target.FacesOf([TopOf(box)]), 3, selected), after));
+
+        Assert.Equal(16, after.Faces.Count);
+        Assert.Equal(8f, Brush(target).Volume(), 3);
+    }
+
+    [Fact]
+    public void RelaxingEvensOutPoints()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+        GeometryData.Edge edge = EdgeBetween(target.Target.Mesh, new Float3(1, 1, 1), new Float3(-1, 1, 1));
+        var added = new ElementSelection();
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.SubdivideEdges(mesh, [edge], 1, selected), added));
+        GeometryData.Vertex middle = added.Vertices.First();
+        middle.Point = new Float3(0.6f, 1, 1);
+        var after = new ElementSelection();
+
+        Assert.Null(MeshEdit.Run(target.Target, (mesh, selected) => Operators.Relax(mesh, [middle], 1f, selected), after));
+
+        Assert.Single(after.Vertices);
+        Assert.True(MathF.Abs(middle.Point.X) < 0.6f);
     }
 }

@@ -194,7 +194,7 @@ public sealed class CSGOverlayTool : SceneTool
         if (mesh.Active) { Command(menu, "csg.tris_to_quads", mesh.TrisToQuadsSelected, "MeshEdit/TrisToQuads"); any = true; }
         if (mesh.CanBridge) { Command(menu, "csg.bridge", mesh.BridgeSelected, "MeshEdit/Bridge"); any = true; }
         if (mesh.Active) { Command(menu, "csg.merge_by_distance", mesh.MergeByDistanceSelected, "MeshEdit/MergeByDistance"); any = true; }
-        if (mesh.CanSmooth) { Command(menu, "csg.smooth", mesh.SmoothSelected, "MeshEdit/Smooth"); any = true; }
+        if (mesh.CanSmooth) { Command(menu, "csg.smooth", mesh.SmoothSelected, "MeshEdit/Smooth"); Command(menu, "csg.relax", mesh.RelaxSelected); any = true; }
         if (mesh.CanSeparate) { Command(menu, "csg.separate", mesh.SeparateSelected, "MeshEdit/Separate"); any = true; }
         if (mesh.Active)
         {

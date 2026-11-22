@@ -221,11 +221,11 @@ public static class Operators
             if (mesh.Contains(edge)) after.Edges.Add(edge);
     }
 
-    /// <summary>Splits faces into one quad per corner, as many levels deep as asked. The quads of the last level are selected after.</summary>
-    public static void SubdivideFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, int levels, ElementSelection after)
+    /// <summary>Cuts faces with points along their edges, four sided ones into grids. The faces made are selected after.</summary>
+    public static void SubdivideFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, int cuts, ElementSelection after)
     {
-        if (faces.Count == 0 || levels < 1) return;
-        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(mesh, [.. faces], levels);
+        if (faces.Count == 0 || cuts < 1) return;
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(mesh, [.. faces], cuts);
         after.Clear();
         after.Faces.UnionWith(made);
     }
@@ -249,10 +249,11 @@ public static class Operators
     }
 
     /// <summary>
-    /// Removes two faces and joins their outlines with a strip of faces. Outlines whose point counts do not fit get
-    /// points added along the shorter one's longest edges first. The strip is selected after.
+    /// Removes two faces and joins their outlines with a strip of faces, cut into segments across its length. Outlines
+    /// whose point counts do not fit get points added along the shorter one's longest edges first. The strip is
+    /// selected after.
     /// </summary>
-    public static void Bridge(GeometryData mesh, GeometryData.Face first, GeometryData.Face second, ElementSelection after)
+    public static void Bridge(GeometryData mesh, GeometryData.Face first, GeometryData.Face second, int segments, ElementSelection after)
     {
         var a = new HashSet<GeometryData.Vertex>(first.NeighborVertices());
         var b = new HashSet<GeometryData.Vertex>(second.NeighborVertices());
@@ -273,7 +274,35 @@ public static class Operators
         edges.AddRange(Outline(mesh, b));
         List<GeometryData.Face> made = GeometryOperators.BridgeEdges(mesh, edges);
         after.Clear();
-        after.Faces.UnionWith(made);
+        if (segments <= 1 || Rung(made, a, b) is not { } rung)
+        {
+            after.Faces.UnionWith(made);
+            return;
+        }
+
+        // Loops cut across the strip's rungs make the segments, and the strip is every face standing on its points
+        var strip = new HashSet<GeometryData.Vertex>(a);
+        strip.UnionWith(b);
+        var before = new HashSet<GeometryData.Vertex>(mesh.Vertices);
+        GeometryOperators.LoopCut(mesh, rung, segments - 1);
+        foreach (GeometryData.Vertex vertex in mesh.Vertices)
+            if (!before.Contains(vertex)) strip.Add(vertex);
+        foreach (GeometryData.Face face in mesh.Faces)
+        {
+            bool all = true;
+            foreach (GeometryData.Vertex vertex in face.NeighborVertices())
+                if (!strip.Contains(vertex)) { all = false; break; }
+            if (all) after.Faces.Add(face);
+        }
+    }
+
+    /// <summary>An edge of the strip running from one outline to the other.</summary>
+    private static GeometryData.Edge? Rung(List<GeometryData.Face> strip, HashSet<GeometryData.Vertex> a, HashSet<GeometryData.Vertex> b)
+    {
+        foreach (GeometryData.Face face in strip)
+            foreach (GeometryData.Edge edge in face.NeighborEdges())
+                if (a.Contains(edge.Vert1) && b.Contains(edge.Vert2) || b.Contains(edge.Vert1) && a.Contains(edge.Vert2)) return edge;
+        return null;
     }
 
     private static bool BridgeFits(int a, int b) => (a - b) % 2 == 0 && Math.Max(a, b) <= 3 * Math.Min(a, b);
@@ -339,6 +368,19 @@ public static class Operators
         if (vertices.Count == 0 || strength <= 0f) return;
         var points = new List<GeometryData.Vertex>(vertices);
         GeometryOperators.SmoothVertices(mesh, points, Math.Clamp(strength, 0f, 1f));
+        after.Clear();
+        after.Vertices.UnionWith(points);
+    }
+
+    /// <summary>
+    /// Evens out the spacing of points, moving each towards the middle of its neighbours along the surface rather than
+    /// through it, by a strength from 0 to 1. They stay selected.
+    /// </summary>
+    public static void Relax(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after)
+    {
+        if (vertices.Count == 0 || strength <= 0f) return;
+        var points = new List<GeometryData.Vertex>(vertices);
+        GeometryOperators.RelaxVertices(mesh, points, Math.Clamp(strength, 0f, 1f));
         after.Clear();
         after.Vertices.UnionWith(points);
     }

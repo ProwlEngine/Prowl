@@ -171,6 +171,7 @@ internal static class CSGSections
         Add(tool.CanBridge, EditorIcons.Bridge, "csg.bridge", tool.BridgeSelected, "MeshEdit/Bridge");
         Add(tool.Active, EditorIcons.ArrowsToDot, "csg.merge_by_distance", tool.MergeByDistanceSelected, "MeshEdit/MergeByDistance");
         Add(tool.CanSmooth, EditorIcons.Water, "csg.smooth", tool.SmoothSelected, "MeshEdit/Smooth");
+        Add(tool.CanSmooth, EditorIcons.Shapes, "csg.relax", tool.RelaxSelected);
         Add(tool.CanSeparate, EditorIcons.Clone, "csg.separate", tool.SeparateSelected, "MeshEdit/Separate");
         Add(tool.CanSnap, EditorIcons.Magnet, "csg.snap", tool.SnapSelectedToGrid, "CSG/SnapToGrid");
         Add(tool.CanDeleteFaces, EditorIcons.TrashCan, "csg.delete_face", tool.DeleteSelectedFaces, "MeshEdit/DeleteFace");

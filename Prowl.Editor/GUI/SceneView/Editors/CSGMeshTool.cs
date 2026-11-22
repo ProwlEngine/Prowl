@@ -222,8 +222,8 @@ public sealed class CSGMeshTool : SceneTool
         _actionCount = 1;
     }
 
-    // Each level of face subdivision makes four times the faces, so the wheel stops soon
-    private const int MaxSubdivideLevels = 4;
+    // Cutting a four sided face makes a grid of the cuts squared, so the wheel stops sooner than for edges
+    private const int MaxFaceCuts = 16;
 
     public bool CanTriangulate => Active && Mode == SelectMode.Face && _faces.Count > 0;
 
@@ -243,26 +243,41 @@ public sealed class CSGMeshTool : SceneTool
 
     public bool CanBridge => Active && Mode == SelectMode.Face && _faces.Count == 2;
 
-    /// <summary>Removes the two selected faces and joins their outlines with a strip of faces.</summary>
+    /// <summary>Starts removing the two selected faces and joining their outlines with a strip, the wheel setting its segments.</summary>
     public void BridgeSelected()
     {
         if (!CanBridge) return;
-        RunEdit("Bridge CSG Faces", selected =>
-        {
-            GeometryData.Face[] ends = [.. selected.Faces];
-            if (ends.Length == 2) Operators.Bridge(_target!.Target.Mesh, ends[0], ends[1], selected);
-        }, SelectMode.Face);
+        BeginAction(Context.Handles, Action.Bridge, fromMenu: true);
+        _actionCount = 1;
     }
 
-    /// <summary>Makes the brush the same on both sides of a plane through its origin, keeping one side.</summary>
+    /// <summary>
+    /// Makes the brush the same on both sides of a plane across one of its axes, keeping one side. The plane goes through
+    /// the scene view's pivot: the middle of the selection, the element last clicked, or the brush's origin.
+    /// </summary>
     public void Symmetrize(int axis, bool keepPositive)
     {
         if (!Active) return;
+        float offset = SymmetrizePlane()[axis];
         RunEdit("Symmetrize CSG Brush", selected =>
         {
-            Operators.Symmetrize(_target!.Target.Mesh, axis, keepPositive, 0f);
+            Operators.Symmetrize(_target!.Target.Mesh, axis, keepPositive, offset);
             selected.Clear();
         });
+    }
+
+    /// <summary>Where the symmetrize plane passes, in the brush's own space.</summary>
+    private Float3 SymmetrizePlane()
+    {
+        if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active)
+            return Float4x4.TransformPoint(active, Target!.Transform.WorldToLocalMatrix);
+        if (SceneTools.Pivot == PivotMode.Center && _vertices.Count > 0)
+        {
+            Float3 sum = Float3.Zero;
+            foreach (int i in _vertices) sum += _mesh!.Points[i];
+            return sum / _vertices.Count;
+        }
+        return Float3.Zero;
     }
 
     /// <summary>The axes and sides to symmetrize by, as a menu at the mouse.</summary>
@@ -295,6 +310,13 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (!CanSmooth) return;
         BeginAction(Context.Handles, Action.Smooth, fromMenu: true);
+    }
+
+    /// <summary>Starts evening out the selected points along the surface, the strength following the mouse.</summary>
+    public void RelaxSelected()
+    {
+        if (!CanSmooth) return;
+        BeginAction(Context.Handles, Action.Relax, fromMenu: true);
     }
 
     public bool CanSeparate => Active && Mode == SelectMode.Face && _faces.Count > 0;
@@ -416,7 +438,7 @@ public sealed class CSGMeshTool : SceneTool
     private readonly List<int> _faces = new();
 
     /// <summary>What a drag in progress is doing.</summary>
-    private enum Action { None, Marquee, Chamfer, Extrude, Inset, ExtrudeRegion, Subdivide, LimitedDissolve, TrisToQuads, MergeByDistance, Smooth, LoopCut, EdgeSlide, Knife, Drag }
+    private enum Action { None, Marquee, Chamfer, Extrude, Inset, ExtrudeRegion, Subdivide, LimitedDissolve, TrisToQuads, MergeByDistance, Smooth, Relax, Bridge, LoopCut, EdgeSlide, Knife, Drag }
 
     // Pixels the cursor has to travel before a press becomes a chamfer, extrude or drag, so a click stays a click
     private const float DragThreshold = 4f;
@@ -970,7 +992,8 @@ public sealed class CSGMeshTool : SceneTool
         if (_action == Action.None) return;
         // Exactly the shape it started with, so the open undo record finds nothing changed and leaves no step
         if (_action is Action.Chamfer or Action.Inset or Action.ExtrudeRegion or Action.Subdivide or Action.LimitedDissolve
-            or Action.TrisToQuads or Action.MergeByDistance or Action.Smooth or Action.LoopCut or Action.EdgeSlide or Action.Drag
+            or Action.TrisToQuads or Action.MergeByDistance or Action.Smooth or Action.Relax or Action.Bridge or Action.LoopCut
+            or Action.EdgeSlide or Action.Drag
             && _actionBrush.IsValid() && _startMesh != null)
             ApplyShape(_actionBrush!, _startMesh.Clone(), (SurfaceData[])_startSurfaces!.Clone());
         EndAction();
@@ -1523,11 +1546,11 @@ public sealed class CSGMeshTool : SceneTool
                 if (wheel != 0f) _actionCount = Math.Clamp(_actionCount + (wheel > 0f ? 1 : -1), 1, 64);
                 if (_actionFaces.Count > 0)
                 {
-                    _actionCount = Math.Min(_actionCount, MaxSubdivideLevels);
-                    int levels = _actionCount;
-                    PreviewOperator("Subdivide CSG Faces", levels, false,
-                        (target, selected) => Operators.SubdivideFaces(target.Target.Mesh, target.FacesOf(_actionFaces), levels, selected), SelectMode.Face);
-                    ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.levels", new { count = levels }), PickedColor);
+                    _actionCount = Math.Min(_actionCount, MaxFaceCuts);
+                    int faceCuts = _actionCount;
+                    PreviewOperator("Subdivide CSG Faces", faceCuts, false,
+                        (target, selected) => Operators.SubdivideFaces(target.Target.Mesh, target.FacesOf(_actionFaces), faceCuts, selected), SelectMode.Face);
+                    ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.cuts", new { count = faceCuts }), PickedColor);
                     break;
                 }
                 int cuts = _actionCount;
@@ -1574,12 +1597,29 @@ public sealed class CSGMeshTool : SceneTool
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, distance.ToString("0.###"), PickedColor);
                 break;
             }
-            case Action.Smooth:
+            case Action.Smooth or Action.Relax:
             {
                 float strength = Math.Clamp(pixels * StrengthPerPixel, 0f, 1f);
-                PreviewOperator("Smooth CSG Points", strength, strength <= 1e-4f,
-                    (target, selected) => Operators.Smooth(target.Target.Mesh, PointsOf(target, _actionPoints), strength, selected), SelectMode.Vertex);
+                bool relax = _action == Action.Relax;
+                PreviewOperator(relax ? "Relax CSG Points" : "Smooth CSG Points", strength, strength <= 1e-4f, (target, selected) =>
+                {
+                    if (relax) Operators.Relax(target.Target.Mesh, PointsOf(target, _actionPoints), strength, selected);
+                    else Operators.Smooth(target.Target.Mesh, PointsOf(target, _actionPoints), strength, selected);
+                }, SelectMode.Vertex);
                 ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, strength.ToString("0.##"), PickedColor);
+                break;
+            }
+            case Action.Bridge:
+            {
+                float wheel = Input.MouseWheelDelta;
+                if (wheel != 0f) _actionCount = Math.Clamp(_actionCount + (wheel > 0f ? 1 : -1), 1, 64);
+                int segments = _actionCount;
+                PreviewOperator("Bridge CSG Faces", segments, false, (target, selected) =>
+                {
+                    List<GeometryData.Face> ends = target.FacesOf(_actionFaces);
+                    if (ends.Count == 2) Operators.Bridge(target.Target.Mesh, ends[0], ends[1], segments, selected);
+                }, SelectMode.Face);
+                ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.segments", new { count = segments }), PickedColor);
                 break;
             }
             case Action.LoopCut:
@@ -1624,7 +1664,7 @@ public sealed class CSGMeshTool : SceneTool
             case Action.Chamfer: ClearSelection(); break;
             case Action.EdgeSlide: TakeActionResult(); break;
             case Action.Inset or Action.ExtrudeRegion or Action.Subdivide or Action.LimitedDissolve
-                or Action.TrisToQuads or Action.MergeByDistance or Action.Smooth: TakeActionResult(); break;
+                or Action.TrisToQuads or Action.MergeByDistance or Action.Smooth or Action.Relax or Action.Bridge: TakeActionResult(); break;
             case Action.Drag: CommitSession("Move CSG Points"); break;
         }
 
