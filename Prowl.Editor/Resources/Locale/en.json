@@ -936,6 +936,8 @@
   "csg.earlier_tip": "Moves the selection one place earlier among its siblings, so later brushes act on it",
   "csg.later": "Later",
   "csg.later_tip": "Moves the selection one place later among its siblings, so it acts on the brushes before it",
+  "csg.rotate": "Rotate",
+  "csg.rotate_tip": "Turns the selection about its centre by the rotation snap from the scene view header",
   "csg.copy_surface": "Copy to selection",
   "csg.copy_surface_tip": "Applies the last picked surface's texturing to every other selected surface.",
   "csg.generate": "Generate",

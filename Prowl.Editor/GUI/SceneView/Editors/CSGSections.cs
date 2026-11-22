@@ -499,6 +499,18 @@ internal static class CSGSections
                 .Item(Loc.Get("csg.clone_array"), tooltip: Loc.Get("csg.clone_array_tip"))
                 .Show());
 
+        EditorGUI.SettingsRow(paper, "csg_sel_rot", Loc.Get("csg.rotate"), () =>
+            Origami.ButtonGroup(paper, "csg_sel_rot_v", -1, idx =>
+                {
+                    Float3 axis = AxisFor(idx / 2) * (idx % 2 == 0 ? -SceneTools.RotateSnap : SceneTools.RotateSnap);
+                    CSGSelection.RotateBy(axis, CSGSelection.SelectionCentre(), clone: false);
+                })
+                .Height(EditorTheme.RowHeight).FullWidth()
+                .Item("X-", tooltip: Loc.Get("csg.rotate_tip")).Item("X+", tooltip: Loc.Get("csg.rotate_tip"))
+                .Item("Y-", tooltip: Loc.Get("csg.rotate_tip")).Item("Y+", tooltip: Loc.Get("csg.rotate_tip"))
+                .Item("Z-", tooltip: Loc.Get("csg.rotate_tip")).Item("Z+", tooltip: Loc.Get("csg.rotate_tip"))
+                .Show());
+
         EditorGUI.SettingsRow(paper, "csg_sel_order", Loc.Get("csg.order"), () =>
             Origami.ButtonGroup(paper, "csg_sel_order_v", -1, idx => CSGSelection.MoveInOrder(idx == 0 ? -1 : 1))
                 .Height(EditorTheme.RowHeight).FullWidth()
