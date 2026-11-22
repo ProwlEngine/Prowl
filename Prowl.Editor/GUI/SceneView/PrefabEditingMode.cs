@@ -8,9 +8,7 @@ using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Rosetta;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
-using Prowl.Vector;
 
 namespace Prowl.Editor.GUI.SceneView;
 
@@ -125,49 +123,13 @@ public static class PrefabEditingMode
 
         editScene.Add(go);
 
-        // Editor-only viewing aids. Hidden from gizmos and marked DontSave so they don't end
-        // up in the serialized prefab file when the user hits Save.
-        var camGo = new GameObject("PrefabEdit Camera");
-        camGo.Tag = "Main Camera";
-        camGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
-        camGo.Transform.Position = FramingPositionFor(go);
-        camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
-        Camera cam = camGo.AddComponent<Camera>();
-        cam.Depth = -1;
-        cam.Profile = VolumeProfile.CreateCameraDefault("PrefabEdit Camera Profile");
-        editScene.Add(camGo);
-
-        var lightGo = new GameObject("PrefabEdit Light");
-        lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
-        lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
-        lightGo.AddComponent<DirectionalLight>();
-        editScene.Add(lightGo);
+        // Editor-only viewing aids, hidden and never saved into the prefab
+        IsolatedWorld.AddViewingRig(editScene, go, "PrefabEdit");
 
         // Objects of the dormant edit world must not stay selected, where the inspector or Delete would reach them.
         Selection.Clear();
         edit.Deactivate();
         editScene.Activate();
-    }
-
-    /// <summary>
-    /// Where to put the editing camera so the prefab fills the view: back off along its own tilt by
-    /// enough to take in its bounds. A prefab that draws nothing keeps the old fixed spot, which is
-    /// as good a guess as any for something with no extent.
-    /// </summary>
-    private static Float3 FramingPositionFor(GameObject go)
-    {
-        if (!Panels.SceneViewPanel.TryGetWorldBounds(go, out Float3 min, out Float3 max))
-            return new Float3(0, 2, -5);
-
-        Float3 center = (min + max) * 0.5f;
-        Float3 extents = (max - min) * 0.5f;
-
-        // Far enough that the largest axis is comfortably inside the view, with a floor so a tiny
-        // object is not framed from a millimetre away.
-        float radius = MathF.Max(MathF.Max((float)extents.X, (float)extents.Y), (float)extents.Z);
-        float distance = MathF.Max(radius * 3.5f, 1.5f);
-
-        return center + new Float3(0, distance * 0.35f, -distance);
     }
 
     /// <summary>

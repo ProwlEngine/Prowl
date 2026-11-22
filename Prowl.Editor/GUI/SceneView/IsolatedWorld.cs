@@ -6,7 +6,9 @@ using System;
 using Prowl.Editor.Core;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Editor.GUI.SceneView;
 
@@ -135,5 +137,48 @@ public static class IsolatedWorld
         session.IsDirty = false;
         Undo.PopContext(_savedSceneUndo);
         _savedSceneUndo = null;
+    }
+
+    /// <summary>
+    /// Adds the editor only camera and light a session's world is seen with: hidden, never saved, and the camera backed
+    /// off along its tilt far enough to take in what is framed.
+    /// </summary>
+    internal static void AddViewingRig(Scene world, GameObject? framed, string prefix)
+    {
+        var camGo = new GameObject($"{prefix} Camera");
+        camGo.Tag = "Main Camera";
+        camGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        camGo.Transform.Position = FramingPositionFor(framed);
+        camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
+        Camera cam = camGo.AddComponent<Camera>();
+        cam.Depth = -1;
+        cam.Profile = VolumeProfile.CreateCameraDefault($"{prefix} Camera Profile");
+        world.Add(camGo);
+
+        var lightGo = new GameObject($"{prefix} Light");
+        lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
+        lightGo.AddComponent<DirectionalLight>();
+        world.Add(lightGo);
+    }
+
+    /// <summary>
+    /// Where to put the editing camera so the object fills the view. Something that draws nothing keeps a fixed spot,
+    /// which is as good a guess as any for something with no extent.
+    /// </summary>
+    private static Float3 FramingPositionFor(GameObject? go)
+    {
+        if (go.IsNotValid() || !Panels.SceneViewPanel.TryGetWorldBounds(go!, out Float3 min, out Float3 max))
+            return new Float3(0, 2, -5);
+
+        Float3 center = (min + max) * 0.5f;
+        Float3 extents = (max - min) * 0.5f;
+
+        // Far enough that the largest axis is comfortably inside the view, with a floor so a tiny object is not framed
+        // from a millimetre away
+        float radius = MathF.Max(MathF.Max(extents.X, extents.Y), extents.Z);
+        float distance = MathF.Max(radius * 3.5f, 1.5f);
+
+        return center + new Float3(0, distance * 0.35f, -distance);
     }
 }
