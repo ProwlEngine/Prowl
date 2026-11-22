@@ -237,7 +237,9 @@ public sealed class CSGObjectTool : SceneTool
                 continue;
             }
 
+            // Only selected brushes are outlined, and unselected carving ones while their toggle is on
             bool selected = Selection.IsSelected(brush.GameObject);
+            if (!selected && brush.Operation == Operation.Additive) continue;
             if (!selected && brush.Operation == Operation.Subtractive && !CSGHelperSurfaces.SubtractiveOutlines) continue;
             if (!selected && brush.Operation == Operation.Intersect && !CSGHelperSurfaces.IntersectOutlines) continue;
             Color32 color = selected ? SelectedColor : ColorFor(brush.Operation);
