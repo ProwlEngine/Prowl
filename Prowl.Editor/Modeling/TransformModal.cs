@@ -66,6 +66,9 @@ public sealed class TransformModal
     private AxisSpace _space;
     private string _typed = "";
     private int _slideEdge = -1;
+
+    // The moving point nearest the mouse when the grab began, which a snap lands on its target
+    private Float3 _anchor;
     private Action? _replay;
 
     /// <param name="local">The object's rotation, for the second press of an axis key.</param>
@@ -79,6 +82,9 @@ public sealed class TransformModal
     }
 
     public TransformKind Kind { get; }
+
+    /// <summary>Where a grab snaps to for the mouse at a screen point, or null for nowhere. Unset, a grab only snaps to the grid.</summary>
+    public Func<Float2, Float3?>? Snap { get; init; }
 
     /// <summary>For a slide, the far ends of the edges the point can slide along, in the world.</summary>
     public IReadOnlyList<Float3> SlideEnds { get; init; } = [];
@@ -113,6 +119,14 @@ public sealed class TransformModal
         {
             _started = true;
             _start = _virtual = _last = handles.MousePosition;
+            _anchor = _session.Median;
+            float nearest = float.MaxValue;
+            foreach (Float3 point in _session.Points)
+            {
+                if (handles.WorldToScreen(point) is not { } at || Float2.Distance(at, _start) >= nearest) continue;
+                nearest = Float2.Distance(at, _start);
+                _anchor = point;
+            }
         }
         _virtual += (handles.MousePosition - _last) * (handles.Shift ? 0.1f : 1f);
         _last = handles.MousePosition;
@@ -184,7 +198,17 @@ public sealed class TransformModal
         int axis = _axis < 0 && typed != null ? 0 : _axis;
 
         Float3 delta;
-        if (axis < 0)
+        if (typed == null && Snap?.Invoke(handles.MousePosition) is { } target)
+        {
+            delta = target - _anchor;
+            if (axis >= 0)
+            {
+                Float3 a = Axis(axis);
+                delta = _plane ? delta - a * Float3.Dot(delta, a) : a * Float3.Dot(delta, a);
+            }
+            ctx.Draw.Dot(target, new Color32(255, 220, 90, 255), 9f);
+        }
+        else if (axis < 0)
         {
             delta = snap ? SnapIn(inView, Quaternion.Identity) : inView;
         }

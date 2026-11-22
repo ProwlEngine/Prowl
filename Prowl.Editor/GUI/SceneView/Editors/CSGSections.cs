@@ -133,7 +133,10 @@ internal static class CSGSections
                 new Tile(EditorIcons.Slash, Loc.Get("csg.mode_edge"), Loc.Get("csg.mode_edge_tip"), () => tool.SetMode(SelectMode.Edge), tool.Mode == SelectMode.Edge),
                 new Tile(EditorIcons.Square, Loc.Get("csg.mode_face"), Loc.Get("csg.mode_face_tip"), () => tool.SetMode(SelectMode.Face), tool.Mode == SelectMode.Face),
             ], iconsOnly: true);
-            Chips(paper, font, "csg_edit_toggles", (Loc.Get("csg.xray"), tool.XRay, Loc.Get("csg.xray_tip"), () => tool.XRay = !tool.XRay));
+            Chips(paper, font, "csg_edit_toggles",
+                (Loc.Get("csg.xray"), tool.XRay, Loc.Get("csg.xray_tip"), () => tool.XRay = !tool.XRay),
+                (Loc.Get("csg.snap_brushes"), tool.SnapToBrushes, Loc.Get("csg.snap_brushes_tip"), () => tool.SnapToBrushes = !tool.SnapToBrushes),
+                (Loc.Get("csg.proportional"), tool.Proportional, Loc.Get("csg.proportional_tip"), () => tool.Proportional = !tool.Proportional));
 
             Tile[] operators = OperatorTiles(tool);
             if (operators.Length > 0) IconGrid(paper, font, "csg_edit_ops", 4, operators);

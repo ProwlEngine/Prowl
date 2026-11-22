@@ -111,4 +111,27 @@ public class TransformSessionTests
 
         foreach (GeometryData.Vertex vertex in top.Vertices) Assert.Equal(2f, vertex.Point.Y, 3);
     }
+
+    [Fact]
+    public void ProportionalEditingPullsNearPointsLessAndLeavesFarOnes()
+    {
+        EditTarget target = Box();
+        GeometryData.Vertex corner = target.Mesh.Vertices.First(v => v.Point == new Float3(1, 1, 1));
+        GeometryData.Vertex near = target.Mesh.Vertices.First(v => v.Point == new Float3(-1, 1, 1));
+        GeometryData.Vertex far = target.Mesh.Vertices.First(v => v.Point == new Float3(-1, -1, -1));
+        var selection = new ElementSelection();
+        selection.Vertices.Add(corner);
+        var session = new TransformSession(target, selection, falloff: 2.5f);
+
+        session.Translate(new Float3(0, 1, 0));
+
+        Assert.Equal(2f, corner.Point.Y, 4);
+        Assert.InRange(near.Point.Y, 1.01f, 1.5f);
+        Assert.Equal(-1f, far.Point.Y, 4);
+
+        session.Falloff = 0f;
+        session.Translate(new Float3(0, 1, 0));
+        Assert.Equal(1f, near.Point.Y, 4);
+        Assert.Equal(2f, corner.Point.Y, 4);
+    }
 }

@@ -473,6 +473,15 @@ public sealed class CSGMeshTool : SceneTool
     /// <summary>Draws and picks through the brush, with no occlusion test.</summary>
     public bool XRay { get; set; }
 
+    /// <summary>Moved points snap to the corners, edges and faces of the model's brushes under the mouse.</summary>
+    public bool SnapToBrushes { get; set; }
+
+    /// <summary>Unselected points near the selection move with it, less the further they are.</summary>
+    public bool Proportional { get; set; }
+
+    /// <summary>How far proportional editing reaches, in world units. The wheel changes it while a transform runs.</summary>
+    public float ProportionalRadius { get; set; } = 1f;
+
     public CSGMeshTool() => _isHiddenFace = _hiddenFaces.Contains;
 
     // Points being moved, by a modal transform, a drag or the gizmo: the session, the brush it runs on, the shape it
@@ -770,6 +779,8 @@ public sealed class CSGMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Linked")) SelectLinked(ctx);
         else if (handles.IsPressed("MeshEdit/Similar")) Command((mesh, s) => Selecting.Similar(mesh, s, Mode));
         else if (handles.IsPressed("MeshEdit/XRay")) XRay = !XRay;
+        else if (handles.IsPressed("MeshEdit/SnapToBrushes")) SnapToBrushes = !SnapToBrushes;
+        else if (handles.IsPressed("MeshEdit/Proportional")) Proportional = !Proportional;
         else if (handles.IsPressed("MeshEdit/HideUnselected")) Hide(unselected: true);
         else if (handles.IsPressed("MeshEdit/Reveal")) ClearHidden();
         else if (handles.IsPressed("MeshEdit/Hide")) Hide(unselected: false);
@@ -796,6 +807,84 @@ public sealed class CSGMeshTool : SceneTool
             s.Edges.UnionWith(shell.Edges);
             s.Faces.UnionWith(shell.Faces);
         });
+    }
+
+    /// <summary>
+    /// What a moved point snaps to with the mouse at a screen point: a corner, a point of an edge or a face of a brush in
+    /// the model, the brush being edited included. The selected points, their edges and faces, and hidden parts are
+    /// never targets. Brushes whose bounds are not near the mouse on screen are passed over.
+    /// </summary>
+    private Float3? FindSnap(HandleContext handles, Float2 mouse)
+    {
+        if (CSGSelection.ActiveModel() is not { } model || model.IsNotValid() || Target.IsNotValid()) return null;
+
+        var corners = new List<Float3>();
+        var edges = new List<(Float3, Float3)>();
+        Float3? face = null;
+        float nearestHit = float.MaxValue;
+        Ray ray = handles.MouseRay;
+
+        foreach (CSGBrush brush in CSGSelection.BrushesIn(model))
+        {
+            if (CSGVisibility.IsHidden(brush)) continue;
+            CSGControlMesh mesh = brush.ControlMesh;
+            if (mesh.Points.Count == 0) continue;
+            Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
+            if (!NearOnScreen(handles, mesh, toWorld, mouse)) continue;
+
+            bool edited = ReferenceEquals(brush, Target);
+            for (int i = 0; i < mesh.Points.Count; i++)
+                if (!edited || !_vertices.Contains(i) && !_hiddenPoints.Contains(i)) corners.Add(Float4x4.TransformPoint(mesh.Points[i], toWorld));
+            foreach ((int a, int b) in mesh.Edges())
+            {
+                if (edited && (_vertices.Contains(a) || _vertices.Contains(b) || _hiddenEdges.Contains(EdgeKey(a, b)))) continue;
+                edges.Add((Float4x4.TransformPoint(mesh.Points[a], toWorld), Float4x4.TransformPoint(mesh.Points[b], toWorld)));
+            }
+
+            Float4x4 toLocal = brush.Transform.WorldToLocalMatrix;
+            Func<int, bool>? skip = edited ? p => _hiddenFaces.Contains(p) || TouchesSelection(mesh, p) : null;
+            if (mesh.Raycast(Float4x4.TransformPoint(ray.Origin, toLocal), Float4x4.TransformNormal(ray.Direction, toLocal), out float t, out _, skip: skip))
+            {
+                Float3 hit = Float4x4.TransformPoint(Float4x4.TransformPoint(ray.Origin, toLocal) + Float4x4.TransformNormal(ray.Direction, toLocal) * t, toWorld);
+                float distance = Float3.Distance(hit, ray.Origin);
+                if (distance < nearestHit)
+                {
+                    nearestHit = distance;
+                    face = hit;
+                }
+            }
+        }
+
+        return Snapping.Find(corners, edges, face, handles.WorldToScreen, mouse, out Float3 point) ? point : null;
+    }
+
+    private bool TouchesSelection(CSGControlMesh mesh, int polygon)
+    {
+        foreach (int i in mesh.PolygonPoints(polygon))
+            if (_vertices.Contains(i)) return true;
+        return false;
+    }
+
+    /// <summary>Whether a brush's bounds, on screen, come within snapping reach of the mouse.</summary>
+    private static bool NearOnScreen(HandleContext handles, CSGControlMesh mesh, Float4x4 toWorld, Float2 mouse)
+    {
+        Float3 min = new(float.MaxValue), max = new(float.MinValue);
+        foreach (Float3 point in mesh.Points)
+        {
+            min = Maths.Min(min, point);
+            max = Maths.Max(max, point);
+        }
+
+        Float2 low = new(float.MaxValue), high = new(float.MinValue);
+        for (int i = 0; i < 8; i++)
+        {
+            Float3 corner = new((i & 1) == 0 ? min.X : max.X, (i & 2) == 0 ? min.Y : max.Y, (i & 4) == 0 ? min.Z : max.Z);
+            if (handles.WorldToScreen(Float4x4.TransformPoint(corner, toWorld)) is not { } at) return true;
+            low = Maths.Min(low, at);
+            high = Maths.Max(high, at);
+        }
+        float reach = Snapping.CornerReach;
+        return mouse.X >= low.X - reach && mouse.X <= high.X + reach && mouse.Y >= low.Y - reach && mouse.Y <= high.Y + reach;
     }
 
     /// <summary>Hides the selected parts, or every other part, while editing. The shape is untouched.</summary>
@@ -1158,8 +1247,13 @@ public sealed class CSGMeshTool : SceneTool
             _dragAnchorStart = _dragAnchor;
         }
 
-        // The pressed point itself lands on the grid, so an off grid vertex is pulled onto it
+        // The pressed point itself lands on the grid, so an off grid vertex is pulled onto it, or on what it snaps to
         Float3 target = CSGSnap.Value(handles, _dragAnchorStart + (hit - _dragStartHit));
+        if (SnapToBrushes && FindSnap(handles, handles.MousePosition) is { } snapped)
+        {
+            target = snapped;
+            ctx.Draw.Dot(snapped, new Color32(255, 220, 90, 255), 9f);
+        }
         if (Float3.LengthSquared(target - _dragAnchor) < 1e-12f) return;
         if ((_session ?? StartSession()) is not { } session) return;
 
@@ -1313,7 +1407,10 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (_target == null || _vertices.Count == 0 || Target.IsNotValid()) return null;
 
-        _session = new TransformSession(_target.Target, SelectedElements()) { Individual = SceneTools.Pivot == PivotMode.Individual };
+        _session = new TransformSession(_target.Target, SelectedElements(), Proportional ? ProportionalRadius : 0f)
+        {
+            Individual = SceneTools.Pivot == PivotMode.Individual,
+        };
         if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active) _session.Pivot = active;
         _sessionBrush = Target;
         _sessionStart = Target!.ControlMesh.Clone();
@@ -1383,7 +1480,10 @@ public sealed class CSGMeshTool : SceneTool
     private void StartTransform(SceneToolContext ctx, TransformKind kind)
     {
         if (StartSession() is not { } session) return;
-        _transform = new TransformModal(kind, session, Target!.Transform.Rotation, NormalFrame());
+        _transform = new TransformModal(kind, session, Target!.Transform.Rotation, NormalFrame())
+        {
+            Snap = SnapToBrushes ? mouse => FindSnap(ctx.Handles, mouse) : null,
+        };
         _transformView = ctx.View;
         ctx.Handles.Modal = true;
         _modalHandles = ctx.Handles;
@@ -1392,6 +1492,18 @@ public sealed class CSGMeshTool : SceneTool
     private void TickTransform(SceneToolContext ctx)
     {
         TransformModal modal = _transform!;
+
+        // The wheel changes how far proportional editing reaches, shown as a circle round the pivot
+        if (Proportional && _session != null)
+        {
+            float wheel = Input.MouseWheelDelta;
+            if (wheel != 0f)
+            {
+                ProportionalRadius = Math.Clamp(ProportionalRadius * MathF.Pow(1.15f, wheel), 0.01f, 1000f);
+                _session.Falloff = ProportionalRadius;
+            }
+            CSGGizmos.Circle(_session.Pivot, ctx.Camera.GameObject.Transform.Forward, ProportionalRadius, new Color32(255, 255, 255, 150), 1f);
+        }
 
         // G again while grabbing a single point slides it along an edge instead
         if (modal.Kind == TransformKind.Translate && ctx.Handles.GetKeyDown(KeyCode.G))

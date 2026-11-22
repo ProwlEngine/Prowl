@@ -11,32 +11,38 @@ namespace Prowl.Editor.Modeling;
 
 /// <summary>
 /// Moves the selected points of an edit target, and can put them back. Every move is measured from where the points
-/// started, in world space, so a modal transform or a gizmo calls it again each frame with the whole amount.
+/// started, in world space, so a modal transform or a gizmo calls it again each frame with the whole amount. With a
+/// falloff, unselected points within it are pulled along too, less the further they are from the selection.
 /// </summary>
 public sealed class TransformSession
 {
     private readonly EditTarget _target;
-    private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin)> _points = new();
+    private readonly ElementSelection _selection;
+    private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight)> _points = new();
     private readonly Float4x4 _toLocal;
+    private readonly List<Float3> _selected = new();
+    private float _falloff;
+    private Func<Float3, Float3, Float3>? _last;
 
-    public TransformSession(EditTarget target, ElementSelection selection)
+    public TransformSession(EditTarget target, ElementSelection selection, float falloff = 0f)
     {
         _target = target;
+        _selection = selection;
         _toLocal = target.LocalToWorld.Invert();
+        _falloff = falloff;
+        Gather();
 
-        Dictionary<GeometryData.Vertex, Float3> origins = IslandCentres(selection, target.LocalToWorld);
         Float3 sum = Float3.Zero;
-        foreach (GeometryData.Vertex vertex in selection.Vertices)
-        {
-            Float3 world = Float4x4.TransformPoint(vertex.Point, target.LocalToWorld);
-            _points.Add((vertex, vertex.Point, world, origins.TryGetValue(vertex, out Float3 origin) ? origin : world));
-            sum += world;
-        }
-        Median = _points.Count > 0 ? sum / _points.Count : Float3.Zero;
+        foreach (Float3 point in _selected) sum += point;
+        Median = _selected.Count > 0 ? sum / _selected.Count : Float3.Zero;
         Pivot = Median;
     }
 
-    public int Count => _points.Count;
+    /// <summary>How many selected points move.</summary>
+    public int Count => _selected.Count;
+
+    /// <summary>Where the selected points started, in the world.</summary>
+    public IReadOnlyList<Float3> Points => _selected;
 
     /// <summary>The middle of the moving points, in the world.</summary>
     public Float3 Median { get; }
@@ -46,6 +52,20 @@ public sealed class TransformSession
 
     /// <summary>Rotation and scale turn each island of selected faces about its own centre instead of the pivot.</summary>
     public bool Individual { get; set; }
+
+    /// <summary>How far from the selection unselected points are still pulled along, 0 for not at all. Changing it moves the points again.</summary>
+    public float Falloff
+    {
+        get => _falloff;
+        set
+        {
+            if (value == _falloff) return;
+            Restore();
+            _falloff = value;
+            Gather();
+            if (_last != null) Apply(_last);
+        }
+    }
 
     public void Translate(Float3 delta) => Apply((p, _) => p + delta);
 
@@ -65,13 +85,46 @@ public sealed class TransformSession
 
     public void Restore()
     {
-        foreach ((GeometryData.Vertex vertex, Float3 local, _, _) in _points) vertex.Point = local;
+        foreach (var point in _points) point.Vertex.Point = point.Local;
     }
 
     private void Apply(Func<Float3, Float3, Float3> move)
     {
-        foreach ((GeometryData.Vertex vertex, _, Float3 world, Float3 origin) in _points)
-            vertex.Point = Float4x4.TransformPoint(move(world, Individual ? origin : Pivot), _toLocal);
+        _last = move;
+        foreach ((GeometryData.Vertex vertex, _, Float3 world, Float3 origin, float weight) in _points)
+        {
+            Float3 moved = move(world, Individual ? origin : Pivot);
+            vertex.Point = Float4x4.TransformPoint(world + (moved - world) * weight, _toLocal);
+        }
+    }
+
+    /// <summary>The selected points at full weight, and with a falloff the unselected points within it, weighted by a smooth curve.</summary>
+    private void Gather()
+    {
+        _points.Clear();
+        _selected.Clear();
+        Float4x4 toWorld = _target.LocalToWorld;
+        Dictionary<GeometryData.Vertex, Float3> origins = IslandCentres(_selection, toWorld);
+        foreach (GeometryData.Vertex vertex in _selection.Vertices)
+        {
+            Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
+            _points.Add((vertex, vertex.Point, world, origins.TryGetValue(vertex, out Float3 origin) ? origin : world, 1f));
+            _selected.Add(world);
+        }
+        if (_falloff <= 0f || _selected.Count == 0) return;
+
+        foreach (GeometryData.Vertex vertex in _target.Mesh.Vertices)
+        {
+            if (_selection.Vertices.Contains(vertex)) continue;
+            Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
+            float nearest = float.MaxValue;
+            foreach (Float3 point in _selected) nearest = MathF.Min(nearest, Float3.DistanceSquared(world, point));
+            float distance = MathF.Sqrt(nearest);
+            if (distance >= _falloff) continue;
+
+            float t = 1f - distance / _falloff;
+            _points.Add((vertex, vertex.Point, world, world, t * t * (3f - 2f * t)));
+        }
     }
 
     /// <summary>The centre of each island of selected faces joined by edges, for each point of it.</summary>
