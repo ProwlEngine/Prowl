@@ -362,9 +362,14 @@ internal static class CSGSections
         LabelledButton(paper, font, "csg_surf_owner", Loc.Get("csg.surface_owner", new { name = active.Brush.GameObject.Name }),
             Loc.Get("csg.surface_owner_tip"), () => Selection.Select(active.Brush.GameObject));
 
+        EditorGUI.SectionHeader(paper, "csg_surf_mat_h", Loc.Get("csg.material"));
+        Hint(paper, font, "csg_surf_paint", Loc.Get("csg.surface_paint_hint"));
+
         EditorGUI.SettingsRow(paper, "csg_surf_mat", Loc.Get("csg.material"), () =>
             PropertyGridUtils.DrawField(paper, "csg_surf_mat_v", "", typeof(Material),
                 data.Material, v => CSGSurfaceSelection.SetMaterial(v as Material), 0));
+
+        EditorGUI.SectionHeader(paper, "csg_surf_map_h", Loc.Get("csg.mapping"));
 
         EditorGUI.SettingsRow(paper, "csg_surf_offset", Loc.Get("csg.uv_offset"), () =>
             Origami.Float2Field(paper, "csg_surf_offset_v", data.Offset,
@@ -402,6 +407,8 @@ internal static class CSGSections
 
         LabelledButton(paper, font, "csg_surf_align", Loc.Get("csg.align"), Loc.Get("csg.align_tip"), CSGSurfaceSelection.AlignToActive);
 
+        EditorGUI.SectionHeader(paper, "csg_surf_flags_h", Loc.Get("csg.shading_flags"));
+
         EditorGUI.SettingsRow(paper, "csg_surf_smooth", Loc.Get("csg.smoothing"), () =>
             Origami.ButtonGroup(paper, "csg_surf_smooth_v", -1,
                     idx => { if (idx == 0) CSGSurfaceSelection.Smooth(); else CSGSurfaceSelection.UnSmooth(); })
@@ -417,6 +424,7 @@ internal static class CSGSections
         EditorGUI.SettingsRow(paper, "csg_surf_lock", Loc.Get("csg.texture_lock"), () =>
             Origami.Toggle(paper, "csg_surf_lock_v", !data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture),
                 v => CSGSurfaceSelection.SetFlag(CSGSurfaceFlags.WorldSpaceTexture, !v)).Show());
+        Hint(paper, font, "csg_surf_lock_hint", Loc.Get("csg.texture_lock_tip"));
 
         EditorGUI.SettingsRow(paper, "csg_surf_render", Loc.Get("csg.render"), () =>
             Origami.Toggle(paper, "csg_surf_render_v", !data.Flags.HasFlag(CSGSurfaceFlags.NoRender),
