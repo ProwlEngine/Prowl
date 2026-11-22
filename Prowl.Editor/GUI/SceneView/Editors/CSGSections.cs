@@ -32,6 +32,7 @@ internal static class CSGSections
 
     internal const float ColumnWidth = 250f;
     private const float NarrowColumnWidth = 180f;
+    private const float IconColumnWidth = 110f;
     private const float RowHeight = 22f;
     private const float LabelWidth = 60f;
     private const float WideLabelWidth = 100f;
@@ -124,10 +125,10 @@ internal static class CSGSections
         string hint = tool.Generator == CSGGeneratorKind.Polygon ? Loc.Get("csg.polygon_hint") : Loc.Get("csg.draw_active");
         columns.Add(new Column("csg_gen", Loc.Get("csg.shape"), hint, (paper, font) =>
         {
-            Actions(paper, font, "csg_gen_shape", 2, ShapeTiles(tool));
+            IconGrid(paper, font, "csg_gen_shape", 2, ShapeTiles(tool));
             Note(paper, font, "csg_gen_name", ShapeName(tool.Generator), centred: true);
             Heading(paper, font, "csg_gen_op_t", Loc.Get("csg.operation"));
-            Actions(paper, font, "csg_gen_op", 1,
+            IconGrid(paper, font, "csg_gen_op", 2,
             [
                 new Tile(EditorIcons.WandMagicSparkles, Loc.Get("csg.auto"), Loc.Get("csg.auto_tip"), () => tool.AutoOperation = true, tool.AutoOperation),
                 .. OperationTiles(tool.AutoOperation ? -1 : (int)tool.Operation, op => tool.Operation = op),
@@ -136,7 +137,7 @@ internal static class CSGSections
                 Chips(paper, font, "csg_gen_place",
                     (Loc.Get("csg.from_centre"), tool.FromCentre, Loc.Get("csg.from_centre_tip"), () => tool.FromCentre = !tool.FromCentre),
                     (Loc.Get("csg.square_base"), tool.SquareBase, Loc.Get("csg.square_base_tip"), () => tool.SquareBase = !tool.SquareBase));
-        }, NarrowColumnWidth));
+        }, IconColumnWidth));
 
         if (HasSettings(tool.Generator))
         {
@@ -413,6 +414,29 @@ internal static class CSGSections
                         .Margin(0, UnitValue.StretchOne, 0, 0).IsNotInteractable()
                         .Text(tile.Label, font).TextColor(ink)
                         .FontSize(Small).Alignment(TextAlignment.MiddleCenter);
+                }
+            }
+        }
+    }
+
+    /// <summary>Icon buttons in a grid, named by their tooltips.</summary>
+    private static void IconGrid(Paper paper, Scribe.FontFile font, string id, int columns, Tile[] tiles)
+    {
+        using (paper.Column(id).Height(UnitValue.Auto).Gap(3).Enter())
+        {
+            for (int start = 0; start < tiles.Length; start += columns)
+            {
+                var row = new Tile[columns];
+                int count = Math.Min(columns, tiles.Length - start);
+                Array.Copy(tiles, start, row, 0, count);
+                if (count == columns) Segments(paper, font, $"{id}_r{start}", row, iconsOnly: true);
+                else
+                {
+                    using (paper.Row($"{id}_r{start}").Height(RowHeight).Gap(3).Enter())
+                    {
+                        Segments(paper, font, $"{id}_r{start}_s", row[..count], iconsOnly: true);
+                        for (int i = count; i < columns; i++) paper.Box($"{id}_pad{start + i}").Height(RowHeight).IsNotInteractable();
+                    }
                 }
             }
         }
