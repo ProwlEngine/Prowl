@@ -359,6 +359,9 @@ internal static class CSGSections
             .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleLeft);
 
+        LabelledButton(paper, font, "csg_surf_owner", Loc.Get("csg.surface_owner", new { name = active.Brush.GameObject.Name }),
+            Loc.Get("csg.surface_owner_tip"), () => Selection.Select(active.Brush.GameObject));
+
         EditorGUI.SettingsRow(paper, "csg_surf_mat", Loc.Get("csg.material"), () =>
             PropertyGridUtils.DrawField(paper, "csg_surf_mat_v", "", typeof(Material),
                 data.Material, v => CSGSurfaceSelection.SetMaterial(v as Material), 0));
