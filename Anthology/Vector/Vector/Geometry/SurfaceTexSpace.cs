@@ -61,14 +61,16 @@ public struct SurfaceTexSpace : IEquatable<SurfaceTexSpace>
     }
 
     /// <summary>Axis-aligned basis chosen by the dominant normal component, so a wall and the floor
-    /// it meets stay aligned.</summary>
+    /// it meets stay aligned. Components within a rounding error of each other count as equal, so a face at 45 degrees
+    /// picks the same basis whichever way its normal was summed.</summary>
     public static void BasisFor(Float3 normal, out Float3 u, out Float3 v)
     {
+        const float Tie = 1e-4f;
         float ax = MathF.Abs(normal.X), ay = MathF.Abs(normal.Y), az = MathF.Abs(normal.Z);
 
-        if (az >= ax && az >= ay)      { u = Float3.UnitX; v = Float3.UnitY; }  // floor / ceiling
-        else if (ax >= ay)             { u = Float3.UnitY; v = Float3.UnitZ; }  // wall facing X
-        else                           { u = Float3.UnitX; v = Float3.UnitZ; }  // wall facing Y
+        if (az >= ax - Tie && az >= ay - Tie) { u = Float3.UnitX; v = Float3.UnitY; }  // floor / ceiling
+        else if (ax >= ay - Tie)              { u = Float3.UnitY; v = Float3.UnitZ; }  // wall facing X
+        else                                  { u = Float3.UnitX; v = Float3.UnitZ; }  // wall facing Y
     }
 
     public readonly bool Equals(SurfaceTexSpace other) => UAxis.Equals(other.UAxis) && VAxis.Equals(other.VAxis);

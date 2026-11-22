@@ -796,4 +796,20 @@ public class CSGTests
         Assert.False(brush.IsValid);
         Assert.Empty(scene.Build().Faces);
     }
+
+    /// <summary>A 45 degree face picks the same texture axes whichever way rounding tips its normal.</summary>
+    [Fact]
+    public void FacesAt45DegreesPickOneBasisDespiteRounding()
+    {
+        float a = 0.70710677f, b = 0.70710683f;
+        SurfaceTexSpace.BasisFor(new Float3(a, b, 0f), out Float3 u1, out Float3 v1);
+        SurfaceTexSpace.BasisFor(new Float3(b, a, 0f), out Float3 u2, out Float3 v2);
+        Assert.Equal(u1, u2);
+        Assert.Equal(v1, v2);
+
+        SurfaceTexSpace.BasisFor(new Float3(0f, a, b), out u1, out v1);
+        SurfaceTexSpace.BasisFor(new Float3(0f, b, a), out u2, out v2);
+        Assert.Equal(u1, u2);
+        Assert.Equal(v1, v2);
+    }
 }
