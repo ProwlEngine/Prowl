@@ -484,6 +484,15 @@ public class TerrainTests
     }
 
     [Fact]
+    public void ThePackageIsBuiltOnceWhenManyThreadsAskAtOnce()
+    {
+        using TerrainData data = Small();
+        Prowl.Graphite.Rendering.TerrainData[] seen = new Prowl.Graphite.Rendering.TerrainData[16];
+        System.Threading.Tasks.Parallel.For(0, seen.Length, i => seen[i] = data.Terrain);
+        Assert.All(seen, terrain => Assert.Same(seen[0], terrain));
+    }
+
+    [Fact]
     public void RestoringACaptureUndoesTheEditsSinceAndRedoesThem()
     {
         using TerrainData data = Small();

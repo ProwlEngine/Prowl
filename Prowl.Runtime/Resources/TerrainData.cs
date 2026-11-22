@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 using Prowl.Echo;
 using Prowl.Graphite.Rendering;
@@ -137,6 +138,7 @@ public sealed class TerrainData : Asset, ISerializable
     private byte[]? _package;
     private GTerrain? _terrain;
 
+    [NotContent] private readonly object _gate = new();
     [NotContent] private int _version;
 
     /// <summary>Raised after the package is built again or loaded anew, so renderers and physics take the new one.</summary>
@@ -173,21 +175,30 @@ public sealed class TerrainData : Asset, ISerializable
     public List<TreePrototype> TreePrototypes { get { EnsureLoaded(); return _treePrototypes; } }
 
     /// <summary>Counts every change to the package, edits and rebuilds alike, for anything caching what it read.</summary>
-    public int Version => _version;
+    public int Version => Volatile.Read(ref _version);
 
-    /// <summary>The live Graphite terrain, its position set by the terrain drawing it. Built flat when the asset has none.</summary>
+    /// <summary>
+    /// The live Graphite terrain, its position set by the terrain drawing it. Built flat when the asset has none. Any
+    /// thread, physics queries reaching it from workers.
+    /// </summary>
     public GTerrain Terrain
     {
         get
         {
             EnsureLoaded();
-            if (_terrain != null)
-                return _terrain;
-            if (_package != null)
-                Attach(GTerrain.Load(new MemoryStream(_package, writable: false)));
-            else
-                Build(Flat(), FlatSettings());
-            return _terrain!;
+            if (_terrain is { } terrain)
+                return terrain;
+            lock (_gate)
+            {
+                if (_terrain == null)
+                {
+                    if (_package != null)
+                        Attach(GTerrain.Load(new MemoryStream(_package, writable: false)));
+                    else
+                        Build(Flat(), FlatSettings());
+                }
+                return _terrain!;
+            }
         }
     }
 
@@ -509,7 +520,8 @@ public sealed class TerrainData : Asset, ISerializable
         MemoryStream stream = new();
         TerrainImporter.Import(map, settings, stream);
         stream.Position = 0;
-        Attach(GTerrain.Load(stream));
+        lock (_gate)
+            Attach(GTerrain.Load(stream));
     }
 
     // Takes a new package, keeping where the old one stood, and lets the old one go once the frames using it are done
@@ -525,15 +537,15 @@ public sealed class TerrainData : Asset, ISerializable
         _terrain = terrain;
         terrain.Edited += OnEdited;
         terrain.TreesChanged += OnTreesChanged;
-        _version++;
+        Interlocked.Increment(ref _version);
         Rebuilt?.Invoke();
         if (old != null)
             Graphics.DeferDispose(old);
     }
 
-    private void OnEdited(TerrainEdited edited) => _version++;
+    private void OnEdited(TerrainEdited edited) => Interlocked.Increment(ref _version);
 
-    private void OnTreesChanged() => _version++;
+    private void OnTreesChanged() => Interlocked.Increment(ref _version);
 
     #endregion
 
@@ -548,7 +560,7 @@ public sealed class TerrainData : Asset, ISerializable
         }
         base.TakeContent(staging);
         _terrain = null;
-        _version++;
+        Interlocked.Increment(ref _version);
         Rebuilt?.Invoke();
     }
 
