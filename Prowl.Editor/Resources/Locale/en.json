@@ -804,6 +804,7 @@
   "csg.title": "CSG",
   "csg.tools": "Tools",
   "csg.mode_select": "Select",
+  "csg.operation": "Operation",
   "csg.mode_select_tip": "Select brushes and move them with the transform gizmo.",
   "csg.mode_create": "Create",
   "csg.mode_create_tip": "Place new shapes on a surface or the grid.",

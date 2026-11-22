@@ -28,9 +28,10 @@ internal static class CSGSections
     internal readonly record struct Tile(string Icon, string Label, string Tip, System.Action Run, bool On = false);
 
     /// <summary>One column of the panel. The tip shows on its title.</summary>
-    internal sealed record Column(string Id, string Title, string? Tip, Action<Paper, Scribe.FontFile> Body);
+    internal sealed record Column(string Id, string Title, string? Tip, Action<Paper, Scribe.FontFile> Body, float Width = ColumnWidth);
 
     internal const float ColumnWidth = 250f;
+    private const float NarrowColumnWidth = 180f;
     private const float RowHeight = 22f;
     private const float LabelWidth = 60f;
     private const float WideLabelWidth = 100f;
@@ -55,41 +56,48 @@ internal static class CSGSections
         }
     }
 
-    /// <summary>The options of the tool in use. Only Create, the UV tools and a cut being placed have any.</summary>
+    /// <summary>The options of the tool in use.</summary>
     internal static List<Column> Columns()
     {
         var columns = new List<Column>();
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return columns;
 
-        if (CSGEditMode.Is(CSGMode.Create)) AddGenerate(columns, SceneToolManager.Get<CSGGenerateTool>());
+        if (CSGEditMode.Is(CSGMode.Select)) AddSelect(columns);
+        else if (CSGEditMode.Is(CSGMode.Create)) AddGenerate(columns, SceneToolManager.Get<CSGGenerateTool>());
         else if (CSGEditMode.IsUV) AddSurface(columns);
         else if (SceneToolManager.Get<CSGClipTool>() is { Active: true } clip) AddClip(columns, clip);
         return columns;
     }
 
-    /// <summary>Lays the columns out in rows that fit <paramref name="width"/>, each column an equal share.</summary>
+    /// <summary>The width the columns take side by side.</summary>
+    internal static float Width(List<Column> columns)
+    {
+        float width = 0f;
+        foreach (Column column in columns) width += column.Width;
+        return width;
+    }
+
+    /// <summary>Lays the columns out side by side, starting a new row when the next one would pass <paramref name="width"/>.</summary>
     internal static void DrawColumns(Paper paper, Scribe.FontFile font, string id, List<Column> columns, float width)
     {
-        int perRow = Math.Max(1, Math.Min(columns.Count, (int)(width / ColumnWidth)));
-        for (int start = 0; start < columns.Count; start += perRow)
+        int start = 0;
+        while (start < columns.Count)
         {
-            using (paper.Row($"{id}_r{start}").Height(UnitValue.Auto).Enter())
-            {
-                for (int i = start; i < start + perRow; i++)
-                {
-                    if (i >= columns.Count)
-                    {
-                        paper.Box($"{id}_pad{i}").Height(1).IsNotInteractable();
-                        continue;
-                    }
+            int end = start + 1;
+            float used = columns[start].Width;
+            while (end < columns.Count && used + columns[end].Width <= width) used += columns[end++].Width;
 
+            using (paper.Row($"{id}_r{start}").Width(UnitValue.Auto).Height(UnitValue.Auto).Enter())
+            {
+                for (int i = start; i < end; i++)
+                {
                     Column column = columns[i];
-                    using (paper.Column(column.Id).Height(UnitValue.Auto).Padding(10, 10, 6, 8).Gap(4).Enter())
+                    using (paper.Column(column.Id).Width(column.Width).Height(UnitValue.Auto).Padding(10, 10, 6, 8).Gap(4).Enter())
                     {
                         ElementBuilder title = paper.Box($"{column.Id}_t").Height(18)
                             .Text(column.Title.ToUpperInvariant(), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.AccentText)
-                            .FontSize(Small - 1f).Alignment(TextAlignment.MiddleLeft);
+                            .FontSize(Small - 1f).Alignment(TextAlignment.MiddleCenter);
                         if (column.Tip != null) title.Tooltip(column.Title, column.Tip);
                         else title.IsNotInteractable();
 
@@ -97,7 +105,16 @@ internal static class CSGSections
                     }
                 }
             }
+            start = end;
         }
+    }
+
+    private static void AddSelect(List<Column> columns)
+    {
+        columns.Add(new Column("csg_sel", Loc.Get("csg.mode_select"), null, (paper, font) =>
+            Actions(paper, font, "csg_sel_pivot", 1,
+                new Tile(EditorIcons.Crosshairs, Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot)),
+            NarrowColumnWidth));
     }
 
     private static void AddGenerate(List<Column> columns, CSGGenerateTool? tool)
@@ -107,9 +124,10 @@ internal static class CSGSections
         string hint = tool.Generator == CSGGeneratorKind.Polygon ? Loc.Get("csg.polygon_hint") : Loc.Get("csg.draw_active");
         columns.Add(new Column("csg_gen", Loc.Get("csg.shape"), hint, (paper, font) =>
         {
-            Segments(paper, font, "csg_gen_shape", ShapeTiles(tool), iconsOnly: true);
-            Note(paper, font, "csg_gen_name", ShapeName(tool.Generator));
-            Segments(paper, font, "csg_gen_op",
+            Actions(paper, font, "csg_gen_shape", 2, ShapeTiles(tool));
+            Note(paper, font, "csg_gen_name", ShapeName(tool.Generator), centred: true);
+            Heading(paper, font, "csg_gen_op_t", Loc.Get("csg.operation"));
+            Actions(paper, font, "csg_gen_op", 1,
             [
                 new Tile(EditorIcons.WandMagicSparkles, Loc.Get("csg.auto"), Loc.Get("csg.auto_tip"), () => tool.AutoOperation = true, tool.AutoOperation),
                 .. OperationTiles(tool.AutoOperation ? -1 : (int)tool.Operation, op => tool.Operation = op),
@@ -118,7 +136,7 @@ internal static class CSGSections
                 Chips(paper, font, "csg_gen_place",
                     (Loc.Get("csg.from_centre"), tool.FromCentre, Loc.Get("csg.from_centre_tip"), () => tool.FromCentre = !tool.FromCentre),
                     (Loc.Get("csg.square_base"), tool.SquareBase, Loc.Get("csg.square_base_tip"), () => tool.SquareBase = !tool.SquareBase));
-        }));
+        }, NarrowColumnWidth));
 
         if (HasSettings(tool.Generator))
         {
@@ -482,11 +500,19 @@ internal static class CSGSections
     private static void Number<T>(Paper paper, string id, T value, Action<T> set) where T : struct, System.Numerics.INumber<T>
         => Origami.NumericField(paper, id, value, set).Show();
 
-    private static void Note(Paper paper, Scribe.FontFile font, string id, string text, bool warn = false)
+    private static void Note(Paper paper, Scribe.FontFile font, string id, string text, bool warn = false, bool centred = false)
     {
         paper.Box(id).Height(UnitValue.Auto).IsNotInteractable()
             .Text(text, font).TextColor(warn ? WarnText : EditorTheme.Ink300).Wrap(Scribe.TextWrapMode.Wrap)
-            .FontSize(Small).Alignment(TextAlignment.Left);
+            .FontSize(Small).Alignment(centred ? TextAlignment.MiddleCenter : TextAlignment.Left);
+    }
+
+    /// <summary>A small centred title inside a column, for a group of its controls.</summary>
+    private static void Heading(Paper paper, Scribe.FontFile font, string id, string text)
+    {
+        paper.Box(id).Height(16).Margin(0, 0, 4, 0).IsNotInteractable()
+            .Text(text.ToUpperInvariant(), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.AccentText)
+            .FontSize(Small - 1f).Alignment(TextAlignment.MiddleCenter);
     }
 
     private static Float3 AxisFor(int index) => index switch

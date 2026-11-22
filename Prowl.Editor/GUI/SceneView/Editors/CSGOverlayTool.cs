@@ -283,7 +283,7 @@ public sealed class CSGOverlayTool : SceneTool
 
         List<CSGSections.Column> columns = CSGSections.Columns();
         float available = MathF.Max(CSGSections.ColumnWidth, ctx.Handles.ViewportSize.X - 100f);
-        float width = MathF.Min(available, columns.Count * CSGSections.ColumnWidth);
+        float width = MathF.Min(available, CSGSections.Width(columns));
 
         using (paper.Column(id).Width(UnitValue.Auto).Height(UnitValue.Auto).Enter())
         {
@@ -295,7 +295,7 @@ public sealed class CSGOverlayTool : SceneTool
         }
     }
 
-    /// <summary>The active tool's name, any warning about the model, the centre pivot button and the helper surfaces menu.</summary>
+    /// <summary>The active tool's name, any warning about the model and the helper surfaces menu.</summary>
     internal static void DrawHeader(Paper paper, Scribe.FontFile font, string id)
     {
         using (paper.Row($"{id}_head").Width(UnitValue.Auto).Height(30).Padding(8, 6, 0, 0).Gap(3).Enter())
@@ -312,10 +312,6 @@ public sealed class CSGOverlayTool : SceneTool
 
             DrawWarnings(paper, font, id);
 
-            if (!CSGEditMode.Is(CSGMode.Create))
-                HeaderButton(paper, font, $"{id}_pivot", EditorIcons.Crosshairs, false,
-                    Loc.Get("csg.centre_pivot"), Loc.Get("csg.centre_pivot_tip"), CSGSelection.CentrePivot);
-
             paper.Box($"{id}_head_show")
                 .Width(22).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .BackgroundColor(CSGHelperSurfaces.Flags == CSGHelperFlags.None ? SColor.Transparent : EditorTheme.Hover)
@@ -325,18 +321,6 @@ public sealed class CSGOverlayTool : SceneTool
                 .Tooltip(Loc.Get("csg.helpers"), Loc.Get("csg.helpers_hint"))
                 .OnClick(paper, (p, _) => Origami.ContextMenu((float)p.PointerPos.X, (float)p.PointerPos.Y, HelperMenu));
         }
-    }
-
-    private static void HeaderButton(Paper paper, Scribe.FontFile font, string id, string icon, bool on, string title, string tip, System.Action run)
-    {
-        paper.Box(id)
-            .Width(24).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-            .BackgroundColor(on ? EditorTheme.Accent : SColor.Transparent)
-            .Hovered.BackgroundColor(on ? EditorTheme.AccentBright : EditorTheme.Hover).End()
-            .Text(icon, font)
-            .TextColor(on ? SColor.White : EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall - 2f).Alignment(TextAlignment.MiddleCenter)
-            .Tooltip(title, tip)
-            .OnClick(run, (r, _) => r());
     }
 
     /// <summary>Which normally invisible surfaces the viewport draws.</summary>
