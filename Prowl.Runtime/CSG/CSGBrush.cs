@@ -41,7 +41,7 @@ public struct SurfaceData
     /// <summary>Faces sharing a nonzero group and a corner get averaged normals.</summary>
     public int SmoothingGroup;
 
-    public static SurfaceData Default => new() { Scale = Float2.One };
+    public static SurfaceData Default => new() { Scale = Float2.One, Flags = CSGSurfaceFlags.WorldSpaceTexture };
 }
 
 /// <summary>One brush: a closed solid given by its points and faces. It can be any shape, concave or with bent faces.</summary>

@@ -168,4 +168,11 @@ public class CSGBrushGeometryTests
         Assert.All(upward, p => Assert.Equal(top, (int)kept[p].Offset.X));
         Assert.Contains(upward, p => inset.PolygonPoints(p).All(i => MathF.Abs(inset.Points[i].X) <= 0.75f + 1e-4f && MathF.Abs(inset.Points[i].Z) <= 0.75f + 1e-4f));
     }
+
+    /// <summary>New faces project their textures in world space, so a moved brush slides under its texture.</summary>
+    [Fact]
+    public void NewFacesProjectTexturesInWorldSpace()
+    {
+        Assert.True(SurfaceData.Default.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture));
+    }
 }
