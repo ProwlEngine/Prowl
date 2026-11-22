@@ -33,6 +33,7 @@ public sealed class CSGClipTool : SceneTool
     public override int Order => 3;
 
     private const string ClipControl = "csg_clip";
+    private const string PointControl = "csg_clip_point";
 
     private static readonly Color32 PlaneFill = new(255, 120, 120, 40);
     private static readonly Color32 PlaneEdge = new(255, 150, 140, 220);
@@ -85,6 +86,9 @@ public sealed class CSGClipTool : SceneTool
         // Tab cycles which half survives, so a cut can be reversed without starting over.
         if (handles.IsPressed("CSG/ClipSwapSide")) Mode = NextMode(Mode);
         if (_stage == Stage.Tilting && handles.IsPressed("CSG/Confirm")) { Commit(ctx); return; }
+
+        // Placed points stay draggable until the cut is made, and win over the click that places the next one
+        if (_stage == Stage.Tilting && ReferenceEquals(ctx.View, _stageView) && DragPoints(ctx)) return;
 
         ControlID id = handles.GetControlID(ClipControl);
         handles.AddControl(id, HandleContext.BodyDistance, float.MaxValue - 1f);
@@ -147,6 +151,43 @@ public sealed class CSGClipTool : SceneTool
         var toward = new Ray(eye, Float3.Normalize(snapped - eye));
         if (!TrySurfaceAlong(toward, out Float3 hit)) return point;
         return Float3.Distance(hit, snapped) < 1e-3f ? snapped : point;
+    }
+
+    /// <summary>Lets the cut's points be moved. True while one is being dragged.</summary>
+    private bool DragPoints(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        int count = _tilted ? 3 : 2;
+        bool dragging = false;
+
+        for (int i = 0; i < count; i++)
+        {
+            Float3 point = i == 0 ? _pointA : i == 1 ? _pointB : _tilt;
+            ControlID id = handles.GetControlID(PointControl, i);
+            handles.AddControl(id, point, 10f);
+            handles.RequestCursor(id, PaperCursor.Pointer);
+            ctx.Draw.Dot(point, handles.IsNearest(id) || handles.IsHot(id) ? KeepColor : PlaneEdge, 8f);
+
+            handles.TryBeginDrag(id);
+            if (!handles.IsHot(id)) continue;
+
+            dragging = true;
+            if (i < 2)
+            {
+                if (!TryWorkPlanePoint(ctx, out Float3 moved)) continue;
+                moved = CSGSnap.OnPlane(handles, moved, _workNormal);
+                if (i == 0) _pointA = moved; else _pointB = moved;
+            }
+            else if (TrySurfacePoint(ctx, out Float3 surface, out Float3 normal))
+            {
+                _tilt = SnapOnSurface(ctx, surface, normal);
+            }
+
+            handles.TryEndDrag(id);
+        }
+
+        if (dragging) DrawPreview(ctx);
+        return dragging;
     }
 
     private void TickAiming(SceneToolContext ctx, bool clicked)
