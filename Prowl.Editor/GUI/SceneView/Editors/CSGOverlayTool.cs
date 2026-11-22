@@ -241,3 +241,20 @@ public sealed class CSGOverlayTool : SceneTool
         });
     }
 }
+
+/// <summary>A tool strip button that starts a CSG model, so building can begin without a trip through the menus.</summary>
+[GlobalSceneTool(Group = "CSG")]
+public sealed class CSGStartTool : SceneTool
+{
+    public override string Name => "CSG Start";
+    public override string Icon => EditorIcons.Cube;
+    public override int Order => -2;
+
+    public override void OnSceneInput(SceneToolContext ctx) { }
+
+    public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
+    {
+        if (CSGSelection.ActiveModel().IsValid()) return;
+        EditorGUI.ToolStripButton(paper, id, EditorIcons.Cube_I, Loc.Get("csg.create_model_tip"), false, () => CSGSelection.CreateModel());
+    }
+}
