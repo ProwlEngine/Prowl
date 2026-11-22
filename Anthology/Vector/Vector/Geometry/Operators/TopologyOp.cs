@@ -458,11 +458,36 @@ internal static class TopologyOp
                         }
                         target.Attributes[definition.Name] = new GeometryData.FloatAttributeValue(mixed);
                     }
+                    foreach (var pair in corner.Attributes)
+                        if (pair.Value is GeometryData.WeightsAttributeValue)
+                            target.Attributes[pair.Key] = MixWeights(pair.Key, c, corner, before, after, corners);
                     target = target.Next!;
                 }
             }
         }
         return result;
+    }
+
+    // Weights at a new corner mixed as float attributes are: the old corner's own, half with a neighbour, or the face's average
+    private static GeometryData.WeightsAttributeValue MixWeights(string name, int corner, Loop own, Loop before, Loop after, List<Loop> corners)
+    {
+        var here = (GeometryData.WeightsAttributeValue)own.Attributes[name];
+        GeometryData.WeightsAttributeValue Of(Loop loop) => loop.Attributes.TryGetValue(name, out var value) && value is GeometryData.WeightsAttributeValue weights ? weights : here;
+        switch (corner)
+        {
+            case 0: return GeometryData.WeightsAttributeValue.Blend([here], [1f]);
+            case 1: return GeometryData.WeightsAttributeValue.Blend([here, Of(after)], [0.5f, 0.5f]);
+            case 3: return GeometryData.WeightsAttributeValue.Blend([here, Of(before)], [0.5f, 0.5f]);
+            default:
+                var all = new GeometryData.WeightsAttributeValue[corners.Count];
+                var shares = new float[corners.Count];
+                for (int i = 0; i < all.Length; i++)
+                {
+                    all[i] = Of(corners[i]);
+                    shares[i] = 1f / all.Length;
+                }
+                return GeometryData.WeightsAttributeValue.Blend(all, shares);
+        }
     }
 
     private static float Component(Loop loop, string name, int index, float fallback)
