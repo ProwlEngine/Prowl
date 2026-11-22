@@ -305,6 +305,16 @@ internal static class CSGSections
                 .Item(Loc.Get("csg.clip_split"), tooltip: Loc.Get("csg.clip_split_tip"))
                 .Show());
 
+        if (tool.HasPlane)
+        {
+            EditorGUI.SettingsRow(paper, "csg_clip_go", "", () =>
+                Origami.ButtonGroup(paper, "csg_clip_go_v", -1, idx => { if (idx == 0) tool.Commit(); else tool.Cancel(); })
+                    .Height(EditorTheme.RowHeight).FullWidth()
+                    .Item(Loc.Get("csg.clip_commit"), tooltip: ShortcutManager.GetTooltip(Loc.Get("csg.clip_commit_tip"), "CSG/Confirm"))
+                    .Item(Loc.Get("csg.clip_cancel"), tooltip: Loc.Get("csg.clip_cancel_tip"))
+                    .Show());
+        }
+
         Hint(paper, font, "csg_clip_help", Loc.Get("csg.clip_help"));
     }
 

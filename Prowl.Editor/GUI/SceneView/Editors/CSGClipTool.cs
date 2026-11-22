@@ -85,7 +85,7 @@ public sealed class CSGClipTool : SceneTool
 
         // Tab cycles which half survives, so a cut can be reversed without starting over.
         if (handles.IsPressed("CSG/ClipSwapSide")) Mode = NextMode(Mode);
-        if (_stage == Stage.Tilting && handles.IsPressed("CSG/Confirm")) { Commit(ctx); return; }
+        if (_stage == Stage.Tilting && handles.IsPressed("CSG/Confirm")) { Commit(); return; }
 
         // Placed points stay draggable until the cut is made, and win over the click that places the next one
         if (_stage == Stage.Tilting && ReferenceEquals(ctx.View, _stageView) && DragPoints(ctx)) return;
@@ -216,16 +216,16 @@ public sealed class CSGClipTool : SceneTool
         }
 
         // The half clicked on is the half thrown away, unless the cut keeps both
-        if (Mode != CSGClipMode.Split && TryPlane(ctx, out Plane plane) && TrySurfacePoint(ctx, out Float3 clickedAt, out _))
+        if (Mode != CSGClipMode.Split && TryPlane(out Plane plane) && TrySurfacePoint(ctx, out Float3 clickedAt, out _))
         {
             float side = plane.GetSignedDistanceToPoint(clickedAt);
             if (MathF.Abs(side) > 1e-3f) Mode = side > 0f ? CSGClipMode.RemoveFront : CSGClipMode.RemoveBack;
         }
 
-        Commit(ctx);
+        Commit();
     }
 
-    private bool TryPlane(SceneToolContext ctx, out Plane plane)
+    private bool TryPlane(out Plane plane)
     {
         if (_tilted) return CSGClip.PlaneFromPoints(_pointA, _pointB, _tilt, out plane);
 
@@ -299,9 +299,9 @@ public sealed class CSGClipTool : SceneTool
         return all;
     }
 
-    public void Commit(SceneToolContext ctx)
+    public void Commit()
     {
-        if (_stage != Stage.Tilting || !TryPlane(ctx, out Plane worldPlane)) { Cancel(); return; }
+        if (_stage != Stage.Tilting || !TryPlane(out Plane worldPlane)) { Cancel(); return; }
 
         List<CSGBrush> brushes = Brushes();
         if (brushes.Count == 0) { Cancel(); return; }
@@ -390,7 +390,7 @@ public sealed class CSGClipTool : SceneTool
     private void DrawPreview(SceneToolContext ctx)
     {
         if (_stage == Stage.Idle) return;
-        if (!TryPlane(ctx, out Plane plane)) return;
+        if (!TryPlane(out Plane plane)) return;
 
         ctx.Draw.Line(_pointA, _pointB, PlaneEdge, 2f);
         DrawPlaneQuad(ctx, plane);
