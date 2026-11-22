@@ -196,13 +196,17 @@ public sealed class CSGMeshTool : SceneTool
 
     public CSGMeshTool() => _isHiddenFace = _hiddenFaces.Contains;
 
-    // A modal grab, rotate or scale, the brush it runs on and the shape it started from
+    // Points being moved, by a modal transform, a drag or the gizmo: the session, the brush it runs on, the shape it
+    // started from and the move to run again when it is committed
+    private TransformSession? _session;
+    private CSGBrush? _sessionBrush;
+    private CSGControlMesh? _sessionStart;
+    private SurfaceData[]? _sessionSurfaces;
+    private System.Action? _sessionMove;
+
+    // A modal grab, rotate or scale and the scene view it runs in
     private TransformModal? _transform;
-    private TransformSession? _transformSession;
-    private CSGBrush? _transformBrush;
     private object? _transformView;
-    private CSGControlMesh? _transformStart;
-    private SurfaceData[]? _transformSurfaces;
 
     // The element last clicked, for the active element pivot: a point, an edge's points or a polygon
     private (SelectMode Kind, int A, int B)? _active;
@@ -630,6 +634,7 @@ public sealed class CSGMeshTool : SceneTool
     private void CancelAction()
     {
         CancelTransform();
+        CancelSession();
         if (_action == Action.None) return;
         // Exactly the shape it started with, so the open undo record finds nothing changed and leaves no step
         if (_action is Action.Chamfer or Action.Inset or Action.Drag && _actionBrush.IsValid() && _startMesh != null)
@@ -798,13 +803,12 @@ public sealed class CSGMeshTool : SceneTool
 
         // The pressed point itself lands on the grid, so an off grid vertex is pulled onto it
         Float3 target = CSGSnap.Value(handles, _dragAnchorStart + (hit - _dragStartHit));
-        Float3 step = target - _dragAnchor;
-        if (Float3.LengthSquared(step) < 1e-12f) return;
+        if (Float3.LengthSquared(target - _dragAnchor) < 1e-12f) return;
+        if ((_session ?? StartSession()) is not { } session) return;
 
-        Float4x4 toLocal = Target!.Transform.WorldToLocalMatrix;
-        Float3 delta = Float4x4.TransformPoint(_dragAnchor + step, toLocal) - Float4x4.TransformPoint(_dragAnchor, toLocal);
-
-        if (RunEdit("Move CSG Vertices", selected => Translate(selected, delta))) _dragAnchor = target;
+        Float3 delta = target - _dragAnchorStart;
+        _dragAnchor = target;
+        PreviewSession(() => session.Translate(delta));
     }
 
     /// <summary>How far a drag has moved, beside what is being moved.</summary>
@@ -937,64 +941,119 @@ public sealed class CSGMeshTool : SceneTool
         return Quaternion.LookRotation(normal, MathF.Abs(normal.Y) < 0.99f ? Float3.UnitY : Float3.UnitX);
     }
 
+    /// <summary>Starts moving the selected points through a session, shown on the brush until it is committed or cancelled.</summary>
+    private TransformSession? StartSession()
+    {
+        if (_target == null || _vertices.Count == 0 || Target.IsNotValid()) return null;
+
+        _session = new TransformSession(_target.Target, SelectedElements()) { Individual = SceneTools.Pivot == PivotMode.Individual };
+        if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active) _session.Pivot = active;
+        _sessionBrush = Target;
+        _sessionStart = Target!.ControlMesh.Clone();
+        _sessionSurfaces = (SurfaceData[])Target.Surfaces.Clone();
+        _sessionMove = null;
+        return _session;
+    }
+
+    /// <summary>Runs a move on the session's points and shows it, without checking or recording anything.</summary>
+    private void PreviewSession(System.Action move)
+    {
+        move();
+        _sessionMove = move;
+
+        CSGControlMesh preview = _sessionStart!.Clone();
+        var vertices = _target!.Target.Mesh.Vertices;
+        for (int i = 0; i < vertices.Count && i < preview.Points.Count; i++) preview.SetPoint(i, vertices[i].Point);
+        ShowShape(preview);
+    }
+
+    /// <summary>
+    /// Puts the brush back where the session started and runs the last move once from there, so it is one undo step
+    /// and the brush's rules judge the whole move. With no move made the session just ends.
+    /// </summary>
+    private void CommitSession(string name)
+    {
+        if (_session == null) return;
+        System.Action? move = _sessionMove;
+        if (move == null)
+        {
+            CancelSession();
+            return;
+        }
+
+        ShowShape(_sessionStart!.Clone());
+        _session.Restore();
+        _session = null;
+        _sessionMove = null;
+        RunEdit(name, _ => move());
+    }
+
+    /// <summary>Puts the brush back where the session started.</summary>
+    private void CancelSession()
+    {
+        if (_session == null) return;
+        ShowShape(_sessionStart!.Clone());
+        _session.Restore();
+        _session = null;
+        _sessionMove = null;
+        if (_target != null && ReferenceEquals(_sessionBrush, Target)) Reload();
+    }
+
+    /// <summary>Shows a shape on the moved brush without loading it as the edit target again.</summary>
+    private void ShowShape(CSGControlMesh mesh)
+    {
+        if (_sessionBrush.IsNotValid()) return;
+        _sessionBrush!.SetShape(mesh, (SurfaceData[])_sessionSurfaces!.Clone());
+        if (ReferenceEquals(_sessionBrush, Target))
+        {
+            _mesh = _sessionBrush.ControlMesh;
+            _meshSource = _mesh;
+        }
+        MarkDirty();
+    }
+
     /// <summary>Starts a modal grab, rotate or scale of the selected points, about the scene view's pivot.</summary>
     private void StartTransform(SceneToolContext ctx, TransformKind kind)
     {
-        if (_target == null || _vertices.Count == 0 || Target.IsNotValid()) return;
-
-        var session = new TransformSession(_target.Target, SelectedElements()) { Individual = SceneTools.Pivot == PivotMode.Individual };
-        if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active) session.Pivot = active;
-
+        if (StartSession() is not { } session) return;
         _transform = new TransformModal(kind, session, Target!.Transform.Rotation, NormalFrame());
-        _transformSession = session;
-        _transformBrush = Target;
         _transformView = ctx.View;
-        _transformStart = Target.ControlMesh.Clone();
-        _transformSurfaces = (SurfaceData[])Target.Surfaces.Clone();
         ctx.Handles.Modal = true;
         _modalHandles = ctx.Handles;
     }
 
     private void TickTransform(SceneToolContext ctx)
     {
-        ModalState state = _transform!.Tick(ctx);
-        ctx.Draw.Label(_transformSession!.Pivot, _transform.Status, PickedColor);
+        TransformModal modal = _transform!;
+        ModalState state = modal.Tick(ctx);
+        ctx.Draw.Label(_session!.Pivot, modal.Status, PickedColor);
 
         if (state == ModalState.Running)
         {
-            CSGControlMesh preview = _transformStart!.Clone();
-            var vertices = _target!.Target.Mesh.Vertices;
-            for (int i = 0; i < vertices.Count && i < preview.Points.Count; i++) preview.SetPoint(i, vertices[i].Point);
-            ShowShape(preview);
+            PreviewSession(modal.Replay);
             return;
         }
 
+        EndTransform();
         if (state == ModalState.Cancelled)
         {
-            CancelTransform();
+            CancelSession();
             return;
         }
-
-        // Back to the start, so the edit records one undo step from it and the brush's rules judge the whole move
-        TransformModal modal = _transform;
-        ShowShape(_transformStart!.Clone());
-        _transformSession!.Restore();
-        EndTransform();
-        RunEdit(modal.Kind switch
+        CommitSession(modal.Kind switch
         {
             TransformKind.Translate => "Move CSG Points",
             TransformKind.Rotate => "Rotate CSG Points",
             _ => "Scale CSG Points",
-        }, _ => modal.Replay());
+        });
     }
 
     /// <summary>Puts the brush back as the transform found it and ends it.</summary>
     private void CancelTransform()
     {
         if (_transform == null) return;
-        ShowShape(_transformStart!.Clone());
         EndTransform();
-        if (_target != null && ReferenceEquals(_transformBrush, Target)) Reload();
+        CancelSession();
     }
 
     private void EndTransform()
@@ -1006,19 +1065,6 @@ public sealed class CSGMeshTool : SceneTool
         }
         _transform = null;
         _transformView = null;
-    }
-
-    /// <summary>Shows a shape on the transformed brush without loading it as the edit target again.</summary>
-    private void ShowShape(CSGControlMesh mesh)
-    {
-        if (_transformBrush.IsNotValid()) return;
-        _transformBrush!.SetShape(mesh, (SurfaceData[])_transformSurfaces!.Clone());
-        if (ReferenceEquals(_transformBrush, Target))
-        {
-            _mesh = _transformBrush.ControlMesh;
-            _meshSource = _mesh;
-        }
-        MarkDirty();
     }
 
     /// <summary>Shift adds, Ctrl removes, a plain click replaces.</summary>
@@ -1091,6 +1137,7 @@ public sealed class CSGMeshTool : SceneTool
             case Action.Extrude: CommitExtrude(amount); break;
             case Action.Marquee: ApplyMarquee(ctx); break;
             case Action.Chamfer or Action.Inset: ClearSelection(); break;
+            case Action.Drag: CommitSession("Move CSG Points"); break;
         }
 
         // A click on part of a selection, with no drag, narrows the selection to what was clicked
@@ -1326,6 +1373,7 @@ public sealed class CSGMeshTool : SceneTool
             _gizmoExtrude = false;
             CommitExtrude(GizmoExtrudeAmount(toWorld));
         }
+        if (_dragging && !hot) CommitSession("Edit CSG Brush");
 
         _dragging = hot;
 
@@ -1347,12 +1395,10 @@ public sealed class CSGMeshTool : SceneTool
 
         if (hot) DrawDistance(ctx, centre, _dragApplied);
         if (!moved || Float3.LengthSquared(step) < 1e-12f) return;
+        if ((_session ?? StartSession()) is not { } session) return;
 
-        Float4x4 toLocal = Target.Transform.WorldToLocalMatrix;
-        Float3 delta = Float4x4.TransformPoint(before + step, toLocal) - Float4x4.TransformPoint(before, toLocal);
-
-        // A move the brush cannot keep is refused, and the drag waits where it was
-        if (!RunEdit("Edit CSG Brush", selected => Translate(selected, delta))) _dragApplied -= step;
+        Float3 total = _dragApplied;
+        PreviewSession(() => session.Translate(total));
     }
 
     /// <summary>How far the gizmo has been dragged along the face being extruded, in the brush's own units.</summary>
@@ -1395,11 +1441,6 @@ public sealed class CSGMeshTool : SceneTool
                 foreach (GeometryData.Vertex vertex in ring) vertex.Point = centre + (vertex.Point - centre) * factor;
             }
         });
-
-    private static void Translate(ElementSelection selected, Float3 delta)
-    {
-        foreach (GeometryData.Vertex vertex in selected.Vertices) vertex.Point += delta;
-    }
 
     private bool IsEdge(HashSet<int> pair)
     {
