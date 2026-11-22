@@ -146,4 +146,40 @@ public class SkinnedModelTests : EditorTestHarness
         Assert.True(fromSide.TryGetAttribute(MeshGeometry.BlendShapePosition(0, 0), out GeometryData.AttributeValue? delta)
                     && delta is GeometryData.FloatAttributeValue d && MathF.Abs(d.Data[0] - 0.5f) < 1e-5f);
     }
+
+    [Fact]
+    public void JoiningMergesSkeletonsAndShapesByName()
+    {
+        PMeshObject target = SkinnedItem();
+        PMeshObject other = SkinnedItem();
+        other.Bones[1].Name = "Head";
+        other.Shapes[0].Name = "Smile";
+        var plain = new PMeshObject { Name = "Hat", Mesh = Primitives.Make(PrimitiveKind.Cube) };
+        Float4x4 move = Float4x4.CreateTranslation(new Float3(5, 0, 0));
+
+        Operators.MergeSkins(target.Mesh, target.Bones, target.Shapes, other.Mesh, other.Bones, other.Shapes, move);
+        Operators.Join(target.Mesh, target.Materials, other.Mesh, other.Materials, move);
+        Operators.MergeSkins(target.Mesh, target.Bones, target.Shapes, plain.Mesh, plain.Bones, plain.Shapes, Float4x4.Identity);
+        Operators.Join(target.Mesh, target.Materials, plain.Mesh, plain.Materials, Float4x4.Identity);
+
+        Assert.Equal(new[] { "Hip", "Spine", "Head" }, target.Bones.Select(b => b.Name));
+        Assert.Equal(0, target.Bones[2].Parent);
+        Assert.Equal(-5f, target.Bones[2].BindPose.c3.X, 4);
+        Assert.Equal(new[] { "Bulge", "Smile" }, target.Shapes.Select(s => s.Name));
+
+        foreach (GeometryData.Face face in target.Mesh.Faces)
+            foreach (GeometryData.Loop corner in UVs.Corners(face))
+            {
+                (int bone, float weight) = Skin(corner);
+                Assert.True(MathF.Abs(weight - 1f) < 1e-4f, $"weight {weight} at {corner.Vert.Point}");
+                Float3 p = corner.Vert.Point;
+                int expected = p.X > 4f ? (p.Y >= 1f ? 2 : 0) : MathF.Abs(p.Z) > 0.4f ? 0 : p.Y >= 1f ? 1 : 0;
+                Assert.True(bone == expected, $"bone {bone} at {p}");
+            }
+
+        GeometryData.Vertex moved = target.Mesh.Vertices.First(v => Float3.Distance(v.Point, new Float3(6, 1, 0)) < 1e-4f);
+        GeometryData.Loop at = moved.NeighborFaces().Select(f => UVs.CornerAt(f, moved)!).First();
+        Assert.True(at.TryGetAttribute(MeshGeometry.BlendShapePosition(1, 0), out GeometryData.AttributeValue? smile) && smile is GeometryData.FloatAttributeValue d && MathF.Abs(d.Data[0] - 0.5f) < 1e-5f);
+        Assert.True(!at.TryGetAttribute(MeshGeometry.BlendShapePosition(0, 0), out GeometryData.AttributeValue? bulge) || bulge is GeometryData.FloatAttributeValue z && z.Data.All(x => x == 0f));
+    }
 }

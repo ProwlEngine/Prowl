@@ -274,7 +274,11 @@ public static class ModelEditingMode
         Float4x4 toTarget = active.Transform.WorldToLocalMatrix;
         foreach (ModelObject other in others)
         {
-            Operators.Join(target.Mesh, target.Materials, other.Mesh, other.Materials, toTarget * other.Transform.LocalToWorldMatrix);
+            Float4x4 otherToTarget = toTarget * other.Transform.LocalToWorldMatrix;
+            var joined = new Vector.Geometry.GeometryData();
+            joined.Restore(other.Mesh.Capture());
+            Operators.MergeSkins(target.Mesh, target.Bones, target.Shapes, joined, other.Bones, other.Shapes, otherToTarget);
+            Operators.Join(target.Mesh, target.Materials, joined, other.Materials, otherToTarget);
             foreach (GameObject child in other.GameObject.Children.ToList())
                 if (!others.Exists(o => o.GameObject == child)) Undo.SetTransformParent(child, active, true, Name);
         }

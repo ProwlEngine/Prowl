@@ -535,6 +535,113 @@ public static class Operators
     }
 
     /// <summary>
+    /// Readies another object's skeleton and blend shapes to join a target's, before their meshes join. Bones and shapes
+    /// are matched by name and the other's missing ones added, a bone moved into the target's space. The other mesh's
+    /// bone indices and shape attributes are renumbered to the target's. Where one side has a skeleton and the other
+    /// none, every corner of the other is weighted fully to the first bone at the top.
+    /// </summary>
+    public static void MergeSkins(GeometryData target, List<PMeshBone> targetBones, List<PMeshShape> targetShapes,
+                                  GeometryData other, IReadOnlyList<PMeshBone> otherBones, IReadOnlyList<PMeshShape> otherShapes, Float4x4 otherToTarget)
+    {
+        const string Indices = Prowl.Runtime.Resources.MeshGeometry.BoneIndices, Weights = Prowl.Runtime.Resources.MeshGeometry.BoneWeights;
+        bool targetHadBones = targetBones.Count > 0;
+
+        int[] boneOf = new int[otherBones.Count];
+        Float4x4 back = otherToTarget.Invert();
+        var added = new List<int>();
+        for (int i = 0; i < otherBones.Count; i++)
+        {
+            PMeshBone bone = otherBones[i];
+            int found = targetBones.FindIndex(b => b.Name == bone.Name);
+            if (found < 0)
+            {
+                found = targetBones.Count;
+                targetBones.Add(new PMeshBone { Name = bone.Name, Position = bone.Position, Rotation = bone.Rotation, Scale = bone.Scale, BindPose = bone.BindPose * back });
+                added.Add(i);
+            }
+            boneOf[i] = found;
+        }
+        foreach (int i in added)
+        {
+            PMeshBone from = otherBones[i], to = targetBones[boneOf[i]];
+            to.Parent = from.Parent >= 0 && from.Parent < boneOf.Length ? boneOf[from.Parent] : -1;
+            if (to.Parent >= 0) continue;
+            Float3 x = otherToTarget.c0.XYZ, y = otherToTarget.c1.XYZ, z = otherToTarget.c2.XYZ;
+            to.Position = Float4x4.TransformPoint(from.Position, otherToTarget);
+            to.Rotation = Quaternion.FromMatrix(new Float3x3(Float3.Normalize(x), Float3.Normalize(y), Float3.Normalize(z))) * from.Rotation;
+            to.Scale = from.Scale * new Float3(Float3.Length(x), Float3.Length(y), Float3.Length(z));
+        }
+
+        if (targetBones.Count > 0)
+        {
+            int top = Math.Max(0, targetBones.FindIndex(b => b.Parent < 0));
+            if (otherBones.Count == 0 || !other.HasLoopAttribute(Indices)) WeightTo(other, top);
+            else
+                foreach (GeometryData.Loop loop in other.Loops)
+                    if (loop.TryGetAttribute(Indices, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue ids)
+                    {
+                        var renumbered = new int[ids.Data.Length];
+                        for (int k = 0; k < renumbered.Length; k++)
+                            renumbered[k] = ids.Data[k] >= 0 && ids.Data[k] < boneOf.Length ? boneOf[ids.Data[k]] : 0;
+                        loop.SetAttribute(Indices, new GeometryData.IntAttributeValue(renumbered));
+                    }
+            if (!targetHadBones || !target.HasLoopAttribute(Indices)) WeightTo(target, top);
+        }
+
+        int[] shapeOf = new int[otherShapes.Count];
+        for (int i = 0; i < otherShapes.Count; i++)
+        {
+            int found = targetShapes.FindIndex(s => s.Name == otherShapes[i].Name);
+            if (found < 0)
+            {
+                found = targetShapes.Count;
+                targetShapes.Add(new PMeshShape { Name = otherShapes[i].Name, Weight = otherShapes[i].Weight, FrameWeights = (float[])otherShapes[i].FrameWeights.Clone() });
+            }
+            shapeOf[i] = found;
+        }
+        RenumberShapes(other, shapeOf);
+    }
+
+    // Declares the skin attributes where missing and weights every corner fully to one bone
+    private static void WeightTo(GeometryData mesh, int bone)
+    {
+        const string Indices = Prowl.Runtime.Resources.MeshGeometry.BoneIndices, Weights = Prowl.Runtime.Resources.MeshGeometry.BoneWeights;
+        if (!mesh.HasLoopAttribute(Indices)) mesh.AddLoopAttribute(Indices, GeometryData.AttributeBaseType.Int, 4);
+        if (!mesh.HasLoopAttribute(Weights)) mesh.AddLoopAttribute(Weights, GeometryData.AttributeBaseType.Float, 4);
+        foreach (GeometryData.Loop loop in mesh.Loops)
+        {
+            loop.SetAttribute(Indices, new GeometryData.IntAttributeValue(0, 0, 0, bone));
+            loop.SetAttribute(Weights, new GeometryData.FloatAttributeValue(0f, 0f, 0f, 1f));
+        }
+    }
+
+    // Moves every blend shape attribute of the mesh from its shape's number to the one given for it
+    private static void RenumberShapes(GeometryData mesh, int[] shapeOf)
+    {
+        string prefix = Prowl.Runtime.Resources.MeshGeometry.BlendShapePrefix;
+        var moves = new List<(string From, string To, GeometryData.AttributeBaseType Type, int Size)>();
+        foreach (GeometryData.AttributeDefinition definition in mesh.LoopAttributes)
+        {
+            if (!definition.Name.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            string rest = definition.Name[prefix.Length..];
+            int slash = rest.IndexOf('/');
+            if (slash < 0 || !int.TryParse(rest[..slash], out int shape) || shape >= shapeOf.Length || shapeOf[shape] == shape) continue;
+            moves.Add((definition.Name, prefix + shapeOf[shape] + rest[slash..], definition.Type.BaseType, definition.Type.Dimensions));
+        }
+        if (moves.Count == 0) return;
+
+        var values = new Dictionary<(GeometryData.Loop, string), GeometryData.AttributeValue>();
+        foreach (GeometryData.Loop loop in mesh.Loops)
+            foreach ((string from, _, _, _) in moves)
+                if (loop.TryGetAttribute(from, out GeometryData.AttributeValue? value)) values[(loop, from)] = GeometryData.AttributeValue.Copy(value!);
+        foreach ((string from, _, _, _) in moves) mesh.RemoveLoopAttribute(from);
+        foreach ((_, string to, GeometryData.AttributeBaseType type, int size) in moves)
+            if (!mesh.HasLoopAttribute(to)) mesh.AddLoopAttribute(to, type, size);
+        foreach (((GeometryData.Loop loop, string from), GeometryData.AttributeValue value) in values)
+            loop.SetAttribute(moves.Find(m => m.From == from).To, value);
+    }
+
+    /// <summary>
     /// Tidies a mesh after an edit, from where its points were and which faces it had before. Corner normals are worked
     /// out again around every point that moved or is new, when the mesh has normals. A face made from nothing takes the
     /// material slot of the old face sharing most edges with it, the texture coordinates of old corners at the same
