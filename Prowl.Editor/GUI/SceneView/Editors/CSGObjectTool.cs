@@ -37,7 +37,7 @@ public sealed class CSGObjectTool : SceneTool
 
     private readonly List<CSGBrush> _brushes = new();
 
-    public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ModelOf(ctx.ActiveObject).IsValid();
+    public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
 
     public override void OnDeactivated() => _brushes.Clear();
 
@@ -46,7 +46,7 @@ public sealed class CSGObjectTool : SceneTool
         // The modes are exclusive so a click in surface mode does not also select the brush.
         if (!CSGEditMode.Is(CSGMode.Object)) return;
 
-        CSGModel? model = CSGSelection.ModelOf(ctx.ActiveObject);
+        CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return;
 
         CollectBrushes(model!);

@@ -20,15 +20,25 @@ namespace Prowl.Editor.GUI.SceneView.Editors;
 public static class CSGSelection
 {
     /// <summary>The CSG model the selection belongs to, walking up from the active object.</summary>
+    /// <remarks>
+    /// The last model worked on stays active while nothing is selected, so a click into empty space does not end the CSG
+    /// session. Selecting anything outside a model does.
+    /// </remarks>
     public static CSGModel? ActiveModel()
     {
+        bool any = false;
         foreach (GameObject selected in Selection.GetSelected<GameObject>())
         {
+            any = true;
             CSGModel? model = ModelOf(selected);
-            if (model.IsValid()) return model;
+            if (model.IsValid()) return _pinned = model;
         }
-        return null;
+
+        if (any || _pinned.IsNotValid() || !_pinned!.GameObject.IsInWorld) _pinned = null;
+        return _pinned;
     }
+
+    private static CSGModel? _pinned;
 
     /// <summary>The model an object belongs to, itself included.</summary>
     public static CSGModel? ModelOf(GameObject? go)
