@@ -46,9 +46,13 @@ public sealed class CSGModel : Component
     /// <summary>Geometry hash the current mesh's UV2 was unwrapped from, or 0 when it never was.</summary>
     [SerializeField] private long lightmapUVHash;
 
-    // Hashes of the meshes as built, before any unwrap, so a rebuild can tell it produced the same geometry
+    // Hashes of the saved meshes as built, before any unwrap, so the first rebuild after a load can keep them
     [SerializeField] private long visibleHash;
     [SerializeField] private long collisionHash;
+
+    // The hashes of the meshes held now. Not serialized, so an undo of the fields above cannot fool the comparison
+    [SerializeIgnore] private long _visibleKey;
+    [SerializeIgnore] private long _collisionKey;
 
     [SerializeIgnore] private double _geometryChangedAt = double.NegativeInfinity;
 
@@ -179,7 +183,7 @@ public sealed class CSGModel : Component
             return;
         }
 
-        LightmapUVsStale = lightmapUVHash == 0 || lightmapUVHash != visibleHash;
+        LightmapUVsStale = lightmapUVHash == 0 || lightmapUVHash != _visibleKey;
 
         if (!LightmapUVsStale) return;
 
@@ -192,7 +196,7 @@ public sealed class CSGModel : Component
         if (_visible.IsNotValid()) return;
 
         CSGLightmapUVs.Generate(_visible);
-        lightmapUVHash = visibleHash;
+        lightmapUVHash = _visibleKey;
         LightmapUVsStale = false;
     }
 
@@ -514,8 +518,10 @@ public sealed class CSGModel : Component
     /// <summary>Swaps in the freshly built meshes, keeping any that are identical so a loaded mesh keeps its lightmap UVs.</summary>
     private void ApplyMeshes(CSGMeshes meshes)
     {
-        _visible = KeepOrReplace(_visible, meshes.Visible, ref visibleHash);
-        _collision = KeepOrReplace(_collision, meshes.Collision, ref collisionHash);
+        _visible = KeepOrReplace(_visible, meshes.Visible, ref _visibleKey);
+        _collision = KeepOrReplace(_collision, meshes.Collision, ref _collisionKey);
+        visibleHash = _visibleKey;
+        collisionHash = _collisionKey;
 
         GeneratedMaterials.Clear();
         GeneratedMaterials.AddRange(meshes.Materials);
@@ -546,13 +552,21 @@ public sealed class CSGModel : Component
         if (_visible.IsNotValid())
         {
             MeshRenderer renderer = GameObject.GetComponent<MeshRenderer>();
-            if (renderer.IsValid() && IsGenerated(renderer.Mesh)) _visible = renderer.Mesh;
+            if (renderer.IsValid() && IsGenerated(renderer.Mesh))
+            {
+                _visible = renderer.Mesh;
+                _visibleKey = visibleHash;
+            }
         }
 
         if (_collision.IsNotValid())
         {
             MeshCollider collider = GameObject.GetComponent<MeshCollider>();
-            if (collider.IsValid() && IsGenerated(collider.Mesh)) _collision = collider.Mesh;
+            if (collider.IsValid() && IsGenerated(collider.Mesh))
+            {
+                _collision = collider.Mesh;
+                _collisionKey = collisionHash;
+            }
         }
     }
 
