@@ -582,4 +582,28 @@ public class CSGModelTests : RuntimeTestBase
         Assert.Equal(0.5f, point.Y, 3);
         Assert.True(normal.Y > 0.99f, $"pit floor faces {normal}");
     }
+
+    /// <summary>A subtraction that carves nothing has no faces of its own, but with discarded faces kept it can be clicked.</summary>
+    [Fact]
+    public void DiscardedFacesCanBePickedWhenKept()
+    {
+        CreateModel();
+        AddBrush(new Float3(2f, 2f, 2f), Float3.Zero);
+        CSGBrush carver = AddBrush(new Float3(2f, 2f, 2f), new Float3(5f, 0f, 0f), Operation.Subtractive);
+
+        var ray = new Ray(new Float3(5f, 5f, 0f), -Float3.UnitY);
+
+        Update(_scene);
+        Assert.False(_model.Raycast(ray, out _, out _, out _));
+
+        _model.KeepDiscarded = true;
+        Update(_scene);
+
+        Assert.NotEmpty(_model.DiscardedFaces());
+        Assert.True(_model.Raycast(ray, out CSGBrush brush, out int plane, out Float3 point, out Float3 normal));
+        Assert.Same(carver, brush);
+        Assert.True(plane >= 0);
+        Assert.Equal(1f, point.Y, 3);
+        Assert.True(normal.Y > 0.99f, $"faces {normal}, should face the ray");
+    }
 }

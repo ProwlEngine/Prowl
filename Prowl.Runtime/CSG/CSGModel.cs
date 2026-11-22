@@ -116,7 +116,16 @@ public sealed class CSGModel : Component
         Float3 origin = Float4x4.TransformPoint(worldRay.Origin, toLocal);
         Float3 direction = Float4x4.TransformNormal(worldRay.Direction, toLocal);
 
-        foreach (CSGPickHit hit in CSGPicking.RaycastAll(_geometry, origin, direction))
+        List<CSGPickHit> hits = CSGPicking.RaycastAll(_geometry, origin, direction);
+        if (_scene.KeepDiscarded)
+        {
+            foreach (CSGDiscardedFace face in _scene.Discarded())
+                if (CSGPicking.RaycastPolygon(face.Corners, face.Plane.Normal, origin, direction, out float distance, out Float3 at, out Float3 facing))
+                    hits.Add(new CSGPickHit(face.BrushId, face.SourceFaceIndex, at, facing, distance));
+            hits.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+        }
+
+        foreach (CSGPickHit hit in hits)
         {
             if (!_byBrushId.TryGetValue(hit.BrushId, out BrushLink? link) || link.Brush.IsNotValid()) continue;
             if (accept != null && !accept(link.Brush)) continue;
@@ -136,6 +145,38 @@ public sealed class CSGModel : Component
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Editor only: also keep the face pieces the operations remove, so a brush that is buried or carves nothing can be
+    /// shown with <see cref="DiscardedFaces"/> and picked by <see cref="Raycast(Ray, out CSGBrush, out int, out Float3, out Float3, Func{CSGBrush, bool}?)"/>.
+    /// </summary>
+    public bool KeepDiscarded
+    {
+        get => _scene.KeepDiscarded;
+        set
+        {
+            if (_scene.KeepDiscarded == value) return;
+            _scene.KeepDiscarded = value;
+            SetDirty();
+        }
+    }
+
+    /// <summary>The face pieces the operations removed, in world space, while <see cref="KeepDiscarded"/> is on.</summary>
+    public List<CSGModelFace> DiscardedFaces()
+    {
+        var result = new List<CSGModelFace>();
+        Float4x4 toWorld = Transform.LocalToWorldMatrix;
+        foreach (CSGDiscardedFace face in _scene.Discarded())
+        {
+            if (!_byBrushId.TryGetValue(face.BrushId, out BrushLink? link) || link.Brush.IsNotValid()) continue;
+            if (face.SourceFaceIndex < 0 || face.SourceFaceIndex >= link.FaceToPlane.Length || link.FaceToPlane[face.SourceFaceIndex] < 0) continue;
+
+            var corners = new Float3[face.Corners.Length];
+            for (int i = 0; i < corners.Length; i++) corners[i] = Float4x4.TransformPoint(face.Corners[i], toWorld);
+            result.Add(new CSGModelFace(link.Brush, link.FaceToPlane[face.SourceFaceIndex], NormalOf(corners), corners));
+        }
+        return result;
     }
 
     /// <summary>Every face the model generated, in world space, with the brush plane it came from and the way it really faces.</summary>

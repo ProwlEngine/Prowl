@@ -236,7 +236,9 @@ internal static class CSGSections
                 (Loc.Get("csg.helper_collision"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.CollisionOnly), Loc.Get("csg.helpers_hint"),
                     () => CSGHelperSurfaces.Set(CSGHelperFlags.CollisionOnly, !CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.CollisionOnly))),
                 (Loc.Get("csg.helper_inert"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Inert), Loc.Get("csg.helpers_hint"),
-                    () => CSGHelperSurfaces.Set(CSGHelperFlags.Inert, !CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Inert)))));
+                    () => CSGHelperSurfaces.Set(CSGHelperFlags.Inert, !CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Inert))),
+                (Loc.Get("csg.helper_discarded"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Discarded), Loc.Get("csg.helper_discarded_tip"),
+                    () => CSGHelperSurfaces.Set(CSGHelperFlags.Discarded, !CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Discarded)))));
 
             Line(paper, font, "csg_model_lm", Loc.Get("csg.lightmap"), () => Chips(paper, font, "csg_model_lm_v",
                 (Loc.Get("csg.uvs"), model.GenerateLightmapUVs, Loc.Get("csg.lightmap_off_hint"),

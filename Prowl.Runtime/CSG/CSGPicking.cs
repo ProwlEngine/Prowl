@@ -83,6 +83,35 @@ public static class CSGPicking
         return hits;
     }
 
+    /// <summary>Ray against a convex polygon from either side. The normal comes back facing the ray.</summary>
+    public static bool RaycastPolygon(IReadOnlyList<Float3> ring, Float3 normal, Float3 origin, Float3 direction,
+                                      out float distance, out Float3 point, out Float3 facing)
+    {
+        distance = 0f;
+        point = Float3.Zero;
+        facing = Float3.Dot(normal, direction) > 0f ? -normal : normal;
+        if (ring.Count < 3) return false;
+
+        float denom = Float3.Dot(facing, direction);
+        if (denom > -1e-9f) return false;
+
+        distance = (Float3.Dot(facing, ring[0]) - Float3.Dot(facing, origin)) / denom;
+        if (distance < 0f) return false;
+
+        point = origin + direction * distance;
+
+        // Inside every edge, measured against the ring's own winding whichever way it runs
+        Float3 wound = Float3.Zero;
+        for (int i = 0; i < ring.Count; i++) wound += Float3.Cross(ring[i], ring[(i + 1) % ring.Count]);
+
+        for (int i = 0; i < ring.Count; i++)
+        {
+            Float3 a = ring[i], b = ring[(i + 1) % ring.Count];
+            if (Float3.Dot(Float3.Cross(b - a, point - a), wound) < -1e-5f) return false;
+        }
+        return true;
+    }
+
     /// <summary>Ray against one convex output polygon.</summary>
     private static bool RaycastFace(GeometryData.Face face, Float3 origin, Float3 direction,
                                     out float distance, out Float3 point, out Float3 normal)

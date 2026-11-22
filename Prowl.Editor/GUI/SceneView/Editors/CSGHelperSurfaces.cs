@@ -21,6 +21,8 @@ public enum CSGHelperFlags
     CollisionOnly = 1 << 1,
     /// <summary>Surfaces that neither render nor collide, and so produce nothing at all.</summary>
     Inert = 1 << 2,
+    /// <summary>Face pieces the operations removed, which also makes them clickable.</summary>
+    Discarded = 1 << 3,
 }
 
 /// <summary>Draws surfaces that would otherwise be invisible as overlay polygons, such as collision only or fully disabled faces.</summary>
@@ -29,6 +31,7 @@ public static class CSGHelperSurfaces
     private static readonly Color32 CollisionColor = new(120, 220, 255, 70);
     private static readonly Color32 InertColor = new(255, 90, 90, 70);
     private static readonly Color32 VisibleColor = new(160, 255, 160, 40);
+    private static readonly Color32 DiscardedColor = new(200, 140, 255, 60);
 
     /// <summary>Which kinds are drawn.</summary>
     public static CSGHelperFlags Flags { get; set; } = CSGHelperFlags.None;
@@ -38,7 +41,18 @@ public static class CSGHelperSurfaces
     /// <summary>Draw every brush face whose flags put it in one of the enabled categories.</summary>
     public static void Draw(SceneToolContext ctx, CSGModel model)
     {
+        model.KeepDiscarded = Flags.HasFlag(CSGHelperFlags.Discarded);
         if (Flags == CSGHelperFlags.None) return;
+
+        if (model.KeepDiscarded)
+        {
+            foreach (CSGModelFace face in model.DiscardedFaces())
+            {
+                if (CSGVisibility.IsHidden(face.Brush)) continue;
+                CSGGizmos.Polygon(face.Corners, DiscardedColor);
+                CSGGizmos.Polyline(face.Corners, Opaque(DiscardedColor), 1f, closed: true);
+            }
+        }
 
         foreach (GameObject go in model.GameObject.GetChildrenDeep())
         {

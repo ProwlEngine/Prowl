@@ -840,6 +840,8 @@
   "csg.helpers": "Helpers",
   "csg.helper_collision": "Collision",
   "csg.helper_inert": "Inert",
+  "csg.helper_discarded": "Discarded",
+  "csg.helper_discarded_tip": "Shows the faces the operations removed, so buried brushes and ones that carve nothing can be seen and clicked.",
   "csg.rebuild": "Rebuild",
   "csg.rebuild_tip": "Regenerates this model's meshes from its brushes.",
   "csg.mode_mesh": "Mesh",
