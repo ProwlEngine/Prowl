@@ -28,7 +28,6 @@ public sealed class CSGOverlayTool : SceneTool
     public override string Icon => EditorIcons.Cube;
     public override int Order => -1;
 
-    private const float PanelWidth = 320f;
 
     private static readonly (CSGMode mode, string label, string tip, string shortcut, string icon)[] Modes =
     {
@@ -238,56 +237,69 @@ public sealed class CSGOverlayTool : SceneTool
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        float maxHeight = MathF.Max(120f, viewportSize.Y - 90f);
-
-        DrawStatus(paper, font, id, viewportSize);
+        List<CSGSections.Column> columns = _collapsed ? [] : CSGSections.Columns();
+        float available = MathF.Max(CSGSections.ColumnWidth, viewportSize.X - 80f);
+        float width = MathF.Min(available, MathF.Max(HeaderWidth, columns.Count * CSGSections.ColumnWidth));
 
         using (paper.Column($"{id}_panel")
                    .PositionType(PositionType.SelfDirected)
-                   .Position(56, 12)
-                   .Width(PanelWidth).Height(UnitValue.Auto)
-                   .Rounded(12).Padding(0, 0, 0, 4)
+                   .AnchorLeft(0).AnchorBottom(0)
+                   .Width(width).Height(UnitValue.Auto)
+                   .Rounded(0, 10, 0, 0)
                    .BackgroundColor(EditorTheme.Glass)
                    .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                    .Enter())
         {
-            DrawTitleBar(paper, font, id);
+            DrawHeader(paper, font, id, _collapsed, () => _collapsed = !_collapsed);
             if (_collapsed) return;
 
-            DrawModeTabs(paper, font, id);
-
-            Origami.ScrollView(paper, $"{id}_scroll", PanelWidth, maxHeight).Body(() =>
-            {
-                using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(0, 0, 0, 4).Enter())
-                    DrawModeBody(paper, font);
-            });
+            paper.Box($"{id}_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            CSGSections.DrawColumns(paper, font, $"{id}_cols", columns, width);
         }
     }
 
-    private void DrawTitleBar(Paper paper, Scribe.FontFile font, string id)
+    private const float HeaderWidth = 560f;
+
+    /// <summary>The mode buttons along the top, with any warning about the model at the far end.</summary>
+    internal static void DrawHeader(Paper paper, Scribe.FontFile font, string id, bool collapsed, System.Action? toggle)
     {
-        using (paper.Row($"{id}_title").Height(34).Padding(12, 8, 0, 0).Gap(8).Enter())
+        using (paper.Row($"{id}_head").Height(30).Padding(8, 6, 0, 0).Gap(3).Enter())
         {
-            paper.Box($"{id}_title_i").Width(18).Height(34).IsNotInteractable()
-                .Text(EditorIcons.Cube, font).TextColor(EditorTheme.AccentText)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-
-            paper.Box($"{id}_title_t").Width(UnitValue.Auto).Height(34).IsNotInteractable()
+            paper.Box($"{id}_head_t").Width(UnitValue.Auto).Height(30).Margin(0, 6, 0, 0).IsNotInteractable()
                 .Text(Loc.Get("csg.title"), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
-
-            paper.Box($"{id}_title_m").Height(34).IsNotInteractable()
-                .Text(Loc.Get(ModeLabel(CSGEditMode.Current)), font).TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
-            paper.Box($"{id}_title_c")
-                .Width(24).Height(24).Rounded(6).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-                .BackgroundColor(SColor.Transparent)
+            foreach ((CSGMode mode, string label, string tip, string shortcut, string icon) in Modes)
+            {
+                bool active = CSGEditMode.Is(mode);
+                using (paper.Row($"{id}_mode_{mode}").Width(UnitValue.Auto).Height(22).Padding(7, 8, 0, 0).Gap(5).Rounded(5)
+                           .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                           .BackgroundColor(active ? EditorTheme.Accent : SColor.Transparent)
+                           .Hovered.BackgroundColor(active ? EditorTheme.AccentBright : EditorTheme.Hover).End()
+                           .Tooltip(ShortcutManager.GetTooltip(Loc.Get(label), shortcut), Loc.Get(tip))
+                           .OnClick(mode, (m, _) => CSGEditMode.Current = m)
+                           .Enter())
+                {
+                    paper.Box($"{id}_mode_{mode}_i").Width(UnitValue.Auto).Height(22).IsNotInteractable()
+                        .Text(icon, font).TextColor(active ? SColor.White : EditorTheme.AccentText)
+                        .FontSize(EditorTheme.FontSizeSmall - 2f).Alignment(TextAlignment.MiddleCenter);
+                    paper.Box($"{id}_mode_{mode}_t").Width(UnitValue.Auto).Height(22).IsNotInteractable()
+                        .Text(Loc.Get(label), font).TextColor(active ? SColor.White : EditorTheme.Ink400)
+                        .FontSize(EditorTheme.FontSizeSmall - 1f).Alignment(TextAlignment.MiddleCenter);
+                }
+            }
+
+            paper.Box($"{id}_head_gap").Height(30).IsNotInteractable();
+            DrawWarnings(paper, font, id);
+
+            if (toggle == null) return;
+            paper.Box($"{id}_head_c")
+                .Width(22).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Text(_collapsed ? EditorIcons.ChevronDown : EditorIcons.ChevronUp, font)
+                .Text(collapsed ? EditorIcons.ChevronUp : EditorIcons.ChevronDown, font)
                 .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall - 4f).Alignment(TextAlignment.MiddleCenter)
                 .Tooltip(Loc.Get("csg.collapse"), Loc.Get("csg.collapse_tip"))
-                .OnClick(_ => _collapsed = !_collapsed);
+                .OnClick(toggle, (t, _) => t());
         }
     }
 
@@ -298,122 +310,37 @@ public sealed class CSGOverlayTool : SceneTool
         return "csg.title";
     }
 
-    /// <summary>
-    /// What the CSG tools will do, along the bottom of the viewport: the mode, what a new brush will be, the grid, how
-    /// much is hidden, any brush that no longer encloses a solid, and a moment's word on a refused edit.
-    /// </summary>
-    private static void DrawStatus(Paper paper, Scribe.FontFile font, string id, Float2 viewportSize)
+    /// <summary>Brushes that no longer enclose a solid, and a moment's word on a refused edit. Nothing while all is well.</summary>
+    private static void DrawWarnings(Paper paper, Scribe.FontFile font, string id)
     {
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return;
 
-        var parts = new List<string> { Loc.Get(ModeLabel(CSGEditMode.Current)) };
-        if (CSGEditMode.Is(CSGMode.Generate) && SceneToolManager.Get<CSGGenerateTool>() is { } generate)
-        {
-            parts.Add(Loc.Get(CSGSections.OperationLabel(generate.Operation)));
-            parts.Add(CSGSections.ShapeName(generate.Generator));
-        }
-        parts.Add(Loc.Get("csg.status_grid", new { size = SceneTools.MoveSnap.ToString(SceneTools.CurrentMoveSnapFormat) }));
-
-        int hidden = CSGVisibility.HiddenCount;
-        if (hidden > 0) parts.Add(Loc.Get("csg.status_hidden", new { count = hidden }));
-
         List<CSGBrush> invalid = CSGSelection.BrushesIn(model!).Where(b => !b.IsShapeValid).ToList();
-        string? flash = CSGStatus.Current;
-        string text = string.Join("   ", parts);
-
-        using (paper.Row($"{id}_status")
-                   .PositionType(PositionType.SelfDirected)
-                   .Position(56, viewportSize.Y - 34)
-                   .Width(UnitValue.Auto).Height(22).Padding(8, 8, 0, 0).Gap(8)
-                   .Rounded(11)
-                   .BackgroundColor(EditorTheme.Glass)
-                   .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                   .Enter())
+        if (invalid.Count > 0)
         {
-            paper.Box($"{id}_status_t").Width(UnitValue.Auto).Height(22)
-                .Text(text, font).TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            paper.Box($"{id}_warn_bad").Width(UnitValue.Auto).Height(22).Padding(6, 6, 0, 0).Rounded(5)
+                .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .Text(Loc.Get("csg.status_invalid", new { count = invalid.Count }), font).TextColor(InvalidText)
+                .FontSize(EditorTheme.FontSizeSmall - 1f).Alignment(TextAlignment.MiddleCenter)
+                .Tooltip(Loc.Get("csg.status_invalid_tip"))
+                .OnClick(invalid, (brushes, _) =>
+                {
+                    Selection.Clear();
+                    foreach (CSGBrush brush in brushes) Selection.AddToSelection(brush.GameObject);
+                });
+        }
 
-            if (invalid.Count > 0)
-            {
-                paper.Box($"{id}_status_bad").Width(UnitValue.Auto).Height(22)
-                    .Text(Loc.Get("csg.status_invalid", new { count = invalid.Count }), font).TextColor(InvalidText)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
-                    .Tooltip(Loc.Get("csg.status_invalid_tip"))
-                    .OnClick(_ =>
-                    {
-                        Selection.Clear();
-                        foreach (CSGBrush brush in invalid) Selection.AddToSelection(brush.GameObject);
-                    });
-            }
-
-            if (flash != null)
-            {
-                paper.Box($"{id}_status_flash").Width(UnitValue.Auto).Height(22)
-                    .Text(flash, font).TextColor(InvalidText)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-            }
+        if (CSGStatus.Current is string flash)
+        {
+            paper.Box($"{id}_warn_flash").Width(UnitValue.Auto).Height(30).Padding(6, 6, 0, 0).IsNotInteractable()
+                .Text(flash, font).TextColor(InvalidText)
+                .FontSize(EditorTheme.FontSizeSmall - 1f).Alignment(TextAlignment.MiddleCenter);
         }
     }
 
     private static readonly SColor InvalidText = SColor.FromArgb(255, 255, 120, 110);
-
-    /// <summary>One icon per mode, the lit one is current. Hovering names the mode and its key.</summary>
-    internal static void DrawModeTabs(Paper paper, Scribe.FontFile font, string id)
-    {
-        using (paper.Row($"{id}_modes").Height(36).Padding(8, 8, 0, 8).Gap(4).Enter())
-        {
-            foreach ((CSGMode mode, string label, string tip, string shortcut, string icon) in Modes)
-            {
-                bool active = CSGEditMode.Is(mode);
-
-                paper.Box($"{id}_mode_{mode}")
-                    .Height(36).Rounded(7)
-                    .BackgroundColor(active ? EditorTheme.Accent : TabColor)
-                    .Hovered.BackgroundColor(active ? EditorTheme.AccentBright : EditorTheme.Hover).End()
-                    .Text(icon, font)
-                    .TextColor(active ? SColor.White : EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
-                    .Tooltip(ShortcutManager.GetTooltip(Loc.Get(label), shortcut), Loc.Get(tip))
-                    .OnClick(mode, (m, _) => CSGEditMode.Current = m);
-            }
-        }
-    }
-
-    private static readonly SColor TabColor = SColor.FromArgb(28, 255, 255, 255);
-
-    internal static void DrawModeBody(Paper paper, Scribe.FontFile font)
-    {
-        CSGModel? model = CSGSelection.ActiveModel();
-        if (model.IsNotValid()) return;
-
-        switch (CSGEditMode.Current)
-        {
-            case CSGMode.Generate:
-                CSGSections.DrawGenerateSection(paper, font, SceneToolManager.Get<CSGGenerateTool>());
-                break;
-
-            case CSGMode.Surface:
-                CSGSections.DrawSurfaceSection(paper, font, SceneToolManager.Get<CSGSurfaceTool>());
-                break;
-
-            case CSGMode.Clip:
-                CSGSections.DrawClipSection(paper, font, SceneToolManager.Get<CSGClipTool>());
-                break;
-
-            case CSGMode.Mesh:
-                CSGSections.DrawMeshSection(paper, font, SceneToolManager.Get<CSGMeshTool>());
-                break;
-
-            default:
-                CSGSections.DrawSelectionSection(paper, font, SceneToolManager.Get<CSGObjectTool>());
-                CSGSections.DrawShapeSection(paper, font);
-                CSGSections.DrawVisibilitySection(paper, font, SceneToolManager.Get<CSGObjectTool>());
-                CSGSections.DrawModelSection(paper, font, model!);
-                break;
-        }
-    }
 }
 
 /// <summary>A tool strip button that starts a CSG model, so building can begin without a trip through the menus.</summary>
