@@ -38,12 +38,12 @@ public class Spawner : Component
     public override void Start()
     {
         var level = NextLevel.Get();         // never loads, may be unloaded
-        var loaded = NextLevel.Load();       // blocks until loaded
+        var loaded = NextLevel.LoadImmediate();  // blocks until loaded
     }
 }
 ```
 
-`AssetRef<T>`: `Get()` never loads, `Load()` blocks, `LoadAsync()` is async, `IsEmpty`, `AssetID`, and it converts implicitly from `T`. Wrapping a runtime asset (no GUID) gives an empty ref and a warning.
+`AssetRef<T>`: `Get()` never loads, `LoadImmediate()` blocks, `LoadAsync()` is async, `IsEmpty`, `AssetID`, and it converts implicitly from `T`. Wrapping a runtime asset (no GUID) gives an empty ref and a warning.
 
 ## What keeps an asset loaded
 

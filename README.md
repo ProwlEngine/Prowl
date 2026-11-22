@@ -48,7 +48,7 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
 -   **General:**
     - Cross-Platform! Windows, Linux & Mac, for both the Editor and exported builds with Andriod under development!
     - Unity-like Editor & Scripting API
-    - C# Scripting with .NET 10, compiled in process with Roslyn
+    - C# Scripting with .NET 11, compiled in process with Roslyn
     - GameObject & Component Architecture
     - **Prowl.Runtime works fully standalone from the Editor** - reference it directly and ship a game with zero Editor dependency
     - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Anthology)), Editor built on top of [Origami](https://github.com/ProwlEngine/Anthology)
@@ -204,7 +204,7 @@ Getting Prowl up and running is super easy!
 
 ### Prerequisites
 
-* [.NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+* [.NET 11](https://dotnet.microsoft.com/en-us/download/dotnet/11.0)
 * A GPU with Vulkan 1.2 support (macOS runs through MoltenVK)
 
 ## Releases
@@ -447,6 +447,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
                     <br />
                     <sub><b>Uncle Bane</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/japsuu">
+                    <img src="https://avatars.githubusercontent.com/u/55388432?v=4" width="100;" alt="japsuu"/>
+                    <br />
+                    <sub><b>Jasper Honkasalo</b></sub>
                 </a>
             </td>
 		</tr>
