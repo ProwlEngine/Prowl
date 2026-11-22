@@ -39,6 +39,8 @@ public sealed class CSGOverlayTool : SceneTool
         (CSGMode.Pivot, "csg.mode_pivot", "csg.mode_pivot_tip", "CSG/ModePivot", EditorIcons.Bullseye),
     };
 
+    private static readonly EditorGlyphIcon[] ModeIcons = Array.ConvertAll(Modes, m => new EditorGlyphIcon(m.icon));
+
     private static readonly (CSGGeneratorKind Kind, string Shortcut)[] ShapeKeys =
     {
         (CSGGeneratorKind.Box, "CSG/ShapeBox"),
@@ -53,6 +55,17 @@ public sealed class CSGOverlayTool : SceneTool
     private bool _collapsed;
 
     public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
+
+    public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
+    {
+        using IDisposable group = EditorGUI.ToolStripGroup(paper, $"{id}_modes");
+        for (int i = 0; i < Modes.Length; i++)
+        {
+            (CSGMode mode, string label, _, string shortcut, _) = Modes[i];
+            EditorGUI.ToolStripButton(paper, $"{id}_{mode}", ModeIcons[i], ShortcutManager.GetTooltip(Loc.Get(label), shortcut),
+                CSGEditMode.Is(mode), () => CSGEditMode.Current = mode);
+        }
+    }
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
@@ -289,35 +302,20 @@ public sealed class CSGOverlayTool : SceneTool
 
     private const float HeaderWidth = 460f;
 
-    /// <summary>The mode buttons along the top, with any warning about the model at the far end.</summary>
+    /// <summary>The active tool's name along the top, with the operation buttons and any warning about the model.</summary>
     internal static void DrawHeader(Paper paper, Scribe.FontFile font, string id, bool collapsed, System.Action? toggle)
     {
         using (paper.Row($"{id}_head").Height(30).Padding(8, 6, 0, 0).Gap(3).Enter())
         {
-            paper.Box($"{id}_head_t").Width(UnitValue.Auto).Height(30).Margin(0, 6, 0, 0).IsNotInteractable()
-                .Text(Loc.Get("csg.title"), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
+            // The tool these options belong to, picked from the scene view tool strip
+            (_, string label, string tip, _, string icon) = Array.Find(Modes, m => CSGEditMode.Is(m.mode));
+            paper.Box($"{id}_head_i").Width(UnitValue.Auto).Height(30).IsNotInteractable()
+                .Text(icon ?? "", font).TextColor(EditorTheme.AccentText)
+                .FontSize(EditorTheme.FontSizeSmall - 2f).Alignment(TextAlignment.MiddleCenter);
+            paper.Box($"{id}_head_t").Width(UnitValue.Auto).Height(30).Margin(0, 6, 0, 0)
+                .Tooltip(Loc.Get(label ?? "csg.title"), tip != null ? Loc.Get(tip) : "")
+                .Text(Loc.Get(label ?? "csg.title"), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-
-            foreach ((CSGMode mode, string label, string tip, string shortcut, string icon) in Modes)
-            {
-                bool active = CSGEditMode.Is(mode);
-                using (paper.Row($"{id}_mode_{mode}").Width(UnitValue.Auto).Height(22).Padding(7, active ? 8 : 7, 0, 0).Gap(5).Rounded(5)
-                           .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-                           .BackgroundColor(active ? EditorTheme.Accent : SColor.Transparent)
-                           .Hovered.BackgroundColor(active ? EditorTheme.AccentBright : EditorTheme.Hover).End()
-                           .Tooltip(ShortcutManager.GetTooltip(Loc.Get(label), shortcut), Loc.Get(tip))
-                           .OnClick(mode, (m, _) => CSGEditMode.Current = m)
-                           .Enter())
-                {
-                    paper.Box($"{id}_mode_{mode}_i").Width(UnitValue.Auto).Height(22).IsNotInteractable()
-                        .Text(icon, font).TextColor(active ? SColor.White : EditorTheme.AccentText)
-                        .FontSize(EditorTheme.FontSizeSmall - 2f).Alignment(TextAlignment.MiddleCenter);
-                    if (!active) continue;
-                    paper.Box($"{id}_mode_{mode}_t").Width(UnitValue.Auto).Height(22).IsNotInteractable()
-                        .Text(Loc.Get(label), font).TextColor(SColor.White)
-                        .FontSize(EditorTheme.FontSizeSmall - 1f).Alignment(TextAlignment.MiddleCenter);
-                }
-            }
 
             paper.Box($"{id}_head_gap").Height(30).IsNotInteractable();
             DrawWarnings(paper, font, id);
