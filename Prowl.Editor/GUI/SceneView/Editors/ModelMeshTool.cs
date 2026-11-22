@@ -500,6 +500,37 @@ public sealed class ModelMeshTool : SceneTool
         return list;
     }
 
+    // ================================================================
+    //  For the UV editor
+    // ================================================================
+
+    /// <summary>The model objects in edit mode.</summary>
+    public IReadOnlyList<ModelObject> EditedObjects => _edited;
+
+    public ElementSelection SelectionOf(ModelObject model) => _selection.TryGetValue(model, out ElementSelection? selection) ? selection : new ElementSelection();
+
+    public bool IsHidden(ModelObject model, GeometryData.Face face) => _hidden.TryGetValue(model, out ElementSelection? hidden) && hidden.Faces.Contains(face);
+
+    /// <summary>Selects points of the edited objects, adding to the selection or replacing it.</summary>
+    public void SelectPoints(IReadOnlyDictionary<ModelObject, List<GeometryData.Vertex>> points, bool add)
+    {
+        foreach (ModelObject model in _edited)
+        {
+            ElementSelection selection = _selection[model];
+            if (!add) selection.Clear();
+            if (points.TryGetValue(model, out List<GeometryData.Vertex>? picked)) selection.Vertices.UnionWith(picked);
+            Selecting.ToMode(selection, SelectMode.Vertex, Mode);
+            Selecting.Without(selection, _hidden[model], Mode);
+        }
+    }
+
+    /// <summary>Changes the edited meshes as one undo step, each with its object and selection.</summary>
+    public void EditMeshes(string name, Action<ModelObject, GeometryData, ElementSelection> edit)
+        => Edit(name, (mesh, s) =>
+        {
+            if (_edited.Find(m => ReferenceEquals(m.Mesh, mesh)) is { } model) edit(model, mesh, s);
+        });
+
     /// <summary>The faces a UV operation works on: the selected ones, or every face when none is selected.</summary>
     private static List<GeometryData.Face> UVFaces(GeometryData mesh, ElementSelection selection)
         => selection.Faces.Count > 0 ? [.. selection.Faces] : [.. mesh.Faces];
