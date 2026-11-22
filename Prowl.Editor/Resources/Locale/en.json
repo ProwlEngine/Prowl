@@ -41,6 +41,8 @@
   "model.slot": "Slot {{index}}",
   "model.add_slot": "Add slot",
   "model.import": "Import",
+  "model.recover_title": "Recover Unsaved Model",
+  "model.recover_body": "\"{{name}}\" has unsaved changes from a session that did not end. Restore them?",
   "model.collider": "Collider",
   "model.lightmap_uvs": "Generate Lightmap UVs (slow)",
   "model.remove_slot": "Remove slot",

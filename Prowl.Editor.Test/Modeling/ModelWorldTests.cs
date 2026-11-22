@@ -202,4 +202,41 @@ public class ModelWorldTests : EditorTestHarness
         Assert.Equal(3, saved.Objects.Select(o => o.Id).Distinct().Count());
         Assert.Equal(document.Objects[0].Id, saved.Objects.Single(o => o.Name == "Body").Id);
     }
+
+    /// <summary>The auto save timer writes a recovery copy, not the model, and leaving the model cleanly removes it.</summary>
+    [Fact]
+    public void ARecoveryCopyIsWrittenForUnsavedChangesAndRemovedOnLeaving()
+    {
+        Guid guid = WriteModel(out _);
+        ModelEditingMode.Open(guid);
+        GameObject lid = ModelEditingMode.World!.FindObject("Body")!.Transform.Find("Lid")!.GameObject;
+        Undo.RecordObject(lid, "Move");
+        lid.Transform.LocalPosition = new Float3(0, 5, 0);
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        Assert.True(IsolatedWorld.IsDirty);
+
+        Assert.True(ModelEditingMode.WriteRecovery());
+        Assert.NotNull(ModelEditingMode.PendingRecovery(guid));
+
+        ModelEditingMode.Exit();
+        Assert.Null(ModelEditingMode.PendingRecovery(guid));
+    }
+
+    [Fact]
+    public void OpeningFromARecoveryCopyLeavesTheModelUnsaved()
+    {
+        Guid guid = WriteModel(out PMeshDocument document);
+        document.Objects[1].Position = new Float3(0, 7, 0);
+        string recovery = ModelEditingMode.RecoveryPath(guid)!;
+        Directory.CreateDirectory(Path.GetDirectoryName(recovery)!);
+        File.WriteAllBytes(recovery, document.Write());
+
+        ModelEditingMode.OpenFile(recovery, guid, "Crate.pmesh", "Crate", recovered: true);
+
+        Assert.True(IsolatedWorld.IsDirty);
+        GameObject lid = ModelEditingMode.World!.FindObject("Body")!.Transform.Find("Lid")!.GameObject;
+        Assert.Equal(new Float3(0, 7, 0), lid.Transform.LocalPosition);
+        ModelEditingMode.Exit();
+    }
 }

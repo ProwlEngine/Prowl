@@ -52,10 +52,29 @@ public static class ModelEditingMode
             return;
         }
 
+        string file = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        string name = Path.GetFileNameWithoutExtension(entry.Path);
+        if (PendingRecovery(modelGuid) is { } recovery)
+        {
+            OrigamiUI.Origami.Confirm(Loc.Get("model.recover_title"), Loc.Get("model.recover_body", new { name }),
+                onYes: () => OpenFile(recovery, modelGuid, entry.Path, name, recovered: true),
+                onNo: () =>
+                {
+                    DeleteRecovery(modelGuid);
+                    OpenFile(file, modelGuid, entry.Path, name, recovered: false);
+                });
+            return;
+        }
+        OpenFile(file, modelGuid, entry.Path, name, recovered: false);
+    }
+
+    /// <summary>Opens a model from a file, its own or a recovery copy of it, which leaves the model with unsaved changes.</summary>
+    internal static void OpenFile(string file, Guid modelGuid, string? path, string name, bool recovered)
+    {
         PMeshDocument document;
         try
         {
-            document = PMeshDocument.Read(File.ReadAllBytes(Path.Combine(Project.Current.AssetsPath, entry.Path)));
+            document = PMeshDocument.Read(File.ReadAllBytes(file));
         }
         catch (Exception e)
         {
@@ -63,8 +82,35 @@ public static class ModelEditingMode
             return;
         }
 
-        OpenDocument(document, new ModelSession(modelGuid, entry.Path, Path.GetFileNameWithoutExtension(entry.Path)));
+        var session = new ModelSession(modelGuid, path, name);
+        OpenDocument(document, session);
+        if (recovered && ReferenceEquals(IsolatedWorld.Current, session)) session.IsDirty = true;
     }
+
+    // ================================================================
+    //  Recovery copies
+    // ================================================================
+
+    /// <summary>Where a model's recovery copy is kept, outside the assets so nothing imports it.</summary>
+    internal static string? RecoveryPath(Guid modelGuid)
+        => Project.Current == null || modelGuid == Guid.Empty ? null : Path.Combine(Project.Current.LibraryPath, "ModelRecovery", modelGuid.ToString("N") + PMeshDocument.Extension);
+
+    /// <summary>A recovery copy newer than the model's own file, left by a session that did not end cleanly.</summary>
+    internal static string? PendingRecovery(Guid modelGuid)
+    {
+        if (RecoveryPath(modelGuid) is not { } recovery || !File.Exists(recovery)) return null;
+        if (EditorAssetBackend.Instance?.GetEntry(modelGuid) is not { } entry || Project.Current == null) return null;
+        string file = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        return !File.Exists(file) || File.GetLastWriteTimeUtc(recovery) > File.GetLastWriteTimeUtc(file) ? recovery : null;
+    }
+
+    internal static void DeleteRecovery(Guid modelGuid)
+    {
+        if (RecoveryPath(modelGuid) is { } recovery && File.Exists(recovery)) File.Delete(recovery);
+    }
+
+    /// <summary>Writes the open model's recovery copy, which is what the auto save timer does instead of saving the model.</summary>
+    internal static bool WriteRecovery() => Session?.WriteRecovery() ?? false;
 
     /// <summary>Builds a document's model world and makes it the open session, the edit world asleep under it.</summary>
     private static void OpenDocument(PMeshDocument document, ModelSession session)
@@ -387,9 +433,31 @@ public static class ModelEditingMode
                 Debug.LogWarning("[Model] Cannot save a model during play mode.");
                 return false;
             }
+            // The auto save timer never writes the model's own file, only a copy to recover from
+            if (SaveManager.IsAutoSave)
+            {
+                WriteRecovery();
+                return false;
+            }
             if (Path != null) return SaveTo(Path);
-            if (!SaveManager.IsAutoSave) PromptSaveAs(SaveManager.TakeAfterSaveAs());
+            PromptSaveAs(SaveManager.TakeAfterSaveAs());
             return false;
+        }
+
+        public bool WriteRecovery()
+        {
+            if (!IsDirty || IsolatedWorld.World is not { } world || RecoveryPath(Guid) is not { } recovery) return false;
+            try
+            {
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(recovery)!);
+                File.WriteAllBytes(recovery, Gather(world).Write());
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogException("[Model] Writing the recovery copy failed", e);
+                return false;
+            }
         }
 
         /// <summary>Asks where to save a model with no file yet, offering Assets/Models and the model's name.</summary>
@@ -435,6 +503,7 @@ public static class ModelEditingMode
             else backend?.Reimport(Guid);
 
             IsDirty = false;
+            DeleteRecovery(Guid);
             Debug.Log($"[Model] Saved model: {relativePath}");
             return true;
         }
@@ -457,6 +526,7 @@ public static class ModelEditingMode
 
         public override void Close()
         {
+            DeleteRecovery(Guid);
             IsolatedWorld.CloseWorld(this);
             IsolatedWorld.End(this);
             Debug.Log("[Model] Exited editing mode.");
