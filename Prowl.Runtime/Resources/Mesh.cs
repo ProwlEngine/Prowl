@@ -1685,7 +1685,7 @@ public static class MeshGeometry
         // and each side stays a clean surface.
         var layers = new Dictionary<(int Point, int Layer), GeometryData.Vertex>();
         var layerTriangles = new List<HashSet<(int, int, int)>>();
-        var layerEdges = new List<HashSet<long>>();
+        var layerEdges = new List<HashSet<(int, int)>>();
         GeometryData.Vertex VertexAt(int point, int layer)
         {
             if (!layers.TryGetValue((point, layer), out GeometryData.Vertex? vertex))
@@ -1696,7 +1696,7 @@ public static class MeshGeometry
         int LayerFor(int a, int b, int c)
         {
             (int, int, int) key = Sorted(a, b, c);
-            long ab = Directed(a, b), bc = Directed(b, c), ca = Directed(c, a);
+            (int, int) ab = (a, b), bc = (b, c), ca = (c, a);
             for (int layer = 0; ; layer++)
             {
                 if (layer == layerTriangles.Count)
@@ -1704,7 +1704,7 @@ public static class MeshGeometry
                     layerTriangles.Add([]);
                     layerEdges.Add([]);
                 }
-                HashSet<long> edges = layerEdges[layer];
+                HashSet<(int, int)> edges = layerEdges[layer];
                 if (layerTriangles[layer].Contains(key) || edges.Contains(ab) || edges.Contains(bc) || edges.Contains(ca)) continue;
 
                 layerTriangles[layer].Add(key);
@@ -1989,8 +1989,6 @@ public static class MeshGeometry
             weights[i] = slots[i].Weight;
         }
     }
-
-    private static long Directed(int from, int to) => ((long)from << 32) | (uint)to;
 
     private static (int, int, int) Sorted(int a, int b, int c)
     {
