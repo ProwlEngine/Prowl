@@ -67,6 +67,9 @@ public static class CSGSelection
 
         Undo.RegisterCreatedObjectUndo(go, "Create CSG Model");
         Selection.Select(go);
+
+        // An empty model has nothing to select, so the first thing to do is draw
+        CSGEditMode.Current = CSGMode.Generate;
         return model;
     }
 
