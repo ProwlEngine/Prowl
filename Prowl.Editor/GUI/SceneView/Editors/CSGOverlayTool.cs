@@ -184,6 +184,7 @@ public sealed class CSGOverlayTool : SceneTool
         if (mesh.CanDissolve) { Command(menu, "csg.dissolve", mesh.DissolveSelected, "MeshEdit/Dissolve"); any = true; }
         if (mesh.Active) { Command(menu, "csg.limited_dissolve", mesh.LimitedDissolveSelected, "MeshEdit/LimitedDissolve"); any = true; }
         if (mesh.CanMerge && mesh.Mode == Prowl.Editor.Modeling.SelectMode.Vertex) { Command(menu, "csg.merge_centre", mesh.MergeAtCentre); any = true; }
+        if (mesh.CanMergeAtFirst) { Command(menu, "csg.merge_first", mesh.MergeAtFirst); any = true; }
         if (mesh.CanMergeAtActive) { Command(menu, "csg.merge_active", mesh.MergeAtActive); any = true; }
         if (mesh.CanSubdivide) { Command(menu, "csg.collapse", mesh.CollapseSelected); Command(menu, "csg.subdivide", mesh.SubdivideSelected); any = true; }
         if (mesh.CanConnect) { Command(menu, "csg.connect", mesh.ConnectSelected, "MeshEdit/Connect"); any = true; }

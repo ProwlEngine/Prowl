@@ -134,7 +134,39 @@ internal static class CSGSections
                 new Tile(EditorIcons.Square, Loc.Get("csg.mode_face"), Loc.Get("csg.mode_face_tip"), () => tool.SetMode(SelectMode.Face), tool.Mode == SelectMode.Face),
             ], iconsOnly: true);
             Chips(paper, font, "csg_edit_toggles", (Loc.Get("csg.xray"), tool.XRay, Loc.Get("csg.xray_tip"), () => tool.XRay = !tool.XRay));
+
+            Tile[] operators = OperatorTiles(tool);
+            if (operators.Length > 0) IconGrid(paper, font, "csg_edit_ops", 4, operators);
         }, NarrowColumnWidth));
+    }
+
+    /// <summary>The operators the mode and selection allow, each named by its tooltip with its key.</summary>
+    private static Tile[] OperatorTiles(CSGMeshTool tool)
+    {
+        var tiles = new List<Tile>();
+        void Add(bool allowed, string icon, string label, System.Action run, string shortcut = "")
+        {
+            if (!allowed) return;
+            string keys = shortcut.Length > 0 && ShortcutManager.Find(shortcut) is { } def ? ShortcutManager.GetDisplayString(def.Binding) : "";
+            tiles.Add(new Tile(icon, Loc.Get(label), keys, run));
+        }
+
+        Add(tool.CanExtrudeRegion, EditorIcons.ArrowUpFromBracket, "csg.extrude_region", tool.ExtrudeRegionSelected, "MeshEdit/Extrude");
+        Add(tool.CanInset, EditorIcons.SquareMinus, "csg.inset", tool.InsetSelected);
+        Add(tool.CanExtrude, EditorIcons.ObjectUngroup, "csg.extrude", tool.ExtrudeSelected);
+        Add(tool.CanChamfer, EditorIcons.CropSimple, "csg.chamfer", tool.ChamferSelected);
+        Add(tool.CanDissolve, EditorIcons.Eraser, "csg.dissolve", tool.DissolveSelected, "MeshEdit/Dissolve");
+        Add(tool.Active, EditorIcons.Broom, "csg.limited_dissolve", tool.LimitedDissolveSelected, "MeshEdit/LimitedDissolve");
+        Add(tool.CanMerge && tool.Mode == SelectMode.Vertex, EditorIcons.Compress, "csg.merge_centre", tool.MergeAtCentre, "MeshEdit/Merge");
+        Add(tool.CanMergeAtFirst, EditorIcons.BackwardStep, "csg.merge_first", tool.MergeAtFirst);
+        Add(tool.CanMergeAtActive, EditorIcons.ForwardStep, "csg.merge_active", tool.MergeAtActive);
+        Add(tool.CanSubdivide, EditorIcons.Minimize, "csg.collapse", tool.CollapseSelected);
+        Add(tool.CanSubdivide, EditorIcons.Scissors, "csg.subdivide", tool.SubdivideSelected);
+        Add(tool.CanConnect, EditorIcons.Link, "csg.connect", tool.ConnectSelected, "MeshEdit/Connect");
+        Add(tool.CanFlatten, EditorIcons.RulerHorizontal, "csg.flatten", tool.FlattenSelected, "MeshEdit/Flatten");
+        Add(tool.CanSnap, EditorIcons.Magnet, "csg.snap", tool.SnapSelectedToGrid, "CSG/SnapToGrid");
+        Add(tool.CanDeleteFaces, EditorIcons.TrashCan, "csg.delete_face", tool.DeleteSelectedFaces, "MeshEdit/DeleteFace");
+        return [.. tiles];
     }
 
     private static void AddGenerate(List<Column> columns, CSGGenerateTool? tool)
