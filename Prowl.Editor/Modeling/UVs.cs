@@ -721,4 +721,67 @@ public static class UVs
             area += 0.5f * Float3.Length(Float3.Cross(b.Vert.Point - a.Vert.Point, c.Vert.Point - a.Vert.Point));
         return area;
     }
+
+    /// <summary>
+    /// Lays out the quads joined to a quad as a grid following its layout: each quad across an edge from a laid out one
+    /// carries that quad's sides on, as long as the surface says. Faces with other than four corners, and quads not
+    /// among the faces, are left alone. A quad with no area in UV space is given the whole square first.
+    /// </summary>
+    public static void FollowQuad(GeometryData mesh, GeometryData.Face active, IReadOnlyCollection<GeometryData.Face> faces)
+    {
+        if (active.VertCount != 4) return;
+        EnsureUV(mesh);
+        var inSet = new HashSet<GeometryData.Face>(faces.Where(f => f.VertCount == 4));
+        List<GeometryData.Loop> start = [.. Corners(active)];
+        Float2 s0 = Get(start[0]), s1 = Get(start[1]), s2 = Get(start[2]);
+        if (MathF.Abs((s1.X - s0.X) * (s2.Y - s0.Y) - (s2.X - s0.X) * (s1.Y - s0.Y)) < 1e-10f) Reset(mesh, [active]);
+
+        var placed = new Dictionary<GeometryData.Face, Dictionary<GeometryData.Vertex, Float2>>
+        {
+            [active] = Corners(active).ToDictionary(c => c.Vert, Get),
+        };
+        var queue = new Queue<GeometryData.Face>();
+        queue.Enqueue(active);
+        while (queue.Count > 0)
+        {
+            GeometryData.Face from = queue.Dequeue();
+            Dictionary<GeometryData.Vertex, Float2> known = placed[from];
+            foreach (GeometryData.Loop corner in Corners(from))
+            {
+                GeometryData.Vertex a = corner.Vert, b = corner.Next!.Vert;
+                foreach (GeometryData.Face next in corner.Edge.NeighborFaces())
+                {
+                    if (next == from || !inSet.Contains(next) || placed.ContainsKey(next)) continue;
+
+                    // The side of the laid out quad leaving each end of the shared edge, carried on into the next quad
+                    GeometryData.Vertex beforeA = corner.Prev!.Vert, afterB = corner.Next!.Next!.Vert;
+                    GeometryData.Loop atA = CornerAt(next, a)!, atB = CornerAt(next, b)!;
+                    GeometryData.Vertex farA = atA.Next!.Vert == b ? atA.Prev!.Vert : atA.Next!.Vert;
+                    GeometryData.Vertex farB = atB.Next!.Vert == a ? atB.Prev!.Vert : atB.Next!.Vert;
+                    var uvs = new Dictionary<GeometryData.Vertex, Float2>
+                    {
+                        [a] = known[a],
+                        [b] = known[b],
+                        [farA] = Carry(known[a], known[beforeA], a.Point, beforeA.Point, farA.Point),
+                        [farB] = Carry(known[b], known[afterB], b.Point, afterB.Point, farB.Point),
+                    };
+                    placed[next] = uvs;
+                    queue.Enqueue(next);
+                }
+            }
+        }
+
+        foreach ((GeometryData.Face face, Dictionary<GeometryData.Vertex, Float2> uvs) in placed)
+            foreach (GeometryData.Loop corner in Corners(face))
+                if (uvs.TryGetValue(corner.Vert, out Float2 uv)) Set(corner, uv);
+        mesh.MarkChanged();
+    }
+
+    // Steps on from a UV point away from the one behind it, as far as the surface step is next to the one behind
+    private static Float2 Carry(Float2 at, Float2 behind, Float3 point, Float3 behindPoint, Float3 ahead)
+    {
+        float back = Float3.Length(point - behindPoint);
+        float scale = back > 1e-12f ? Float3.Length(ahead - point) / back : 1f;
+        return at + (at - behind) * scale;
+    }
 }

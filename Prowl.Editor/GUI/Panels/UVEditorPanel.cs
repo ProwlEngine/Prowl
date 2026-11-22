@@ -180,6 +180,10 @@ public class UVEditorPanel : DockPanel
             Faces("uv_pack", "uv.pack", "Pack UVs", (m, f) => UVs.Pack(m, f));
             Faces("uv_average", "uv.average_scale", "Average Island Scale", UVs.AverageIslandScale);
             Faces("uv_by_angle", "uv.project_angle", "Project By Angle", (m, f) => UVs.ByAngle(m, f, 66f));
+            Faces("uv_follow", "uv.follow_quad", "Follow Quad", (m, f) =>
+            {
+                if (f.Where(x => x.VertCount == 4).OrderBy(x => x.Index).FirstOrDefault() is { } active) UVs.FollowQuad(m, active, f);
+            });
         }
     }
 

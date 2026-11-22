@@ -498,6 +498,11 @@ public sealed class ModelMeshTool : SceneTool
             UVs.FromView(mesh, UVFaces(mesh, s), p => ctx.Handles.WorldToScreen(Float4x4.TransformPoint(p, toWorld)) is { } at ? new Float2(at.X, -at.Y) : Float2.Zero);
         })));
         list.Add((Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => UVs.Reset(mesh, UVFaces(mesh, s)))));
+        list.Add((Loc.Get("uv.follow_quad"), () => Edit("Follow Quad", (mesh, s) =>
+        {
+            List<GeometryData.Face> faces = UVFaces(mesh, s);
+            if (faces.Where(f => f.VertCount == 4).OrderBy(f => f.Index).FirstOrDefault() is { } active) UVs.FollowQuad(mesh, active, faces);
+        })));
         return list;
     }
 

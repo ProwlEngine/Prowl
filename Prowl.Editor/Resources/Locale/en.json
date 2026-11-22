@@ -75,6 +75,7 @@
   "uv.project_sphere": "Sphere Projection",
   "uv.project_view": "Project From View",
   "uv.reset": "Reset UVs",
+  "uv.follow_quad": "Follow Quad",
   "csg.amount": "Amount",
   "csg.count": "Count",
   "csg.median": "Selection Median",

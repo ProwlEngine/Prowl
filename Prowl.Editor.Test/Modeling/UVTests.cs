@@ -321,4 +321,23 @@ public class UVTests
         Assert.True(UVs.IsSeam(read.FindEdge(read.Vertices[1], read.Vertices[4])!));
         Assert.Single(read.Faces.SelectMany(Corners), UVs.IsPinned);
     }
+
+    [Fact]
+    public void FollowingAQuadLaysJoinedQuadsOutInAGridLikeIt()
+    {
+        GeometryData mesh = Grid(3, 2);
+        UVs.Reset(mesh, [mesh.Faces[0]]);
+        UVs.Transform(mesh, [.. Corners(mesh.Faces[0])], uv => uv * 0.1f);
+
+        UVs.FollowQuad(mesh, mesh.Faces[0], [.. mesh.Faces]);
+
+        Assert.Single(UVs.Islands(mesh, [.. mesh.Faces]));
+        float first = UVArea(mesh.Faces[0]);
+        Assert.All(mesh.Faces, f => Assert.True(MathF.Abs(UVArea(f) - first) < first * 0.01f, $"{UVArea(f)} against {first}"));
+        foreach (GeometryData.Vertex vertex in mesh.Vertices)
+        {
+            Float2 expected = UVOf(mesh.Faces.SelectMany(Corners).First(l => l.Vert == vertex));
+            Assert.All(mesh.Faces.SelectMany(Corners).Where(l => l.Vert == vertex), l => Assert.True(Float2.Distance(UVOf(l), expected) < 1e-4f));
+        }
+    }
 }
