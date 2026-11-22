@@ -57,6 +57,9 @@ public sealed class CSGBrush : Component
 
     public CSGBrushFlags Flags;
 
+    /// <summary>Hidden in the editor's viewport. It still shapes the model and is never hidden in a game.</summary>
+    public bool HiddenInEditor;
+
     [SerializeIgnore] private GeometryData? _shape;
     [SerializeIgnore] private int[] _faceToPlane = [];
     [SerializeIgnore] private ConvexSolidStatus _status = ConvexSolidStatus.Valid;

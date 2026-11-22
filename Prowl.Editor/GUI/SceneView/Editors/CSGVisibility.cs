@@ -2,22 +2,27 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
+using System.Linq;
 
+using Prowl.Editor.Core;
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
-/// <summary>Which brushes are hidden in the viewport. Hiding never changes the CSG result or the saved mesh.</summary>
+/// <summary>
+/// Which brushes are hidden in the viewport. Each brush keeps its own flag, so hiding is saved with the scene and undoes
+/// like any edit. Hiding never changes the CSG result or the saved mesh.
+/// </summary>
 public static class CSGVisibility
 {
-    private static readonly HashSet<CSGBrush> _hidden = new();
+    [InitializeOnLoad]
+    private static void Install() => CSGModel.EditorHidden = brush => brush.HiddenInEditor;
 
-    /// <summary>Hands the hidden set to the models and has them redraw, without rebuilding them.</summary>
+    /// <summary>Has the models redraw, without rebuilding them.</summary>
     private static void Changed()
     {
-        CSGModel.EditorHidden = _hidden.Count > 0 ? IsHidden : null;
         foreach (CSGModel model in Models()) model.RefreshHidden();
     }
 
@@ -36,22 +41,11 @@ public static class CSGVisibility
         }
     }
 
-    public static int HiddenCount
-    {
-        get
-        {
-            Prune();
-            return _hidden.Count;
-        }
-    }
+    public static int HiddenCount => Models().Sum(model => CSGSelection.BrushesIn(model).Count(IsHidden));
 
-    public static bool IsHidden(CSGBrush brush) => _hidden.Contains(brush);
+    public static bool IsHidden(CSGBrush brush) => brush.HiddenInEditor;
 
-    public static void Hide(IEnumerable<CSGBrush> brushes)
-    {
-        foreach (CSGBrush brush in brushes) _hidden.Add(brush);
-        Changed();
-    }
+    public static void Hide(IEnumerable<CSGBrush> brushes) => Set(brushes, true, "Hide CSG Brushes");
 
     /// <summary>Hides everything except the selection.</summary>
     public static void HideUnselected()
@@ -59,41 +53,36 @@ public static class CSGVisibility
         List<CSGBrush> selected = CSGSelection.Brushes();
         if (selected.Count == 0) return;
 
-        foreach (CSGBrush brush in AllBrushes())
-            if (!selected.Contains(brush)) _hidden.Add(brush);
-        Changed();
+        Set(ActiveBrushes().Where(brush => !selected.Contains(brush)), true, "Hide Unselected CSG Brushes");
     }
 
     /// <summary>Swaps hidden and shown.</summary>
     public static void ToggleAll()
     {
-        var shown = new List<CSGBrush>();
-        foreach (CSGBrush brush in AllBrushes())
-            if (!_hidden.Contains(brush)) shown.Add(brush);
-
-        _hidden.Clear();
-        foreach (CSGBrush brush in shown) _hidden.Add(brush);
+        foreach (CSGBrush brush in ActiveBrushes())
+        {
+            Undo.RecordObject(brush, "Swap Hidden CSG Brushes");
+            brush.HiddenInEditor = !brush.HiddenInEditor;
+        }
         Changed();
     }
 
-    public static void UnhideAll()
+    public static void UnhideAll() => Set(Models().SelectMany(CSGSelection.BrushesIn), false, "Unhide CSG Brushes");
+
+    private static void Set(IEnumerable<CSGBrush> brushes, bool hidden, string name)
     {
-        _hidden.Clear();
+        foreach (CSGBrush brush in brushes.ToList())
+        {
+            if (brush.HiddenInEditor == hidden) continue;
+            Undo.RecordObject(brush, name);
+            brush.HiddenInEditor = hidden;
+        }
         Changed();
     }
 
-    /// <summary>Drops brushes that have been deleted.</summary>
-    public static void Prune() => _hidden.RemoveWhere(b => b.IsNotValid());
-
-    private static IEnumerable<CSGBrush> AllBrushes()
+    private static IEnumerable<CSGBrush> ActiveBrushes()
     {
         CSGModel? model = CSGSelection.ActiveModel();
-        if (model.IsNotValid()) yield break;
-
-        foreach (GameObject go in model.GameObject.GetChildrenDeep())
-        {
-            CSGBrush brush = go.GetComponent<CSGBrush>();
-            if (brush.IsValid()) yield return brush;
-        }
+        return model.IsValid() ? CSGSelection.BrushesIn(model!) : [];
     }
 }
