@@ -196,6 +196,17 @@ public sealed class CSGMeshTool : SceneTool
 
     public CSGMeshTool() => _isHiddenFace = _hiddenFaces.Contains;
 
+    // A modal grab, rotate or scale, the brush it runs on and the shape it started from
+    private TransformModal? _transform;
+    private TransformSession? _transformSession;
+    private CSGBrush? _transformBrush;
+    private object? _transformView;
+    private CSGControlMesh? _transformStart;
+    private SurfaceData[]? _transformSurfaces;
+
+    // The element last clicked, for the active element pivot: a point, an edge's points or a polygon
+    private (SelectMode Kind, int A, int B)? _active;
+
     // An element pressed while already selected, so the press drags the whole selection and a plain click narrows to it
     private int _clicked = -1;
 
@@ -247,6 +258,14 @@ public sealed class CSGMeshTool : SceneTool
         HoldSelection();
 
         HandleContext handles = ctx.Handles;
+
+        // A modal transform owns every key and click until it ends
+        if (_transform != null)
+        {
+            if (ReferenceEquals(ctx.View, _transformView)) TickTransform(ctx);
+            DrawElements(ctx);
+            return;
+        }
 
         if (handles.KeyDown(KeyCode.Escape))
         {
@@ -401,7 +420,15 @@ public sealed class CSGMeshTool : SceneTool
     private void SelectionKeys(SceneToolContext ctx)
     {
         HandleContext handles = ctx.Handles;
-        if (handles.IsPressed("MeshEdit/SelectAll")) Command((mesh, s) => Selecting.All(mesh, s, Mode));
+
+        // The scene view's tool keys stand down, Edit has no use for the transform gizmo's modes
+        handles.IsPressed("Scene/ToolTranslate");
+        handles.IsPressed("Scene/ToolRotate");
+
+        if (handles.IsPressed("MeshEdit/Grab")) StartTransform(ctx, TransformKind.Translate);
+        else if (handles.IsPressed("MeshEdit/Rotate")) StartTransform(ctx, TransformKind.Rotate);
+        else if (handles.IsPressed("MeshEdit/Scale")) StartTransform(ctx, TransformKind.Scale);
+        else if (handles.IsPressed("MeshEdit/SelectAll")) Command((mesh, s) => Selecting.All(mesh, s, Mode));
         else if (handles.IsPressed("MeshEdit/SelectNone")) ClearSelection();
         else if (handles.IsPressed("MeshEdit/Invert")) Command((mesh, s) => Selecting.Invert(mesh, s, Mode));
         else if (handles.IsPressed("MeshEdit/More")) Command((_, s) => Selecting.More(s, Mode));
@@ -602,6 +629,7 @@ public sealed class CSGMeshTool : SceneTool
     /// <summary>Abandons a gesture in progress, putting back what a chamfer changed.</summary>
     private void CancelAction()
     {
+        CancelTransform();
         if (_action == Action.None) return;
         // Exactly the shape it started with, so the open undo record finds nothing changed and leaves no step
         if (_action is Action.Chamfer or Action.Inset or Action.Drag && _actionBrush.IsValid() && _startMesh != null)
@@ -856,11 +884,142 @@ public sealed class CSGMeshTool : SceneTool
         return _mesh!.Raycast(origin, direction, out distance, out polygon, bothSides: true, HiddenSkip);
     }
 
-    private void SelectVertex(HandleContext handles, int index) => Pick(handles, _vertices, index);
+    private void SelectVertex(HandleContext handles, int index)
+    {
+        Pick(handles, _vertices, index);
+        _active = (SelectMode.Vertex, index, index);
+    }
 
-    private void SelectEdge(HandleContext handles, int index) => Pick(handles, _selectedEdges, EdgeKey(_edges[index].a, _edges[index].b));
+    private void SelectEdge(HandleContext handles, int index)
+    {
+        (int a, int b) = EdgeKey(_edges[index].a, _edges[index].b);
+        Pick(handles, _selectedEdges, (a, b));
+        _active = (SelectMode.Edge, a, b);
+    }
 
-    private void SelectFace(HandleContext handles, int polygon) => Pick(handles, _faces, polygon);
+    private void SelectFace(HandleContext handles, int polygon)
+    {
+        Pick(handles, _faces, polygon);
+        _active = (SelectMode.Face, polygon, polygon);
+    }
+
+    /// <summary>The centre of the element last clicked, in the world, while it is still selected.</summary>
+    private Float3? ActiveCentre()
+    {
+        if (_active is not { } active || _mesh == null) return null;
+        Float3 centre;
+        switch (active.Kind)
+        {
+            case SelectMode.Vertex when _vertices.Contains(active.A): centre = _mesh.Points[active.A]; break;
+            case SelectMode.Edge when _selectedEdges.Contains((active.A, active.B)): centre = (_mesh.Points[active.A] + _mesh.Points[active.B]) * 0.5f; break;
+            case SelectMode.Face when _faces.Contains(active.A): centre = FaceCentre(active.A); break;
+            default: return null;
+        }
+        return Float4x4.TransformPoint(centre, Target!.Transform.LocalToWorldMatrix);
+    }
+
+    /// <summary>A frame whose Z axis is the selection's average normal, in the world, or null when it has none.</summary>
+    private Quaternion? NormalFrame()
+    {
+        Float3 sum = Float3.Zero;
+        if (_faces.Count > 0)
+            foreach (int polygon in _faces) sum += _mesh!.PolygonNormal(polygon);
+        else if (_selectedEdges.Count > 0)
+            foreach ((int a, int b) in _selectedEdges)
+                foreach (int polygon in _mesh!.PolygonsAtEdge(a, b)) sum += _mesh.PolygonNormal(polygon);
+        else
+            foreach (int point in _vertices)
+                foreach (int polygon in _mesh!.PolygonsAtPoint(point)) sum += _mesh.PolygonNormal(polygon);
+
+        Float3 normal = Float4x4.TransformNormal(sum, Target!.Transform.LocalToWorldMatrix);
+        if (Float3.LengthSquared(normal) < 1e-10f) return null;
+        normal = Float3.Normalize(normal);
+        return Quaternion.LookRotation(normal, MathF.Abs(normal.Y) < 0.99f ? Float3.UnitY : Float3.UnitX);
+    }
+
+    /// <summary>Starts a modal grab, rotate or scale of the selected points, about the scene view's pivot.</summary>
+    private void StartTransform(SceneToolContext ctx, TransformKind kind)
+    {
+        if (_target == null || _vertices.Count == 0 || Target.IsNotValid()) return;
+
+        var session = new TransformSession(_target.Target, SelectedElements()) { Individual = SceneTools.Pivot == PivotMode.Individual };
+        if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active) session.Pivot = active;
+
+        _transform = new TransformModal(kind, session, Target!.Transform.Rotation, NormalFrame());
+        _transformSession = session;
+        _transformBrush = Target;
+        _transformView = ctx.View;
+        _transformStart = Target.ControlMesh.Clone();
+        _transformSurfaces = (SurfaceData[])Target.Surfaces.Clone();
+        ctx.Handles.Modal = true;
+        _modalHandles = ctx.Handles;
+    }
+
+    private void TickTransform(SceneToolContext ctx)
+    {
+        ModalState state = _transform!.Tick(ctx);
+        ctx.Draw.Label(_transformSession!.Pivot, _transform.Status, PickedColor);
+
+        if (state == ModalState.Running)
+        {
+            CSGControlMesh preview = _transformStart!.Clone();
+            var vertices = _target!.Target.Mesh.Vertices;
+            for (int i = 0; i < vertices.Count && i < preview.Points.Count; i++) preview.SetPoint(i, vertices[i].Point);
+            ShowShape(preview);
+            return;
+        }
+
+        if (state == ModalState.Cancelled)
+        {
+            CancelTransform();
+            return;
+        }
+
+        // Back to the start, so the edit records one undo step from it and the brush's rules judge the whole move
+        TransformModal modal = _transform;
+        ShowShape(_transformStart!.Clone());
+        _transformSession!.Restore();
+        EndTransform();
+        RunEdit(modal.Kind switch
+        {
+            TransformKind.Translate => "Move CSG Points",
+            TransformKind.Rotate => "Rotate CSG Points",
+            _ => "Scale CSG Points",
+        }, _ => modal.Replay());
+    }
+
+    /// <summary>Puts the brush back as the transform found it and ends it.</summary>
+    private void CancelTransform()
+    {
+        if (_transform == null) return;
+        ShowShape(_transformStart!.Clone());
+        EndTransform();
+        if (_target != null && ReferenceEquals(_transformBrush, Target)) Reload();
+    }
+
+    private void EndTransform()
+    {
+        if (_modalHandles != null)
+        {
+            _modalHandles.Modal = false;
+            _modalHandles = null;
+        }
+        _transform = null;
+        _transformView = null;
+    }
+
+    /// <summary>Shows a shape on the transformed brush without loading it as the edit target again.</summary>
+    private void ShowShape(CSGControlMesh mesh)
+    {
+        if (_transformBrush.IsNotValid()) return;
+        _transformBrush!.SetShape(mesh, (SurfaceData[])_transformSurfaces!.Clone());
+        if (ReferenceEquals(_transformBrush, Target))
+        {
+            _mesh = _transformBrush.ControlMesh;
+            _meshSource = _mesh;
+        }
+        MarkDirty();
+    }
 
     /// <summary>Shift adds, Ctrl removes, a plain click replaces.</summary>
     private void Pick<T>(HandleContext handles, ICollection<T> set, T item)

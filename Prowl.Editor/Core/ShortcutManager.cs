@@ -407,6 +407,9 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("MeshEdit/HideUnselected", "Hide Unselected Elements", KeyCode.H, shift: true);
         ShortcutManager.Register("MeshEdit/Reveal", "Reveal Elements", KeyCode.H, alt: true);
         ShortcutManager.Register("MeshEdit/Frame", "Frame Selected Elements", KeyCode.F);
+        ShortcutManager.Register("MeshEdit/Grab", "Grab", KeyCode.G);
+        ShortcutManager.Register("MeshEdit/Rotate", "Rotate", KeyCode.R);
+        ShortcutManager.Register("MeshEdit/Scale", "Scale", KeyCode.S);
         ShortcutManager.Register("CSG/FlipX", "Flip On X", KeyCode.X, ctrl: true, alt: true);
         ShortcutManager.Register("CSG/FlipY", "Flip On Y", KeyCode.Y, ctrl: true, alt: true);
         ShortcutManager.Register("CSG/FlipZ", "Flip On Z", KeyCode.Z, ctrl: true, alt: true);
