@@ -22,6 +22,8 @@ public abstract class ModelModifier
     /// <summary>Too slow to run on every frame of a drag, so the preview leaves it out until the drag ends.</summary>
     public virtual bool SkipWhileDragging => false;
 
+    public ModelModifier Clone() => (ModelModifier)MemberwiseClone();
+
     /// <summary>Runs on a mesh of its own, which it may change or replace.</summary>
     public abstract GeometryData Apply(GeometryData mesh);
 

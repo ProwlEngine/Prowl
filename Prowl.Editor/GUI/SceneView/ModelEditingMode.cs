@@ -583,6 +583,8 @@ public static class ModelEditingMode
             Close();
         }
 
+        public override void DrawInspector(PaperUI.Paper paper, GameObject go, Action drawDefault) => Inspector.ModelInspector.Draw(paper, go, drawDefault);
+
         public override void Close()
         {
             Unwatch();

@@ -5,6 +5,7 @@ using System;
 
 using Prowl.Editor.Core;
 using Prowl.OrigamiUI;
+using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -44,6 +45,9 @@ public abstract class IsolatedSession
 
     /// <summary>Ends the session without saving.</summary>
     public abstract void Close();
+
+    /// <summary>Draws the Inspector for one of the world's objects, the usual one unless the session has its own.</summary>
+    public virtual void DrawInspector(Paper paper, GameObject go, System.Action drawDefault) => drawDefault();
 }
 
 /// <summary>

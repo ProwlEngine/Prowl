@@ -444,30 +444,154 @@ public sealed class ModelMeshTool : SceneTool
     {
         if (!Editing) return;
         menu.Title(Loc.Get("model.edit_mode"));
-        menu.Item(Loc.Get("csg.extrude_region"), () => StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s), SelectMode.Face)));
-        menu.Item(Loc.Get("csg.inset"), () => Inset(ctx));
-        menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)));
-        menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
-        menu.Item(Loc.Get("csg.dissolve"), () => Edit("Dissolve Model Elements", (mesh, s) => Operators.Dissolve(mesh, s, Mode, s), SelectMode.Face));
-        menu.Item(Loc.Get("csg.merge_centre"), () => Edit("Merge Model Points", MergeAtCentre, SelectMode.Vertex));
-        menu.Item(Loc.Get("csg.connect"), () => Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge));
-        menu.Item(Loc.Get("csg.triangulate"), () => Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face));
-        menu.Item(Loc.Get("csg.flatten"), () => Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s)));
-        menu.Item(Loc.Get("csg.bridge"), () => Edit("Bridge Model Faces", Bridge, SelectMode.Face));
-        menu.Item(Loc.Get("csg.separate"), SeparateSelected);
-        menu.Item(Loc.Get("model.origin_to_selection"), OriginToSelection);
-        for (int axis = 0; axis < 3; axis++)
-        {
-            int chosen = axis;
-            string name = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
-            menu.Item(Loc.Get("csg.symmetrize") + "  " + Loc.Get("csg.symmetrize_side", new { from = "+" + name, to = "-" + name }),
-                () => Edit("Symmetrize Model", (mesh, s) => { Operators.Symmetrize(mesh, chosen, true, 0f); s.Clear(); }));
-        }
+        foreach ((string label, System.Action run) in Operations(ctx)) menu.Item(label, run);
         menu.Separator();
         menu.Item(Loc.Get("csg.xray"), () => XRay = !XRay, on: XRay);
         menu.Item(Loc.Get("csg.snap_brushes"), () => SnapToObjects = !SnapToObjects, on: SnapToObjects);
         menu.Item(Loc.Get("csg.proportional"), () => Proportional = !Proportional, on: Proportional);
     }
+
+    /// <summary>The operations the right click menu and the Inspector's Tool tab offer, by label.</summary>
+    private List<(string Label, System.Action Run)> Operations(SceneToolContext ctx)
+    {
+        var list = new List<(string, System.Action)>
+        {
+            (Loc.Get("csg.extrude_region"), () => StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s), SelectMode.Face))),
+            (Loc.Get("csg.inset"), () => Inset(ctx)),
+            (Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32))),
+            (Loc.Get("csg.loop_cut"), () => StartLoopCut(ctx)),
+            (Loc.Get("csg.knife"), () => StartKnife(ctx)),
+            (Loc.Get("csg.subdivide"), () => Subdivide(ctx)),
+            (Loc.Get("csg.dissolve"), () => Edit("Dissolve Model Elements", (mesh, s) => Operators.Dissolve(mesh, s, Mode, s), SelectMode.Face)),
+            (Loc.Get("csg.merge_centre"), () => Edit("Merge Model Points", MergeAtCentre, SelectMode.Vertex)),
+            (Loc.Get("csg.connect"), () => Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge)),
+            (Loc.Get("csg.triangulate"), () => Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face)),
+            (Loc.Get("csg.flatten"), () => Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s))),
+            (Loc.Get("csg.bridge"), () => Edit("Bridge Model Faces", Bridge, SelectMode.Face)),
+            (Loc.Get("csg.separate"), SeparateSelected),
+            (Loc.Get("model.origin_to_selection"), OriginToSelection),
+        };
+        for (int axis = 0; axis < 3; axis++)
+        {
+            int chosen = axis;
+            string name = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
+            list.Add((Loc.Get("csg.symmetrize") + "  " + Loc.Get("csg.symmetrize_side", new { from = "+" + name, to = "-" + name }),
+                () => Edit("Symmetrize Model", (mesh, s) => { Operators.Symmetrize(mesh, chosen, true, 0f); s.Clear(); })));
+        }
+        return list;
+    }
+
+    /// <summary>The operations for the Inspector's Tool tab, started in the scene view as from its menu.</summary>
+    public List<(string Label, System.Action Run)> PanelOperations() => Editing ? Operations(Context) : [];
+
+    // ================================================================
+    //  Adjust last
+    // ================================================================
+
+    // The last amount operator: its settings, its undo step, and the meshes it left, so a later change to them ends it
+    private sealed record LastOperator(AmountOperator Op, float Amount, int Count, int Group, long Step, List<(ModelObject Model, GeometryData Mesh, int Version)> Left);
+    private LastOperator? _last;
+
+    /// <summary>The last operator run, while nothing else has changed the meshes or the history since.</summary>
+    public (string Name, float Amount, bool Distance, string Format, int Count, int MaxCount)? Last
+        => _last is { } last && LastStillHolds(last) ? (last.Op.Name, last.Amount, last.Op.Distance, last.Op.Format, last.Count, last.Op.MaxCount) : null;
+
+    private static bool LastStillHolds(LastOperator last)
+    {
+        IReadOnlyList<UndoStepInfo> steps = Undo.UndoSteps;
+        if (steps.Count == 0 || steps[^1].Id != last.Step) return false;
+        foreach ((ModelObject model, GeometryData mesh, int version) in last.Left)
+            if (model.IsNotValid() || !ReferenceEquals(model.Mesh, mesh) || mesh.Version != version) return false;
+        return true;
+    }
+
+    /// <summary>Runs the last operator again from before it, with a new amount and count, in place of its step.</summary>
+    public void AdjustLast(float amount, int count)
+    {
+        if (_last is not { } last || !LastStillHolds(last)) return;
+        Undo.RevertAllDownToGroup(last.Group);
+        RestoreHeld();
+        RunAsLast(last.Op, amount, Math.Clamp(count, 1, Math.Max(1, last.Op.MaxCount)));
+    }
+
+    /// <summary>Runs an amount operator as one undo step of its own, remembered for adjusting.</summary>
+    private void RunAsLast(AmountOperator op, float amount, int count)
+    {
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        int group = Undo.GetCurrentGroup();
+        Edit(op.Name, (mesh, s) => op.Run(mesh, s, amount, count), op.Selects);
+        Undo.FlushUndoRecordObjects();
+        IReadOnlyList<UndoStepInfo> steps = Undo.UndoSteps;
+        _last = steps.Count == 0 ? null : new LastOperator(op, amount, count, group, steps[^1].Id, [.. _edited.Select(m => (m, m.Mesh, m.Mesh.Version))]);
+    }
+
+    // ================================================================
+    //  Selection for the Inspector
+    // ================================================================
+
+    /// <summary>The middle of every selected point in the world, or null with nothing selected.</summary>
+    public Float3? SelectionMedian
+    {
+        get
+        {
+            Float3 sum = Float3.Zero;
+            int count = 0;
+            foreach (ModelObject model in _edited)
+            {
+                Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+                foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
+                {
+                    sum += Float4x4.TransformPoint(vertex.Point, toWorld);
+                    count++;
+                }
+            }
+            return count == 0 ? null : sum / count;
+        }
+    }
+
+    /// <summary>Moves the selected points so their middle lands on a point in the world.</summary>
+    public void MoveSelectionTo(Float3 world)
+    {
+        if (SelectionMedian is not { } median) return;
+        Float3 delta = world - median;
+        Edit("Move Model Points", (mesh, s) =>
+        {
+            if (_edited.Find(m => ReferenceEquals(m.Mesh, mesh)) is not { } model) return;
+            Float4x4 toWorld = model.Transform.LocalToWorldMatrix, toLocal = toWorld.Invert();
+            foreach (GeometryData.Vertex vertex in s.Vertices)
+                vertex.Point = Float4x4.TransformPoint(Float4x4.TransformPoint(vertex.Point, toWorld) + delta, toLocal);
+        });
+    }
+
+    /// <summary>The material slot of the selected faces, -1 when they differ, null with none selected.</summary>
+    public int? SelectedFaceSlot
+    {
+        get
+        {
+            int? found = null;
+            foreach (ModelObject model in _edited)
+                foreach (GeometryData.Face face in _selection[model].Faces)
+                {
+                    int slot = SlotOf(face);
+                    if (found == null) found = slot;
+                    else if (found != slot) return -1;
+                }
+            return found;
+        }
+    }
+
+    /// <summary>How many material slots the edited objects have at most.</summary>
+    public int SlotCount => _edited.Count == 0 ? 0 : _edited.Max(m => Math.Max(1, m.Materials.Count));
+
+    public void SetSelectedFaceSlot(int slot)
+        => Edit("Set Face Material", (mesh, s) =>
+        {
+            foreach (GeometryData.Face face in s.Faces) face.SetAttribute(MeshGeometry.SubMesh, new GeometryData.IntAttributeValue(slot));
+        });
+
+    private static int SlotOf(GeometryData.Face face)
+        => face.TryGetAttribute(MeshGeometry.SubMesh, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue n && n.Data.Length > 0 ? n.Data[0] : 0;
 
     /// <summary>Moves the origin of each edited object with something selected to the middle of its selected points.</summary>
     private void OriginToSelection()
@@ -624,8 +748,7 @@ public sealed class ModelMeshTool : SceneTool
         EndOperator();
         RestoreStart();
         _start.Clear();
-        int final = _operatorCount;
-        Edit(op.Name, (mesh, s) => op.Run(mesh, s, amount, final), op.Selects);
+        RunAsLast(op, amount, _operatorCount);
     }
 
     private void RunFromStart(AmountOperator op, float amount)
