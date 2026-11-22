@@ -262,10 +262,10 @@ public sealed class CSGClipTool : SceneTool
 
         CSGModel? model = CSGSelection.ActiveModel();
 
-        if (model.IsValid() && model!.Raycast(ray, out CSGBrush brush, out int plane, out Float3 hit, b => !CSGVisibility.IsHidden(b)))
+        if (model.IsValid() && model!.Raycast(ray, out _, out _, out Float3 hit, out Float3 shown, b => !CSGVisibility.IsHidden(b)))
         {
             point = hit;
-            normal = plane >= 0 ? CSGSelection.WorldNormal(brush, plane) : Float3.UnitY;
+            normal = shown;
             return true;
         }
 

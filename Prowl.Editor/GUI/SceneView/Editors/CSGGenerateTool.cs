@@ -268,11 +268,8 @@ public sealed class CSGGenerateTool : SceneTool
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return false;
 
-        // The generated surfaces, so drawing works inside carved rooms and never on hidden or subtractive faces
-        if (!model!.Raycast(ray, out CSGBrush brush, out int plane, out point, b => !CSGVisibility.IsHidden(b)) || plane < 0) return false;
-
-        normal = CSGSelection.WorldNormal(brush, plane);
-        return true;
+        // The faces the model shows, facing the way they show, so drawing inside a carved hole faces out of its wall
+        return model!.Raycast(ray, out _, out int plane, out point, out normal, b => !CSGVisibility.IsHidden(b)) && plane >= 0;
     }
 
     /// <summary>The cursor on the locked work plane, in the plane's own frame.</summary>

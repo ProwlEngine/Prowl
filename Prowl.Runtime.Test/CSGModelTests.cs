@@ -564,4 +564,22 @@ public class CSGModelTests : RuntimeTestBase
         int top = System.Array.FindIndex(pit.Planes, p => p.Normal.Y > 0.9f);
         Assert.DoesNotContain(_model.Faces(), f => ReferenceEquals(f.Brush, pit) && f.PlaneIndex == top);
     }
+
+    /// <summary>A ray onto the floor of a carved pit reports the floor facing up, the way the model shows it, not the brush plane facing down.</summary>
+    [Fact]
+    public void RaycastReportsTheNormalTheHitFaceShows()
+    {
+        CreateModel();
+        AddBrush(new Float3(4f, 2f, 4f), Float3.Zero);
+        CSGBrush pit = AddBrush(new Float3(2f, 2f, 2f), new Float3(0f, 1.5f, 0f), Operation.Subtractive);
+
+        Update(_scene);
+
+        var ray = new Ray(new Float3(0f, 5f, 0f), -Float3.UnitY);
+        Assert.True(_model.Raycast(ray, out CSGBrush brush, out _, out Float3 point, out Float3 normal));
+
+        Assert.Same(pit, brush);
+        Assert.Equal(0.5f, point.Y, 3);
+        Assert.True(normal.Y > 0.99f, $"pit floor faces {normal}");
+    }
 }

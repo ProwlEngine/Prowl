@@ -102,10 +102,15 @@ public sealed class CSGModel : Component
     /// <param name="worldRay">Ray in world space.</param>
     /// <param name="accept">Brushes it returns false for are seen through, as hidden ones are.</param>
     public bool Raycast(Ray worldRay, out CSGBrush brush, out int planeIndex, out Float3 worldPoint, Func<CSGBrush, bool>? accept = null)
+        => Raycast(worldRay, out brush, out planeIndex, out worldPoint, out _, accept);
+
+    /// <summary>As the other overload, also giving the way the hit face shows, which is against its plane on a subtractive brush.</summary>
+    public bool Raycast(Ray worldRay, out CSGBrush brush, out int planeIndex, out Float3 worldPoint, out Float3 worldNormal, Func<CSGBrush, bool>? accept = null)
     {
         brush = null!;
         planeIndex = -1;
         worldPoint = Float3.Zero;
+        worldNormal = Float3.UnitY;
 
         Float4x4 toLocal = Transform.WorldToLocalMatrix;
         Float3 origin = Float4x4.TransformPoint(worldRay.Origin, toLocal);
@@ -124,6 +129,10 @@ public sealed class CSGModel : Component
                 : -1;
 
             worldPoint = Float4x4.TransformPoint(hit.Point, Transform.LocalToWorldMatrix);
+
+            // Normals go through the inverse transpose, so a scaled model keeps them square to the face
+            Float3 n = hit.Normal;
+            worldNormal = Float3.NormalizeSafe(new Float3(Float3.Dot(toLocal.c0.XYZ, n), Float3.Dot(toLocal.c1.XYZ, n), Float3.Dot(toLocal.c2.XYZ, n)), Float3.UnitY);
             return true;
         }
         return false;
