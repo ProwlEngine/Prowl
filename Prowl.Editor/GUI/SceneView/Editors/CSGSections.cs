@@ -79,7 +79,6 @@ internal static class CSGSections
             default:
                 AddSelection(columns);
                 AddShape(columns);
-                AddModel(columns, model!);
                 break;
         }
         return columns;
@@ -210,47 +209,6 @@ internal static class CSGSections
         Undo.RecordObject(shape, "Edit CSG Shape");
         change();
         CSGSelection.Regenerate(shape, "Edit CSG Shape");
-    }
-
-    private static void AddModel(List<Column> columns, CSGModel model)
-    {
-        string stats = Loc.Get("csg.stats", new { brushes = model.BrushCount, vertices = model.VertexCount, triangles = model.TriangleCount });
-
-        columns.Add(new Column("csg_model", Loc.Get("csg.model"), stats, (paper, font) =>
-        {
-            Line(paper, font, "csg_model_mat", Loc.Get("csg.material"), () =>
-                PropertyGridUtils.DrawField(paper, "csg_model_mat_v", "", typeof(Material),
-                    model.DefaultMaterial, v => Change(model, () => model.DefaultMaterial = v as Material), 0));
-            Line(paper, font, "csg_model_texel", Loc.Get("csg.texel"), () =>
-                Number(paper, "csg_model_texel_v", model.DefaultTexelScale, v => Change(model, () => model.DefaultTexelScale = v)));
-
-            Chips(paper, font, "csg_model_flags",
-                (Loc.Get("csg.render"), !model.Flags.HasFlag(CSGModelFlags.DoNotRender), null,
-                    () => Change(model, () => SetFlag(model, CSGModelFlags.DoNotRender, !model.Flags.HasFlag(CSGModelFlags.DoNotRender)))),
-                (Loc.Get("csg.collide"), !model.Flags.HasFlag(CSGModelFlags.NoCollider), null,
-                    () => Change(model, () => SetFlag(model, CSGModelFlags.NoCollider, !model.Flags.HasFlag(CSGModelFlags.NoCollider)))),
-                (Loc.Get("csg.convex_collider"), model.Flags.HasFlag(CSGModelFlags.ConvexCollider), null,
-                    () => Change(model, () => SetFlag(model, CSGModelFlags.ConvexCollider, !model.Flags.HasFlag(CSGModelFlags.ConvexCollider)))));
-
-            Line(paper, font, "csg_model_help", Loc.Get("csg.helpers"), () => Chips(paper, font, "csg_model_help_v",
-                (Loc.Get("csg.helper_collision"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.CollisionOnly), Loc.Get("csg.helpers_hint"),
-                    () => CSGHelperSurfaces.Set(CSGHelperFlags.CollisionOnly, !CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.CollisionOnly))),
-                (Loc.Get("csg.helper_inert"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Inert), Loc.Get("csg.helpers_hint"),
-                    () => CSGHelperSurfaces.Set(CSGHelperFlags.Inert, !CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Inert))),
-                (Loc.Get("csg.helper_discarded"), CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Discarded), Loc.Get("csg.helper_discarded_tip"),
-                    () => CSGHelperSurfaces.Set(CSGHelperFlags.Discarded, !CSGHelperSurfaces.Flags.HasFlag(CSGHelperFlags.Discarded)))));
-
-            Line(paper, font, "csg_model_lm", Loc.Get("csg.lightmap"), () => Chips(paper, font, "csg_model_lm_v",
-                (Loc.Get("csg.uvs"), model.GenerateLightmapUVs, Loc.Get("csg.lightmap_off_hint"),
-                    () => Change(model, () => model.GenerateLightmapUVs = !model.GenerateLightmapUVs)),
-                (Loc.Get("csg.auto"), model.AutoRebuildLightmapUVs, Loc.Get("csg.lightmap_auto"),
-                    () => Change(model, () => model.AutoRebuildLightmapUVs = !model.AutoRebuildLightmapUVs))));
-
-            var actions = new List<Tile> { new(EditorIcons.ArrowsRotate, Loc.Get("csg.rebuild"), Loc.Get("csg.rebuild_tip"), model.Rebuild) };
-            if (model.GenerateLightmapUVs && model.LightmapUVsStale)
-                actions.Add(new(EditorIcons.ArrowsRotate, Loc.Get("csg.uvs"), Loc.Get("csg.lightmap_rebuild_tip"), () => Change(model, model.RebuildLightmapUVs)));
-            Actions(paper, font, "csg_model_acts", 2, [.. actions]);
-        }));
     }
 
     private static void AddGenerate(List<Column> columns, CSGGenerateTool? tool)
@@ -751,15 +709,5 @@ internal static class CSGSections
             else if (result != (int)op) return -1;
         }
         return result;
-    }
-
-    private static void SetFlag(CSGModel model, CSGModelFlags flag, bool on)
-        => model.Flags = on ? model.Flags | flag : model.Flags & ~flag;
-
-    private static void Change(CSGModel model, Action change)
-    {
-        Undo.RecordObject(model, "Edit CSG Model");
-        change();
-        model.SetDirty();
     }
 }

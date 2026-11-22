@@ -292,6 +292,15 @@ public sealed class CSGOverlayTool : SceneTool
             paper.Box($"{id}_head_gap").Height(30).IsNotInteractable();
             DrawWarnings(paper, font, id);
 
+            paper.Box($"{id}_head_show")
+                .Width(22).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .BackgroundColor(CSGHelperSurfaces.Flags == CSGHelperFlags.None ? SColor.Transparent : EditorTheme.Hover)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .Text(EditorIcons.Eye, font)
+                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall - 2f).Alignment(TextAlignment.MiddleCenter)
+                .Tooltip(Loc.Get("csg.helpers"), Loc.Get("csg.helpers_hint"))
+                .OnClick(paper, (p, _) => Origami.ContextMenu((float)p.PointerPos.X, (float)p.PointerPos.Y, HelperMenu));
+
             if (toggle == null) return;
             paper.Box($"{id}_head_c")
                 .Width(22).Height(22).Rounded(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
@@ -301,6 +310,21 @@ public sealed class CSGOverlayTool : SceneTool
                 .Tooltip(Loc.Get("csg.collapse"), Loc.Get("csg.collapse_tip"))
                 .OnClick(toggle, (t, _) => t());
         }
+    }
+
+    /// <summary>Which normally invisible surfaces the viewport draws.</summary>
+    private static void HelperMenu(ContextBuilder menu)
+    {
+        menu.Title(Loc.Get("csg.helpers"));
+        HelperItem(menu, "csg.helper_collision", CSGHelperFlags.CollisionOnly);
+        HelperItem(menu, "csg.helper_inert", CSGHelperFlags.Inert);
+        HelperItem(menu, "csg.helper_discarded", CSGHelperFlags.Discarded);
+    }
+
+    private static void HelperItem(ContextBuilder menu, string label, CSGHelperFlags flag)
+    {
+        bool on = CSGHelperSurfaces.Flags.HasFlag(flag);
+        menu.Item(Loc.Get(label), () => CSGHelperSurfaces.Set(flag, !on), on: on);
     }
 
     private static string ModeLabel(CSGMode mode)
