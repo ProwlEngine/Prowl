@@ -72,6 +72,7 @@ public class SceneViewPanel : DockPanel
     /// <summary>Tools ticking in the scene view this frame.</summary>
     public static IReadOnlyList<SceneTool> LiveTools => SceneToolManager.Live;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
+    private int _viewCubeElementId;
     private int _viewportElementId; // Paper hit target, excluding the floating toolbar and other UI overlays
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
@@ -505,7 +506,9 @@ public class SceneViewPanel : DockPanel
 
                 // Only the viewport surface accepts scene picks. The enclosing panel is also
                 // hovered over toolbar buttons, which would let their raw mouse press start a pick.
-                bool viewportHovered = _viewportElementId != 0 && paper.HoveredElementId == _viewportElementId;
+                // The view cube is a handle of its own drawn over the viewport, so it counts as scene surface too
+                int hoveredId = paper.HoveredElementId;
+                bool viewportHovered = hoveredId != 0 && (hoveredId == _viewportElementId || hoveredId == _viewCubeElementId);
                 _handles.BeginFrame(cam, _viewportAbsoluteRect, mouseLocal, viewportHovered);
 
                 _toolContext.Begin(scene, this);
@@ -1710,7 +1713,10 @@ public class SceneViewPanel : DockPanel
             .PositionType(PositionType.SelfDirected)
             .Position(width - cubeSize - 8, 12)
             .Size(cubeSize, cubeSize)
-            .OnPostLayout((handle, rect) => paper.DrawForeground(ref handle, (canvas, r) =>
+            .OnPostLayout((handle, rect) =>
+            {
+                _viewCubeElementId = handle.Data.ID;
+                paper.DrawForeground(ref handle, (canvas, r) =>
             {
                 // Use the absolute rect from layout for the view manipulator
                 _viewManipulator.SetRect(r);
@@ -1743,6 +1749,7 @@ public class SceneViewPanel : DockPanel
                     float pitch = MathF.Asin(-newForward.Y) * Gizmo.GizmoUtils.Rad2Deg;
                     _editorCamera.SetOrientation(yaw, pitch);
                 }
-            }));
+            });
+            });
     }
 }

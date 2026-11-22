@@ -193,6 +193,10 @@ public sealed class HandleContext
         KeysUsed = false;
         Cursor = PaperCursor.Inherit;
 
+        // Registrations resolve a frame late, so a cursor that just moved onto UI over the viewport would still hold
+        // last frame's winner and let a press reach the handle behind it
+        if (!ViewportHovered && !Hot.IsValid) _nearest = ControlID.None;
+
         // A drag whose owner never saw the release (viewport lost focus mid-drag) would otherwise
         // hold Hot forever.
         if (Hot.IsValid && !PrimaryHeld && !PrimaryUp)
@@ -238,6 +242,7 @@ public sealed class HandleContext
     /// </summary>
     public void AddControl(ControlID id, float screenDistance, float depth = float.MaxValue)
     {
+        if (!AcceptsRegistrations) return;
         if (!id.IsValid || !float.IsFinite(screenDistance) || screenDistance >= float.MaxValue) return;
 
         if (_pendingNearest.IsValid)
@@ -261,7 +266,18 @@ public sealed class HandleContext
         => AddControl(id, DistanceToPoint(world, grabRadiusPixels), DepthOf(world));
 
     /// <summary>Register a fallback that wins only when no other control registered at all.</summary>
-    public void AddDefaultControl(ControlID id) => _pendingDefault = id;
+    public void AddDefaultControl(ControlID id)
+    {
+        if (!AcceptsRegistrations) return;
+        _pendingDefault = id;
+    }
+
+    /// <summary>
+    /// Whether anything in the scene may become hovered or pressed now. UI drawn over the viewport, such as a tool's
+    /// panel or the view cube, takes the cursor, so nothing behind it lights up or can be clicked through it. A drag
+    /// already under way keeps going when the cursor passes over UI.
+    /// </summary>
+    private bool AcceptsRegistrations => ViewportHovered || Hot.IsValid;
 
     public ControlID Nearest => _nearest;
     public ControlID Hot { get; private set; }
