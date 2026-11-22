@@ -397,6 +397,8 @@ internal static class CSGSections
 
         DrawJustifyGrid(paper, font);
 
+        LabelledButton(paper, font, "csg_surf_align", Loc.Get("csg.align"), Loc.Get("csg.align_tip"), CSGSurfaceSelection.AlignToActive);
+
         EditorGUI.SettingsRow(paper, "csg_surf_smooth", Loc.Get("csg.smoothing"), () =>
             Origami.ButtonGroup(paper, "csg_surf_smooth_v", -1,
                     idx => { if (idx == 0) CSGSurfaceSelection.Smooth(); else CSGSurfaceSelection.UnSmooth(); })

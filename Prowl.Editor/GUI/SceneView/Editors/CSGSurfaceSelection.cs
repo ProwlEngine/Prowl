@@ -339,6 +339,25 @@ public static class CSGSurfaceSelection
         if (model.IsValid()) model!.SetDirty();
     }
 
+    /// <summary>
+    /// Lines the selection's textures up with the active surface's, so they run on across shared edges: every selected
+    /// surface projects in world space with the active one's scale, rotation and offset.
+    /// </summary>
+    public static void AlignToActive()
+    {
+        if (Active is not CSGSurfaceRef source || !source.IsValid) return;
+
+        SurfaceData template = source.Data;
+        Edit("Align CSG Textures", (data, _, _) =>
+        {
+            data.Offset = template.Offset;
+            data.Scale = template.Scale;
+            data.Rotation = template.Rotation;
+            data.Flags |= CSGSurfaceFlags.WorldSpaceTexture;
+            return data;
+        });
+    }
+
     /// <summary>Copies the active surface's texturing onto every other selected surface.</summary>
     public static void CopyFromActive()
     {

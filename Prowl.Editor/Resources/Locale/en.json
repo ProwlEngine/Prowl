@@ -957,6 +957,8 @@
   "csg.coplanar_tip": "Selects every surface in the same plane as the active one",
   "csg.connected": "Connected",
   "csg.connected_tip": "Selects every surface joined to the active one by shared edges, up to a 45 degree turn",
+  "csg.align": "Align to Active",
+  "csg.align_tip": "Projects the selected surfaces in world space with the active surface's scale, rotation and offset, so the texture runs on across neighbouring faces",
   "csg.copy_surface": "Copy to selection",
   "csg.copy_surface_tip": "Applies the last picked surface's texturing to every other selected surface.",
   "csg.generate": "Generate",
