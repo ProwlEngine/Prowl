@@ -12,7 +12,7 @@ public partial class NetworkingTests
     [Fact]
     public void TransformBatchesCarryTheNetworkTickTheGameSees()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Ticking");
         go.AddComponent<NetworkTransform>();
         go.Network.Networked = true;

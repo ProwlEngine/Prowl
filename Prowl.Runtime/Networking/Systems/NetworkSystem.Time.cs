@@ -48,7 +48,7 @@ internal sealed partial class NetworkSystem
     private float HostRate => WorldPaused ? 0 : _worldFrame == Frame ? ReplicatedWorld!.Clock.EffectiveTimeScale : 1;
 
     /// <summary>The networked world ran a frame, so its fixed steps drive the tick this frame, or hold it while paused.</summary>
-    internal void OnWorldFrame(SceneInstance world)
+    internal void OnWorldFrame(Scene world)
     {
         if (world == ReplicatedWorld)
         {
@@ -57,7 +57,7 @@ internal sealed partial class NetworkSystem
         }
     }
 
-    internal void OnFixedStep(SceneInstance world)
+    internal void OnFixedStep(Scene world)
     {
         if (IsActive && world == ReplicatedWorld)
         {

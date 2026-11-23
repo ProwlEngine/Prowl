@@ -767,7 +767,9 @@ public class DesktopBuildPipeline : BuildPipeline
             string source = Path.Combine(engineRuntimes, relative);
             if (!File.Exists(source)) continue;
 
-            string dest = Path.Combine(destinationRoot, relative);
+            string dest = relative.Contains("native")
+                ? Path.Combine(destinationRoot, "native", Path.GetFileName(relative))
+                : Path.Combine(destinationRoot, Path.GetFileName(relative));
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
             File.Copy(source, dest, true);
         }
@@ -815,6 +817,8 @@ public class DesktopBuildPipeline : BuildPipeline
             Packaging = request.Packaging,
             WindowWidth = plan.Profile.WindowWidth,
             WindowHeight = plan.Profile.WindowHeight,
+            Fullscreen = plan.Profile.WindowMode == DesktopWindowMode.Fullscreen,
+            WindowMaximized = plan.Profile.WindowMode == DesktopWindowMode.Windowed && plan.Profile.WindowMaximized,
         };
     }
 
@@ -856,7 +860,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
         var properties = new Dictionary<string, string>
         {
-            ["OutputType"] = "Exe",
+            ["OutputType"] = desktopProfile.ShowConsole ? "Exe" : "WinExe",
             ["EnableDefaultCompileItems"] = "false",
             ["AllowUnsafeBlocks"] = "true",
             ["Nullable"] = "annotations",

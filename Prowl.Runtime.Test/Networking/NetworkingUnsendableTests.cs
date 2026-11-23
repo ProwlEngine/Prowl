@@ -35,9 +35,9 @@ public class ShapeHolderTestComponent : Component
 
 public partial class NetworkingTests
 {
-    private (SceneInstance Scene, ShapeHolderTestComponent Holder) SpawnShapeHolder(FakePeer alice)
+    private (Scene Scene, ShapeHolderTestComponent Holder) SpawnShapeHolder(FakePeer alice)
     {
-        SceneInstance scene = SceneInstance.Main;
+        Scene scene = Scene.Main;
         Pump(() => alice.IsReady, alice);
         GameObject crate = CreateGameObject("Crate");
         ShapeHolderTestComponent holder = crate.AddComponent<ShapeHolderTestComponent>();

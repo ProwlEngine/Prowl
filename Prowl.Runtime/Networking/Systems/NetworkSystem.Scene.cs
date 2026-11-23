@@ -83,7 +83,7 @@ internal sealed partial class NetworkSystem
     ///     Refuses an additive load into the networked world of objects it holds already, which loading one scene twice
     ///     does. Networking knows each object by its identifier, so the world can hold each one only once.
     /// </summary>
-    internal string? RefuseDuplicateObjects(SceneInstance world, Scene scene, SceneContent content)
+    internal string? RefuseDuplicateObjects(Scene world, SceneAsset scene, SceneContent content)
     {
         if (!ReferenceEquals(world, ReplicatedWorld))
         {
@@ -172,7 +172,7 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>A host that binds another world as Main shares that world instead, like a load replacing every section.</summary>
-    internal void OnMainChanged(SceneInstance? previous, SceneInstance? current)
+    internal void OnMainChanged(Scene? previous, Scene? current)
     {
         if (current.IsNotValid() || current == ReplicatedWorld)
         {
@@ -264,7 +264,7 @@ internal sealed partial class NetworkSystem
 
         // Objects in the persistent section keep their network state; the rest went with the sections the load replaced.
         using FrameStatScope stats = FrameStats.Network.Scope();
-        SceneInstance world = ReplicatedWorld!;
+        Scene world = ReplicatedWorld!;
         _unloading.Clear();
         _removedSections.Clear();
         foreach (SceneSection section in world.Sections)
@@ -327,7 +327,7 @@ internal sealed partial class NetworkSystem
     ///     A networked object kept in the persistent section gives way to the copy of it the new scenes bring, as it
     ///     does on clients, so every peer ends up with the one fresh object.
     /// </summary>
-    private void ReleaseReloadedCopies(SceneInstance world)
+    private void ReleaseReloadedCopies(Scene world)
     {
         HashSet<Guid> incoming = new();
         foreach (SceneSection section in world.Sections)
@@ -414,7 +414,7 @@ internal sealed partial class NetworkSystem
 
         _sectionIds.Remove(section);
         _sectionsById.Remove(message.SectionId);
-        SceneInstance world = section.Instance;
+        Scene world = section.Instance;
         _applyingSections = true;
         try
         {

@@ -91,7 +91,7 @@ public static class LayoutUtility
 
     /// <summary>Drops a world's memo. Called by the canvas at the start of every layout pass, since a
     /// <see cref="ContentSizeFitter"/> can rewrite sizes part-way through a walk.</summary>
-    internal static void InvalidateCache(SceneInstance? world)
+    internal static void InvalidateCache(Scene? world)
     {
         if (world.IsNotValid()) return;
         world.LayoutCache.Sizes.Clear();

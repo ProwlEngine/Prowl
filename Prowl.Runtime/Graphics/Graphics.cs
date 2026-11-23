@@ -138,7 +138,8 @@ public static class Graphics
         {
             BakedVariants baked = new(Compiler);
             using System.IO.FileStream file = System.IO.File.OpenRead(BakedShadersPath);
-            baked.Read(file);
+            using System.IO.Compression.ZstandardStream compressed = new(file, System.IO.Compression.CompressionMode.Decompress);
+            baked.Read(compressed);
             return baked;
         }
         catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or ArgumentException)
@@ -401,7 +402,7 @@ public static class Graphics
     /// scene unless given one, and draws nothing while the mesh or material is still loading.
     /// </summary>
     public static void DrawMeshInstanced(Mesh mesh, Material material, ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Color> colors = default,
-        ShadowCasting shadowCasting = ShadowCasting.On, int layer = 0, SceneInstance? scene = null, AABB? bounds = null)
+        ShadowCasting shadowCasting = ShadowCasting.On, int layer = 0, Scene? scene = null, AABB? bounds = null)
     {
         if (Renderer == null || transforms.IsEmpty || mesh.IsNotValid() || material.IsNotValid()) return;
         if (!mesh.IsLoaded || !material.IsLoaded)
@@ -412,7 +413,7 @@ public static class Graphics
         }
         mesh.Upload();
         if (mesh.GpuIfLoaded is not { } gpuMesh || material.GpuMaterial is not { } gpuMaterial) return;
-        if (scene.IsNotValid()) scene = SceneInstance.Active;
+        if (scene.IsNotValid()) scene = Scene.Active;
         if (scene.Rendering.World is not { } world) return;
 
         var draw = new TransientDraw
@@ -491,6 +492,7 @@ public static class Graphics
         s_fallbackBuffers.Clear();
         lock (s_libraryShaders) s_libraryShaders.Clear();
         s_views.Clear();
+        Debug.DisposeGizmoFeature();
         Renderer.Dispose();
         Renderer = null;
         Device.Dispose();

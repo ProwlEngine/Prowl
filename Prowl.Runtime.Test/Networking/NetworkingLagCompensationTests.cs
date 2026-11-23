@@ -13,7 +13,7 @@ public partial class NetworkingTests
     [Fact]
     public void TheHostRemembersWhereAnObjectWasAndWhatAClientSaw()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject target = CreateGameObject("Target");
         LagCompensator history = target.AddComponent<LagCompensator>();
         scene.Add(target);

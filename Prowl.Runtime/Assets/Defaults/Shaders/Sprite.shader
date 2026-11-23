@@ -33,7 +33,7 @@ Shader "Default/Sprite"
                 gl_Position = Graphite_RelativeToClip(relative);
                 vUV = vertexUV0 * _Tiling + _Offset;
                 vRelativePos = relative;
-                vColor = vertexColor;
+                vColor = vertexColor * Graphite_Object().color;
             }
         }
         Fragment

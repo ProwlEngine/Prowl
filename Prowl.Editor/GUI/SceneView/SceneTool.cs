@@ -73,16 +73,28 @@ public abstract class SceneTool
     /// <summary>Draw 2D overlays in the viewport foreground.</summary>
     public virtual void OnDrawOverlay(SceneToolContext ctx, Canvas canvas) { }
 
-    /// <summary>Tool strip contents. Appended after the built-in transform buttons unless
-    /// <see cref="OverridesToolStrip"/> is set, in which case this replaces them.</summary>
+    /// <summary>Tool strip contents, each set of buttons inside its own <see cref="EditorGUI.ToolStripGroup"/>. Appended
+    /// after the built-in transform buttons unless <see cref="OverridesToolStrip"/> is set, in which case this replaces them.</summary>
     public virtual void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id) { }
 
     /// <summary>Replacement orientation-cube UI. Only called when
     /// <see cref="OverridesViewManipulator"/> is set.</summary>
     public virtual void OnViewManipulatorGUI(SceneToolContext ctx, Paper paper, string id, Rect rect) { }
 
-    /// <summary>Contents of the tool's floating settings panel. Drawing nothing hides the panel.</summary>
-    public virtual void OnSettingsGUI(SceneToolContext ctx, Paper paper, string id) { }
+    /// <summary>Replace the scene view's right click menu with <see cref="OnSceneContextMenu"/>, the usual items moving to a submenu.</summary>
+    public virtual bool ReplacesSceneContextMenu => false;
+
+    /// <summary>Whether the tool uses a scene view shortcut's key for something else right now, so the scene view leaves it.</summary>
+    public virtual bool TakesShortcut(string shortcut) => false;
+
+    /// <summary>Selects what <paramref name="ray"/> right clicked before the menu opens, in place of the scene's own pick. True when handled.</summary>
+    public virtual bool OnSceneContextPick(SceneToolContext ctx, Ray ray) => false;
+
+    /// <summary>Items for the scene view's right click menu, added after the usual ones unless <see cref="ReplacesSceneContextMenu"/> is set.</summary>
+    public virtual void OnSceneContextMenu(SceneToolContext ctx, OrigamiUI.ContextBuilder menu) { }
+
+    /// <summary>Floating UI inside the viewport. Elements should be self directed and place themselves.</summary>
+    public virtual void OnSceneOverlayGUI(SceneToolContext ctx, Paper paper, string id, Float2 viewportSize) { }
 
     /// <summary>
     /// Handle an asset dropped into the viewport while this tool is active. Return true to consume

@@ -38,7 +38,7 @@ public abstract class StationGame : Game
 
     public sealed record Station(string Name, string Description, Float3 Center, Float3 View, float LookHeight);
 
-    protected SceneInstance SampleScene = null!;
+    protected Scene SampleScene = null!;
     protected GameObject CameraObject = null!;
     protected Camera MainCamera = null!;
     protected SampleHud Hud = null!;
@@ -87,7 +87,7 @@ public abstract class StationGame : Game
         // imported the first time something asks for them by path.
         AssetDatabase.Mount(new SourceAssetBackend(new FolderAssetSource(Path.Combine(AppContext.BaseDirectory, "Assets"))));
 
-        SampleScene = SceneInstance.Main;
+        SampleScene = Scene.Main;
 
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         MainCamera = CameraObject.AddComponent<Camera>();

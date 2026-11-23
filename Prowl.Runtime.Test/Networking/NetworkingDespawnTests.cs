@@ -14,7 +14,7 @@ public partial class NetworkingTests
     public void ADespawnKeepsTheHostsObjectAndItCanBeSpawnedAgainByItsPrefab()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -42,7 +42,7 @@ public partial class NetworkingTests
     public void AClientBuildsAndReturnsPrefabInstancesThroughItsHandlers()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         byte[] snapshot, spawn;
         Guid id;
@@ -76,9 +76,9 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == id), host);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == id), host);
             Assert.Equal(1, built);
-            GameObject copy = Find(SceneInstance.Main, id);
+            GameObject copy = Find(Scene.Main, id);
 
             using NetWriter despawn = new();
             new DespawnMessage(id).Write(despawn);
@@ -98,7 +98,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientKeepsAnObjectDespawnedAndSpawnedAgainInOneFrame()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject original = CreateGameObject("Crate");
@@ -116,7 +116,7 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == id), host);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == id), host);
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
 
             // As the host sends for a Despawn and a Spawn of the same object in one frame.
@@ -127,7 +127,7 @@ public partial class NetworkingTests
             host.Session.Flush();
             PumpFor(40, host);
 
-            GameObject here = Assert.Single(SceneInstance.Main.Objects, o => o.Identifier == id);
+            GameObject here = Assert.Single(Scene.Main.Objects, o => o.Identifier == id);
             Assert.True(here.IsValid());
             Assert.True(here.Network.Active);
         }

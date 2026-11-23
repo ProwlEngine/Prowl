@@ -65,18 +65,34 @@ public abstract class EditorTestHarness : IDisposable
         Assets.Initialize(); // registers itself as AssetDatabase.Backend
 
         // After the database, since a new world loads its default sky.
-        BindEditWorld(SceneInstance.Create("Untitled", SceneMode.Edit));
+        BindEditWorld(Scene.Create("Untitled", SceneMode.Edit));
         Core.Undo.ClearAll();
     }
 
     /// <summary>Binds <paramref name="world"/> as the editor's edit world and as Main, running, as the editor does at startup.</summary>
-    protected static void BindEditWorld(SceneInstance world)
+    protected static void BindEditWorld(Scene world)
     {
-        SceneInstance? previous = GUI.SceneView.EditorSceneManager.EditWorldOrNull;
+        Scene? previous = GUI.SceneView.EditorSceneManager.EditWorldOrNull;
         world.Activate();
         GUI.SceneView.EditorSceneManager.EditWorld = world;
-        SceneInstance.Main = world;
+        Scene.Main = world;
         if (previous.IsValid() && !ReferenceEquals(previous, world)) previous!.Dispose();
+    }
+
+    /// <summary>Opens <paramref name="scene"/> in place of the open scenes, and runs the load.</summary>
+    protected static GUI.SceneView.OpenScene Open(SceneAsset scene)
+    {
+        GUI.SceneView.OpenScene open = GUI.SceneView.EditorSceneManager.Open(scene, force: true);
+        Scene.ProcessPendingLoad();
+        return open;
+    }
+
+    /// <summary>Opens <paramref name="scene"/> beside the open scenes, and runs the load.</summary>
+    protected static GUI.SceneView.OpenScene Additive(SceneAsset scene, bool load = true)
+    {
+        GUI.SceneView.OpenScene open = GUI.SceneView.EditorSceneManager.OpenAdditive(scene, load);
+        Scene.ProcessPendingLoad();
+        return open;
     }
 
     /// <summary>The asset with this GUID, loaded.</summary>
@@ -97,7 +113,7 @@ public abstract class EditorTestHarness : IDisposable
     {
         if (source.Scene is null)
         {
-            var scene = new SceneInstance(SceneMode.Edit);
+            var scene = new Scene(SceneMode.Edit);
             scene.Add(source);
             BindEditWorld(scene);
         }
@@ -152,7 +168,7 @@ public abstract class EditorTestHarness : IDisposable
     protected PrefabAsset? GetPrefab(Guid guid) => AssetDatabase.Load<PrefabAsset>(guid);
 
     /// <summary>Persist a Scene as a .scene file, the way the editor saves one, and return its GUID.</summary>
-    protected Guid CreateSceneAsset(SceneInstance scene, string relativePath = "Scene.scene")
+    protected Guid CreateSceneAsset(Scene scene, string relativePath = "Scene.scene")
     {
         string abs = AssetAbsolutePath(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
@@ -207,7 +223,7 @@ public abstract class EditorTestHarness : IDisposable
     protected static PlayModeScope EnterPlayMode() => new();
 
     /// <summary>Advances full frames: FixedUpdate then Update.</summary>
-    protected static void Tick(SceneInstance scene, int steps = 1)
+    protected static void Tick(Scene scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
         {
@@ -218,7 +234,7 @@ public abstract class EditorTestHarness : IDisposable
     }
 
     /// <summary>Runs Scene.Update the given number of frames (no physics step).</summary>
-    protected static void UpdateScene(SceneInstance scene, int frames = 1)
+    protected static void UpdateScene(Scene scene, int frames = 1)
     {
         for (int i = 0; i < frames; i++)
         {
@@ -266,7 +282,7 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Author a scene containing a single empty GameObject and save it as Main.scene.</summary>
     protected Guid AuthorEmptyScene(string relativePath = "Main.scene")
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         scene.Add(new GameObject("Root"));
         Guid guid = CreateSceneAsset(scene, relativePath);
         Assert.NotEqual(Guid.Empty, guid);
@@ -280,7 +296,7 @@ public abstract class EditorTestHarness : IDisposable
         Type type = gameAsm.GetType(componentTypeName)
             ?? throw new InvalidOperationException($"Type '{componentTypeName}' not found in the game assembly.");
 
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         var go = new GameObject("Root");
         go.AddComponent(type);
         scene.Add(go);
@@ -389,7 +405,7 @@ public abstract class EditorTestHarness : IDisposable
     public virtual void Dispose()
     {
         // Drop this test's world so the next one binds its own.
-        try { SceneInstance.Shutdown(); } catch { }
+        try { Scene.Shutdown(); } catch { }
 
         Assets.Dispose(); // stops the FileSystemWatcher and clears AssetDatabase.Current / Instance
         Project.CloseCurrent();

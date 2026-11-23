@@ -12,7 +12,7 @@ public partial class NetworkingTests
     [Fact]
     public void TheHostDropsBroadcastAndOwnerRpcsSentByAClient()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
         NetTestComponent component = ship.AddComponent<NetTestComponent>();
         scene.Add(ship);
@@ -43,7 +43,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientCallingABroadcastOrOwnerRpcSendsNothingAndDoesNotRunIt()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject level = CreateGameObject("Level");
         level.Network.Networked = true;
         level.AddComponent<NetTestComponent>();
@@ -67,8 +67,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == levelId), host);
-            NetTestComponent here = Find(SceneInstance.Main, levelId).GetComponent<NetTestComponent>()!;
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == levelId), host);
+            NetTestComponent here = Find(Scene.Main, levelId).GetComponent<NetTestComponent>()!;
 
             here.Shout("hello");
             here.TellOwner("psst");

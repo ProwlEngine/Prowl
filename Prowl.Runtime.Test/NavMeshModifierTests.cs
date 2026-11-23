@@ -18,7 +18,7 @@ public class NavMeshModifierTests : RuntimeTestBase
 {
     private const int Mud = 3; // arbitrary user area
 
-    private GameObject AddFloorBox(SceneInstance scene, string name, Float3 center, Float3 size)
+    private GameObject AddFloorBox(Scene scene, string name, Float3 center, Float3 size)
     {
         GameObject go = CreateGameObject(name);
         scene.Add(go);
@@ -27,7 +27,7 @@ public class NavMeshModifierTests : RuntimeTestBase
         return go;
     }
 
-    private NavMeshSurface AddSurface(SceneInstance scene, int agentTypeId = 0)
+    private NavMeshSurface AddSurface(Scene scene, int agentTypeId = 0)
     {
         GameObject surfaceGo = CreateGameObject("NavMeshSurface");
         scene.Add(surfaceGo);
@@ -37,7 +37,7 @@ public class NavMeshModifierTests : RuntimeTestBase
         return surface;
     }
 
-    private static uint SampleAreaMask(SceneInstance scene, Float3 position, int agentTypeId = 0)
+    private static uint SampleAreaMask(Scene scene, Float3 position, int agentTypeId = 0)
     {
         var filter = new NavMeshQueryFilter(NavMeshAreaMask.Everything, agentTypeId);
         return scene.Navigation.SamplePosition(position, out NavMeshHit hit, 0.5f, filter) ? hit.Mask.Mask : 0u;
@@ -49,7 +49,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void Modifier_OverrideArea_LandsOnThatObjectsPolys()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         AddFloorBox(scene, "Plain", new Float3(-5, -0.5f, 0), new Float3(10, 1, 10));
         GameObject marked = AddFloorBox(scene, "Marked", new Float3(5, -0.5f, 0), new Float3(10, 1, 10));
         NavMeshModifier modifier = marked.AddComponent<NavMeshModifier>();
@@ -66,7 +66,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void Modifier_ChildModifier_BeatsInheritedParentModifier()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
 
         GameObject parent = CreateGameObject("Parent");
         scene.Add(parent);
@@ -101,7 +101,7 @@ public class NavMeshModifierTests : RuntimeTestBase
                 new NavMeshAgentType { Id = 3, Name = "Scout", Radius = 0.4f },
             ]);
 
-            SceneInstance scene = CreateScene(enable: true);
+            Scene scene = CreateScene(enable: true);
             GameObject floor = AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
             NavMeshModifier modifier = floor.AddComponent<NavMeshModifier>();
             modifier.IgnoreFromBuild = true;
@@ -126,7 +126,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void Modifier_WalksPastNonAffectingAncestor_ToHigherOne()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
 
         GameObject grandparent = CreateGameObject("Grandparent");
         scene.Add(grandparent);
@@ -157,7 +157,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void Modifier_OwnNoOpModifier_ShieldsInheritedOverride()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
 
         GameObject parent = CreateGameObject("Parent");
         scene.Add(parent);
@@ -184,7 +184,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void ModifierVolume_StampsAreaOnlyInsideFootprint()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         GameObject volumeGo = CreateGameObject("MudZone");
@@ -205,7 +205,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void ModifierVolume_NotWalkable_PunchesHole()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         GameObject volumeGo = CreateGameObject("Hole");
@@ -235,7 +235,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void ModifierVolume_NotWalkable_KeepsAgentRadiusClear()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         GameObject volumeGo = CreateGameObject("Hole");
@@ -257,7 +257,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void ModifierVolume_RotatedFootprint_IsHonored()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(24, 1, 24));
 
         GameObject volumeGo = CreateGameObject("Diamond");
@@ -284,7 +284,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_AppliesAndRemovesVolume()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
         NavMeshSurface surface = AddSurface(scene);
         Assert.True(surface.BuildNavMesh());
@@ -314,7 +314,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_HonorsModifierChanges()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
         // A wall segment initially ignored by the bake (a ghost preview, say).
         GameObject wall = AddFloorBox(scene, "Wall", new Float3(0, 2, 0), new Float3(2, 4, 20));
@@ -345,7 +345,7 @@ public class NavMeshModifierTests : RuntimeTestBase
     [Fact]
     public void Modifier_NotWalkableOnAWalkableFloor_ErasesIt()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
 
         // Thin and flush with the floor, so the two span tops land within the climb threshold and

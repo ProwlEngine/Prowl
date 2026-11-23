@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Test;
 public partial class NetworkingTests
 {
     // A ship whose NetTestComponent is its second networked component, on a child.
-    private (GameObject Ship, NetTestComponent Component) IndexedShip(SceneInstance scene)
+    private (GameObject Ship, NetTestComponent Component) IndexedShip(Scene scene)
     {
         GameObject ship = CreateGameObject("Ship");
         ship.AddComponent<PlainTestComponent>();
@@ -37,7 +37,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnRpcFromTheHostNamesItsObjectByNetIdAndComponentIndex()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         (GameObject ship, NetTestComponent component) = IndexedShip(scene);
         MakeCurrent(scene);
         LocalNetwork network = new();
@@ -66,7 +66,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientCallsAHostRpcByNetIdAndComponentIndex()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         (GameObject ship, NetTestComponent component) = IndexedShip(scene);
         MakeCurrent(scene);
         LocalNetwork network = new();
@@ -94,7 +94,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnRpcOnAnObjectThatIsNotNetworkedIsDroppedWhileASessionRuns()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject prop = CreateGameObject("Prop");
         NetTestComponent component = prop.AddComponent<NetTestComponent>();
         scene.Add(prop);
@@ -116,7 +116,7 @@ public partial class NetworkingTests
     [Fact]
     public void AStaticRpcNamesItsTypeByHash()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));

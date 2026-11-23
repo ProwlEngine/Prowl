@@ -72,7 +72,7 @@ public static class GameTask
     {
         MainThreadContext loop = Loop();
         if (seconds <= 0) return Task.CompletedTask;
-        Resources.SceneInstance? world = Resources.SceneInstance.ActiveOrNull;
+        Resources.Scene? world = Resources.Scene.ActiveOrNull;
         if (ReferenceEquals(world, null)) return loop.WaitFrames(() => (seconds -= Time.UnscaledDeltaTime) <= 0, cancel);
         SceneClock clock = world.Clock;
         double end = clock.TimeSinceStartup + seconds;

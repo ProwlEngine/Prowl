@@ -1210,7 +1210,7 @@ public static partial class PrefabUtility
         if (db == null) return;
 
         // The edit world counts too while play or prefab editing has it dormant, since its instances come back.
-        SceneInstance?[] worlds = [EditorSceneManager.EditedWorld, EditorSceneManager.EditWorldOrNull];
+        Scene?[] worlds = [EditorSceneManager.EditedWorld, EditorSceneManager.EditWorldOrNull];
 
         // The entries are gone, so go by which cached prefabs the database can no longer resolve.
         foreach (Guid prefabGuid in s_sourceCache.Keys.ToList())
@@ -1235,7 +1235,7 @@ public static partial class PrefabUtility
     /// </summary>
     internal static void OnSectionLoaded(SceneLoadedArgs args)
     {
-        if (ReferenceEquals(args.Section.Instance, SceneInstance.Main)) OnSceneLoaded();
+        if (ReferenceEquals(args.Section.Instance, Scene.Main)) OnSceneLoaded();
     }
 
     internal static void OnSceneLoaded()
@@ -1244,7 +1244,7 @@ public static partial class PrefabUtility
         // The prefab editing scene holds the prefab itself, not instances of it.
         if (PrefabEditingMode.IsEditing) return;
 
-        SceneInstance? scene = EditorSceneManager.EditedWorld;
+        Scene? scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         // Collected before anything is refreshed, since a refresh adds and removes objects.
@@ -1277,7 +1277,7 @@ public static partial class PrefabUtility
     /// </summary>
     public static void RefreshAllInstances(Guid prefabGuid)
     {
-        SceneInstance? scene = EditorSceneManager.EditedWorld;
+        Scene? scene = EditorSceneManager.EditedWorld;
         if (scene.IsValid()) RefreshInstancesOf(prefabGuid, scene.Objects);
     }
 
@@ -1306,13 +1306,13 @@ public static partial class PrefabUtility
     /// the scene was saved. Open it and it catches up, but a build reads what is on disk, and nobody
     /// has to have opened a scene since the prefabs it uses last changed.
     /// </summary>
-    public static void RefreshInstancesIn(SceneInstance scene)
+    public static void RefreshInstancesIn(Scene scene)
     {
         if (scene.IsValid()) RefreshInstancesAmong(scene.Objects);
     }
 
     /// <summary>
-    /// Bring every prefab instance in detached content up to date, as <see cref="RefreshInstancesIn(SceneInstance)"/>
+    /// Bring every prefab instance in detached content up to date, as <see cref="RefreshInstancesIn(Scene)"/>
     /// does for a world. Override references resolve against the content itself, and its object list follows what
     /// the refresh added and removed.
     /// </summary>
@@ -1626,7 +1626,7 @@ public static partial class PrefabUtility
 
             // Scene.Remove unparents on the way out; a tree in no scene has to be told, or the deferred
             // destroy leaves the child in its parent's list for the rest of the operation.
-            SceneInstance? childScene = child.Scene;
+            Scene? childScene = child.Scene;
             if (childScene.IsValid()) childScene!.Remove(child);
             else child.SetParent(null!);
             child.Destroy();
@@ -1655,7 +1655,7 @@ public static partial class PrefabUtility
             component.OnValidate();
         }
 
-        SceneInstance? scene = instance.Scene;
+        Scene? scene = instance.Scene;
         int order = 0;
 
         foreach (GameObject sourceChild in source.Children)
@@ -1866,7 +1866,7 @@ public static partial class PrefabUtility
     /// <summary>As <see cref="ReconcileOpenScene"/>, for the instances of one section only, like the scene being saved.</summary>
     internal static void ReconcileSection(SceneSection section) => Reconcile(section.Instance, section);
 
-    private static void Reconcile(SceneInstance? scene, SceneSection? section)
+    private static void Reconcile(Scene? scene, SceneSection? section)
     {
         if (scene.IsNotValid()) return;
         List<GameObject> objects = [.. scene!.Objects.Where(go => section == null || ReferenceEquals(go.Section, section))];

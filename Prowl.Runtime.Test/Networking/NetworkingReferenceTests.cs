@@ -12,7 +12,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASyncReferenceToAnObjectThatArrivesLaterStartsReadingAsIt()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject holder = CreateGameObject("Holder");
         holder.Network.Networked = true;
         SyncReferenceTestComponent pointer = holder.AddComponent<SyncReferenceTestComponent>();
@@ -43,15 +43,15 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == holderId), host);
-            SyncReferenceTestComponent here = Find(SceneInstance.Main, holderId).GetComponent<SyncReferenceTestComponent>()!;
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == holderId), host);
+            SyncReferenceTestComponent here = Find(Scene.Main, holderId).GetComponent<SyncReferenceTestComponent>()!;
 
             // The chest hasn't been spawned here, so the reference names nothing yet.
             Assert.Null(here.Target);
 
             host.Send(FakePeer.Spawn, w => w.WriteBytes(chestSpawn), host.Session.Peers.Single(p => !p.IsLocal));
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == chestId), host);
-            Assert.Same(Find(SceneInstance.Main, chestId), here.Target);
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == chestId), host);
+            Assert.Same(Find(Scene.Main, chestId), here.Target);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -59,7 +59,7 @@ public partial class NetworkingTests
     [Fact]
     public void AReferenceToSomethingThatIsNotNetworkedGoesAsNull()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
         ship.Network.Networked = true;
         NetTestComponent stats = ship.AddComponent<NetTestComponent>();
@@ -106,7 +106,7 @@ public partial class NetworkingTests
     [Fact]
     public void ADespawnedObjectsReferencesAreForgotten()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject bullet = CreateGameObject("Bullet");
         bullet.Network.Networked = true;
         NetTestComponent component = bullet.AddComponent<NetTestComponent>();

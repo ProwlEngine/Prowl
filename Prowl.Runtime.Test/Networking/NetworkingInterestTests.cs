@@ -57,7 +57,7 @@ public class InterestReadyListener : Component, INetworkListener
 
 public partial class NetworkingTests
 {
-    private sealed record InterestSession(SceneInstance World, FakePeer Alice, FakePeer Bob, LocalNetwork Network, NetworkConfiguration Previous)
+    private sealed record InterestSession(Scene World, FakePeer Alice, FakePeer Bob, LocalNetwork Network, NetworkConfiguration Previous)
         : IDisposable
     {
         public NetPeer AliceHere => HostPeerOf(Alice);
@@ -74,7 +74,7 @@ public partial class NetworkingTests
         }
     }
 
-    private InterestSession InterestHost(Action<NetworkConfiguration>? configure = null, Action<SceneInstance>? setUp = null)
+    private InterestSession InterestHost(Action<NetworkConfiguration>? configure = null, Action<Scene>? setUp = null)
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         NetworkConfiguration configuration = new()
@@ -86,7 +86,7 @@ public partial class NetworkingTests
         Networking.Networking.Configure(configuration);
         try
         {
-            SceneInstance world = CreateScene();
+            Scene world = CreateScene();
             world.Add(CreateGameObject("Level"));
             setUp?.Invoke(world);
             MakeCurrent(world);
@@ -104,7 +104,7 @@ public partial class NetworkingTests
         }
     }
 
-    private GameObject CrateAt(SceneInstance world, float x, NetworkVisibility visibility = NetworkVisibility.Default, string name = "Crate")
+    private GameObject CrateAt(Scene world, float x, NetworkVisibility visibility = NetworkVisibility.Default, string name = "Crate")
     {
         GameObject crate = Crate(world, visibility, name);
         crate.Transform.Position = new Float3(x, 0, 0);

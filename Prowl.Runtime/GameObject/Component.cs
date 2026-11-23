@@ -215,7 +215,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// The world this component is in. Throws while it is in none: on a detached object, on a prefab asset, and in
     /// OnValidate and OnAfterDeserialize, which run detached. Check <see cref="IsInWorld"/> first where that can happen.
     /// </summary>
-    public SceneInstance Scene => IsInWorld
+    public Scene Scene => IsInWorld
         ? _go.Scene!
         : throw new InvalidOperationException($"'{Name}' ({GetType().Name}) is not in a world. A detached object, a prefab asset, " +
             "OnValidate and OnAfterDeserialize have none, so check IsInWorld first.");
@@ -349,7 +349,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
             _enabledInHierarchy = newState;
 
             // Only call OnEnable/OnDisable if we're in an active Scene
-            SceneInstance? scene = _go.IsValid() ? _go.Scene : null;
+            Scene? scene = _go.IsValid() ? _go.Scene : null;
             if (scene.IsValid() && scene.ComponentsEnabled)
             {
                 if (newState)
@@ -369,13 +369,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
         // Skip dependency check if the entire GameObject is being disposed
         if (_go.IsDisposed)
             return true;
-
-        if (_go.IsComponentRequired(this, out Type dependentType))
-        {
-            Debug.LogError("Can't remove " + GetType().Name + " because " + dependentType.Name + " depends on it");
-            return false;
-        }
-        return true;
+        return !_go.IsComponentRequired(this, out _);
     }
 
     #region Behaviour
@@ -407,15 +401,15 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     public virtual void OnDisable() { }
 
     /// <summary>Adds this component to its world's registries as it enables there, before any gameplay gate.</summary>
-    internal virtual void JoinWorld(SceneInstance world) { }
+    internal virtual void JoinWorld(Scene world) { }
 
     /// <summary>The other half of <see cref="JoinWorld"/>, as the component disables or leaves the world.</summary>
-    internal virtual void LeaveWorld(SceneInstance world) { }
+    internal virtual void LeaveWorld(Scene world) { }
 
     // The world whose registries this component is in, so it joins and leaves each one once.
-    internal SceneInstance? _joinedWorld;
+    internal Scene? _joinedWorld;
 
-    internal void Join(SceneInstance world)
+    internal void Join(Scene world)
     {
         if (ReferenceEquals(_joinedWorld, world)) return;
         if (!ReferenceEquals(_joinedWorld, null)) Leave(_joinedWorld);
@@ -423,7 +417,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
         JoinWorld(world);
     }
 
-    internal void Leave(SceneInstance world)
+    internal void Leave(Scene world)
     {
         if (!ReferenceEquals(_joinedWorld, world)) return;
         _joinedWorld = null;
@@ -497,14 +491,14 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     public virtual void OnCharacterExit(CharacterController character) { }
 
     // Makes this component's scene the ambient world for the callback, so it holds even when another scene's code calls in.
-    private protected SceneInstance.SceneScope EnterOwnWorld() => SceneInstance.Enter(ReferenceEquals(_go, null) ? null : _go.Scene);
+    private protected Scene.SceneScope EnterOwnWorld() => Scene.Enter(ReferenceEquals(_go, null) ? null : _go.Scene);
 
-    private protected override SceneInstance? OwningScene => ReferenceEquals(_go, null) ? null : _go.Scene;
+    private protected override Scene? OwningScene => ReferenceEquals(_go, null) ? null : _go.Scene;
 
     /// <summary>Gated Start only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalStart()
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (HasStarted) return;
         if (!RunsGameplay) return;
         HasStarted = true;
@@ -515,7 +509,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <summary>Gated Update only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalUpdate()
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { Update(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] Update() threw", ex); }
@@ -524,7 +518,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <summary>Gated LateUpdate only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalLateUpdate()
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { LateUpdate(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] LateUpdate() threw", ex); }
@@ -533,7 +527,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <summary>Gated FixedUpdate only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalFixedUpdate()
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { FixedUpdate(); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] FixedUpdate() threw", ex); }
@@ -542,13 +536,13 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <summary>Gated OnEnable only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnEnable()
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         _hasBeenEnabled = true;
         // Register for ticking whenever enabled in an active scene, regardless of play mode; the
         // per-tick gate (ShouldExecuteGameplay) decides whether the callbacks actually run.
         if (GameObject.IsValid())
         {
-            SceneInstance? scene = GameObject.Scene;
+            Scene? scene = GameObject.Scene;
             if (scene.IsValid())
             {
                 scene.Dispatcher.Register(this);
@@ -565,12 +559,12 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <summary>OnDisable only runs to pair with a gameplay OnEnable.</summary>
     internal void InternalOnDisable()
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         // Reference check rather than validity: this also runs while the GameObject is being disposed,
         // when it already reads as invalid but its scene link is still intact. Leaving must always work.
         if (!ReferenceEquals(GameObject, null))
         {
-            SceneInstance? scene = GameObject.Scene;
+            Scene? scene = GameObject.Scene;
             if (scene.IsValid())
             {
                 scene.Dispatcher.Unregister(this);
@@ -588,7 +582,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnCollisionBegin(in Collision collision)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnCollisionBegin(collision); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCollisionBegin() threw", ex); }
@@ -596,7 +590,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnCollisionStay(in Collision collision)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnCollisionStay(collision); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCollisionStay() threw", ex); }
@@ -604,7 +598,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnCollisionEnd(in Collision collision)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnCollisionEnd(collision); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCollisionEnd() threw", ex); }
@@ -612,7 +606,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnTriggerEnter(Rigidbody3D other)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnTriggerEnter(other); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnTriggerEnter() threw", ex); }
@@ -620,7 +614,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnTriggerStay(Rigidbody3D other)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnTriggerStay(other); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnTriggerStay() threw", ex); }
@@ -628,7 +622,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnTriggerExit(Rigidbody3D other)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnTriggerExit(other); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnTriggerExit() threw", ex); }
@@ -636,7 +630,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnCharacterEnter(CharacterController character)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnCharacterEnter(character); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCharacterEnter() threw", ex); }
@@ -644,7 +638,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnCharacterStay(CharacterController character)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnCharacterStay(character); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCharacterStay() threw", ex); }
@@ -652,7 +646,7 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
 
     internal void InternalOnCharacterExit(CharacterController character)
     {
-        using SceneInstance.SceneScope active = EnterOwnWorld();
+        using Scene.SceneScope active = EnterOwnWorld();
         if (!RunsGameplay) return;
         try { OnCharacterExit(character); }
         catch (Exception ex) { Debug.LogException($"[{Name}/{GetType().Name}] OnCharacterExit() threw", ex); }
@@ -696,6 +690,9 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     private protected override void OnDisposed()
     {
         SceneEvents.Invalidate();
+        Scene? world = OwningScene;
+        if (world.IsValid()) world.ComponentDisposed(this);
+
         CancellationTokenSource? cancellation = Interlocked.Exchange(ref _destroyCancellation, null);
         if (cancellation == null) return;
 

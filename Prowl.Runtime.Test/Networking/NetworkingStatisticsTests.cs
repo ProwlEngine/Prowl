@@ -11,7 +11,7 @@ public partial class NetworkingTests
     [Fact]
     public void StatisticsCountEngineMessagesByKindBothWays()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         NetworkStatistics.Reset();

@@ -21,7 +21,7 @@ public partial class NetworkingTests
     [Fact]
     public void TheHostAddsPlayersAndTellsEachClientWhichIsItsOwn()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -60,7 +60,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientLearnsItsPlayerAndLosesItWhenItDespawns()
     {
-        SceneInstance hostWorld = CreateScene();
+        Scene hostWorld = CreateScene();
         using NetWriter snapshot = new(), spawn = new(), player = new(), despawn = new();
         NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
         GameObject avatar = CreateGameObject("Avatar");
@@ -97,7 +97,7 @@ public partial class NetworkingTests
     [Fact]
     public void APlayerObjectKeepsItsOwnerWhileItIsAPlayer()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));

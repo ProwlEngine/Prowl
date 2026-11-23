@@ -383,7 +383,7 @@ public enum CliProbeMode { Slow, Fast }
 /// <summary> The built in editor commands, run through the same path the CLI uses, against a live scene. </summary>
 public class CliEditorCommandTests : EditorTestHarness
 {
-    private readonly SceneInstance _scene;
+    private readonly Scene _scene;
 
     public CliEditorCommandTests()
     {
@@ -394,7 +394,7 @@ public class CliEditorCommandTests : EditorTestHarness
                 CliCommands.Scan(method);
 
         Undo.Clear();
-        _scene = new SceneInstance(SceneMode.Edit);
+        _scene = new Scene(SceneMode.Edit);
         BindEditWorld(_scene);
     }
 
@@ -610,7 +610,7 @@ public class CliEditorCommandTests : EditorTestHarness
         JsonNode created = Ok("scene", "--action", "new")!;
 
         Assert.Equal("Untitled", created["scenes"]!.AsArray().Single()!["name"]!.GetValue<string>());
-        Assert.DoesNotContain(SceneInstance.Main.Objects, g => g.Name == "OnlyInTheOldScene");
+        Assert.DoesNotContain(Scene.Main.Objects, g => g.Name == "OnlyInTheOldScene");
     }
 
     [Fact]
@@ -622,14 +622,14 @@ public class CliEditorCommandTests : EditorTestHarness
 
         Assert.Equal(2, scenes.Count);
         Assert.StartsWith("Untitled", scenes[1]!["name"]!.GetValue<string>());
-        Assert.Contains(SceneInstance.Main.Objects, g => g.Name == "KeptInTheFirstScene");
+        Assert.Contains(Scene.Main.Objects, g => g.Name == "KeptInTheFirstScene");
     }
 
     [Fact]
     public void ScenesOpenAdditively_GroupTheTree_AndUnloadByName()
     {
-        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "First.scene");
-        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "Second.scene");
+        CreateSceneAsset(new Scene(SceneMode.Edit), "First.scene");
+        CreateSceneAsset(new Scene(SceneMode.Edit), "Second.scene");
         Ok("scene", "--action", "open", "--path", "First.scene");
         Ok("scene", "--action", "openadditive", "--path", "Second.scene");
         Ok("go", "create", "--name", "InSecond", "--scene", "Second");
@@ -647,8 +647,8 @@ public class CliEditorCommandTests : EditorTestHarness
     [Fact]
     public void SceneRefs_NameDuplicatesByPath_AndIdsCarryTheirScene()
     {
-        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "Level.scene");
-        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "Sub/Level.scene");
+        CreateSceneAsset(new Scene(SceneMode.Edit), "Level.scene");
+        CreateSceneAsset(new Scene(SceneMode.Edit), "Sub/Level.scene");
         Ok("scene", "--action", "open", "--path", "Level.scene");
         Ok("scene", "--action", "openadditive", "--path", "Sub/Level.scene");
         Ok("go", "create", "--name", "Thing", "--scene", "Sub/Level.scene");
@@ -662,8 +662,8 @@ public class CliEditorCommandTests : EditorTestHarness
     [Fact]
     public void Set_RefusesAReferenceIntoAnotherScene()
     {
-        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "First.scene");
-        CreateSceneAsset(new SceneInstance(SceneMode.Edit), "Second.scene");
+        CreateSceneAsset(new Scene(SceneMode.Edit), "First.scene");
+        CreateSceneAsset(new Scene(SceneMode.Edit), "Second.scene");
         Ok("scene", "--action", "open", "--path", "First.scene");
         Ok("scene", "--action", "openadditive", "--path", "Second.scene");
         Ok("go", "create", "--name", "P", "--components", "CliProbe", "--scene", "First");
@@ -686,7 +686,7 @@ public class CliEditorCommandTests : EditorTestHarness
         AssertTonemaps(Assert.Single(EditorSceneManager.CreateDefaultScene().GetAll<Camera>(includeDisabled: true))!);
 
         typeof(GUI.DefaultGameObjectCreators).GetMethod("CreateCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
-        AssertTonemaps(SceneInstance.Main.Objects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
+        AssertTonemaps(Scene.Main.Objects.Single(g => g.Name == "Camera").GetComponent<Camera>()!);
     }
     // Runs a command the way the editor does, with this thread as the main thread pumping frames, while a drag is held
     // for the first frames and released after.
@@ -783,7 +783,7 @@ public class CliEditorCommandTests : EditorTestHarness
 /// <summary> Asset, prefab, script and import settings commands against a throwaway project. </summary>
 public class CliAssetCommandTests : EditorTestHarness
 {
-    private readonly SceneInstance _scene;
+    private readonly Scene _scene;
 
     public CliAssetCommandTests()
     {
@@ -795,7 +795,7 @@ public class CliAssetCommandTests : EditorTestHarness
                 CliCommands.Scan(method);
 
         Undo.Clear();
-        _scene = new SceneInstance();
+        _scene = new Scene();
         BindEditWorld(_scene);
     }
 
@@ -850,7 +850,7 @@ public class CliAssetCommandTests : EditorTestHarness
     {
         JsonNode created = Ok("asset", "create", "--path", "Levels/First", "--type", "Scene")!;
         Assert.Equal("Levels/First.scene", created["path"]!.GetValue<string>());
-        Assert.IsType<Scene>(AssetDatabase.Get(Assets.PathToGuid("Levels/First.scene")));
+        Assert.IsType<SceneAsset>(AssetDatabase.Get(Assets.PathToGuid("Levels/First.scene")));
 
         Ok("scene", "--action", "open", "--path", "Levels/First.scene");
         Assert.Contains(EditorSceneManager.EditWorld.ActiveSection.Roots, go => go.GetComponent<Camera>() != null);
@@ -959,7 +959,7 @@ public class CliGraphCommandTests : EditorTestHarness
             foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
                 CliCommands.Scan(method);
         Undo.Clear();
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         BindEditWorld(scene);
     }
 

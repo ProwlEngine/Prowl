@@ -15,7 +15,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASendWritesEachChangedValueOnceForAllPeers()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Counted");
         go.Network.Networked = true;
         CountedWritesTestComponent component = go.AddComponent<CountedWritesTestComponent>();

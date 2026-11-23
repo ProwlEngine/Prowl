@@ -9,9 +9,9 @@ namespace Prowl.Runtime.Test;
 
 public partial class NetworkingTests
 {
-    private (SceneInstance World, FakePeer Alice) SectionHost()
+    private (Scene World, FakePeer Alice) SectionHost()
     {
-        SceneInstance world = CreateScene();
+        Scene world = CreateScene();
         world.Add(CreateGameObject("Level"));
         MakeCurrent(world);
         LocalNetwork network = new();
@@ -79,7 +79,7 @@ public partial class NetworkingTests
     [Fact]
     public void ClientMovesANetworkedObjectWhereTheHostMovedIt()
     {
-        SceneInstance hostWorld = CreateScene();
+        Scene hostWorld = CreateScene();
         hostWorld.Add(CreateGameObject("Level"));
         using NetWriter snapshot = new(), spawn = new(), move = new();
         NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
@@ -97,8 +97,8 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.IsReady, host);
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             host.Session.SendRaw(client, FakePeer.Spawn, spawn.WrittenSpan);
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
-            GameObject here = Find(SceneInstance.Main, crate.Identifier);
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
+            GameObject here = Find(Scene.Main, crate.Identifier);
             Assert.False(here.Persistent);
 
             host.Session.SendRaw(client, FakePeer.SectionMove, move.WrittenSpan);
@@ -140,9 +140,9 @@ public partial class NetworkingTests
         var (world, alice) = SectionHost();
         try
         {
-            SceneInstance.Main = null!;
+            Scene.Main = null!;
             world.Dispose();
-            SceneInstance next = CreateScene();
+            Scene next = CreateScene();
             next.Add(CreateGameObject("Arena"));
             Bind(next);
 
@@ -158,11 +158,11 @@ public partial class NetworkingTests
     [Fact]
     public void JoiningWithNoWorldBoundEndsTheSession()
     {
-        SceneInstance hostWorld = CreateScene();
+        Scene hostWorld = CreateScene();
         hostWorld.Add(CreateGameObject("Level"));
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
-        SceneInstance.Main = null!;
+        Scene.Main = null!;
 
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
@@ -173,7 +173,7 @@ public partial class NetworkingTests
             NetSession session = Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             session.Ended += (_, message) => failure = message;
             Pump(() => Networking.Networking.Session == null, host);
-            Assert.Equal("Joining needs a world bound as SceneInstance.Main to load into.", failure);
+            Assert.Equal("Joining needs a world bound as Scene.Main to load into.", failure);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -181,7 +181,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASpawnCallbackOnAJoiningClientFindsTheIncomingObjects()
     {
-        SceneInstance hostWorld = CreateScene();
+        Scene hostWorld = CreateScene();
         GameObject root = CreateGameObject("Root");
         root.Network.Networked = true;
         NetworkLifecycleListener listener = root.AddComponent<NetworkLifecycleListener>();
@@ -228,9 +228,9 @@ public partial class NetworkingTests
         var (world, alice) = SectionHost();
         try
         {
-            var authoring = new SceneInstance();
+            var authoring = new Scene();
             authoring.Create("Crate");
-            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            SceneAsset arena = AssetDatabase.Get<SceneAsset>(backend.Add(new SceneAsset { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
             authoring.Dispose();
 
             SceneLoad first = arena.LoadAdditive(world);
@@ -266,16 +266,16 @@ public partial class NetworkingTests
         AssetDatabase.Backend = backend;
         try
         {
-            var authoring = new SceneInstance();
+            var authoring = new Scene();
             authoring.Create("Crate");
-            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            SceneAsset arena = AssetDatabase.Get<SceneAsset>(backend.Add(new SceneAsset { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
             authoring.Dispose();
 
             arena.LoadAdditive().Wait();
             SceneLoad second = arena.LoadAdditive();
             second.Wait();
             Assert.Equal(SceneLoadPhase.Done, second.Phase);
-            Assert.Equal(2, SceneInstance.Main.Sections.Count(s => s.Name == "Arena"));
+            Assert.Equal(2, Scene.Main.Sections.Count(s => s.Name == "Arena"));
         }
         finally
         {
@@ -287,7 +287,7 @@ public partial class NetworkingTests
     [Fact]
     public void ClientUnloadingAHostSectionEndsTheSession()
     {
-        SceneInstance hostWorld = CreateScene();
+        Scene hostWorld = CreateScene();
         hostWorld.Add(CreateGameObject("Level"));
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
@@ -303,13 +303,13 @@ public partial class NetworkingTests
             Pump(() => Networking.Networking.IsReady, host);
 
             // A local additive section is the client's own, and unloading it is fine.
-            SceneSection local = SceneInstance.Main.CreateSection("Local");
-            SceneInstance.Main.UnloadNow(local);
+            SceneSection local = Scene.Main.CreateSection("Local");
+            Scene.Main.UnloadNow(local);
             Assert.True(Networking.Networking.IsActive);
 
-            SceneSection shared = SceneInstance.Main.Sections.First(s => !s.IsPersistent);
-            SceneInstance.Main.CreateSection("Keep");
-            SceneInstance.Main.UnloadNow(shared);
+            SceneSection shared = Scene.Main.Sections.First(s => !s.IsPersistent);
+            Scene.Main.CreateSection("Keep");
+            Scene.Main.UnloadNow(shared);
             Assert.Null(Networking.Networking.Session);
             Assert.Equal("The network scene was replaced locally during the session.", failure);
         }

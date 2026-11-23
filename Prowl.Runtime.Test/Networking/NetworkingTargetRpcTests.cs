@@ -51,7 +51,7 @@ public partial class NetworkingTests
     [Fact]
     public void ATargetRpcGoesNowhereTheRecipientFiltersLeaveOut()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Speaker");
         WhisperTestComponent speaker = go.AddComponent<WhisperTestComponent>();
         scene.Add(go);
@@ -90,7 +90,7 @@ public partial class NetworkingTests
     [Fact]
     public void ATargetRpcReachesOnlyItsPeerAndExcludeOwnerSkipsTheOwner()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Speaker");
         WhisperTestComponent speaker = go.AddComponent<WhisperTestComponent>();
         scene.Add(go);

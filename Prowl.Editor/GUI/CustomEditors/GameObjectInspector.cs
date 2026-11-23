@@ -292,8 +292,8 @@ public static class GameObjectInspector
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
             }
 
-            // Reflection-based multi grid (custom single-target editors are bypassed in multi mode).
-            PropertyGridUtils.DrawMulti(paper, compId, instances);
+            if (EditorRegistries.GetCustomEditor(type) is not { } custom || !custom.OnGUIMulti(paper, compId, instances))
+                PropertyGridUtils.DrawMulti(paper, compId, instances);
 
             Origami.Separator(paper, $"{compId}_sep").Show();
         }
@@ -976,7 +976,7 @@ public static class GameObjectInspector
         if (DragDrop.Payload is ComponentDragPayload { Component: var comp }
             && comp.IsValid() && comp.GameObject == go && comp is not RectTransform)
             moving = comp;
-        else if (DragDrop.Payload is AssetDragPayload assetPayload && ScriptComponentResolver.IsScriptAsset(assetPayload))
+        else if (DragDrop.Payload is AssetDragPayload assetPayload && ScriptComponentResolver.IsScriptAsset(assetPayload) && !ModelEditingMode.IsEditing)
             asset = assetPayload;
         else
             return false;
@@ -1170,7 +1170,7 @@ public static class GameObjectInspector
 
         private void MoveTo(int index)
         {
-            Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
+            Runtime.Resources.Scene scene = EditorSceneManager.EditedWorld;
             if (scene.IsNotValid()) return;
             Component? c = scene.FindObject<Component>(component);
             if (c.IsValid()) c.SetSiblingIndex(index);
@@ -1212,6 +1212,8 @@ public static class GameObjectInspector
 
     private static void DrawAddComponentButton(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
+        // A model saves model objects and nothing else, so nothing is added to them
+        if (ModelEditingMode.IsEditing) return;
         using (paper.Row("gi_add_comp_row").Height(28).PaddingLeft(20).PaddingRight(20).Enter())
         {
             ElementBuilder trigger = paper.Box("gi_add_comp")
@@ -1573,7 +1575,7 @@ public static class GameObjectInspector
 
         Origami.Button(paper, id, label, () =>
             {
-                Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
+                Runtime.Resources.Scene scene = EditorSceneManager.EditedWorld;
                 GameObject? live = scene.IsValid() ? scene.FindObject<GameObject>(rootId) : null;
                 if (live.IsValid()) act(live!);
             })
@@ -1740,7 +1742,7 @@ public static class GameObjectInspector
                 // A compile already running when the file was written lacks it; ours is still queued, so wait.
                 if (type == null && ScriptAssemblyManager.IsCompiling) return;
                 ScriptAssemblyManager.CompileFinished -= OnCompiled;
-                Runtime.Resources.SceneInstance scene = EditorSceneManager.EditedWorld;
+                Runtime.Resources.Scene scene = EditorSceneManager.EditedWorld;
                 GameObject? live = scene.IsValid() ? scene.FindObject<GameObject>(targetId) : null;
                 if (type != null && live.IsValid())
                     Undo.AddComponent(live!, type);

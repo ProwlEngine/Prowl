@@ -167,7 +167,7 @@ public sealed class NavMeshBakeService
     private static HashSet<Guid> OtherSurfaceAssets(NavMeshSurface surface)
     {
         HashSet<Guid> assets = [];
-        SceneInstance? scene = surface.GameObject.Scene;
+        Scene? scene = surface.GameObject.Scene;
         if (scene.IsNotValid()) return assets;
 
         foreach (GameObject go in scene.Objects)

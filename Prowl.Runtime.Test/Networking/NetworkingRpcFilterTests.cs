@@ -193,7 +193,7 @@ public partial class NetworkingTests
         var (_, original, _) = ReadinessHost();
         Guid objectId = original.GameObject.Identifier;
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteScene(SceneInstance.Main, snapshot);
+        NetworkTestScene.Current.WriteScene(Scene.Main, snapshot);
         Networking.Networking.Shutdown();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network), garry = FakePeer.Join(network, "Garry");
@@ -206,7 +206,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "caller"), "host", "caller");
             Pump(() => Networking.Networking.IsReady && garry.Session.State == SessionState.Active, host, garry);
-            NetTestComponent state = Find(SceneInstance.Main, objectId).GetComponent<NetTestComponent>()!;
+            NetTestComponent state = Find(Scene.Main, objectId).GetComponent<NetTestComponent>()!;
             using (Rpc.FilterInclude(peer => peer.Name == "Garry"))
             {
                 StaticRpcProbe.Call(901, 1);

@@ -74,8 +74,8 @@ public class TimeTests
     [Fact]
     public void WithNoWorldBound_ScaledTimeReadsAsAStoppedClock()
     {
-        Resources.SceneInstance.Shutdown();
-        Assert.False(Resources.SceneInstance.HasMain);
+        Resources.Scene.Shutdown();
+        Assert.False(Resources.Scene.HasMain);
         Assert.Equal(0f, Time.DeltaTime);
         Assert.Equal(0f, Time.TimeSinceStartup);
         Assert.Throws<System.InvalidOperationException>(() => Time.TimeScale = 2f);

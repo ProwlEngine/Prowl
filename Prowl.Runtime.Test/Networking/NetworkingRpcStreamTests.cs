@@ -52,7 +52,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnRpcCalledWhileStateIsWrittenLeavesTheCallBeingSentIntact()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Reentrant"); root.Network.Networked = true;
         ReentrantRpcTestComponent component = root.AddComponent<ReentrantRpcTestComponent>();
         scene.Add(root); Bind(scene);
@@ -93,7 +93,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnRpcFollowsTheStateOfItsObjectEvenWhenAComponentSendsSlowly()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject(); root.Network.Networked = true;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         root.Network.SetSendInterval(component, 255);
@@ -120,7 +120,7 @@ public partial class NetworkingTests
     [Fact]
     public void TheHostDropsACallForAnObjectItDoesNotHaveAndKeepsTheCaller()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject(); root.Network.Networked = true;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
         scene.Add(root); Bind(scene);
@@ -163,7 +163,7 @@ public partial class NetworkingTests
     [Fact]
     public void CallsReceivedDuringASpawnRunWaitForTheSpawnCallbacks()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Pinged");
         go.Network.Networked = true;
         RpcSpawnOrderTestComponent component = go.AddComponent<RpcSpawnOrderTestComponent>();
@@ -194,8 +194,8 @@ public partial class NetworkingTests
             host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(generation), peer);
             foreach (byte[] spawn in spawns) host.Session.SendRaw(peer, FakePeer.Spawn, spawn);
             host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
-            RpcSpawnOrderTestComponent here = Find(SceneInstance.Main, go.Identifier).GetComponent<RpcSpawnOrderTestComponent>()!;
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
+            RpcSpawnOrderTestComponent here = Find(Scene.Main, go.Identifier).GetComponent<RpcSpawnOrderTestComponent>()!;
 
             // On the same stream as the spawns, in the middle of the run.
             for (int i = 0; i < 2; i++)

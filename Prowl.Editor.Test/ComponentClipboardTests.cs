@@ -117,9 +117,9 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         base.Dispose();
     }
 
-    private static SceneInstance MakeScene(out GameObject a, out GameObject b)
+    private static Scene MakeScene(out GameObject a, out GameObject b)
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         a = new GameObject("A");
         b = new GameObject("B");
         scene.Add(a);
@@ -268,7 +268,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     [Fact]
     public void SceneReferences_ResolveToOriginalObjects_NotClones()
     {
-        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
+        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
         ClipComp target = a.AddComponent<ClipComp>();
         ClipRefComp src = a.AddComponent<ClipRefComp>();
         src.TargetGO = a;
@@ -302,7 +302,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         ComponentClipboard.Copy(src);
 
         // Swap to an unrelated scene, as entering/leaving prefab mode does.
-        var other = new SceneInstance(SceneMode.Edit);
+        var other = new Scene(SceneMode.Edit);
         var host = new GameObject("Host");
         other.Add(host);
         BindEditWorld(other);
@@ -322,7 +322,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         // Prefab editing mode serializes the scene away and deserializes it back; identifiers are
         // restored by Scene.OnBefore/OnAfterDeserialize, so an identifier captured before the
         // round-trip must still resolve after it.
-        SceneInstance scene = MakeScene(out GameObject? a, out _);
+        Scene scene = MakeScene(out GameObject? a, out _);
         ClipRefComp src = a.AddComponent<ClipRefComp>();
         src.TargetGO = a;
 
@@ -330,7 +330,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Guid originalId = a.Identifier;
 
         EchoObject echo = scene.ActiveSection.CaptureTree();
-        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
+        Scene restored = Scene.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
         BindEditWorld(restored);
 
         GameObject restoredA = restored.Objects.First(g => g.Identifier == originalId);
@@ -349,7 +349,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         // A Transform with no GameObject can't be anchored to an id. It must still be linked rather
         // than serialized by value - otherwise paste produces an orphan Transform with a null
         // GameObject that NREs the first time anything touches it. It resolves to null on paste.
-        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
+        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
         ClipRefComp src = a.AddComponent<ClipRefComp>();
         src.TargetTransform = new Transform(); // never attached to a GameObject
 
@@ -368,7 +368,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     {
         // The payoff of Echo owning the traversal: references nested inside a list or a plain data
         // class are linked too, which the old top-level-only tokenizer could not reach.
-        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
+        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
         var c = new GameObject("C");
         scene.Add(c);
 
@@ -514,7 +514,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     {
         // The redo lambda looks its GameObject back up by identifier rather than capturing it, so a
         // redo whose target no longer exists must no-op instead of throwing out of the undo stack.
-        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
+        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
         ClipComp src = a.AddComponent<ClipComp>();
 
         ComponentClipboard.Copy(src);
@@ -533,7 +533,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     [Fact]
     public void PasteAsNew_Undo_AfterTargetDeleted_FailsGracefully()
     {
-        SceneInstance scene = MakeScene(out GameObject? a, out GameObject? b);
+        Scene scene = MakeScene(out GameObject? a, out GameObject? b);
         ClipComp src = a.AddComponent<ClipComp>();
 
         ComponentClipboard.Copy(src);

@@ -129,7 +129,7 @@ internal sealed partial class NetworkSystem
             if (go.Scene != ReplicatedWorld)
             {
                 throw new InvalidOperationException(
-                    $"'{go.Name}' has to be in the networked world, SceneInstance.Main, before it can be spawned.");
+                    $"'{go.Name}' has to be in the networked world, Scene.Main, before it can be spawned.");
             }
 
             if (NetworkAccessor.IsExcludedFromNetwork(go))
@@ -285,7 +285,7 @@ internal sealed partial class NetworkSystem
         // Gathered as built, before the scene runs anything on it, which is the tree clients build too.
         Component[] components = NetworkComponents.Gather(go);
         NetworkTransform[] transforms = NetworkComponents.GatherTransforms(go);
-        SceneInstance.Main.Add(go);
+        Scene.Main.Add(go);
         Spawn(go, owner, orphaned ?? go.Network.Orphaned,
             new SpawnTemplate(prefab, factory, data, [.. identifiers], components, false, transforms));
         return go;
@@ -699,7 +699,7 @@ internal sealed partial class NetworkSystem
         }
 
         NetSession? session = Session;
-        SceneInstance scene = ReplicatedWorld;
+        Scene scene = ReplicatedWorld;
         SpawnMessage message = SpawnMessage.Read(ref reader);
         Guid id = message.Identifier;
         Guid parentId = message.ParentId;

@@ -431,7 +431,7 @@ public sealed class RenderingShowcaseGame : StationGame
         _orbitLight.Range = 14f;
         _orbitLight.Intensity = 950000f;
         _orbitLight.ShadowResolution = ShadowResolution._1024;
-        _orbitLight.ShadowFilter = ShadowFilter.ContactHardening;
+        _orbitLight.ShadowFilter = ShadowFilter.Tent;
         _orbitLight.SourceRadius = 0.12f;
         _orbitBulb = orbit;
         Orbit orbiter = orbit.AddComponent<Orbit>();
@@ -446,7 +446,7 @@ public sealed class RenderingShowcaseGame : StationGame
         _spotLight.SpotAngle = 70f;
         _spotLight.SpotSoftness = 1f - 25f / 35f;
         _spotLight.ShadowResolution = ShadowResolution._1024;
-        _spotLight.ShadowFilter = ShadowFilter.ContactHardening;
+        _spotLight.ShadowFilter = ShadowFilter.Tent;
         _spotLight.SourceRadius = 0.2f;
         spot.Transform.Position = c + new Float3(-6f, 7f, -5f);
         Sweep sweep = spot.AddComponent<Sweep>();

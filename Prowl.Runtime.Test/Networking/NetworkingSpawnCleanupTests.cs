@@ -40,7 +40,7 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
-        SceneInstance original = CreateScene(); MakeCurrent(original);
+        Scene original = CreateScene(); MakeCurrent(original);
         using NetWriter snapshot = new(); NetworkTestScene.Current.WriteScene(original, snapshot);
         GameObject root = CreateGameObject("Spawn root"); root.Network.Networked = true;
         NetworkSpawnCleanupComponent component = root.AddComponent<NetworkSpawnCleanupComponent>();
@@ -97,7 +97,7 @@ public partial class NetworkingTests
                     Assert.True(c.IsDisposed); Assert.Equal(1, c.DisposeCalls); Assert.Equal(0, c.SpawnCalls);
                 });
                 Assert.Equal(0, NetworkDiagnostics.NetworkObjectCount);
-                Assert.Null(SceneInstance.Main.PendingLoad);
+                Assert.Null(Scene.Main.PendingLoad);
             }
         }
         finally
@@ -115,7 +115,7 @@ public partial class NetworkingTests
     public void SpawningAnObjectTheClientBuiltItselfKeepsTheClientsOneInstance()
     {
         // A scene built in code is built by every peer, so the client has the crate before the host spawns it.
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject crate = CreateGameObject("Crate");
         NetTestComponent original = crate.AddComponent<NetTestComponent>();
         scene.Add(crate);
@@ -135,13 +135,13 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
-            GameObject before = Find(SceneInstance.Main, crate.Identifier);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
+            GameObject before = Find(Scene.Main, crate.Identifier);
             host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Spawn, spawn.WrittenSpan);
             Pump(() => before.Network.Active, host);
             PumpFor(50, host);
 
-            Assert.Same(before, Find(SceneInstance.Main, crate.Identifier));
+            Assert.Same(before, Find(Scene.Main, crate.Identifier));
             Assert.Equal(7, before.GetComponent<NetTestComponent>()!.Health);
         }
         finally

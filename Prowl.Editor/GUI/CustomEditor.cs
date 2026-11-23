@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Prowl.PaperUI;
 
@@ -30,6 +31,9 @@ public abstract class CustomEditor
     /// <param name="id">Unique element ID prefix.</param>
     /// <param name="target">The object being edited.</param>
     public abstract void OnGUI(Paper paper, string id, object target);
+
+    /// <summary>Draws the editor for several objects of the type at once, or returns false to leave them to the default multi object grid.</summary>
+    public virtual bool OnGUIMulti(Paper paper, string id, IReadOnlyList<object> targets) => false;
 
     /// <summary>
     /// Draw the default PropertyGrid-based inspector for an object.

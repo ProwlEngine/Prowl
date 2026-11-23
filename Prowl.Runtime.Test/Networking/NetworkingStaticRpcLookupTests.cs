@@ -23,7 +23,7 @@ public partial class NetworkingTests
     [Fact]
     public void CheckingReadinessEachFrameAllocatesNothing()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));

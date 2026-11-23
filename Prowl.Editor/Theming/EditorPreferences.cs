@@ -68,7 +68,8 @@ public sealed class PreferencesSection
 /// <summary>The registry and store of every <see cref="EditorPreferences"/> section.</summary>
 public static class Preferences
 {
-    private static readonly List<PreferencesSection> _sections = [];
+    private static List<PreferencesSection> _sections = [];
+    private static List<PreferencesSection> s_pending = [];
     private static FileSystemWatcher? s_watcher;
     private static volatile bool s_filesChanged;
 
@@ -95,7 +96,11 @@ public static class Preferences
     /// <summary>The section a live instance belongs to.</summary>
     public static PreferencesSection SectionOf(EditorPreferences instance) => _sections.First(s => s.Instance == instance);
 
-    internal static void Clear() => _sections.Clear();
+    /// <summary>Starts a rescan. Sections build up on the side so readers keep the last complete list.</summary>
+    internal static void BeginScan() => s_pending = [];
+
+    /// <summary>Swaps the rescanned sections in.</summary>
+    internal static void EndScan() => _sections = s_pending;
 
     internal static void Scan(Type type)
     {
@@ -105,8 +110,8 @@ public static class Preferences
         try
         {
             PreferencesSection section = Create(type);
-            int index = _sections.FindIndex(s => s.Order > section.Order);
-            _sections.Insert(index < 0 ? _sections.Count : index, section);
+            int index = s_pending.FindIndex(s => s.Order > section.Order);
+            s_pending.Insert(index < 0 ? s_pending.Count : index, section);
         }
         catch (Exception ex)
         {

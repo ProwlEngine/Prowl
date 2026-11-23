@@ -40,7 +40,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientRpcNeedsAuthorityUnlessItTakesAnyCaller()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject door = CreateGameObject("Door");
         OpenDoorTestComponent open = door.AddComponent<OpenDoorTestComponent>();
         scene.Add(door);
@@ -71,7 +71,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnOwnerWritesOnlyTheSyncValuesThatTakeFromOwner()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
         NetTestComponent component = ship.AddComponent<NetTestComponent>();
         scene.Add(ship);
@@ -97,7 +97,7 @@ public partial class NetworkingTests
     [Fact]
     public void AWriteFromAPeerWithoutControlWarnsOnce()
     {
-        SceneInstance hostWorld = CreateScene();
+        Scene hostWorld = CreateScene();
         using NetWriter snapshot = new(), spawn = new();
         NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
         GameObject remote = CreateGameObject("Remote");
@@ -121,8 +121,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == remote.Identifier), host);
-            NetTestComponent copy = Find(SceneInstance.Main, remote.Identifier).GetComponent<NetTestComponent>()!;
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == remote.Identifier), host);
+            NetTestComponent copy = Find(Scene.Main, remote.Identifier).GetComponent<NetTestComponent>()!;
             copy.Health = 5;
             copy.Health = 6;
             Assert.Equal(100, copy.Health);

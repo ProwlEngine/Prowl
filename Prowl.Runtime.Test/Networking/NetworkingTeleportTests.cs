@@ -21,7 +21,7 @@ public partial class NetworkingTests
     [Fact]
     public void AHostTeleportReachesPeersTaggedAndAClientCannotTeleportWhatItDoesNotControl()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -46,7 +46,7 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
 
-        SceneInstance hostWorld = CreateScene();
+        Scene hostWorld = CreateScene();
         using NetWriter snapshot = new(), spawn = new();
         NetworkTestScene.Current.WriteScene(hostWorld, snapshot);
         GameObject remote = CreateGameObject("Remote");
@@ -62,8 +62,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(other, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == remote.Identifier), host);
-            GameObject copy = Find(SceneInstance.Main, remote.Identifier);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == remote.Identifier), host);
+            GameObject copy = Find(Scene.Main, remote.Identifier);
             Assert.Throws<InvalidOperationException>(() => copy.Network.Teleport(Float3.One, Quaternion.Identity));
         }
         finally { Networking.Networking.Shutdown(); }

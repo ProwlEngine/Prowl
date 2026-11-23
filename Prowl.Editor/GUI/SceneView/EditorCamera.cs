@@ -55,6 +55,24 @@ public class EditorCamera
     /// <summary>Where the camera comes to rest: the WASD flight target while gliding, otherwise its position.</summary>
     public Float3 RestPosition => _moveTarget ?? _position;
     public float Yaw => _yaw;
+
+    // A right press is a click when it is short and neither looks nor moves
+    private double _rightDownAt;
+    private float _rightTravel;
+    private bool _rightMoved;
+    private float _rightDownYaw, _rightDownPitch;
+    private bool _rightClicked;
+
+    /// <summary>Where the pointer was when the right button went down, before the look lock pinned it.</summary>
+    public Float2 RightClickPointer { get; private set; }
+
+    /// <summary>True once after a right click that was not a camera look, which opens the scene view's menu.</summary>
+    public bool TakeRightClick()
+    {
+        bool clicked = _rightClicked;
+        _rightClicked = false;
+        return clicked;
+    }
     public float Pitch => _pitch;
     public Float3 Forward => _cameraObject.Transform.Forward;
 
@@ -236,6 +254,7 @@ public class EditorCamera
         _camera.FarClipPlane = 1000f;
         _perspectiveFarClip = _camera.FarClipPlane;
         _camera.Background = CameraBackground.Skybox;
+        _defaultEv100 = _camera.EV100;
 
         UpdateTransform();
     }
@@ -265,7 +284,7 @@ public class EditorCamera
     /// <summary>
     /// Render the scene from this camera's perspective.
     /// </summary>
-    public void Render(SceneInstance scene, bool drawUI = true)
+    public void Render(Scene scene, bool drawUI = true)
     {
         if (_renderTarget.IsNotValid()) return;
 
@@ -302,10 +321,11 @@ public class EditorCamera
     }
 
     private VolumeProfile? _defaultProfile;
+    private float _defaultEv100;
 
-    // The scene view resolves volumes itself; only the main camera's base profile, volume layers, HDR and anti aliasing
-    // are borrowed, a new camera's default profile standing in without one
-    private void MirrorSceneCamera(SceneInstance scene)
+    // The scene view resolves volumes itself; only the main camera's base profile, volume layers, exposure, clear, HDR
+    // and anti aliasing are borrowed, a new camera's defaults standing in without one
+    private void MirrorSceneCamera(Scene scene)
     {
         _camera.PostProcessing = PostProcessing;
         Camera? sceneCamera = FindSceneCamera(scene);
@@ -314,6 +334,8 @@ public class EditorCamera
             if (_defaultProfile.IsNotValid()) _defaultProfile = VolumeProfile.CreateCameraDefault("Scene View Profile");
             _camera.Profile = _defaultProfile;
             _camera.VolumeMask = LayerMask.Everything;
+            _camera.EV100 = _defaultEv100;
+            _camera.Background = CameraBackground.Skybox;
             _camera.HDR = true;
             _camera.AntiAliasing = AntiAliasingMode.None;
             return;
@@ -321,6 +343,9 @@ public class EditorCamera
 
         _camera.Profile = sceneCamera.Profile;
         _camera.VolumeMask = sceneCamera.VolumeMask;
+        _camera.EV100 = sceneCamera.EV100;
+        _camera.Background = sceneCamera.Background == CameraBackground.None ? CameraBackground.Skybox : sceneCamera.Background;
+        _camera.BackgroundColor = sceneCamera.BackgroundColor;
         _camera.HDR = sceneCamera.HDR;
         _camera.AntiAliasing = sceneCamera.AntiAliasing;
         _camera.Fxaa = sceneCamera.Fxaa;
@@ -328,7 +353,7 @@ public class EditorCamera
         _camera.Taa = sceneCamera.Taa;
     }
 
-    private static Camera? FindSceneCamera(SceneInstance scene)
+    private static Camera? FindSceneCamera(Scene scene)
     {
         // First try to find a camera tagged "Main Camera"
         foreach (GameObject go in scene.Objects)
@@ -458,6 +483,12 @@ public class EditorCamera
         // Right mouse = look + WASD (with cursor lock)
         if (Input.GetMouseButtonDown(1))
         {
+            _rightDownAt = Runtime.Time.UnscaledTotalTime;
+            RightClickPointer = mousePos;
+            _rightTravel = 0f;
+            _rightMoved = false;
+            _rightDownYaw = _yaw;
+            _rightDownPitch = _pitch;
             _lockContext.PanelOrigin = panelOrigin;
             _lockContext.PanelSize = panelSize;
             _flying = true;
@@ -468,6 +499,7 @@ public class EditorCamera
         if (Input.GetMouseButton(1))
         {
             Float2 delta = Input.MouseDelta;
+            _rightTravel += Float2.Length(delta);
 
             // Mouse look
             _yaw += delta.X * 0.2f;
@@ -491,6 +523,7 @@ public class EditorCamera
 
             if (Float3.LengthSquared(move) > 0)
             {
+                _rightMoved = true;
                 move = Float3.Normalize(move) * speed;
                 _moveTarget = (_moveTarget ?? _position) + move;
             }
@@ -515,10 +548,19 @@ public class EditorCamera
             _flying = false;
             Input.UnlockCursor();
             Input.PopLockContext();
+
+            // A quick press that went nowhere was a click, not a look around, so the view goes back as it was
+            if (!_rightMoved && _rightTravel < 4f && Runtime.Time.UnscaledTotalTime - _rightDownAt < 0.3)
+            {
+                _yaw = _rightDownYaw;
+                _pitch = _rightDownPitch;
+                UpdateTransform();
+                _rightClicked = true;
+            }
         }
 
         // F = focus on selection
-        if (ShortcutManager.IsPressed("Scene/Focus"))
+        if (ShortcutManager.IsPressed("Scene/Focus") && !System.Linq.Enumerable.Any(SceneToolManager.Live, t => t.TakesShortcut("Scene/Focus")))
         {
             FocusSelection();
             consumed = true;
@@ -627,11 +669,6 @@ public class EditorCamera
             radius = 0.5f;
         }
 
-        // Distance that fits the object in the vertical FOV, with a little padding.
-        float fovRad = _camera.FieldOfView * MathF.PI / 180f;
-        float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
-        dist = MathF.Max(dist, 0.5f);
-
         // A UI-only selection is a flat rect, so the view swings around to face it from whichever side
         // the camera is already on. Anything with geometry keeps the angle it was viewed from.
         if (anyUI && !anyRenderer && Float3.LengthSquared(uiNormal) > 1e-8f)
@@ -640,6 +677,17 @@ public class EditorCamera
             if (Float3.Dot(facing, _position - target) < 0f) facing = -facing;
             FaceDirection(-facing);
         }
+
+        Frame(target, radius);
+    }
+
+    /// <summary>Moves the camera back along its view to fit a sphere, keeping the angle it looks from.</summary>
+    public void Frame(Float3 target, float radius)
+    {
+        // Distance that fits the object in the vertical FOV, with a little padding.
+        float fovRad = _camera.FieldOfView * MathF.PI / 180f;
+        float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
+        dist = MathF.Max(dist, 0.5f);
 
         // Set orbit distance and position camera to look at target
         ClearMovementSmoothing();

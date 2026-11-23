@@ -49,7 +49,7 @@ public partial class NetworkingTests
     [Fact]
     public void OwnershipAndShutdownRestoreAuthoredPhysics()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Physics root");
         root.AddComponent<NetworkTransform>();
         root.Network.Networked = true;
@@ -77,7 +77,7 @@ public partial class NetworkingTests
 
     private (GameObject Root, NetworkLifecycleListener Listener, LocalNetwork Network) LifecycleHost()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Lifecycle root");
         root.Network.Networked = true;
         NetworkLifecycleListener listener = root.AddComponent<NetworkLifecycleListener>();
@@ -125,7 +125,7 @@ public partial class NetworkingTests
     [Fact]
     public void NetworkSpawnCallbackMayEndTheSession()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject();
         NetworkLifecycleListener listener = root.AddComponent<NetworkLifecycleListener>();
         listener.SpawnAction = () => Networking.Networking.Shutdown();
@@ -146,7 +146,7 @@ public partial class NetworkingTests
         var (root, listener, _) = LifecycleHost();
         try
         {
-            SceneInstance.Main.ReplaceContent(new SceneContent(), "Next", null);
+            Scene.Main.ReplaceContent(new SceneContent(), "Next", null);
             Assert.True(root.IsDisposed);
             Assert.True(listener.IsDisposed);
             Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
@@ -159,7 +159,7 @@ public partial class NetworkingTests
     {
         var (root, listener, _) = LifecycleHost();
         GameObject outside = CreateGameObject();
-        SceneInstance.Main.Add(outside);
+        Scene.Main.Add(outside);
         try
         {
             NetTestComponent added = root.AddComponent<NetTestComponent>();
@@ -184,7 +184,7 @@ public partial class NetworkingTests
             Assert.True(outside.SetParent(root));
             Assert.True(outside.SetParent(null!));
 
-            SceneInstance scene = root.Scene!;
+            Scene scene = root.Scene!;
             scene.Remove(root);
             scene.Add(root);
             Assert.Throws<InvalidOperationException>(() => root.Network.ServerOnly = true);
@@ -198,7 +198,7 @@ public partial class NetworkingTests
     [Fact]
     public void TreesCanBeBuiltBeforeSpawnAndWholeRootsCanBeDespawned()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         Bind(scene);
         try
         {
@@ -235,7 +235,7 @@ public partial class NetworkingTests
     [Fact]
     public void EndingSessionDuringSceneRegistrationDoesNotRegisterRemainingObjects()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject first = CreateGameObject(), second = CreateGameObject();
         first.Network.Networked = second.Network.Networked = true;
         NetworkLifecycleListener a = first.AddComponent<NetworkLifecycleListener>();
@@ -248,7 +248,7 @@ public partial class NetworkingTests
             Assert.Null(Networking.Networking.Session);
             Assert.Empty(b.Events);
             Assert.Equal(0, NetworkDiagnostics.NetworkObjectCount);
-            var sceneLoaded = (Delegate?)typeof(SceneInstance).GetField("Loaded",
+            var sceneLoaded = (Delegate?)typeof(Scene).GetField("Loaded",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
             Assert.DoesNotContain(sceneLoaded?.GetInvocationList() ?? [], d => d.Method.Name == "OnWorldLoaded");
         }
@@ -283,7 +283,7 @@ public partial class NetworkingTests
     [Fact]
     public void EndingSessionDuringAJoinSpawnCallbackEndsTheJoinCleanly()
     {
-        SceneInstance original = CreateScene();
+        Scene original = CreateScene();
         GameObject root = CreateGameObject(); root.Network.Networked = true;
         NetworkLifecycleListener listener = root.AddComponent<NetworkLifecycleListener>();
         original.Add(root); Bind(original);
@@ -302,7 +302,7 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
 
-        SceneInstance local = CreateScene();
+        Scene local = CreateScene();
         Bind(local);
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
@@ -312,7 +312,7 @@ public partial class NetworkingTests
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.Session == null, host);
             Assert.Equal(NetworkJoinState.Disconnected, Networking.Networking.JoinState);
-            Assert.Same(local, SceneInstance.Main);
+            Assert.Same(local, Scene.Main);
             NetworkLifecycleListener received = Find(local, root.Identifier).GetComponent<NetworkLifecycleListener>()!;
             Assert.Equal(new[] { "spawn", "despawn" }, received.Events);
             Assert.Same(root, Assert.Single(original.Objects, o => o.Identifier == root.Identifier));
@@ -326,7 +326,7 @@ public partial class NetworkingTests
     [InlineData(true)]
     public void ClientCanDestroyALocalNetworkTreeWithoutDespawningItOnTheHost(bool disposeImmediately)
     {
-        SceneInstance original = CreateScene();
+        Scene original = CreateScene();
         GameObject parent = CreateGameObject("Parent"), root = CreateGameObject("Root");
         root.Network.Networked = true;
         root.AddComponent<NetworkLifecycleListener>();
@@ -351,8 +351,8 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.IsReady, host);
-            GameObject receivedParent = Find(SceneInstance.Main, parent.Identifier);
-            GameObject receivedRoot = Find(SceneInstance.Main, root.Identifier);
+            GameObject receivedParent = Find(Scene.Main, parent.Identifier);
+            GameObject receivedRoot = Find(Scene.Main, root.Identifier);
             Assert.Same(receivedParent, receivedRoot.Parent);
             NetworkLifecycleListener listener = receivedRoot.GetComponent<NetworkLifecycleListener>()!;
             if (disposeImmediately) receivedParent.Dispose();
@@ -375,7 +375,7 @@ public partial class NetworkingTests
     [Fact]
     public void MalformedSceneMetadataDisposesTheIncomingScene()
     {
-        SceneInstance original = CreateScene();
+        Scene original = CreateScene();
         GameObject marker = CreateGameObject("Marker");
         original.Add(marker);
         Bind(original);
@@ -386,7 +386,7 @@ public partial class NetworkingTests
         using NetWriter malformed = new();
         malformed.WriteBytes(snapshot.WrittenSpan[..header.Position]);
         malformed.WriteVarUInt32(1); // One entry promised, but its metadata is missing.
-        HashSet<SceneInstance> liveBefore = SceneInstance.All.ToHashSet();
+        HashSet<Scene> liveBefore = Scene.All.ToHashSet();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.Session.PeerJoined += peer => host.Send(FakePeer.Scene, w => w.WriteBytes(malformed.WrittenSpan), peer);
@@ -394,7 +394,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.Session == null, host);
-            Assert.All(SceneInstance.All, scene => Assert.Contains(scene, liveBefore));
+            Assert.All(Scene.All, scene => Assert.Contains(scene, liveBefore));
             Assert.Same(marker, Assert.Single(original.Objects));
         }
         finally { Networking.Networking.Shutdown(); }
@@ -436,8 +436,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == id), host);
-            GameObject copy = Find(SceneInstance.Main, id);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == id), host);
+            GameObject copy = Find(Scene.Main, id);
             NetworkLifecycleListener listener = copy.GetComponent<NetworkLifecycleListener>()!;
             Assert.True(copy.Persistent);
             Assert.Equal(new[] { "spawn" }, listener.Events);
@@ -447,7 +447,7 @@ public partial class NetworkingTests
             host.JoinSpawns.Add(SpawnWith(kept, 9));
             host.Session.SendRaw(client, FakePeer.Scene, SceneNaming(2));
             Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
-            Assert.Same(copy, Find(SceneInstance.Main, id));
+            Assert.Same(copy, Find(Scene.Main, id));
             Assert.False(copy.IsDisposed);
             Assert.True(copy.Network.Active);
             Assert.Equal(9, copy.GetComponent<NetTestComponent>()!.Health);
@@ -459,7 +459,7 @@ public partial class NetworkingTests
             Pump(() => NetworkTestScene.Current.SceneGeneration == 3 && Networking.Networking.IsReady, host);
             PumpFor(30, host);
             Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
-            Assert.DoesNotContain(SceneInstance.Main.Objects, o => o.Identifier == id);
+            Assert.DoesNotContain(Scene.Main.Objects, o => o.Identifier == id);
         }
         finally
         {
@@ -509,8 +509,8 @@ public partial class NetworkingTests
             NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
             host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(1), peer);
             host.Send(FakePeer.Spawn, w => w.WriteBytes(spawn), peer);
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
-            NetworkLifecycleListener listener = Find(SceneInstance.Main, kept.Identifier).GetComponent<NetworkLifecycleListener>()!;
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
+            NetworkLifecycleListener listener = Find(Scene.Main, kept.Identifier).GetComponent<NetworkLifecycleListener>()!;
             Assert.Empty(listener.Events);
 
             // The host changes scene before it finished the first run.
@@ -546,8 +546,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
-            NetCollectionTestComponent here = Find(SceneInstance.Main, kept.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
+            NetCollectionTestComponent here = Find(Scene.Main, kept.Identifier).GetComponent<NetCollectionTestComponent>()!;
             here.HealthChanges.Clear();
 
             state.Health = 9;
@@ -579,8 +579,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
-            GameObject copy = Find(SceneInstance.Main, kept.Identifier);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
+            GameObject copy = Find(Scene.Main, kept.Identifier);
             NetTestComponent here = copy.GetComponent<NetTestComponent>()!;
             Assert.False(copy.IsProxy);
 
@@ -618,7 +618,7 @@ public partial class NetworkingTests
         byte[] asRoot = RunSpawn(kept);
 
         // This peer has the same rig, kept across loads.
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject rig = CreateGameObject("Rig");
         rig.SetIdentifier(hostRig.Identifier);
         scene.Add(rig);
@@ -630,15 +630,15 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
-            GameObject copy = Find(SceneInstance.Main, kept.Identifier);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == kept.Identifier), host);
+            GameObject copy = Find(Scene.Main, kept.Identifier);
             Assert.Same(rig, copy.Parent);
 
             host.JoinSpawns.Clear();
             host.JoinSpawns.Add(asRoot);
             host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Scene, CodeBuiltScene(2));
             Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
-            Assert.Same(copy, Find(SceneInstance.Main, kept.Identifier));
+            Assert.Same(copy, Find(Scene.Main, kept.Identifier));
             Assert.True(copy.Parent.IsNotValid());
             Assert.True(copy.Network.Active);
         }
@@ -652,11 +652,11 @@ public partial class NetworkingTests
         MemoryAssetBackend backend = new();
         AssetDatabase.ClearForTests();
         AssetDatabase.Backend = backend;
-        var authoring = new SceneInstance();
+        var authoring = new Scene();
         GameObject manager = authoring.Create("Manager");
         manager.AddComponent<KeptAcrossLoadsComponent>();
         Guid managerId = manager.Identifier;
-        Scene level = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Level.scene"))!;
+        SceneAsset level = AssetDatabase.Get<SceneAsset>(backend.Add(new SceneAsset { Data = authoring.ActiveSection.CaptureTree() }, "Level.scene"))!;
         authoring.Dispose();
 
         // The host loads the same scene asset twice, so each scene message names it under a new generation.
@@ -677,15 +677,15 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == managerId), host);
-            Assert.Contains(SceneInstance.Main.Persistent.Roots, p => p.Identifier == managerId);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == managerId), host);
+            Assert.Contains(Scene.Main.Persistent.Roots, p => p.Identifier == managerId);
 
             host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), FakePeer.Scene, SceneNaming(2));
             Pump(() => NetworkTestScene.Current.SceneGeneration == 2 && Networking.Networking.IsReady, host);
             PumpFor(50, host);
 
-            Assert.Single(SceneInstance.Main.Objects, o => o.Identifier == managerId);
-            Assert.Single(SceneInstance.Main.Persistent.Roots, p => p.Identifier == managerId);
+            Assert.Single(Scene.Main.Objects, o => o.Identifier == managerId);
+            Assert.Single(Scene.Main.Persistent.Roots, p => p.Identifier == managerId);
         }
         finally
         {

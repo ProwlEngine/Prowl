@@ -86,9 +86,17 @@ public class HierarchyPanel : DockPanel
     // "below" drop on an expanded node into a "first child" drop (where its first child visually sits).
     private readonly Dictionary<string, bool> _expandState = [];
 
-    // Rebuilt every frame from the scene. Nodes are kept per GameObject so their id string is only made once.
+    // Rebuilt every frame from the scene. A row is kept per GameObject, so its id string is only made again
+    // when the scene key or identifier it was made from changes.
     private readonly List<TreeNode> _treeNodes = [];
-    private readonly ConditionalWeakTable<GameObject, TreeNode> _nodeCache = [];
+    private readonly ConditionalWeakTable<GameObject, Row> _rowCache = [];
+
+    private sealed class Row(GameObject go)
+    {
+        public readonly TreeNode Node = new() { UserData = go };
+        public string? SectionKey;
+        public Guid Identifier;
+    }
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -119,7 +127,7 @@ public class HierarchyPanel : DockPanel
 
         UpdateScriptHoverSelection(paper.DeltaTime);
 
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
 
         using (paper.Column("hier_root")
             .Size(width, height)
@@ -127,8 +135,8 @@ public class HierarchyPanel : DockPanel
             //.OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
-            // Prefab editing breadcrumb
-            if (PrefabEditingMode.IsEditing)
+            // Breadcrumb of an isolated session, such as a prefab being edited
+            if (IsolatedWorld.Current is { } session)
             {
                 using (paper.Row("hier_prefab_breadcrumb")
                     .Height(24)
@@ -143,7 +151,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
                         .Hovered.TextColor(EditorTheme.Ink500).End()
-                        .OnClick(0, (_, _) => PrefabEditingMode.RequestExit());
+                        .OnClick(0, (_, _) => IsolatedWorld.RequestClose());
 
                     paper.Box("hier_prefab_sep_arrow")
                         .Width(UnitValue.Auto).Height(24)
@@ -151,7 +159,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string sceneName = PrefabEditingMode.OriginalSceneName ?? Loc.Get("panel.scene");
+                    string sceneName = IsolatedWorld.OriginalSceneName ?? Loc.Get("panel.scene");
                     paper.Box("hier_prefab_scene")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(sceneName, font)
@@ -164,9 +172,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string prefabName = PrefabEditingMode.EditingPrefabPath != null
-                        ? System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath)
-                        : Loc.Get("hierarchy.prefab_fallback");
+                    string prefabName = session.Name;
 
                     paper.Box("hier_prefab_name")
                         .Width(UnitValue.Auto).Height(24)
@@ -176,7 +182,7 @@ public class HierarchyPanel : DockPanel
 
                     paper.Box("hier_prefab_spacer");
 
-                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  {Loc.Get("hierarchy.save_and_exit")}", () => PrefabEditingMode.SaveAndExit()).Width(100).Show();
+                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  {Loc.Get("hierarchy.save_and_exit")}", () => session.SaveAndClose()).Width(100).Show();
                 }
             }
 
@@ -271,8 +277,8 @@ public class HierarchyPanel : DockPanel
 
                 // Account for toolbar + margins + optional prefab breadcrumb
                 float usedHeight = ToolbarHeight + 8;
-                if (PrefabEditingMode.IsEditing)
-                    usedHeight += 28; // prefab breadcrumb row + margins
+                if (IsolatedWorld.IsOpen)
+                    usedHeight += 28; // session breadcrumb row + margins
                 float scrollHeight = height - usedHeight;
                 List<TreeNode> treeNodes = _treeNodes;
                 treeNodes.Clear();
@@ -327,7 +333,7 @@ public class HierarchyPanel : DockPanel
                             }
                             if (n.UserData is not GameObject go) return;
                             _dragHoverTargetNext = go;
-                            _dragHoverTargetIdNext = NodeId(go);
+                            _dragHoverTargetIdNext = n.Id;
                             _dragHoverNormalizedYNext = normY;
                         }
                         else if (DragDrop.Payload is AssetDragPayload assetPayload
@@ -335,7 +341,7 @@ public class HierarchyPanel : DockPanel
                             && ScriptComponentResolver.IsScriptAsset(assetPayload))
                         {
                             _dragHoverTargetNext = targetGo;
-                            _dragHoverTargetIdNext = NodeId(targetGo);
+                            _dragHoverTargetIdNext = n.Id;
                             _dragHoverNormalizedYNext = 0.5f;
                         }
                     })
@@ -443,7 +449,7 @@ public class HierarchyPanel : DockPanel
                     }
                     else if (_assetDropTarget)
                     {
-                        if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
+                        if (assetDrop.AssetType == typeof(Runtime.Resources.SceneAsset))
                         {
                             AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
                             if (entry != null && EditorSceneManager.SceneAt(entry.Path) is { } dropped && EditorSceneManager.CanEditScenes)
@@ -532,12 +538,16 @@ public class HierarchyPanel : DockPanel
 
     // One header per open scene in the edit world, per section in the play world (Persistent once it holds anything),
     // and none in the prefab world, which is one prefab.
-    private void BuildSceneNodes(SceneInstance world, List<TreeNode> nodes)
+    internal void BuildSceneNodes(Scene world, List<TreeNode> nodes)
     {
-        if (PrefabEditingMode.IsEditing)
+        if (IsolatedWorld.IsOpen)
         {
-            foreach (GameObject root in GetDisplayRoots(world.Roots))
-                BuildNodeList(root, 0, nodes);
+            foreach (SceneSection section in world.Sections)
+            {
+                string sectionKey = SectionKey(section);
+                foreach (GameObject root in section.Roots)
+                    BuildNodeList(root, sectionKey, 0, nodes);
+            }
             return;
         }
 
@@ -557,18 +567,23 @@ public class HierarchyPanel : DockPanel
         void AddScene(SceneHeader header, SceneSection? section)
         {
             header.Section = section is { IsLoaded: true } ? section : null;
-            List<GameObject> roots = header.Section != null ? GetDisplayRoots(header.Section.Roots) : [];
             TreeNode node = header.Node;
             node.Id = HeaderId(header.Open is { } open ? SceneKey(open) : SectionKey(section));
             node.OverrideExpanded = _forceExpandedIds.Contains(node.Id) || !string.IsNullOrEmpty(_searchText) ? true : null;
             node.UserData = header;
             node.Label = HeaderName(header);
             node.Depth = 0;
-            node.HasChildren = roots.Count > 0;
+            node.HasChildren = false;
             node.DropIndicator = DragDrop.IsDragging && ReferenceEquals(_dragHoverHeader, header) ? TreeDropPosition.Into : null;
             nodes.Add(node);
-            foreach (GameObject root in roots)
-                BuildNodeList(root, 1, nodes);
+            if (header.Section == null) return;
+
+            string sectionKey = SectionKey(header.Section);
+            foreach (GameObject root in header.Section.Roots)
+            {
+                node.HasChildren |= !IsHidden(root);
+                BuildNodeList(root, sectionKey, 1, nodes);
+            }
         }
     }
 
@@ -585,7 +600,11 @@ public class HierarchyPanel : DockPanel
     private static string HeaderId(string sceneKey) => $"hier_scene_{sceneKey}";
 
     // Unique per scene, so rows of duplicated scenes never share state.
-    private static string NodeId(GameObject go) => $"{SectionKey(go.Section)}/{go.Identifier}";
+    internal static string NodeId(GameObject go) => NodeId(SectionKey(go.Section), go.Identifier);
+
+    private static string NodeId(string sectionKey, Guid identifier) => $"{sectionKey}/{identifier}";
+
+    private static bool IsHidden(GameObject go) => (go.HideFlags & (HideFlags.Hide | HideFlags.HideAndDontSave)) != 0;
 
     // The row a node shows on, counting only rows whose parents are expanded. -1 when none matches.
     private int VisibleRowOf(List<TreeNode> nodes, Func<TreeNode, bool> match)
@@ -658,7 +677,7 @@ public class HierarchyPanel : DockPanel
                     b.Header(Loc.Get("hierarchy.create"));
                     // Creates into this header's scene, whatever is selected.
                     MenuContext.SetSection(header.Section);
-                    MenuItemAttribute.BuildContextMenu(b, "GameObject");
+                    BuildCreateItems(b);
                 }));
         }
     }
@@ -737,7 +756,7 @@ public class HierarchyPanel : DockPanel
     /// <summary>
     /// The section a new object goes into: its parent's, else a scene header menu's, else the selected object's scene, else the active scene.
     /// </summary>
-    internal static SceneSection SectionForNew(SceneInstance world, GameObject? parent)
+    internal static SceneSection SectionForNew(Scene world, GameObject? parent)
     {
         if (parent.IsValid() && parent.Section is { } parentSection && ReferenceEquals(parentSection.Instance, world)) return parentSection;
         if (MenuContext.Section is { IsLoaded: true } pinned && ReferenceEquals(pinned.Instance, world)) return pinned;
@@ -810,9 +829,9 @@ public class HierarchyPanel : DockPanel
     }
 
     // Adds the rows for go and its children. Returns whether any row was added for its subtree.
-    private bool BuildNodeList(GameObject go, int depth, List<TreeNode> nodes)
+    private bool BuildNodeList(GameObject go, string sectionKey, int depth, List<TreeNode> nodes)
     {
-        if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
+        if (IsHidden(go))
             return false;
 
         bool searching = !string.IsNullOrEmpty(_searchText);
@@ -823,34 +842,35 @@ public class HierarchyPanel : DockPanel
             bool any = MatchesSearch(go);
             if (any)
             {
-                TreeNode match = AddNode(go, depth, nodes);
+                TreeNode match = AddNode(go, sectionKey, depth, nodes);
                 match.HasChildren = false;
                 SetDropIndicator(go, match);
             }
             foreach (GameObject child in go.Children)
-                any |= BuildNodeList(child, depth, nodes);
+                any |= BuildNodeList(child, sectionKey, depth, nodes);
             return any;
         }
 
-        // Children are built first so one pass over the scene tells whether anything below matched.
+        // Children are built first so one pass over the scene tells whether any row was added below:
+        // a child that is not hidden, and in a search one that matched or has a match under it.
         // The tree widget handles skipping collapsed children internally.
         int index = nodes.Count;
-        TreeNode node = AddNode(go, depth, nodes);
-        bool matchBelow = false;
+        TreeNode node = AddNode(go, sectionKey, depth, nodes);
+        bool rowsBelow = false;
         foreach (GameObject child in go.Children)
-            matchBelow |= BuildNodeList(child, depth + 1, nodes);
+            rowsBelow |= BuildNodeList(child, sectionKey, depth + 1, nodes);
+        node.HasChildren = rowsBelow;
 
         if (searching)
         {
             // A tree search keeps the parents of every match, opened so all the matches show.
             // With nothing below matching, this node is the last row added, so removing it is cheap.
-            if (!matchBelow && !MatchesSearch(go))
+            if (!rowsBelow && !MatchesSearch(go))
             {
                 nodes.RemoveAt(index);
                 return false;
             }
-            node.HasChildren = matchBelow;
-            if (matchBelow)
+            if (rowsBelow)
                 node.OverrideExpanded = true;
         }
 
@@ -858,13 +878,17 @@ public class HierarchyPanel : DockPanel
         return true;
     }
 
-    private TreeNode AddNode(GameObject go, int depth, List<TreeNode> nodes)
+    private TreeNode AddNode(GameObject go, string sectionKey, int depth, List<TreeNode> nodes)
     {
-        TreeNode node = _nodeCache.GetValue(go, static g => new TreeNode { UserData = g });
-        node.Id = NodeId(go);
+        Row row = _rowCache.GetValue(go, static g => new Row(g));
+        TreeNode node = row.Node;
+        if (row.Identifier != go.Identifier || row.SectionKey != sectionKey)
+        {
+            row.Identifier = go.Identifier;
+            row.SectionKey = sectionKey;
+            node.Id = NodeId(sectionKey, go.Identifier);
+        }
         node.Label = go.Name;
-        node.HasChildren = go.Children.Count > 0
-            && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
         node.Depth = depth;
         node.TrailingIcon = go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash;
         node.TrailingIconColor = go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300;
@@ -894,7 +918,7 @@ public class HierarchyPanel : DockPanel
     // True when the target's row shows children under it (its first-child slot is visible).
     // Reads the row as drawn, so flat search rows and rows forced open by search or a ping are right.
     private bool IsTargetExpanded(GameObject target, string targetId)
-        => _nodeCache.TryGetValue(target, out TreeNode? node) && node.HasChildren
+        => _rowCache.TryGetValue(target, out Row? row) && row.Node is { HasChildren: true } node
             && (node.OverrideExpanded ?? (_expandState.TryGetValue(targetId, out bool e) ? e : node.DefaultExpanded));
 
     private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
@@ -939,7 +963,7 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Below:
                     if (targetIsRoot)
                     {
-                        SceneInstance scene = EditorSceneManager.EditedWorld;
+                        Scene scene = EditorSceneManager.EditedWorld;
                         if (scene.IsNotValid()) break;
 
                         // Unparent if needed, then into the target's scene
@@ -1147,6 +1171,17 @@ public class HierarchyPanel : DockPanel
         builder.Item(Loc.Get("hierarchy.create_prefab"), () => CreatePrefabsFrom(selectedGOs),
             icon: EditorIcons.Cubes);
 
+        if (ModelEditingMode.IsEditing)
+        {
+            builder.Item(Loc.Get("model.join"), () => ModelEditingMode.Join(selectedGOs, clickedItem), enabled: selectedGOs.Count > 1,
+                icon: EditorIcons.ObjectGroup);
+            builder.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selectedGOs), icon: EditorIcons.Crosshairs);
+            builder.Item(Loc.Get("model.export"), ModelEditingMode.ExportGlb, icon: EditorIcons.FileExport);
+        }
+
+        if (!IsolatedWorld.IsOpen && ModelEditingMode.CanEditAsModel(selectedGOs))
+            builder.Item(Loc.Get("model.edit_as_model"), () => ModelEditingMode.EditAsModel(selectedGOs, clickedItem), icon: EditorIcons.Shapes);
+
         // Prefab operations, over every selected instance rather than only the first.
         List<GameObject> prefabRoots = PrefabInstanceRootsOf(selectedGOs);
         if (prefabRoots.Count > 0)
@@ -1159,8 +1194,11 @@ public class HierarchyPanel : DockPanel
 
                 // Straight into the prefab, rather than pinging the asset and leaving the user to
                 // find it in the project panel and double click it.
-                builder.Item(Loc.Get("hierarchy.open_prefab"), () => PrefabEditingMode.Enter(assetId),
-                    icon: EditorIcons.PenToSquare, enabled: PrefabUtility.IsEditablePrefab(assetId));
+                if (ModelEditingMode.IsModelAsset(assetId))
+                    builder.Item(Loc.Get("model.open_model"), () => ModelEditingMode.Open(assetId), icon: EditorIcons.PenToSquare);
+                else
+                    builder.Item(Loc.Get("hierarchy.open_prefab"), () => PrefabEditingMode.Enter(assetId),
+                        icon: EditorIcons.PenToSquare, enabled: PrefabUtility.IsEditablePrefab(assetId));
 
                 builder.Item(Loc.Get("hierarchy.select_prefab_asset"),
                     () => Selection.Ping(assetId), icon: EditorIcons.Cubes);
@@ -1209,6 +1247,13 @@ public class HierarchyPanel : DockPanel
     //  Create Menu
     // ================================================================
 
+    /// <summary>What can be created: in the model world only model objects, which is all a model saves, otherwise the GameObject menu.</summary>
+    private static void BuildCreateItems(ContextBuilder builder)
+    {
+        if (ModelEditingMode.IsEditing) ModelEditingMode.BuildCreateMenu(builder);
+        else MenuItemAttribute.BuildContextMenu(builder, "GameObject");
+    }
+
     /// <summary>Create menu for a menu that knows what it was opened over: <paramref name="parent"/>
     /// for a GameObject row, null for empty space (meaning the scene root).</summary>
     private static void BuildCreateMenuFor(ContextBuilder builder, GameObject? parent) =>
@@ -1217,7 +1262,7 @@ public class HierarchyPanel : DockPanel
     private static void BuildCreateMenuFor(ContextBuilder builder, IReadOnlyList<GameObject> parents)
     {
         MenuContext.SetMany(parents);
-        MenuItemAttribute.BuildContextMenu(builder, "GameObject");
+        BuildCreateItems(builder);
     }
 
     /// <summary>Create menu with no object of its own - new objects land under the active selection,
@@ -1225,7 +1270,7 @@ public class HierarchyPanel : DockPanel
     private static void BuildCreateMenuForSelection(ContextBuilder builder)
     {
         MenuContext.Clear();
-        MenuItemAttribute.BuildContextMenu(builder, "GameObject");
+        BuildCreateItems(builder);
     }
 
     /// <summary>
@@ -1237,7 +1282,7 @@ public class HierarchyPanel : DockPanel
     /// so they don't steal selection / rename focus from the object the user actually asked for.</param>
     internal static GameObject CreateGameObject(string name, GameObject? parent, bool select = true, bool beginRename = true)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return new GameObject(name);
 
         var go = new GameObject(name);
@@ -1286,7 +1331,7 @@ public class HierarchyPanel : DockPanel
     /// </summary>
     internal static void CreateEmptyParent()
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         // Only the top-level selection moves: an object whose ancestor is also selected already
@@ -1305,7 +1350,7 @@ public class HierarchyPanel : DockPanel
 
     private static void CreateEmptyParentCore(List<GameObject> targets)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         // The first selected object anchors the group: the new parent drops into its place in the
@@ -1370,8 +1415,9 @@ public class HierarchyPanel : DockPanel
             AssetCreateMenu.CreatePrefabIn(go, folder);
     }
 
-    private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
+    internal static void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
     {
+        Selection.FastPing(primary.Identifier);
         var targets = allTargets.ToList();
         string goId = NodeId(primary);
         RenameOverlay.Begin(goId, primary.Name, newName =>
@@ -1412,7 +1458,7 @@ public class HierarchyPanel : DockPanel
 
     internal static void DeleteOneGameObject(GameObject go)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         Undo.DestroyObjectImmediate(go);
@@ -1421,13 +1467,6 @@ public class HierarchyPanel : DockPanel
     // ================================================================
     //  Helpers
     // ================================================================
-
-    private static List<GameObject> GetDisplayRoots(IEnumerable<GameObject> roots)
-    {
-        return [.. roots
-            .Where(go => !go.HideFlags.HasFlag(HideFlags.Hide)
-                      && !go.HideFlags.HasFlag(HideFlags.HideAndDontSave))];
-    }
 
     private static Color GetPrefabTextColor(GameObject go)
     {
@@ -1465,7 +1504,7 @@ public class HierarchyPanel : DockPanel
     /// Search all GameObjects in the scene for any that reference the given GUID.
     /// Checks each component's AssetID and all AssetRef fields.
     /// </summary>
-    private static void FindGameObjectsWithGuid(SceneInstance scene, Guid guid, HashSet<GameObject> results)
+    private static void FindGameObjectsWithGuid(Scene scene, Guid guid, HashSet<GameObject> results)
     {
         foreach (GameObject go in scene.Objects)
         {
@@ -1505,7 +1544,7 @@ public class HierarchyPanel : DockPanel
 
     public static void SpawnAssetInScene(AssetDragPayload payload, GameObject? parent, Float3 position)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         Asset? asset = Runtime.AssetDatabase.Get(payload.AssetGuid);
@@ -1559,7 +1598,7 @@ public class HierarchyPanel : DockPanel
 
     /// <summary>Put a prefab into the scene, as an instance or as a copy of its contents with no link.</summary>
     private static void SpawnPrefab(AssetDragPayload payload, GameObject? parent, Float3 position,
-        Runtime.Resources.SceneInstance scene, bool flatten)
+        Runtime.Resources.Scene scene, bool flatten)
     {
         GameObject? instance = PrefabUtility.InstantiatePrefab(payload.AssetGuid);
         if (instance.IsNotValid()) return;

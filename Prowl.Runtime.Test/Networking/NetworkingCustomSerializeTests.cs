@@ -66,7 +66,7 @@ public partial class NetworkingTests
     public void SpawningOrHandingOverWhileStateIsWrittenIsRefused()
     {
         Networking.Networking.RegisterFactory("crate", BuildCrate);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Meddler"), other = CreateGameObject("Other");
         root.Network.Networked = true;
         other.Network.Networked = true;
@@ -113,7 +113,7 @@ public partial class NetworkingTests
     [InlineData(true)]
     public void GameCodeFailingToReadItsStateLosesOnlyThatComponentsState(bool argument)
     {
-        SceneInstance hostScene = CreateScene();
+        Scene hostScene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(hostScene, snapshot);
         GameObject original = CreateGameObject("Fragile");
@@ -134,8 +134,8 @@ public partial class NetworkingTests
             // What OnDeserialize throws is caught and reading goes on at the next component: the spawn still
             // arrives with the rest of its state, and the session goes on.
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == original.Identifier), host);
-            GameObject copy = Find(SceneInstance.Main, original.Identifier);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == original.Identifier), host);
+            GameObject copy = Find(Scene.Main, original.Identifier);
             NetTestComponent stats = copy.GetComponent<NetTestComponent>()!;
             Assert.Equal(9, stats.Health);
 
@@ -156,7 +156,7 @@ public partial class NetworkingTests
     [Fact]
     public void AComponentWritesItsOwnStateAndSendsItWhenMarkedDirty()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject board = CreateGameObject("Board");
         PackedGridTestComponent grid = board.AddComponent<PackedGridTestComponent>();
         grid.Cells[3] = true;

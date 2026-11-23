@@ -57,7 +57,7 @@ public class PointerTestComponent : Component
 
 public partial class NetworkingTests
 {
-    private sealed record VisibilitySession(SceneInstance World, FakePeer Alice, FakePeer Bob, LocalNetwork Network) : IDisposable
+    private sealed record VisibilitySession(Scene World, FakePeer Alice, FakePeer Bob, LocalNetwork Network) : IDisposable
     {
         public NetPeer AliceHere => HostPeerOf(Alice);
         public NetPeer BobHere => HostPeerOf(Bob);
@@ -73,9 +73,9 @@ public partial class NetworkingTests
     private static NetPeer HostPeerOf(FakePeer peer) =>
         Networking.Networking.Session!.Peers.Single(p => p.Id == peer.Session.LocalPeer!.Id);
 
-    private VisibilitySession VisibilityHost(Action<SceneInstance>? setUp = null)
+    private VisibilitySession VisibilityHost(Action<Scene>? setUp = null)
     {
-        SceneInstance world = CreateScene();
+        Scene world = CreateScene();
         world.Add(CreateGameObject("Level"));
         setUp?.Invoke(world);
         MakeCurrent(world);
@@ -86,7 +86,7 @@ public partial class NetworkingTests
         return new VisibilitySession(world, alice, bob, network);
     }
 
-    private GameObject Crate(SceneInstance world, NetworkVisibility visibility, string name = "Crate")
+    private GameObject Crate(Scene world, NetworkVisibility visibility, string name = "Crate")
     {
         GameObject crate = CreateGameObject(name);
         crate.AddComponent<NetTestComponent>();
@@ -308,7 +308,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientReplacesAnObjectThatLeftAndCameBackInTheSameFrame()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         using NetWriter snapshot = new(), spawn = new(), despawn = new(), back = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject crate = CreateGameObject("Crate");
@@ -330,8 +330,8 @@ public partial class NetworkingTests
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             host.Session.SendRaw(client, FakePeer.Spawn, spawn.WrittenSpan);
             host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
-            GameObject first = Find(SceneInstance.Main, crate.Identifier);
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == crate.Identifier), host);
+            GameObject first = Find(Scene.Main, crate.Identifier);
             VisibilityListener listener = first.GetComponent<VisibilityListener>()!;
 
             host.Session.SendRaw(client, FakePeer.Despawn, despawn.WrittenSpan);
@@ -340,7 +340,7 @@ public partial class NetworkingTests
             Pump(() => first.IsDisposed, host);
             PumpFor(30, host);
 
-            GameObject second = Find(SceneInstance.Main, crate.Identifier);
+            GameObject second = Find(Scene.Main, crate.Identifier);
             Assert.NotSame(first, second);
             Assert.False(second.IsDisposed);
             Assert.Equal(9, second.GetComponent<NetTestComponent>()!.Health);

@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Linq;
 
 using Prowl.Editor.Theming;
@@ -14,7 +15,8 @@ namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
 /// The list of component types that draw gizmos, dropped down from the Scene view toolbar. Each category has a
-/// checkbox for all its types, and each type a row that shows or hides its gizmos.
+/// checkbox for all its types, and each type a row that shows or hides its gizmos. A search field at the top
+/// filters the list by type or category name.
 /// </summary>
 public static class GizmoTypesPopover
 {
@@ -25,6 +27,13 @@ public static class GizmoTypesPopover
     // Room kept clear down the right for the scrollbar, so it never covers the checkboxes and the rows do not
     // shift sideways when the list grows long enough to scroll.
     private const float ScrollbarGutter = 10f;
+
+    private const float SearchHeight = 28f;
+
+    private static string _search = "";
+
+    /// <summary>Clears the search, so the list opens unfiltered. Call when the popover is opened.</summary>
+    public static void ResetSearch() => _search = "";
 
     /// <summary>Draws the popover below <paramref name="trigger"/>. Call from inside the trigger's scope.</summary>
     public static void Draw(Paper paper, string id, ElementHandle trigger)
@@ -44,6 +53,7 @@ public static class GizmoTypesPopover
             .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
             .Rounded(Origami.Current.Metrics.ContainerRounding)
             .Padding(Pad, Pad, Pad, Pad)
+            .Gap(4f)
             .HookToParent()
             .Layer(Layer.Topmost)
             .ClampToScreen()
@@ -57,22 +67,49 @@ public static class GizmoTypesPopover
                 return;
             }
 
+            using (paper.Row($"{id}_search_row").Height(SearchHeight).Enter())
+            {
+                Origami.SearchField(paper, $"{id}_search", _search, v => _search = v, Loc.Get("scene.gizmos.search"))
+                    .AutoFocus()
+                    .Show();
+            }
+
+            string search = _search.Trim();
+            var groups = GizmoTypes.All.GroupBy(t => t.Category)
+                .Select(g => (Category: g.Key, Types: Filter(g.Key, [.. g], search)))
+                .Where(g => g.Types.Length > 0)
+                .ToList();
+
+            if (groups.Count == 0)
+            {
+                EditorGUI.EmptyState(paper, $"{id}_nomatch", Loc.Get("scene.gizmos.no_match"), font);
+                return;
+            }
+
             Origami.ScrollView(paper, $"{id}_scroll", Width - Pad * 2, MaxHeight)
                 .Padding(0)
                 .Body(() =>
                 {
                     using var body = paper.Column($"{id}_body").Height(UnitValue.Auto).PaddingRight(ScrollbarGutter).Enter();
-                    int index = 0;
-                    foreach (IGrouping<string, GizmoType> group in GizmoTypes.All.GroupBy(t => t.Category))
+                    // IDs come from names, not list positions, so a row keeps its hover and checkbox state while
+                    // the search adds and removes rows around it.
+                    for (int index = 0; index < groups.Count; index++)
                     {
-                        GizmoType[] types = [.. group];
-                        DrawCategory(paper, font, $"{id}_cat{index}", group.Key, types, first: index == 0);
-                        for (int i = 0; i < types.Length; i++)
-                            DrawType(paper, font, $"{id}_cat{index}_t{i}", types[i]);
-                        index++;
+                        (string category, GizmoType[] types) = groups[index];
+                        DrawCategory(paper, font, $"{id}_cat_{category}", category, types, first: index == 0);
+                        foreach (GizmoType type in types)
+                            DrawType(paper, font, $"{id}_t_{type.Type.FullName}", type);
                     }
                 });
         }
+    }
+
+    // A category whose name matches keeps all its types; otherwise only the types whose name matches remain.
+    private static GizmoType[] Filter(string category, GizmoType[] types, string search)
+    {
+        if (search.Length == 0 || category.Contains(search, StringComparison.OrdinalIgnoreCase))
+            return types;
+        return [.. types.Where(t => t.Name.Contains(search, StringComparison.OrdinalIgnoreCase))];
     }
 
     private static void DrawCategory(Paper paper, Scribe.FontFile font, string id, string category, GizmoType[] types, bool first)

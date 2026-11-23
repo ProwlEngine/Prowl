@@ -25,7 +25,7 @@ public class TickCounter : Component, INetworkTick
 
 public partial class NetworkingTests
 {
-    private static void WorldFrame(SceneInstance world, params FakePeer[] others)
+    private static void WorldFrame(Scene world, params FakePeer[] others)
     {
         Networking.Networking.Receive();
         world.Tick(1f / 60f);
@@ -52,7 +52,7 @@ public partial class NetworkingTests
         }
     }
 
-    private static FakePeer JoinFakeHost(SceneInstance level)
+    private static FakePeer JoinFakeHost(Scene level)
     {
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(level, snapshot);

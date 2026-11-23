@@ -976,7 +976,7 @@ public class PhysicsWorld
 
         World.EnableAuxiliaryContactPoints = EnableAuxiliaryContactPoints;
         World.PersistentContactManifold = PersistentContactManifold;
-        World.CcdRelaxationFactor = SpeculativeRelaxationFactor;
+        World.ContactSettings.CcdRelaxationFactor = SpeculativeRelaxationFactor;
 
         // Push any user Transform edits into the bodies before stepping. Colliders that moved are
         // rebuilt either way, since their shapes are physics state rather than a body pose.
@@ -2495,9 +2495,9 @@ public class PhysicsWorld
 
                 ref ContactData.Contact contact = ref ContactAt(ref data, i);
                 float weight = MathF.Max(contact.Impulse, 1e-6f);
-                JVector world = (position1 + contact.RelativePosition1 + position2 + contact.RelativePosition2) * 0.5f;
+                JVector world = (position1 + contact.RelativePosition1 + position2 + contact.GetRelativePosition2(in data)) * 0.5f;
                 pointSum += world * weight;
-                normalSum += contact.Normal * (sign * weight);
+                normalSum += data.Normal * (sign * weight);
                 weightSum += weight;
                 impulseSum += contact.Impulse;
             }

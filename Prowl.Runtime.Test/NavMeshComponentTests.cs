@@ -15,7 +15,7 @@ namespace Prowl.Runtime.Test;
 
 public class NavMeshComponentTests : RuntimeTestBase
 {
-    private (SceneInstance scene, NavMeshSurface surface) CreateBakedFloorScene(float size = 20f)
+    private (Scene scene, NavMeshSurface surface) CreateBakedFloorScene(float size = 20f)
         => CreateFloorScene(size, bake: true);
 
     /// <summary>Toggling two same-type surfaces must always leave exactly one registered, and it
@@ -26,7 +26,7 @@ public class NavMeshComponentTests : RuntimeTestBase
         Debug.ClearReportedOnce();
         try
         {
-            (SceneInstance scene, NavMeshSurface first) = CreateBakedFloorScene();
+            (Scene scene, NavMeshSurface first) = CreateBakedFloorScene();
             GameObject secondGo = CreateGameObject("SecondSurface");
             scene.Add(secondGo);
             NavMeshSurface second = secondGo.AddComponent<NavMeshSurface>();
@@ -61,7 +61,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     public void Surfaces_SecondOfOneAgentType_RegistersNothing()
     {
         Debug.ClearReportedOnce();
-        (SceneInstance scene, NavMeshSurface first) = CreateBakedFloorScene();
+        (Scene scene, NavMeshSurface first) = CreateBakedFloorScene();
         Assert.NotNull(first.Instance);
 
         GameObject secondGo = CreateGameObject("SecondSurface");
@@ -112,7 +112,7 @@ public class NavMeshComponentTests : RuntimeTestBase
         Debug.ClearReportedOnce();
         try
         {
-            (SceneInstance scene, NavMeshSurface first) = CreateBakedFloorScene();
+            (Scene scene, NavMeshSurface first) = CreateBakedFloorScene();
             GameObject secondGo = CreateGameObject("SecondSurface");
             scene.Add(secondGo);
             NavMeshSurface second = secondGo.AddComponent<NavMeshSurface>();
@@ -158,7 +158,7 @@ public class NavMeshComponentTests : RuntimeTestBase
                 new NavMeshAgentType { Id = 7, Name = "Tank", Radius = 1.4f, Height = 2f, MaxSlope = 45f, MaxClimb = 0.4f },
             ]);
 
-            SceneInstance scene = CreateScene(enable: true);
+            Scene scene = CreateScene(enable: true);
             GameObject floor = CreateGameObject("Corridor");
             scene.Add(floor);
             // 3-unit-wide corridor: walkable inset survives radius 0.5, vanishes at radius 1.4.
@@ -235,7 +235,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_RegistersWhenNavMeshAppearsLater()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
 
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
@@ -267,7 +267,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_IsStopped_KeepsThePathAndResumesWithoutReplanning()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -307,7 +307,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_StoppedThroughARebuild_KeepsAPath()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateBakedFloorScene();
+        (Scene scene, NavMeshSurface surface) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -335,7 +335,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_StoppedBeforeANavMeshExists_PlansOnRegistration()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(20f, bake: false);
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene(20f, bake: false);
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -362,7 +362,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_AfterArrival_ReportsPathComplete()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -384,7 +384,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_WithNoPath_ReportsPathInvalid()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -402,7 +402,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_Warp_KeepsTheSameCrowdAgent()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -422,7 +422,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_IsStoppedHaltsMovement()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -453,7 +453,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_WarpOffTheNavMesh_LeavesTheAgentWorking()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -476,7 +476,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_PicksUpGeometryAboveTheOriginalBake()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateBakedFloorScene();
+        (Scene scene, NavMeshSurface surface) = CreateBakedFloorScene();
         Assert.False(scene.Navigation.SamplePosition(new Float3(0, 5.5f, 0), out _, 0.5f, NavMeshAreaMask.Everything));
 
         GameObject platform = CreateGameObject("Platform");
@@ -496,7 +496,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_ReflectsChangedGeometry()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateBakedFloorScene(30f);
+        (Scene scene, NavMeshSurface surface) = CreateBakedFloorScene(30f);
 
         var path = new NavMeshPath();
         Assert.True(scene.Navigation.CalculatePath(new Float3(-12, 0, 0), new Float3(12, 0, 0), path, NavMeshAreaMask.Everything));
@@ -537,7 +537,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_WithGeometryBelowTheBakeMinimum_KeepsTheSeamFlush()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateExplicitGeometryScene();
+        (Scene scene, NavMeshSurface surface) = CreateExplicitGeometryScene();
 
         // Voxel height is half the 0.25 voxel size, so this ledge sits 0.3 of a voxel below the
         // bake's floor — deliberately not a whole multiple.
@@ -574,7 +574,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_SamplePathPosition_StopsAtAnExcludedArea()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(20f);
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene(20f);
 
         // A Jump strip across the whole floor at x in -2..2, so a path from one side to the other
         // has to enter it and cannot route around.
@@ -636,7 +636,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_SamplePathPosition_HandlesNoPathAndNegativeBudgets()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene(20f);
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene(20f);
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -676,7 +676,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_WritingSteeringProperties_ReachesTheCrowdWithoutATick()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -706,7 +706,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_WritingAgentTypeId_MovesItBetweenCrowds()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -787,7 +787,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_AgentTypeIdEditedThroughTheField_StillMovesBetweenCrowds()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateFloorScene();
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
@@ -843,9 +843,9 @@ public class NavMeshComponentTests : RuntimeTestBase
     /// renderers at all — the shape of a game with custom rendering/collision, where
     /// CollectSources() returns nothing (the RubbleRangers case).
     /// </summary>
-    private (SceneInstance scene, NavMeshSurface surface) CreateExplicitGeometryScene()
+    private (Scene scene, NavMeshSurface surface) CreateExplicitGeometryScene()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject surfaceGo = CreateGameObject("NavMeshSurface");
         scene.Add(surfaceGo);
         NavMeshSurface surface = surfaceGo.AddComponent<NavMeshSurface>();
@@ -871,7 +871,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_WithExplicitSources_ChangesRegionAndKeepsGridAnchored()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateExplicitGeometryScene();
+        (Scene scene, NavMeshSurface surface) = CreateExplicitGeometryScene();
 
         var path = new NavMeshPath();
         Assert.True(scene.Navigation.SamplePosition(new Float3(8, 0.2f, 8), out _, 0.5f, NavMeshAreaMask.Everything));
@@ -913,7 +913,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_WithEmptySources_EmptiesAffectedTiles()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateExplicitGeometryScene();
+        (Scene scene, NavMeshSurface surface) = CreateExplicitGeometryScene();
 
         // The changed-region AABB sits inside tile (0,0) so border expansion stays within it.
         Assert.True(surface.RebuildTiles(new AABB(new Float3(2, -1, 2), new Float3(14, 1, 14)), []));
@@ -941,7 +941,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_OutsideOriginalGeometry_WorksWithDeclaredWorldBounds()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject surfaceGo = CreateGameObject("NavMeshSurface");
         scene.Add(surfaceGo);
         NavMeshSurface surface = surfaceGo.AddComponent<NavMeshSurface>();
@@ -978,7 +978,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_RotatesTowardTravelDirection()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -1006,7 +1006,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_DetectsArrival_WithAutoBraking()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -1043,7 +1043,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_SetDestinationWhileStopped_StaysHalted()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         GameObject agentGo = CreateGameObject("Agent");
         scene.Add(agentGo);
@@ -1078,7 +1078,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void RebuildTiles_RegionOutsideBakedBounds_IsNoOp()
     {
-        (SceneInstance scene, NavMeshSurface surface) = CreateBakedFloorScene(20f); // floor -10..10
+        (Scene scene, NavMeshSurface surface) = CreateBakedFloorScene(20f); // floor -10..10
 
         // Edge of the floor is walkable before.
         Assert.True(scene.Navigation.SamplePosition(new Float3(9, 0.2f, 0), out _, 1f, NavMeshAreaMask.Everything));
@@ -1101,7 +1101,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     [Fact]
     public void Agent_TunedForCorridor_DoesNotWeave()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
 
         GameObject floor = CreateGameObject("Corridor");
         scene.Add(floor);

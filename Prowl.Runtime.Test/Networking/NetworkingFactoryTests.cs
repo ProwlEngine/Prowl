@@ -33,7 +33,7 @@ public partial class NetworkingTests
     public void AFactorySpawnSendsItsNameDataAndIdentifiers()
     {
         Networking.Networking.RegisterFactory("crate", BuildCrate);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -63,7 +63,7 @@ public partial class NetworkingTests
     public void AnObjectAFactoryBuiltBeforeHostingSpawnsWhenTheSessionStarts()
     {
         Networking.Networking.RegisterFactory("crate", BuildCrate);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         GameObject crate = Networking.Networking.SpawnFactory("crate", new Float3(1, 2, 3), Quaternion.Identity);
         LocalNetwork network = new();
@@ -84,7 +84,7 @@ public partial class NetworkingTests
     public void ASpawnMadeAsTheHostChangesSceneReachesClientsOnceAndAfterTheSceneMessage()
     {
         Networking.Networking.RegisterFactory("crate", BuildCrate);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject manager = CreateGameObject("Manager");
         NetworkReadinessListener listener = manager.AddComponent<NetworkReadinessListener>();
         scene.Add(manager);
@@ -120,7 +120,7 @@ public partial class NetworkingTests
     {
         List<GameObject> returned = new();
         Networking.Networking.RegisterFactory("crate", BuildCrate, go => returned.Add(go));
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         byte[] snapshot, spawn;
         List<Guid> ids;
@@ -152,8 +152,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == ids[0]), host);
-            GameObject copy = Find(SceneInstance.Main, ids[0]);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == ids[0]), host);
+            GameObject copy = Find(Scene.Main, ids[0]);
             Assert.Equal(ids, TreeIdentifiers(copy));
             Assert.Equal(9, copy.GetComponent<NetTestComponent>()!.Health);
 
@@ -176,12 +176,12 @@ public partial class NetworkingTests
     [Fact]
     public void AnUnknownFactoryOrOneReturningAnObjectInASceneIsRefused()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         Networking.Networking.RegisterFactory("placed", (in NetworkSpawn spawn) =>
         {
             GameObject go = new("Placed");
-            SceneInstance.Main.Add(go);
+            Scene.Main.Add(go);
             return go;
         });
         Networking.Networking.Host(new LocalTransport(new(), "host"));

@@ -9,9 +9,9 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Prowl.Analyzers;
 
 /// <summary>
-/// Flags comparing a live world (<c>SceneInstance</c>) with a scene asset (<c>Scene</c>), which compiles because both
-/// are engine objects and is always false, and a plain <c>Scene</c> field on a component, which holds the scene and
-/// everything it uses loaded for as long as the component lives where an <c>AssetRef&lt;Scene&gt;</c> only names it.
+/// Flags comparing a live world (<c>Scene</c>) with a scene asset (<c>SceneAsset</c>), which compiles because both
+/// are engine objects and is always false, and a plain <c>SceneAsset</c> field on a component, which holds the scene and
+/// everything it uses loaded for as long as the component lives where an <c>AssetRef&lt;SceneAsset&gt;</c> only names it.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class SceneAnalyzer : DiagnosticAnalyzer
@@ -19,8 +19,8 @@ public sealed class SceneAnalyzer : DiagnosticAnalyzer
     public const string WorldComparedWithAssetId = "PROWLSC001";
     public const string HardSceneFieldId = "PROWLSC002";
 
+    public const string SceneAssetMetadataName = "Prowl.Runtime.Resources.SceneAsset";
     public const string SceneMetadataName = "Prowl.Runtime.Resources.Scene";
-    public const string SceneInstanceMetadataName = "Prowl.Runtime.Resources.SceneInstance";
     private const string ComponentMetadataName = "Prowl.Runtime.Component";
     private const string SerializeFieldMetadataName = "Prowl.Echo.SerializeFieldAttribute";
 
@@ -31,16 +31,16 @@ public sealed class SceneAnalyzer : DiagnosticAnalyzer
         category: "Correctness",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A SceneInstance is the running world and a Scene is the stored asset it was loaded from. They are different objects, so == is always false and != always true.");
+        description: "A Scene is the running world and a SceneAsset is the stored asset it was loaded from. They are different objects, so == is always false and != always true.");
 
     private static readonly DiagnosticDescriptor s_hardSceneField = new(
         HardSceneFieldId,
         title: "A component field holds a scene asset",
-        messageFormat: "'{0}' holds the scene asset itself, so the scene and everything it uses stay loaded with this component. Use AssetRef<Scene> to name the scene without loading it.",
+        messageFormat: "'{0}' holds the scene asset itself, so the scene and everything it uses stay loaded with this component. Use AssetRef<SceneAsset> to name the scene without loading it.",
         category: "Usage",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A plain asset field is a hard reference: loading the component loads the scene, its own scene fields and every asset down the chain. AssetRef<Scene> is a soft reference, loaded only when asked.");
+        description: "A plain asset field is a hard reference: loading the component loads the scene, its own scene fields and every asset down the chain. AssetRef<SceneAsset> is a soft reference, loaded only when asked.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(s_worldComparedWithAsset, s_hardSceneField);
@@ -51,17 +51,17 @@ public sealed class SceneAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
         context.RegisterCompilationStartAction(start =>
         {
-            INamedTypeSymbol? scene = start.Compilation.GetTypeByMetadataName(SceneMetadataName);
-            INamedTypeSymbol? world = start.Compilation.GetTypeByMetadataName(SceneInstanceMetadataName);
-            if (scene is null || world is null) return;
+            INamedTypeSymbol? asset = start.Compilation.GetTypeByMetadataName(SceneAssetMetadataName);
+            INamedTypeSymbol? world = start.Compilation.GetTypeByMetadataName(SceneMetadataName);
+            if (asset is null || world is null) return;
 
             start.RegisterOperationAction(ctx =>
             {
                 var op = (IBinaryOperation)ctx.Operation;
                 if (op.OperatorKind is not (BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals)) return;
                 IOperation left = Unwrap(op.LeftOperand), right = Unwrap(op.RightOperand);
-                IOperation? worldSide = DerivesFrom(left.Type, world) && DerivesFrom(right.Type, scene) ? left
-                    : DerivesFrom(right.Type, world) && DerivesFrom(left.Type, scene) ? right : null;
+                IOperation? worldSide = DerivesFrom(left.Type, world) && DerivesFrom(right.Type, asset) ? left
+                    : DerivesFrom(right.Type, world) && DerivesFrom(left.Type, asset) ? right : null;
                 if (worldSide is null) return;
                 IOperation assetSide = ReferenceEquals(worldSide, left) ? right : left;
                 ctx.ReportDiagnostic(Diagnostic.Create(s_worldComparedWithAsset, worldSide.Syntax.GetLocation(),
@@ -77,7 +77,7 @@ public sealed class SceneAnalyzer : DiagnosticAnalyzer
                 if (call.Instance is { } instance && call.TargetMethod.Name == "Equals") sides.Insert(0, Unwrap(instance));
                 if (sides.Count != 2) return;
                 IOperation? worldSide = sides.FirstOrDefault(s => DerivesFrom(s.Type, world));
-                IOperation? assetSide = sides.FirstOrDefault(s => DerivesFrom(s.Type, scene));
+                IOperation? assetSide = sides.FirstOrDefault(s => DerivesFrom(s.Type, asset));
                 if (worldSide is null || assetSide is null) return;
                 ctx.ReportDiagnostic(Diagnostic.Create(s_worldComparedWithAsset, worldSide.Syntax.GetLocation(),
                     worldSide.Syntax.ToString(), assetSide.Syntax.ToString()));
@@ -91,7 +91,7 @@ public sealed class SceneAnalyzer : DiagnosticAnalyzer
             {
                 var field = (IFieldSymbol)ctx.Symbol;
                 if (field.IsStatic || field.IsConst || field.IsImplicitlyDeclared) return;
-                if (!HoldsScene(field.Type, scene)) return;
+                if (!HoldsScene(field.Type, asset)) return;
                 if (!DerivesFrom(field.ContainingType, component)) return;
                 bool serialized = field.DeclaredAccessibility == Accessibility.Public
                     || (serializeField is not null && HasAttribute(field, serializeField));

@@ -96,9 +96,9 @@ public class EditorApplication : Game
     }
 
     /// <summary>The edit world, empty until a project's scene opens, so panels always have a world to show.</summary>
-    protected override SceneInstance CreateMainWorld()
+    protected override Scene CreateMainWorld()
     {
-        SceneInstance edit = SceneInstance.Create("Untitled", SceneMode.Edit);
+        Scene edit = Scene.Create("Untitled", SceneMode.Edit);
         edit.Activate();
         EditorSceneManager.EditWorld = edit;
         return edit;
@@ -107,7 +107,7 @@ public class EditorApplication : Game
     // The game view draws and feeds the presented worlds, never the editor window.
     protected override bool PresentsWorlds => false;
 
-    protected override List<SceneInstance> InputWorlds() => GameViewPanel.HostedWorlds();
+    protected override List<Scene> InputWorlds() => GameViewPanel.HostedWorlds();
 
     /// <summary> Initializes the editor: sets the singleton instance, loads fonts and settings, initializes the dock space, localization, registries, menus, and the PropertyGrid config. Opens a project if one was provided via --project, otherwise shows the project launcher. </summary>
     public override void Initialize()
@@ -149,7 +149,7 @@ public class EditorApplication : Game
         // Open windows and the selection keep what they show loaded, through their fields like a scene's objects.
         AssetDatabase.WalkingRoots += WalkEditorRoots;
         AssetDatabase.WalkingRoots += Undo.VisitResidents;
-        Runtime.Resources.SceneInstance.Loaded += Undo.OnSectionLoaded;
+        Runtime.Resources.Scene.Loaded += Undo.OnSectionLoaded;
 
         // If launched with --project arg, open the project and load assemblies
         // BEFORE registries scan so user types are visible to all registries
@@ -242,6 +242,7 @@ public class EditorApplication : Game
         PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
         RangeSliderDrawer.Register(PropertyGridConfig.Drawers); // wraps the built-in float/int drawers
+        PropertyGridConfig.Drawers.Register(typeof(SortingLayer), new Projects.Settings.SortingLayerDrawer());
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
         PropertyGridConfig.OnBeginRoot = Undo.InspectorBaseline;
         PropertyGridConfig.OnFieldChanged = target =>
@@ -308,10 +309,10 @@ public class EditorApplication : Game
         SaveManager.OnSave += () =>
         {
             if (Application.IsPlaying) return null;
-            if (PrefabEditingMode.IsEditing)
+            if (IsolatedWorld.Current is { } session)
             {
-                bool changed = PrefabEditingMode.IsDirty;
-                return PrefabEditingMode.Save() && changed ? PrefabEditingMode.SaveLabel : null;
+                bool changed = session.IsDirty;
+                return session.Save() && changed ? session.SaveLabel : null;
             }
 
             List<string> saved = [];
@@ -329,7 +330,7 @@ public class EditorApplication : Game
         Runtime.Debug.OnLog += PauseOnLog;
         SaveManager.CollectUnsaved += unsaved =>
         {
-            if (PrefabEditingMode.IsEditing && PrefabEditingMode.IsDirty) unsaved.Add(PrefabEditingMode.SaveLabel);
+            if (IsolatedWorld.Current is { IsDirty: true } session) unsaved.Add(session.SaveLabel);
             foreach (OpenScene scene in EditorSceneManager.OpenScenes)
                 if (scene.IsDirty) unsaved.Add(EditorSceneManager.LabelOf(scene));
         };
@@ -541,13 +542,12 @@ public class EditorApplication : Game
         DwmSetWindowAttribute(hwnd, 20, ref darkMode, sizeof(int));
     }
 
-    /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     // Panels act inside the world they edit, so Camera.Main, Physics and Debug.Draw reach it rather than Main.
-    private SceneInstance.SceneScope _guiScope;
+    protected override Scene? GuiWorld => Scene.HasMain ? EditorSceneManager.EditedWorld : null;
 
+    /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     public override void BeginGui(Paper paper)
     {
-        _guiScope = SceneInstance.HasMain ? EditorSceneManager.EditedWorld.Enter() : default;
         (Input.Current as GameViewInputHandler)?.UpdateSuppressedKeys();
 
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
@@ -604,7 +604,7 @@ public class EditorApplication : Game
         GameViewInputHandler.IsGameViewFocused = false;
 
         // Keeps the editor view outside of UI input's reach, to prevent false positives when clicking around
-        foreach (SceneInstance world in GameViewPanel.HostedWorlds())
+        foreach (Scene world in GameViewPanel.HostedWorlds())
             world.Input.Viewport = new Runtime.UI.EventSystem.HostViewport { ReceivesInput = false };
 
         float w = paper.ScreenRect.Size.X;
@@ -767,7 +767,7 @@ public class EditorApplication : Game
             s_pauseRequested = false;
             if (Application.IsPlaying && !IsPlayPaused)
             {
-                SceneInstance.Main.Paused = true;
+                Scene.Main.Paused = true;
                 Toasts.Warning(Loc.Get("play.paused_on_error"), Loc.Get("play.paused_on_error_msg"));
             }
         }
@@ -998,8 +998,6 @@ public class EditorApplication : Game
         // Pop the editor Origami theme now that all rendering (including overlays) is done.
         _origamiScope?.Dispose();
         _origamiScope = null;
-        _guiScope.Dispose();
-        _guiScope = default;
     }
 
     // ================================================================
@@ -2012,10 +2010,10 @@ public class EditorApplication : Game
     {
         if (Application.IsPlaying) return;
 
-        // Play copies the edit world, which is dormant under prefab editing.
-        if (PrefabEditingMode.IsEditing)
+        // Play copies the edit world, which is dormant under an isolated session such as prefab editing.
+        if (IsolatedWorld.Current is { } isolated)
         {
-            Runtime.Debug.LogWarning("Exit prefab editing mode before entering play mode.");
+            Runtime.Debug.LogWarning($"Leave editing {isolated.Name} before entering play mode.");
             return;
         }
 
@@ -2035,7 +2033,7 @@ public class EditorApplication : Game
         PrefabUtility.ReconcileOpenScene();
 
         // Built before anything else changes, so a failure leaves the edit world awake and the editor usable.
-        SceneInstance playWorld;
+        Scene playWorld;
         try { playWorld = EditorSceneManager.PreparePlayWorld(); }
         catch (Exception e)
         {
@@ -2074,7 +2072,7 @@ public class EditorApplication : Game
         Runtime.Debug.Log("Entered play mode.");
     }
 
-    private void StartPlayMode(SceneInstance playWorld)
+    private void StartPlayMode(Scene playWorld)
     {
         // An edit made this frame, typed or flushed, belongs to the edit history set aside here.
         _savedEditUndo = Undo.PushContext();
@@ -2100,7 +2098,7 @@ public class EditorApplication : Game
     }
 
     // Puts everything a failed StartPlayMode may have set up back the way edit mode had it.
-    private void AbandonPlayMode(SceneInstance playWorld)
+    private void AbandonPlayMode(Scene playWorld)
     {
         Application.IsPlaying = false;
         Guarded("Stopping XR", XR.Stop);
@@ -2197,20 +2195,20 @@ public class EditorApplication : Game
     }
 
     /// <summary>Whether play mode is on and its world is paused.</summary>
-    internal static bool IsPlayPaused => Application.IsPlaying && SceneInstance.HasMain && SceneInstance.Main.Paused;
+    internal static bool IsPlayPaused => Application.IsPlaying && Scene.HasMain && Scene.Main.Paused;
 
     internal static void TogglePause()
     {
-        if (!Application.IsPlaying || !SceneInstance.HasMain) return;
-        SceneInstance.Main.Paused = !SceneInstance.Main.Paused;
+        if (!Application.IsPlaying || !Scene.HasMain) return;
+        Scene.Main.Paused = !Scene.Main.Paused;
     }
 
     /// <summary>Pauses the play world and runs exactly one frame of it.</summary>
     internal static void StepOneFrame()
     {
-        if (!Application.IsPlaying || !SceneInstance.HasMain) return;
-        SceneInstance.Main.Paused = true;
-        SceneInstance.Main.RequestStep();
+        if (!Application.IsPlaying || !Scene.HasMain) return;
+        Scene.Main.Paused = true;
+        Scene.Main.RequestStep();
     }
 
     // ================================================================
@@ -2343,7 +2341,7 @@ public class EditorApplication : Game
 
         // The engine ticks the play world. The edit and prefab worlds are the editor's to tick, where only
         // [ExecuteAlways] components run.
-        if (SceneInstance.HasMain && EditorSceneManager.EditedWorld is { Mode: SceneMode.Edit, State: SceneState.Running } edited)
+        if (Scene.HasMain && EditorSceneManager.EditedWorld is { Mode: SceneMode.Edit, State: SceneState.Running } edited)
             edited.Tick(Runtime.Time.UnscaledDeltaTime);
 
         using (FrameStats.Navigation.Scope())
@@ -2356,7 +2354,7 @@ public class EditorApplication : Game
     }
 
     /// <summary>Queues component gizmos once per rendered frame, on demand from a visible Scene view.</summary>
-    internal void DrawSceneGizmos(Runtime.Resources.SceneInstance scene)
+    internal void DrawSceneGizmos(Runtime.Resources.Scene scene)
     {
         if (_sceneGizmosDrawn || !scene.IsValid()) return;
         _sceneGizmosDrawn = true;
@@ -2375,7 +2373,7 @@ public class EditorApplication : Game
             // Visible Scene views keep their gizmos while playing as well as while editing.
             scene.DrawGizmos();
 
-            using SceneInstance.SceneScope active = scene.Enter();
+            using Scene.SceneScope active = scene.Enter();
             if (Selection.Count > 0)
             {
                 // Selected gizmos draw for the selection and everything below it, each GameObject once

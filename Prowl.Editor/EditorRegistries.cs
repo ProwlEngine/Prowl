@@ -137,7 +137,6 @@ public static class EditorRegistries
         _dropHandlers.Clear();
 
         _settingsEntries.Clear();
-        Preferences.Clear();
         Build.TargetRegistry.Shared.ResetToBuiltIns();
 
         MenuItemAttribute.Clear();
@@ -166,6 +165,7 @@ public static class EditorRegistries
 
         BindingFlags methodFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
+        Preferences.BeginScan();
         foreach (Type type in EditorUtils.GetAllTypes())
         {
             // A single type/method with unresolvable reflection metadata (e.g. an attribute referencing
@@ -204,6 +204,7 @@ public static class EditorRegistries
                 Debug.LogWarning($"EditorRegistries: skipped scanning '{type.FullName}': {ex.Message}");
             }
         }
+        Preferences.EndScan();
 
         // Anything creatable from the Assets menu has to be readable again. Extensions with their own
         // importer keep it; the rest would otherwise fall through to DefaultImporter, which tracks the
@@ -396,7 +397,7 @@ public static class EditorRegistries
     /// <summary>Types whose "Create" menu entry needs more than a blank instance.</summary>
     private static readonly Dictionary<Type, Func<object>> _assetFactories = new()
     {
-        [typeof(Runtime.Resources.Scene)] = GUI.SceneView.EditorSceneManager.CreateDefaultContent,
+        [typeof(Runtime.Resources.SceneAsset)] = GUI.SceneView.EditorSceneManager.CreateDefaultContent,
     };
 
     private static void ScanAssetMenuEntry(Type type)

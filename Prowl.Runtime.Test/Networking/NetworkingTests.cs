@@ -306,7 +306,7 @@ public sealed class FakePeer : IDisposable
     public List<byte[]> JoinSpawns { get; } = new();
 
     /// <summary>As a host: a scene message for <paramref name="world" />, as the engine writes it.</summary>
-    public static byte[] SceneMessage(SceneInstance world)
+    public static byte[] SceneMessage(Scene world)
     {
         using NetWriter writer = new();
         NetworkTestScene.Current.WriteScene(world, writer);
@@ -439,7 +439,7 @@ public sealed class FakePeer : IDisposable
 
 public partial class NetworkingTests : RuntimeTestBase
 {
-    private static GameObject Find(SceneInstance scene, Guid id) => scene.Objects.Single(o => o.Identifier == id);
+    private static GameObject Find(Scene scene, Guid id) => scene.Objects.Single(o => o.Identifier == id);
 
     /// <summary>The object a Spawn message is for.</summary>
     private static Guid SpawnedId(byte[] spawn)
@@ -493,7 +493,7 @@ public partial class NetworkingTests : RuntimeTestBase
     private static List<Guid> SpawnedIds(FakePeer peer) =>
         [.. peer.WireReceived.Where(m => m.Id == FakePeer.Spawn).Select(m => SpawnedId(m.Data))];
 
-    private static GameObject Find(SceneInstance scene, string name) => scene.Objects.Single(o => o.Name == name);
+    private static GameObject Find(Scene scene, string name) => scene.Objects.Single(o => o.Name == name);
 
     /// <summary>The Spawn messages <paramref name="peer" /> received so far, as sent.</summary>
     private static byte[][] RecordedSpawns(FakePeer peer) =>
@@ -543,12 +543,12 @@ public partial class NetworkingTests : RuntimeTestBase
         Networking.Networking.Flush();
         foreach (FakePeer other in others)
             other.Session.Update();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         EngineObject.ProcessDestroyed();
         Thread.Sleep(1);
     }
 
-    private void MakeCurrent(SceneInstance scene)
+    private void MakeCurrent(Scene scene)
     {
         Bind(scene);
     }
@@ -579,7 +579,7 @@ public partial class NetworkingTests : RuntimeTestBase
     [Fact]
     public void HostSpawnsAndFollowsClientOwnedObjects()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
 
         LocalNetwork network = new();
@@ -646,7 +646,7 @@ public partial class NetworkingTests : RuntimeTestBase
     [Fact]
     public void HostOwnedObjectsReplicateToClients()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
 
         LocalNetwork network = new();
@@ -692,7 +692,7 @@ public partial class NetworkingTests : RuntimeTestBase
     [Fact]
     public void SpawningInsideANetworkedObjectThrowsAndChangesNothing()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
 
         LocalNetwork network = new();
@@ -719,7 +719,7 @@ public partial class NetworkingTests : RuntimeTestBase
     [Fact]
     public void AnRpcThatThrowsNeitherCrashesTheHostNorDropsTheCaller()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
 
         LocalNetwork network = new();
@@ -750,7 +750,7 @@ public partial class NetworkingTests : RuntimeTestBase
     [InlineData(true)]
     public void MalformedRpcsAreRejectedBeforeRunning(bool trailingBytes)
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -780,7 +780,7 @@ public partial class NetworkingTests : RuntimeTestBase
 
     private GameObject JoinTransformProxy(out FakePeer host, out NetPeer client)
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject original = CreateGameObject("Proxy");
@@ -797,14 +797,14 @@ public partial class NetworkingTests : RuntimeTestBase
             remote.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
         };
         Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-        Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == original.Identifier), remote);
+        Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == original.Identifier), remote);
         client = host.Session.Peers.Single(p => !p.IsLocal);
-        return Find(SceneInstance.Main, original.Identifier);
+        return Find(Scene.Main, original.Identifier);
     }
 
     private static void SendProxyTransform(FakePeer host, NetPeer client, Guid id, uint tick, float position, uint generation = 0)
     {
-        uint netId = NetworkTestScene.Current.NetIdOf(Find(SceneInstance.Main, id));
+        uint netId = NetworkTestScene.Current.NetIdOf(Find(Scene.Main, id));
         host.Send(FakePeer.Transform, w => WriteTransforms(w, tick, tick / 30.0,
             (netId, generation, new Float3(position, 0, 0), Quaternion.Identity, Float3.One)), client);
     }
@@ -938,7 +938,7 @@ public partial class NetworkingTests : RuntimeTestBase
     [Fact]
     public void HostRejectsAnOldGenerationWhenOwnershipReturnsToTheSamePeer()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -1023,7 +1023,7 @@ public partial class NetworkingTests : RuntimeTestBase
     public void ClientLoadsTheHostSceneSpawnsAndControlsWhatItOwns()
     {
         // What a host would send, made with the host side's own writers.
-        SceneInstance hostScene = CreateScene();
+        Scene hostScene = CreateScene();
         GameObject level = CreateGameObject("Level");
         level.AddComponent<NetTestComponent>().Health = 3;
         level.Network.Networked = true;
@@ -1055,13 +1055,13 @@ public partial class NetworkingTests : RuntimeTestBase
         Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
         try
         {
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == crateId), host);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == crateId), host);
 
             // [Sync] values come with the spawns.
-            NetTestComponent levelHere = Find(SceneInstance.Main, levelId).GetComponent<NetTestComponent>()!;
-            GameObject shipHere = Find(SceneInstance.Main, shipId);
+            NetTestComponent levelHere = Find(Scene.Main, levelId).GetComponent<NetTestComponent>()!;
+            GameObject shipHere = Find(Scene.Main, shipId);
             NetTestComponent shipComponent = shipHere.GetComponent<NetTestComponent>()!;
-            GameObject crateHere = Find(SceneInstance.Main, crateId);
+            GameObject crateHere = Find(Scene.Main, crateId);
             Assert.Equal(3, levelHere.Health);
             Assert.Equal(9, shipComponent.Health);
 
@@ -1083,7 +1083,7 @@ public partial class NetworkingTests : RuntimeTestBase
 
             // The host moves the crate; it follows, smoothed.
             NetPeer bob = host.Session.Peers.Single(p => !p.IsLocal);
-            uint crateNetId = NetworkTestScene.Current.NetIdOf(Find(SceneInstance.Main, crateId));
+            uint crateNetId = NetworkTestScene.Current.NetIdOf(Find(Scene.Main, crateId));
             host.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
                 (crateNetId, 0, new Float3(7, 8, 9), Quaternion.Identity, Float3.One)), to: bob);
             Pump(() => crateHere.Transform.LocalPosition.Equals(new Float3(7, 8, 9)), host);
@@ -1150,7 +1150,7 @@ public partial class NetworkingTests : RuntimeTestBase
         {
             Pump(() => Networking.Networking.IsActive, host);
             GameObject go = CreateGameObject();
-            SceneInstance.Main.Add(go);
+            Scene.Main.Add(go);
             Assert.Throws<InvalidOperationException>(() => go.SpawnBuilt());
         }
         finally

@@ -50,6 +50,86 @@ public class LODTests
         Assert.Equal(12, geometry.Faces.Count);
     }
 
+    /// <summary>Each side of a cube is two triangles alike in every corner, so they join into one face, and no two sides do.</summary>
+    [Fact]
+    public void FlatTrianglesJoinIntoFacesAcrossMatchingCorners()
+    {
+        using var cube = Mesh.CreateCube(Float3.One);
+
+        GeometryData geometry = MeshGeometry.ToGeometryData(cube, joinDegrees: 1f);
+
+        Assert.Equal(6, geometry.Edges.Count(e => e.IsHidden));
+        Assert.All(geometry.Edges.Where(e => e.IsHidden), e => Assert.Equal(2, e.NeighborFaces().Count));
+        Assert.Equal(0, MeshGeometry.ToGeometryData(cube).Edges.Count(e => e.IsHidden));
+    }
+
+    /// <summary>A large grid converts in about linear time, its edges kept in sets that hash well.</summary>
+    [Fact]
+    public void ALargeGridConvertsQuickly()
+    {
+        const int N = 200;
+        var vertices = new Float3[(N + 1) * (N + 1)];
+        for (int z = 0; z <= N; z++)
+            for (int x = 0; x <= N; x++)
+                vertices[z * (N + 1) + x] = new Float3(x, 0, z);
+        var indices = new List<uint>();
+        for (int z = 0; z < N; z++)
+            for (int x = 0; x < N; x++)
+            {
+                uint a = (uint)(z * (N + 1) + x), b = a + 1, c = a + (uint)(N + 1), d = c + 1;
+                indices.AddRange([a, c, d, a, d, b]);
+            }
+        using var grid = new Mesh { Vertices = vertices, Indices = [.. indices] };
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        GeometryData geometry = MeshGeometry.ToGeometryData(grid);
+
+        Assert.Equal(N * N * 2, geometry.Faces.Count);
+        Assert.True(watch.ElapsedMilliseconds < 3000, $"took {watch.ElapsedMilliseconds} ms");
+    }
+
+    /// <summary>A concave face is cut inside itself: its triangles cover its area once, all facing its way.</summary>
+    [Fact]
+    public void AConcaveFaceIsEarClippedNotFanned()
+    {
+        var geometry = new GeometryData();
+        // An L seen from above, starting where a fan would cross the notch
+        Float3[] corners = [new(0, 0, 2), new(0, 0, 0), new(2, 0, 0), new(2, 0, 1), new(1, 0, 1), new(1, 0, 2)];
+        GeometryData.Face face = geometry.AddFace([.. corners.Select(c => geometry.AddVertex(c))])!;
+        Float3 normal = face.Normal();
+
+        using Mesh mesh = MeshGeometry.ToMesh(geometry);
+
+        Float3[] positions = mesh.Vertices;
+        uint[] indices = mesh.Indices;
+        Assert.Equal(4 * 3, indices.Length);
+        float area = 0f;
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            Float3 cross = Float3.Cross(positions[indices[i + 1]] - positions[indices[i]], positions[indices[i + 2]] - positions[indices[i]]);
+            Assert.True(Float3.Dot(cross, normal) > 0f, $"triangle {i / 3} faces away");
+            area += Float3.Length(cross) * 0.5f;
+        }
+        Assert.Equal(3f, area, 4);
+    }
+
+    /// <summary>Two flat triangles with a texture seam between them stay apart.</summary>
+    [Fact]
+    public void ASeamKeepsFlatTrianglesApart()
+    {
+        using var quad = new Mesh
+        {
+            Vertices = [new(0, 0, 0), new(1, 0, 0), new(1, 0, 1), new(0, 0, 0), new(1, 0, 1), new(0, 0, 1)],
+            UV = [new(0, 0), new(1, 0), new(1, 1), new(0.5f, 0.5f), new(0.2f, 0.9f), new(0, 1)],
+            Indices = [0, 2, 1, 3, 5, 4],
+        };
+
+        GeometryData geometry = MeshGeometry.ToGeometryData(quad, joinDegrees: 1f);
+
+        Assert.Equal(2, geometry.Faces.Count);
+        Assert.Equal(0, geometry.Edges.Count(e => e.IsHidden));
+    }
+
     [Fact]
     public void CubeRoundTripsThroughGeometry()
     {

@@ -55,7 +55,7 @@ public partial class NetworkingTests
     [InlineData(false)]
     public void PassingOnAResumeAndATeleportTogetherGivesARecordClientsAccept(bool teleportLast)
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Driven");
         root.Network.Networked = true;
         root.AddComponent<NetworkTransform>();
@@ -121,7 +121,7 @@ public partial class NetworkingTests
     [Fact]
     public void TheHostPassesOnTheLatestOfAClientsMovingTransformsWithItsOwnTick()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Driven");
         root.Network.Networked = true;
         root.AddComponent<NetworkTransform>();

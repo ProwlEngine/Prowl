@@ -26,19 +26,19 @@ public class EditorWorldTests : EditorTestHarness
     [Fact]
     public void PlayMode_RunsACopyOfEverySection_AndLeavesTheEditWorldUntouched()
     {
-        SceneInstance edit = EditorSceneManager.EditWorld;
+        Scene edit = EditorSceneManager.EditWorld;
         GameObject go = edit.Create("Thing");
         Marker marker = go.AddComponent<Marker>();
         SceneSection extra = edit.CreateSection("Extra");
         edit.Create(extra, "Other");
 
-        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        Scene play = EditorSceneManager.BuildPlayWorld();
         using (EnterPlayMode())
         {
             EditorSceneManager.EnterPlayWorld(play);
 
             Assert.Equal(SceneState.Dormant, edit.State);
-            Assert.Same(play, SceneInstance.Main);
+            Assert.Same(play, Scene.Main);
             Assert.Same(play, EditorSceneManager.EditedWorld);
             Assert.Equal(["Persistent", edit.ActiveSection.Name, "Extra"], play.Sections.Select(s => s.Name));
             Assert.Equal(edit.ActiveSection.Name, play.ActiveSection.Name);
@@ -52,7 +52,7 @@ public class EditorWorldTests : EditorTestHarness
         EditorSceneManager.ReturnToEditWorld();
 
         Assert.True(play.IsDisposed);
-        Assert.Same(edit, SceneInstance.Main);
+        Assert.Same(edit, Scene.Main);
         Assert.Equal(SceneState.Running, edit.State);
         Assert.False(go.IsDisposed);
         Assert.Same(marker, go.GetComponent<Marker>());
@@ -66,7 +66,7 @@ public class EditorWorldTests : EditorTestHarness
         try
         {
             EditorSceneManager.EditWorld.Create("Thing").AddComponent<Marker>();
-            SceneInstance play = EditorSceneManager.BuildPlayWorld();
+            Scene play = EditorSceneManager.BuildPlayWorld();
             using (EnterPlayMode())
             {
                 EditorSceneManager.EnterPlayWorld(play);
@@ -86,13 +86,13 @@ public class EditorWorldTests : EditorTestHarness
     [Fact]
     public void StoppingPlay_DestroysEveryWorldPlayOpened()
     {
-        SceneInstance before = SceneInstance.Create("Before", SceneMode.Game);
-        SceneInstance play = EditorSceneManager.BuildPlayWorld();
-        SceneInstance opened;
+        Scene before = Scene.Create("Before", SceneMode.Game);
+        Scene play = EditorSceneManager.BuildPlayWorld();
+        Scene opened;
         using (EnterPlayMode())
         {
             EditorSceneManager.EnterPlayWorld(play);
-            opened = SceneInstance.Create("Overlay", SceneMode.Game);
+            opened = Scene.Create("Overlay", SceneMode.Game);
             opened.Activate();
             EditorSceneManager.DestroyPlayWorld();
         }
@@ -106,7 +106,7 @@ public class EditorWorldTests : EditorTestHarness
     [Fact]
     public void PlayMode_ListsTheEnabledBuildScenes()
     {
-        var world = new SceneInstance(SceneMode.Edit);
+        var world = new Scene(SceneMode.Edit);
         Guid on = CreateSceneAsset(world, "On.scene");
         Guid off = CreateSceneAsset(world, "Off.scene");
         world.Dispose();
@@ -115,7 +115,7 @@ public class EditorWorldTests : EditorTestHarness
         build.Scenes = [new() { Path = "On.scene", SceneGuid = on }, new() { Path = "Off.scene", SceneGuid = off, Enabled = false }];
         try
         {
-            SceneInstance play = EditorSceneManager.BuildPlayWorld();
+            Scene play = EditorSceneManager.BuildPlayWorld();
             using (EnterPlayMode())
             {
                 EditorSceneManager.EnterPlayWorld(play);
@@ -130,11 +130,11 @@ public class EditorWorldTests : EditorTestHarness
     [Fact]
     public void TheGameView_HostsWorldsPlayPresents_AboveThePlayWorld()
     {
-        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        Scene play = EditorSceneManager.BuildPlayWorld();
         using (EnterPlayMode())
         {
             EditorSceneManager.EnterPlayWorld(play);
-            SceneInstance overlay = SceneInstance.Create("Overlay", SceneMode.Game);
+            Scene overlay = Scene.Create("Overlay", SceneMode.Game);
             overlay.Present = true;
             overlay.RenderOrder = 10;
             overlay.Activate();
@@ -150,7 +150,7 @@ public class EditorWorldTests : EditorTestHarness
     [Fact]
     public void ASelectionSnapshot_RestoresTheSameObjects_AndAssets()
     {
-        SceneInstance edit = EditorSceneManager.EditWorld;
+        Scene edit = EditorSceneManager.EditWorld;
         GameObject first = edit.Create("First");
         GameObject second = edit.Create("Second");
         GameObject gone = edit.Create("Gone");
@@ -180,7 +180,7 @@ public class EditorWorldTests : EditorTestHarness
         try
         {
             EditorSceneManager.EditWorld.Create("Thing").AddComponent<WaitsWhenAdded>();
-            SceneInstance play = EditorSceneManager.PreparePlayWorld();
+            Scene play = EditorSceneManager.PreparePlayWorld();
             using (EnterPlayMode())
             {
                 EditorSceneManager.EnterPlayWorld(play);
@@ -204,7 +204,7 @@ public class EditorWorldTests : EditorTestHarness
     public void ThePlayCopy_IsTakenBeforeTheEditWorldSleeps()
     {
         EditorSceneManager.EditWorld.Create("Thing").AddComponent<ChangesWhenDisabled>();
-        SceneInstance play = EditorSceneManager.PreparePlayWorld();
+        Scene play = EditorSceneManager.PreparePlayWorld();
         try
         {
             Assert.Equal(1, play.FindObject("Thing")!.GetComponent<ChangesWhenDisabled>()!.Value);
@@ -221,9 +221,9 @@ public class EditorWorldTests : EditorTestHarness
     [InlineData(true)]
     public void AnAbandonedPlayStart_DestroysThePlayWorld_AndWakesTheEditWorld(bool entered)
     {
-        SceneInstance edit = EditorSceneManager.EditWorld;
+        Scene edit = EditorSceneManager.EditWorld;
         GameObject go = edit.Create("Thing");
-        SceneInstance play = EditorSceneManager.PreparePlayWorld();
+        Scene play = EditorSceneManager.PreparePlayWorld();
         using (EnterPlayMode())
         {
             if (entered) EditorSceneManager.EnterPlayWorld(play);
@@ -233,7 +233,7 @@ public class EditorWorldTests : EditorTestHarness
 
         Assert.True(play.IsDisposed);
         Assert.Null(EditorSceneManager.PlayWorld);
-        Assert.Same(edit, SceneInstance.Main);
+        Assert.Same(edit, Scene.Main);
         Assert.Equal(SceneState.Running, edit.State);
         Assert.False(go.IsDisposed);
     }
@@ -241,7 +241,7 @@ public class EditorWorldTests : EditorTestHarness
     [Fact]
     public void ApplyingTimeSettings_LeavesThePlayWorldsTimeScale()
     {
-        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        Scene play = EditorSceneManager.BuildPlayWorld();
         try
         {
             play.Clock.TimeScale = 0f;
@@ -267,7 +267,7 @@ public class EditorWorldTests : EditorTestHarness
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         object editHistory = Undo.PushContext();
-        SceneInstance play = EditorSceneManager.BuildPlayWorld();
+        Scene play = EditorSceneManager.BuildPlayWorld();
         using (EnterPlayMode())
         {
             EditorSceneManager.EnterPlayWorld(play);
@@ -286,14 +286,14 @@ public class EditorWorldTests : EditorTestHarness
         var authored = new GameObject("Crate");
         authored.AddComponent<Marker>();
         Guid prefab = CreatePrefabAsset(authored, "Crate.prefab");
-        SceneInstance edit = EditorSceneManager.EditWorld;
+        Scene edit = EditorSceneManager.EditWorld;
         GameObject sceneObject = edit.Create("InTheScene");
         Selection.Select(sceneObject);
 
         PrefabEditingMode.Enter(prefab);
 
         Assert.Equal(0, Selection.Count);
-        SceneInstance prefabWorld = PrefabEditingMode.World!;
+        Scene prefabWorld = PrefabEditingMode.World!;
         Assert.NotSame(edit, prefabWorld);
         Assert.Same(prefabWorld, EditorSceneManager.EditedWorld);
         Assert.Equal(SceneState.Dormant, edit.State);
@@ -307,5 +307,36 @@ public class EditorWorldTests : EditorTestHarness
         Assert.Same(edit, EditorSceneManager.EditedWorld);
         Assert.Equal(SceneState.Running, edit.State);
         Assert.False(sceneObject.IsDisposed);
+    }
+
+    /// <summary>The isolated world owner answers for the prefab session: its world, its name, its dirty flag from undo.</summary>
+    [Fact]
+    public void APrefabSessionIsTheIsolatedWorldsSession()
+    {
+        var authored = new GameObject("Barrel");
+        authored.AddComponent<Marker>();
+        Guid prefab = CreatePrefabAsset(authored, "Barrel.prefab");
+
+        PrefabEditingMode.Enter(prefab);
+
+        IsolatedSession session = Assert.IsAssignableFrom<IsolatedSession>(IsolatedWorld.Current);
+        Assert.Same(PrefabEditingMode.World, IsolatedWorld.World);
+        Assert.Equal("Barrel", session.Name);
+        Assert.False(IsolatedWorld.IsDirty);
+        Assert.False(EditorSceneManager.CanEditScenes);
+
+        GameObject root = IsolatedWorld.World!.FindObject("Barrel")!;
+        Undo.RecordObject(root.GetComponent<Marker>()!, "Change Marker");
+        root.GetComponent<Marker>()!.Value = 7;
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        Assert.True(IsolatedWorld.IsDirty);
+        Assert.True(PrefabEditingMode.IsDirty);
+
+        PrefabEditingMode.Exit();
+
+        Assert.Null(IsolatedWorld.Current);
+        Assert.False(IsolatedWorld.IsOpen);
+        Assert.True(EditorSceneManager.CanEditScenes);
     }
 }

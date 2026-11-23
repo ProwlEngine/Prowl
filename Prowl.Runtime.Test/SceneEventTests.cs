@@ -17,7 +17,7 @@ public class SceneEventTests : RuntimeTestBase
     [Fact]
     public void ScopesAndInactiveOptionsAreExplicit()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject(), child = CreateGameObject(), sibling = CreateGameObject();
         child.SetParent(root);
         scene.Add(root); scene.Add(sibling);
@@ -97,7 +97,7 @@ public class SceneEventTests : RuntimeTestBase
     [Fact]
     public void SceneMembershipMovesAndHotReloadInvalidateCachedTargets()
     {
-        SceneInstance first = CreateScene(), second = CreateScene();
+        Scene first = CreateScene(), second = CreateScene();
         GameObject go = CreateGameObject();
         Listener listener = go.AddComponent<Listener>();
         first.Add(go);
@@ -114,7 +114,7 @@ public class SceneEventTests : RuntimeTestBase
     [Fact]
     public void ExplicitSceneAndConvenienceMethodsHaveTheSameTargets()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject();
         Listener listener = go.AddComponent<Listener>();
         scene.Add(go);

@@ -15,7 +15,7 @@ public partial class NetworkingTests
         NetworkConfiguration configuration = new();
         configure(configuration);
         Networking.Networking.Configure(configuration);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Target");
         NetTestComponent target = go.AddComponent<NetTestComponent>();
         scene.Add(go);

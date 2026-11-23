@@ -41,7 +41,7 @@ public interface IRenderSync
 /// </summary>
 public sealed class SceneRendering : IDisposable
 {
-    private readonly SceneInstance _scene;
+    private readonly Scene _scene;
     private readonly List<IRenderSync> _members = [];
     private readonly HashSet<IRenderSync> _memberSet = [];
 
@@ -58,6 +58,7 @@ public sealed class SceneRendering : IDisposable
     private readonly Action<Mesh> _onMeshChanged;
     private int _lightingVersion = -1;
     private int _qualityVersion = -1;
+    private int _sortingLayersVersion = -1;
 
     /// <summary>
     /// Moves once every scene sync. A Transform pushes its move to its renderers and its children's at most once a sync,
@@ -68,7 +69,7 @@ public sealed class SceneRendering : IDisposable
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<DirectionalLight> _directionals = [];
 
-    internal SceneRendering(SceneInstance scene)
+    internal SceneRendering(Scene scene)
     {
         _scene = scene;
         _onMeshChanged = _changedMeshes.Enqueue;
@@ -177,13 +178,14 @@ public sealed class SceneRendering : IDisposable
         _spareUserSets.Clear();
     }
 
-    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake or a quality change
+    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake, a quality change or a sorting layer change
     internal void WakeChanged()
     {
-        if (_scene.BakedLightingVersion != _lightingVersion || QualitySettings.Version != _qualityVersion)
+        if (_scene.BakedLightingVersion != _lightingVersion || QualitySettings.Version != _qualityVersion || TagLayerManager.SortingLayersVersion != _sortingLayersVersion)
         {
             _lightingVersion = _scene.BakedLightingVersion;
             _qualityVersion = QualitySettings.Version;
+            _sortingLayersVersion = TagLayerManager.SortingLayersVersion;
             UnparkAll();
         }
         while (_changedMeshes.TryDequeue(out Mesh? mesh))
@@ -232,12 +234,12 @@ public sealed class SceneRendering : IDisposable
         RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }
 
-    private SceneInstance.ProbeSet? _probesFrom;
+    private Scene.ProbeSet? _probesFrom;
     private int _probesVersion = -1;
 
     private void SyncProbes(RenderWorld world)
     {
-        SceneInstance.ProbeSet? baked = _scene.Probes;
+        Scene.ProbeSet? baked = _scene.Probes;
         if (baked == _probesFrom && _scene.BakedLightingVersion == _probesVersion) return;
         _probesFrom = baked;
         _probesVersion = _scene.BakedLightingVersion;
@@ -307,12 +309,42 @@ public sealed class SceneRendering : IDisposable
         EnvironmentDesc env = world.Environment;
         _scene.Environment.ApplyTo(env);
         env.FogVolumes = FogVolumes(_scene.Environment.VolumetricFog.Density);
+        env.WindZones = WindZones();
         SyncClouds(world);
 
         DirectionalLight? sun = null;
         foreach (DirectionalLight light in _directionals)
             if (light.Handle.IsValid && (sun.IsNotValid() || light.Intensity > sun.Intensity)) sun = light;
         env.Sun = sun.IsValid() ? sun.Handle : default;
+    }
+
+    private readonly WindZone?[] _windZones = new WindZone?[WindZone.kMaxShaderZones];
+    private readonly Graphite.Rendering.WindZoneDesc[] _windScratch = new Graphite.Rendering.WindZoneDesc[WindZone.kMaxShaderZones];
+    private Graphite.Rendering.WindZoneDesc[] _windSent = [];
+
+    // The wind zones nearest the main camera, or the scene's origin without one, the same array while they hold still
+    private Graphite.Rendering.WindZoneDesc[] WindZones()
+    {
+        Camera? camera = _scene.MainCamera;
+        Float3 near = camera.IsValid() ? camera.Transform.Position : Float3.Zero;
+        int count = WindZone.GetNearest(_scene, near, _windZones);
+        for (int i = 0; i < count; i++)
+        {
+            WindZone zone = _windZones[i]!;
+            Float3 centre = zone.Transform.Position;
+            _windScratch[i] = new Graphite.Rendering.WindZoneDesc
+            {
+                Center = new Double3(centre.X, centre.Y, centre.Z),
+                Radius = zone.Radius,
+                Strength = zone.WindMain,
+                Turbulence = zone.Turbulence,
+                PulseMagnitude = zone.PulseMagnitude,
+                PulseFrequency = zone.PulseFrequency,
+            };
+        }
+        if (!_windScratch.AsSpan(0, count).SequenceEqual(_windSent))
+            _windSent = _windScratch.AsSpan(0, count).ToArray();
+        return _windSent;
     }
 
     /// <summary>Whether the scene draws a sky material, which a camera clearing to its sky shows.</summary>

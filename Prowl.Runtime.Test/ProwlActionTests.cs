@@ -26,7 +26,7 @@ public class ProwlActionTests : RuntimeTestBase
 
     private CallTarget MakeTarget()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Target");
         CallTarget comp = go.AddComponent<CallTarget>();
         scene.Add(go);

@@ -174,7 +174,7 @@ public class ReflectionProbe : Component, IRenderSync
             TimeSlicing = TimeSlicing == ReflectionProbeTimeSlicing.IndividualFaces ? GProbeSlicing.IndividualFaces : GProbeSlicing.AllFacesAtOnce,
             NearClip = NearClip,
             FarClip = FarClip,
-            CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask,
+            CullingMask = (uint)CullingMask.Mask,
             Resolution = (uint)Math.Clamp((int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)Math.Max(Math.Min(Resolution, QualitySettings.Active.MaxProbeResolution), 16)), 16, 2048),
             Cubemap = _bakedCube,
             CubemapExposure = _baked?.Exposure ?? 1f,

@@ -14,7 +14,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// A point in 3D space where audio is heard. Only listeners in <see cref="SceneInstance.Main"/> are heard, so spatial
+/// A point in 3D space where audio is heard. Only listeners in <see cref="Scene.Main"/> are heard, so spatial
 /// sources in other worlds play relative to Main's listener.
 /// </summary>
 [AddComponentMenu("Audio/Audio Listener")]
@@ -29,7 +29,7 @@ public sealed class AudioListener : Component
     public IntPtr Handle => handle;
 
     // Spatial audio is only defined for one listener, so a second enabled in the same world is an authoring mistake.
-    internal override void JoinWorld(SceneInstance world)
+    internal override void JoinWorld(Scene world)
     {
         if (!world.AudioListeners.Contains(this)) world.AudioListeners.Add(this);
         if (world.AudioListeners.Count > 1)
@@ -37,18 +37,18 @@ public sealed class AudioListener : Component
                              "Spatial audio is only defined for one, so which of them sources are heard from is arbitrary.");
     }
 
-    internal override void LeaveWorld(SceneInstance world) => world.AudioListeners.Remove(this);
+    internal override void LeaveWorld(Scene world) => world.AudioListeners.Remove(this);
 
     public override void OnEnable()
     {
         AudioContext.DeviceClosing += OnDeviceClosing;
-        SceneInstance.MainChanged += OnMainChanged;
+        Scene.MainChanged += OnMainChanged;
         Refresh();
     }
 
-    private bool IsHeard => SceneInstance.HasMain && ReferenceEquals(GameObject.Scene, SceneInstance.Main);
+    private bool IsHeard => Scene.HasMain && ReferenceEquals(GameObject.Scene, Scene.Main);
 
-    private void OnMainChanged(SceneInstance? previous, SceneInstance? next) => Refresh();
+    private void OnMainChanged(Scene? previous, Scene? next) => Refresh();
 
     // Makes the native listener while this is in Main, and lets it go otherwise.
     private void Refresh()
@@ -133,7 +133,7 @@ public sealed class AudioListener : Component
     public override void OnDisable()
     {
         AudioContext.DeviceClosing -= OnDeviceClosing;
-        SceneInstance.MainChanged -= OnMainChanged;
+        Scene.MainChanged -= OnMainChanged;
         DestroyNative();
     }
 

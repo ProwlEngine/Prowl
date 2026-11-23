@@ -278,26 +278,26 @@ public static class NavMeshGeometryCollector
             return;
         }
 
-        // Primitives are origin-centered by construction, so their bounds are tested before any tessellation.
+        // Primitives sit on the collider's origin, so their bounds are tested before any tessellation. The cone is the
+        // exception: its origin is its centre of mass, a quarter of its height above the base.
         Float3? halfExtents = collider switch
         {
             BoxCollider box => box.Size * 0.5f,
             SphereCollider sphere => new Float3(sphere.Radius, sphere.Radius, sphere.Radius),
-            CapsuleCollider capsule => new Float3(capsule.Radius, capsule.Height * 0.5f + capsule.Radius, capsule.Radius),
+            CapsuleCollider capsule => new Float3(capsule.Radius, CapsuleHeight(capsule) * 0.5f, capsule.Radius),
             CylinderCollider cylinder => new Float3(cylinder.Radius, cylinder.Height * 0.5f, cylinder.Radius),
-            ConeCollider cone => new Float3(cone.Radius, cone.Height * 0.5f, cone.Radius),
+            ConeCollider cone => new Float3(cone.Radius, cone.Height * 0.75f, cone.Radius),
             _ => null,
         };
         if (halfExtents is not Float3 half) return;
         if (bounds is AABB filter && !TransformedBoundsIntersect(-half, half, world, filter)) return;
 
-        // Same sizing conventions as each collider's Jitter shape and gizmo (origin-centered, GizmoMatrix places it).
+        // Same sizing conventions as each collider's Jitter shape and gizmo, which GizmoMatrix places.
         Mesh primitive = collider switch
         {
             BoxCollider box => Mesh.CreateCube(box.Size),
             SphereCollider sphere => Mesh.CreateSphere(Math.Max(sphere.Radius, 0.01f), 12, 12),
-            // Collider capsule height is the cylindrical segment; CreateCapsule takes total height.
-            CapsuleCollider capsule => Mesh.CreateCapsule(Math.Max(capsule.Radius, 0.01f), capsule.Height + 2f * capsule.Radius, 12, 4),
+            CapsuleCollider capsule => Mesh.CreateCapsule(Math.Max(capsule.Radius, 0.01f), CapsuleHeight(capsule), 12, 4),
             CylinderCollider cylinder => Mesh.CreateCylinder(Math.Max(cylinder.Radius, 0.01f), cylinder.Height, 12),
             ConeCollider cone => Mesh.CreateCone(Math.Max(cone.Radius, 0.01f), cone.Height, 12),
             _ => throw new InvalidOperationException("Every collider with half extents has a primitive."),
@@ -305,13 +305,22 @@ public static class NavMeshGeometryCollector
 
         try
         {
-            results.Add(new NavMeshGeometrySource(primitive.Vertices, ToIntIndices(primitive.Indices), world, area));
+            Float3[] vertices = primitive.Vertices;
+            if (collider is ConeCollider coneCollider)
+            {
+                float lift = coneCollider.Height * 0.25f;
+                for (int i = 0; i < vertices.Length; i++) vertices[i].Y += lift;
+            }
+            results.Add(new NavMeshGeometrySource(vertices, ToIntIndices(primitive.Indices), world, area));
         }
         finally
         {
             primitive.Dispose();
         }
     }
+
+    // The whole height, caps included, never shorter than the caps as the physics capsule keeps a segment.
+    private static float CapsuleHeight(CapsuleCollider capsule) => Math.Max(capsule.Height, 2f * Math.Max(capsule.Radius, 0.01f));
 
     /// <summary>A mesh's triangles, after testing its transformed bounds against the filter.</summary>
     private static void AddMesh(Mesh? mesh, Float4x4 world, int area, List<NavMeshGeometrySource> results, AABB? bounds)
@@ -350,16 +359,15 @@ public static class NavMeshGeometryCollector
         if (res < 2) return;
 
         // The stored heights span the full 0..Height band, so sculpting can never leave these bounds.
-        Float4x4 localToWorld = terrain.Transform.LocalToWorldMatrix;
+        // The terrain stands at its position, unturned and unscaled, as it draws.
+        Float3 position = terrain.Transform.Position;
+        Float4x4 localToWorld = Float4x4.CreateTranslation(position);
         if (bounds is AABB filter
             && !TransformedBoundsIntersect(Float3.Zero, new Float3(data.Size, data.Height, data.Size), localToWorld, filter))
             return;
 
-        // The sample budget is a world-space distance, so it converts to grid steps through the
-        // scale the terrain is drawn at.
         float cellSize = data.Size / (res - 1);
-        Float3 scale = terrain.Transform.LossyScale;
-        float localVoxelSize = voxelSize / Math.Max(1e-4f, Math.Max(MathF.Abs(scale.X), MathF.Abs(scale.Z)));
+        float localVoxelSize = voxelSize;
         // Capped at res - 1 because a wider stride samples nothing beyond the two edges anyway,
         // and an unbounded one (cellSize of a zero-sized terrain saturates the cast) overflows
         // the round-up in SampleCeil.
@@ -370,9 +378,7 @@ public static class NavMeshGeometryCollector
         int x0 = 0, x1 = res - 1, z0 = 0, z1 = res - 1;
         if (bounds is AABB clip)
         {
-            // Corner-transformed, not a box transform: under rotation the local box of a world
-            // box is not that box with its axes swapped around.
-            AABB local = terrain.Transform.InverseTransformAABB(clip);
+            AABB local = new(clip.Min - position, clip.Max - position);
             x0 = SampleFloor(local.Min.X, cellSize, stride, res);
             x1 = SampleCeil(local.Max.X, cellSize, stride, res);
             z0 = SampleFloor(local.Min.Z, cellSize, stride, res);
@@ -395,7 +401,7 @@ public static class NavMeshGeometryCollector
             for (int xi = 0; xi < nx; xi++)
             {
                 int x = xSteps[xi], z = zSteps[zi];
-                vertices[zi * nx + xi] = new Float3(x * cellSize, data.GetHeight(x, z) * data.Height, z * cellSize);
+                vertices[zi * nx + xi] = new Float3(x * cellSize, data.GetHeight(x, z), z * cellSize);
             }
         }
 

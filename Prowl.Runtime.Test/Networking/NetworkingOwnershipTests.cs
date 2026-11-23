@@ -38,7 +38,7 @@ public partial class NetworkingTests
         ReadinessHost();
         using NetSession foreign = NetSession.Host(new LocalTransport(new(), "foreign"));
         GameObject root = CreateGameObject();
-        SceneInstance.Main.Add(root);
+        Scene.Main.Add(root);
         try
         {
             Assert.Throws<ArgumentException>(() => root.SpawnBuilt(foreign.LocalPeer, NetworkOrphaned.ClearOwner));
@@ -139,7 +139,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.IsReady, host);
-            GameObject root = Find(SceneInstance.Main, objectId);
+            GameObject root = Find(Scene.Main, objectId);
             uint generation = NetworkTestScene.Current.GenerationOf(root);
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             Assert.Throws<InvalidOperationException>(() => root.Network.Orphaned = NetworkOrphaned.ClearOwner);
@@ -164,7 +164,7 @@ public partial class NetworkingTests
     public void InvalidOrphanPoliciesAreRejectedBeforeMutation()
     {
         ReadinessHost();
-        GameObject root = CreateGameObject(); SceneInstance.Main.Add(root);
+        GameObject root = CreateGameObject(); Scene.Main.Add(root);
         try
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => root.Network.Orphaned = (NetworkOrphaned)255);

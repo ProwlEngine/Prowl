@@ -44,7 +44,7 @@ public partial class NetworkingTests
         NetworkConfiguration paced = Networking.Networking.Configuration;
         paced.JoinSpawnBytesPerTick = 1;
         Networking.Networking.Configure(paced);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         for (int i = 0; i < 8; i++)
         {
             GameObject actor = CreateGameObject($"Actor {i}");
@@ -85,7 +85,7 @@ public partial class NetworkingTests
         NetworkConfiguration paced = Networking.Networking.Configuration;
         paced.JoinSpawnBytesPerTick = 1;
         Networking.Networking.Configure(paced);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         List<NetTestComponent> actors = new();
         for (int i = 0; i < 6; i++)
         {
@@ -132,7 +132,7 @@ public partial class NetworkingTests
         NetworkConfiguration paced = Networking.Networking.Configuration;
         paced.JoinSpawnBytesPerTick = 1;
         Networking.Networking.Configure(paced);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         for (int i = 0; i < 3; i++)
         {
             GameObject actor = CreateGameObject($"Actor {i}");
@@ -169,7 +169,7 @@ public partial class NetworkingTests
     [Fact]
     public void AJoiningClientRunsSpawnCallbacksOnlyOnceTheHostFinishesSpawning()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Actor");
         root.Network.Networked = true;
         root.AddComponent<NetworkLifecycleListener>();
@@ -200,11 +200,11 @@ public partial class NetworkingTests
             host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(generation), client);
             host.Session.SendRaw(client, FakePeer.Spawn, Assert.Single(spawns));
             host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == id), host);
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == id), host);
             PumpFor(30, host);
 
             // The object is in the world with its state, but nothing was told about it yet.
-            GameObject copy = Find(SceneInstance.Main, id);
+            GameObject copy = Find(Scene.Main, id);
             NetworkLifecycleListener listener = copy.GetComponent<NetworkLifecycleListener>()!;
             Assert.True(copy.Network.Active);
             Assert.Empty(listener.Events);

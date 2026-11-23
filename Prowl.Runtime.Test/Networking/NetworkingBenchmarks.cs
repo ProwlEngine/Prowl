@@ -67,7 +67,7 @@ public partial class NetworkingTests
         // The local transport takes 64 connections, so 63 clients is the most a run here can have.
         int peerCount = Math.Min(63, BenchSize("PROWL_NET_BENCH_PEERS", 32)), objectCount = BenchSize("PROWL_NET_BENCH_OBJECTS", 1000);
         int ticks = BenchSize("PROWL_NET_BENCH_TICKS", 120);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         List<GameObject> objects = [];
         List<RpcStateTestComponent> components = [];
         for (int i = 0; i < objectCount; i++)

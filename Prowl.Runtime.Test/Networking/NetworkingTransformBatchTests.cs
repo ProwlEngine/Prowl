@@ -27,10 +27,10 @@ public partial class NetworkingTests
     }
 
     /// <summary>A host-owned crate a ready client knows about.</summary>
-    private (SceneInstance Scene, GameObject Crate, NetTestComponent Component) SpawnCrate(LocalNetwork network, NetPeer? owner,
+    private (Scene Scene, GameObject Crate, NetTestComponent Component) SpawnCrate(LocalNetwork network, NetPeer? owner,
         params FakePeer[] peers)
     {
-        SceneInstance scene = SceneInstance.Main;
+        Scene scene = Scene.Main;
         Pump(() => peers.All(p => p.IsReady), peers);
         GameObject crate = CreateGameObject("Crate");
         NetTestComponent component = crate.AddComponent<NetTestComponent>();

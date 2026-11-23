@@ -188,7 +188,7 @@ public partial class NetworkingTests
     [Fact]
     public void StaticClientCallsAndHostRelaysNeedNoSceneObject()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         LocalNetwork network = new();
@@ -247,7 +247,7 @@ public partial class NetworkingTests
     [Fact]
     public void ReliableStaticRpcsArriveAfterTheCollectionChangesMadeBeforeThem()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Board");
         root.Network.Networked = true;
         NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>();

@@ -53,7 +53,7 @@ public partial class NetworkingTests
     {
         const float area = 500f, speed = 5f / 30f;
         Random random = new(12345);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         List<GameObject> players = [];
         for (int i = 0; i < peerCount; i++)
         {

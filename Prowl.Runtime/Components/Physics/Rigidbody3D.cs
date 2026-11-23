@@ -390,7 +390,7 @@ public sealed class Rigidbody3D : Component
         {
             AssertOwner();
             linearSleepThreshold = value;
-            if (IsSimulated) _body.DeactivationThreshold = (_body.DeactivationThreshold.angular, value);
+            if (IsSimulated) _body.DeactivationVelocity = (value, _body.DeactivationVelocity.angular);
         }
     }
 
@@ -404,7 +404,7 @@ public sealed class Rigidbody3D : Component
         {
             AssertOwner();
             angularSleepThreshold = value;
-            if (IsSimulated) _body.DeactivationThreshold = (value, _body.DeactivationThreshold.linear);
+            if (IsSimulated) _body.DeactivationVelocity = (_body.DeactivationVelocity.linear, value);
         }
     }
 
@@ -472,7 +472,7 @@ public sealed class Rigidbody3D : Component
     private void EnsureBody()
     {
         if (IsSimulated) return;
-        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
         World? world = scene.IsValid() ? scene.Physics?.World : null;
         if (world != null) CreateBody(world);
     }
@@ -485,7 +485,7 @@ public sealed class Rigidbody3D : Component
         UpdateShapes(_body);
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version; // initial pose is already in the body
-        SceneInstance? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
         PhysicsWorld physics = scene.IsValid() ? scene.Physics : null;
         physics?.RegisterBody(this);
         physics?.RebindConstraints(this);
@@ -671,7 +671,7 @@ public sealed class Rigidbody3D : Component
         rb.Restitution = restitution;
         rb.EnableGyroscopicForces = enableGyroscopicForces;
         rb.DeactivationTime = System.TimeSpan.FromSeconds(deactivationTime);
-        rb.DeactivationThreshold = (angularSleepThreshold, linearSleepThreshold);
+        rb.DeactivationVelocity = (linearSleepThreshold, angularSleepThreshold);
         rb.Tag = new RigidBodyUserData()
         {
             Rigidbody = this,

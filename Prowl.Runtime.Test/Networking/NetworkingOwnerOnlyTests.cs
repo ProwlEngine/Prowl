@@ -32,7 +32,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnOwnerOnlyValueItsOwnerWritesReachesTheHost()
     {
-        SceneInstance hostScene = CreateScene();
+        Scene hostScene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(hostScene, snapshot);
         GameObject purse = CreateGameObject("Purse");
@@ -48,7 +48,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => Networking.Networking.IsReady, host);
-            StashTestComponent mine = Find(SceneInstance.Main, purse.Identifier).GetComponent<StashTestComponent>()!;
+            StashTestComponent mine = Find(Scene.Main, purse.Identifier).GetComponent<StashTestComponent>()!;
             Assert.False(mine.IsProxy);
 
             // An owner sends the host every value it writes, whoever else it is kept from.
@@ -61,7 +61,7 @@ public partial class NetworkingTests
     [Fact]
     public void TheHostKeepsAnOwnersOwnerOnlyValueFromEveryoneElse()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -97,7 +97,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnOwnerOnlyValueReachesTheOwnerAndNobodyElse()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject gun = CreateGameObject("Gun");
         AmmoTestComponent ammo = gun.AddComponent<AmmoTestComponent>();
         ammo.Ammo = 30;
@@ -125,7 +125,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnOwnerChangeGivesTheNewOwnerItsValuesAndTheLastOneWhatItWroteBack()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject gun = CreateGameObject("Gun");
         AmmoTestComponent ammo = gun.AddComponent<AmmoTestComponent>();
         NetTestComponent stats = gun.AddComponent<NetTestComponent>();
@@ -159,7 +159,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASyncValueOnAnObjectThatIsNotNetworkedIsSentNowhere()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject prop = CreateGameObject("Prop");
         NetTestComponent stats = prop.AddComponent<NetTestComponent>();
         scene.Add(prop);

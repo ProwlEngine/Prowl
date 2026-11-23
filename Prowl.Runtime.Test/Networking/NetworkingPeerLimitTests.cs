@@ -62,7 +62,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASpawnTooLargeForOnePeerKicksOnlyThatPeer()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -84,7 +84,7 @@ public partial class NetworkingTests
     [Fact]
     public void TransformBatchesAreSplitToThePeersOwnMessageLimit()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -110,7 +110,7 @@ public partial class NetworkingTests
     [Fact]
     public void ABroadcastTooLargeForOnePeerKicksThatPeerAndKeepsTheOthers()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
         NetTestComponent component = ship.AddComponent<NetTestComponent>();
         ship.Network.Networked = true;

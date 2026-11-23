@@ -13,7 +13,7 @@ public partial class NetworkingTests
     [Fact]
     public void ANetworkedObjectWithoutANetworkTransformKeepsItsTransformToItself()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject plain = CreateGameObject("Plain"), moving = CreateGameObject("Moving");
         plain.Network.Networked = true;
         moving.Network.Networked = true;
@@ -50,7 +50,7 @@ public partial class NetworkingTests
     [Fact]
     public void AChildMovesThroughASecondNetworkTransformWithATarget()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Tank"), turret = CreateGameObject("Turret"), wheel = CreateGameObject("Wheel");
         turret.SetParent(root); wheel.SetParent(root);
         root.Network.Networked = true;
@@ -102,7 +102,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientBuildsATargetedNetworkTransformFromItsSpawn()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject original = CreateGameObject("Tank"), turret = CreateGameObject("Turret");
@@ -122,9 +122,9 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == original.Identifier), host);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == original.Identifier), host);
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            GameObject proxy = Find(SceneInstance.Main, original.Identifier);
+            GameObject proxy = Find(Scene.Main, original.Identifier);
             GameObject proxyTurret = Assert.Single(proxy.Children);
             NetworkTransform[] transforms = proxy.GetComponents<NetworkTransform>().ToArray();
             Assert.Equal(2, transforms.Length);
@@ -187,7 +187,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.IsReady, host);
-            GameObject copy = Find(SceneInstance.Main, id);
+            GameObject copy = Find(Scene.Main, id);
             Assert.Equal(2, copy.GetComponents<NetworkTransform>().Count());
             Assert.Single(Networking.Networking.System!.FindEntry(copy)!.Transforms);
         }
@@ -231,8 +231,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == id), host);
-            GameObject copy = Find(SceneInstance.Main, id);
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == id), host);
+            GameObject copy = Find(Scene.Main, id);
             Assert.Equal(new Float3(1, 0, 0), copy.Transform.LocalPosition);
             Assert.Equal(new Float3(0, 2, 0), copy.Children[0].Transform.LocalPosition);
             Assert.Equal(new Float3(2, 2, 2), copy.Children[0].Transform.LocalScale);

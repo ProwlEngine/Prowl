@@ -150,7 +150,7 @@ public sealed class TimeScaleModifier
 
 /// <summary>
 /// Frame time. The unscaled values and the frame count are the engine's, shared by every world. The scaled values are
-/// <see cref="SceneInstance.Active"/>'s <see cref="SceneClock"/>, and read as a stopped clock when no world is bound.
+/// <see cref="Scene.Active"/>'s <see cref="SceneClock"/>, and read as a stopped clock when no world is bound.
 /// </summary>
 public static class Time
 {
@@ -191,7 +191,7 @@ public static class Time
         SmoothUnscaledDeltaTime += (dt - SmoothUnscaledDeltaTime) * TimeSmoothFactor;
     }
 
-    private static SceneClock? Clock => SceneInstance.ActiveClock;
+    private static SceneClock? Clock => Scene.ActiveClock;
 
     public static float DeltaTime => Clock?.DeltaTime ?? 0f;
     public static float TimeSinceStartup => (float)(Clock?.TimeSinceStartup ?? 0d);

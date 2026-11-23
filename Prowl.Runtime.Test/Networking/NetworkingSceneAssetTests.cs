@@ -18,7 +18,7 @@ public partial class NetworkingTests
         AssetDatabase.Backend = backend;
         try
         {
-            SceneInstance authoring = new();
+            Scene authoring = new();
             authoring.Create("Arena Level");
             GameObject authoredDoor = authoring.Create("Door");
             authoredDoor.Network.Networked = true;
@@ -26,10 +26,10 @@ public partial class NetworkingTests
             GameObject authoredGone = authoring.Create("Gone");
             authoredGone.Network.Networked = true;
             authoring.Create("Secret").Network.ServerOnly = true;
-            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            SceneAsset arena = AssetDatabase.Get<SceneAsset>(backend.Add(new SceneAsset { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
             authoring.Dispose();
 
-            SceneInstance world = CreateScene();
+            Scene world = CreateScene();
             MakeCurrent(world);
             byte[] scene;
             byte[][] spawns;
@@ -72,7 +72,7 @@ public partial class NetworkingTests
             {
                 Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
                 Pump(() => Networking.Networking.IsReady, host);
-                SceneInstance mine = SceneInstance.Main;
+                Scene mine = Scene.Main;
                 Assert.Contains(mine.Objects, o => o.Name == "Arena Level");
                 Assert.DoesNotContain(mine.Objects, o => o.Name == "Secret");
                 Assert.DoesNotContain(mine.Objects, o => o.Identifier == goneId);
@@ -126,11 +126,11 @@ public partial class NetworkingTests
         AssetDatabase.Backend = backend;
         try
         {
-            SceneInstance authoring = new();
+            Scene authoring = new();
             GameObject authoredDoor = authoring.Create("Door");
             authoredDoor.Network.Networked = true;
             authoredDoor.AddComponent<NetworkLifecycleListener>();
-            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            SceneAsset arena = AssetDatabase.Get<SceneAsset>(backend.Add(new SceneAsset { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
             authoring.Dispose();
 
             MakeCurrent(CreateScene());
@@ -141,8 +141,8 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(source, "host"));
             try
             {
-                arena.LoadAdditive(SceneInstance.Main).Wait();
-                doorId = SceneInstance.Main.Objects.Single(o => o.Name == "Door").Identifier;
+                arena.LoadAdditive(Scene.Main).Wait();
+                doorId = Scene.Main.Objects.Single(o => o.Name == "Door").Identifier;
                 (scene, byte[][] spawns) = RecordJoin(source);
                 spawn = spawns.Single(s => SpawnedId(s) == doorId);
             }
@@ -156,7 +156,7 @@ public partial class NetworkingTests
             {
                 Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
                 Pump(() => Networking.Networking.IsReady, host);
-                GameObject door = Find(SceneInstance.Main, doorId);
+                GameObject door = Find(Scene.Main, doorId);
                 NetworkLifecycleListener listener = door.GetComponent<NetworkLifecycleListener>()!;
                 NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
 
@@ -208,14 +208,14 @@ public partial class NetworkingTests
         AssetDatabase.Backend = backend;
         try
         {
-            SceneInstance authoring = new();
+            Scene authoring = new();
             GameObject authoredDoor = authoring.Create("Door");
             authoredDoor.Network.Networked = true;
             authoredDoor.AddComponent<NetworkLifecycleListener>();
-            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            SceneAsset arena = AssetDatabase.Get<SceneAsset>(backend.Add(new SceneAsset { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
             authoring.Dispose();
 
-            SceneInstance world = CreateScene();
+            Scene world = CreateScene();
             MakeCurrent(world);
             LocalNetwork network = new();
             Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -256,13 +256,13 @@ public partial class NetworkingTests
         AssetDatabase.Backend = backend;
         try
         {
-            SceneInstance authoring = new();
+            Scene authoring = new();
             GameObject authoredDoor = authoring.Create("Door");
             authoredDoor.Network.Networked = true;
             authoredDoor.AddComponent<NetTestComponent>();
             authoredDoor.AddComponent<SproutsATransform>();
             authoredDoor.AddComponent<SproutsState>();
-            Scene arena = AssetDatabase.Get<Scene>(backend.Add(new Scene { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
+            SceneAsset arena = AssetDatabase.Get<SceneAsset>(backend.Add(new SceneAsset { Data = authoring.ActiveSection.CaptureTree() }, "Arena.scene"))!;
             authoring.Dispose();
 
             MakeCurrent(CreateScene());
@@ -273,8 +273,8 @@ public partial class NetworkingTests
             Networking.Networking.Host(new LocalTransport(source, "host"));
             try
             {
-                arena.LoadAdditive(SceneInstance.Main).Wait();
-                GameObject door = SceneInstance.Main.Objects.Single(o => o.Name == "Door");
+                arena.LoadAdditive(Scene.Main).Wait();
+                GameObject door = Scene.Main.Objects.Single(o => o.Name == "Door");
                 doorId = door.Identifier;
                 Assert.NotNull(door.GetComponent<NetworkTransform>());
                 Assert.NotNull(door.GetComponent<SyncPairTestComponent>());
@@ -296,7 +296,7 @@ public partial class NetworkingTests
             {
                 Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
                 Pump(() => Networking.Networking.IsReady, host);
-                GameObject door = Find(SceneInstance.Main, doorId);
+                GameObject door = Find(Scene.Main, doorId);
                 Assert.True(door.Network.Active);
                 NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
 

@@ -12,7 +12,7 @@ public partial class NetworkingTests
     [Fact]
     public void AJoinerGetsNetworkedObjectsAsSpawnsAndNoPlainObjectsOfACodeBuiltScene()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject prop = CreateGameObject("Prop");
         prop.AddComponent<PlainTestComponent>();
         GameObject ship = CreateGameObject("Ship");
@@ -55,9 +55,9 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == shipId), host);
-            Assert.DoesNotContain(SceneInstance.Main.Objects, o => o.Identifier == propId);
-            GameObject copy = Find(SceneInstance.Main, shipId);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == shipId), host);
+            Assert.DoesNotContain(Scene.Main.Objects, o => o.Identifier == propId);
+            GameObject copy = Find(Scene.Main, shipId);
             Assert.True(copy.Network.Active);
             Assert.Equal(netId, NetworkTestScene.Current.NetIdOf(copy));
             Assert.Equal(9, copy.GetComponent<NetTestComponent>()!.Score);
@@ -68,7 +68,7 @@ public partial class NetworkingTests
     [Fact]
     public void AChangeArrivingDuringAJoinRunHoldsItsHookUntilTheRunEnds()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Changing");
         go.Network.Networked = true;
         NetCollectionTestComponent component = go.AddComponent<NetCollectionTestComponent>();
@@ -101,8 +101,8 @@ public partial class NetworkingTests
             host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(generation), peer);
             foreach (byte[] spawn in spawns) host.Session.SendRaw(peer, FakePeer.Spawn, spawn);
             host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
-            NetCollectionTestComponent here = Find(SceneInstance.Main, go.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
+            NetCollectionTestComponent here = Find(Scene.Main, go.Identifier).GetComponent<NetCollectionTestComponent>()!;
 
             // The value changes on the host while the run is still going.
             using NetWriter value = new();
@@ -122,7 +122,7 @@ public partial class NetworkingTests
     [Fact]
     public void AHeldHookDoesNotRunForAComponentDestroyedBeforeTheRunEnds()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Changing");
         go.Network.Networked = true;
         NetCollectionTestComponent component = go.AddComponent<NetCollectionTestComponent>();
@@ -155,8 +155,8 @@ public partial class NetworkingTests
             host.Send(FakePeer.SpawnStarted, w => w.WriteUInt64(generation), peer);
             foreach (byte[] spawn in spawns) host.Session.SendRaw(peer, FakePeer.Spawn, spawn);
             host.Session.Flush();
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
-            NetCollectionTestComponent here = Find(SceneInstance.Main, go.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == go.Identifier), host);
+            NetCollectionTestComponent here = Find(Scene.Main, go.Identifier).GetComponent<NetCollectionTestComponent>()!;
 
             // The value changes on the host while the run is still going.
             using NetWriter value = new();
@@ -183,7 +183,7 @@ public partial class NetworkingTests
     [Fact]
     public void AJoiningOwnerHasItsOwnerOnlyValuesBeforeItsSpawnsFinish()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject gun = CreateGameObject("Gun");
         gun.Network.Networked = true;
         AmmoTestComponent ammo = gun.AddComponent<AmmoTestComponent>();

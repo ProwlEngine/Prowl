@@ -387,7 +387,7 @@ public class AudioAssetTests : EditorTestHarness
         var go = new GameObject("Holder");
         go.AddComponent<AudioSource>().Clip = clip;
 
-        var scene = new Runtime.Resources.SceneInstance();
+        var scene = new Runtime.Resources.Scene();
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Clipped.scene");
 
@@ -408,7 +408,7 @@ public class AudioAssetTests : EditorTestHarness
         var imported = (AudioMixer)AssetDatabase.Load<Asset>(mixerGuid)!;
         AudioMixerGroup music = imported.FindGroup("Music");
 
-        var scene = new Runtime.Resources.SceneInstance();
+        var scene = new Runtime.Resources.Scene();
         var go = new GameObject("Speaker");
         go.AddComponent<AudioSource>().OutputGroup = music;
         scene.Add(go);

@@ -56,7 +56,7 @@ public class SerializationTests : RuntimeTestBase
 {
     private static T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.Serialize(value))!;
 
-    private static SceneInstance RoundTrip(SceneInstance scene) => SceneInstance.Instantiate(scene.ActiveSection.Capture());
+    private static Scene RoundTrip(Scene scene) => Scene.Instantiate(scene.ActiveSection.Capture());
 
     // ---------------------------------------------------------------------
     // GameObject (custom ISerializable: GameObject.Serialize/Deserialize)
@@ -181,7 +181,7 @@ public class SerializationTests : RuntimeTestBase
     [Fact]
     public void Capture_ThenInstantiate_KeepsEveryObjectAndIdentifier()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject parent = CreateGameObject("Parent");
         GameObject child = CreateGameObject("Child");
         child.SetParent(parent);
@@ -191,7 +191,7 @@ public class SerializationTests : RuntimeTestBase
         scene.Lighting.LightmapScale = 3f;
         scene.LightmapBake.Bounces = 7;
 
-        SceneInstance copy = SceneInstance.Instantiate(scene.ActiveSection.Capture());
+        Scene copy = Scene.Instantiate(scene.ActiveSection.Capture());
 
         Assert.Equal(
             scene.Objects.Select(o => (o.Name, o.Identifier)).OrderBy(o => o.Name),
@@ -205,11 +205,11 @@ public class SerializationTests : RuntimeTestBase
     [Fact]
     public void ReadContent_DeliversNoLifecycleCallback()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Counted");
         go.AddComponent<LifecycleCounter>();
         scene.Add(go);
-        var stored = new Scene { Data = scene.ActiveSection.CaptureTree() };
+        var stored = new SceneAsset { Data = scene.ActiveSection.CaptureTree() };
         LifecycleCounter.Callbacks = 0;
 
         SceneContent content = stored.ReadContent();
@@ -223,8 +223,8 @@ public class SerializationTests : RuntimeTestBase
     [Fact]
     public void Capture_SavesAReferenceOutOfTheWorldAsNull_AndNeverCopiesItsTarget()
     {
-        SceneInstance scene = CreateScene();
-        SceneInstance other = CreateScene();
+        Scene scene = CreateScene();
+        Scene other = CreateScene();
         GameObject foreign = CreateGameObject("ForeignObject");
         other.Add(foreign);
         GameObject holder = CreateGameObject("Holder");
@@ -232,7 +232,7 @@ public class SerializationTests : RuntimeTestBase
         scene.Add(holder);
 
         EchoObject tree = scene.ActiveSection.CaptureTree();
-        SceneInstance copy = SceneInstance.Instantiate(SceneContent.Read(tree));
+        Scene copy = Scene.Instantiate(SceneContent.Read(tree));
 
         Assert.DoesNotContain("ForeignObject", tree.WriteToString());
         Assert.Null(copy.Roots.Single().GetComponent<LinkComponent>()!.Target);
@@ -245,13 +245,13 @@ public class SerializationTests : RuntimeTestBase
     [Fact]
     public void Scene_RoundTrip_ReaddsObjectsAndHierarchy()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject parent = CreateGameObject("Parent");
         GameObject child = CreateGameObject("Child");
         child.SetParent(parent);
         scene.Add(parent);
 
-        SceneInstance clone = RoundTrip(scene);
+        Scene clone = RoundTrip(scene);
 
         Assert.Equal(2, clone.ObjectCount);
         GameObject cloneParent = clone.Roots.Single();
@@ -283,7 +283,7 @@ public class SerializationTests : RuntimeTestBase
     [Fact]
     public void Scene_RoundTrip_OneObjectWithUnresolvableTransform_DoesNotWipeScene()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         scene.Add(CreateGameObject("Healthy1"));
         scene.Add(CreateGameObject("Broken"));
         scene.Add(CreateGameObject("Healthy2"));
@@ -295,7 +295,7 @@ public class SerializationTests : RuntimeTestBase
             if (el.TryGet("Name", out EchoObject? n) && n!.StringValue == "Broken")
                 el.Remove("Transform");
 
-        SceneInstance clone = SceneInstance.Instantiate(SceneContent.Read(echo));
+        Scene clone = Scene.Instantiate(SceneContent.Read(echo));
 
         Assert.Equal(3, clone.Objects.Count());
         Assert.Contains(clone.Objects, g => g.Name == "Healthy1");

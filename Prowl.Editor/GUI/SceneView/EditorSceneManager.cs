@@ -23,16 +23,16 @@ namespace Prowl.Editor.GUI.SceneView;
 /// </summary>
 public static class EditorSceneManager
 {
-    private static SceneInstance? s_editWorld;
-    private static SceneInstance? s_playWorld;
+    private static Scene? s_editWorld;
+    private static Scene? s_playWorld;
 
     /// <summary>
     /// The world scenes are edited in. Bound as Main outside play mode, and dormant underneath during play and prefab
     /// editing, so it comes back exactly as it was.
     /// </summary>
-    internal static SceneInstance? EditWorldOrNull => s_editWorld.IsValid() ? s_editWorld : null;
+    internal static Scene? EditWorldOrNull => s_editWorld.IsValid() ? s_editWorld : null;
 
-    public static SceneInstance EditWorld
+    public static Scene EditWorld
     {
         get => s_editWorld.IsValid() ? s_editWorld : throw new InvalidOperationException("The editor has no edit world bound.");
         internal set
@@ -43,24 +43,24 @@ public static class EditorSceneManager
     }
 
     /// <summary>The world built from the edit world for play mode, or null outside it.</summary>
-    public static SceneInstance? PlayWorld => s_playWorld.IsValid() ? s_playWorld : null;
+    public static Scene? PlayWorld => s_playWorld.IsValid() ? s_playWorld : null;
 
-    /// <summary>The world panels act on: the prefab world while editing a prefab, otherwise Main, the edit world or the play world.</summary>
-    public static SceneInstance EditedWorld => PrefabEditingMode.World.IsValid() ? PrefabEditingMode.World : SceneInstance.Main;
+    /// <summary>The world panels act on: an isolated session's world, such as a prefab's, otherwise Main, the edit world or the play world.</summary>
+    public static Scene EditedWorld => IsolatedWorld.World.IsValid() ? IsolatedWorld.World! : Scene.Main;
 
     /// <summary>
     /// The play copy of the edit world: each section captured into a section of a new dormant game world, in the same
     /// order and with the same active section, each keeping its source. Nothing changes if this throws.
     /// </summary>
-    internal static SceneInstance BuildPlayWorld() => BuildPlayWorld(CaptureEditSections());
+    internal static Scene BuildPlayWorld() => BuildPlayWorld(CaptureEditSections());
 
     private static List<(SceneSection Section, EchoObject Tree)> CaptureEditSections()
         => [.. EditWorld.Sections.Where(section => !section.IsPersistent).Select(section => (section, section.CaptureTree()))];
 
-    private static SceneInstance BuildPlayWorld(List<(SceneSection Section, EchoObject Tree)> captured)
+    private static Scene BuildPlayWorld(List<(SceneSection Section, EchoObject Tree)> captured)
     {
-        SceneInstance edit = EditWorld;
-        SceneInstance play = SceneInstance.Create(edit.Name, SceneMode.Game);
+        Scene edit = EditWorld;
+        Scene play = Scene.Create(edit.Name, SceneMode.Game);
         s_playCopies.Clear();
         try
         {
@@ -96,15 +96,15 @@ public static class EditorSceneManager
     }
 
     /// <summary>Binds <paramref name="play"/> as Main, running, sending the edit world dormant first when it is still awake.</summary>
-    internal static void EnterPlayWorld(SceneInstance play)
+    internal static void EnterPlayWorld(Scene play)
     {
         TrackPlayWorld(play);
         SceneBuild.Set(EditorRegistries.GetSettings<BuildSettings>().Scenes
             .Where(entry => entry.Enabled)
-            .Select(entry => AssetDatabase.Get<Scene>(entry.SceneGuid))
+            .Select(entry => AssetDatabase.Get<SceneAsset>(entry.SceneGuid))
             .Where(scene => scene.IsValid())!);
         if (EditWorld.State == SceneState.Running) SleepEditWorld();
-        SceneInstance.Main = play;
+        Scene.Main = play;
         play.Activate();
     }
 
@@ -112,7 +112,7 @@ public static class EditorSceneManager
     /// Captures the edit world, sends it dormant, restarts the session, and builds the play copy in the new session, so
     /// work the copy starts as it fills belongs to play. A failed build wakes the edit world again and rethrows.
     /// </summary>
-    internal static SceneInstance PreparePlayWorld()
+    internal static Scene PreparePlayWorld()
     {
         List<(SceneSection Section, EchoObject Tree)> captured = CaptureEditSections();
         SleepEditWorld();
@@ -124,16 +124,16 @@ public static class EditorSceneManager
         }
     }
 
-    private static void TrackPlayWorld(SceneInstance play)
+    private static void TrackPlayWorld(Scene play)
     {
         s_playWorld = play;
         s_worldsBeforePlay = new();
-        foreach (SceneInstance world in SceneInstance.Live)
+        foreach (Scene world in Scene.Live)
             if (!ReferenceEquals(world, play)) s_worldsBeforePlay.Add(world, null);
     }
 
     /// <summary>Destroys <paramref name="play"/> after a play start threw partway, whether or not it was entered.</summary>
-    internal static void AbandonPlayWorld(SceneInstance play)
+    internal static void AbandonPlayWorld(Scene play)
     {
         if (!ReferenceEquals(s_playWorld, play)) TrackPlayWorld(play);
         DestroyPlayWorld();
@@ -146,19 +146,19 @@ public static class EditorSceneManager
     }
 
     // The worlds that existed when play started. Every other world is play's own and goes when it stops.
-    private static ConditionalWeakTable<SceneInstance, object?> s_worldsBeforePlay = new();
+    private static ConditionalWeakTable<Scene, object?> s_worldsBeforePlay = new();
 
     /// <summary>Destroys the play world and every world play opened, inside the session they ran in, and restarts the session.</summary>
     internal static void DestroyPlayWorld()
     {
-        SceneInstance? play = s_playWorld;
+        Scene? play = s_playWorld;
         s_playWorld = null;
         if (play.IsValid())
         {
             try { play.Dispose(); }
             catch (Exception e) { Debug.LogException("[Play] Destroying the play world threw", e); }
         }
-        foreach (SceneInstance world in SceneInstance.Live)
+        foreach (Scene world in Scene.Live)
         {
             if (s_worldsBeforePlay.TryGetValue(world, out _) || world.IsDisposed) continue;
             try { world.Dispose(); }
@@ -175,7 +175,7 @@ public static class EditorSceneManager
     /// </summary>
     internal static void ReturnToEditWorld()
     {
-        SceneInstance.Main = EditWorld;
+        Scene.Main = EditWorld;
         EditWorld.Activate();
         PrefabUtility.RefreshStaleInstances();
     }
@@ -272,7 +272,7 @@ public static class EditorSceneManager
     public static OpenScene? SceneOf(GameObject? go) => go.IsValid() ? SceneOf(go.Section) : null;
 
     // Lists every section of a newly bound edit world, so it always has its scenes.
-    private static void AdoptSections(SceneInstance world)
+    private static void AdoptSections(Scene world)
     {
         s_open.Clear();
         s_pending.Clear();
@@ -281,7 +281,7 @@ public static class EditorSceneManager
                 s_open.Add(new OpenScene(section.Source, section.Name) { Section = section });
         if (!s_hooked)
         {
-            SceneInstance.SafePoint += ApplyPending;
+            Scene.SafePoint += ApplyPending;
             ReflectionProbe.BakedChanged += probe => Core.EditorUtility.SetDirty(probe);
             s_hooked = true;
         }
@@ -310,7 +310,7 @@ public static class EditorSceneManager
     private static void RequireEditing(string operation)
     {
         if (Application.IsPlaying) throw new InvalidOperationException($"Cannot {operation} during play mode.");
-        if (PrefabEditingMode.IsEditing) throw new InvalidOperationException($"Cannot {operation} while editing a prefab. Leave prefab editing mode first.");
+        if (IsolatedWorld.Current is { } session) throw new InvalidOperationException($"Cannot {operation} while editing {session.Name}. Leave it first.");
     }
 
     private static void RefuseDirty(IEnumerable<OpenScene> closing, bool force)
@@ -320,14 +320,14 @@ public static class EditorSceneManager
         if (dirty != null) throw new InvalidOperationException($"'{dirty.Name}' has unsaved changes. Save it first, or pass force to discard them.");
     }
 
-    /// <summary>Whether scenes can be opened, closed and saved now: not during play or prefab editing.</summary>
-    public static bool CanEditScenes => !Application.IsPlaying && !PrefabEditingMode.IsEditing;
+    /// <summary>Whether scenes can be opened, closed and saved now: not during play or an isolated session such as prefab editing.</summary>
+    public static bool CanEditScenes => !Application.IsPlaying && !IsolatedWorld.IsOpen;
 
     /// <summary>
     /// Replaces the setup with <paramref name="scene"/>, loaded and active, and clears the undo history. Refused when a
     /// scene it closes is dirty, unless <paramref name="force"/> is set.
     /// </summary>
-    public static OpenScene Open(Scene scene, bool force = false)
+    public static OpenScene Open(SceneAsset scene, bool force = false)
     {
         RequireEditing("open a scene");
         SceneContent content = ReadContent(scene);
@@ -339,7 +339,7 @@ public static class EditorSceneManager
     /// Adds <paramref name="scene"/> after the open scenes, loaded unless <paramref name="load"/> is false. A scene that
     /// is already listed is returned as it is, so one asset is never two sections.
     /// </summary>
-    public static OpenScene OpenAdditive(Scene scene, bool load = true)
+    public static OpenScene OpenAdditive(SceneAsset scene, bool load = true)
     {
         RequireEditing("open a scene");
         OpenScene? listed = s_open.FirstOrDefault(o => ReferenceEquals(o.Scene, scene));
@@ -427,7 +427,7 @@ public static class EditorSceneManager
             if (!open.LoadPending) return;
             open.LoadPending = false;
             if (!s_open.Contains(open) || open.IsLoaded) return;
-            SceneInstance edit = EditWorld;
+            Scene edit = EditWorld;
             open.Section = edit.AddContent(content, open.Name, open.Scene);
             open.Section.HiddenInSceneView = open.IsHiddenInSceneView;
             edit.MoveSection(open.Section, SectionIndexOf(open));
@@ -590,9 +590,9 @@ public static class EditorSceneManager
     private static bool Write(OpenScene scene, string relativePath)
     {
         if (Project.Current == null || scene.Section is not { IsLoaded: true } section) return false;
-        if (PrefabEditingMode.IsEditing)
+        if (IsolatedWorld.Current is { } session)
         {
-            Debug.LogWarning("Cannot save a scene while editing a prefab. Leave prefab editing mode first.");
+            Debug.LogWarning($"Cannot save a scene while editing {session.Name}. Leave it first.");
             return false;
         }
 
@@ -607,11 +607,11 @@ public static class EditorSceneManager
 
             File.WriteAllText(absolutePath, section.CaptureTree().WriteToString());
 
-            // The stored scene takes what was written, so a build or a Scene.Load of it sees this save.
+            // The stored scene takes what was written, so a build or a SceneAsset.Load of it sees this save.
             Guid guid = EditorAssetBackend.Instance?.ImportFile(relativePath) ?? Guid.Empty;
             if (guid != Guid.Empty)
             {
-                scene.Scene = AssetDatabase.Get<Scene>(guid);
+                scene.Scene = AssetDatabase.Get<SceneAsset>(guid);
                 section.Source = scene.Scene;
             }
             section.Name = scene.Name;
@@ -647,10 +647,10 @@ public static class EditorSceneManager
     public static void RestoreSetup(SceneSetup[] setup, bool force = false)
     {
         RequireEditing("restore a scene setup");
-        var entries = new List<(Scene Scene, SceneSetup Entry, SceneContent? Content)>();
+        var entries = new List<(SceneAsset Scene, SceneSetup Entry, SceneContent? Content)>();
         foreach (SceneSetup entry in setup)
         {
-            Scene? scene = Resolve(entry);
+            SceneAsset? scene = Resolve(entry);
             if (scene.IsNotValid())
             {
                 Debug.LogWarning($"[Scene] '{entry.Path}' is gone, so it was left out of the restored scenes.");
@@ -674,7 +674,7 @@ public static class EditorSceneManager
 
         OpenScene first = Replace(new OpenScene(entries[active].Scene, entries[active].Scene.Name), entries[active].Content!);
         s_open.Clear();
-        foreach ((Scene scene, SceneSetup _, SceneContent? content) in entries)
+        foreach ((SceneAsset scene, SceneSetup _, SceneContent? content) in entries)
         {
             OpenScene open = ReferenceEquals(scene, first.Scene) ? first : new OpenScene(scene, scene.Name);
             s_open.Add(open);
@@ -687,21 +687,21 @@ public static class EditorSceneManager
         s_pending.Add(() => { if (first.IsLoaded) EditWorld.MoveSection(first.Section!, SectionIndexOf(first)); });
     }
 
-    private static Scene? Resolve(SceneSetup entry)
+    private static SceneAsset? Resolve(SceneSetup entry)
     {
-        if (entry.Asset != Guid.Empty && AssetDatabase.Get<Scene>(entry.Asset) is { IsMissing: false } byId) return byId;
+        if (entry.Asset != Guid.Empty && AssetDatabase.Get<SceneAsset>(entry.Asset) is { IsMissing: false } byId) return byId;
         return string.IsNullOrEmpty(entry.Path) ? null : SceneAt(entry.Path);
     }
 
     /// <summary>The scene asset at a path relative to Assets, or null.</summary>
-    public static Scene? SceneAt(string relativePath)
+    public static SceneAsset? SceneAt(string relativePath)
     {
         Guid guid = EditorAssetBackend.Instance?.PathToGuid(EditorAssetBackend.NormalizePath(relativePath)) ?? Guid.Empty;
-        return guid == Guid.Empty ? null : AssetDatabase.Get<Scene>(guid);
+        return guid == Guid.Empty ? null : AssetDatabase.Get<SceneAsset>(guid);
     }
 
     // Reads the scene's file as it is on disk, through the layout migration, ready to fill a section.
-    private static SceneContent ReadContent(Scene scene)
+    private static SceneContent ReadContent(SceneAsset scene)
     {
         string? path = EditorAssetBackend.Instance?.GetEntry(scene.AssetID)?.Path;
         if (path == null || Project.Current == null) throw new InvalidOperationException($"'{scene.Name}' has no file in the project.");
@@ -710,6 +710,7 @@ public static class EditorSceneManager
 
         var echo = EchoObject.ReadFromString(File.ReadAllText(absolutePath));
         Migration.Releases.Release_1_0.SceneContentLayout(echo);
+        Migration.Releases.Release_1_0.SceneAssetName(echo);
         return SceneContent.Read(echo, ImportHelper.CreateTrackingContext(out _));
     }
 
@@ -754,7 +755,7 @@ public static class EditorSceneManager
     public static void OpenWithPrompt(string relativePath)
     {
         if (!CanEditScenes) { Debug.LogWarning("Cannot open scenes during play mode or prefab editing."); return; }
-        Scene? scene = SceneAt(relativePath);
+        SceneAsset? scene = SceneAt(relativePath);
         if (scene.IsNotValid()) { Debug.LogError($"No scene at '{relativePath}'."); return; }
         ConfirmClosing(() => Run(() => Open(scene, force: true)));
     }
@@ -829,7 +830,7 @@ public static class EditorSceneManager
     /// <summary>The default scene's content, for a new scene and for writing a new .scene file.</summary>
     public static SceneContent CreateDefaultContent()
     {
-        SceneInstance world = CreateDefaultScene();
+        Scene world = CreateDefaultScene();
         try { return world.ActiveSection.Capture(); }
         finally { world.Dispose(); }
     }
@@ -837,9 +838,9 @@ public static class EditorSceneManager
     /// <summary>
     /// Build a new default scene with camera, light, floor, and cubes.
     /// </summary>
-    public static SceneInstance CreateDefaultScene()
+    public static Scene CreateDefaultScene()
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         scene.Name = "Untitled Scene";
 
         Material? defaultMat = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
@@ -905,14 +906,14 @@ public sealed class OpenScene
 {
     private readonly string _untitledName;
 
-    internal OpenScene(Scene? scene, string name)
+    internal OpenScene(SceneAsset? scene, string name)
     {
         Scene = scene;
         _untitledName = name;
     }
 
     /// <summary>The scene asset, or null while untitled.</summary>
-    public Scene? Scene { get; internal set; }
+    public SceneAsset? Scene { get; internal set; }
 
     /// <summary>Its section of the edit world, or null while unloaded.</summary>
     public SceneSection? Section { get; internal set; }

@@ -46,7 +46,7 @@ public partial class NetworkingTests
     [Fact]
     public void AMovingObjectSendsDeltasFromThePoseThePeerAcknowledged()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -82,7 +82,7 @@ public partial class NetworkingTests
     [Fact]
     public void TheHostKeepsNoPositionsForTransformsTheSenderDoesNotOwn()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Not owned");
         root.Network.Networked = true;
         root.AddComponent<NetworkTransform>();
@@ -113,7 +113,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnOwnershipChangeStartsPositionsWholeAgain()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -154,7 +154,7 @@ public partial class NetworkingTests
     [Fact]
     public void ADeltaFromAnUnknownBaselineIsRejected()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Owned");
         scene.Add(root);
         MakeCurrent(scene);

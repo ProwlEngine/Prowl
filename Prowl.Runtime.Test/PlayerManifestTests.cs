@@ -40,6 +40,8 @@ public class PlayerManifestTests : IDisposable
             Packaging = AssetPackagingMode.ProwlPak,
             WindowWidth = 1600,
             WindowHeight = 900,
+            Fullscreen = true,
+            WindowMaximized = true,
             TargetExtras = { ["android.orientation"] = "landscape" },
         };
 
@@ -56,6 +58,8 @@ public class PlayerManifestTests : IDisposable
         Assert.Equal(AssetPackagingMode.ProwlPak, read.Packaging);
         Assert.Equal(1600, read.WindowWidth);
         Assert.Equal(900, read.WindowHeight);
+        Assert.True(read.Fullscreen);
+        Assert.True(read.WindowMaximized);
         Assert.Equal("landscape", read.TargetExtras["android.orientation"]);
     }
 
@@ -68,5 +72,7 @@ public class PlayerManifestTests : IDisposable
         Assert.Equal("Prowl Game", read.ProductName);
         Assert.Empty(read.AssemblyLoadOrder);
         Assert.Equal(Guid.Empty, read.DefaultSceneGuid);
+        Assert.False(read.Fullscreen);
+        Assert.False(read.WindowMaximized);
     }
 }

@@ -442,6 +442,36 @@ public static class EditorGUI
     }
 
     /// <summary>A button in the scene view's floating tool strip, filled with the accent while active.</summary>
+    /// <summary>One floating box of the scene view tool strip. Each group stands apart from the others, so wrap every set of related buttons in its own.</summary>
+    public static IDisposable ToolStripGroup(Paper paper, string id)
+        => paper.Column(id)
+            .Width(32).Height(UnitValue.Auto)
+            .Rounded(Origami.Current.Metrics.ContainerRounding)
+            .BackgroundColor(EditorTheme.Glass)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Enter();
+
+    /// <summary>A tool strip group that widens into a panel for the options of the tool in use, all one box. A null expansion leaves it closed.</summary>
+    public static void ToolStripGroup(Paper paper, string id, Action buttons, Action? expansion)
+    {
+        if (expansion == null)
+        {
+            using (ToolStripGroup(paper, id)) buttons();
+            return;
+        }
+
+        using (paper.Row($"{id}_row").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                   .Rounded(Origami.Current.Metrics.ContainerRounding)
+                   .BackgroundColor(EditorTheme.Glass)
+                   .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+                   .Enter())
+        {
+            using (paper.Column(id).Width(32).Height(UnitValue.Auto).Enter()) buttons();
+            paper.Box($"{id}_split").Width(1).Height(UnitValue.StretchOne).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            using (paper.Column($"{id}_expansion").Width(UnitValue.Auto).Height(UnitValue.Auto).Enter()) expansion();
+        }
+    }
+
     public static void ToolStripButton(Paper paper, string id, IOrigamiIcon icon, string tooltip, bool active, Action onClick)
     {
         ButtonBuilder b = Origami.IconButton(paper, id, icon, onClick)

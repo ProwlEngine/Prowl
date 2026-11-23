@@ -453,12 +453,12 @@ public class SyncAndRpcTests
     {
         public const ushort Scene = Net.EngineMessageIds, RpcToHost = Scene + 6, RpcFromHost = Scene + 7, Ready = Scene + 8;
 
-        private readonly SceneInstance _scene = SceneInstance.Create("Hosted");
+        private readonly Prowl.Runtime.Resources.Scene _scene = Prowl.Runtime.Resources.Scene.Create("Hosted");
 
         public HostedComponent(Type type)
         {
             _scene.Activate();
-            SceneInstance.Main = _scene;
+            Prowl.Runtime.Resources.Scene.Main = _scene;
             LocalNetwork network = new();
             Net.Host(new LocalTransport(network, "host"));
 
@@ -517,7 +517,7 @@ public class SyncAndRpcTests
         {
             Net.Shutdown();
             Client.Dispose();
-            SceneInstance.Shutdown();
+            Prowl.Runtime.Resources.Scene.Shutdown();
         }
     }
 }

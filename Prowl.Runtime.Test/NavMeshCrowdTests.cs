@@ -16,7 +16,7 @@ namespace Prowl.Runtime.Test;
 /// </summary>
 public class NavMeshCrowdTests : RuntimeTestBase
 {
-    private NavMeshAgent AddAgent(SceneInstance scene, Float3 position)
+    private NavMeshAgent AddAgent(Scene scene, Float3 position)
     {
         GameObject go = CreateGameObject("Agent");
         scene.Add(go);
@@ -37,7 +37,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void Agent_WithNothingToSteerTowards_StopsPayingForAvoidance()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         NavMeshAgent idle = AddAgent(scene, new Float3(0, 0, 0));
         NavMeshAgent walker = AddAgent(scene, new Float3(-1.2f, 0, 0));
@@ -81,7 +81,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void Agent_NotPlanningAvoidance_IsStillAvoidedByOthers()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         NavMeshAgent idle = AddAgent(scene, new Float3(0, 0, 0));
         NavMeshAgent walker = AddAgent(scene, new Float3(-6, 0, 0));
@@ -115,7 +115,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void Agent_ApproachingDestination_DoesNotWobble()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
         NavMeshAgent agent = AddAgent(scene, new Float3(-8, 0, 0));
         Tick(scene, 2);
 
@@ -174,7 +174,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     public void Agent_AloneOnAStraightPath_DoesNotDriftSideways(bool alongX)
     {
         // Walks ±8 with AddAgent's 2m query range, so 40 keeps every edge well out of range.
-        (SceneInstance scene, _) = CreateBakedFloorScene(40f);
+        (Scene scene, _) = CreateBakedFloorScene(40f);
         NavMeshAgent agent = AddAgent(scene, alongX ? new Float3(-8, 0, 0) : new Float3(0, 0, -8));
         Assert.NotEqual(ObstacleAvoidanceType.NoObstacleAvoidance, agent.ObstacleAvoidanceQuality);
         Tick(scene, 2);
@@ -205,7 +205,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     public void Agent_AloneNearABoundary_KeepsAvoidanceEngaged()
     {
         // Walk the agent one metre from an edge, inside AddAgent's 2m query range.
-        (SceneInstance scene, _) = CreateBakedFloorScene(12f);
+        (Scene scene, _) = CreateBakedFloorScene(12f);
         NavMeshAgent agent = AddAgent(scene, new Float3(-4, 0, 5));
         Tick(scene, 2);
 
@@ -226,7 +226,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void Agent_SetPath_FollowsTheSuppliedRoute()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene(40f);
+        (Scene scene, _) = CreateBakedFloorScene(40f);
         NavMeshAgent agent = AddAgent(scene, new Float3(-8, 0, 0));
         Tick(scene, 2);
 
@@ -270,7 +270,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
                 new NavMeshAgentType { Id = 3, Name = "Scout", Radius = 0.4f },
             ]);
 
-            SceneInstance scene = CreateScene(enable: true);
+            Scene scene = CreateScene(enable: true);
             GameObject floor = CreateGameObject("Floor");
             scene.Add(floor);
             floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
@@ -337,7 +337,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
                 new NavMeshAgentType { Id = 3, Name = "Scout", Radius = 0.4f },
             ]);
 
-            SceneInstance scene = CreateScene(enable: true);
+            Scene scene = CreateScene(enable: true);
             GameObject floor = CreateGameObject("Floor");
             scene.Add(floor);
             floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
@@ -406,9 +406,9 @@ public class NavMeshCrowdTests : RuntimeTestBase
     /// (2,1.5) to (28,1.5) the short route runs through the mud; the alternative goes up
     /// and around through the top corridor.
     /// </summary>
-    private (SceneInstance scene, NavMeshSurface surface) CreateTwoCorridorScene()
+    private (Scene scene, NavMeshSurface surface) CreateTwoCorridorScene()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject surfaceGo = CreateGameObject("NavMeshSurface");
         scene.Add(surfaceGo);
         NavMeshSurface surface = surfaceGo.AddComponent<NavMeshSurface>();
@@ -431,7 +431,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     /// <summary>Walk the agent from the bottom corridor's west end to its east end, recording
     /// the highest z reached — crossing into the top corridor (z &gt; 6) means it took the
     /// detour; staying under z 3 means it went straight through the mud.</summary>
-    private (double maxZ, double endDistance) WalkBottomCorridor(SceneInstance scene, NavMeshAgent agent)
+    private (double maxZ, double endDistance) WalkBottomCorridor(Scene scene, NavMeshAgent agent)
     {
         var goal = new Float3(28, 0, 1.5f);
         Tick(scene, 2);
@@ -456,7 +456,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void AreaMask_RoutesCrowdSteeringAroundExcludedArea()
     {
-        (SceneInstance scene, _) = CreateTwoCorridorScene();
+        (Scene scene, _) = CreateTwoCorridorScene();
 
         NavMeshAgent direct = AddAgent(scene, new Float3(2, 0, 1.5f));
         (double directMaxZ, double directEnd) = WalkBottomCorridor(scene, direct);
@@ -483,7 +483,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void SetAreaCost_BiasesCrowdCorridorChoice()
     {
-        (SceneInstance scene, _) = CreateTwoCorridorScene();
+        (Scene scene, _) = CreateTwoCorridorScene();
 
         NavMeshAgent agent = AddAgent(scene, new Float3(2, 0, 1.5f));
         agent.SetAreaCost(MudArea, 20f);
@@ -497,9 +497,9 @@ public class NavMeshCrowdTests : RuntimeTestBase
 
     // ── Filter slot allocation ──────────────────────────────────────────
 
-    private (SceneInstance scene, NavMeshSurface surface) CreateBakedFloorScene(float size = 20f)
+    private (Scene scene, NavMeshSurface surface) CreateBakedFloorScene(float size = 20f)
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
         floor.AddComponent<BoxCollider>().Size = new Float3(size, 1, size);
@@ -518,7 +518,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void FilterSlots_SharedByIdenticalConfigs()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         NavMeshAgent defaultAgent = AddAgent(scene, new Float3(0, 0, 0));
         NavMeshAgent maskedA = AddAgent(scene, new Float3(2, 0, 0));
@@ -548,7 +548,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void FilterSlots_ExhaustionFallsBackToDefault_AndReleaseFrees()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
 
         // 17 distinct configs against 15 assignable slots (1..15; 0 is the shared default).
         var agents = new NavMeshAgent[17];
@@ -585,7 +585,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
     [Fact]
     public void ApplySettings_ReachesQueriesAndTheLiveCrowd()
     {
-        (SceneInstance scene, _) = CreateBakedFloorScene();
+        (Scene scene, _) = CreateBakedFloorScene();
         AddAgent(scene, new Float3(0, 0, 0));
         Tick(scene, 2);
         DtCrowd crowd = scene.Navigation.GetNativeCrowd()!;

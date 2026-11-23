@@ -10,7 +10,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnInterestRuleDecidesWhichClientsGetAnObject()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));

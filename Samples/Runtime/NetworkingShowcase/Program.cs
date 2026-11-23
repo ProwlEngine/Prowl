@@ -93,7 +93,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
                     $"Color {lamp.ColorIndex}, height {lamp.Height:0.0}, {Control(lamp)}",
                 1 when Find<Rover>() is { } rover =>
                     $"Rover driven by {Who(rover.GameObject.Network.Owner)} at speed {rover.Speed:0.0}    "
-                    + $"Pucks here: {SceneInstance.Main.GetAll<Grabbable>(includeDisabled: true).Count(p => p != null && p.GetComponent<Rigidbody3D>() == null && !p.GameObject.IsProxy)} of 4",
+                    + $"Pucks here: {Scene.Main.GetAll<Grabbable>(includeDisabled: true).Count(p => p != null && p.GetComponent<Rigidbody3D>() == null && !p.GameObject.IsProxy)} of 4",
                 2 when Find<Bell>() is { } bell => $"The host has counted {bell.Requests} request(s)",
                 3 when Find<Reactor>() is { } reactor => $"Heat {reactor.Heat}",
                 4 when Find<Board>() is { } board =>
@@ -276,7 +276,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     /// <summary>Host: every body back to the host and where it started, at rest.</summary>
     private static void RestackPhysics()
     {
-        foreach (Grabbable? item in SceneInstance.Main.GetAll<Grabbable>(includeDisabled: true))
+        foreach (Grabbable? item in Scene.Main.GetAll<Grabbable>(includeDisabled: true))
         {
             if (item?.GetComponent<Rigidbody3D>() is not { } body)
             {
@@ -321,7 +321,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     protected override void Tick()
     {
         // Start after the initial scene activates, so the local camera and HUD are ready on either peer.
-        if (!_started && SceneInstance.Main == SampleScene)
+        if (!_started && Scene.Main == SampleScene)
         {
             _started = true;
             StartSession();
@@ -399,7 +399,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         Ray ray = MainCamera.ScreenPointToRay(new Float2(Input.MousePosition.X, Input.MousePosition.Y));
         if (Input.GetMouseButtonDown(0) && PaperInstance?.WantsCapturePointer != true)
         {
-            _dragging = SceneInstance.Main.GetAll<Grabbable>(includeDisabled: true).OfType<Grabbable>()
+            _dragging = Scene.Main.GetAll<Grabbable>(includeDisabled: true).OfType<Grabbable>()
                 .Where(p => p.GetComponent<Rigidbody3D>() == null && Hits(ray, p.Transform.Position, 0.5f))
                 .OrderBy(p => Float3.Distance(ray.Origin, p.Transform.Position))
                 .FirstOrDefault();
@@ -469,7 +469,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
 
     /// <summary>The stage's component in the replicated scene, which on a client is the host's, once it has arrived.</summary>
     private static T? Find<T>() where T : Component =>
-        SceneInstance.Main.GetAll<T>(includeDisabled: true).FirstOrDefault(c => c.IsValid());
+        Scene.Main.GetAll<T>(includeDisabled: true).FirstOrDefault(c => c.IsValid());
 
     private static string Who(NetPeer? peer) => peer == null ? "the host" : peer.IsLocal ? "you" : peer.Name;
 
@@ -633,7 +633,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
     {
         List<Rigidbody3D> bodies =
         [
-            .. SceneInstance.Main.GetAll<Rigidbody3D>(includeDisabled: true).OfType<Rigidbody3D>()
+            .. Scene.Main.GetAll<Rigidbody3D>(includeDisabled: true).OfType<Rigidbody3D>()
                 .Where(b => b.GameObject.Network.Active)
         ];
         return

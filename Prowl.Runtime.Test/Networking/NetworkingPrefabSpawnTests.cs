@@ -45,7 +45,7 @@ public partial class NetworkingTests
     public void APrefabSpawnSendsItsGuidAndIdentifiersInsteadOfTheTree()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -73,7 +73,7 @@ public partial class NetworkingTests
     public void AClientBuildsAPrefabSpawnWithTheHostsIdentifiersAndValues()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         byte[] snapshot, spawn;
         List<Guid> ids;
@@ -107,8 +107,8 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => SceneInstance.Main.Objects.Any(o => o.Identifier == ids[0]), host);
-            GameObject copy = Find(SceneInstance.Main, ids[0]);
+            Pump(() => Scene.Main.Objects.Any(o => o.Identifier == ids[0]), host);
+            GameObject copy = Find(Scene.Main, ids[0]);
 
             Assert.Equal(ids, TreeIdentifiers(copy));
             Assert.Equal(prefab.AssetID, copy.PrefabAssetId);
@@ -124,7 +124,7 @@ public partial class NetworkingTests
     public void OnlyWhatEveryPeerCanBuildSpawns()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -152,7 +152,7 @@ public partial class NetworkingTests
     public void APrefabInstanceIsSpawnedAsItsPrefabBuildsItOrRefusedOnTheHost()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -191,7 +191,7 @@ public partial class NetworkingTests
     public void AChildPutAheadOfThePrefabsOwnIsNotTakenForOneOfThem()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         Networking.Networking.Host(new LocalTransport(new(), "host"));
         try
@@ -220,7 +220,7 @@ public partial class NetworkingTests
     public void ALateJoinerGetsPrefabInstancesAsPrefabSpawns()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -249,7 +249,7 @@ public partial class NetworkingTests
     public void OnlyTheHostCanSpawnAPrefab()
     {
         PrefabAsset prefab = RegisterCratePrefab();
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
@@ -261,9 +261,9 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.IsReady, host);
-            int before = SceneInstance.Main.Objects.Count();
+            int before = Scene.Main.Objects.Count();
             Assert.Throws<InvalidOperationException>(() => Networking.Networking.SpawnPrefab(prefab, Float3.Zero, Quaternion.Identity));
-            Assert.Equal(before, SceneInstance.Main.Objects.Count());
+            Assert.Equal(before, Scene.Main.Objects.Count());
         }
         finally { Networking.Networking.Shutdown(); }
     }

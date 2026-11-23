@@ -31,7 +31,7 @@ internal sealed partial class NetworkSystem : IDisposable
     internal NetworkJoinState LocalJoinState;
     internal uint NextNetIdValue;
     internal double ReadyDeadline;
-    internal SceneInstance? ReplicatedWorld;
+    internal Scene? ReplicatedWorld;
     internal ulong SceneGeneration;
     internal Dictionary<Guid, EngineObject>? Spawning;
     internal uint Tick;
@@ -62,13 +62,13 @@ internal sealed partial class NetworkSystem : IDisposable
 
         _detached = true;
         Session = null;
-        SceneInstance.Loaded -= OnWorldLoaded;
-        SceneInstance.Unloading -= OnWorldUnloading;
-        SceneInstance.MainChanged -= OnMainChanged;
-        SceneInstance.RootMoved -= OnRootMoved;
-        if (SceneInstance.RefuseAdditive == RefuseDuplicateObjects)
+        Scene.Loaded -= OnWorldLoaded;
+        Scene.Unloading -= OnWorldUnloading;
+        Scene.MainChanged -= OnMainChanged;
+        Scene.RootMoved -= OnRootMoved;
+        if (Scene.RefuseAdditive == RefuseDuplicateObjects)
         {
-            SceneInstance.RefuseAdditive = null;
+            Scene.RefuseAdditive = null;
         }
 
         foreach (NetworkObject entry in Entries.Values.ToArray())
@@ -110,11 +110,11 @@ internal sealed partial class NetworkSystem : IDisposable
         _wallStepAt = Now;
         LocalJoinState = session.IsHost ? NetworkJoinState.Loading : NetworkJoinState.Connecting;
         ReadyDeadline = Now + Configuration.SceneLoadTimeoutSeconds;
-        SceneInstance.Loaded += OnWorldLoaded;
-        SceneInstance.Unloading += OnWorldUnloading;
-        SceneInstance.MainChanged += OnMainChanged;
-        SceneInstance.RootMoved += OnRootMoved;
-        SceneInstance.RefuseAdditive = RefuseDuplicateObjects;
+        Scene.Loaded += OnWorldLoaded;
+        Scene.Unloading += OnWorldUnloading;
+        Scene.MainChanged += OnMainChanged;
+        Scene.RootMoved += OnRootMoved;
+        Scene.RefuseAdditive = RefuseDuplicateObjects;
         session.Joined += OnSessionAdmitted;
         NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty,
             session.IsHost ? "Hosting" : "Joining");
@@ -148,7 +148,7 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.Player, OnPlayer);
         if (session.IsHost)
         {
-            SceneInstance world = SceneInstance.Main;
+            Scene world = Scene.Main;
             ReplicatedWorld = world;
             foreach (SceneSection section in world.Sections)
             {

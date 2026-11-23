@@ -36,7 +36,7 @@ public partial class NetworkingTests
 {
     private (NetworkReadinessListener Listener, NetTestComponent State, LocalNetwork Network) ReadinessHost()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Ready actor");
         root.Network.Networked = true;
         NetworkReadinessListener listener = root.AddComponent<NetworkReadinessListener>();
@@ -92,7 +92,7 @@ public partial class NetworkingTests
     [Fact]
     public void LocalReadyListenerCanEndTheSessionWithoutNotifyingLaterListeners()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject first = CreateGameObject(), second = CreateGameObject();
         NetworkReadinessListener a = first.AddComponent<NetworkReadinessListener>();
         NetworkReadinessListener b = second.AddComponent<NetworkReadinessListener>();
@@ -129,7 +129,7 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         host.AutoReady = false;
-        SceneInstance local = CreateScene();
+        Scene local = CreateScene();
         try
         {
             NetSession session = Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
@@ -151,7 +151,7 @@ public partial class NetworkingTests
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             host.Send(FakePeer.Scene, w => w.WriteBytes(snapshot), client);
             Pump(() => host.Has(FakePeer.Ready), host);
-            Assert.Same(local, SceneInstance.Main);
+            Assert.Same(local, Scene.Main);
             Assert.Equal(NetworkJoinState.Synchronizing, Networking.Networking.JoinState);
             Assert.Same(session, Networking.Networking.Session);
 
@@ -161,7 +161,7 @@ public partial class NetworkingTests
             foreach (byte[] spawn in spawns) host.Session.SendRaw(client, FakePeer.Spawn, spawn);
             host.Send(FakePeer.SpawnFinished, w => w.WriteUInt64(generation), client);
             Pump(() => Networking.Networking.IsReady, host);
-            Assert.Same(local, SceneInstance.Main);
+            Assert.Same(local, Scene.Main);
             Assert.Contains(local.Objects, o => o.Identifier == actor);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
@@ -178,7 +178,7 @@ public partial class NetworkingTests
         Networking.Networking.Configure(new() { Execution = execution });
         ReadinessHost();
         using NetWriter snapshot = new();
-        NetworkTestScene.Current.WriteScene(SceneInstance.Main, snapshot);
+        NetworkTestScene.Current.WriteScene(Scene.Main, snapshot);
         Networking.Networking.Shutdown();
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
@@ -195,7 +195,7 @@ public partial class NetworkingTests
                 Thread.Sleep(1);
             }
             Assert.Equal(NetworkJoinState.Synchronizing, Networking.Networking.JoinState);
-            if (replaceContent) SceneInstance.Main.ReplaceContent(new SceneContent(), "Local", null);
+            if (replaceContent) Scene.Main.ReplaceContent(new SceneContent(), "Local", null);
             else MakeCurrent(CreateScene());
             Assert.Null(Networking.Networking.Session);
             Assert.Equal("The network scene was replaced locally during the session.", failure);

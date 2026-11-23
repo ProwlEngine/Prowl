@@ -59,7 +59,7 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
-        SceneInstance scene = CreateScene(); MakeCurrent(scene);
+        Scene scene = CreateScene(); MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
         using FakePeer owner = FakePeer.Join(network, "owner"), observer = FakePeer.Join(network, "observer");
@@ -99,7 +99,7 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
-        SceneInstance source = CreateScene(); GameObject root = CreateGameObject();
+        Scene source = CreateScene(); GameObject root = CreateGameObject();
         root.AddComponent<NetCollectionTestComponent>();
         root.Network.Networked = true;
         source.Add(root);
@@ -114,7 +114,7 @@ public partial class NetworkingTests
             SessionEndReason? reason = null;
             session.Ended += (why, _) => reason = why;
             Pump(() => Networking.Networking.IsReady, host);
-            NetCollectionTestComponent component = Find(SceneInstance.Main, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
+            NetCollectionTestComponent component = Find(Scene.Main, root.Identifier).GetComponent<NetCollectionTestComponent>()!;
             component.ClearSeen();
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
             host.Session.SendRaw(client, FakePeer.Sync, SyncWithMalformedTail(NetPeer.HostId, component, kind));
@@ -136,7 +136,7 @@ public partial class NetworkingTests
     [InlineData("stale")]
     public void ValidSyncSkipsRejectedValuesAndNotifiesOnceAfterTheWholeBlock(string skipped)
     {
-        SceneInstance scene = CreateScene(); MakeCurrent(scene);
+        Scene scene = CreateScene(); MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
         using FakePeer owner = FakePeer.Join(network, "owner"), observer = FakePeer.Join(network, "observer");

@@ -77,6 +77,7 @@ public class GameViewPanel : DockPanel
     internal static float LastAspect { get; private set; } = 16f / 9f;
     private int _resolutionIndex = -1; // read from the project on first use, see ResolutionIndex
     private bool _showStats;
+    private bool _showGizmos;
     private GameViewScale _scale = GameViewScale.Fit;
     private float _zoom = 1f;
     private static readonly float[] s_zooms = [0.25f, 0.5f, 1f, 1.5f, 2f, 3f, 4f];
@@ -136,6 +137,7 @@ public class GameViewPanel : DockPanel
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
         state["showStats"] = _showStats;
+        state["showGizmos"] = _showGizmos;
         state["scale"] = _scale.ToString();
         state["zoom"] = _zoom;
         return true;
@@ -144,6 +146,7 @@ public class GameViewPanel : DockPanel
     public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
     {
         _showStats = state["showStats"]?.GetValue<bool>() == true;
+        _showGizmos = state["showGizmos"]?.GetValue<bool>() == true;
         if (Enum.TryParse(state["scale"]?.GetValue<string>(), out GameViewScale scale)) _scale = scale;
         _zoom = state["zoom"]?.GetValue<float>() ?? 1f;
     }
@@ -234,6 +237,7 @@ public class GameViewPanel : DockPanel
                             on: _scale == GameViewScale.Zoom && Math.Abs(_zoom - zoom) < 0.001f);
                 }, EditorIcons.MagnifyingGlass);
                 b.Toggle(Loc.Get("game.show_stats"), () => { _showStats = !_showStats; SaveViewState(); }, () => _showStats);
+                b.Toggle(Loc.Get("scene.show_gizmos"), () => { _showGizmos = !_showGizmos; SaveViewState(); }, () => _showGizmos);
                 b.Toggle(Loc.Get("game.maximize_on_play"), ToggleMaximizeOnPlay,
                     () => Preferences.Get<PlayModePreferences>().GameViewOnPlay == GameViewOnPlay.Maximize);
             }));
@@ -267,14 +271,14 @@ public class GameViewPanel : DockPanel
     /// The worlds the game view draws and feeds input, lowest render order first: Main, and in play every running
     /// world play code presented over it.
     /// </summary>
-    internal static List<SceneInstance> HostedWorlds()
+    internal static List<Scene> HostedWorlds()
     {
-        List<SceneInstance> worlds = [];
-        if (!SceneInstance.HasMain) return worlds;
-        SceneInstance main = SceneInstance.Main;
+        List<Scene> worlds = [];
+        if (!Scene.HasMain) return worlds;
+        Scene main = Scene.Main;
         worlds.Add(main);
         if (!Application.IsPlaying) return worlds;
-        foreach (SceneInstance world in SceneInstance.All)
+        foreach (Scene world in Scene.All)
             if (world.Present && world.State == SceneState.Running && !ReferenceEquals(world, main))
                 worlds.Add(world);
         return [.. worlds.OrderBy(world => world.RenderOrder)];
@@ -284,7 +288,7 @@ public class GameViewPanel : DockPanel
     {
         using (paper.Box("gv_game").Clip().Enter())
         {
-            SceneInstance scene = SceneInstance.Main;
+            Scene scene = Scene.Main;
             if (scene.IsNotValid())
             {
                 paper.Box("gv_no_scene")
@@ -330,17 +334,19 @@ public class GameViewPanel : DockPanel
 
             EnsureRT(rtW, rtH);
 
-            List<SceneInstance> hosted = HostedWorlds();
-            foreach (SceneInstance world in hosted)
+            List<Scene> hosted = HostedWorlds();
+            foreach (Scene world in hosted)
             {
                 List<Camera> cameras = world.GatherActiveCameras();
                 cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+                if (_showGizmos)
+                    EditorApplication.Instance?.DrawSceneGizmos(world);
 
                 foreach (Camera cam in cameras)
                 {
                     try
                     {
-                        cam.Render(new CameraRenderOptions { FallbackTarget = _rt, Kind = Prowl.Graphite.Rendering.ViewKind.Game });
+                        cam.Render(new CameraRenderOptions { FallbackTarget = _rt, Kind = Prowl.Graphite.Rendering.ViewKind.Game, DisplayGizmos = _showGizmos });
                     }
                     catch (Exception ex)
                     {
@@ -386,7 +392,7 @@ public class GameViewPanel : DockPanel
                 // Camera.PixelWidth/Height), so picking works from the editor like a standalone build.
                 GameViewInputHandler.Viewport = new GameViewInputHandler.GameViewport(origin, size, new Int2(rtW, rtH));
 
-                foreach (SceneInstance world in hosted)
+                foreach (Scene world in hosted)
                     world.Input.Viewport = new RuntimeEventSystem.HostViewport
                     {
                         ReferenceSize = new Float2(rtW, rtH),
@@ -397,7 +403,7 @@ public class GameViewPanel : DockPanel
             else
             {
                 GameViewInputHandler.Viewport = null;
-                foreach (SceneInstance world in hosted)
+                foreach (Scene world in hosted)
                     world.Input.Viewport = null;
             }
 
@@ -419,7 +425,7 @@ public class GameViewPanel : DockPanel
                     using (FrameStats.UI.Scope())
                     {
                         _gamePaper!.BeginFrame(Time.UnscaledDeltaTime, -1f);
-                        foreach (SceneInstance world in hosted)
+                        foreach (Scene world in hosted)
                             world.OnGui(_gamePaper);
                         _gamePaper.EndFrame();
                     }

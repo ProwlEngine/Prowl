@@ -47,7 +47,7 @@ internal sealed partial class NetworkSystem
     private readonly List<NetworkObject> _pendingSpawns = new();
 
     // The trees of the networked objects stored in each scene asset, by root, read once a session.
-    private readonly Dictionary<Scene, Dictionary<Guid, Guid[]>> _assetTrees = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<SceneAsset, Dictionary<Guid, Guid[]>> _assetTrees = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Starts <paramref name="peers" /> loading the host's scenes.</summary>
     internal void SendScene(params NetPeer[] peers)
@@ -72,7 +72,7 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>The scene message: the sections of <paramref name="world" /> and the scene asset each came from.</summary>
-    internal void WriteScene(SceneInstance world, NetWriter output)
+    internal void WriteScene(Scene world, NetWriter output)
     {
         output.WriteByte(SceneMessageFormat);
         output.WriteUInt64(Math.Max(SceneGeneration, 1));
@@ -91,7 +91,7 @@ internal sealed partial class NetworkSystem
     ///     The networked objects stored in <paramref name="source" />, each with the identifiers of its tree in build
     ///     order, or null when the section has no scene asset a client could load.
     /// </summary>
-    private Dictionary<Guid, Guid[]>? AssetTrees(Scene? source)
+    private Dictionary<Guid, Guid[]>? AssetTrees(SceneAsset? source)
     {
         if (source.IsNotValid() || source!.Data == null)
         {
@@ -157,13 +157,13 @@ internal sealed partial class NetworkSystem
             return;
         }
 
-        if (!SceneInstance.HasMain)
+        if (!Scene.HasMain)
         {
-            Networking.Shutdown("Joining needs a world bound as SceneInstance.Main to load into.");
+            Networking.Shutdown("Joining needs a world bound as Scene.Main to load into.");
             return;
         }
 
-        SceneInstance world = SceneInstance.Main;
+        Scene world = Scene.Main;
         SceneGeneration = sceneGeneration;
         LocalJoinState = NetworkJoinState.Loading;
         EarlyRpcs.Clear();
@@ -195,14 +195,14 @@ internal sealed partial class NetworkSystem
         // One kept through the change that never had its spawn callbacks still waits for them.
         _pendingSpawns.RemoveAll(e => !e.AwaitingRespawn);
 
-        List<(SectionHeader Header, Scene? Source, SceneContent Content)> loaded = new();
+        List<(SectionHeader Header, SceneAsset? Source, SceneContent Content)> loaded = new();
         try
         {
             foreach (SectionHeader header in headers)
             {
                 if (header.Id != PersistentSectionId)
                 {
-                    SceneContent content = LoadSection(header, out Scene? source);
+                    SceneContent content = LoadSection(header, out SceneAsset? source);
                     loaded.Add((header, source, content));
                 }
             }
@@ -236,7 +236,7 @@ internal sealed partial class NetworkSystem
     ///     This peer's own copy of a section the host named: read from its scene asset, with the networked objects
     ///     held back until the host spawns them, or empty for a section the host built in code.
     /// </summary>
-    private SceneContent LoadSection(SectionHeader header, out Scene? source)
+    private SceneContent LoadSection(SectionHeader header, out SceneAsset? source)
     {
         source = null;
         if (header.Source == Guid.Empty)
@@ -244,7 +244,7 @@ internal sealed partial class NetworkSystem
             return new SceneContent();
         }
 
-        source = AssetDatabase.Get(header.Source) as Scene;
+        source = AssetDatabase.Get(header.Source) as SceneAsset;
         if (source.IsNotValid() || source!.Data == null)
         {
             throw new InvalidDataException(
@@ -330,7 +330,7 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>Lets go of the held scene objects, but for the ones in the persistent section of <paramref name="keeping" />.</summary>
-    private void DisposeHeld(SceneInstance? keeping = null)
+    private void DisposeHeld(Scene? keeping = null)
     {
         foreach ((Guid id, GameObject go) in _held.ToArray())
         {
@@ -348,7 +348,7 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>Replaces every section of <paramref name="world" /> but the persistent one with the ones just loaded.</summary>
-    private void ApplyLoaded(SceneInstance world, List<(SectionHeader Header, Scene? Source, SceneContent Content)> sections)
+    private void ApplyLoaded(Scene world, List<(SectionHeader Header, SceneAsset? Source, SceneContent Content)> sections)
     {
         _applyingSections = true;
         try
@@ -395,7 +395,7 @@ internal sealed partial class NetworkSystem
             bool replaced = kept.Count > 0;
             for (int i = 0; i < sections.Count; i++)
             {
-                (SectionHeader header, Scene? source, SceneContent content) = sections[i];
+                (SectionHeader header, SceneAsset? source, SceneContent content) = sections[i];
                 sections[i] = (header, source, new SceneContent());
                 SceneSection section = own[i] ?? (replaced
                     ? world.AddContent(content, header.Name, source)
@@ -435,7 +435,7 @@ internal sealed partial class NetworkSystem
     }
 
     /// <summary>Persistent objects the incoming scenes bring again go with the sections they replace instead.</summary>
-    internal static void ReleasePreservedCopies(SceneInstance world, HashSet<Guid> incoming)
+    internal static void ReleasePreservedCopies(Scene world, HashSet<Guid> incoming)
     {
         foreach (GameObject kept in world.Persistent.Roots.ToArray())
         {
@@ -557,13 +557,13 @@ internal sealed partial class NetworkSystem
         }
 
         NetSession? session = Session;
-        SceneInstance world = ReplicatedWorld!;
+        Scene world = ReplicatedWorld!;
         SceneSection? section = header.Source == Guid.Empty
             ? OwnSection(world.Sections, header.Name, [.. _sectionIds.Keys])
             : null;
         if (section == null)
         {
-            SceneContent content = LoadSection(header, out Scene? source);
+            SceneContent content = LoadSection(header, out SceneAsset? source);
             _applyingSections = true;
             try
             {
@@ -605,7 +605,7 @@ internal sealed partial class NetworkSystem
     internal static Func<GameObject, SpawnTemplate?>? UnstoredSceneObjects;
 
     /// <summary>Registers networked objects the host's world holds, which belong to the host until it spawns or hands them out.</summary>
-    internal void RegisterSceneObjects(SceneInstance world, IEnumerable<GameObject> objects)
+    internal void RegisterSceneObjects(Scene world, IEnumerable<GameObject> objects)
     {
         NetSession? session = Session;
         foreach (GameObject go in objects.ToArray())

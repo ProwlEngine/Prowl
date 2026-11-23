@@ -5,17 +5,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
-using Material = Prowl.Runtime.Resources.Material;
-using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -450,122 +447,119 @@ public static class Debug
         });
     }
 
-    public static void If(bool condition, string message = "")
+    /// <summary>Throws an <see cref="AssertionFailedException"/> when <paramref name="condition"/> is false, in every build.</summary>
+    /// <param name="condition"> The condition to check. </param>
+    /// <param name="message"> An optional message to include in the excepton message. </param>
+    public static void Assert([DoesNotReturnIf(false)] bool condition, string? message = null)
     {
-        if (condition)
-            throw new Exception(message);
-    }
-
-    public static void IfNull(object value, string message = "")
-    {
-        if (value is null)
-            throw new Exception(message);
-    }
-
-    public static void IfNullOrEmpty(string value, string message = "")
-    {
-        if (string.IsNullOrEmpty(value))
-            throw new Exception(message);
-    }
-
-    internal static void ErrorGuard(Action value)
-    {
-        try
-        {
-            value();
-        }
-        catch (Exception e)
-        {
-            LogError(e.Message);
-        }
-    }
-
-    /// <summary>Logs an error when <paramref name="condition"/> is false, in every build, and carries on.</summary>
-    public static void Assert(bool condition, string? message)
-    {
-        if (!condition) LogCore(message == null ? "Assertion failed" : $"Assertion failed: {message}", LogSeverity.Error);
-    }
-
-    /// <inheritdoc cref="Assert(bool, string?)"/>
-    public static void Assert(bool condition)
-    {
-        if (!condition) LogCore("Assertion failed", LogSeverity.Error);
+        if (!condition)
+            throw new AssertionFailedException(message == null ? "Assertion failed" : $"Assertion failed: {message}");
     }
 
     #region Gizmos
 
     // Draw calls land in the scene whose code is running, so a preview never draws the game's lines.
-    private static GizmoBuilder s_gizmoBuilder => Resources.SceneInstance.Active.Gizmos;
+    private static GizmoBuilder s_gizmoBuilder => Resources.Scene.Active.Gizmos;
 
-    /// <summary>Clears every scene's gizmos for the next frame.</summary>
+    // Built games draw no gizmos, so their draw calls return before touching a scene
+    private static GizmoBatch? Gizmos => Application.IsEditor ? s_gizmoBuilder.Batch : null;
+
+    private static Prowl.Graphite.Rendering.Gizmos? s_gizmoFeature;
+
+    /// <summary>The render feature every view showing gizmos draws them with, made on first use.</summary>
+    internal static Prowl.Graphite.Rendering.Gizmos GizmoFeature => s_gizmoFeature ??= new Prowl.Graphite.Rendering.Gizmos(Graphics.Renderer!);
+
+    internal static void DisposeGizmoFeature()
+    {
+        s_gizmoFeature?.Dispose();
+        s_gizmoFeature = null;
+    }
+
+    /// <summary>Clears every scene's gizmos for the next frame, handing the frame's to the renderer.</summary>
     public static void ClearGizmos()
     {
-        foreach (Resources.SceneInstance scene in Resources.SceneInstance.Live)
+        foreach (Resources.Scene scene in Resources.Scene.Live)
             scene.Gizmos.Clear();
     }
 
-    /// <summary>The layer gizmos draw on. Views showing gizmos include it, cameras never draw it otherwise.</summary>
-    public const uint GizmoLayerMask = 1u << 31;
-
-    private static readonly Dictionary<RenderWorld, ulong> s_gizmosSubmitted = [];
-
-    /// <summary>Draws a scene's gizmos for this frame into a world, once a frame, on the gizmo layer.</summary>
-    internal static void SubmitGizmos(Resources.SceneInstance? scene, RenderWorld world)
+    /// <summary>Shows a scene's gizmos for this frame in the views of a world that draw gizmos.</summary>
+    internal static void SubmitGizmos(Resources.Scene? scene, RenderWorld world)
     {
-        if (scene.IsNotValid()) return;
-        if (s_gizmosSubmitted.TryGetValue(world, out ulong frame) && frame == Graphics.FrameIndex) return;
-        s_gizmosSubmitted[world] = Graphics.FrameIndex;
-        if (s_gizmosSubmitted.Count > 64)
-            foreach (RenderWorld stale in s_gizmosSubmitted.Where(pair => pair.Value != Graphics.FrameIndex).Select(pair => pair.Key).ToList())
-                s_gizmosSubmitted.Remove(stale);
-        scene.Gizmos.Submit(world);
-    }
-
-    public static List<GizmoBuilder.IconDrawCall> GetGizmoIcons()
-    {
-        return s_gizmoBuilder.GetIcons();
+        if (scene.IsNotValid() || !Application.IsEditor) return;
+        scene.Gizmos.Submit(world, GizmoFeature);
     }
 
     public static void PushMatrix(Float4x4 matrix)
     {
-        s_gizmoBuilder.PushMatrix(matrix);
+        if (Application.IsEditor) s_gizmoBuilder.PushMatrix(matrix);
     }
 
     public static void PopMatrix()
     {
-        s_gizmoBuilder.PopMatrix();
+        if (Application.IsEditor) s_gizmoBuilder.PopMatrix();
     }
 
-    public static void DrawLine(Float3 start, Float3 end, Color color) => s_gizmoBuilder.DrawLine(start, end, color);
-    public static void DrawTriangle(Float3 a, Float3 b, Float3 c, Color color) => s_gizmoBuilder.DrawTriangle(a, b, c, color);
-    public static void DrawWireCube(Float3 center, Float3 halfExtents, Color color) => s_gizmoBuilder.DrawWireCube(center, halfExtents, color);
-    public static void DrawCube(Float3 center, Float3 halfExtents, Color color) => s_gizmoBuilder.DrawCube(center, halfExtents, color);
-    public static void DrawWireCircle(Float3 center, Float3 normal, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawCircle(center, normal, radius, color, segments);
+    public static void DrawLine(Float3 start, Float3 end, Color color) => Gizmos?.Line(start, end, color);
+    public static void DrawTriangle(Float3 a, Float3 b, Float3 c, Color color) => Gizmos?.Triangle(a, b, c, color);
+    public static void DrawWireCube(Float3 center, Float3 halfExtents, Color color) => Gizmos?.Box(center, halfExtents, Quaternion.Identity, color);
+    public static void DrawCube(Float3 center, Float3 halfExtents, Color color) => Gizmos?.SolidBox(center, halfExtents, Quaternion.Identity, color);
+    public static void DrawWireCircle(Float3 center, Float3 normal, float radius, Color color, int segments = 32) => Gizmos?.Circle(center, normal, radius, color, segments: segments);
 
     /// <summary>
-    /// Part of a circle, starting at the <paramref name="from"/> direction and sweeping
-    /// <paramref name="sweepRadians"/> about <paramref name="normal"/>. Negative sweeps go the other way.
+    /// Part of a circle about <paramref name="normal"/>, starting at the <paramref name="from"/> direction and sweeping
+    /// <paramref name="sweepRadians"/>, counterclockwise looking down the normal. A negative sweep goes the other way.
     /// </summary>
-    public static void DrawWireArc(Float3 center, Float3 normal, Float3 from, float radius, float sweepRadians, Color color, int segments = 24) => s_gizmoBuilder.DrawWireArc(center, normal, from, radius, sweepRadians, color, segments);
-    public static void DrawWireSphere(Float3 center, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireSphere(center, radius, color, segments);
-    public static void DrawSphere(Float3 center, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawSphere(center, radius, color, segments);
-    public static void DrawWireCone(Float3 start, Float3 direction, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireCone(start, direction, radius, color, segments);
-    public static void DrawWireCapsule(Float3 point1, Float3 point2, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireCapsule(point1, point2, radius, color, segments);
-    public static void DrawWireCylinder(Float3 center, Quaternion rotation, float radius, float height, Color color, int segments = 16) => s_gizmoBuilder.DrawWireCylinder(center, rotation, radius, height, color, segments);
-    public static void DrawArrow(Float3 start, Float3 direction, Color color) => s_gizmoBuilder.DrawArrow(start, direction, color);
+    public static void DrawWireArc(Float3 center, Float3 normal, Float3 from, float radius, float sweepRadians, Color color, int segments = 24)
+    {
+        float turn = MathF.Abs(sweepRadians) / MathF.Tau;
+        Gizmos?.Arc(center, normal, from, sweepRadians, radius, color, segments: turn > 1e-4f ? (int)MathF.Ceiling(Maths.Max(1, segments) / turn) : segments);
+    }
 
-    /// <inheritdoc cref="GizmoBuilder.DrawIcon"/>
-    public static void DrawIcon(Texture2D icon, Float3 center, float scale, Color color) => s_gizmoBuilder.DrawIcon(icon, center, scale, color);
+    public static void DrawWireSphere(Float3 center, float radius, Color color, int segments = 32) => Gizmos?.Sphere(center, radius, color, segments: segments);
+    public static void DrawSphere(Float3 center, float radius, Color color, int segments = 16) => Gizmos?.SolidSphere(center, radius, color, segments);
+
+    /// <summary>A cone with its base around <paramref name="start"/> and its tip at <paramref name="start"/> plus <paramref name="direction"/>.</summary>
+    public static void DrawWireCone(Float3 start, Float3 direction, float radius, Color color, int segments = 32)
+    {
+        float length = Float3.Length(direction);
+        if (length <= 0.0f) return;
+        Gizmos?.Cone(start + direction, -direction, length, MathF.Atan2(radius, length), color, segments: segments);
+    }
+
+    public static void DrawWireCapsule(Float3 point1, Float3 point2, float radius, Color color, int segments = 32) => Gizmos?.Capsule(point1, point2, radius, color, segments: segments);
+
+    /// <summary>A cylinder along the rotation's up axis, <paramref name="height"/> long and centred on <paramref name="center"/>.</summary>
+    public static void DrawWireCylinder(Float3 center, Quaternion rotation, float radius, float height, Color color, int segments = 32)
+    {
+        Float3 half = rotation * Float3.UnitY * (height * 0.5f);
+        Gizmos?.Cylinder(center - half, center + half, radius, color, segments: segments);
+    }
+
+    /// <summary>A line from <paramref name="start"/> along <paramref name="direction"/>, with a head that keeps its size on screen.</summary>
+    public static void DrawArrow(Float3 start, Float3 direction, Color color)
+    {
+        if (Float3.LengthSquared(direction) <= 0.0f) return;
+        Gizmos?.Arrow(start, start + direction, color);
+    }
+
+    /// <summary>A camera facing icon <paramref name="scale"/> world units across. It can be clicked to select the component drawing it.</summary>
+    public static void DrawIcon(Texture2D icon, Float3 center, float scale, Color color)
+    {
+        if (Application.IsEditor) s_gizmoBuilder.DrawIcon(icon, center, scale, color);
+    }
 
     /// <summary>
     /// Lines drawn until the scope is disposed can be clicked in the scene view to select the component drawing
     /// them. Meant for outlines that always show, such as a volume's bounds, so the volume selects from its edges
     /// without taking clicks meant for what is inside it.
     /// </summary>
-    public static GizmoBuilder.HitboxLineScope GizmoHitboxLines() => s_gizmoBuilder.HitboxLines();
+    public static GizmoBuilder.HitboxLineScope GizmoHitboxLines() => Application.IsEditor ? s_gizmoBuilder.HitboxLines() : default;
 
     /// <summary>A sphere that can be clicked in the scene view to select the component drawing it.</summary>
-    public static void GizmoHitboxSphere(Float3 center, float radius) => s_gizmoBuilder.HitboxSphere(center, radius);
+    public static void GizmoHitboxSphere(Float3 center, float radius)
+    {
+        if (Application.IsEditor) s_gizmoBuilder.HitboxSphere(center, radius);
+    }
 
     /// <summary>
     /// A line broken into dashes, so it reads as a relationship between two things rather than as an
@@ -573,33 +567,22 @@ public static class Debug
     /// </summary>
     public static void DrawDashedLine(Float3 from, Float3 to, Color color, int dashes = 8)
     {
+        if (Gizmos is not { } gizmos) return;
         if (dashes < 1) dashes = 1;
         Float3 step = (to - from) / (dashes * 2 - 1);
 
         for (int i = 0; i < dashes; i++)
-            DrawLine(from + step * (i * 2), from + step * (i * 2 + 1), color);
+            gizmos.Line(from + step * (i * 2), from + step * (i * 2 + 1), color);
     }
 
     /// <summary>
-    /// An axis through a point, drawn both ways because an axis has no near end, with an arrow to give
+    /// An axis through a point, drawn both ways because an axis has no near end, with an arrow head to give
     /// it a positive direction.
     /// </summary>
-    public static void DrawAxisLine(Float3 center, Float3 direction, float length, Color color)
-    {
-        Float3 half = Float3.Normalize(direction) * length;
-        if (Float3.LengthSquared(half) <= 0.0f) return;
-
-        DrawLine(center - half, center + half, color);
-        DrawArrow(center, half, color);
-    }
+    public static void DrawAxisLine(Float3 center, Float3 direction, float length, Color color) => Gizmos?.AxisLine(center, direction, length, color);
 
     /// <summary>A bar across an axis, for marking a hard stop along it.</summary>
-    public static void DrawCrossBar(Float3 position, Float3 axis, float size, Color color)
-    {
-        PerpendicularAxes(axis, out Float3 u, out Float3 v);
-        DrawLine(position - u * size, position + u * size, color);
-        DrawLine(position - v * size, position + v * size, color);
-    }
+    public static void DrawCrossBar(Float3 position, Float3 axis, float size, Color color) => Gizmos?.CrossBar(position, axis, size, color);
 
     /// <summary>
     /// An angular range about <paramref name="normal"/>, measured from the <paramref name="zero"/>
@@ -607,20 +590,7 @@ public static class Debug
     /// </summary>
     public static void DrawArcRange(Float3 center, Float3 normal, Float3 zero, float radius,
         float minDegrees, float maxDegrees, Color rangeColor, Color limitColor)
-    {
-        float min = minDegrees * Maths.Deg2Rad;
-        float max = maxDegrees * Maths.Deg2Rad;
-        if (max < min) (min, max) = (max, min);
-
-        Float3 start = Quaternion.AxisAngle(Float3.Normalize(normal), min) * zero;
-        DrawWireArc(center, normal, start, radius, max - min, rangeColor, 32);
-
-        if (max - min >= Maths.PI * 2 - 1e-3f) return; // a full turn has no stops to mark
-
-        Float3 end = Quaternion.AxisAngle(Float3.Normalize(normal), max) * zero;
-        DrawLine(center, center + Float3.Normalize(start) * radius, limitColor);
-        DrawLine(center, center + Float3.Normalize(end) * radius, limitColor);
-    }
+        => Gizmos?.ArcRange(center, normal, zero, radius, minDegrees * Maths.Deg2Rad, maxDegrees * Maths.Deg2Rad, rangeColor, limitColor);
 
     /// <summary>
     /// A range along an axis. Ends that are infinite run on for <paramref name="openLength"/> with no
@@ -628,65 +598,34 @@ public static class Debug
     /// </summary>
     public static void DrawLinearRange(Float3 origin, Float3 direction, float minDistance, float maxDistance,
         float openLength, float stopSize, Color rangeColor, Color limitColor)
-    {
-        Float3 axis = Float3.Normalize(direction);
-        if (Float3.LengthSquared(axis) <= 0.0f) return;
-
-        bool hasMin = float.IsFinite(minDistance);
-        bool hasMax = float.IsFinite(maxDistance);
-
-        float from = hasMin ? minDistance : -openLength;
-        float to = hasMax ? maxDistance : openLength;
-        if (to < from) (from, to) = (to, from);
-
-        DrawLine(origin + axis * from, origin + axis * to, rangeColor);
-
-        if (hasMin) DrawCrossBar(origin + axis * from, axis, stopSize, limitColor);
-        if (hasMax) DrawCrossBar(origin + axis * to, axis, stopSize, limitColor);
-    }
+        => Gizmos?.LinearRange(origin, direction, minDistance, maxDistance, openLength, stopSize, rangeColor, limitColor);
 
     /// <summary>
     /// An arc with an arrowhead on the swept end, for showing a rotation direction. A negative
     /// <paramref name="sweepRadians"/> turns the other way.
     /// </summary>
     public static void DrawSpinArrow(Float3 center, Float3 normal, Float3 from, float radius, float sweepRadians, Color color)
-    {
-        DrawWireArc(center, normal, from, radius, sweepRadians, color, 24);
-
-        Float3 end = Quaternion.AxisAngle(Float3.Normalize(normal), sweepRadians) * (Float3.Normalize(from) * radius);
-        Float3 tangent = Float3.Cross(Float3.Normalize(normal), end);
-        if (Float3.LengthSquared(tangent) <= 0.0f) return;
-
-        DrawArrow(center + end, Float3.Normalize(tangent) * Maths.Sign(sweepRadians) * (radius * 0.5f), color);
-    }
+        => Gizmos?.SpinArrow(center, normal, from, radius, sweepRadians, color);
 
     /// <summary>Three rings around a point, the shorthand for "free to rotate any way".</summary>
-    public static void DrawGimbal(Float3 center, float radius, Color color, int segments = 20)
-    {
-        DrawWireCircle(center, Float3.UnitX, radius, color, segments);
-        DrawWireCircle(center, Float3.UnitY, radius, color, segments);
-        DrawWireCircle(center, Float3.UnitZ, radius, color, segments);
-    }
+    public static void DrawGimbal(Float3 center, float radius, Color color, int segments = 32) => Gizmos?.Sphere(center, radius, color, segments: segments);
 
     /// <summary>An orientation tripod, X/Y/Z in red/green/blue.</summary>
-    public static void DrawAxes(Float3 center, Quaternion rotation, float scale)
-    {
-        DrawLine(center, center + rotation * Float3.UnitX * scale, Color.Red);
-        DrawLine(center, center + rotation * Float3.UnitY * scale, Color.Green);
-        DrawLine(center, center + rotation * Float3.UnitZ * scale, Color.Blue);
-    }
+    public static void DrawAxes(Float3 center, Quaternion rotation, float scale) => Gizmos?.Axes(center, rotation, scale);
 
     /// <inheritdoc cref="DrawAxes(Float3, Quaternion, float)"/>
     public static void DrawAxes(Float3 center, Quaternion rotation, float scale, Color color)
     {
-        DrawLine(center, center + rotation * Float3.UnitX * scale, color);
-        DrawLine(center, center + rotation * Float3.UnitY * scale, color);
-        DrawLine(center, center + rotation * Float3.UnitZ * scale, color);
+        if (Gizmos is not { } gizmos) return;
+        gizmos.Line(center, center + rotation * Float3.UnitX * scale, color);
+        gizmos.Line(center, center + rotation * Float3.UnitY * scale, color);
+        gizmos.Line(center, center + rotation * Float3.UnitZ * scale, color);
     }
 
     /// <summary>A square patch of plane with a cross through it, so it reads as a surface.</summary>
     public static void DrawWirePlane(Float3 center, Float3 normal, float extent, Color color)
     {
+        if (Gizmos is not { } gizmos) return;
         PerpendicularAxes(normal, out Float3 u, out Float3 v);
 
         Float3 a = center + (u + v) * extent;
@@ -694,12 +633,12 @@ public static class Debug
         Float3 c = center - (u + v) * extent;
         Float3 d = center - (u - v) * extent;
 
-        DrawLine(a, b, color);
-        DrawLine(b, c, color);
-        DrawLine(c, d, color);
-        DrawLine(d, a, color);
-        DrawLine((a + b) * 0.5f, (c + d) * 0.5f, color);
-        DrawLine((b + c) * 0.5f, (d + a) * 0.5f, color);
+        gizmos.Line(a, b, color);
+        gizmos.Line(b, c, color);
+        gizmos.Line(c, d, color);
+        gizmos.Line(d, a, color);
+        gizmos.Line((a + b) * 0.5f, (c + d) * 0.5f, color);
+        gizmos.Line((b + c) * 0.5f, (d + a) * 0.5f, color);
     }
 
     /// <summary>
@@ -707,28 +646,8 @@ public static class Debug
     /// vision cones. <paramref name="length"/> is the slant length, so every drawn edge is that far from
     /// the apex.
     /// </summary>
-    public static void DrawWireConeAngle(Float3 apex, Float3 axis, float angleDegrees, float length, Color color, int segments = 24)
-    {
-        Float3 dir = Float3.Normalize(axis);
-        if (Float3.LengthSquared(dir) <= 0.0f) return;
-
-        float angle = Maths.Clamp(angleDegrees, 0.0f, 180.0f) * Maths.Deg2Rad;
-
-        // Rim on the sphere: it slides behind the apex past 90 degrees, which is exactly right.
-        Float3 rimCenter = apex + dir * (length * Maths.Cos(angle));
-        float radius = length * Maths.Sin(angle);
-        DrawWireCircle(rimCenter, dir, radius, color, segments);
-
-        // Four meridians out to that rim. Rotating the axis about one perpendicular sweeps it toward the
-        // other, so the two perpendiculars and their negatives give the four quarters.
-        PerpendicularAxes(dir, out Float3 u, out Float3 v);
-        int arcSegments = Maths.Max(2, segments / 2);
-
-        DrawWireArc(apex, v, dir, length, angle, color, arcSegments);
-        DrawWireArc(apex, v, dir, length, -angle, color, arcSegments);
-        DrawWireArc(apex, u, dir, length, angle, color, arcSegments);
-        DrawWireArc(apex, u, dir, length, -angle, color, arcSegments);
-    }
+    public static void DrawWireConeAngle(Float3 apex, Float3 axis, float angleDegrees, float length, Color color, int segments = 32)
+        => Gizmos?.SlantCone(apex, axis, angleDegrees * Maths.Deg2Rad, length, color, segments: segments);
 
     /// <summary>
     /// Two unit vectors perpendicular to <paramref name="axis"/> and to each other. The reference is
@@ -748,45 +667,34 @@ public static class Debug
 
 }
 
+/// <summary>
+/// The exception that is thrown if <see cref="Debug.Assert"/> fails.
+/// </summary>
+/// <param name="message"> The exception message. </param>
+public class AssertionFailedException(string message) : Exception(message);
+
+/// <summary>
+/// A scene's gizmos, drawn through Graphite's gizmo feature. Draws fill one batch while the renderer shows the other,
+/// which <see cref="Clear"/> swaps at the end of a frame, so the frame's gizmos reach the renderer after they are cleared.
+/// </summary>
 public class GizmoBuilder
 {
-    private struct MeshData
-    {
-        public List<Float3> Vertices = [];
-        public List<Float2> Uvs = [];
-        public List<Color32> Colors = [];
-        public List<int> Indices = [];
+    private GizmoBatch _building = new() { Visible = false };
+    private GizmoBatch _shown = new() { Visible = false };
+    private GizmoBatch _surfaceBuilding = new() { Visible = false, Hidden = HiddenStyle.Gone };
+    private GizmoBatch _surfaceShown = new() { Visible = false, Hidden = HiddenStyle.Gone };
+    private RenderWorld? _world;
+    private Prowl.Graphite.Rendering.Gizmos? _feature;
+    private readonly Stack<Float4x4> _matrices = new();
 
-        public MeshData()
-        {
-        }
+    /// <summary>The batch draws this frame go into.</summary>
+    public GizmoBatch Batch => _building;
 
-        public readonly void Clear()
-        {
-            Vertices.Clear();
-            Uvs.Clear();
-            Colors.Clear();
-            Indices.Clear();
-        }
-    }
-
-    private MeshData _wireData = new();
-    private MeshData _solidData = new();
-
-    public struct IconDrawCall
-    {
-        public Texture2D Texture;
-        public Float3 Center;
-        public float Scale;
-        public Color Color;
-    }
-
-    private List<IconDrawCall> _icons = [];
+    /// <summary>A batch for this frame whose parts behind the scene's surfaces are not drawn at all.</summary>
+    public GizmoBatch SurfaceBatch => _surfaceBuilding;
 
     /// <summary>Whether nothing was drawn into this builder since it was last cleared.</summary>
-    internal bool IsEmpty => _wireData.Vertices.Count == 0 && _solidData.Vertices.Count == 0 && _icons.Count == 0;
-
-    private Stack<Float4x4> _matrix4X4s = new();
+    internal bool IsEmpty => _building.PrimitiveCount == 0;
 
     // ---- hitboxes ------------------------------------------------------------------------------------
 
@@ -802,6 +710,7 @@ public class GizmoBuilder
     private List<GizmoHitbox> _hitboxes = [];
     private List<GizmoHitbox> _publishedHitboxes = [];
     private int _lineHitboxDepth;
+    private int _lineHitboxStart;
 
     /// <summary>
     /// The hitboxes of the last full frame of gizmos. Picking runs before the frame's gizmos are drawn, so it reads
@@ -825,7 +734,8 @@ public class GizmoBuilder
     /// <summary>Lines drawn until disposal can be clicked to select the component drawing them.</summary>
     public HitboxLineScope HitboxLines()
     {
-        _lineHitboxDepth++;
+        if (_lineHitboxDepth++ == 0)
+            _lineHitboxStart = _building.PrimitiveCount;
         return new HitboxLineScope(this);
     }
 
@@ -833,16 +743,28 @@ public class GizmoBuilder
     {
         private readonly GizmoBuilder? _builder;
         internal HitboxLineScope(GizmoBuilder builder) => _builder = builder;
-        public void Dispose() { if (_builder != null && _builder._lineHitboxDepth > 0) _builder._lineHitboxDepth--; }
+        public void Dispose() => _builder?.EndHitboxLines();
+    }
+
+    // Every line drawn in the outermost scope becomes a segment hitbox when it ends
+    private void EndHitboxLines()
+    {
+        if (_lineHitboxDepth == 0 || --_lineHitboxDepth > 0) return;
+        if (!RecordHitboxes) return;
+        for (int i = _lineHitboxStart; i < _building.PrimitiveCount; i++)
+        {
+            if (_building.TryGetLine(i, out Float3 a, out Float3 b))
+                AddHitbox(GizmoHitboxKind.Segment, a, b, 0f);
+        }
     }
 
     /// <summary>A sphere that can be clicked to select the component drawing it.</summary>
     public void HitboxSphere(Float3 center, float radius)
     {
-        if (_matrix4X4s.Count > 0)
+        if (_matrices.Count > 0)
         {
             // The radius scales with the matrix's largest axis, so the hitbox covers the sphere drawn with it.
-            Float4x4 m = _matrix4X4s.Peek();
+            Float4x4 m = _matrices.Peek();
             Float3 c = Float4x4.TransformPoint(center, m);
             radius = MathF.Max(MathF.Max(
                 Float3.Distance(c, Float4x4.TransformPoint(center + new Float3(radius, 0, 0), m)),
@@ -859,569 +781,77 @@ public class GizmoBuilder
         _hitboxes.Add(new GizmoHitbox(go, kind, a, b, radius));
     }
 
+    /// <summary>Transforms what is drawn until <see cref="PopMatrix"/> by a matrix, after the matrices pushed before it.</summary>
+    public void PushMatrix(Float4x4 matrix)
+    {
+        _matrices.Push(_matrices.Count > 0 ? _matrices.Peek() * matrix : matrix);
+        _building.Push(matrix);
+    }
 
+    public void PopMatrix()
+    {
+        if (_matrices.Count == 0) return;
+        _matrices.Pop();
+        _building.Pop();
+    }
+
+    /// <summary>A camera facing icon <paramref name="scale"/> world units across. It can be clicked to select the component drawing it.</summary>
+    public void DrawIcon(Texture2D icon, Float3 center, float scale, Color color)
+    {
+        if (icon.IsNotValid() || icon.GpuTexture is not { } texture) return;
+        if (_matrices.Count > 0)
+            center = Float4x4.TransformPoint(center, _matrices.Peek());
+        _building.WorldIcon(center, texture, scale, color);
+        AddHitbox(GizmoHitboxKind.Icon, center, center, scale * 0.5f);
+    }
+
+    /// <summary>Shows this frame's gizmos in the views of a world that draw gizmos with the feature.</summary>
+    internal void Submit(RenderWorld world, Prowl.Graphite.Rendering.Gizmos feature)
+    {
+        if (_feature != feature)
+        {
+            _feature?.Remove(_building);
+            _feature?.Remove(_shown);
+            _feature?.Remove(_surfaceBuilding);
+            _feature?.Remove(_surfaceShown);
+            _feature = feature;
+            feature.Add(_building);
+            feature.Add(_shown);
+            feature.Add(_surfaceBuilding);
+            feature.Add(_surfaceShown);
+        }
+        _world = world;
+    }
+
+    /// <summary>Hands the frame's gizmos to the renderer and starts the next frame's empty.</summary>
     public void Clear()
     {
-        _wireData.Clear();
-        _solidData.Clear();
-
-        //_wire?.Clear();
-        //_solid?.Clear();
-
-        _icons.Clear();
-
-        _matrix4X4s.Clear();
+        (_shown, _building) = (_building, _shown);
+        _shown.World = _world;
+        _shown.Visible = _world != null;
+        _world = null;
+        _building.Clear();
+        _building.Visible = false;
+        (_surfaceShown, _surfaceBuilding) = (_surfaceBuilding, _surfaceShown);
+        _surfaceShown.World = _shown.World;
+        _surfaceShown.Visible = _shown.Visible;
+        _surfaceBuilding.Clear();
+        _surfaceBuilding.Visible = false;
+        _matrices.Clear();
 
         (_publishedHitboxes, _hitboxes) = (_hitboxes, _publishedHitboxes);
         _hitboxes.Clear();
         _lineHitboxDepth = 0;
     }
 
-    private void AddLine(Float3 a, Float3 b, Color color)
+    /// <summary>Stops drawing this scene's gizmos, when the scene is gone.</summary>
+    internal void Release()
     {
-        if (_matrix4X4s.Count > 0)
-        {
-            Float4x4 m = _matrix4X4s.Peek();
-            a = Float4x4.TransformPoint(a, m);
-            b = Float4x4.TransformPoint(b, m);
-        }
-
-        if (_lineHitboxDepth > 0) AddHitbox(GizmoHitboxKind.Segment, a, b, 0f);
-
-        int index = _wireData.Vertices.Count;
-        _wireData.Vertices.Add(a);
-        _wireData.Vertices.Add(b);
-
-        _wireData.Colors.Add(color);
-        _wireData.Colors.Add(color);
-
-        _wireData.Indices.Add(index);
-        _wireData.Indices.Add(index + 1);
-    }
-
-    private void AddTriangle(Float3 a, Float3 b, Float3 c, Float2 a_uv, Float2 b_uv, Float2 c_uv, Color color)
-    {
-        if (_matrix4X4s.Count > 0)
-        {
-            Float4x4 m = _matrix4X4s.Peek();
-            a = Float4x4.TransformPoint(a, m);
-            b = Float4x4.TransformPoint(b, m);
-            c = Float4x4.TransformPoint(c, m);
-        }
-
-        int index = _solidData.Vertices.Count;
-
-        _solidData.Vertices.Add(a);
-        _solidData.Vertices.Add(b);
-        _solidData.Vertices.Add(c);
-
-        _solidData.Uvs.Add(a_uv);
-        _solidData.Uvs.Add(b_uv);
-        _solidData.Uvs.Add(c_uv);
-
-        _solidData.Colors.Add(color);
-        _solidData.Colors.Add(color);
-        _solidData.Colors.Add(color);
-
-        _solidData.Indices.Add(index);
-        _solidData.Indices.Add(index + 1);
-        _solidData.Indices.Add(index + 2);
-    }
-
-    public void PushMatrix(Float4x4 matrix)
-    {
-        _matrix4X4s.Push(matrix);
-    }
-
-    public void PopMatrix()
-    {
-        _matrix4X4s.Pop();
-    }
-
-    public void DrawLine(Float3 start, Float3 end, Color color) => AddLine(start, end, color);
-
-    public void DrawTriangle(Float3 a, Float3 b, Float3 c, Color color) => AddTriangle(a, b, c, Float2.Zero, Float2.Zero, Float2.Zero, color);
-
-    public void DrawWireCube(Float3 center, Float3 halfExtents, Color color)
-    {
-        Float3[] vertices = [
-            new Float3(center.X - halfExtents.X, center.Y - halfExtents.Y, center.Z - halfExtents.Z),
-            new Float3(center.X + halfExtents.X, center.Y - halfExtents.Y, center.Z - halfExtents.Z),
-            new Float3(center.X + halfExtents.X, center.Y - halfExtents.Y, center.Z + halfExtents.Z),
-            new Float3(center.X - halfExtents.X, center.Y - halfExtents.Y, center.Z + halfExtents.Z),
-            new Float3(center.X - halfExtents.X, center.Y + halfExtents.Y, center.Z - halfExtents.Z),
-            new Float3(center.X + halfExtents.X, center.Y + halfExtents.Y, center.Z - halfExtents.Z),
-            new Float3(center.X + halfExtents.X, center.Y + halfExtents.Y, center.Z + halfExtents.Z),
-            new Float3(center.X - halfExtents.X, center.Y + halfExtents.Y, center.Z + halfExtents.Z),
-        ];
-
-        AddLine(vertices[0], vertices[1], color);
-        AddLine(vertices[1], vertices[2], color);
-        AddLine(vertices[2], vertices[3], color);
-        AddLine(vertices[3], vertices[0], color);
-
-        AddLine(vertices[4], vertices[5], color);
-        AddLine(vertices[5], vertices[6], color);
-        AddLine(vertices[6], vertices[7], color);
-        AddLine(vertices[7], vertices[4], color);
-
-        AddLine(vertices[0], vertices[4], color);
-        AddLine(vertices[1], vertices[5], color);
-        AddLine(vertices[2], vertices[6], color);
-        AddLine(vertices[3], vertices[7], color);
-    }
-
-    public void DrawCube(Float3 center, Float3 halfExtents, Color color)
-    {
-        Float3[] vertices = [
-            new Float3(center.X - halfExtents.X, center.Y - halfExtents.Y, center.Z - halfExtents.Z),
-            new Float3(center.X + halfExtents.X, center.Y - halfExtents.Y, center.Z - halfExtents.Z),
-            new Float3(center.X + halfExtents.X, center.Y - halfExtents.Y, center.Z + halfExtents.Z),
-            new Float3(center.X - halfExtents.X, center.Y - halfExtents.Y, center.Z + halfExtents.Z),
-            new Float3(center.X - halfExtents.X, center.Y + halfExtents.Y, center.Z - halfExtents.Z),
-            new Float3(center.X + halfExtents.X, center.Y + halfExtents.Y, center.Z - halfExtents.Z),
-            new Float3(center.X + halfExtents.X, center.Y + halfExtents.Y, center.Z + halfExtents.Z),
-            new Float3(center.X - halfExtents.X, center.Y + halfExtents.Y, center.Z + halfExtents.Z),
-        ];
-
-        Float2[] uvs = [
-            new Float2(0, 0),
-            new Float2(1, 0),
-            new Float2(1, 1),
-            new Float2(0, 1),
-        ];
-
-        AddTriangle(vertices[0], vertices[1], vertices[2], uvs[0], uvs[1], uvs[2], color);
-        AddTriangle(vertices[0], vertices[2], vertices[3], uvs[0], uvs[2], uvs[3], color);
-
-        AddTriangle(vertices[4], vertices[6], vertices[5], uvs[0], uvs[1], uvs[2], color);
-        AddTriangle(vertices[4], vertices[7], vertices[6], uvs[0], uvs[2], uvs[3], color);
-
-        AddTriangle(vertices[0], vertices[3], vertices[7], uvs[0], uvs[1], uvs[2], color);
-        AddTriangle(vertices[0], vertices[7], vertices[4], uvs[0], uvs[2], uvs[3], color);
-
-        AddTriangle(vertices[1], vertices[5], vertices[6], uvs[0], uvs[1], uvs[2], color);
-        AddTriangle(vertices[1], vertices[6], vertices[2], uvs[0], uvs[2], uvs[3], color);
-
-        AddTriangle(vertices[3], vertices[2], vertices[6], uvs[0], uvs[1], uvs[2], color);
-        AddTriangle(vertices[3], vertices[6], vertices[7], uvs[0], uvs[2], uvs[3], color);
-
-        AddTriangle(vertices[0], vertices[4], vertices[5], uvs[0], uvs[1], uvs[2], color);
-        AddTriangle(vertices[0], vertices[5], vertices[1], uvs[0], uvs[2], uvs[3], color);
-    }
-
-    public void DrawWireSphere(Float3 center, float radius, Color color, int segments = 16)
-    {
-        float step = MathF.PI * 2 / segments;
-
-        for (int i = 0; i < segments; i++)
-        {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
-
-            Float3 a = new(Maths.Cos(angle1) * radius + center.X,
-                            Maths.Sin(angle1) * radius + center.Y,
-                            center.Z
-                        );
-
-            Float3 b = new(Maths.Cos(angle2) * radius + center.X,
-                            Maths.Sin(angle2) * radius + center.Y,
-                            center.Z
-                        );
-
-            AddLine(a, b, color);
-        }
-
-        for (int i = 0; i < segments; i++)
-        {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
-
-            Float3 a = new(Maths.Cos(angle1) * radius + center.X,
-                            center.Y,
-                            Maths.Sin(angle1) * radius + center.Z
-                        );
-
-            Float3 b = new(Maths.Cos(angle2) * radius + center.X,
-                            center.Y,
-                            Maths.Sin(angle2) * radius + center.Z
-                        );
-
-            AddLine(a, b, color);
-        }
-
-        for (int i = 0; i < segments; i++)
-        {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
-
-            Float3 a = new(center.X,
-                            Maths.Cos(angle1) * radius + center.Y,
-                            Maths.Sin(angle1) * radius + center.Z
-                        );
-
-            Float3 b = new(center.X,
-                            Maths.Cos(angle2) * radius + center.Y,
-                            Maths.Sin(angle2) * radius + center.Z
-                        );
-
-            AddLine(a, b, color);
-        }
-    }
-
-    public void DrawCircle(Float3 center, Float3 normal, float radius, Color color, int segments)
-    {
-        PlaneBasis(normal, out Float3 u, out Float3 v);
-        DrawArcInternal(center, u, v, radius, 0.0f, MathF.PI * 2, color, segments);
-    }
-
-    public void DrawWireArc(Float3 center, Float3 normal, Float3 from, float radius, float sweepRadians, Color color, int segments)
-    {
-        PlaneBasis(normal, out Float3 u, out Float3 v);
-
-        // Re-seat the basis so the arc starts exactly at `from`, which is what lets callers line an arc
-        // up with a limit angle instead of an arbitrary reference direction.
-        Float3 flattened = from - Float3.Dot(from, Float3.Normalize(normal)) * Float3.Normalize(normal);
-        if (Float3.LengthSquared(flattened) > 1e-12f)
-        {
-            u = Float3.Normalize(flattened);
-            v = Float3.Normalize(Float3.Cross(normal, u));
-        }
-
-        DrawArcInternal(center, u, v, radius, 0.0f, sweepRadians, color, Maths.Max(1, segments));
-    }
-
-    private void DrawArcInternal(Float3 center, Float3 u, Float3 v, float radius, float start, float sweep, Color color, int segments)
-    {
-        float step = sweep / segments;
-        Float3 previous = center + radius * (Maths.Cos(start) * u + Maths.Sin(start) * v);
-
-        for (int i = 1; i <= segments; i++)
-        {
-            float angle = start + i * step;
-            Float3 point = center + radius * (Maths.Cos(angle) * u + Maths.Sin(angle) * v);
-            AddLine(previous, point, color);
-            previous = point;
-        }
-    }
-
-    private static void PlaneBasis(Float3 normal, out Float3 u, out Float3 v)
-    {
-        Float3 n = Float3.Normalize(normal);
-        if (Float3.LengthSquared(n) <= 0.0f) n = Float3.UnitY;
-
-        Float3 reference = Maths.Abs(n.Y) < 0.9f ? Float3.UnitY : Float3.UnitX;
-        u = Float3.Normalize(Float3.Cross(reference, n));
-        v = Float3.Normalize(Float3.Cross(n, u));
-    }
-
-    public void DrawSphere(Float3 center, float radius, Color color, int segments = 16)
-    {
-        int latitudeSegments = segments;
-        int longitudeSegments = segments * 2;
-
-        for (int lat = 0; lat < latitudeSegments; lat++)
-        {
-            float theta1 = lat * MathF.PI / latitudeSegments;
-            float theta2 = (lat + 1) * MathF.PI / latitudeSegments;
-
-            for (int lon = 0; lon < longitudeSegments; lon++)
-            {
-                float phi1 = lon * 2 * MathF.PI / longitudeSegments;
-                float phi2 = (lon + 1) * 2 * MathF.PI / longitudeSegments;
-
-                Float3 v1 = CalculatePointOnSphere(theta1, phi1, radius, center);
-                Float3 v2 = CalculatePointOnSphere(theta1, phi2, radius, center);
-                Float3 v3 = CalculatePointOnSphere(theta2, phi1, radius, center);
-                Float3 v4 = CalculatePointOnSphere(theta2, phi2, radius, center);
-
-                // First triangle
-                AddTriangle(v1, v2, v3, Float2.Zero, Float2.Zero, Float2.Zero, color);
-
-                // Second triangle
-                AddTriangle(v2, v4, v3, Float2.Zero, Float2.Zero, Float2.Zero, color);
-            }
-        }
-    }
-
-    private Float3 CalculatePointOnSphere(float theta, float phi, float radius, Float3 center)
-    {
-        float x = Maths.Sin(theta) * Maths.Cos(phi);
-        float y = Maths.Cos(theta);
-        float z = Maths.Sin(theta) * Maths.Sin(phi);
-
-        return new Float3(
-            x * radius + center.X,
-            y * radius + center.Y,
-            z * radius + center.Z
-        );
-    }
-
-    public void DrawWireCone(Float3 start, Float3 direction, float radius, Color color, int segments = 16)
-    {
-        float step = MathF.PI * 2 / segments;
-        Float3 tip = start + direction;
-
-        // Normalize the direction vector
-        Float3 dir = Float3.Normalize(direction);
-
-        // Find perpendicular vectors
-        Float3 u = GetPerpendicularVector(dir);
-        Float3 v = Float3.Cross(dir, u);
-
-        for (int i = 0; i < segments; i++)
-        {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
-
-            // Calculate circle points using the perpendicular vectors
-            Float3 a = start + radius * (Maths.Cos(angle1) * u + Maths.Sin(angle1) * v);
-            Float3 b = start + radius * (Maths.Cos(angle2) * u + Maths.Sin(angle2) * v);
-
-            AddLine(a, b, color);
-            if (i == 0 || i == segments / 4 || i == segments / 2 || i == segments * 3 / 4)
-                AddLine(a, tip, color);
-        }
-    }
-
-    public void DrawWireCapsule(Float3 point1, Float3 point2, float radius, Color color, int segments = 16)
-    {
-        // Calculate the axis of the capsule
-        Float3 axis = point2 - point1;
-        float height = Float3.Length(axis);
-
-        if (height < 1e-6)
-        {
-            // Degenerate case: draw a sphere
-            DrawWireSphere(point1, radius, color, segments);
-            return;
-        }
-
-        Float3 dir = axis / height;
-
-        // Find perpendicular vectors
-        Float3 u = GetPerpendicularVector(dir);
-        Float3 v = Float3.Cross(dir, u);
-
-        float step = MathF.PI * 2 / segments;
-
-        // Draw the cylindrical body (circles at both ends and connecting lines)
-        for (int i = 0; i < segments; i++)
-        {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
-
-            // Circle at point1
-            Float3 a1 = point1 + radius * (Maths.Cos(angle1) * u + Maths.Sin(angle1) * v);
-            Float3 b1 = point1 + radius * (Maths.Cos(angle2) * u + Maths.Sin(angle2) * v);
-
-            // Circle at point2
-            Float3 a2 = point2 + radius * (Maths.Cos(angle1) * u + Maths.Sin(angle1) * v);
-            Float3 b2 = point2 + radius * (Maths.Cos(angle2) * u + Maths.Sin(angle2) * v);
-
-            AddLine(a1, b1, color);
-            AddLine(a2, b2, color);
-
-            // Connecting lines every quarter
-            if (i % (segments / 4) == 0)
-            {
-                AddLine(a1, a2, color);
-            }
-        }
-
-        // Draw hemisphere at point1 (bottom cap)
-        for (int i = 0; i < segments / 2; i++)
-        {
-            float theta1 = MathF.PI / 2 + i * MathF.PI / segments;
-            float theta2 = MathF.PI / 2 + (i + 1) * MathF.PI / segments;
-
-            for (int j = 0; j < segments; j++)
-            {
-                float phi1 = j * 2 * MathF.PI / segments;
-                float phi2 = (j + 1) * 2 * MathF.PI / segments;
-
-                Float3 v1 = point1 + radius * (Maths.Sin(theta1) * Maths.Cos(phi1) * u + Maths.Sin(theta1) * Maths.Sin(phi1) * v + Maths.Cos(theta1) * dir);
-                Float3 v2 = point1 + radius * (Maths.Sin(theta1) * Maths.Cos(phi2) * u + Maths.Sin(theta1) * Maths.Sin(phi2) * v + Maths.Cos(theta1) * dir);
-                Float3 v3 = point1 + radius * (Maths.Sin(theta2) * Maths.Cos(phi1) * u + Maths.Sin(theta2) * Maths.Sin(phi1) * v + Maths.Cos(theta2) * dir);
-
-                if (j % (segments / 4) == 0)
-                {
-                    AddLine(v1, v3, color);
-                }
-                if (i == 0 || i == segments / 2 - 1)
-                {
-                    AddLine(v1, v2, color);
-                }
-            }
-        }
-
-        // Draw hemisphere at point2 (top cap)
-        for (int i = 0; i < segments / 2; i++)
-        {
-            float theta1 = i * MathF.PI / segments;
-            float theta2 = (i + 1) * MathF.PI / segments;
-
-            for (int j = 0; j < segments; j++)
-            {
-                float phi1 = j * 2 * MathF.PI / segments;
-                float phi2 = (j + 1) * 2 * MathF.PI / segments;
-
-                Float3 v1 = point2 + radius * (Maths.Sin(theta1) * Maths.Cos(phi1) * u + Maths.Sin(theta1) * Maths.Sin(phi1) * v + Maths.Cos(theta1) * dir);
-                Float3 v2 = point2 + radius * (Maths.Sin(theta1) * Maths.Cos(phi2) * u + Maths.Sin(theta1) * Maths.Sin(phi2) * v + Maths.Cos(theta1) * dir);
-                Float3 v3 = point2 + radius * (Maths.Sin(theta2) * Maths.Cos(phi1) * u + Maths.Sin(theta2) * Maths.Sin(phi1) * v + Maths.Cos(theta2) * dir);
-
-                if (j % (segments / 4) == 0)
-                {
-                    AddLine(v1, v3, color);
-                }
-                if (i == 0 || i == segments / 2 - 1)
-                {
-                    AddLine(v1, v2, color);
-                }
-            }
-        }
-    }
-
-    public void DrawWireCylinder(Float3 center, Quaternion rotation, float radius, float height, Color color, int segments)
-    {
-        Float3 up = rotation * Float3.UnitY;
-        Float3 forward = rotation * Float3.UnitZ;
-        Float3 right = rotation * Float3.UnitX;
-        Float3 topCenter = center + (up * (height / 2));
-        Float3 bottomCenter = center - (up * (height / 2));
-        float step = MathF.PI * 2 / segments;
-        // Draw top and bottom circles
-        for (int i = 0; i < segments; i++)
-        {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
-            Float3 topA = topCenter + radius * (Maths.Cos(angle1) * right + Maths.Sin(angle1) * forward);
-            Float3 topB = topCenter + radius * (Maths.Cos(angle2) * right + Maths.Sin(angle2) * forward);
-            Float3 bottomA = bottomCenter + radius * (Maths.Cos(angle1) * right + Maths.Sin(angle1) * forward);
-            Float3 bottomB = bottomCenter + radius * (Maths.Cos(angle2) * right + Maths.Sin(angle2) * forward);
-            AddLine(topA, topB, color);
-            AddLine(bottomA, bottomB, color);
-            // Connecting lines every quarter
-            if (i % (segments / 4) == 0)
-            {
-                AddLine(topA, bottomA, color);
-            }
-        }
-    }
-
-    private Float3 GetPerpendicularVector(Float3 v)
-    {
-        Float3 result;
-        if (Maths.Abs(v.X) > 0.1f)
-            result = new Float3(v.Y, -v.X, 0);
-        else if (Maths.Abs(v.Y) > 0.1f)
-            result = new Float3(0, v.Z, -v.Y);
-        else
-            result = new Float3(-v.Z, 0, v.X);
-        return Float3.Normalize(result);
-    }
-
-    public void DrawArrow(Float3 start, Float3 direction, Color color)
-    {
-        float length = Float3.Length(direction);
-        if (length <= 0.0f) return;
-
-        Float3 axis = direction / length;
-        AddLine(start, start + direction, color);
-
-        // Head sized from the arrow rather than fixed in world units, so a short arrow is not all head
-        // and a long one still reads as an arrow.
-        float head = length * 0.18f;
-        DrawWireCone(start + direction - axis * head, axis * head, head * 0.4f, color, 4);
-    }
-
-    /// <summary>A camera facing icon <paramref name="scale"/> world units across. It can be clicked to select the component drawing it.</summary>
-    public void DrawIcon(Texture2D icon, Float3 center, float scale, Color color)
-    {
-        _icons.Add(new IconDrawCall { Texture = icon, Center = center, Scale = scale, Color = color });
-        AddHitbox(GizmoHitboxKind.Icon, center, center, scale * 0.5f);
-    }
-
-    private static Material? s_lineMaterial;
-    private static Prowl.Graphite.Rendering.Material? s_hiddenLines;
-    private static readonly Dictionary<(Texture2D, Color), (Material Visible, Prowl.Graphite.Rendering.Material Hidden)> s_iconMaterials = [];
-    private static Mesh? s_iconQuad;
-
-    // The occluded draw of a gizmo material: the same values with GIZMO_OCCLUDED on, drawn where geometry is nearer
-    private static Prowl.Graphite.Rendering.Material Occluded(Prowl.Graphite.Rendering.Material visible)
-    {
-        Prowl.Graphite.Rendering.Material hidden = Graphics.Renderer!.CreateMaterial(visible.Shader);
-        hidden.Parent = visible;
-        hidden.SetInt("_Occluded", 1);
-        var state = new Prowl.Graphite.ShaderDef.PassState { Set = Prowl.Graphite.ShaderDef.PassStateFields.DepthComparison };
-        state.DepthStencil.DepthComparison = Graphite.ComparisonKind.Less;
-        hidden.StateOverride = state;
-        return hidden;
-    }
-
-    /// <summary>Draws the lines, triangles and icons gathered this frame into a world as transient draws.</summary>
-    internal void Submit(RenderWorld world)
-    {
-        if (s_lineMaterial.IsNotValid()) s_lineMaterial = new Material(Shader.LoadDefault(DefaultShader.Gizmos));
-        if (s_lineMaterial.GpuMaterial is not { } lines) return;
-        if (s_hiddenLines == null || s_hiddenLines.IsDisposed || s_hiddenLines.Parent != lines) s_hiddenLines = Occluded(lines);
-        Prowl.Graphite.Rendering.Material hiddenLines = s_hiddenLines;
-
-        foreach (Prowl.Graphite.Rendering.Material material in (ReadOnlySpan<Prowl.Graphite.Rendering.Material>)[hiddenLines, lines])
-        {
-            if (_wireData.Vertices.Count > 0)
-                world.DrawTransient(Transient(in _wireData, Graphite.PrimitiveTopology.LineList, material));
-            if (_solidData.Vertices.Count > 0)
-                world.DrawTransient(Transient(in _solidData, Graphite.PrimitiveTopology.TriangleList, material));
-        }
-
-        if (_icons.Count == 0) return;
-        if (s_iconQuad.IsNotValid())
-        {
-            s_iconQuad = new Mesh
-            {
-                Vertices = [new(-0.5f, -0.5f, 0), new(0.5f, -0.5f, 0), new(0.5f, 0.5f, 0), new(-0.5f, 0.5f, 0)],
-            };
-            s_iconQuad.UV = [new(0, 1), new(1, 1), new(1, 0), new(0, 0)];
-            s_iconQuad.Indices = [0, 1, 2, 0, 2, 3];
-        }
-        s_iconQuad.Upload();
-        if (s_iconQuad.GpuMesh is not { } quad) return;
-
-        foreach (IconDrawCall icon in _icons)
-        {
-            if (icon.Texture.IsNotValid()) continue;
-            if (!s_iconMaterials.TryGetValue((icon.Texture, icon.Color), out var materials) || materials.Visible.IsNotValid() || materials.Hidden.IsDisposed)
-            {
-                Material created = new(Shader.LoadDefault(DefaultShader.GizmoIcon));
-                created.SetTexture("_MainTex", icon.Texture);
-                created.SetColor("_Color", icon.Color);
-                if (created.GpuMaterial is not { } gpu) continue;
-                materials = (created, Occluded(gpu));
-                s_iconMaterials[(icon.Texture, icon.Color)] = materials;
-            }
-            if (materials.Visible.GpuMaterial is not { } visible) continue;
-            Prowl.Graphite.Rendering.Material hidden = materials.Hidden;
-            Double4x4 transform = Double4x4.CreateTranslation(new Double3(icon.Center.X, icon.Center.Y, icon.Center.Z)) * Double4x4.CreateScale(new Double3(icon.Scale, icon.Scale, icon.Scale));
-            world.DrawTransient(new TransientDraw { Mesh = quad, Material = hidden, Transform = transform, LayerMask = Debug.GizmoLayerMask, Flags = RenderableFlags.None });
-            world.DrawTransient(new TransientDraw { Mesh = quad, Material = visible, Transform = transform, LayerMask = Debug.GizmoLayerMask, Flags = RenderableFlags.None });
-        }
-    }
-
-    private static TransientDraw Transient(in MeshData data, Graphite.PrimitiveTopology topology, Prowl.Graphite.Rendering.Material material) => new()
-    {
-        Positions = CollectionsMarshal.AsSpan(data.Vertices).ToArray(),
-        Colors = MemoryMarshal.Cast<Color32, uint>(CollectionsMarshal.AsSpan(data.Colors)).ToArray(),
-        Indices = MemoryMarshal.Cast<int, uint>(CollectionsMarshal.AsSpan(data.Indices)).ToArray(),
-        Topology = topology,
-        Material = material,
-        LayerMask = Debug.GizmoLayerMask,
-        Flags = RenderableFlags.None,
-    };
-
-    public List<IconDrawCall> GetIcons()
-    {
-        return _icons;
+        _feature?.Remove(_building);
+        _feature?.Remove(_shown);
+        _feature?.Remove(_surfaceBuilding);
+        _feature?.Remove(_surfaceShown);
+        _feature = null;
     }
 }
 

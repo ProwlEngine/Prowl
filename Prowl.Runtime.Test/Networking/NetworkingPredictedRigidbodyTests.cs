@@ -94,7 +94,7 @@ public partial class NetworkingTests
     [Fact]
     public void TheHostSendsAPredictedBodyWhileItMovesAndOnceASecondAtRest()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Predicted");
         go.Network.Networked = true;
         go.AddComponent<Rigidbody3D>().AffectedByGravity = false;
@@ -138,7 +138,7 @@ public partial class NetworkingTests
     [Fact]
     public void APredictedBodyStaysDynamicOnPeersThatDoNotControlIt()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Predicted");
         root.Network.Networked = true;
         root.AddComponent<NetworkTransform>();
@@ -163,7 +163,7 @@ public partial class NetworkingTests
     [Fact]
     public void AClientTakesAPredictedBodysSpawnStateAndCorrectsFromLaterOnes()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject original = CreateGameObject("Predicted");
@@ -183,9 +183,9 @@ public partial class NetworkingTests
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
-            Pump(() => Networking.Networking.IsReady && SceneInstance.Main.Objects.Any(o => o.Identifier == original.Identifier), host);
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == original.Identifier), host);
             NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
-            GameObject proxy = Find(SceneInstance.Main, original.Identifier);
+            GameObject proxy = Find(Scene.Main, original.Identifier);
             PredictedRigidbody predicted = proxy.GetComponent<PredictedRigidbody>()!;
             predicted.Enabled = false; // Its states are recorded by hand here, at chosen times.
             Assert.Equal(new Float3(1, 2, 3), proxy.Transform.Position);
@@ -222,7 +222,7 @@ public partial class NetworkingTests
     [Fact]
     public void SpawningAPredictedBodyForOnePeerDoesNotHideItsMoveFromTheOthers()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Predicted");
         go.Network.Networked = true;
         go.AddComponent<Rigidbody3D>().AffectedByGravity = false;

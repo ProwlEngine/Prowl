@@ -91,7 +91,7 @@ public class Animator : Component
     public SampledEventsBuffer? Events => _graph?.Events;
 
     // The world this animator is registered with, kept so it leaves even during teardown, when it no longer reads as in one.
-    private SceneInstance? _registeredIn;
+    private Scene? _registeredIn;
 
     public override void OnEnable()
     {

@@ -47,7 +47,7 @@ public class GizmoPickingTests : EditorTestHarness
     }
 
     // A camera 10 units back on -Z, looking down +Z at the origin.
-    private static Camera MakeCamera(SceneInstance scene)
+    private static Camera MakeCamera(Scene scene)
     {
         var go = new GameObject("Camera");
         go.Transform.Position = new Float3(0, 0, -10);
@@ -56,15 +56,15 @@ public class GizmoPickingTests : EditorTestHarness
         return cam;
     }
 
-    private static SceneInstance MakeScene()
+    private static Scene MakeScene()
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         scene.Activate();
         return scene;
     }
 
     // Runs the editor's gizmo pass, then ends the frame so its hitboxes are the ones picking reads.
-    private static void DrawFrame(SceneInstance scene)
+    private static void DrawFrame(Scene scene)
     {
         var editor = new EditorApplication();
         editor.BeginRender();
@@ -81,7 +81,7 @@ public class GizmoPickingTests : EditorTestHarness
     [Fact]
     public void DisabledTypeDrawsNoGizmosSelectedOrNot()
     {
-        using SceneInstance scene = MakeScene();
+        using Scene scene = MakeScene();
         var go = new GameObject("Probe");
         HitboxProbe probe = go.AddComponent<HitboxProbe>();
         scene.Add(go);
@@ -101,7 +101,7 @@ public class GizmoPickingTests : EditorTestHarness
     [Fact]
     public void GizmoPassRecordsHitboxesForTheDrawingObjectOnly()
     {
-        using SceneInstance scene = MakeScene();
+        using Scene scene = MakeScene();
         var go = new GameObject("Probe");
         go.AddComponent<HitboxProbe>();
         scene.Add(go);
@@ -122,7 +122,7 @@ public class GizmoPickingTests : EditorTestHarness
     [Fact]
     public void IconIsClickableAcrossItsWholeDrawnSize()
     {
-        using SceneInstance scene = MakeScene();
+        using Scene scene = MakeScene();
         Camera cam = MakeCamera(scene);
         var light = new GameObject("Light");
         GizmoHitbox[] hitboxes = [new(light, GizmoHitboxKind.Icon, Float3.Zero, Float3.Zero, 0.25f)];
@@ -139,7 +139,7 @@ public class GizmoPickingTests : EditorTestHarness
     [Fact]
     public void IconWinsOverANearerLineAndALineOverNothing()
     {
-        using SceneInstance scene = MakeScene();
+        using Scene scene = MakeScene();
         Camera cam = MakeCamera(scene);
         var light = new GameObject("Light");
         var volume = new GameObject("Volume");
@@ -160,7 +160,7 @@ public class GizmoPickingTests : EditorTestHarness
     [Fact]
     public void LineRunningBehindTheCameraIsClickableWhereVisible()
     {
-        using SceneInstance scene = MakeScene();
+        using Scene scene = MakeScene();
         Camera cam = MakeCamera(scene);
         var volume = new GameObject("Volume");
 
@@ -172,7 +172,7 @@ public class GizmoPickingTests : EditorTestHarness
     [Fact]
     public void HiddenOrDisabledOwnersCannotBeClicked()
     {
-        using SceneInstance scene = MakeScene();
+        using Scene scene = MakeScene();
         Camera cam = MakeCamera(scene);
         var light = new GameObject("Light");
         light.Enabled = false;

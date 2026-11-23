@@ -21,7 +21,7 @@ public partial class NetworkingTests
             // Nobody else has it, so nobody else drives it, and its values are this peer's to set.
             GameObject local = CreateGameObject("Local");
             NetTestComponent component = local.AddComponent<NetTestComponent>();
-            SceneInstance.Main.Add(local);
+            Scene.Main.Add(local);
             Assert.False(local.IsProxy);
             Assert.False(local.Network.IsProxy);
             component.Score = 5;
@@ -33,7 +33,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASpawnedObjectCannotBeTakenOffTheNetworkByItsSettings()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Spawned"), part = CreateGameObject("Part");
         part.SetParent(root);
         root.Network.Networked = true;
@@ -61,7 +61,7 @@ public partial class NetworkingTests
     [Fact]
     public void SpawningASpawnedObjectAgainChangesNothing()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -97,7 +97,7 @@ public partial class NetworkingTests
     [Fact]
     public void ControlAndLookupByNetIdAreAnsweredForSpawnedObjectsOnly()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         GameObject plain = CreateGameObject("Plain");
         scene.Add(plain);
@@ -136,7 +136,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnObjectWithMoreTransformsThanAnIndexHoldsIsRefused()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         Networking.Networking.Host(new LocalTransport(new LocalNetwork(), "host"));
         try

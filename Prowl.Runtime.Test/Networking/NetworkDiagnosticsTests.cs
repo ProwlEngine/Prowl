@@ -60,7 +60,7 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
     [Fact]
     public void CaptureObservesRpcAndRejectedSyncWithoutConsumingTheReader()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject("Diagnostic target");
         go.Network.Networked = true;
         NetTestComponent component = go.AddComponent<NetTestComponent>();

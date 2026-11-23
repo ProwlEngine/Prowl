@@ -2,51 +2,46 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.IO;
 
 using Prowl.Echo;
 using Prowl.Runtime.AssetImporting;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
 
-/// <summary>
-/// Builds the embedded default models (Cube, Sphere, ...) as prefabs.
-/// A model file is imported into a <see cref="PrefabAsset"/> like any other, so these are too; this
-/// exists only because the defaults come from embedded resources rather than the asset database.
-/// </summary>
+/// <summary>Builds the default models (Cube, Sphere, ...), generated rather than loaded from files.</summary>
 public static class DefaultModels
 {
-    /// <summary>Loads a default embedded model (Cube, Sphere, etc.) as a prefab.</summary>
-    public static PrefabAsset Load(DefaultModel model)
+    /// <summary>Generates a default model's mesh, with lightmap UVs so it can be lightmapped as it is.</summary>
+    public static Mesh Generate(DefaultModel model)
     {
-        string fileName = model switch
+        Mesh mesh = model switch
         {
-            DefaultModel.Cube => "Cube.obj",
-            DefaultModel.Sphere => "Sphere.obj",
-            DefaultModel.Cylinder => "Cylinder.obj",
-            DefaultModel.Plane => "Plane.obj",
+            DefaultModel.Cube => Mesh.CreateCube(Float3.One),
+            DefaultModel.Sphere => Mesh.CreateSphere(0.5f, 32, 64),
+            DefaultModel.Cylinder => Mesh.CreateCylinder(0.5f, 2f, 48),
+            DefaultModel.Plane => Mesh.CreatePlane(10f, 10f),
+            DefaultModel.Capsule => Mesh.CreateCapsule(0.5f, 2f, 48, 12),
+            DefaultModel.Cone => Mesh.CreateCone(0.5f, 2f, 48),
             _ => throw new ArgumentException($"Unknown default model: {model}")
         };
+        mesh.Name = model.ToString();
+        LightmapUVGenerator.Generate(mesh);
+        return mesh;
+    }
 
-        string resourcePath = $"Assets/Defaults/{fileName}";
-        using Stream stream = EmbeddedResources.GetStream(resourcePath);
-        var result = new PrefabAsset { Name = model.ToString(), InstanceType = PrefabInstanceType.Model };
+    /// <summary>A default model as a prefab: one object drawing its built-in mesh, the same as an imported model.</summary>
+    public static PrefabAsset Load(DefaultModel model)
+    {
+        var root = new GameObject(model.ToString());
+        // Referenced without loading, as loading never waits on another asset.
+        root.AddComponent<MeshRenderer>().Mesh = AssetDatabase.Get<Mesh>(BuiltInAssets.GuidForMesh(model));
 
-        // Import via the OBJ importer. Embedded defaults have no companion .mtl, so the
-        // resulting GO just has a MeshRenderer with an empty Materials list callers that
-        // use these meshes (e.g. BuiltInAssets, primitive creators) assign their own material.
-        ModelImportResult importResult = new AssetImporting.ModelImporter().Import(stream, fileName,
-            new AssetImporting.ModelImporterSettings
-            {
-                RecalculateNormals = true,
-                GenerateNormals = true,
-                GenerateSmoothNormals = true,
-                CalculateTangentSpace = true
-            });
-
-        if (importResult.RootGO.IsValid())
-            result.GameObjectData = Serializer.Serialize(typeof(object), importResult.RootGO);
-
-        return result;
+        return new PrefabAsset
+        {
+            Name = model.ToString(),
+            InstanceType = PrefabInstanceType.Model,
+            GameObjectData = Serializer.Serialize(typeof(object), root),
+        };
     }
 }

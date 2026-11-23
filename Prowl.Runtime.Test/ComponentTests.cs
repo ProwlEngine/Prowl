@@ -351,7 +351,7 @@ public class ComponentTests : RuntimeTestBase
     private static GameObject AddedToUnheldScene()
     {
         GameObject go = new();
-        SceneInstance.Create("Unheld").Add(go);
+        Scene.Create("Unheld").Add(go);
         return go;
     }
 
@@ -622,7 +622,7 @@ public class ComponentTests : RuntimeTestBase
     [Fact]
     public void RemoveComponent_FromWrongGameObject_DoesNothing()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject owner = CreateGameObject("Owner");
         GameObject other = CreateGameObject("Other");
         PlainComponent comp = owner.AddComponent<PlainComponent>();
@@ -654,7 +654,7 @@ public class ComponentTests : RuntimeTestBase
     [Fact]
     public void AddComponent_Instance_SurvivesDisposalOfThePreviousGameObject()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject a = CreateGameObject("A");
         GameObject b = CreateGameObject("B");
         PlainComponent comp = a.AddComponent<PlainComponent>();

@@ -80,7 +80,7 @@ public partial class NetworkingTests
     [Fact]
     public void ANetworkedObjectIndexesItsNetworkedComponentsInTreeOrder()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         Networking.Networking.Host(new LocalTransport(new LocalNetwork(), "host"));
         try
@@ -112,7 +112,7 @@ public partial class NetworkingTests
     [Fact]
     public void AnObjectWithMoreThan64NetworkedComponentsCannotSpawn()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         Networking.Networking.Host(new LocalTransport(new LocalNetwork(), "host"));
         try
@@ -136,7 +136,7 @@ public partial class NetworkingTests
     public void ATemplateSpawnCarriesItsNetworkedComponentCountAndTypeHash()
     {
         Networking.Networking.RegisterFactory("crate", BuildCrate);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -163,7 +163,7 @@ public partial class NetworkingTests
     {
         s_buildSwapped = false;
         Networking.Networking.RegisterFactory("swappable", BuildSwappable);
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         byte[] snapshot, spawn;
         Guid id;
@@ -196,7 +196,7 @@ public partial class NetworkingTests
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             PumpFor(300, host);
-            Assert.DoesNotContain(SceneInstance.Main.Objects, o => o.Identifier == id);
+            Assert.DoesNotContain(Scene.Main.Objects, o => o.Identifier == id);
         }
         finally
         {
@@ -209,7 +209,7 @@ public partial class NetworkingTests
     [Fact]
     public void ANetworkedObjectInsideAnotherIsPartOfIt()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject outer = CreateGameObject("Outer");
         outer.Network.Networked = true;
         GameObject inner = CreateGameObject("Inner");

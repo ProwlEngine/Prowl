@@ -93,7 +93,7 @@ public partial class PrefabTests : EditorTestHarness
 
     private static void SetSceneCurrent(params GameObject[] instances)
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         foreach (GameObject i in instances) scene.Add(i);
         BindEditWorld(scene);
     }
@@ -621,7 +621,7 @@ public partial class PrefabTests : EditorTestHarness
     /// What a build does with a scene it is shipping: read what was saved, without that scene ever
     /// being the open one.
     /// </summary>
-    private static SceneInstance ReadSavedScene(EchoObject saved) => SceneInstance.Instantiate(SceneContent.Read(saved), SceneMode.Edit);
+    private static Scene ReadSavedScene(EchoObject saved) => Scene.Instantiate(SceneContent.Read(saved), SceneMode.Edit);
 
     [Fact]
     public void RefreshInstancesIn_KeepsWhatTheInstanceOverrode()
@@ -632,7 +632,7 @@ public partial class PrefabTests : EditorTestHarness
         Guid g = CreatePrefabAsset(root, "ShelvedOv.prefab");
 
         GameObject instance = Inst(g);
-        SceneInstance open = LoadSceneWith(instance);
+        Scene open = LoadSceneWith(instance);
         instance.GetComponent<OverrideComp>()!.B = 99;
         PrefabUtility.ReconcileInstance(instance);
         EchoObject saved = open.ActiveSection.CaptureTree();
@@ -640,7 +640,7 @@ public partial class PrefabTests : EditorTestHarness
         LoadSceneWith(new GameObject("Elsewhere"));
         EditPrefabSource(g, "ShelvedOv.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
 
-        SceneInstance shipped = ReadSavedScene(saved);
+        Scene shipped = ReadSavedScene(saved);
         PrefabUtility.RefreshInstancesIn(shipped);
 
         OverrideComp live = shipped.Roots.First().GetComponent<OverrideComp>()!;
@@ -660,7 +660,7 @@ public partial class PrefabTests : EditorTestHarness
         comp.A = 12345;
         PrefabUtility.RecordComponentOverrides(instance, comp);
 
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         scene.Add(instance);
         EchoObject echo = scene.ActiveSection.CaptureTree();
 
@@ -685,7 +685,7 @@ public partial class PrefabTests : EditorTestHarness
     [Fact]
     public void Build_StripReportsNothingToDoOnAPlainScene()
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         scene.Add(new GameObject("Plain"));
 
         Assert.False(Build.BuildPipeline.StripEditorOnlyPrefabData(scene.ActiveSection.CaptureTree()));
@@ -757,8 +757,8 @@ public partial class PrefabTests : EditorTestHarness
         SetSceneCurrent();
         EditPrefabSource(prefabGuid, path, s => s.GetComponent<OverrideComp>()!.A = newValue);
 
-        AssetDatabase.Load<Scene>(sceneGuid)!.Load().Wait();
-        SceneInstance.ProcessPendingLoad();
+        AssetDatabase.Load<SceneAsset>(sceneGuid)!.Load().Wait();
+        Scene.ProcessPendingLoad();
         return EditorSceneManager.EditedWorld.Roots.First();
     }
 
@@ -796,8 +796,8 @@ public partial class PrefabTests : EditorTestHarness
         SetSceneCurrent();
         EditPrefabSource(g, "ClosedKeep.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
 
-        AssetDatabase.Load<Scene>(sceneGuid)!.Load().Wait();
-        SceneInstance.ProcessPendingLoad();
+        AssetDatabase.Load<SceneAsset>(sceneGuid)!.Load().Wait();
+        Scene.ProcessPendingLoad();
 
         OverrideComp live = EditorSceneManager.EditedWorld.Roots.First().GetComponent<OverrideComp>()!;
         Assert.Equal(77, live.A);   // followed the prefab
@@ -2319,7 +2319,7 @@ public partial class PrefabTests : EditorTestHarness
         try
         {
             PrefabEditingMode.Enter(outer);
-            SceneInstance.ProcessPendingLoad();
+            Scene.ProcessPendingLoad();
             Assert.True(PrefabEditingMode.IsEditing);
 
             // Something the session adds that answers to another prefab.
@@ -2332,7 +2332,7 @@ public partial class PrefabTests : EditorTestHarness
         {
             PrefabUtility.OnPrefabSaved -= OnSaved;
             PrefabEditingMode.Exit();
-            SceneInstance.ProcessPendingLoad();
+            Scene.ProcessPendingLoad();
         }
 
         // Listeners hear about a prefab-mode save the same as any other write.
@@ -2357,11 +2357,11 @@ public partial class PrefabTests : EditorTestHarness
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
         PrefabEditingMode.Enter(g);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Assert.False(Undo.CanUndo); // the session starts with nothing behind it
 
         PrefabEditingMode.Exit();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         // Glancing at a prefab used to cost every step taken in the scene.
         Assert.True(Undo.CanUndo);
@@ -2650,9 +2650,9 @@ public partial class PrefabTests : EditorTestHarness
 
     #region Reconcile
 
-    private static SceneInstance LoadSceneWith(params GameObject[] objects)
+    private static Scene LoadSceneWith(params GameObject[] objects)
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         foreach (GameObject o in objects) scene.Add(o);
         BindEditWorld(scene);
         return EditorSceneManager.EditedWorld;
@@ -2763,7 +2763,7 @@ public partial class PrefabTests : EditorTestHarness
         Assert.NotEqual(Guid.Empty, extra.SourceIdentifier);
         Assert.NotEqual(Guid.Empty, extra.GetComponent<VecComp>()!.SourceIdentifier);
         Assert.Same(instance, extra.Parent);
-        Assert.Same(SceneInstance.Main, extra.Scene);
+        Assert.Same(Scene.Main, extra.Scene);
         // Tracked as prefab content, so a later prefab change can reach it.
         Assert.NotEqual(Guid.Empty, extra.SourceIdentifier);
     }
@@ -3235,15 +3235,15 @@ public partial class PrefabTests : EditorTestHarness
 
     #region InstanceAddition
 
-    private static SceneInstance SaveAndReload(SceneInstance scene)
+    private static Scene SaveAndReload(Scene scene)
     {
         EchoObject echo = scene.ActiveSection.CaptureTree();
-        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
+        Scene reloaded = Scene.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
         BindEditWorld(reloaded);
         return EditorSceneManager.EditedWorld;
     }
 
-    private static GameObject InstanceRootOf(SceneInstance scene)
+    private static GameObject InstanceRootOf(Scene scene)
         => scene.Objects.First(o => o.IsPrefabInstance && o.Parent is null);
 
     private static (LinkComp, GameObject) AddOwnContent(GameObject instance)
@@ -3259,7 +3259,7 @@ public partial class PrefabTests : EditorTestHarness
     {
         Guid guid = MakePrefab("RoundTrip.prefab");
         GameObject instance = Inst(guid);
-        SceneInstance scene = LoadSceneWith(instance);
+        Scene scene = LoadSceneWith(instance);
 
         AddOwnContent(instance);
 
@@ -3278,10 +3278,10 @@ public partial class PrefabTests : EditorTestHarness
     {
         Guid guid = MakePrefab("ReloadRefresh.prefab");
         GameObject instance = Inst(guid);
-        SceneInstance scene = LoadSceneWith(instance);
+        Scene scene = LoadSceneWith(instance);
 
         AddOwnContent(instance);
-        SceneInstance reloaded = SaveAndReload(scene);
+        Scene reloaded = SaveAndReload(scene);
 
         EditPrefabSource(guid, "ReloadRefresh.prefab", src => src.GetComponent<OverrideComp>()!.A = 9);
         PrefabUtility.RefreshAllInstances(guid);
@@ -4013,13 +4013,13 @@ public partial class PrefabTests : EditorTestHarness
     private static void EnterEditingMode(Guid guid)
     {
         PrefabEditingMode.Enter(guid);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
     }
 
     private static void ExitEditingMode()
     {
         PrefabEditingMode.Exit();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
     }
 
     /// <summary>The prefab root in the editing scene, found the way PrefabEditingMode.Save finds it,
@@ -4071,7 +4071,7 @@ public partial class PrefabTests : EditorTestHarness
         EnterEditingMode(guid);
         EditingRoot().GetComponent<OverrideComp>()!.A = 7;
         PrefabEditingMode.SaveAndExit();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.False(PrefabEditingMode.IsEditing);
         Assert.Contains(EditorSceneManager.EditedWorld.Objects, go => go.Name == "SceneObject");
@@ -4101,7 +4101,7 @@ public partial class PrefabTests : EditorTestHarness
         EnterEditingMode(guid);
         EditingRoot().GetComponent<OverrideComp>()!.A = 33;
         PrefabEditingMode.SaveAndExit();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         GameObject live = EditorSceneManager.EditedWorld.Objects.First(go => go.PrefabAssetId == guid && go.Parent is null);
         Assert.Equal(33, live.GetComponent<OverrideComp>()!.A);
@@ -4271,17 +4271,17 @@ public partial class PrefabTests : EditorTestHarness
         LoadSceneWith(new GameObject("OriginalSceneObject"));
 
         PrefabEditingMode.Enter(guid);
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Throws<InvalidOperationException>(() => EditorSceneManager.New());
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         // Still the prefab session's own scene, not a replacement.
         Assert.True(PrefabEditingMode.IsEditing);
         Assert.Contains(EditorSceneManager.EditedWorld.Roots, go => go.Name == "Root");
 
         PrefabEditingMode.Exit();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
     }
 
     #endregion
@@ -4443,7 +4443,7 @@ public partial class PrefabTests : EditorTestHarness
     {
         var go = new GameObject("Baked");
         go.AddComponent<MeshRenderer>();
-        SceneInstance scene = LoadSceneWith(go);
+        Scene scene = LoadSceneWith(go);
 
         scene.Lighting.Placements[go.Identifier] = new LightmapPlacement
         {
@@ -4451,7 +4451,7 @@ public partial class PrefabTests : EditorTestHarness
             ScaleOffset = new Float4(0.5f, 0.5f, 0.25f, 0.75f)
         };
 
-        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(scene.ActiveSection.CaptureTree()), SceneMode.Edit);
+        Scene reloaded = Scene.Instantiate(SceneContent.Read(scene.ActiveSection.CaptureTree()), SceneMode.Edit);
         try
         {
             GameObject restored = reloaded.Roots.First(o => o.Name == "Baked");
@@ -4472,7 +4472,7 @@ public partial class PrefabTests : EditorTestHarness
 
         GameObject a = Inst(guid);
         GameObject b = Inst(guid);
-        SceneInstance scene = LoadSceneWith(a, b);
+        Scene scene = LoadSceneWith(a, b);
 
         // What a bake writes now: one placement per baked object, on the scene.
         scene.Lighting.Placements[a.Identifier] = new LightmapPlacement { Index = 3, ScaleOffset = new Float4(1, 1, 0, 0) };
@@ -4497,7 +4497,7 @@ public partial class PrefabTests : EditorTestHarness
     public void ClearingBakedLighting_DropsEveryPlacement()
     {
         var go = new GameObject("Baked");
-        SceneInstance scene = LoadSceneWith(go);
+        Scene scene = LoadSceneWith(go);
 
         scene.Lighting.Placements[go.Identifier] = new LightmapPlacement { Index = 1, ScaleOffset = new Float4(1, 1, 0, 0) };
         scene.Lighting.Lightmaps.Add(null!);
@@ -4524,8 +4524,8 @@ public partial class PrefabTests : EditorTestHarness
         Guid childSource = instance.Children[0].GetComponent<OverrideComp>()!.SourceIdentifier;
         Assert.NotEqual(Guid.Empty, rootSource);
 
-        EchoObject saved = SceneInstance.Main.ActiveSection.CaptureTree();
-        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(saved), SceneMode.Edit);
+        EchoObject saved = Scene.Main.ActiveSection.CaptureTree();
+        Scene reloaded = Scene.Instantiate(SceneContent.Read(saved), SceneMode.Edit);
         try
         {
             GameObject restored = reloaded.Roots.First(go => go.PrefabAssetId == guid);
@@ -4749,11 +4749,11 @@ public partial class PrefabTests : EditorTestHarness
         PrefabUtility.ReconcileInstance(instance);
         Assert.Single(instance.PrefabOverrides);
 
-        EchoObject saved = SceneInstance.Main.ActiveSection.CaptureTree();
+        EchoObject saved = Scene.Main.ActiveSection.CaptureTree();
 
         // A build reads a scene off disk while some other scene is open.
         LoadSceneWith(new GameObject("Elsewhere"));
-        SceneInstance copy = SceneInstance.Instantiate(SceneContent.Read(saved), SceneMode.Edit);
+        Scene copy = Scene.Instantiate(SceneContent.Read(saved), SceneMode.Edit);
         try
         {
             PrefabUtility.RefreshInstancesIn(copy);
@@ -4780,12 +4780,12 @@ public partial class PrefabTests : EditorTestHarness
         EditorSceneManager.EditedWorld.Add(nested);
         nested.SetParent(outerInstance);
 
-        EchoObject echo = SceneInstance.Main.ActiveSection.CaptureTree();
+        EchoObject echo = Scene.Main.ActiveSection.CaptureTree();
         Build.BuildPipeline.StripEditorOnlyPrefabData(echo);
 
         // Both links survive: what an object is an instance of is observable at runtime, so a player
         // must not disagree with play mode about it.
-        SceneInstance reloaded = SceneInstance.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
+        Scene reloaded = Scene.Instantiate(SceneContent.Read(echo), SceneMode.Edit);
         try
         {
             Assert.Contains(reloaded.Objects, o => o.PrefabAssetId == outer);

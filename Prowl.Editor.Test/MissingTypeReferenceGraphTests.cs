@@ -95,12 +95,12 @@ public class MissingTypeReferenceGraphTests
         MissRefComp misser = root.AddComponent<MissRefComp>();
         misser.TargetGO = grandchild;
 
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         scene.Add(root);
 
         string text = scene.ActiveSection.CaptureTree().WriteToString();
         text = text.Replace(nameof(MissRefComp), "GhostComp_DoesNotExist");
-        SceneInstance loaded = SceneInstance.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)), SceneMode.Edit);
+        Scene loaded = Scene.Instantiate(SceneContent.Read(EchoObject.ReadFromString(text)), SceneMode.Edit);
 
         GameObject? loadedRoot = loaded.Objects.FirstOrDefault(o => o.Name == "Root");
         string Structure(GameObject g, int d = 0) =>

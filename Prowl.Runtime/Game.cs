@@ -120,7 +120,7 @@ public abstract class Game
             BuiltInAssets.Initialize();
             AssetLoader.SetMainThread();
 
-            SceneInstance.Main = CreateMainWorld();
+            Scene.Main = CreateMainWorld();
             Initialize();
         }
 
@@ -137,7 +137,7 @@ public abstract class Game
                 AudioContext.Update();
 
                 Time.AdvanceFrame();
-                SceneInstance.FrameRunning = true;
+                Scene.FrameRunning = true;
 
                 UpdateInputActions();
 
@@ -150,15 +150,8 @@ public abstract class Game
                 if (Debug.LogToConsole && consoleTitleAvailable && (frameCounter++ % 60 == 0))
                 {
                     double fps = delta > 0 ? 1.0 / delta : 0; // real (unscaled) frame rate
-                    try
-                    {
-                        Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
-                    }
-                    catch (IOException)
-                    {
-                        // No console to title, e.g. a process started without a window and its output redirected.
-                        consoleTitleAvailable = false;
-                    }
+                    try { Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}"; }
+                    catch { /* no console in WinExe / non-console hosts */ }
                 }
 
             }
@@ -172,7 +165,7 @@ public abstract class Game
         {
             try
             {
-                SceneInstance? main = SceneInstance.HasMain ? SceneInstance.Main : null;
+                Scene? main = Scene.HasMain ? Scene.Main : null;
 
                 BeginRender();
 
@@ -187,14 +180,7 @@ public abstract class Game
                     PreparePaperFrame();
                     _paper.BeginFrame(delta, -1f); // negative = keep DisplayFramebufferScale set by PreparePaperFrame
 
-                    BeginGui(_paper);
-
-                    if (PresentsWorlds)
-                        foreach (SceneInstance world in PresentedWorlds())
-                            world.OnGui(_paper);
-                    OnGui(_paper);
-
-                    EndGui(_paper);
+                    RunGui(_paper);
 
                     _paper.EndFrame();
                 }
@@ -216,15 +202,15 @@ public abstract class Game
 
                 // Then queued loads and unloads, so one requested this frame tears its sections down here rather
                 // than under whatever was still running.
-                SceneInstance.ProcessPendingLoad();
-                SceneInstance.FrameRunning = false;
+                Scene.ProcessPendingLoad();
+                Scene.FrameRunning = false;
 
                 // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
                 AssetDatabase.EndFrame();
             }
             catch (Exception e)
             {
-                SceneInstance.FrameRunning = false;
+                Scene.FrameRunning = false;
                 ReportLoopFailure("Render", e);
             }
         };
@@ -248,7 +234,7 @@ public abstract class Game
 
         Window.FramebufferResize += (size) =>
         {
-            _paperRenderer.UpdateProjection(size.X, size.Y);
+            _paperRenderer?.UpdateProjection(size.X, size.Y);
         };
 
         Window.Closing += () =>
@@ -264,7 +250,7 @@ public abstract class Game
             Tasks.MainThreadContext.Stop();
 
             // Dispose every world so everything in them runs its teardown callbacks.
-            SceneInstance.Shutdown(everyWorld: true);
+            Scene.Shutdown(everyWorld: true);
 
             // Asset payloads go while the audio and graphics they belong to are still up.
             AssetDatabase.Shutdown();
@@ -303,7 +289,7 @@ public abstract class Game
         // Registers built-in asset loaders (no GPU work happens until something resolves them).
         BuiltInAssets.Initialize();
         AssetLoader.SetMainThread();
-        SceneInstance.Main = CreateMainWorld();
+        Scene.Main = CreateMainWorld();
         Initialize();
 
         Debug.LogSuccess("Headless initialization complete");
@@ -323,7 +309,7 @@ public abstract class Game
             while (!_headlessQuitRequested)
             {
                 Time.AdvanceFrame();
-                SceneInstance.FrameRunning = true;
+                Scene.FrameRunning = true;
 
                 UpdateInputActions();
 
@@ -335,8 +321,8 @@ public abstract class Game
                 EngineObject.ProcessDestroyed();
 
                 // Then queued loads and unloads, applied where nothing is mid callback.
-                SceneInstance.ProcessPendingLoad();
-                SceneInstance.FrameRunning = false;
+                Scene.ProcessPendingLoad();
+                Scene.FrameRunning = false;
 
                 // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
                 AssetDatabase.EndFrame();
@@ -361,7 +347,7 @@ public abstract class Game
             Closing();
             Networking.Networking.Shutdown();
             Tasks.MainThreadContext.Stop();
-            SceneInstance.Shutdown(everyWorld: true);
+            Scene.Shutdown(everyWorld: true);
             AssetDatabase.Shutdown();
             Tasks.MainThreadContext.Uninstall();
             Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
@@ -380,7 +366,7 @@ public abstract class Game
     {
         // Actions are gameplay input and their callbacks are gameplay code, so in the editor they read input the
         // way the scene update does: from the game view only, in its pixels, with simulated input included.
-        if (SceneInstance.HasMain && SceneInstance.Main is { IsPlaying: true, Paused: false })
+        if (Scene.HasMain && Scene.Main is { IsPlaying: true, Paused: false })
             Application.IsGameplayExecuting = true;
 
         // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
@@ -409,12 +395,12 @@ public abstract class Game
         // over a frozen game. Only in the editor: pausing there is a debugging tool that freezes
         // everything, while a shipped game pausing itself is a design decision, and that one reaches
         // for AudioContext.Suspended when it wants the audio to stop too.
-        AudioContext.SuspendedByPause = Application.IsEditor && Application.IsPlaying && SceneInstance.HasMain && SceneInstance.Main.Paused;
+        AudioContext.SuspendedByPause = Application.IsEditor && Application.IsPlaying && Scene.HasMain && Scene.Main.Paused;
 
         // Before any world's event system ticks, so a menu drawn over the game takes the pointer from it.
         UI.SceneInput.Arbitrate(InputWorlds());
 
-        foreach (SceneInstance world in SceneInstance.All)
+        foreach (Scene world in Scene.All)
         {
             if (!world.TicksWithEngine) continue;
             try
@@ -435,25 +421,45 @@ public abstract class Game
     protected virtual bool PresentsWorlds => true;
 
     /// <summary>The worlds whose UI input is arbitrated each frame, lowest render order first.</summary>
-    protected virtual List<SceneInstance> InputWorlds() => PresentedWorlds();
+    protected virtual List<Scene> InputWorlds() => PresentedWorlds();
 
-    /// <summary>Every running world drawn to the game's output, lowest <see cref="SceneInstance.RenderOrder"/> first.</summary>
+    /// <summary>Every running world drawn to the game's output, lowest <see cref="Scene.RenderOrder"/> first.</summary>
     // Refilled on every call, so a caller iterates it before asking again.
-    private static readonly List<SceneInstance> s_presented = [];
+    private static readonly List<Scene> s_presented = [];
 
-    protected static List<SceneInstance> PresentedWorlds()
+    protected static List<Scene> PresentedWorlds()
     {
         s_presented.Clear();
-        foreach (SceneInstance world in SceneInstance.All)
+        foreach (Scene world in Scene.All)
             if (world.Present && world.State == SceneState.Running)
                 s_presented.Add(world);
         s_presented.Sort(static (a, b) => a.RenderOrder.CompareTo(b.RenderOrder));
         return s_presented;
     }
 
+    /// <summary>The world the GUI phase runs in, so <see cref="Camera.Main"/>, Physics and gizmos there reach it. Null leaves the ambient world as it is.</summary>
+    protected virtual Scene? GuiWorld => null;
+
+    // The editor logs a GUI exception and carries on to the next frame, so the scope has to close even when the phase
+    // throws. Left open, the world stays ambient for every later frame, and once it is destroyed Time and the other
+    // ambient readers throw from code that runs outside any world, such as input action callbacks.
+    internal void RunGui(Paper paper)
+    {
+        using Scene.SceneScope scope = Scene.Enter(GuiWorld);
+
+        BeginGui(paper);
+
+        if (PresentsWorlds)
+            foreach (Scene world in PresentedWorlds())
+                world.OnGui(paper);
+        OnGui(paper);
+
+        EndGui(paper);
+    }
+
     private void RenderPresentedWorlds()
     {
-        foreach (SceneInstance world in PresentedWorlds())
+        foreach (Scene world in PresentedWorlds())
         {
             try { world.Render(null, DrawGizmos); }
             catch (Exception e) { Debug.LogException($"[Render] Drawing '{world.Name}' threw", e); }
@@ -464,9 +470,9 @@ public abstract class Game
     /// The world bound as Main before <see cref="Initialize"/> and kept until shutdown: a running, presented game world
     /// that levels load into. The editor makes its edit world instead.
     /// </summary>
-    protected virtual SceneInstance CreateMainWorld()
+    protected virtual Scene CreateMainWorld()
     {
-        SceneInstance main = SceneInstance.Create("Main");
+        Scene main = Scene.Create("Main");
         main.Present = true;
         main.Activate();
         return main;

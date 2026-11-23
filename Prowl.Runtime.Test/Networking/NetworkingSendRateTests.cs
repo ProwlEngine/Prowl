@@ -42,7 +42,7 @@ public partial class NetworkingTests
     [Fact]
     public void AMovingObjectSendsItsTransformOnlyEveryIntervalTicks()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -96,7 +96,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASyncValueChangingEveryTickWaitsForItsComponentsInterval()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         Networking.Networking.Host(new LocalTransport(network, "host"));
@@ -135,7 +135,7 @@ public partial class NetworkingTests
     [Fact]
     public void ASendIntervalStillSendsWhenTheTickSkipsAhead()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         List<GameObject> objects = [];
         List<NetTestComponent> components = [];
         for (int i = 0; i < 2; i++)

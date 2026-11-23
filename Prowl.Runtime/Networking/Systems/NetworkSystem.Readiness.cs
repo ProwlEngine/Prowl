@@ -179,7 +179,7 @@ internal sealed partial class NetworkSystem
     internal void DispatchNetworkListener(Action<INetworkListener> action)
     {
         NetSession? session = Session;
-        SceneInstance? world = ReplicatedWorld;
+        Scene? world = ReplicatedWorld;
         if (world.IsNotValid())
         {
             return;

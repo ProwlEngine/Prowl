@@ -47,7 +47,7 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution, BatchMessages = batching });
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         MakeCurrent(scene);
         LocalNetwork network = new();
         using LimitedTransport transport = new(network, address => address == "small" ? smallLimit : address == "wide" ? 155 : 1000, deliveries);
@@ -111,7 +111,7 @@ public partial class NetworkingTests
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
         Networking.Networking.Configure(new() { Execution = execution });
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         using NetWriter snapshot = new();
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject ship = CreateGameObject("Ship");
@@ -131,7 +131,7 @@ public partial class NetworkingTests
         try
         {
             Pump(() => Networking.Networking.IsReady && host.Has(FakePeer.Transform), host);
-            GameObject local = Find(SceneInstance.Main, ship.Identifier);
+            GameObject local = Find(Scene.Main, ship.Identifier);
             host.WireReceived.Clear();
             local.Transform.LocalPosition = new Float3(42, 0, 0);
             Pump(() => host.Has(FakePeer.Transform) && host.WireReceived.Any(m => m.Id == FakePeer.Transform), host);
