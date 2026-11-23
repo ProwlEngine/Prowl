@@ -267,8 +267,6 @@ public class InspectorPanel : DockPanel
                 var gos = Selection.GetSelected<GameObject>().ToList();
                 if (gos.Count > 1)
                     GameObjectInspector.DrawMulti(paper, font, gos);
-                else if (IsolatedWorld.Current is { } session)
-                    session.DrawInspector(paper, gameObject, () => GameObjectInspector.Draw(paper, font, gameObject, _viewportRect, _componentLayout));
                 else
                     GameObjectInspector.Draw(paper, font, gameObject, _viewportRect, _componentLayout);
             }

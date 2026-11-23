@@ -84,6 +84,9 @@ public abstract class SceneTool
     /// <summary>Replace the scene view's right click menu with <see cref="OnSceneContextMenu"/>, the usual items moving to a submenu.</summary>
     public virtual bool ReplacesSceneContextMenu => false;
 
+    /// <summary>Whether the tool uses a scene view shortcut's key for something else right now, so the scene view leaves it.</summary>
+    public virtual bool TakesShortcut(string shortcut) => false;
+
     /// <summary>Selects what <paramref name="ray"/> right clicked before the menu opens, in place of the scene's own pick. True when handled.</summary>
     public virtual bool OnSceneContextPick(SceneToolContext ctx, Ray ray) => false;
 

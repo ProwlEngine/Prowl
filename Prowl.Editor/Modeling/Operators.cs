@@ -30,6 +30,99 @@ public static class Operators
     }
 
     /// <summary>
+    /// Pulls edges out into a strip of faces joining each to a copy at the same place, so a grab can move the copies off.
+    /// The copied edges and their points are selected after.
+    /// </summary>
+    public static void ExtrudeEdges(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, ElementSelection after)
+    {
+        after.Clear();
+        var copyOf = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
+        GeometryData.Vertex Copy(GeometryData.Vertex v)
+        {
+            if (!copyOf.TryGetValue(v, out GeometryData.Vertex? copy)) copyOf[v] = copy = mesh.AddVertex(v.Point);
+            return copy;
+        }
+        foreach (GeometryData.Edge edge in edges.ToList())
+        {
+            if (edge.IsHidden || !mesh.Contains(edge)) continue;
+            GeometryData.Vertex a = edge.Vert1, b = edge.Vert2, ac = Copy(a), bc = Copy(b);
+            // Wound against the face already along the edge, so the surface stays one way round
+            bool reversed = edge.Loop != null && edge.Loop.Vert == a;
+            if (reversed) mesh.AddFace(b, a, ac, bc);
+            else mesh.AddFace(a, b, bc, ac);
+            if (mesh.FindEdge(ac, bc) is { } copied) after.Edges.Add(copied);
+        }
+        after.Vertices.UnionWith(copyOf.Values);
+        mesh.MarkChanged();
+    }
+
+    /// <summary>
+    /// Fills the selection: two points get an edge between them, a chain or ring of edges gets a face through it, turned
+    /// to face the way of a face already beside it. The new face is selected after.
+    /// </summary>
+    public static void Fill(GeometryData mesh, ElementSelection selection)
+    {
+        if (selection.Vertices.Count == 2 && selection.Edges.Count == 0)
+        {
+            GeometryData.Vertex[] pair = [.. selection.Vertices];
+            if (mesh.FindEdge(pair[0], pair[1]) == null) mesh.AddEdge(pair[0], pair[1]);
+            mesh.MarkChanged();
+            return;
+        }
+
+        var around = new Dictionary<GeometryData.Vertex, List<GeometryData.Edge>>();
+        foreach (GeometryData.Edge edge in selection.Edges)
+            foreach (GeometryData.Vertex end in (GeometryData.Vertex[])[edge.Vert1, edge.Vert2])
+            {
+                if (!around.TryGetValue(end, out List<GeometryData.Edge>? list)) around[end] = list = new List<GeometryData.Edge>();
+                list.Add(edge);
+            }
+        List<GeometryData.Vertex> tips = [.. around.Where(p => p.Value.Count == 1).Select(p => p.Key)];
+        if (around.Count < 3 || around.Values.Any(l => l.Count > 2) || tips.Count is not (0 or 2))
+            throw new InvalidOperationException("The selected edges do not run as one chain or ring");
+
+        var path = new List<GeometryData.Vertex>();
+        GeometryData.Vertex? at = tips.Count == 2 ? tips[0] : around.Keys.First();
+        GeometryData.Edge? from = null;
+        while (at != null && !path.Contains(at))
+        {
+            path.Add(at);
+            GeometryData.Edge? onward = around[at].FirstOrDefault(e => e != from);
+            if (onward == null) break;
+            from = onward;
+            at = onward.OtherVertex(at);
+        }
+        if (path.Count != around.Count) throw new InvalidOperationException("The selected edges do not run as one chain or ring");
+
+        // Against a face already along one of its sides, so the two face the same way
+        for (int i = 0; i < path.Count; i++)
+            if (mesh.FindEdge(path[i], path[(i + 1) % path.Count])?.Loop is { } loop && loop.Vert == path[i])
+            {
+                path.Reverse();
+                break;
+            }
+        GeometryData.Face made = mesh.AddFace([.. path]) ?? throw new InvalidOperationException("No face fits the selection");
+        selection.Clear();
+        selection.Faces.Add(made);
+        selection.Vertices.UnionWith(path);
+        foreach (GeometryData.Edge edge in made.NeighborEdges()) selection.Edges.Add(edge);
+        mesh.MarkChanged();
+    }
+
+    /// <summary>Gives each point a copy at the same place joined to it by an edge, so a grab can draw the edges out. The copies are selected after.</summary>
+    public static void ExtrudePoints(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> points, ElementSelection after)
+    {
+        after.Clear();
+        foreach (GeometryData.Vertex point in points)
+        {
+            GeometryData.Vertex copy = mesh.AddVertex(point.Point);
+            mesh.AddEdge(point, copy);
+            after.Vertices.Add(copy);
+        }
+        mesh.MarkChanged();
+    }
+
+    /// <summary>
     /// Pulls faces out along their normals as one region, walled to where they were, so the solid grows. A negative
     /// distance pushes them in. The moved faces are selected after.
     /// </summary>

@@ -711,12 +711,17 @@ public class GizmoBuilder
 {
     private GizmoBatch _building = new() { Visible = false };
     private GizmoBatch _shown = new() { Visible = false };
+    private GizmoBatch _surfaceBuilding = new() { Visible = false, Hidden = HiddenStyle.Gone };
+    private GizmoBatch _surfaceShown = new() { Visible = false, Hidden = HiddenStyle.Gone };
     private RenderWorld? _world;
     private Prowl.Graphite.Rendering.Gizmos? _feature;
     private readonly Stack<Float4x4> _matrices = new();
 
     /// <summary>The batch draws this frame go into.</summary>
     public GizmoBatch Batch => _building;
+
+    /// <summary>A batch for this frame whose parts behind the scene's surfaces are not drawn at all.</summary>
+    public GizmoBatch SurfaceBatch => _surfaceBuilding;
 
     /// <summary>Whether nothing was drawn into this builder since it was last cleared.</summary>
     internal bool IsEmpty => _building.PrimitiveCount == 0;
@@ -837,9 +842,13 @@ public class GizmoBuilder
         {
             _feature?.Remove(_building);
             _feature?.Remove(_shown);
+            _feature?.Remove(_surfaceBuilding);
+            _feature?.Remove(_surfaceShown);
             _feature = feature;
             feature.Add(_building);
             feature.Add(_shown);
+            feature.Add(_surfaceBuilding);
+            feature.Add(_surfaceShown);
         }
         _world = world;
     }
@@ -853,6 +862,11 @@ public class GizmoBuilder
         _world = null;
         _building.Clear();
         _building.Visible = false;
+        (_surfaceShown, _surfaceBuilding) = (_surfaceBuilding, _surfaceShown);
+        _surfaceShown.World = _shown.World;
+        _surfaceShown.Visible = _shown.Visible;
+        _surfaceBuilding.Clear();
+        _surfaceBuilding.Visible = false;
         _matrices.Clear();
 
         (_publishedHitboxes, _hitboxes) = (_hitboxes, _publishedHitboxes);
@@ -865,6 +879,8 @@ public class GizmoBuilder
     {
         _feature?.Remove(_building);
         _feature?.Remove(_shown);
+        _feature?.Remove(_surfaceBuilding);
+        _feature?.Remove(_surfaceShown);
         _feature = null;
     }
 }

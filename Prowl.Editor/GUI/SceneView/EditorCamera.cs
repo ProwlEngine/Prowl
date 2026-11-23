@@ -560,7 +560,7 @@ public class EditorCamera
         }
 
         // F = focus on selection
-        if (ShortcutManager.IsPressed("Scene/Focus"))
+        if (ShortcutManager.IsPressed("Scene/Focus") && !System.Linq.Enumerable.Any(SceneToolManager.Live, t => t.TakesShortcut("Scene/Focus")))
         {
             FocusSelection();
             consumed = true;

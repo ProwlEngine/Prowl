@@ -85,6 +85,70 @@ public class OperatorTests
         Assert.Equal(12f, Brush(target).Volume(), 3);
     }
 
+    [Fact]
+    public void ExtrudingAnEdgeMakesAFaceAndSelectsTheCopiedEdge()
+    {
+        var mesh = new GeometryData();
+        GeometryData.Vertex a = mesh.AddVertex(0, 0, 0), b = mesh.AddVertex(1, 0, 0);
+        mesh.AddFace(a, b, mesh.AddVertex(1, 0, 1), mesh.AddVertex(0, 0, 1));
+        var after = new ElementSelection();
+
+        Operators.ExtrudeEdges(mesh, [mesh.FindEdge(a, b)!], after);
+
+        Assert.Equal(2, mesh.Faces.Count);
+        Assert.Equal(6, mesh.Vertices.Count);
+        GeometryData.Edge copy = Assert.Single(after.Edges);
+        Assert.DoesNotContain(copy.Vert1, new[] { a, b });
+        Assert.Equal(2, after.Vertices.Count);
+    }
+
+    [Fact]
+    public void FillingTwoPointsJoinsThemWithAnEdge()
+    {
+        var mesh = new GeometryData();
+        GeometryData.Vertex a = mesh.AddVertex(0, 0, 0), b = mesh.AddVertex(1, 0, 0);
+        var selection = new ElementSelection();
+        selection.Vertices.UnionWith([a, b]);
+
+        Operators.Fill(mesh, selection);
+
+        Assert.NotNull(mesh.FindEdge(a, b));
+    }
+
+    [Fact]
+    public void FillingAChainOfEdgesMakesAFaceFacingItsNeighbour()
+    {
+        var mesh = new GeometryData();
+        GeometryData.Vertex a = mesh.AddVertex(0, 0, 0), b = mesh.AddVertex(1, 0, 0), c = mesh.AddVertex(1, 0, 1), d = mesh.AddVertex(0, 0, 1);
+        GeometryData.Vertex e = mesh.AddVertex(2, 0, 0), f = mesh.AddVertex(2, 0, 1);
+        GeometryData.Face first = mesh.AddFace(a, d, c, b)!;
+        var selection = new ElementSelection();
+        selection.Edges.UnionWith([mesh.FindEdge(b, c)!, mesh.AddEdge(b, e), mesh.AddEdge(e, f), mesh.AddEdge(f, c)]);
+        selection.Vertices.UnionWith([b, c, e, f]);
+
+        Operators.Fill(mesh, selection);
+
+        GeometryData.Face made = Assert.Single(selection.Faces);
+        Assert.Equal(4, made.VertCount);
+        Assert.True(Float3.Dot(made.Normal(), first.Normal()) > 0.99f);
+    }
+
+    [Fact]
+    public void ExtrudingAPointMakesAnEdgeToACopyAndSelectsIt()
+    {
+        var mesh = new GeometryData();
+        GeometryData.Vertex a = mesh.AddVertex(0, 0, 0);
+        mesh.AddFace(a, mesh.AddVertex(1, 0, 0), mesh.AddVertex(1, 0, 1));
+        var after = new ElementSelection();
+
+        Operators.ExtrudePoints(mesh, [a], after);
+
+        GeometryData.Vertex copy = Assert.Single(after.Vertices);
+        Assert.NotSame(a, copy);
+        Assert.NotNull(mesh.FindEdge(a, copy));
+        Assert.Single(mesh.Faces);
+    }
+
     /// <summary>A line splitting the top, dissolved, leaves the top whole again.</summary>
     [Fact]
     public void DissolvingAnEdgeJoinsTheFacesBesideIt()
