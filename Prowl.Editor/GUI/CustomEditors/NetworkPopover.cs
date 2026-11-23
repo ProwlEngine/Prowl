@@ -211,7 +211,7 @@ internal static class NetworkPopover
         }
     }
 
-    /// <summary>Who receives the object: its visibility rule, the groups it is in, and how far away it is still sent.</summary>
+    /// <summary>Who receives the object: the interest, everyone, or only its owner.</summary>
     private static void Receivers(Paper paper, FontFile font, GameObject go)
     {
         Heading(paper, font, "gi_net_vis", Loc.Get("network.visibility"), Loc.Get("network.visibility.desc"));
@@ -223,65 +223,14 @@ internal static class NetworkPopover
 
         string[] rules =
         [
-            Loc.Get("network.visibility.default"), Loc.Get("network.visibility.always"),
-            Loc.Get("network.visibility.owner_only"), Loc.Get("network.visibility.manual"),
+            Loc.Get("network.visibility.default"), Loc.Get("network.visibility.force_shown"),
+            Loc.Get("network.visibility.force_hidden"),
         ];
         Origami.Dropdown(paper, "gi_net_vis_v", (int)go.Network.Visibility, v =>
         {
             Undo.RecordObject(go, "Change Network Visibility");
             go.Network.Visibility = (NetworkVisibility)v;
         }, rules).Show();
-
-        LabeledRow(paper, font, "gi_net_cull", Loc.Get("network.cull_distance"), () =>
-            Origami.NumericField<float>(paper, "gi_net_cull_v", go.Network.CullDistance, v =>
-            {
-                Undo.RecordObject(go, "Change Cull Distance");
-                go.Network.CullDistance = float.IsFinite(v) ? MathF.Max(0f, v) : 0f;
-            }).Min(0).Show());
-
-        LabeledRow(paper, font, "gi_net_groups", Loc.Get("network.groups"), () =>
-            Origami.TextField(paper, "gi_net_groups_v", GroupList(go.Network.Groups), text =>
-            {
-                Undo.RecordObject(go, "Change Network Groups");
-                go.Network.Groups = ParseGroups(text);
-            }).CommitOnEnter().Show());
-        Note(paper, font, "gi_net_groups_desc", Loc.Get("network.groups.desc"), EditorTheme.Ink400);
-    }
-
-    private static string GroupList(NetworkGroups groups)
-    {
-        System.Collections.Generic.List<string> numbers = [];
-        for (int group = 0; group < NetworkGroups.Count; group++)
-        {
-            if (groups.Contains(group))
-                numbers.Add(group.ToString());
-        }
-
-        return string.Join(", ", numbers);
-    }
-
-    /// <summary>The groups a list of numbers names. What is not a number from 0 to 63 is left out.</summary>
-    private static NetworkGroups ParseGroups(string text)
-    {
-        NetworkGroups groups = NetworkGroups.None;
-        foreach (string part in text.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (int.TryParse(part, out int group) && group >= 0 && group < NetworkGroups.Count)
-                groups = groups.With(group);
-        }
-
-        return groups;
-    }
-
-    private static void LabeledRow(Paper paper, FontFile font, string id, string label, Action control)
-    {
-        using (paper.Row(id).Height(EditorTheme.RowHeight).Gap(8).Enter())
-        {
-            paper.Box(id + "_name").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).IsNotInteractable()
-                .Text(label, font).TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-            control();
-        }
     }
 
     /// <summary>A send interval for each networked component on the object itself.</summary>

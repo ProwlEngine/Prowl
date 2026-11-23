@@ -16,8 +16,7 @@ internal static class NetworkSerialization
         NetworkAccessor? network = go._network;
         if (network == null || (!network.Networked && !network.ServerOnly &&
                                 network.Orphaned == NetworkOrphaned.Destroy &&
-                                network.Visibility == NetworkVisibility.Default && network.CullDistance == 0 &&
-                                network.Groups.IsEmpty && !network.HasComponentIntervals))
+                                network.Visibility == NetworkVisibility.Default && !network.HasComponentIntervals))
         {
             return;
         }
@@ -37,16 +36,6 @@ internal static class NetworkSerialization
         if (network.Visibility != NetworkVisibility.Default)
         {
             settings.Add("Visibility", new EchoObject((byte)network.Visibility));
-        }
-
-        if (network.CullDistance != 0)
-        {
-            settings.Add("CullDistance", new EchoObject(network.CullDistance));
-        }
-
-        if (!network.Groups.IsEmpty)
-        {
-            settings.Add("Groups", new EchoObject(network.Groups.Mask));
         }
 
         if (network.HasComponentIntervals)
@@ -85,8 +74,6 @@ internal static class NetworkSerialization
             existing.ClearComponentIntervals();
             existing.Orphaned = NetworkOrphaned.Destroy;
             existing.Visibility = NetworkVisibility.Default;
-            existing.CullDistance = 0;
-            existing.Groups = NetworkGroups.None;
             return;
         }
 
@@ -95,10 +82,9 @@ internal static class NetworkSerialization
         byte stored = settings["Mode"]?.ByteValue ?? 0;
         network.LoadSharing(settings["Networked"]?.BoolValue ?? stored == 2, settings["ServerOnly"]?.BoolValue ?? stored == 1);
         network.Orphaned = (NetworkOrphaned)(settings["Orphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
-        network.Visibility = (NetworkVisibility)(settings["Visibility"]?.ByteValue ?? (byte)NetworkVisibility.Default);
-        float cullDistance = settings["CullDistance"]?.FloatValue ?? 0;
-        network.CullDistance = float.IsFinite(cullDistance) && cullDistance > 0 ? cullDistance : 0;
-        network.Groups = new NetworkGroups(settings["Groups"]?.ULongValue ?? 0);
+        // Scenes and prefabs saved with the old Manual visibility, 3, hide the object as it did.
+        byte visibility = settings["Visibility"]?.ByteValue ?? (byte)NetworkVisibility.Default;
+        network.Visibility = visibility == 3 ? NetworkVisibility.ForceHidden : (NetworkVisibility)visibility;
         network.ClearComponentIntervals();
         if (settings["ComponentIntervals"]?.List is { } intervals)
         {

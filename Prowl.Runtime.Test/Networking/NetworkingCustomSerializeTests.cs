@@ -87,7 +87,7 @@ public partial class NetworkingTests
                      {
                          () => Networking.Networking.SpawnFactory("crate", default, Prowl.Vector.Quaternion.Identity),
                          () => other.Network.AssignOwnership(aliceHere),
-                         () => other.Network.HideFrom(aliceHere),
+                         () => other.Network.Visibility = NetworkVisibility.ForceHidden,
                      })
             {
                 meddler.Thrown = null;

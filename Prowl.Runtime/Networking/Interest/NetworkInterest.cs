@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
 using System.Collections.Generic;
 
 using Prowl.Courier;
@@ -9,63 +8,52 @@ using Prowl.Courier;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-///     Host: which networked objects each client is near enough to receive, under <see cref="InterestMode.Distance" />.
-///     An object's visibility rules come first, and distance decides only for <see cref="NetworkVisibility.Default" />
-///     ones a client doesn't own or have shown to it. A client with no viewpoint receives none of those.
+///     Host: decides which clients receive each networked object. Set one as <see cref="Networking.Interest" />. With
+///     none, every client receives every object. An object's owner always receives it, and its
+///     <see cref="NetworkVisibility" /> can force it shown to everyone or hidden from all but its owner.
 /// </summary>
-public sealed class NetworkInterest
+public abstract class NetworkInterest
 {
-    private readonly NetworkSystem _system;
+    /// <summary>Whether <paramref name="peer" /> receives <paramref name="go" />. Asked for every object as a client joins or loads a scene.</summary>
+    public abstract bool OnCheckObserver(GameObject go, NetPeer peer);
 
-    internal NetworkInterest(NetworkSystem system) => _system = system;
+    /// <summary>Adds the clients that receive <paramref name="go" /> to <paramref name="observers" />. Asked as it spawns and on each rebuild.</summary>
+    public abstract void OnRebuildObservers(GameObject go, HashSet<NetPeer> observers);
 
-    /// <summary>
-    ///     A rule of the game's own: true or false decides whether a client gets an
-    ///     object, null leaves it to the built in rules. It runs after ownership, per client overrides and the object's
-    ///     <see cref="NetworkVisibility" />, and before groups and distance. Setting it checks every client again; call
-    ///     <see cref="Refresh()" /> when what it depends on changes.
-    /// </summary>
-    public Func<GameObject, NetPeer, bool?>? Rule
+    /// <summary>A networked object was spawned, before its observers are first worked out.</summary>
+    public virtual void OnSpawned(GameObject go)
     {
-        get => _system.InterestRule;
-        set
+    }
+
+    /// <summary>A networked object was despawned or destroyed.</summary>
+    public virtual void OnDestroyed(GameObject go)
+    {
+    }
+
+    /// <summary>A session starts or ends, or this became the interest: forget everything kept so far.</summary>
+    public virtual void ResetState()
+    {
+    }
+
+    /// <summary>Runs once a network tick on the host, for rebuilding observers over time.</summary>
+    public virtual void Update()
+    {
+    }
+
+    /// <summary>Works out again who receives <paramref name="go" />, sending or removing it where that changed.</summary>
+    protected static void Rebuild(GameObject go) => Networking.System?.RebuildObservers(go);
+
+    /// <summary>Works out again who receives every networked object.</summary>
+    protected static void RebuildAll() => Networking.System?.RebuildAllObservers();
+
+    /// <summary>The clients of the session, not the host itself.</summary>
+    protected static IEnumerable<NetPeer> Clients()
+    {
+        if (Networking.System is not { } system)
         {
-            _system.InterestRule = value;
-            Refresh();
+            return [];
         }
-    }
 
-    /// <summary>The client's viewpoints and options. One that left gets a detached copy that changes nothing.</summary>
-    public PeerInterest For(NetPeer peer)
-    {
-        ArgumentNullException.ThrowIfNull(peer);
-        return _system.InterestOf(peer);
-    }
-
-    /// <summary>Checks every client against every object now, rather than at their next interest check.</summary>
-    public void Refresh()
-    {
-        foreach (NetPeer peer in _system.RemotePeers())
-        {
-            _system.RefreshInterest(_system.InterestOf(peer));
-        }
-    }
-
-    /// <summary>Checks <paramref name="peer" /> against every object now.</summary>
-    public void Refresh(NetPeer peer) => _system.RefreshInterest(For(peer));
-
-    /// <summary>How many networked objects <paramref name="peer" /> has.</summary>
-    public int VisibleCount(NetPeer peer)
-    {
-        ArgumentNullException.ThrowIfNull(peer);
-        return _system.VisibleCount(peer);
-    }
-
-    /// <summary>Adds the networked objects <paramref name="peer" /> has to <paramref name="results" />.</summary>
-    public void GetVisible(NetPeer peer, List<GameObject> results)
-    {
-        ArgumentNullException.ThrowIfNull(peer);
-        ArgumentNullException.ThrowIfNull(results);
-        _system.GetVisible(peer, results);
+        return system.RemotePeers();
     }
 }

@@ -96,16 +96,6 @@ internal sealed partial class NetworkObject
         }
     }
 
-    internal void NotifyVisibility(NetPeer peer, bool visible) =>
-        SceneEvents.RunLifecycle<INetworkEvents>(GameObject, e =>
-        {
-            if (SpawnNotified && SpawnListeners.Contains((Component)e))
-            {
-                System.VisibilityCallbacks++;
-                e.OnNetworkVisibilityChanged(peer, visible);
-            }
-        });
-
     internal void NotifyDespawn(NetworkDespawnReason reason = NetworkDespawnReason.Destroyed)
     {
         System.Sync.ForgetReferencesOf(this);
@@ -144,8 +134,6 @@ internal sealed partial class NetworkObject
         SendOwnershipState(velocity);
         int previous = Owner;
         ApplyOwner(owner, System.NextGeneration(), velocity);
-        System.ForgetViewpoints(previous);
-        System.ForgetViewpoints(owner);
 
         using NetWriter message = new(32);
         new OwnerMessage(GameObject.Identifier, owner, Generation).Write(message);
@@ -154,7 +142,7 @@ internal sealed partial class NetworkObject
         NotifyOwnership();
         if (System.FindEntry(GameObject) == this && !TearingDown)
         {
-            System.RefreshVisibility(this);
+            System.RebuildObservers(this);
         }
     }
 

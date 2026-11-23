@@ -195,7 +195,6 @@ internal sealed partial class NetworkSystem
         };
         entry.SetTransforms(transforms);
         Entries.Add(entry);
-        ForgetViewpoints(entry.Owner);
         InitVisibility(entry);
 
         List<NetPeer> observers = new();
@@ -866,11 +865,6 @@ internal sealed partial class NetworkSystem
     /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>
     internal void OnGameObjectDisposed(GameObject go)
     {
-        if (VisibilityOverrides.Count > 0)
-        {
-            VisibilityOverrides.Remove(go);
-        }
-
         if (!Entries.TryGetValue(go.Identifier, out NetworkObject? entry) || entry.GameObject != go)
         {
             return;
@@ -878,8 +872,7 @@ internal sealed partial class NetworkSystem
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         Entries.Remove(go.Identifier);
-        Restricted.Remove(entry);
-        ForgetInRange(entry);
+        ForgetObserved(entry);
 
         // A section being unloaded, or a world being torn down, goes away on clients as a whole.
         if (!IsHost || !IsActive || go.Scene != ReplicatedWorld || ReplicatedWorld!.State != SceneState.Running ||
@@ -948,9 +941,7 @@ internal sealed partial class NetworkSystem
         }
 
         Entries.Remove(go.Identifier);
-        Restricted.Remove(entry);
-        ForgetInRange(entry);
-        VisibilityOverrides.Remove(go);
+        ForgetObserved(entry);
     }
 
     internal void OnDespawn(NetPeer sender, ref NetReader reader, Delivery delivery)

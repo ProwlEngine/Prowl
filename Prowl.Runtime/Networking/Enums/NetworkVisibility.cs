@@ -3,18 +3,15 @@
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Which clients a networked object is sent to. Its owner always has it, and the host can override it per peer.</summary>
+/// <summary>Who receives a networked object. Its owner always does.</summary>
 public enum NetworkVisibility : byte
 {
-    /// <summary>Every client has it.</summary>
+    /// <summary>The <see cref="Networking.Interest" /> decides, or every client when there is none.</summary>
     Default,
 
-    /// <summary>Every client has it, whatever other rules say.</summary>
-    Always,
+    /// <summary>Every client receives it, whatever the interest decides.</summary>
+    ForceShown,
 
-    /// <summary>Only its owner has it.</summary>
-    OwnerOnly,
-
-    /// <summary>Only its owner and the peers the host shows it to have it.</summary>
-    Manual
+    /// <summary>Only its owner receives it.</summary>
+    ForceHidden
 }

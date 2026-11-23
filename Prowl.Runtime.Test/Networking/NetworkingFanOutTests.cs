@@ -44,20 +44,20 @@ public partial class NetworkingTests
     [Fact]
     public void AnObjectEnteringSeveralPeersInterestTogetherIsWrittenOnce()
     {
-        using InterestSession session = InterestHost();
-        session.AliceSees.SetViewpoints([Float3.Zero]);
-        session.BobSees.SetViewpoints([Float3.Zero]);
+        using InterestSession session = InterestHost(new DistanceInterest { Range = 10, RebuildInterval = 0 });
+        Player(session.World, session.AliceHere, "Alice", Float3.Zero);
+        Player(session.World, session.BobHere, "Bob", Float3.Zero);
         GameObject crate = CreateGameObject("Counted crate");
         crate.AddComponent<CountedWritesTestComponent>();
         crate.Transform.Position = new Float3(100, 0, 0);
         session.World.Add(crate);
         crate.SpawnBuilt();
         PumpFor(10, session.Alice, session.Bob);
-        Assert.Equal(0, SpawnsOf(session.Alice, crate));
+        Assert.Equal(0, Spawns(session.Alice, crate));
 
         CountedWrites.Writes = 0;
         crate.Transform.Position = Float3.Zero;
-        Pump(() => SpawnsOf(session.Alice, crate) == 1 && SpawnsOf(session.Bob, crate) == 1, session.Alice, session.Bob);
+        Pump(() => Spawns(session.Alice, crate) == 1 && Spawns(session.Bob, crate) == 1, session.Alice, session.Bob);
         Assert.Equal(1, CountedWrites.Writes);
     }
 }

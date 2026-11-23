@@ -110,6 +110,11 @@ internal sealed partial class NetworkSystem : IDisposable
         _wallStepAt = Now;
         LocalJoinState = session.IsHost ? NetworkJoinState.Loading : NetworkJoinState.Connecting;
         ReadyDeadline = Now + Configuration.SceneLoadTimeoutSeconds;
+        if (session.IsHost)
+        {
+            Networking.Interest?.ResetState();
+        }
+
         Scene.Loaded += OnWorldLoaded;
         Scene.Unloading += OnWorldUnloading;
         Scene.MainChanged += OnMainChanged;
@@ -188,7 +193,11 @@ internal sealed partial class NetworkSystem : IDisposable
         if (IsActive && (IsHost || IsReady) && _tickDue)
         {
             _tickDue = false;
-            UpdateInterest();
+            if (IsHost)
+            {
+                Networking.Interest?.Update();
+            }
+
             if (IsActive)
             {
                 Sync.SendSyncChanges();

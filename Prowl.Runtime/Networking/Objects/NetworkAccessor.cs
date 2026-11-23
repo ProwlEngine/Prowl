@@ -17,8 +17,6 @@ public sealed class NetworkAccessor
     private bool _serverOnly;
     private NetworkOrphaned _orphaned = NetworkOrphaned.Destroy;
     private NetworkVisibility _visibility;
-    private float _cullDistance;
-    private NetworkGroups _groups;
 
     // The send interval of each component of this object that has one set.
     private Dictionary<Component, int>? _componentIntervals;
@@ -161,8 +159,7 @@ public sealed class NetworkAccessor
 
     /// <summary>
     ///     Which clients receive this object. Only the host may change this after spawning. It is read from the
-    ///     networked object itself, not from the objects under it, as are <see cref="Groups" /> and
-    ///     <see cref="CullDistance" />.
+    ///     networked object itself, not from the objects under it.
     /// </summary>
     public NetworkVisibility Visibility
     {
@@ -182,54 +179,8 @@ public sealed class NetworkAccessor
             NetworkSystem? system = Networking.System;
             system?.CheckVisibilityChange(_object);
             _visibility = value;
-            system?.RefreshVisibility(_object);
+            system?.RebuildObservers(_object);
         }
-    }
-
-    /// <summary>
-    ///     How far from a viewpoint a client still receives this object under <see cref="InterestMode.Distance" />, in place
-    ///     of the viewpoint's own radius. Zero leaves it to the viewpoint.
-    /// </summary>
-    public float CullDistance
-    {
-        get => _cullDistance;
-        set
-        {
-            if (!float.IsFinite(value) || value < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
-
-            _cullDistance = value;
-        }
-    }
-
-    /// <summary>
-    ///     The groups whose clients receive this object, such as a team. None sends it to every client. Only the host may
-    ///     change this after spawning.
-    /// </summary>
-    public NetworkGroups Groups
-    {
-        get => _groups;
-        set
-        {
-            if (value == _groups)
-            {
-                return;
-            }
-
-            NetworkSystem? system = Networking.System;
-            system?.CheckVisibilityChange(_object);
-            _groups = value;
-            system?.RefreshVisibility(_object);
-        }
-    }
-
-    /// <summary>The groups as their bits, for the editor to store as a prefab override.</summary>
-    internal ulong GroupMask
-    {
-        get => _groups.Mask;
-        set => Groups = new NetworkGroups(value);
     }
 
     /// <summary>Why the object left this peer. Read it in <see cref="INetworkEvents.OnNetworkDespawn" />.</summary>
@@ -323,28 +274,8 @@ public sealed class NetworkAccessor
     /// <summary>Host: true if <paramref name="peer" /> has this object. Outside a session, always true.</summary>
     public bool IsVisibleTo(NetPeer peer) => Networking.System?.IsVisibleTo(_object, peer) ?? true;
 
-    /// <summary>Host: sends this object to <paramref name="peer" />, whatever <see cref="Visibility" /> says. Ignored once the peer left.</summary>
-    public void ShowTo(NetPeer peer) => VisibilityOverride(peer, true);
-
-    /// <summary>Host: stops sending this object to <paramref name="peer" />. Ignored for its owner, or once the peer left.</summary>
-    public void HideFrom(NetPeer peer) => VisibilityOverride(peer, false);
-
-    /// <summary>Host: <see cref="Visibility" /> decides for <paramref name="peer" /> again. Ignored once the peer left.</summary>
-    public void ClearVisibilityOverride(NetPeer peer) => VisibilityOverride(peer, null);
-
-    /// <summary>Host: checks every peer again, sending or removing the object where that changed.</summary>
-    public void RefreshVisibility() => Networking.System?.RefreshVisibility(_object);
-
-    private void VisibilityOverride(NetPeer peer, bool? visible)
-    {
-        ArgumentNullException.ThrowIfNull(peer);
-        if (Networking.System is not { IsActive: true } system)
-        {
-            throw new InvalidOperationException("Visibility can only be overridden on the host of a running session.");
-        }
-
-        system.SetVisibilityOverride(_object, peer, visible);
-    }
+    /// <summary>Host: asks the interest again who receives this object, sending or removing it where that changed.</summary>
+    public void RebuildObservers() => Networking.System?.RebuildObservers(_object);
 
     internal const int MaxSendInterval = byte.MaxValue;
 

@@ -273,7 +273,6 @@ internal sealed partial class NetworkSystem
         }
 
         SceneGeneration++;
-        ClearViewpoints();
         LocalJoinState = NetworkJoinState.Loading;
         Sync.Clear();
         Transforms.Clear();

@@ -24,8 +24,23 @@ public static partial class Networking
     /// <summary>The current engine session, or null without one.</summary>
     public static NetSession? Session { get; private set; }
 
-    /// <summary>Who receives which networked objects by distance, while hosting. Null otherwise.</summary>
-    public static NetworkInterest? Interest => System is { IsHost: true } system ? system.Interest : null;
+    private static NetworkInterest? s_interest;
+
+    /// <summary>Host: decides which clients receive which networked objects. Null sends every object to every client.</summary>
+    public static NetworkInterest? Interest
+    {
+        get => s_interest;
+        set
+        {
+            if (ReferenceEquals(value, s_interest))
+            {
+                return;
+            }
+
+            s_interest = value;
+            System?.OnInterestChanged();
+        }
+    }
 
     /// <summary>The bound IP port, or zero for a transport without an IP listener.</summary>
     public static int LocalPort => s_transport?.LocalPort ?? 0;

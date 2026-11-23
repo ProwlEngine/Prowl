@@ -1348,18 +1348,14 @@ public partial class PrefabTests : EditorTestHarness
         // runs, must not take it back to the prefab's.
         instance.Network.Networked = true;
         instance.Network.Orphaned = Prowl.Runtime.Networking.NetworkOrphaned.ClearOwner;
-        instance.Network.Visibility = Prowl.Runtime.Networking.NetworkVisibility.Manual;
-        instance.Network.CullDistance = 40;
-        instance.Network.Groups = Prowl.Runtime.Networking.NetworkGroups.Of(3);
+        instance.Network.Visibility = Prowl.Runtime.Networking.NetworkVisibility.ForceHidden;
         PrefabUtility.RecordGameObjectOverrides(instance);
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, "Network.Networked")));
 
         PrefabUtility.RefreshAllInstances(g);
         Assert.True(instance.Network.Networked);
         Assert.Equal(Prowl.Runtime.Networking.NetworkOrphaned.ClearOwner, instance.Network.Orphaned);
-        Assert.Equal(Prowl.Runtime.Networking.NetworkVisibility.Manual, instance.Network.Visibility);
-        Assert.Equal(40, instance.Network.CullDistance);
-        Assert.True(instance.Network.Groups.Contains(3));
+        Assert.Equal(Prowl.Runtime.Networking.NetworkVisibility.ForceHidden, instance.Network.Visibility);
 
         // Set back to what the prefab has, it is no override any more.
         instance.Network.Networked = false;
