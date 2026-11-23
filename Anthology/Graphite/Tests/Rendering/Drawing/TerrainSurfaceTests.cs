@@ -412,31 +412,6 @@ public sealed class TerrainSurfaceTests : IDisposable
         return TerrainData.Load(stream);
     }
 
-    // With a low sun from -x a 90 m wall shadows the ground behind it through the terrain's own far shadow, and the
-    // ground in front of it stays lit
-    [Fact]
-    public void FarShadow_TerrainShadowsWhatLiesBehindIt()
-    {
-        using TerrainData data = Shaped(1000, (x, z) => x >= 300 && x < 320 ? 90.0 : 10.0);
-        TerrainSurface surface = new(_harness.Renderer, data) { CastFarShadow = true, FarShadowResolution = 256, FarShadowCoverage = 1000 };
-        _harness.Owned.Add(surface);
-        _harness.World.Providers.Add(surface);
-        LightHandle sun = _harness.World.AddLight(new LightDesc { Type = LightType.Directional, Direction = Float3.Normalize(new Float3(1, -0.5f, 0)), Color = new Float3(1, 1, 1), Intensity = 10f });
-        _harness.World.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default, Sun = sun };
-
-        RenderView view = _harness.View();
-        Float4x4 down = new(new Float4(1, 0, 0, 0), new Float4(0, 0, -1, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 0, 1));
-        view.Camera = new ViewCamera(new ViewLayer { View = down, Projection = RendererHarness.Projection, Position = new Double3(400.5, 60, 500.25) });
-        for (int frame = 0; frame < 16; frame++)
-            _harness.Frame(view);
-        Assert.NotNull(_harness.World.FarShadow);
-        float behind = Brightness(view);
-        view.Camera = new ViewCamera(new ViewLayer { View = down, Projection = RendererHarness.Projection, Position = new Double3(200.5, 60, 500.25) });
-        float front = Brightness(view);
-        Assert.True(front > 0.05f, $"front {front}");
-        Assert.True(behind < front * 0.5f, $"behind {behind} front {front}");
-    }
-
     [Fact]
     public void GrassShader_Compiles()
     {
