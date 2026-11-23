@@ -32,14 +32,16 @@
       <_ProwlCodeGenArguments Include="@(ReferencePath->'ref:%(FullPath)')"/>
       <_ProwlCodeGenArguments Include="@(Compile->'src:%(FullPath)')"/>
     </ItemGroup>
+    <!-- Written only when it differs, so a deleted source or a changed define makes it newer than the output. -->
+    <WriteLinesToFile File="$(ProwlCodeGenOutput)arguments.txt" Lines="@(_ProwlCodeGenArguments)" Overwrite="true"
+                      WriteOnlyWhenDifferent="true"/>
   </Target>
 
-  <!-- Only reruns when a source, a reference or the generator changed; the swap below happens either way. -->
+  <!-- Only reruns when a source, a reference, the arguments or the generator changed; the swap below happens either way. -->
   <Target Name="ProwlCodeGenRun" DependsOnTargets="ProwlCodeGenResolve"
           Condition=" '$(ProwlCodeGen)' == 'true' and '$(DesignTimeBuild)' != 'true' "
-          Inputs="@(Compile);@(ReferencePath);$(ProwlCodeGenTool);$(MSBuildProjectFullPath)"
+          Inputs="@(Compile);@(ReferencePath);$(ProwlCodeGenTool);$(MSBuildProjectFullPath);$(ProwlCodeGenOutput)arguments.txt"
           Outputs="$(ProwlCodeGenOutput)compile.txt">
-    <WriteLinesToFile File="$(ProwlCodeGenOutput)arguments.txt" Lines="@(_ProwlCodeGenArguments)" Overwrite="true"/>
     <!-- Its errors come out in the compiler's format, so MSBuild reports them itself. -->
     <Exec Command="dotnet &quot;$(ProwlCodeGenTool)&quot; &quot;$(ProwlCodeGenOutput)arguments.txt&quot;" IgnoreExitCode="true">
       <Output TaskParameter="ExitCode" PropertyName="_ProwlCodeGenExitCode"/>
