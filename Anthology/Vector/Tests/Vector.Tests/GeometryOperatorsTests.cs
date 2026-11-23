@@ -13,6 +13,32 @@ namespace Prowl.Vector.Tests;
 public class GeometryOperatorsTests
 {
     [Fact]
+    public void Transform_MovesOffsetsAndNormalsAndTurnsMirroredFaces()
+    {
+        GeometryData mesh = GeometryGenerator.Box(new Float3(2f));
+        mesh.AddLoopAttribute("offset", GeometryData.AttributeBaseType.Float, 3);
+        mesh.AddLoopAttribute("normal", GeometryData.AttributeBaseType.Float, 3);
+        foreach (GeometryData.Loop loop in mesh.Loops)
+        {
+            loop.SetAttribute("offset", new GeometryData.FloatAttributeValue(1f, 0f, 0f));
+            loop.SetAttribute("normal", new GeometryData.FloatAttributeValue(1f, 0f, 0f));
+        }
+        float volume = mesh.Volume();
+
+        GeometryOperators.Transform(mesh, Float4x4.CreateTRS(new Float3(5f, 0f, 0f), Quaternion.Identity, new Float3(-2f, 1f, 1f)), ["offset"], ["normal"]);
+
+        Assert.True(mesh.Volume() > 0f);
+        Assert.Equal(volume * 2f, mesh.Volume(), 3);
+        Assert.All(mesh.Loops, l =>
+        {
+            Assert.True(l.TryGetAttribute("offset", out GeometryData.AttributeValue? o));
+            Assert.Equal(-2f, ((GeometryData.FloatAttributeValue)o!).Data[0], 4);
+            Assert.True(l.TryGetAttribute("normal", out GeometryData.AttributeValue? n));
+            Assert.Equal(-1f, ((GeometryData.FloatAttributeValue)n!).Data[0], 4);
+        });
+    }
+
+    [Fact]
     public void Scale_ScalesAllVerticesFromOrigin()
     {
         var mesh = new GeometryData();

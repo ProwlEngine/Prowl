@@ -277,16 +277,39 @@ public static class GeometryOperators
     }
 
     /// <summary>
-    /// Transform all vertices by a matrix.
+    /// Transforms the mesh by a matrix: its points, the named vertex or corner attributes holding offsets by the
+    /// matrix's turn and scale, and the named ones holding normals by its inverse transpose. A matrix that mirrors
+    /// turns the faces round so they still face out.
     /// </summary>
-    /// <param name="mesh">The mesh to transform.</param>
-    /// <param name="transform">The transformation matrix.</param>
-    public static void Transform(GeometryData mesh, Float4x4 transform)
+    public static void Transform(GeometryData mesh, Float4x4 transform, IReadOnlyCollection<string>? offsets = null, IReadOnlyCollection<string>? normals = null)
     {
         foreach (var v in mesh.Vertices)
-        {
             v.Point = Float4x4.TransformPoint(v.Point, transform);
+
+        Float3 origin = Float4x4.TransformPoint(Float3.Zero, transform);
+        void Turn(GeometryData.Element element)
+        {
+            foreach (string name in offsets ?? [])
+                if (element.TryGetAttribute(name, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue { Data.Length: >= 3 } offset)
+                {
+                    Float3 turned = Float4x4.TransformPoint(new Float3(offset.Data[0], offset.Data[1], offset.Data[2]), transform) - origin;
+                    element.SetAttribute(name, new GeometryData.FloatAttributeValue(turned.X, turned.Y, turned.Z));
+                }
+            foreach (string name in normals ?? [])
+                if (element.TryGetAttribute(name, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue { Data.Length: >= 3 } normal)
+                {
+                    Float3 turned = Float4x4.TransformNormal(new Float3(normal.Data[0], normal.Data[1], normal.Data[2]), transform);
+                    element.SetAttribute(name, new GeometryData.FloatAttributeValue(turned.X, turned.Y, turned.Z));
+                }
         }
+        if (offsets is { Count: > 0 } || normals is { Count: > 0 })
+        {
+            foreach (var v in mesh.Vertices) Turn(v);
+            foreach (var l in mesh.Loops) Turn(l);
+        }
+
+        if (Float4x4.Determinant(transform) < 0f) FlipFaces(mesh, [.. mesh.Faces]);
+        mesh.MarkChanged();
     }
 
     /// <summary>
