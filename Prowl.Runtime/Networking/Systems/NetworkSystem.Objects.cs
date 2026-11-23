@@ -172,6 +172,14 @@ internal sealed partial class NetworkSystem
                 $"{NetworkComponents.MaxPerObject}. Split it into several networked objects.");
         }
 
+        NetworkTransform[] transforms = template?.Transforms ?? NetworkComponents.GatherTransforms(go);
+        if (transforms.Length > NetworkComponents.MaxTransformsPerObject)
+        {
+            throw new InvalidOperationException(
+                $"'{go.Name}' has {transforms.Length} NetworkTransforms, and a networked object can hold " +
+                $"{NetworkComponents.MaxTransformsPerObject}. Split it into several networked objects.");
+        }
+
         go.Network.Networked = true;
         go.Network.Orphaned = orphaned;
         if (!IsActive)
@@ -185,7 +193,7 @@ internal sealed partial class NetworkSystem
             Owner = owner?.Id ?? NoOwner, Generation = NextGeneration(), NetId = NextNetId(), Template = template!,
             Components = components
         };
-        entry.SetTransforms(template!.Transforms ?? NetworkComponents.GatherTransforms(go));
+        entry.SetTransforms(transforms);
         Entries.Add(entry);
         ForgetViewpoints(entry.Owner);
         InitVisibility(entry);

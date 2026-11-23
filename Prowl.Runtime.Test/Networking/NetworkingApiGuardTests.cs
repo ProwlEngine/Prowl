@@ -132,4 +132,27 @@ public partial class NetworkingTests
         }
         finally { Networking.Networking.Shutdown(); }
     }
+
+    [Fact]
+    public void AnObjectWithMoreTransformsThanAnIndexHoldsIsRefused()
+    {
+        SceneInstance scene = CreateScene();
+        MakeCurrent(scene);
+        Networking.Networking.Host(new LocalTransport(new LocalNetwork(), "host"));
+        try
+        {
+            GameObject swarm = CreateGameObject("Swarm");
+            for (int i = 0; i < 256; i++)
+            {
+                GameObject part = CreateGameObject($"Part {i}");
+                part.AddComponent<NetworkTransform>();
+                part.SetParent(swarm);
+            }
+
+            scene.Add(swarm);
+            Assert.Throws<InvalidOperationException>(() => swarm.SpawnBuilt());
+            Assert.False(swarm.Network.Active);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
 }

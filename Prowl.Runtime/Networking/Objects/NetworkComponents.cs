@@ -35,16 +35,14 @@ internal static class NetworkComponents
         }
     }
 
-    /// <summary>A tree's NetworkTransform components in build order, at most 255 of them.</summary>
+    /// <summary>The most NetworkTransforms a networked object can hold, since one goes by a byte index.</summary>
+    public const int MaxTransformsPerObject = byte.MaxValue;
+
+    /// <summary>A tree's NetworkTransform components in build order.</summary>
     public static NetworkTransform[] GatherTransforms(GameObject root)
     {
         List<NetworkTransform> found = new();
         GatherTransforms(root, found);
-        if (found.Count > byte.MaxValue)
-        {
-            found.RemoveRange(byte.MaxValue, found.Count - byte.MaxValue);
-        }
-
         return [.. found];
     }
 

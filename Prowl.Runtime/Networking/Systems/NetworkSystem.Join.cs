@@ -669,11 +669,20 @@ internal sealed partial class NetworkSystem
                 continue;
             }
 
+            NetworkTransform[] moving = template.Transforms ?? NetworkComponents.GatherTransforms(go);
+            if (moving.Length > NetworkComponents.MaxTransformsPerObject)
+            {
+                Debug.LogError(
+                    $"'{go.Name}' has {moving.Length} NetworkTransforms, and a networked object can hold " +
+                    $"{NetworkComponents.MaxTransformsPerObject}, so it is not networked. Split it into several networked objects.");
+                continue;
+            }
+
             NetworkObject entry = new(this, go)
             {
                 Generation = NextGeneration(), NetId = NextNetId(), Components = template.Components, Template = template
             };
-            entry.SetTransforms(template.Transforms ?? NetworkComponents.GatherTransforms(go));
+            entry.SetTransforms(moving);
             Entries.Add(entry);
             InitVisibility(entry);
             entry.NotifySpawn();
