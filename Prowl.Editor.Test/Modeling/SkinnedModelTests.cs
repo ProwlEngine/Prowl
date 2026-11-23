@@ -226,7 +226,7 @@ public class SkinnedModelTests : EditorTestHarness
         item.Bones.Add(new PMeshBone { Name = "Arm.R" });
         item.Modifiers.Add(new MirrorModifier { Axis = 0 });
 
-        GeometryData result = ModelModifier.Run(item.Mesh, item.Modifiers, false, [.. item.Bones.Select(b => b.Name)]);
+        GeometryData result = ModelModifier.Run(item.Mesh, item.Modifiers, new ModifierContext([.. item.Bones.Select(b => b.Name)]));
 
         foreach (GeometryData.Loop corner in result.Loops)
         {

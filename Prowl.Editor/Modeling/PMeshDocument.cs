@@ -92,6 +92,20 @@ public sealed class PMeshDocument
 
     public List<PMeshObject> Objects { get; } = new();
 
+    /// <summary>What an object's modifiers see: its bones, and the document's other objects placed into its space.</summary>
+    public ModifierContext ContextFor(PMeshObject item)
+    {
+        Float4x4 toItem = WorldOf(item).Invert();
+        return new ModifierContext([.. item.Bones.Select(b => b.Name)],
+            id => id != item.Id && Objects.Find(o => o.Id == id) is { } other ? (other.Mesh, toItem * WorldOf(other)) : null);
+    }
+
+    private Float4x4 WorldOf(PMeshObject item)
+    {
+        Float4x4 local = Float4x4.CreateTRS(item.Position, item.Rotation, item.Scale);
+        return Objects.Find(o => o.Id == item.Parent) is { } parent ? WorldOf(parent) * local : local;
+    }
+
     public byte[] Write()
     {
         EchoObject root = EchoObject.NewCompound();

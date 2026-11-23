@@ -8,6 +8,7 @@ using System.Linq;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Modeling;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -138,11 +139,20 @@ public class ModelObjectEditor : CustomEditor
                 {
                     ModelModifier applied = m.Modifiers[index].Clone();
                     applied.Enabled = true;
-                    m.Mesh = ModelModifier.Run(m.Mesh, [applied], false, [.. m.Bones.Select(b => b.Name)]);
+                    m.Mesh = ModelModifier.Run(m.Mesh, [applied], m.ModifierContext());
                     m.Mesh.MarkChanged();
                     m.Modifiers.RemoveAt(index);
                 })).Tooltip(Loc.Get("model.apply_modifier_tip")).Show();
                 Origami.Button(paper, $"{row}_remove", Loc.Get("model.remove_modifier"), () => Change(models, "Remove Modifier", m => m.Modifiers.RemoveAt(index))).Show();
+            }
+
+            if (modifier is BooleanModifier boolean)
+            {
+                List<ModelObject> others = OtherModels(models);
+                int current = others.FindIndex(o => o.Id == boolean.Target);
+                Origami.Dropdown(paper, $"{row}_target", current + 1,
+                    i => Change(models, "Set Boolean Object", m => ((BooleanModifier)m.Modifiers[index]).Target = i > 0 ? others[i - 1].Id : Guid.Empty),
+                    [Loc.Get("model.boolean_none"), .. others.Select(o => o.GameObject.Name)]).Show();
             }
 
             // Edits go to a copy, so the objects are recorded for undo before the real ones change
@@ -151,6 +161,16 @@ public class ModelObjectEditor : CustomEditor
         }
         if (models.Any(m => m.Modifiers.Count > shared))
             Origami.Label(paper, $"{id}_mods_differ", Loc.Get("model.modifiers_differ")).Show();
+    }
+
+    // The model objects of the open model other than the ones being edited
+    private static List<ModelObject> OtherModels(IReadOnlyList<ModelObject> models)
+    {
+        var others = new List<ModelObject>();
+        if (ModelEditingMode.World is not { } world) return others;
+        foreach (GameObject go in world.Objects)
+            if (go.GetComponent<ModelObject>() is { } model && model.IsValid() && !models.Contains(model)) others.Add(model);
+        return others;
     }
 
     private static void Swap(List<ModelModifier> list, int a, int b)

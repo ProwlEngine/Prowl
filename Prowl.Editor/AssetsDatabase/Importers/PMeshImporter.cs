@@ -51,7 +51,7 @@ public class PMeshImporter : AssetImporter
                 go.SetIdentifier(BuiltInAssets.DeterministicGuid($"$PMesh/{item.Id}"));
                 objects[item.Id] = go;
 
-                Mesh mesh = BuildMesh(item);
+                Mesh mesh = BuildMesh(item, document.ContextFor(item));
                 if (lightmapUVs) LightmapUVGenerator.Generate(mesh);
                 meshIdentities.Add(ctx.AddSubAsset(item.Name, mesh, SubAssetIdentity.Key(item.Id.ToString())));
                 meshes.Add(mesh);
@@ -145,15 +145,15 @@ public class PMeshImporter : AssetImporter
     /// has none or a modifier ran, softened by its smoothing angle when no edge is flagged at all. The mesh cuts its faces
     /// into triangles, ear clipping the concave ones. While dragging, modifiers too slow for every frame are left out.
     /// </summary>
-    internal static Mesh BuildMesh(PMeshObject item, bool dragging = false) => BuildMesh(item, dragging, out _);
+    internal static Mesh BuildMesh(PMeshObject item, ModifierContext? context = null, bool dragging = false) => BuildMesh(item, context, dragging, out _);
 
     /// <summary>
-    /// Builds the mesh as <see cref="BuildMesh(PMeshObject, bool)"/> does, giving the index of the object's point each
+    /// Builds the mesh as <see cref="BuildMesh(PMeshObject, ModifierContext, bool)"/> does, giving the index of the object's point each
     /// mesh vertex sits on, or null when a modifier ran and the mesh is no longer the object's points.
     /// </summary>
-    internal static Mesh BuildMesh(PMeshObject item, bool dragging, out int[]? sources)
+    internal static Mesh BuildMesh(PMeshObject item, ModifierContext? context, bool dragging, out int[]? sources)
     {
-        GeometryData geometry = ModelModifier.Run(item.Mesh, item.Modifiers, dragging, [.. item.Bones.Select(b => b.Name)]);
+        GeometryData geometry = ModelModifier.Run(item.Mesh, item.Modifiers, context ?? new ModifierContext([.. item.Bones.Select(b => b.Name)]), dragging);
         bool modified = !ReferenceEquals(geometry, item.Mesh);
         if (!modified)
         {

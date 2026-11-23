@@ -51,7 +51,7 @@ public static class ModelExport
             ExportNode node = model.Nodes[nodeOf[item.Id]];
             node.Parent = nodeOf.TryGetValue(item.Parent, out int parent) ? parent : -1;
 
-            using Mesh mesh = PMeshImporter.BuildMesh(item);
+            using Mesh mesh = PMeshImporter.BuildMesh(item, document.ContextFor(item));
             ExportMesh export = MeshOf(mesh, item, slot => MaterialIndex(model, item, slot, materials, png, materialOf, textureOf));
             // An object with nothing to draw stays a node, since a mesh needs at least one primitive and point
             if (export.Primitives.Count > 0 && export.Positions.Length > 0)

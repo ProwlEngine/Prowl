@@ -72,6 +72,7 @@
   "model.menu.clear_scale": "Scale",
   "model.menu.mirror_x": "Mirror X",
   "model.menu.apply_modifiers": "Apply modifiers",
+  "model.boolean_none": "No object",
   "model.modifiers_differ": "The rest of the modifiers differ between the selected objects",
   "model.menu.mirror_clip": "Clip at mirror",
   "model.menu.snap_to": "Snap to",

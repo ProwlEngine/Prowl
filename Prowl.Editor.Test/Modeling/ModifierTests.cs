@@ -57,6 +57,43 @@ public class ModifierTests : EditorTestHarness
     }
 
     [Fact]
+    public void ArrayCopiesTheMeshByItsSize()
+    {
+        var item = new PMeshObject { Name = "Body", Mesh = GeometryGenerator.Box(new Float3(2f)) };
+        item.Modifiers.Add(new ArrayModifier { Count = 3 });
+
+        GeometryData result = ModelModifier.Run(item.Mesh, item.Modifiers);
+
+        Assert.Equal(18, result.Faces.Count);
+        Assert.Equal(new Float3(5f, 1f, 1f), result.Bounds().Max);
+    }
+
+    [Fact]
+    public void BevelRoundsTheEdgesSharperThanItsAngle()
+    {
+        var item = new PMeshObject { Name = "Body", Mesh = GeometryGenerator.Box(new Float3(2f)) };
+        item.Modifiers.Add(new BevelModifier { Width = 0.2f });
+
+        GeometryData result = ModelModifier.Run(item.Mesh, item.Modifiers);
+
+        Assert.Equal(26, result.Faces.Count);
+        Assert.Equal(6, item.Mesh.Faces.Count);
+    }
+
+    [Fact]
+    public void BooleanCutsAnotherObjectAwayWhereItStands()
+    {
+        var body = new PMeshObject { Name = "Body", Mesh = GeometryGenerator.Box(new Float3(2f)) };
+        var cutter = new PMeshObject { Name = "Cutter", Mesh = GeometryGenerator.Box(new Float3(2f)), Position = new Float3(1f, 0f, 0f) };
+        var document = new PMeshDocument { Objects = { body, cutter } };
+        body.Modifiers.Add(new BooleanModifier { Target = cutter.Id });
+
+        GeometryData result = ModelModifier.Run(body.Mesh, body.Modifiers, document.ContextFor(body));
+
+        Assert.Equal(4f, result.Volume(), 3);
+    }
+
+    [Fact]
     public void SimplifyIsLeftOutWhileDragging()
     {
         var item = new PMeshObject { Name = "Body", Mesh = Quad() };

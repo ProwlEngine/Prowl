@@ -1128,7 +1128,7 @@ public sealed class ModelMeshTool : SceneTool
         Undo.RecordObjects([.. models], "Apply Modifiers");
         foreach (ModelObject model in models)
         {
-            model.Mesh = ModelModifier.Run(model.Mesh, model.Modifiers, false, [.. model.Bones.Select(b => b.Name)]);
+            model.Mesh = ModelModifier.Run(model.Mesh, model.Modifiers, model.ModifierContext());
             model.Mesh.MarkChanged();
             model.Modifiers.RemoveAll(m => m.Enabled);
             model.RefreshPreview();

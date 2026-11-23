@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
@@ -83,7 +85,39 @@ public sealed class ModelObject : Component
     // An undo puts back the mesh without enabling the object again, so the preview catches up here
     public override void Update()
     {
-        if (_previewStale) RefreshPreview();
+        if (_previewStale || TargetsStamp() != _targetsStamp) RefreshPreview();
+    }
+
+    // How the objects this one's booleans use stood when the preview was built, so a change to one builds it again
+    [NonSerialized] private int _targetsStamp;
+
+    private int TargetsStamp()
+    {
+        var stamp = new HashCode();
+        foreach (ModelModifier modifier in Modifiers)
+            if (modifier is BooleanModifier { Enabled: true } boolean && Find(boolean.Target) is { } other)
+            {
+                stamp.Add(other.Mesh.Version);
+                stamp.Add(other.Transform.LocalToWorldMatrix);
+                stamp.Add(Transform.LocalToWorldMatrix);
+            }
+        return stamp.ToHashCode();
+    }
+
+    private ModelObject? Find(Guid id)
+    {
+        if (id == Id || ModelEditingMode.World is not { } world) return null;
+        foreach (GameObject go in world.Objects)
+            if (go.GetComponent<ModelObject>() is { } model && model.IsValid() && model.Id == id) return model;
+        return null;
+    }
+
+    /// <summary>What this object's modifiers see: its bones, and the other model objects of its world placed into its space.</summary>
+    public ModifierContext ModifierContext()
+    {
+        Float4x4 toThis = Transform.LocalToWorldMatrix.Invert();
+        return new ModifierContext([.. Bones.Select(b => b.Name)],
+            id => Find(id) is { } other ? (other.Mesh, toThis * other.Transform.LocalToWorldMatrix) : null);
     }
 
     // Undo and the inspector can change modifiers or materials without touching the mesh
@@ -103,7 +137,8 @@ public sealed class ModelObject : Component
         if (dragging && MovePreviewPoints(renderer!)) return;
 
         Mesh? old = _preview;
-        _preview = PMeshImporter.BuildMesh(ToDocumentObject(), dragging, out _previewSources);
+        _preview = PMeshImporter.BuildMesh(ToDocumentObject(), ModifierContext(), dragging, out _previewSources);
+        _targetsStamp = TargetsStamp();
         _previewFrom = Mesh;
         _previewVersion = Mesh.Version;
         _previewStale = false;
