@@ -1939,7 +1939,7 @@ public class EditorApplication : Game
             }
 
             if (Application.IsPlaying || Instance == null) return;
-            if (EditorSceneManager.SaveAll()) Instance.EnterPlayMode();
+            if (EditorSceneManager.SaveAllWithFiles()) Instance.EnterPlayMode();
         }
 
         dialog.Button(Loc.Get("dialog.save"), () => SaveAndPlay(false), OrigamiVariant.Primary)

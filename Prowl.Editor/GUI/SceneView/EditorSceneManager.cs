@@ -578,6 +578,15 @@ public static class EditorSceneManager
         return all;
     }
 
+    /// <summary>Saves every dirty loaded scene that has a file, leaving untitled ones. False when one failed.</summary>
+    public static bool SaveAllWithFiles()
+    {
+        bool all = true;
+        foreach (OpenScene scene in s_open.ToArray())
+            if (scene.Dirty && scene.IsLoaded && scene.Path != null && !Save(scene)) all = false;
+        return all;
+    }
+
     private static bool Write(OpenScene scene, string relativePath)
     {
         if (Project.Current == null || scene.Section is not { IsLoaded: true } section) return false;
