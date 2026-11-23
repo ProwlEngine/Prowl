@@ -705,12 +705,12 @@ public static class AssetDatabase
     public static event Action<AssetWalker>? WalkingRoots;
 
     /// <summary>
-    /// Time the walk may take each frame. A walk that needs longer carries on over the next frames, and assets are
-    /// only freed once a whole walk has finished without reaching them.
+    /// Time the walk and the freeing after it may take each frame. Work that needs longer carries on over the next
+    /// frames, and assets are only freed once a whole walk has finished without reaching them.
     /// </summary>
     public static TimeSpan WalkBudget { get; set; } = TimeSpan.FromMilliseconds(0.5);
 
-    /// <summary>Whether a walk spread over frames is under way.</summary>
+    /// <summary>Whether a walk spread over frames, or the count of what it reached, is under way.</summary>
     public static bool IsWalking { get; private set; }
 
     private static int s_epoch;
@@ -719,45 +719,70 @@ public static class AssetDatabase
     private static long s_lastWalk;
     private static bool s_warnedBudget;
     private static readonly AssetWalker s_walker = new();
+    private static readonly List<Asset> s_evictions = [];
+    private static int s_nextEviction;
+    private static bool s_evictIgnoresGrace;
+    private static long s_evictionsQueuedAt;
+    private static IEnumerator<KeyValuePair<Guid, Asset>>? s_sweep;
+    private static long s_sweepResident;
+    private const int SweepsPerClockCheck = 256;
 
     /// <summary>
-    /// Advances the walk by this frame's budget, starting one when it is due, and frees what nothing reached once
-    /// it finishes. Called at the end of every frame.
+    /// Spends this frame's budget on the walk, starting one when it is due, then on counting what it left unreached,
+    /// then on freeing that. Called at the end of every frame.
     /// </summary>
     public static void EndFrame()
     {
         using FrameStatScope stats = FrameStats.Assets.Scope();
 
+        long start = Stopwatch.GetTimestamp();
+        long budget = (long)(WalkBudget.TotalSeconds * Stopwatch.Frequency);
+        // A queue older than the walk interval is dropped for a fresh walk, so nothing is freed on stale news
+        if (s_nextEviction < s_evictions.Count && Stopwatch.GetElapsedTime(s_evictionsQueuedAt, start) < WalkInterval)
+        {
+            DrainEvictions(start, budget);
+            return;
+        }
+
         if (!IsWalking)
         {
-            if (Stopwatch.GetElapsedTime(s_lastWalk, Stopwatch.GetTimestamp()) < WalkInterval) return;
+            if (Stopwatch.GetElapsedTime(s_lastWalk, start) < WalkInterval) return;
             BeginWalk();
         }
 
-        long budget = (long)(WalkBudget.TotalSeconds * Stopwatch.Frequency);
-        if (!s_walker.Step(budget)) return;
-        CompleteWalk();
-        Evict(ignoreGrace: false);
+        if (s_sweep == null && !s_walker.Step(budget)) return;
+        if (!Sweep(start, budget, ignoreGrace: false)) return;
+        DrainEvictions(start, budget);
     }
 
     /// <summary>Walks every root now, in one go, and marks what it reaches. Replaces a walk under way.</summary>
     public static void Walk()
     {
+        WalkNow(ignoreGrace: false);
+        s_evictions.Clear();
+    }
+
+    private static void WalkNow(bool ignoreGrace)
+    {
         BeginWalk();
         s_walker.Finish();
-        CompleteWalk();
+        Sweep(0, long.MaxValue, ignoreGrace);
     }
 
     /// <summary>Drops a walk under way, so it holds nothing an assembly unload is waiting on. The next one starts fresh.</summary>
     internal static void AbandonWalk()
     {
         IsWalking = false;
+        s_sweep = null;
         s_walker.Reset();
     }
 
     private static void BeginWalk()
     {
         IsWalking = true;
+        s_sweep = null;
+        s_evictions.Clear();
+        s_nextEviction = 0;
         s_lastWalk = Stopwatch.GetTimestamp();
         int epoch = ++s_epoch;
         s_walker.Begin(epoch, s_lastWalk);
@@ -785,24 +810,56 @@ public static class AssetDatabase
         s_walker.VisitHeldStatics();
     }
 
-    private static void CompleteWalk()
+    /// <summary>
+    /// Goes over every asset once the walk is done, counting what it missed and queueing what may be freed, until
+    /// the frame's budget is spent. True once the whole table is done, which is when the walk counts as complete.
+    /// </summary>
+    private static bool Sweep(long frameStart, long budgetTicks, bool ignoreGrace)
     {
-        IsWalking = false;
-        int epoch = s_epoch;
-        long resident = 0;
-        foreach (Asset asset in s_assets.Values)
+        if (s_sweep == null)
         {
-            if (asset.MarkEpoch != epoch) asset.UnreachedWalks++;
-            if (asset.IsLoaded) resident += asset.EstimateBytes();
+            s_sweep = s_assets.GetEnumerator();
+            s_sweepResident = 0;
+            s_evictions.Clear();
+            s_nextEviction = 0;
+            s_evictIgnoresGrace = ignoreGrace;
+            s_evictionsQueuedAt = Stopwatch.GetTimestamp();
+        }
+
+        int epoch = s_epoch;
+        bool canEvict = EvictionEnabled && HasAnySource;
+        int sinceCheck = 0;
+        while (s_sweep.MoveNext())
+        {
+            Asset asset = s_sweep.Current.Value;
+            bool reached = asset.MarkEpoch == epoch;
+            if (!reached) asset.UnreachedWalks++;
+            if (asset.IsLoaded)
+            {
+                s_sweepResident += asset.EstimateBytes();
+                if (canEvict && !reached && (ignoreGrace || asset.UnreachedWalks >= 2)
+                    && (ignoreGrace || MemoryBudget > 0 || Stopwatch.GetElapsedTime(asset.LastReached, s_evictionsQueuedAt) >= GracePeriod))
+                    s_evictions.Add(asset);
+            }
 
             // A missing GUID nothing refers to any more has no identity worth keeping.
             if (asset.IsMissing && asset.UnreachedWalks >= 2 && GetAssetType(asset.AssetID) == null
                 && s_assets.TryRemove(new KeyValuePair<Guid, Asset>(asset.AssetID, asset)))
                 asset.Registered = false;
+
+            if (++sinceCheck < SweepsPerClockCheck) continue;
+            sinceCheck = 0;
+            if (Stopwatch.GetTimestamp() - frameStart >= budgetTicks) return false;
         }
-        ResidentBytes = resident;
+
+        s_sweep = null;
+        IsWalking = false;
+        ResidentBytes = s_sweepResident;
         s_completedEpoch = epoch;
         s_completedWalks++;
+        // Oldest first, so a memory budget frees what was used longest ago
+        if (MemoryBudget > 0) s_evictions.Sort((a, b) => a.LastReached.CompareTo(b.LastReached));
+        return true;
     }
 
     /// <summary>Walks now and loads, blocking, everything the walk reached that is not loaded yet.</summary>
@@ -822,8 +879,8 @@ public static class AssetDatabase
     /// <summary>Walks now and frees every unreached asset, without waiting out the grace period. Returns how many were freed.</summary>
     public static int UnloadUnused()
     {
-        Walk();
-        return Evict(ignoreGrace: true);
+        WalkNow(ignoreGrace: true);
+        return DrainEvictions(0, long.MaxValue);
     }
 
     /// <summary>Frees one asset's payload now, even if something reaches it. It loads again on its next use.</summary>
@@ -838,35 +895,34 @@ public static class AssetDatabase
         => asset.Registered && asset.IsLoaded && !BuiltInAssets.IsBuiltIn(asset.AssetID)
            && !AssetLoader.IsInFlight(asset);
 
-    private static int Evict(bool ignoreGrace)
+    /// <summary>Frees queued assets until the frame's budget is spent, always at least one. Returns how many were freed.</summary>
+    private static int DrainEvictions(long frameStart, long budgetTicks)
     {
-        if (!EvictionEnabled || !HasAnySource) return 0;
-
-        long now = Stopwatch.GetTimestamp();
-        bool overBudget = MemoryBudget > 0 && ResidentBytes > MemoryBudget;
-
-        var candidates = new List<Asset>();
-        foreach (Asset asset in s_assets.Values)
-        {
-            if (asset.MarkEpoch == s_completedEpoch || asset.UnreachedWalks < 2 && !ignoreGrace) continue;
-            if (!CanEvict(asset)) continue;
-            if (!ignoreGrace && !overBudget && Stopwatch.GetElapsedTime(asset.LastReached, now) < GracePeriod) continue;
-            candidates.Add(asset);
-        }
-        candidates.Sort((a, b) => a.LastReached.CompareTo(b.LastReached));
-
         int freed = 0;
-        foreach (Asset asset in candidates)
+        while (s_nextEviction < s_evictions.Count)
         {
-            bool graceOver = Stopwatch.GetElapsedTime(asset.LastReached, now) >= GracePeriod;
-            if (!ignoreGrace && !graceOver && (MemoryBudget == 0 || ResidentBytes <= MemoryBudget)) break;
+            Asset asset = s_evictions[s_nextEviction];
+            bool graceOver = Stopwatch.GetElapsedTime(asset.LastReached, s_evictionsQueuedAt) >= GracePeriod;
+            if (!s_evictIgnoresGrace && !graceOver && (MemoryBudget == 0 || ResidentBytes <= MemoryBudget))
+            {
+                s_nextEviction = s_evictions.Count;
+                break;
+            }
+            s_nextEviction++;
+
+            // Loaded or used again since it was queued
+            if (asset.UnreachedWalks == 0 || !CanEvict(asset)) continue;
 
             long bytes = asset.EstimateBytes();
             Evict(asset);
             ResidentBytes -= bytes;
             freed++;
+            if (Stopwatch.GetTimestamp() - frameStart >= budgetTicks) break;
         }
+        if (s_nextEviction < s_evictions.Count) return freed;
 
+        s_evictions.Clear();
+        s_nextEviction = 0;
         if (MemoryBudget > 0 && ResidentBytes > MemoryBudget && !s_warnedBudget)
         {
             s_warnedBudget = true;
@@ -917,6 +973,8 @@ public static class AssetDatabase
         s_completedWalks = 0;
         AbandonWalk();
         s_lastWalk = 0;
+        s_evictions.Clear();
+        s_nextEviction = 0;
         ResidentBytes = 0;
     }
 
@@ -944,7 +1002,7 @@ public sealed class AssetWalker
     private static readonly string[] s_skippedAssemblies =
         ["System", "Microsoft", "Silk.NET", "Jitter2", "Prowl.Motion", "Prowl.Vector", "Prowl.Recast", "Prowl.Paper", "Prowl.Scribe", "Prowl.Echo", "Prowl.Quill", "Prowl.Ember", "Prowl.Graphite"];
 
-    private const int ExpandsPerClockCheck = 256;
+    private const int WorkPerClockCheck = 256;
 
     // Never reset, so a stamp an earlier walk left on an engine object can never match a later walk
     private static int s_stamp;
@@ -956,6 +1014,17 @@ public sealed class AssetWalker
     private int _walkStamp;
     private long _now;
     private object? _current;
+
+    // A collection the budget ran out on, carried to the next step
+    private IList? _pausedList;
+    private IEnumerator? _pausedEnumerator;
+    private object? _pausedOwner;
+    private int _pausedIndex;
+    private int _pausedCount;
+
+    private long _stepStart;
+    private long _stepBudget;
+    private int _sinceCheck;
 
     internal bool RecordPaths;
 
@@ -974,6 +1043,15 @@ public sealed class AssetWalker
         _parents.Clear();
         _pending.Clear();
         _current = null;
+        ClearPaused();
+    }
+
+    private void ClearPaused()
+    {
+        (_pausedEnumerator as IDisposable)?.Dispose();
+        _pausedList = null;
+        _pausedEnumerator = null;
+        _pausedOwner = null;
     }
 
     /// <summary>Marks what <paramref name="value"/> reaches, and it if it is an asset.</summary>
@@ -1006,33 +1084,48 @@ public sealed class AssetWalker
     /// <summary>Visits what is pending until <paramref name="budgetTicks"/> of stopwatch time is spent. True once nothing is left.</summary>
     internal bool Step(long budgetTicks)
     {
-        long start = Stopwatch.GetTimestamp();
-        int sinceCheck = 0;
-        while (_pending.Count > 0)
+        _stepStart = Stopwatch.GetTimestamp();
+        _stepBudget = budgetTicks;
+        _sinceCheck = 0;
+        while (_pausedOwner != null || _pending.Count > 0)
         {
-            if (++sinceCheck > ExpandsPerClockCheck)
+            object value;
+            if (_pausedOwner != null) value = _pausedOwner;
+            else
             {
-                sinceCheck = 0;
-                if (Stopwatch.GetTimestamp() - start >= budgetTicks) break;
+                if (OutOfBudget()) break;
+                value = _pending.Pop();
+                // Pending across frames, so it may have been destroyed since it was found
+                if (value is EngineObject { IsDisposed: true }) continue;
             }
 
-            object value = _pending.Pop();
-            // Pending across frames, so it may have been destroyed since it was found
-            if (value is EngineObject { IsDisposed: true }) continue;
-
             _current = value;
-            try { Expand(value); }
+            try
+            {
+                if (_pausedOwner != null) Resume();
+                else Expand(value, canPause: true);
+            }
             catch (Exception ex)
             {
+                ClearPaused();
                 Debug.LogWarningOnce($"AssetWalker.Threw.{value.GetType().FullName}",
                     $"Walking a {value.GetType().Name} threw, so the assets only it holds count as unused: {ex.Message}");
             }
+            if (_pausedOwner != null) break;
         }
         _current = null;
-        return _pending.Count == 0;
+        return _pending.Count == 0 && _pausedOwner == null;
     }
 
-    private void Expand(object value)
+    // Reads the clock once per so many items, and always lets that many through, so a step never stalls
+    private bool OutOfBudget()
+    {
+        if (++_sinceCheck <= WorkPerClockCheck) return false;
+        _sinceCheck = 0;
+        return Stopwatch.GetTimestamp() - _stepStart >= _stepBudget;
+    }
+
+    private void Expand(object value, bool canPause)
     {
         if (value is IAssetWalkable custom)
         {
@@ -1043,29 +1136,76 @@ public sealed class AssetWalker
         Plan plan = s_plans[value.GetType()];
         if (plan.Kind == Kind.Skip) return;
 
-        if (plan.Kind == Kind.Enumerable)
-        {
-            // Indexed where possible, since enumerating through the interface boxes an enumerator per collection
-            if (value is IList list)
-            {
-                for (int i = 0; i < list.Count; i++)
-                    if (list[i] is { } item) VisitMember(item);
-            }
-            else
-            {
-                foreach (object? item in (IEnumerable)value)
-                    if (item != null) VisitMember(item);
-            }
-        }
-
         foreach (Func<object, object?> field in plan.Fields)
             if (field(value) is { } member) VisitMember(member);
+
+        if (plan.Kind != Kind.Enumerable) return;
+
+        // Indexed where possible, since enumerating through the interface boxes an enumerator per collection
+        if (value is IList list) WalkList(list, 0, canPause);
+        else WalkEnumerator(value, ((IEnumerable)value).GetEnumerator(), canPause);
+    }
+
+    private void WalkList(IList list, int from, bool canPause)
+    {
+        int count = list.Count;
+        for (int i = from; i < list.Count; i++)
+        {
+            if (list[i] is { } item) VisitMember(item);
+            if (!canPause || !OutOfBudget()) continue;
+
+            _pausedOwner = list;
+            _pausedList = list;
+            _pausedIndex = i + 1;
+            _pausedCount = count;
+            return;
+        }
+    }
+
+    private void WalkEnumerator(object owner, IEnumerator enumerator, bool canPause)
+    {
+        while (enumerator.MoveNext())
+        {
+            if (enumerator.Current is { } item) VisitMember(item);
+            if (!canPause || !OutOfBudget()) continue;
+
+            _pausedOwner = owner;
+            _pausedEnumerator = enumerator;
+            return;
+        }
+        (enumerator as IDisposable)?.Dispose();
+    }
+
+    // A collection that changed while paused is walked again from its start, in one go
+    private void Resume()
+    {
+        object owner = _pausedOwner!;
+        IList? list = _pausedList;
+        IEnumerator? enumerator = _pausedEnumerator;
+        int index = _pausedIndex;
+        bool changed = list != null && list.Count != _pausedCount;
+        _pausedOwner = null;
+        _pausedList = null;
+        _pausedEnumerator = null;
+
+        if (list != null)
+        {
+            WalkList(list, changed ? 0 : index, canPause: !changed);
+            return;
+        }
+
+        try { WalkEnumerator(owner, enumerator!, canPause: true); }
+        catch (InvalidOperationException)
+        {
+            (enumerator as IDisposable)?.Dispose();
+            WalkEnumerator(owner, ((IEnumerable)owner).GetEnumerator(), canPause: false);
+        }
     }
 
     // A struct is walked where it sits, since boxing gives it a new identity each time.
     private void VisitMember(object member)
     {
-        if (member.GetType().IsValueType) Expand(member);
+        if (member.GetType().IsValueType) Expand(member, canPause: false);
         else Visit(member);
     }
 

@@ -37,6 +37,18 @@ public sealed class CrateHolder : Component
     }
 }
 
+public sealed class CrateBox
+{
+    public Crate? Crate;
+}
+
+/// <summary>A component holding crates in collections long enough for a walk to pause inside.</summary>
+public sealed class CrateList : Component
+{
+    public List<Crate> Crates = [];
+    public HashSet<CrateBox> Set = [];
+}
+
 /// <summary>
 /// The asset database's promises: one object per GUID that loading, unloading and refilling all act on, references
 /// written as stubs, and everything something reaches staying loaded while what nothing reaches goes.
@@ -672,6 +684,92 @@ public class AssetDatabaseTests : RuntimeTestBase
         {
             AssetDatabase.GracePeriod = grace;
             AssetDatabase.WalkInterval = interval;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SlicedWalk_PausedInsideOneCollection_StillReachesItsLastItem(bool changeWhilePaused)
+    {
+        Crate filler = AssetDatabase.Load<Crate>(AddCrate(1))!;
+        Crate last = AssetDatabase.Load<Crate>(AddCrate(2))!;
+        Scene scene = CreateScene();
+        GameObject holder = CreateGameObject();
+        scene.Add(holder);
+        CrateList list = holder.AddComponent<CrateList>();
+        for (int i = 0; i < 5000; i++) list.Crates.Add(filler);
+        list.Crates.Add(last);
+        foreach (Crate crate in list.Crates) list.Set.Add(new CrateBox { Crate = crate });
+
+        TimeSpan grace = AssetDatabase.GracePeriod, interval = AssetDatabase.WalkInterval, budget = AssetDatabase.WalkBudget;
+        AssetDatabase.GracePeriod = TimeSpan.Zero;
+        AssetDatabase.WalkInterval = TimeSpan.Zero;
+        AssetDatabase.WalkBudget = TimeSpan.Zero;
+        try
+        {
+            int longestWalk = 0;
+            for (int walk = 0; walk < 6; walk++)
+            {
+                AssetDatabase.EndFrame();
+                int frames = 1;
+                for (; frames < 10000 && AssetDatabase.IsWalking; frames++)
+                {
+                    if (changeWhilePaused && frames % 3 == 0)
+                    {
+                        list.Crates.Insert(0, filler);
+                        list.Set.Add(new CrateBox { Crate = filler });
+                    }
+                    AssetDatabase.EndFrame();
+                }
+                longestWalk = Math.Max(longestWalk, frames);
+            }
+
+            Assert.True(longestWalk > 10);
+            Assert.True(filler.IsLoaded);
+            Assert.True(last.IsLoaded);
+        }
+        finally
+        {
+            AssetDatabase.GracePeriod = grace;
+            AssetDatabase.WalkInterval = interval;
+            AssetDatabase.WalkBudget = budget;
+        }
+    }
+
+    [Fact]
+    public void ManyUnreachedAssets_AreFreedAFewEachFrame_UntilNoneAreLeft()
+    {
+        var crates = new List<Crate>();
+        for (int i = 0; i < 40; i++) crates.Add(AssetDatabase.Load<Crate>(AddCrate(i))!);
+        Crate kept = AssetDatabase.Load<Crate>(AddCrate(100))!;
+        object owner = new();
+        AssetDatabase.Hold(kept, owner);
+
+        TimeSpan grace = AssetDatabase.GracePeriod, interval = AssetDatabase.WalkInterval, budget = AssetDatabase.WalkBudget;
+        AssetDatabase.GracePeriod = TimeSpan.Zero;
+        AssetDatabase.WalkBudget = TimeSpan.Zero;
+        try
+        {
+            AssetDatabase.Walk();
+            AssetDatabase.WalkInterval = TimeSpan.Zero;
+            AssetDatabase.EndFrame();
+            AssetDatabase.WalkInterval = TimeSpan.FromHours(1);
+            Assert.Equal(39, crates.Count(c => c.IsLoaded));
+
+            AssetDatabase.EndFrame();
+            Assert.Equal(38, crates.Count(c => c.IsLoaded));
+
+            for (int i = 0; i < 40; i++) AssetDatabase.EndFrame();
+            Assert.DoesNotContain(crates, c => c.IsLoaded);
+            Assert.True(kept.IsLoaded);
+        }
+        finally
+        {
+            AssetDatabase.Release(kept, owner);
+            AssetDatabase.GracePeriod = grace;
+            AssetDatabase.WalkInterval = interval;
+            AssetDatabase.WalkBudget = budget;
         }
     }
 
