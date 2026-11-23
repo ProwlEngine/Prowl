@@ -660,8 +660,10 @@ public sealed class PhysicsGrabber : Component
     private float _distance;
     private Float3 _target;
 
-    // A body that wasn't dynamic when clicked: held as soon as it is, if the button still is down.
+    // A body that wasn't dynamic when clicked: held as soon as it is, if the button still is down, at the point clicked.
     private Rigidbody3D? _wanted;
+    private Float3 _wantedAnchor;
+    private float _wantedDistance;
 
     /// <summary>
     /// A body that can't be held right now, one that isn't dynamic, was clicked. The grab takes hold if it turns
@@ -695,7 +697,7 @@ public sealed class PhysicsGrabber : Component
         else if (!Input.GetMouseButton(0))
             _held = _wanted = null;
         else if (_wanted.IsValid() && _wanted!.MotionType == Jitter2.Dynamics.MotionType.Dynamic)
-            TryGrab(ray);
+            Hold(_wanted, _wantedAnchor, _wantedDistance);
 
         _line.Points.Clear();
         if (!IsHolding) return;
@@ -715,17 +717,23 @@ public sealed class PhysicsGrabber : Component
         if (body.IsNotValid()) return;
 
         _wanted = null;
+        Float3 anchor = Quaternion.Inverse(body.Rotation) * (hit.Point - body.Position);
         if (body.MotionType != Jitter2.Dynamics.MotionType.Dynamic)
         {
-            _wanted = body;
+            (_wanted, _wantedAnchor, _wantedDistance) = (body, anchor, hit.Distance);
             UnheldClicked?.Invoke(body);
             return;
         }
 
-        _held = body;
-        _localAnchor = Quaternion.Inverse(body.Rotation) * (hit.Point - body.Position);
-        _distance = hit.Distance;
-        _target = hit.Point;
+        Hold(body, anchor, hit.Distance);
+    }
+
+    private void Hold(Rigidbody3D body, Float3 localAnchor, float distance)
+    {
+        (_held, _wanted) = (body, null);
+        _localAnchor = localAnchor;
+        _distance = distance;
+        _target = WorldAnchor();
     }
 
     private Float3 WorldAnchor() => _held!.Transform.Position + _held.Transform.Rotation * _localAnchor;
