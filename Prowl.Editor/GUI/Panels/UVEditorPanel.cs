@@ -177,9 +177,13 @@ public class UVEditorPanel : DockPanel
                 UVs.SnapToPixels(m, c, w, h);
             });
             Faces("uv_unwrap", "uv.unwrap", "Unwrap", UVs.Unwrap);
-            Faces("uv_pack", "uv.pack", "Pack UVs", (m, f) => UVs.Pack(m, f));
+            // The faces are found again when run, as adjusting the step after runs it on the meshes undo brings back
+            Origami.Button(paper, "uv_pack", Loc.Get("uv.pack"), () => tool.RunRemembered("Pack UVs", [new(Loc.Get("uv.margin"), 1f / 256f)],
+                v => EditFaces(tool, ShownFaces(tool), "Pack UVs", (m, f) => UVs.Pack(m, f, MathF.Max(0f, v[0]))))).Show();
             Faces("uv_average", "uv.average_scale", "Average Island Scale", UVs.AverageIslandScale);
-            Faces("uv_by_angle", "uv.project_angle", "Project By Angle", (m, f) => UVs.ByAngle(m, f, 66f));
+            Origami.Button(paper, "uv_by_angle", Loc.Get("uv.project_angle"), () => tool.RunRemembered("Project By Angle",
+                [new(Loc.Get("model.field_degrees"), 66f), new(Loc.Get("uv.margin"), 1f / 256f)],
+                v => EditFaces(tool, ShownFaces(tool), "Project By Angle", (m, f) => UVs.ByAngle(m, f, v[0], MathF.Max(0f, v[1]))))).Show();
             Faces("uv_follow", "uv.follow_quad", "Follow Quad", (m, f) =>
             {
                 if (f.Where(x => x.VertCount == 4).OrderBy(x => x.Index).FirstOrDefault() is { } active) UVs.FollowQuad(m, active, f);

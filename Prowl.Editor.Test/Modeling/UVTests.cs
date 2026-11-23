@@ -340,4 +340,30 @@ public class UVTests
             Assert.All(mesh.Faces.SelectMany(Corners).Where(l => l.Vert == vertex), l => Assert.True(Float2.Distance(UVOf(l), expected) < 1e-4f));
         }
     }
+
+    [Theory]
+    [InlineData(60f, 12)]
+    [InlineData(100f, 0)]
+    public void SeamsFromSharpMarkEdgesWhoseFacesTurnPastTheAngle(float degrees, int seams)
+    {
+        GeometryData mesh = Primitives.Make(PrimitiveKind.Cube);
+
+        UVs.SeamsFromSharp(mesh, degrees);
+
+        Assert.Equal(seams, mesh.Edges.Count(UVs.IsSeam));
+    }
+
+    [Fact]
+    public void ClearingTakesTheUVsAndPinsAwayAndKeepsSeams()
+    {
+        GeometryData mesh = Primitives.Make(PrimitiveKind.Cube);
+        UVs.SetPinned(UVs.Corners(mesh.Faces[0]), true);
+        UVs.SeamsFromSharp(mesh, 60f);
+
+        UVs.Clear(mesh);
+
+        Assert.False(mesh.HasLoopAttribute(MeshGeometry.UV));
+        Assert.False(mesh.HasLoopAttribute(UVs.Pin));
+        Assert.Equal(12, mesh.Edges.Count(UVs.IsSeam));
+    }
 }

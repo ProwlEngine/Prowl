@@ -145,6 +145,8 @@
   "uv.weld": "Weld",
   "uv.snap_pixels": "Snap to Pixels",
   "uv.pack": "Pack",
+  "uv.margin": "Margin",
+  "uv.clear": "Clear UVs",
   "uv.average_scale": "Average Scale",
   "uv.clear_seam": "Clear Seam",
   "uv.seams_from_sharp": "Seams From Sharp Edges",

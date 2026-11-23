@@ -77,8 +77,20 @@ public static class UVs
         foreach (GeometryData.Loop corner in corners) corner.SetAttribute(Pin, new GeometryData.IntAttributeValue(pinned ? 1 : 0));
     }
 
-    /// <summary>Marks every sharp edge as a seam.</summary>
-    public static void SeamsFromSharp(GeometryData mesh) => SetSeams(mesh, mesh.Edges.Where(e => e.IsSharp).ToList(), true);
+    /// <summary>Marks every edge flagged sharp, or whose two faces turn against each other by more than the angle, as a seam.</summary>
+    public static void SeamsFromSharp(GeometryData mesh, float degrees)
+    {
+        float limit = MathF.Cos(degrees * MathF.PI / 180f);
+        SetSeams(mesh, mesh.Edges.Where(e => e.IsSharp || e.NeighborFaces() is { Count: 2 } f && Float3.Dot(f[0].Normal(), f[1].Normal()) < limit).ToList(), true);
+    }
+
+    /// <summary>Takes the UV map and its pins off the mesh. Seams are kept.</summary>
+    public static void Clear(GeometryData mesh)
+    {
+        mesh.RemoveLoopAttribute(MeshGeometry.UV);
+        mesh.RemoveLoopAttribute(Pin);
+        mesh.MarkChanged();
+    }
 
     /// <summary>Marks every edge between faces of different material slots as a seam.</summary>
     public static void SeamsFromMaterials(GeometryData mesh)
@@ -675,7 +687,7 @@ public static class UVs
     /// Groups joined faces whose normals are within the angle of the group's first face, projects each group flat onto
     /// the plane of its average normal, and packs the groups into the unit square.
     /// </summary>
-    public static void ByAngle(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, float degrees)
+    public static void ByAngle(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, float degrees, float margin = 1f / 256f)
     {
         EnsureUV(mesh);
         var inSet = new HashSet<GeometryData.Face>(faces);
@@ -707,7 +719,7 @@ public static class UVs
             corners.Add(at);
             layouts.Add([.. at.Select(c => { Float2 p = frame.To2D(c.Vert.Point); return new Double2(p.X, p.Y); })]);
         }
-        ChartUnwrapper.Pack(layouts, 1.0 / 256.0);
+        ChartUnwrapper.Pack(layouts, margin);
         for (int i = 0; i < corners.Count; i++)
             for (int k = 0; k < corners[i].Count; k++)
                 Set(corners[i][k], new Float2((float)layouts[i][k].X, (float)layouts[i][k].Y));

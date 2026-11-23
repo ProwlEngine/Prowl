@@ -840,7 +840,8 @@ public sealed class ModelMeshTool : SceneTool
             Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
             UVs.FromView(mesh, UVFaces(mesh, s), p => ctx.Handles.WorldToScreen(Float4x4.TransformPoint(p, toWorld)) is { } at ? new Float2(at.X, -at.Y) : Float2.Zero);
         }));
-        menu.Item(Loc.Get("uv.project_angle"), () => Edit("Project By Angle", (mesh, s) => UVs.ByAngle(mesh, UVFaces(mesh, s), 66f)));
+        menu.Item(Loc.Get("uv.project_angle"), () => RunRemembered("Project By Angle", [new(Loc.Get("model.field_degrees"), 66f), new(Loc.Get("uv.margin"), 1f / 256f)],
+            v => Edit("Project By Angle", (mesh, s) => UVs.ByAngle(mesh, UVFaces(mesh, s), v[0], MathF.Max(0f, v[1])))));
         menu.Item(Loc.Get("uv.follow_quad"), () => Edit("Follow Quad", (mesh, s) =>
         {
             List<GeometryData.Face> faces = UVFaces(mesh, s);
@@ -849,9 +850,11 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("uv.project_cube"), () => Edit("Cube Projection", (mesh, s) => UVs.Cube(mesh, UVFaces(mesh, s))));
         menu.Item(Loc.Get("uv.project_cylinder"), () => Edit("Cylinder Projection", (mesh, s) => UVs.Cylinder(mesh, UVFaces(mesh, s))));
         menu.Item(Loc.Get("uv.project_sphere"), () => Edit("Sphere Projection", (mesh, s) => UVs.Sphere(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => UVs.Reset(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => UVs.Reset(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.clear"), () => Edit("Clear UVs", (mesh, _) => UVs.Clear(mesh)));
         menu.Separator();
-        menu.Item(Loc.Get("uv.seams_from_sharp"), () => Edit("Seams From Sharp Edges", (mesh, _) => UVs.SeamsFromSharp(mesh)));
+        menu.Item(Loc.Get("uv.seams_from_sharp"), () => RunRemembered("Seams From Sharp Edges", [new(Loc.Get("model.field_degrees"), 60f)],
+            v => Edit("Seams From Sharp Edges", (mesh, _) => UVs.SeamsFromSharp(mesh, v[0]))));
         menu.Item(Loc.Get("uv.seams_from_materials"), () => Edit("Seams From Materials", (mesh, _) => UVs.SeamsFromMaterials(mesh)));
         menu.Item(Loc.Get("uv.seams_from_islands"), () => Edit("Seams From Islands", (mesh, _) => UVs.SeamsFromIslands(mesh)));
     }
@@ -1193,7 +1196,7 @@ public sealed class ModelMeshTool : SceneTool
     }
 
     /// <summary>Runs a step as one undo step of its own, remembered with its settings for adjusting.</summary>
-    private void RunRemembered(string name, LastField[] fields, Action<float[]> run)
+    public void RunRemembered(string name, LastField[] fields, Action<float[]> run)
     {
         Undo.FlushUndoRecordObjects();
         Undo.IncrementCurrentGroup();
