@@ -284,11 +284,11 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             float trackRowH = _height;
 
             // ── Track + optional inline numeric field row ─────────
-            using (_paper.Row($"{_id}_row").Width(UnitValue.Stretch()).Height(trackRowH).Gap(8).Enter())
+            using (_paper.Row("row").Width(UnitValue.Stretch()).Height(trackRowH).Gap(8).Enter())
             {
                 // Track box owns all interaction + the canvas-drawn track + thumb.
                 ElementHandle trackHandle = default;
-                var trackBuilder = _paper.Box($"{_id}_track")
+                var trackBuilder = _paper.Box("track")
                     .Width(UnitValue.Stretch())
                     .Height(trackRowH);
 
@@ -375,9 +375,9 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             // the labels would stretch under the inline numeric field too and skew the spacing.
             if (drawTickLabels)
             {
-                using (_paper.Row($"{_id}_ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).Gap(8).Enter())
+                using (_paper.Row("ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).Gap(8).Enter())
                 {
-                    using (_paper.Row($"{_id}_ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
+                    using (_paper.Row("ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
                     {
                         for (int i = 0; i < _tickCount; i++)
                         {
@@ -386,7 +386,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                             string label = _tickLabel!.Invoke(i, tv);
                             if (string.IsNullOrEmpty(label)) continue;
 
-                            _paper.Box($"{_id}_tk_{i}")
+                            _paper.Box("tk", i)
                                 .Width(UnitValue.Stretch()).Height(tickLabelH)
                                 .Alignment(TextAlignment.MiddleCenter)
                                 .IsNotInteractable()
@@ -397,7 +397,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                     // Spacer that matches the inline numeric field's footprint so tick labels
                     // align with the track section above, not the full row.
                     if (_showValue)
-                        _paper.Box($"{_id}_ticks_pad").Width(_valueWidth).Height(tickLabelH).IsNotInteractable();
+                        _paper.Box("ticks_pad").Width(_valueWidth).Height(tickLabelH).IsNotInteractable();
                 }
             }
 
@@ -405,7 +405,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             if (helperH > 0f && font != null)
             {
                 Color color = hasError ? _theme.Red.C600 : ink.C300;
-                _paper.Box($"{_id}_help")
+                _paper.Box("help")
                     .Width(UnitValue.Stretch()).Height(helperH)
                     .Margin(2, 2, 2, 0)
                     .Alignment(TextAlignment.MiddleLeft)

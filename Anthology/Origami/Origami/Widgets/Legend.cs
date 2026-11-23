@@ -110,9 +110,9 @@ public sealed class LegendBuilder
                 string text = entry.ValueText != null ? entry.Label + "  " + entry.ValueText : entry.Label;
                 Color swatchColor = entry.Hidden ? Color.FromArgb(entry.Color.A / 3, entry.Color) : entry.Color;
 
-                using (_paper.Row($"{_id}_row_{i}").Height(_swatchSize).Gap(2f).Enter())
+                using (_paper.Row("row", i).Height(_swatchSize).Gap(2f).Enter())
                 {
-                    ElementBuilder swatch = _paper.Box($"{_id}_sw_{i}").Size(_swatchSize).BackgroundColor(swatchColor).Rounded(_theme.Metrics.SmallRounding);
+                    ElementBuilder swatch = _paper.Box("sw", i).Size(_swatchSize).BackgroundColor(swatchColor).Rounded(_theme.Metrics.SmallRounding);
 
                     if (InteractiveActive)
                         swatch.OnClick(_ => _onToggle?.Invoke(key));

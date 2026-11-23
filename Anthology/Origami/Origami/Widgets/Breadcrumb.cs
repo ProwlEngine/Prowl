@@ -197,7 +197,7 @@ public sealed class BreadcrumbBuilder
                     if (sepIcon != null)
                     {
                         Color sepCol = ink.C300;
-                        _paper.Box($"{_id}_sep_{i}")
+                        _paper.Box("sep", i)
                             .Width(14).Height(_height)
                             .IsNotInteractable()
                             .OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) =>
@@ -210,7 +210,7 @@ public sealed class BreadcrumbBuilder
                     }
                     else if (!string.IsNullOrEmpty(sepText))
                     {
-                        _paper.Box($"{_id}_sep_{i}")
+                        _paper.Box("sep", i)
                             .Width(UnitValue.Auto).Height(_height)
                             .Padding(1, 1, 0, 0)
                             .IsNotInteractable()
@@ -227,7 +227,7 @@ public sealed class BreadcrumbBuilder
                     : ink.C300;
                 Color hoverBg = _theme.Neutral.C500;
 
-                using (_paper.Row($"{_id}_seg_{i}")
+                using (_paper.Row("seg", i)
                     .Width(UnitValue.Auto).Height(_height)
                     .Padding(m.PaddingSmall, m.PaddingSmall, 0, 0)
                     .Rounded(m.SmallRounding)
@@ -243,7 +243,7 @@ public sealed class BreadcrumbBuilder
                             var icon = item.IconDraw;
                             Color icoCol = isActive ? textColor : ink.C400;
                             float isz = fontSize;
-                            _paper.Box($"{_id}_ico_{i}")
+                            _paper.Box("ico", i)
                                 .Width(m.IconWidth).Height(_height)
                                 .IsNotInteractable()
                                 .OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) =>
@@ -255,7 +255,7 @@ public sealed class BreadcrumbBuilder
                         }
                         else
                         {
-                            _paper.Box($"{_id}_ico_{i}")
+                            _paper.Box("ico", i)
                                 .Width(m.IconWidth).Height(_height)
                                 .IsNotInteractable()
                                 .Text(item.Icon, font)
@@ -268,7 +268,7 @@ public sealed class BreadcrumbBuilder
                     // Label
                     if (showLabel)
                     {
-                        _paper.Box($"{_id}_lbl_{i}")
+                        _paper.Box("lbl", i)
                             .Width(UnitValue.Auto).Height(_height)
                             .IsNotInteractable()
                             .Text(item.Label, font)

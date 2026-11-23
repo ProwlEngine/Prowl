@@ -141,7 +141,7 @@ public sealed class SpinnerBuilder
 
         using (_paper.Row(_id).Width(UnitValue.Auto).Height(rowH).Gap(8).Enter())
         {
-            using (_paper.Box($"{_id}_glyph")
+            using (_paper.Box("glyph")
                 .Width(glyphW).Height(rowH)
                 .IsNotInteractable().Enter())
             {
@@ -150,7 +150,7 @@ public sealed class SpinnerBuilder
 
             if (hasLabel)
             {
-                _paper.Box($"{_id}_lbl")
+                _paper.Box("lbl")
                     .Height(rowH)
                     .Alignment(PaperUI.TextAlignment.MiddleLeft).IsNotInteractable()
                     .Text(_label!, font!).TextColor(_theme.Ink.C500).FontSize(_theme.Metrics.FontSize);

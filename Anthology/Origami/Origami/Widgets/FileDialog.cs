@@ -374,7 +374,7 @@ public static class FileDialog
                 if (start > 0)
                 {
                     string tp = crumbs[start - 1].Path;
-                    var eb = paper.Box($"{id}_cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
+                    var eb = paper.Box("cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
                         .Text("...", font).TextColor(ink.C300).FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                         .Hovered.BackgroundColor(theme.Hover).End();
                     eb.OnClick(0, (_, _) => NavigateTo(tp, true));
@@ -385,7 +385,7 @@ public static class FileDialog
                 {
                     var (label, cpath) = crumbs[i];
                     bool last = i == crumbs.Count - 1;
-                    var cb = paper.Box($"{id}_cr_{i}").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
+                    var cb = paper.Box("cr", i).Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
                         .Text(label, last ? titleFont : font).TextColor(last ? ink.C500 : ink.C300)
                         .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
                     if (!last)
@@ -452,7 +452,7 @@ public static class FileDialog
             // Toolbar: back / fwd / up + breadcrumb + search + new folder (+ close X when floating).
             // Use Padding: the edge buttons set an explicit Margin for vertical
             // centering, which would override container child-margins and touch the edges.
-            using (paper.Row($"{id}_tb").Height(toolbarH)
+            using (paper.Row("tb").Height(toolbarH)
                 .BackgroundColor(theme.Glass).RoundedTop(m.ContainerRounding)
                 .Padding(10, 10, 0, 0).Gap(4).Enter())
             {
@@ -468,12 +468,12 @@ public static class FileDialog
                 if (onClose != null)
                     TbBtn($"{id}_close", DrawClose, true, onClose);
             }
-            paper.Box($"{id}_tbsep").Height(1).BackgroundColor(theme.BorderSoft);
+            paper.Box("tbsep").Height(1).BackgroundColor(theme.BorderSoft);
 
             // Body: sidebar + (column header + list)
-            using (paper.Row($"{id}_body").Height(bodyH).Enter())
+            using (paper.Row("body").Height(bodyH).Enter())
             {
-                using (paper.Column($"{id}_side").Width(sideW).Height(UnitValue.Stretch())
+                using (paper.Column("side").Width(sideW).Height(UnitValue.Stretch())
                     .BackgroundColor(SideBg)
                     .Padding(7, 7, 7, 7).Gap(1).Enter())
                 {
@@ -490,9 +490,9 @@ public static class FileDialog
                     foreach (var (dlabel, dn) in _drives)
                         SideRow($"{id}_drv_{dn}", DrawDrive, ink.C400, dlabel, dn);
                 }
-                paper.Box($"{id}_vsep").Width(1).Height(UnitValue.Stretch()).BackgroundColor(theme.BorderSoft);
+                paper.Box("vsep").Width(1).Height(UnitValue.Stretch()).BackgroundColor(theme.BorderSoft);
 
-                using (paper.Column($"{id}_list_area").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
+                using (paper.Column("list_area").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
                 {
                     // Right-click on empty list space: new folder / refresh (row clicks open their own menu).
                     ContextMenu.RightClickMenu(paper, $"{id}_bgctx", b => b
@@ -507,10 +507,10 @@ public static class FileDialog
                     if (!string.IsNullOrEmpty(st.Renaming))
                     {
                         tableH -= m.RowHeight + 4f;
-                        using (paper.Row($"{id}_rn").Height(m.RowHeight).BackgroundColor(theme.Selected)
+                        using (paper.Row("rn").Height(m.RowHeight).BackgroundColor(theme.Selected)
                             .PaddingLeft(rowPadL).Gap(6).Margin(0, 0, 0, 4).Enter())
                         {
-                            using (paper.Box($"{id}_rn_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
+                            using (paper.Box("rn_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
                                 paper.Draw((canvas, rect) => DrawIcon(canvas, rect, DrawPencil, 15f, theme.Primary.C500));
                             Origami.TextField(paper, $"{id}_rn_n", st.RenameName, v => st.RenameName = v)
                                 .Placeholder("New name").Width(UnitValue.Stretch()).Show();
@@ -523,10 +523,10 @@ public static class FileDialog
                     if (st.CreatingFolder)
                     {
                         tableH -= m.RowHeight + 4f;
-                        using (paper.Row($"{id}_nf").Height(m.RowHeight).BackgroundColor(theme.Selected)
+                        using (paper.Row("nf").Height(m.RowHeight).BackgroundColor(theme.Selected)
                             .PaddingLeft(rowPadL).Gap(6).Margin(0, 0, 0, 4).Enter())
                         {
-                            using (paper.Box($"{id}_nf_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
+                            using (paper.Box("nf_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
                                 paper.Draw((canvas, rect) => DrawIcon(canvas, rect, DrawFolder, 15f, theme.Amber.C500));
                             Origami.TextField(paper, $"{id}_nf_n", st.NewFolderName, v => st.NewFolderName = v)
                                 .Placeholder("Name").Width(UnitValue.Stretch()).Show();
@@ -603,18 +603,18 @@ public static class FileDialog
             }
 
             // Foot: filename field + Cancel + primary action (label follows the mode)
-            paper.Box($"{id}_fsep").Height(1).BackgroundColor(theme.BorderSoft);
+            paper.Box("fsep").Height(1).BackgroundColor(theme.BorderSoft);
             string primaryLabel = mode switch
             {
                 FileDialogMode.Save => "Save",
                 FileDialogMode.SelectFolder => "Select Folder",
                 _ => "Open",
             };
-            using (paper.Row($"{id}_foot").Height(footH)
+            using (paper.Row("foot").Height(footH)
                 .BackgroundColor(theme.Glass).RoundedBottom(m.ContainerRounding)
                 .Padding(11, 11, 0, 0).Gap(8).Enter())
             {
-                paper.Box($"{id}_foot_l").Width(UnitValue.Auto).Height(footH)
+                paper.Box("foot_l").Width(UnitValue.Auto).Height(footH)
                     .Text(mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font).TextColor(ink.C200)
                     .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 VC($"{id}_fnwrap", UnitValue.Stretch(), footH, () =>

@@ -152,20 +152,20 @@ public sealed class ContextBuilder
 
                 DrawLeadingIcon(paper, $"{id}_ico_{index}", font, txt);
 
-                paper.Box($"{id}_l_{index}")
+                paper.Box("l", index)
                     .Width(UnitValue.Stretch()).Height(RowHeight)
                     .Text(Label, font).TextColor(txt)
                     .FontSize(RowFont).Alignment(TextAlignment.MiddleLeft);
 
                 if (!string.IsNullOrEmpty(Shortcut))
-                    paper.Box($"{id}_k_{index}")
+                    paper.Box("k", index)
                         .Width(UnitValue.Auto).Height(RowHeight)
                         .Text(Shortcut, font).TextColor(Enabled ? ink.C200 : ink.C100)   // t-lo
                         .FontSize(SubFont).Alignment(TextAlignment.MiddleRight);
 
                 // Active/checked items (e.g. the current "Sort By") show a trailing green check.
                 if (On)
-                    paper.Box($"{id}_chk_{index}").Width(16).Height(RowHeight).IsNotInteractable()
+                    paper.Box("chk", index).Width(16).Height(RowHeight).IsNotInteractable()
                         .Icon(paper, Origami.Current.Icons.Check, theme.Green.C500, size: 13f);
             }
         }
@@ -208,13 +208,13 @@ public sealed class ContextBuilder
                 .IsNotInteractable().Enter())
             {
                 if (IconDraw != null)
-                    paper.Box($"{id}_tii_{index}").Width(IconSize).Height(RowHeight).IsNotInteractable()
+                    paper.Box("tii", index).Width(IconSize).Height(RowHeight).IsNotInteractable()
                         .Icon(paper, IconDraw, theme.Primary.C700);
                 else if (!string.IsNullOrEmpty(Icon))
-                    paper.Box($"{id}_tii_{index}").Width(IconSize).Height(RowHeight)
+                    paper.Box("tii", index).Width(IconSize).Height(RowHeight)
                         .Text(Icon, font).TextColor(theme.Primary.C700).FontSize(RowFont).Alignment(TextAlignment.MiddleCenter);
 
-                paper.Box($"{id}_tit_{index}").Width(UnitValue.Stretch()).Height(RowHeight).Clip()
+                paper.Box("tit", index).Width(UnitValue.Stretch()).Height(RowHeight).Clip()
                     .Text(Text, theme.SemiBold ?? theme.Bold ?? font).TextColor(theme.Ink.C500)
                     .FontSize(RowFont - 1f).Alignment(TextAlignment.MiddleLeft);
             }
@@ -235,7 +235,7 @@ public sealed class ContextBuilder
                 .IsNotInteractable()
                 .Enter())
             {
-                paper.Box($"{id}_ht_{index}")
+                paper.Box("ht", index)
                     .Width(UnitValue.Stretch()).Height(14)
                     .Text(Text.ToUpperInvariant(), theme.SemiBold ?? theme.Bold ?? font)
                     .TextColor(theme.Ink.C100)                      // t-dim
@@ -274,20 +274,20 @@ public sealed class ContextBuilder
                 Color txt = !Enabled ? ink.C100 : hovered ? ink.C500 : ink.C400;
                 bool on = GetValue?.Invoke() ?? false;
 
-                paper.Box($"{id}_l_{index}")
+                paper.Box("l", index)
                     .Width(UnitValue.Stretch()).Height(RowHeight)
                     .Text(Label, font).TextColor(txt)
                     .FontSize(RowFont).Alignment(TextAlignment.MiddleLeft);
 
                 // Pill toggle on the right (matches the Nebula .tg switch).
                 var acc = theme.Primary.C500;
-                using (paper.Box($"{id}_tg_{index}").Width(32).Height(18).Rounded(9)
+                using (paper.Box("tg", index).Width(32).Height(18).Rounded(9)
                     .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .BackgroundColor(on ? acc : Color.FromArgb(26, 255, 255, 255))
                     .BorderColor(on ? Color.Transparent : theme.BorderSoft).BorderWidth(1)
                     .IsNotInteractable()
                     .Enter())
-                    paper.Box($"{id}_tk_{index}").Width(14).Height(14).Rounded(7)
+                    paper.Box("tk", index).Width(14).Height(14).Rounded(7)
                         .PositionType(PositionType.SelfDirected).Position(on ? 16 : 2, 1.5f)
                         .BackgroundColor(Color.White).IsNotInteractable();
             }
@@ -360,18 +360,18 @@ public sealed class ContextBuilder
                 Color txt = hovered || submenuIsOpen || keyOn ? ink.C500 : ink.C400;
 
                 if (!string.IsNullOrEmpty(Icon))
-                    paper.Box($"{id}_ico_{index}")
+                    paper.Box("ico", index)
                         .Width(IconSize).Height(RowHeight)
                         .Text(Icon, font).TextColor(txt)
                         .FontSize(RowFont).Alignment(TextAlignment.MiddleCenter);
 
-                paper.Box($"{id}_l_{index}")
+                paper.Box("l", index)
                     .Width(UnitValue.Stretch()).Height(RowHeight)
                     .Text(Label, font).TextColor(txt)
                     .FontSize(RowFont).Alignment(TextAlignment.MiddleLeft);
 
                 Color arrow = txt;
-                using (paper.Box($"{id}_a_{index}").Width(12).Height(RowHeight).IsNotInteractable().Enter())
+                using (paper.Box("a", index).Width(12).Height(RowHeight).IsNotInteractable().Enter())
                     paper.Draw((canvas, rect) => ContextMenu.DrawChevron(canvas, rect, arrow));
 
                 // Accumulate a hover time. The submenu can only open after the threshold has been reached.

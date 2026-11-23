@@ -304,9 +304,9 @@ public sealed class ButtonBuilder
             bool isPressed = interactive && _paper.IsParentActive;
             bool isFocused = interactive && _paper.IsElementFocused(handle.Data.ID);
 
-            float hoverT = _paper.AnimateBool(isHovered, 0.10f, id: $"{_id}_hov");
-            float pressT = _paper.AnimateBool(isPressed, 0.06f, id: $"{_id}_prs");
-            float focusT = _paper.AnimateBool(isFocused, 0.12f, id: $"{_id}_foc");
+            float hoverT = _paper.AnimateBool(isHovered, 0.10f);
+            float pressT = _paper.AnimateBool(isPressed, 0.06f);
+            float focusT = _paper.AnimateBool(isFocused, 0.12f);
 
             // Keyboard activation while focused — Space / Enter both trigger click.
             if (interactive && isFocused && _onClick != null)

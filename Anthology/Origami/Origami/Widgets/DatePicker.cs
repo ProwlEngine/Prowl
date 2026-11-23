@@ -138,7 +138,7 @@ public sealed class DatePickerBuilder
         {
             if (font != null)
             {
-                _paper.Box($"{_id}_txt")
+                _paper.Box("txt")
                     .Width(UnitValue.Stretch()).Height(m.RowHeight)
                     .Margin(m.Padding, 0, 0, 0)
                     .IsNotInteractable()
@@ -148,7 +148,7 @@ public sealed class DatePickerBuilder
                 // Trailing affordance — drawn as a vector (the icon font ships no glyph).
                 bool clock = _mode == DatePickerMode.Time;
                 Color icoColor = ink.C300;
-                using (_paper.Box($"{_id}_ico")
+                using (_paper.Box("ico")
                     .Width(m.RowHeight).Height(m.RowHeight)
                     .IsNotInteractable().Enter())
                 {
@@ -382,12 +382,12 @@ internal static class OrigamiCalendar
         using (paper.Column($"{id}_cal").Width(contentWidth).Height(UnitValue.Auto).Enter())
         {
             // ── Header: ‹  Month Year  › ──
-            using (paper.Row($"{id}_head").Width(UnitValue.Stretch()).Height(m.HeaderHeight)
+            using (paper.Row("head").Width(UnitValue.Stretch()).Height(m.HeaderHeight)
                 .Margin(0, 0, 0, 9).Enter())
             {
                 Chevron(paper, $"{id}_prev", true, m.HeaderHeight, ink.C300, onPrev);
 
-                var title = paper.Box($"{id}_title")
+                var title = paper.Box("title")
                     .Width(UnitValue.Stretch()).Height(m.HeaderHeight)
                     .Text($"{MonthName(viewMonth)} {viewYear}", titleFont)
                     .TextColor(ink.C500).FontSize(titleSize)
@@ -399,11 +399,11 @@ internal static class OrigamiCalendar
             }
 
             // ── Weekday row ──
-            using (paper.Row($"{id}_dow").Width(UnitValue.Stretch()).Height(cell * 0.62f)
+            using (paper.Row("dow").Width(UnitValue.Stretch()).Height(cell * 0.62f)
                 .Margin(0, 0, 0, 2).Gap(Gap).Enter())
             {
                 for (int i = 0; i < 7; i++)
-                    paper.Box($"{id}_dow_{i}").Width(cell).Height(cell * 0.62f)
+                    paper.Box("dow", i).Width(cell).Height(cell * 0.62f)
                         .IsNotInteractable()
                         .Text(DowLetters[i], font).TextColor(ink.C200)
                         .FontSize(dowSize).Alignment(TextAlignment.MiddleCenter);
@@ -415,12 +415,12 @@ internal static class OrigamiCalendar
             int firstDow = (int)first.DayOfWeek; // Sunday = 0
             int rows = (firstDow + daysInMonth + 6) / 7;
 
-            using (paper.Column($"{id}_grid").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+            using (paper.Column("grid").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                 .Gap(Gap).Enter())
             {
                 for (int r = 0; r < rows; r++)
                 {
-                    using (paper.Row($"{id}_r{r}").Width(UnitValue.Stretch()).Height(cell)
+                    using (paper.Row("r", r).Width(UnitValue.Stretch()).Height(cell)
                         .Gap(Gap).Enter())
                     {
                         for (int c = 0; c < 7; c++)
@@ -759,7 +759,7 @@ internal sealed class DatePickerModal : IModal
                 _setter(_value);
             }).Min(_use24Hour ? 0 : 1).Max(_use24Hour ? 23 : 12).Width(50).DragHandle(false).Show();
 
-            paper.Box($"{_id}_colon").Width(10).Height(m.RowHeight)
+            paper.Box("colon").Width(10).Height(m.RowHeight)
                 .Text(":", font).TextColor(ink.C400)
                 .FontSize(m.FontSize + 2).Alignment(TextAlignment.MiddleCenter)
                 .IsNotInteractable();
@@ -797,7 +797,7 @@ internal sealed class DatePickerModal : IModal
         {
             Origami.IconButton(paper, $"{_id}_yback", theme.Icons.ChevronLeft, () =>
                 _yearPickerOpen = false).Height(m.CompactHeight).Show();
-            paper.Box($"{_id}_ytitle").Width(UnitValue.Stretch()).Height(m.RowHeight)
+            paper.Box("ytitle").Width(UnitValue.Stretch()).Height(m.RowHeight)
                 .Text("Select Year", theme.SemiBold ?? font).TextColor(ink.C500)
                 .FontSize(m.FontSize - 1f).Alignment(TextAlignment.MiddleCenter)
                 .IsNotInteractable();

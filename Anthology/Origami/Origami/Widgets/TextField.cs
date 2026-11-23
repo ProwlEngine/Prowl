@@ -319,7 +319,7 @@ public sealed class TextFieldBuilder
             // ── Field row (border, slots, text element) ────────────────
             // Soft accent glow on focus (not a hard ring).
             Color glowColor = hasError ? Color.FromArgb(130, _theme.Red.C500) : _theme.FocusGlow;
-            var rowBuilder = _paper.Row($"{_id}_row")
+            var rowBuilder = _paper.Row("row")
                 .Width(UnitValue.Stretch()).Height(fieldH)
                 .BackgroundColor(bgColor)
                 .BorderColor(idleBorder).BorderWidth(1)
@@ -359,7 +359,7 @@ public sealed class TextFieldBuilder
                 // Simple padded colored label before the input (channel tag / draggable label).
                 if (!string.IsNullOrEmpty(_prefixText) && font != null)
                 {
-                    var pfx = _paper.Box($"{_id}_pfx")
+                    var pfx = _paper.Box("pfx")
                         .Height(fieldH).Width(UnitValue.Auto)
                         .Text(_prefixText!, font)
                         .TextColor(_prefixColor ?? ink.C200)
@@ -437,7 +437,7 @@ public sealed class TextFieldBuilder
                 // Inner edit element. HookToParent + IsNotInteractable lets the row collect
                 // clicks (so it gains focus via TabIndex(0)) while the textfield's own event
                 // handlers (cursor placement, drag-select, keyboard) still fire via the hook.
-                var editBuilder = _paper.Box($"{_id}_tf")
+                var editBuilder = _paper.Box("tf")
                     .Width(UnitValue.Stretch())
                     .Height(_multiLine ? UnitValue.Stretch() : _theme.Metrics.FontSize)
                     .Margin(editLeftPad, _multiLine ? 8 : 0, _multiLine ? 6 : UnitValue.Stretch(), _multiLine ? 6 : UnitValue.Stretch())
@@ -481,7 +481,7 @@ public sealed class TextFieldBuilder
                 // Suffix (.suf) — muted mono unit after the input.
                 if (!string.IsNullOrEmpty(_suffixText) && font != null)
                 {
-                    _paper.Box($"{_id}_suf").Width(UnitValue.Auto).Height(fieldH)
+                    _paper.Box("suf").Width(UnitValue.Auto).Height(fieldH)
                         .Margin(2, 10, 0, 0)
                         .Text(_suffixText!, _theme.Mono ?? font)
                         .TextColor(ink.C200)
@@ -530,7 +530,7 @@ public sealed class TextFieldBuilder
                 else if (!drewTrailing)
                 {
                     // Reserve trailing padding so the text doesn't kiss the right border.
-                    _paper.Box($"{_id}_endpad").Width(6).Height(fieldH).IsNotInteractable();
+                    _paper.Box("endpad").Width(6).Height(fieldH).IsNotInteractable();
                 }
 
                 // AutoComplete popover ─────────────────────────────────
@@ -550,7 +550,7 @@ public sealed class TextFieldBuilder
             {
                 string text = errorMsg ?? _helperText ?? string.Empty;
                 Color color = hasError ? _theme.Red.C600 : ink.C300;
-                _paper.Box($"{_id}_help")
+                _paper.Box("help")
                     .Width(UnitValue.Stretch()).Height(helperH)
                     .Margin(2, 2, 2, 0)
                     .Alignment(TextAlignment.MiddleLeft)
@@ -716,7 +716,7 @@ public sealed class TextFieldBuilder
                 bool highlighted = i == hl;
                 Color rowBg = highlighted ? ramp.C300 : Color.Transparent;
 
-                _paper.Row($"{_id}_acrow_{i}")
+                _paper.Row("acrow", i)
                     .Height(rowH)
                     .BackgroundColor(rowBg)
                     .Hovered.BackgroundColor(ramp.C400).End()

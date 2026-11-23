@@ -289,7 +289,7 @@ public sealed class TableBuilder
             HandleKeys(owner, _cellContent != null ? (_rowCount ?? 0) : _rows.Count);
 
             // ── Header row ──
-            var headRow = _paper.Row($"{_id}_head")
+            var headRow = _paper.Row("head")
                 .Width(UnitValue.Stretch()).Height(hHead)
                 .BackgroundColor(glassIn);
             if (_bordered) headRow.RoundedTop(m.ContainerRounding);
@@ -301,7 +301,7 @@ public sealed class TableBuilder
                     int ci = c;
                     bool active = _sortColumn == c;
                     bool right = col.Align == TextAlignment.MiddleRight;
-                    var hcell = _paper.Row($"{_id}_h{c}")
+                    var hcell = _paper.Row("h", c)
                         .Width(UnitValue.Stretch(col.Flex)).Height(hHead)
                         .Padding(10, 10, 0, 0);
                     if (_bordered)
@@ -315,9 +315,9 @@ public sealed class TableBuilder
                     using (hcell.Enter())
                     {
                         if (right)
-                            _paper.Box($"{_id}_hs{c}").Width(UnitValue.Stretch()).Height(hHead).IsNotInteractable();
+                            _paper.Box("hs", c).Width(UnitValue.Stretch()).Height(hHead).IsNotInteractable();
 
-                        _paper.Box($"{_id}_ht{c}")
+                        _paper.Box("ht", c)
                             .Width(UnitValue.Auto).Height(hHead)
                             .IsNotInteractable()
                             .Text(col.Header.ToUpperInvariant(), headerFace)
@@ -330,7 +330,7 @@ public sealed class TableBuilder
                             Color caret = active ? _theme.Primary.C700 : ink.C200;
                             bool up = active && _sortAscending;
                             bool dim = !active;
-                            _paper.Box($"{_id}_hc{c}")
+                            _paper.Box("hc", c)
                                 .Width(12).Height(hHead)
                                 .IsNotInteractable()
                                 .OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) =>
@@ -353,7 +353,7 @@ public sealed class TableBuilder
                 }
             }
 
-            _paper.Box($"{_id}_hdiv").Width(UnitValue.Stretch()).Height(1).BackgroundColor(bdSoft).IsNotInteractable();
+            _paper.Box("hdiv").Width(UnitValue.Stretch()).Height(1).BackgroundColor(bdSoft).IsNotInteractable();
 
             // ── Body rows (optionally inside a scroll view) ──
             if (_scroll)
@@ -398,14 +398,14 @@ public sealed class TableBuilder
 
                 float topH = first * stride;
                 if (topH > 0f)
-                    _paper.Box($"{_id}_vtop").Width(UnitValue.Stretch()).Height(topH).IsNotInteractable();
+                    _paper.Box("vtop").Width(UnitValue.Stretch()).Height(topH).IsNotInteractable();
 
                 for (int i = first; i <= last; i++)
                     DrawRow(i);
 
                 float botH = last >= n - 1 ? 0f : (n - 1 - last) * stride - 1f;
                 if (botH > 0f)
-                    _paper.Box($"{_id}_vbot").Width(UnitValue.Stretch()).Height(botH).IsNotInteractable();
+                    _paper.Box("vbot").Width(UnitValue.Stretch()).Height(botH).IsNotInteractable();
             }
 
             void DrawRow(int i)
@@ -415,7 +415,7 @@ public sealed class TableBuilder
                 bool selected = _isSelected != null ? _isSelected(i) : i == _selected;
                 bool isLast = i == RowN() - 1;
 
-                var rowBuilder = _paper.Row($"{_id}_r{i}")
+                var rowBuilder = _paper.Row("r", i)
                     .Width(UnitValue.Stretch()).Height(hRow)
                     .BackgroundColor(selected ? accDim : Color.Transparent)
                     .Hovered.BackgroundColor(selected ? accDim : hover).End();
@@ -476,7 +476,7 @@ public sealed class TableBuilder
                     {
                         var col = _columns[c];
 
-                        using (_paper.Row($"{_id}_r{i}c{c}")
+                        using (_paper.Row("c", c)
                             .Width(UnitValue.Stretch(col.Flex)).Height(hRow)
                             .Padding(10, 10, 0, 0)
                             .Clip()
@@ -492,7 +492,7 @@ public sealed class TableBuilder
                                 var icon = cell.Icon;
                                 var iconCol = cell.Color;
                                 float isz = bodyFont;
-                                _paper.Box($"{_id}_r{i}c{c}i")
+                                _paper.Box("i")
                                     .Width(19).Height(hRow)
                                     .IsNotInteractable()
                                     .OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) =>
@@ -505,7 +505,7 @@ public sealed class TableBuilder
                                     }));
                             }
 
-                            _paper.Box($"{_id}_r{i}c{c}t")
+                            _paper.Box("t")
                                 .Width(UnitValue.Stretch()).Height(hRow)
                                 .IsNotInteractable()
                                 .Text(cell.Text, font)
@@ -517,7 +517,7 @@ public sealed class TableBuilder
                 }
 
                 if (!isLast)
-                    _paper.Box($"{_id}_rd{i}").Width(UnitValue.Stretch()).Height(1).BackgroundColor(bdSoft).IsNotInteractable();
+                    _paper.Box("rd", i).Width(UnitValue.Stretch()).Height(1).BackgroundColor(bdSoft).IsNotInteractable();
             }
         }
     }

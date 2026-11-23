@@ -112,17 +112,17 @@ public sealed class AppBarBuilder
                 {
                     case Kind.Brand:
                         var brandIcon = it.Icon;
-                        using (_paper.Box($"{_id}_logo").Size(28).Rounded(_theme.Metrics.Rounding).Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                        using (_paper.Box("logo").Size(28).Rounded(_theme.Metrics.Rounding).Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(acc).Enter())
                             _paper.Draw((canvas, r) => brandIcon?.Draw(canvas, Center(r, 15f), ink.C700));
-                        _paper.Box($"{_id}_title").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                        _paper.Box("title").Width(UnitValue.Auto).Height(UnitValue.Auto)
                             .Margin(gap, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .Text(it.Text, titleFont!).FontSize(_theme.Metrics.FontSize)
                             .TextColor(ink.C500).Alignment(TextAlignment.MiddleLeft);
                         break;
 
                     case Kind.Tag:
-                        _paper.Box($"{_id}_tag{i}").Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(_theme.Metrics.SmallRounding)
+                        _paper.Box("tag", i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(_theme.Metrics.SmallRounding)
                             .Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch()).Padding(6, 6, 2, 2)
                             .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1)
                             .Text(it.Text, monoFont!).FontSize(_theme.Metrics.FontSizeSmall - 3.5f)
@@ -130,7 +130,7 @@ public sealed class AppBarBuilder
                         break;
 
                     case Kind.Spacer:
-                        _paper.Box($"{_id}_sp{i}").Width(UnitValue.Stretch()).Height(1);
+                        _paper.Box("sp", i).Width(UnitValue.Stretch()).Height(1);
                         first = true; // next item after a spacer needs no leading gap
                         continue;
 

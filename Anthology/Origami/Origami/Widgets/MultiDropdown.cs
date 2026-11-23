@@ -185,7 +185,7 @@ public sealed class MultiDropdownBuilder<T>
 
                 // Trailing add affordance (prototype's <input placeholder="Add layer…">). Clicking
                 // anywhere on the field opens the popover, so this is just the labelled hint.
-                _paper.Box($"{_id}_add")
+                _paper.Box("add")
                     .Width(UnitValue.Auto).MinWidth(70).Height(22)
                     .Margin(4, 4, 0, 0)
                     .Alignment(TextAlignment.MiddleLeft)
@@ -252,14 +252,14 @@ public sealed class MultiDropdownBuilder<T>
             .BackgroundColor(bg).BorderColor(bd).BorderWidth(1)
             .Enter())
         {
-            _paper.Box($"{id}_l").Width(UnitValue.Auto).Height(UnitValue.Auto)
+            _paper.Box("l").Width(UnitValue.Auto).Height(UnitValue.Auto)
                 .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                 .IsNotInteractable()
                 .Text(label, font!).TextColor(tx).FontSize(_theme.Metrics.FontSize - 2f).Alignment(TextAlignment.MiddleLeft);
 
             var rm = onRemove;
             var xcol = tx;
-            using (_paper.Box($"{id}_x").Size(15).Rounded(_theme.Metrics.SmallRounding).Margin(3, 0, UnitValue.Stretch(), UnitValue.Stretch())
+            using (_paper.Box("x").Size(15).Rounded(_theme.Metrics.SmallRounding).Margin(3, 0, UnitValue.Stretch(), UnitValue.Stretch())
                 .Hovered.BackgroundColor(Color.FromArgb(64, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B)).End()
                 .StopEventPropagation().OnClick(_ => rm())
                 .Enter())

@@ -480,7 +480,7 @@ public static class PropertyGridRenderer
             {
                 var dot = isOverridden ? theme.Primary.C500 : theme.Amber.C400;
                 Action<string>? onMarkerClicked = isOverridden && overriddenField != null ? _onMarkerClicked : null;
-                var marker = paper.Box($"{id}_ov").Width(8).Height(m.RowHeight);
+                var marker = paper.Box("ov").Width(8).Height(m.RowHeight);
                 if (onMarkerClicked != null)
                 {
                     marker.Cursor(PaperCursor.Pointer).OnClick(overriddenField!, (name, _) => onMarkerClicked(name));
@@ -488,7 +488,7 @@ public static class PropertyGridRenderer
                 }
                 else marker.IsNotInteractable();
                 using (marker.Enter())
-                    paper.Box($"{id}_ovd").Width(5).Height(5).Rounded(3)
+                    paper.Box("ovd").Width(5).Height(5).Rounded(3)
                         .Margin(1, UnitValue.Stretch(), UnitValue.Stretch(), UnitValue.Stretch())
                         .BackgroundColor(dot).IsNotInteractable();
             }
@@ -497,7 +497,7 @@ public static class PropertyGridRenderer
             {
                 bool isNumeric = IsNumericType(fieldType);
                 // A tall card (simple collection) top-aligns its label; scalar fields centre it.
-                var lbl = paper.Box($"{id}_lbl")
+                var lbl = paper.Box("lbl")
                     .Width(m.LabelWidth).Height(m.RowHeight)
                     .Margin(0, 0, isLeafCollection ? UnitValue.Pixels(4) : UnitValue.Stretch(), UnitValue.Stretch())
                     .Text(label, font)
@@ -527,7 +527,7 @@ public static class PropertyGridRenderer
                 }
             }
 
-            using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
+            using (paper.Box("ctl").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
             {
                 IsMixedField = isMixed;
                 DrawFieldControl(paper, $"{id}_v", fieldType, value, config, onChange, depth);
@@ -821,28 +821,28 @@ public static class PropertyGridRenderer
             {
                 var listEl = paper.CurrentParent;
                 bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
-                float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_se");
+                float anim = paper.AnimateBool(expanded, 0.18f);
                 float headBottom = expanded || anim > 0.001f ? 0f : cr;
 
-                using (paper.Row($"{id}_ch").Width(ST).Height(headH).Rounded(cr, cr, headBottom, headBottom).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingMedium).BackgroundColor(glass)
+                using (paper.Row("ch").Width(ST).Height(headH).Rounded(cr, cr, headBottom, headBottom).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingMedium).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer)
                     .Enter())
                 {
-                    paper.Box($"{id}_ci").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiGlyphs.LayerGroup_I, acc, size: 12f);
-                    paper.Box($"{id}_cc").Width(ST).Height(headH).IsNotInteractable()
+                    paper.Box("ci").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiGlyphs.LayerGroup_I, acc, size: 12f);
+                    paper.Box("cc").Width(ST).Height(headH).IsNotInteractable()
                         .Text(string.IsNullOrEmpty(label) ? $"{list.Count} elements" : $"{label}  ({list.Count})", font)
                         .TextColor(tMid).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
-                    paper.Box($"{id}_cv").Width(12).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable()
+                    paper.Box("cv").Width(12).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable()
                         .Icon(paper, expanded ? Origami.Current.Icons.ChevronDown : Origami.Current.Icons.ChevronRight, tLo, size: 11f);
                 }
 
                 if (!expanded && anim <= 0.001f) return;
 
-                using (paper.Column($"{id}_body").Width(ST).Height(UnitValue.Lerp(0, UnitValue.Auto, anim)).Clip().Enter())
+                using (paper.Column("body").Width(ST).Height(UnitValue.Lerp(0, UnitValue.Auto, anim)).Clip().Enter())
                 {
-                    paper.Box($"{id}_chd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
+                    paper.Box("chd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
 
                     for (int i = 0; i < list.Count; i++)
                     {
@@ -870,7 +870,7 @@ public static class PropertyGridRenderer
                             paper.Box($"{id}_d_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
                     }
 
-                    paper.Box($"{id}_add").Width(ST).Height(headH).RoundedBottom(cr)
+                    paper.Box("add").Width(ST).Height(headH).RoundedBottom(cr)
                         .Hovered.BackgroundColor(theme.Hover).End()
                         .Text("+ Add Element", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
                         .OnClick(0, (_, _) => AddNew()).Cursor(PaperCursor.Pointer);
@@ -954,39 +954,39 @@ public static class PropertyGridRenderer
             {
                 var listEl = paper.CurrentParent;
                 bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
-                float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_ne");
+                float anim = paper.AnimateBool(expanded, 0.18f);
                 float headBottom = expanded || anim > 0.001f ? 0f : cr;
 
-                using (paper.Row($"{id}_nlh").Width(ST).Height(headH).Rounded(cr, cr, headBottom, headBottom).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingLarge).BackgroundColor(glass)
+                using (paper.Row("nlh").Width(ST).Height(headH).Rounded(cr, cr, headBottom, headBottom).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingLarge).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer)
                     .Enter())
                 {
-                    paper.Box($"{id}_nli").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiGlyphs.LayerGroup_I, color, size: 13f);
-                    paper.Box($"{id}_nlt").Width(UnitValue.Auto).Height(headH).IsNotInteractable()
+                    paper.Box("nli").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiGlyphs.LayerGroup_I, color, size: 13f);
+                    paper.Box("nlt").Width(UnitValue.Auto).Height(headH).IsNotInteractable()
                         .Text(string.IsNullOrEmpty(label) ? elementType.Name : label, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
-                    paper.Box($"{id}_nlc").Width(ST).Height(headH).Margin(4, 0, 0, 0).IsNotInteractable()
+                    paper.Box("nlc").Width(ST).Height(headH).Margin(4, 0, 0, 0).IsNotInteractable()
                         .Text($"[{list.Count}]", mono).TextColor(tLo).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
-                    paper.Box($"{id}_nlv").Width(12).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable()
+                    paper.Box("nlv").Width(12).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable()
                         .Icon(paper, expanded ? Origami.Current.Icons.ChevronDown : Origami.Current.Icons.ChevronRight, tLo, size: 11f);
                 }
 
                 if (!expanded && anim <= 0.001f) return;
 
-                using (paper.Column($"{id}_nlwrap").Width(ST).Height(UnitValue.Lerp(0, UnitValue.Auto, anim)).Clip().Enter())
+                using (paper.Column("nlwrap").Width(ST).Height(UnitValue.Lerp(0, UnitValue.Auto, anim)).Clip().Enter())
                 {
-                    paper.Box($"{id}_nlhd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
+                    paper.Box("nlhd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
 
-                    using (paper.Column($"{id}_nlb").Width(ST).Height(UnitValue.Auto).Padding(m.Padding, m.Padding, m.Padding, m.Padding).Gap(m.SpacingMedium).Enter())
+                    using (paper.Column("nlb").Width(ST).Height(UnitValue.Auto).Padding(m.Padding, m.Padding, m.Padding, m.Padding).Gap(m.SpacingMedium).Enter())
                     {
                         if (list.Count == 0)
-                            paper.Box($"{id}_nle").Width(ST).Height(m.RowHeight).IsNotInteractable()
+                            paper.Box("nle").Width(ST).Height(m.RowHeight).IsNotInteractable()
                                 .Text("Empty list", font).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
                         for (int i = 0; i < list.Count; i++)
                             DrawElement(i, stableIds[i]);
 
-                        paper.Box($"{id}_nladd").Width(ST).Height(m.RowHeight + 2f).Rounded(m.Rounding)
+                        paper.Box("nladd").Width(ST).Height(m.RowHeight + 2f).Rounded(m.Rounding)
                             .Hovered.BackgroundColor(theme.Hover).End()
                             .Text($"+ Add {elementType.Name}", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
                             .OnClick(0, (_, _) => AddNew()).Cursor(PaperCursor.Pointer);
@@ -1049,7 +1049,7 @@ public static class PropertyGridRenderer
         using (paper.Row($"{id}_null").Height(m.RowHeight).Gap(m.SpacingMedium).Enter())
         {
             if (font != null)
-                paper.Box($"{id}_null_lbl").Width(UnitValue.Stretch()).Height(m.RowHeight)
+                paper.Box("null_lbl").Width(UnitValue.Stretch()).Height(m.RowHeight)
                     .Text("(null)", font).TextColor(theme.Ink.C300)
                     .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft)
                     .IsNotInteractable();
