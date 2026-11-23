@@ -28,24 +28,28 @@ public static class MeshPicking
 
         foreach (GeometryData.Face face in mesh.Faces)
         {
-            if (skip != null && skip(face) || face.Loop == null) continue;
-            GeometryData.Loop first = face.Loop;
-            GeometryData.Loop loop = first.Next!;
-            while (loop.Next != null && loop.Next != first)
+            if (skip != null && skip(face)) continue;
+            foreach ((GeometryData.Vertex a, GeometryData.Vertex b, GeometryData.Vertex c) in Fan(face))
             {
-                if (Intersection.RayTriangle(origin, direction, first.Vert.Point, loop.Vert.Point, loop.Next.Vert.Point, out float t, out _, out _))
+                if (!Intersection.RayTriangle(origin, direction, a.Point, b.Point, c.Point, out float t, out _, out _)) continue;
+                float world = Float3.Distance(ray.Origin, Float4x4.TransformPoint(origin + direction * t, toWorld));
+                if (world < distance)
                 {
-                    float world = Float3.Distance(ray.Origin, Float4x4.TransformPoint(origin + direction * t, toWorld));
-                    if (world < distance)
-                    {
-                        distance = world;
-                        hit = face;
-                    }
+                    distance = world;
+                    hit = face;
                 }
-                loop = loop.Next;
             }
         }
         return hit != null;
+    }
+
+    /// <summary>A face cut into triangles from its first corner, which picking treats it as.</summary>
+    internal static IEnumerable<(GeometryData.Vertex A, GeometryData.Vertex B, GeometryData.Vertex C)> Fan(GeometryData.Face face)
+    {
+        if (face.Loop == null) yield break;
+        GeometryData.Loop first = face.Loop;
+        for (GeometryData.Loop loop = first.Next!; loop.Next != null && loop.Next != first; loop = loop.Next)
+            yield return (first.Vert, loop.Vert, loop.Next.Vert);
     }
 
     /// <summary>
@@ -132,17 +136,13 @@ public sealed class MeshBvh
         var b = new List<GeometryData.Vertex>();
         var c = new List<GeometryData.Vertex>();
         foreach (GeometryData.Face face in mesh.Faces)
-        {
-            if (face.Loop == null) continue;
-            GeometryData.Loop first = face.Loop;
-            for (GeometryData.Loop loop = first.Next!; loop.Next != null && loop.Next != first; loop = loop.Next)
+            foreach ((GeometryData.Vertex first, GeometryData.Vertex second, GeometryData.Vertex third) in MeshPicking.Fan(face))
             {
                 faces.Add(face);
-                a.Add(first.Vert);
-                b.Add(loop.Vert);
-                c.Add(loop.Next.Vert);
+                a.Add(first);
+                b.Add(second);
+                c.Add(third);
             }
-        }
 
         int[] order = new int[faces.Count];
         var centres = new float[3][];

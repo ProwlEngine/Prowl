@@ -1721,10 +1721,10 @@ public sealed class ModelMeshTool : SceneTool
         }
     }
 
-    // The middle of the selected points and the average normal of the selected faces, in the world
-    private (Float3 Pivot, Float3 Normal) SelectionPivotAndNormal()
+    // The middle of the selected points of every edited object in the world, and how many there are
+    private (Float3 Centre, int Count) SelectedCentre()
     {
-        Float3 sum = Float3.Zero, normal = Float3.Zero;
+        Float3 sum = Float3.Zero;
         int count = 0;
         foreach (ModelObject model in _edited)
         {
@@ -1734,9 +1734,17 @@ public sealed class ModelMeshTool : SceneTool
                 sum += Float4x4.TransformPoint(vertex.Point, toWorld);
                 count++;
             }
-            foreach (GeometryData.Face face in _selection[model].Faces) normal += Float4x4.TransformNormal(face.Normal(), toWorld);
         }
-        return (count > 0 ? sum / count : Float3.Zero, Float3.LengthSquared(normal) > 1e-12f ? Float3.Normalize(normal) : Float3.UnitY);
+        return (count > 0 ? sum / count : Float3.Zero, count);
+    }
+
+    // The middle of the selected points and the average normal of the selected faces, in the world
+    private (Float3 Pivot, Float3 Normal) SelectionPivotAndNormal()
+    {
+        Float3 normal = Float3.Zero;
+        foreach (ModelObject model in _edited)
+            foreach (GeometryData.Face face in _selection[model].Faces) normal += Float4x4.TransformNormal(face.Normal(), model.Transform.LocalToWorldMatrix);
+        return (SelectedCentre().Centre, Float3.LengthSquared(normal) > 1e-12f ? Float3.Normalize(normal) : Float3.UnitY);
     }
 
     private void EndOperator()
@@ -1749,18 +1757,7 @@ public sealed class ModelMeshTool : SceneTool
     /// <summary>World units one pixel spans at the selection, so amounts scale with the view.</summary>
     private float WorldPerPixel(SceneToolContext ctx)
     {
-        Float3 centre = Float3.Zero;
-        int count = 0;
-        foreach (ModelObject model in _edited)
-        {
-            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
-            foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
-            {
-                centre += Float4x4.TransformPoint(vertex.Point, toWorld);
-                count++;
-            }
-        }
-        if (count > 0) centre /= count;
+        Float3 centre = SelectedCentre().Centre;
         if (ctx.Handles.WorldToScreen(centre) is not { } a || ctx.Handles.WorldToScreen(centre + ctx.Camera.GameObject.Transform.Right) is not { } b) return 0.01f;
         float pixels = Float2.Distance(a, b);
         return pixels > 1e-3f ? 1f / pixels : 0.01f;
@@ -2124,10 +2121,7 @@ public sealed class ModelMeshTool : SceneTool
                 if (_hidden[model].Edges.Contains(edge) || edge.IsHidden) continue;
                 Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
                 if (handles.WorldToScreen(a) is not { } from || handles.WorldToScreen(b) is not { } to) continue;
-                Float2 along = to - from;
-                float lengthSq = Float2.Dot(along, along);
-                float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - from, along) / lengthSq, 0f, 1f) : 0f;
-                float distance = Float2.Distance(handles.MousePosition, from + along * t);
+                float distance = Polygon2D.DistanceToSegment(handles.MousePosition, from, to, out float t);
                 if (distance >= bestDistance || !throughSurface && !Seen(ctx, a + (b - a) * t)) continue;
                 bestDistance = distance;
                 best = (model, edge.Vert1.Index, edge.Vert2.Index);
@@ -2464,15 +2458,8 @@ public sealed class ModelMeshTool : SceneTool
     // The middle of the selected points, or of the drawn object
     private Float3 Focus()
     {
-        Float3 sum = Float3.Zero;
-        int count = 0;
-        foreach (ModelObject model in _edited)
-            foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
-            {
-                sum += Float4x4.TransformPoint(vertex.Point, model.Transform.LocalToWorldMatrix);
-                count++;
-            }
-        if (count > 0) return sum / count;
+        (Float3 centre, int count) = SelectedCentre();
+        if (count > 0) return centre;
         return _lineModel is { } target ? target.Transform.Position : Float3.Zero;
     }
 
@@ -2503,13 +2490,10 @@ public sealed class ModelMeshTool : SceneTool
             if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
             Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
             if (handles.WorldToScreen(a) is not { } pa || handles.WorldToScreen(b) is not { } pb) continue;
-            Float2 along = pb - pa;
-            float lengthSq = Float2.Dot(along, along);
-            if (lengthSq < 1e-6f) continue;
-            float t = Math.Clamp(Float2.Dot(mouse - pa, along) / lengthSq, 0f, 1f);
+            if (Float2.Distance(pa, pb) < 1e-3f) continue;
             // The middle of an edge pulls from further away than the rest of it, and wins when both are in reach
-            float toMiddle = Float2.Distance(pa + along * 0.5f, mouse) - LineMiddleRadius - LineEdgeRadius;
-            float toEdge = Float2.Distance(pa + along * t, mouse) - LineEdgeRadius;
+            float toMiddle = Float2.Distance((pa + pb) * 0.5f, mouse) - LineMiddleRadius - LineEdgeRadius;
+            float toEdge = Polygon2D.DistanceToSegment(mouse, pa, pb, out float t) - LineEdgeRadius;
             if (toMiddle < -LineEdgeRadius && toMiddle < best)
             {
                 best = toMiddle;
@@ -2653,12 +2637,9 @@ public sealed class ModelMeshTool : SceneTool
     /// <summary>The nearest point of the other model objects' surfaces under a ray.</summary>
     private bool SurfaceUnder(Ray ray, out Float3 hit)
     {
-        float nearest = float.PositiveInfinity;
-        foreach (ModelObject other in OtherModels())
-            if (Tree(other.Mesh).Raycast(other.Transform.LocalToWorldMatrix, ray, out _, out float distance) && distance < nearest)
-                nearest = distance;
-        hit = ray.Origin + ray.Direction * (float.IsPositiveInfinity(nearest) ? 0f : nearest);
-        return !float.IsPositiveInfinity(nearest);
+        float? nearest = SurfaceHit(OtherModels())(ray, float.PositiveInfinity);
+        hit = ray.Origin + ray.Direction * (nearest ?? 0f);
+        return nearest != null;
     }
 
     private GeometryData.Vertex? NearestPoint(SceneToolContext ctx, ModelObject model)
@@ -2719,10 +2700,7 @@ public sealed class ModelMeshTool : SceneTool
             if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
             Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
             if (handles.WorldToScreen(a) is not { } from || handles.WorldToScreen(b) is not { } to) continue;
-            Float2 along = to - from;
-            float lengthSq = Float2.Dot(along, along);
-            float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(mouse - from, along) / lengthSq, 0f, 1f) : 0f;
-            float distance = Float2.Distance(mouse, from + along * t);
+            float distance = Polygon2D.DistanceToSegment(mouse, from, to, out float t);
             if (distance >= best || !Seen(ctx, a + (b - a) * t)) continue;
             best = distance;
             near = edge;
@@ -2808,24 +2786,13 @@ public sealed class ModelMeshTool : SceneTool
     private void SelectionGizmo(SceneToolContext ctx)
     {
         HandleContext handles = ctx.Handles;
-        Float3 sum = Float3.Zero;
-        int count = 0;
-        foreach (ModelObject model in _edited)
-        {
-            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
-            foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
-            {
-                sum += Float4x4.TransformPoint(vertex.Point, toWorld);
-                count++;
-            }
-        }
+        (Float3 centre, int count) = SelectedCentre();
         if (count == 0 || Gizmo == EditGizmo.Off)
         {
             _gizmoDragging = false;
             return;
         }
 
-        Float3 centre = sum / count;
         if (!_gizmoDragging)
             _gizmoAxes = SceneTools.Orientation switch
             {
@@ -3029,10 +2996,7 @@ public sealed class ModelMeshTool : SceneTool
         {
             (Float3 a, Float3 b) = ends(element);
             if (handles.WorldToScreen(a) is not { } from || handles.WorldToScreen(b) is not { } to) continue;
-            Float2 along = to - from;
-            float lengthSq = Float2.Dot(along, along);
-            float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(mouse - from, along) / lengthSq, 0f, 1f) : 0f;
-            float distance = Float2.Distance(mouse, from + along * t);
+            float distance = Polygon2D.DistanceToSegment(mouse, from, to, out float t);
             if (distance < PickRadius) near.Add((element, distance, a + (b - a) * t));
         }
         near.Sort((x, y) => x.Distance.CompareTo(y.Distance));
