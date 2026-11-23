@@ -153,7 +153,7 @@ namespace Prowl.PaperUI
         }
 
         // Logical units to the physical pixels the font engine works in, as Canvas.CreateLayout does.
-        private static TextLayoutSettings Scaled(TextLayoutSettings settings, float scale)
+        internal static TextLayoutSettings Scaled(TextLayoutSettings settings, float scale)
         {
             settings.PixelSize *= scale;
             settings.LetterSpacing *= scale;

@@ -2299,9 +2299,15 @@ namespace Prowl.PaperUI
                     if (!string.IsNullOrEmpty(shown))
                     {
                         var drawn = empty ? LayoutInput(shown, settings, isMultiLine, r.Size) : text;
-                        var drawSettings = CreateTextLayoutSettings(settings, isMultiLine, drawn.AlignX > 0 ? drawn.AlignWidth : r.Size.X);
-                        drawSettings.Alignment = drawn.ScribeAlignment;
-                        canvas.DrawText(shown, r.Min.X, r.Min.Y + drawn.OffsetY, empty ? settings.PlaceholderColor : settings.TextColor, drawSettings);
+                        var shownLayout = drawn.Layout;
+                        // Left aligned text is the layout hit testing already uses. Other alignments need their own.
+                        if (drawn.AlignX > 0)
+                        {
+                            var drawSettings = CreateTextLayoutSettings(settings, isMultiLine, drawn.AlignWidth);
+                            drawSettings.Alignment = drawn.ScribeAlignment;
+                            shownLayout = InputLayout(shown, drawSettings);
+                        }
+                        canvas.DrawLayout(shownLayout, r.Min.X, r.Min.Y + drawn.OffsetY, empty ? settings.PlaceholderColor : settings.TextColor);
                     }
 
                     // Draw selection and cursor if focused
@@ -2428,8 +2434,32 @@ namespace Prowl.PaperUI
 
         private InputText LayoutInput(string text, TextInputSettings settings, bool isMultiLine, Float2 area)
         {
-            var layout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, isMultiLine ? area.X : float.MaxValue));
+            var layout = InputLayout(text, CreateTextLayoutSettings(settings, isMultiLine, isMultiLine ? area.X : float.MaxValue));
             return new InputText(layout, 1f / _paper.Canvas.FramebufferScale, area, _handle.Data.TextAlignment, isMultiLine && settings.DoWrap);
+        }
+
+        /// <summary>A layout the input owns, rebuilt in place only when its text or settings change.</summary>
+        private TextLayout InputLayout(string text, in TextLayoutSettings settings)
+        {
+            var canvas = _paper.Canvas;
+            var fonts = canvas.Text.FontEngine;
+            float scale = canvas.FramebufferScale;
+
+            if (string.IsNullOrEmpty(text))
+            {
+                fonts.UpdateLayout(_paper._textScratch, text, TextMeasurement.Scaled(settings, scale));
+                return _paper._textScratch;
+            }
+
+            var key = new PlainTextKey(text, settings, scale, settings.MaxWidth, false);
+            var cache = _paper.GetTextCache(_handle.Data.ID);
+            var layout = cache.Find(key);
+            if (layout == null)
+            {
+                layout = cache.Take(key, true);
+                fonts.UpdateLayout(layout, text, TextMeasurement.Scaled(settings, scale));
+            }
+            return layout;
         }
 
         /// <summary>Pulls the scroll back within the text, for when the input has grown since it scrolled.</summary>
