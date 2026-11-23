@@ -523,11 +523,11 @@ public static class Operators
     /// Bevels edges into strips of faces, one segment a flat chamfer, more a rounded edge. Corners where bevelled
     /// edges meet are capped. The strips and caps are selected after.
     /// </summary>
-    public static void Bevel(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, float width, int segments, ElementSelection after)
+    public static void Bevel(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, float width, int segments, ElementSelection after, float profile = 0.5f)
     {
         if (edges.Count == 0 || width <= 0f) return;
         var oldPoints = new HashSet<GeometryData.Vertex>(mesh.Vertices);
-        GeometryOperators.BevelEdges(mesh, [.. edges], width, Math.Max(1, segments));
+        GeometryOperators.BevelEdges(mesh, [.. edges], width, Math.Max(1, segments), profile);
         SelectFacesOnNewPoints(mesh, oldPoints, after);
     }
 

@@ -117,8 +117,19 @@ public sealed class ModelMeshTool : SceneTool
 
         public OperatorDrag Drag { get; init; }
 
-        /// <summary>An on and off setting shown when adjusting the step after, by locale key, and how the operator runs with it on.</summary>
-        public (string Label, Action<GeometryData, ElementSelection, float, int> Run)? Flag { get; init; }
+        /// <summary>Further settings, by locale key and the value they start at, shown when adjusting the step after.</summary>
+        public LastField[] Extras { get; init; } = [];
+
+        /// <summary>How the operator runs given its extra settings, in place of <see cref="Run"/>.</summary>
+        public Action<GeometryData, ElementSelection, float, int, float[]>? RunWithExtras { get; init; }
+
+        public void Invoke(GeometryData mesh, ElementSelection selection, float amount, int count, float[] extras)
+        {
+            if (RunWithExtras != null) RunWithExtras(mesh, selection, amount, count, extras);
+            else Run(mesh, selection, amount, count);
+        }
+
+        public float[] ExtraDefaults => [.. Extras.Select(e => e.Value)];
     }
 
     public SelectMode Mode { get; private set; } = SelectMode.Vertex;
@@ -367,7 +378,11 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Separate")) SeparateSelected();
         else if (handles.IsPressed("MeshEdit/Extrude")) Extrude(ctx);
         else if (handles.IsPressed("MeshEdit/Bevel"))
-            StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32));
+            BevelEdges(ctx);
+        else if (handles.IsPressed("MeshEdit/BevelPoints"))
+            BevelPoints(ctx);
+        else if (handles.IsPressed("MeshEdit/ExtrudeMenu"))
+            ExtrudeMenu(ctx);
         else if (handles.IsPressed("MeshEdit/LimitedDissolve")) LimitedDissolve(ctx);
         else if (handles.IsPressed("MeshEdit/TrisToQuads")) TrisToQuads(ctx);
         else if (handles.IsPressed("MeshEdit/MergeByDistance")) MergeByDistance(ctx);
@@ -476,11 +491,7 @@ public sealed class ModelMeshTool : SceneTool
         switch (Mode)
         {
             case SelectMode.Face:
-                StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s), SelectMode.Face)
-                {
-                    Drag = OperatorDrag.AlongNormal,
-                    Flag = ("model.field_average_normal", (GeometryData mesh, ElementSelection s, float d, int _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s, ExtrudeMode.AverageNormal)),
-                });
+                ExtrudeFaces(ctx, ExtrudeMode.AverageNormal);
                 break;
             case SelectMode.Edge:
                 Edit("Extrude Model Edges", (mesh, s) => Operators.ExtrudeEdges(mesh, [.. s.Edges], s), SelectMode.Edge);
@@ -760,6 +771,7 @@ public sealed class ModelMeshTool : SceneTool
     {
         menu.Item(Loc.Get("model.menu.extrude"), () => Extrude(ctx), shortcut: Chord("MeshEdit/Extrude"));
         menu.Item(Loc.Get("model.menu.fill"), Fill, shortcut: Chord("MeshEdit/Fill"));
+        menu.Item(Loc.Get("csg.bevel"), () => BevelPoints(ctx), shortcut: Chord("MeshEdit/BevelPoints"));
         menu.Item(Loc.Get("model.menu.rip"), () => Rip(ctx), shortcut: Chord("MeshEdit/Rip"));
         menu.Item(Loc.Get("model.menu.slide"), () => Slide(ctx), shortcut: Chord("MeshEdit/Slide"));
         menu.Item(Loc.Get("csg.merge_centre"), () => Edit("Merge Model Points", MergeAtCentre, SelectMode.Vertex), shortcut: Chord("MeshEdit/Merge"));
@@ -780,7 +792,7 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("model.menu.fill"), Fill, shortcut: Chord("MeshEdit/Fill"));
         menu.Item(Loc.Get("model.menu.bridge_edges"), () => Edit("Bridge Model Edges", Operators.BridgeEdges), shortcut: Chord("MeshEdit/Bridge"));
         menu.Item(Loc.Get("model.menu.grid_fill"), GridFill);
-        menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)), shortcut: Chord("MeshEdit/Bevel"));
+        menu.Item(Loc.Get("csg.bevel"), () => BevelEdges(ctx), shortcut: Chord("MeshEdit/Bevel"));
         menu.Item(Loc.Get("model.menu.slide"), () => Slide(ctx), shortcut: Chord("MeshEdit/Slide"));
         menu.Item(Loc.Get("model.menu.crease"), () => Crease(ctx), shortcut: Chord("MeshEdit/Crease"));
         menu.Item(Loc.Get("model.menu.rip"), () => Rip(ctx), shortcut: Chord("MeshEdit/Rip"));
@@ -798,7 +810,8 @@ public sealed class ModelMeshTool : SceneTool
     {
         menu.Item(Loc.Get("model.menu.extrude"), () => Extrude(ctx), shortcut: Chord("MeshEdit/Extrude"));
         menu.Item(Loc.Get("csg.inset"), () => Inset(ctx), shortcut: Chord("MeshEdit/Inset"));
-        menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)), shortcut: Chord("MeshEdit/Bevel"));
+        menu.Item(Loc.Get("csg.bevel"), () => BevelEdges(ctx), shortcut: Chord("MeshEdit/Bevel"));
+        menu.Submenu(Loc.Get("model.menu.extrude_as"), m => ExtrudeItems(ctx, m));
         menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
         menu.Item(Loc.Get("model.menu.subdivide_smooth"), () => SubdivideSmooth(ctx));
         menu.Item(Loc.Get("csg.triangulate"), () => Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face), shortcut: Chord("MeshEdit/Triangulate"));
@@ -1254,14 +1267,13 @@ public sealed class ModelMeshTool : SceneTool
         var fields = new List<LastField>();
         if (hasAmount) fields.Add(new(Loc.Get("model.amount"), amount));
         if (hasCount) fields.Add(new(Loc.Get("model.count"), count, FieldKind.Whole));
-        if (op.Flag is { } flag) fields.Add(new(Loc.Get(flag.Label), 0f, FieldKind.Toggle));
+        int first = fields.Count;
+        foreach (LastField extra in op.Extras) fields.Add(extra with { Label = Loc.Get(extra.Label) });
         RunRemembered(op.Name, [.. fields], v =>
         {
-            int i = 0;
-            float runAmount = hasAmount ? v[i++] : amount;
-            int runCount = hasCount ? Math.Clamp((int)v[i++], 1, op.MaxCount) : count;
-            if (op.Flag is { } flagged && v[i] != 0f) Edit(op.Name, (mesh, s) => flagged.Run(mesh, s, runAmount, runCount), op.Selects);
-            else Edit(op.Name, (mesh, s) => op.Run(mesh, s, runAmount, runCount), op.Selects);
+            float runAmount = hasAmount ? v[0] : amount;
+            int runCount = hasCount ? Math.Clamp((int)v[first - 1], 1, op.MaxCount) : count;
+            Edit(op.Name, (mesh, s) => op.Invoke(mesh, s, runAmount, runCount, v[first..]), op.Selects);
         });
     }
 
@@ -1377,10 +1389,45 @@ public sealed class ModelMeshTool : SceneTool
         Operators.Bridge(mesh, ends[0], ends[1], 1, selection);
     }
 
-    private static void Bevel(GeometryData mesh, ElementSelection selection, float width, int segments)
+    private void BevelEdges(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", (_, _, _, _) => { }, SelectMode.Face, 1, 32)
+        {
+            Extras = [new("model.field_profile", 0.5f)],
+            RunWithExtras = (mesh, s, width, segments, extras) =>
+            {
+                if (s.Edges.Count > 0) Operators.Bevel(mesh, [.. s.Edges], width, segments, s, extras[0]);
+                else Operators.BevelPoints(mesh, [.. s.Vertices], width, s);
+            },
+        });
+
+    private void BevelPoints(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Bevel Model Points", true, d => d, "0.###", (mesh, s, d, _) => Operators.BevelPoints(mesh, [.. s.Vertices], d, s), SelectMode.Face));
+
+    private void ExtrudeFaces(SceneToolContext ctx, ExtrudeMode mode)
+        => StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s, mode), SelectMode.Face)
+            { Drag = OperatorDrag.AlongNormal });
+
+    /// <summary>Alt E: with faces, how they extrude. Otherwise the plain extrude.</summary>
+    private void ExtrudeMenu(SceneToolContext ctx)
     {
-        if (selection.Edges.Count > 0) Operators.Bevel(mesh, [.. selection.Edges], width, segments, selection);
-        else Operators.BevelPoints(mesh, [.. selection.Vertices], width, selection);
+        if (Mode != SelectMode.Face)
+        {
+            Extrude(ctx);
+            return;
+        }
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.extrude_as"));
+            ExtrudeItems(ctx, menu);
+        });
+    }
+
+    private void ExtrudeItems(SceneToolContext ctx, OrigamiUI.ContextBuilder menu)
+    {
+        menu.Item(Loc.Get("model.menu.extrude_region"), () => ExtrudeFaces(ctx, ExtrudeMode.AverageNormal), shortcut: Chord("MeshEdit/Extrude"));
+        menu.Item(Loc.Get("model.menu.extrude_along_normals"), () => ExtrudeFaces(ctx, ExtrudeMode.AlongNormals));
+        menu.Item(Loc.Get("model.menu.extrude_individual"), () => ExtrudeFaces(ctx, ExtrudeMode.PerFace));
     }
 
     private static void Delete(GeometryData mesh, ElementSelection selection)
@@ -1536,7 +1583,7 @@ public sealed class ModelMeshTool : SceneTool
             ElementSelection running = FromIndices(model.Mesh, selection);
             try
             {
-                op.Run(model.Mesh, running, amount, count);
+                op.Invoke(model.Mesh, running, amount, count, op.ExtraDefaults);
             }
             catch (InvalidOperationException)
             {
