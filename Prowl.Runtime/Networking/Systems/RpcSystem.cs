@@ -119,13 +119,13 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             throw new ArgumentNullException(nameof(target), "A target RPC needs the peer to run on.");
         }
 
-        if (mode == RpcMode.Target && target!.IsLocal)
-        {
-            return true;
-        }
-
         RpcRecipients? recipients = WithoutOwner(Rpc.CaptureRecipients(session), component.GameObject, flags);
         bool localIncluded = RpcRecipients.Includes(recipients, session.LocalPeer!);
+        if (mode == RpcMode.Target && (target!.IsLocal || !RpcRecipients.Includes(recipients, target)))
+        {
+            return target.IsLocal && localIncluded;
+        }
+
         if (recipients != null && recipients.Ids.Count == (localIncluded ? 1 : 0) && mode == RpcMode.Broadcast)
         {
             return localIncluded;
