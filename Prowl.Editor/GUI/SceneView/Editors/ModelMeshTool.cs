@@ -390,6 +390,10 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/TrisToQuads")) TrisToQuads(ctx);
         else if (handles.IsPressed("MeshEdit/MergeByDistance")) MergeByDistance(ctx);
         else if (handles.IsPressed("MeshEdit/Smooth")) SmoothPoints(ctx);
+        else if (handles.IsPressed("MeshEdit/PickLinked")) PickLinked(ctx, remove: false);
+        else if (handles.IsPressed("MeshEdit/UnpickLinked")) PickLinked(ctx, remove: true);
+        else if (handles.IsPressed("MeshEdit/SnapMenu")) SnapMenu();
+        else if (handles.IsPressed("MeshEdit/EdgeMenu")) EdgeMenu(ctx);
     }
 
     public void SetMode(SelectMode mode)
@@ -870,7 +874,7 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("uv.project_cube"), () => Edit("Cube Projection", (mesh, s) => UVs.Cube(mesh, UVFaces(mesh, s))));
         menu.Item(Loc.Get("uv.project_cylinder"), () => Edit("Cylinder Projection", (mesh, s) => UVs.Cylinder(mesh, UVFaces(mesh, s))));
         menu.Item(Loc.Get("uv.project_sphere"), () => Edit("Sphere Projection", (mesh, s) => UVs.Sphere(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => UVs.Reset(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => UVs.Reset(mesh, UVFaces(mesh, s))));
         menu.Item(Loc.Get("uv.clear"), () => Edit("Clear UVs", (mesh, _) => UVs.Clear(mesh)));
         menu.Separator();
         menu.Item(Loc.Get("uv.seams_from_sharp"), () => RunRemembered("Seams From Sharp Edges", [new(Loc.Get("model.field_degrees"), 60f)],
@@ -982,6 +986,7 @@ public sealed class ModelMeshTool : SceneTool
         if (handles.IsPressed("ModelEdit/Join") && Selection.ActiveObject is GameObject active) ModelEditingMode.Join(selected, active);
         else if (handles.IsPressed("ModelEdit/Add")) AddMenu();
         else if (handles.IsPressed("ModelEdit/Apply") && selected.Count > 0) ApplyMenu(selected);
+        else if (handles.IsPressed("MeshEdit/SnapMenu") && selected.Count > 0) SnapMenu();
         else if (handles.IsPressed("ModelEdit/ClearLocation")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Location);
         else if (handles.IsPressed("ModelEdit/ClearRotation")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Rotation);
         else if (handles.IsPressed("ModelEdit/ClearScale")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Scale);
@@ -1406,6 +1411,91 @@ public sealed class ModelMeshTool : SceneTool
                 else Operators.BevelPoints(mesh, [.. s.Vertices], width, s);
             },
         });
+
+    /// <summary>L: everything joined to the surface under the mouse is selected, or with Shift no longer selected.</summary>
+    private void PickLinked(SceneToolContext ctx, bool remove)
+    {
+        Ray ray = ctx.Handles.MouseRay;
+        ModelObject? best = null;
+        GeometryData.Face? under = null;
+        float nearest = float.MaxValue;
+        foreach (ModelObject model in _edited)
+        {
+            ElementSelection hidden = _hidden[model];
+            if (Tree(model.Mesh).Raycast(model.Transform.LocalToWorldMatrix, ray, out GeometryData.Face? face, out float distance, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null)
+                && distance < nearest)
+            {
+                nearest = distance;
+                best = model;
+                under = face;
+            }
+        }
+        if (best.IsNotValid() || under == null) return;
+
+        var linked = new ElementSelection();
+        linked.Vertices.UnionWith(under.NeighborVertices());
+        Selecting.Linked(linked, SelectMode.Vertex);
+        Selecting.ToMode(linked, SelectMode.Vertex, Mode);
+        Command((mesh, s) =>
+        {
+            if (!ReferenceEquals(mesh, best!.Mesh)) return;
+            if (remove)
+            {
+                s.Vertices.ExceptWith(linked.Vertices);
+                s.Edges.ExceptWith(linked.Edges);
+                s.Faces.ExceptWith(linked.Faces);
+            }
+            else
+            {
+                s.Vertices.UnionWith(linked.Vertices);
+                s.Edges.UnionWith(linked.Edges);
+                s.Faces.UnionWith(linked.Faces);
+            }
+        });
+    }
+
+    /// <summary>Shift S: puts the selection on the grid, or whole objects onto the active one.</summary>
+    private void SnapMenu()
+    {
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.snap_menu"));
+            if (Editing)
+            {
+                menu.Item(Loc.Get("model.menu.selection_to_grid"), () => EditMeshes("Snap Points To Grid", (model, mesh, s) =>
+                {
+                    Float4x4 toWorld = model.Transform.LocalToWorldMatrix, toLocal = toWorld.Invert();
+                    foreach (GeometryData.Vertex vertex in s.Vertices)
+                        vertex.Point = Float4x4.TransformPoint(Round(Float4x4.TransformPoint(vertex.Point, toWorld), SceneTools.MoveSnap), toLocal);
+                }));
+                return;
+            }
+            List<GameObject> selected = HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]);
+            menu.Item(Loc.Get("model.menu.selection_to_grid"), () =>
+            {
+                Undo.RecordObjects([.. selected], "Snap Objects To Grid");
+                foreach (GameObject go in selected) go.Transform.Position = Round(go.Transform.Position, SceneTools.MoveSnap);
+            });
+            if (Selection.ActiveObject is GameObject active && selected.Count > 1)
+                menu.Item(Loc.Get("model.menu.selection_to_active"), () =>
+                {
+                    Undo.RecordObjects([.. selected], "Snap Objects To Active");
+                    foreach (GameObject go in selected) go.Transform.Position = active.Transform.Position;
+                });
+        });
+    }
+
+    /// <summary>Ctrl E: the edge menu, whatever the select mode.</summary>
+    private void EdgeMenu(SceneToolContext ctx)
+    {
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.edge_menu"));
+            EdgeItems(ctx, menu);
+        });
+    }
 
     private void ShrinkFatten(SceneToolContext ctx)
         => StartOperator(ctx, new AmountOperator("Shrink Fatten Model Points", true, d => -d, "0.###", (mesh, s, d, _) => GeometryOperators.ShrinkFatten(mesh, s.Vertices, d), null)

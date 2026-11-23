@@ -439,11 +439,13 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("MeshEdit/Inset", "Inset Faces", KeyCode.I);
         ShortcutManager.Register("MeshEdit/Triangulate", "Triangulate Faces", KeyCode.T, ctrl: true);
         ShortcutManager.Register("MeshEdit/TrisToQuads", "Triangles To Quads", KeyCode.J, alt: true);
-        ShortcutManager.Register("MeshEdit/Bridge", "Bridge Faces", KeyCode.E, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Bridge", "Bridge Faces", KeyCode.Unknown);
+        ShortcutManager.Register("MeshEdit/EdgeMenu", "Edge Menu", KeyCode.E, ctrl: true);
         ShortcutManager.Register("MeshEdit/Symmetrize", "Symmetrize", KeyCode.M, ctrl: true, shift: true);
         ShortcutManager.Register("MeshEdit/MergeByDistance", "Merge By Distance", KeyCode.M, shift: true);
         ShortcutManager.Register("MeshEdit/Separate", "Separate", KeyCode.P);
-        ShortcutManager.Register("MeshEdit/Smooth", "Smooth", KeyCode.S, shift: true);
+        ShortcutManager.Register("MeshEdit/Smooth", "Smooth", KeyCode.Unknown);
+        ShortcutManager.Register("MeshEdit/SnapMenu", "Snap Menu", KeyCode.S, shift: true);
         ShortcutManager.Register("MeshEdit/Dissolve", "Dissolve", KeyCode.X, ctrl: true);
         ShortcutManager.Register("MeshEdit/LimitedDissolve", "Limited Dissolve", KeyCode.X, ctrl: true, shift: true);
         ShortcutManager.Register("MeshEdit/DeleteMenu", "Delete", KeyCode.X);
@@ -452,8 +454,10 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("MeshEdit/Crease", "Crease", KeyCode.E, shift: true);
         ShortcutManager.Register("MeshEdit/Duplicate", "Duplicate", KeyCode.D, shift: true);
         ShortcutManager.Register("MeshEdit/Unwrap", "Unwrap", KeyCode.U);
-        ShortcutManager.Register("MeshEdit/DrawLine", "Draw Lines", KeyCode.L);
-        ShortcutManager.Register("MeshEdit/DrawQuads", "Draw Quads", KeyCode.Q, ctrl: true);
+        ShortcutManager.Register("MeshEdit/DrawLine", "Draw Lines", KeyCode.L, alt: true);
+        ShortcutManager.Register("MeshEdit/DrawQuads", "Draw Quads", KeyCode.Q, alt: true);
+        ShortcutManager.Register("MeshEdit/PickLinked", "Select Linked Under Mouse", KeyCode.L);
+        ShortcutManager.Register("MeshEdit/UnpickLinked", "Deselect Linked Under Mouse", KeyCode.L, shift: true);
         ShortcutManager.Register("MeshEdit/DeleteFace", "Delete Face", KeyCode.Delete, ctrl: true);
         ShortcutManager.Register("MeshEdit/Merge", "Merge", KeyCode.M);
         ShortcutManager.Register("MeshEdit/Connect", "Connect Points", KeyCode.J);
