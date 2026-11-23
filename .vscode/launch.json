@@ -69,7 +69,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build: NetworkingShowcase Debug",
-            "program": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase/bin/Debug/net10.0/NetworkingShowcase.dll",
+            "program": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase/bin/Debug/net11.0/NetworkingShowcase.dll",
             "args": [],
             "cwd": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase",
             "stopAtEntry": false
@@ -79,7 +79,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build: NetworkingShowcase Debug",
-            "program": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase/bin/Debug/net10.0/NetworkingShowcase.dll",
+            "program": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase/bin/Debug/net11.0/NetworkingShowcase.dll",
             "args": ["--join", "127.0.0.1:7777"],
             "cwd": "${workspaceFolder}/Samples/Runtime/NetworkingShowcase",
             "stopAtEntry": false
