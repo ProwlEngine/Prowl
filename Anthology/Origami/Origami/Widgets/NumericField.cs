@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Numerics;
 
@@ -188,6 +189,39 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     /// </summary>
     public NumericFieldBuilder<T> OnCommit(Action onCommit) { _onCommit = onCommit; return this; }
 
+    // A field shows the same number most frames, so its text is kept per value, format and culture.
+    [ThreadStatic] private static List<(string Format, CultureInfo Culture, Dictionary<T, string> Texts)>? s_texts;
+    private const int MaxCachedTexts = 2048;
+
+    private static string FormatCached(T value, string format, CultureInfo culture)
+    {
+        // Positive and negative zero compare equal but print differently, so zero is never cached.
+        if (T.IsZero(value)) return FormatValue(value, format, culture);
+
+        var all = s_texts ??= new();
+        Dictionary<T, string>? texts = null;
+        for (int i = 0; i < all.Count; i++)
+        {
+            if (!ReferenceEquals(all[i].Culture, culture) || all[i].Format != format) continue;
+            texts = all[i].Texts;
+            break;
+        }
+        if (texts == null) all.Add((format, culture, texts = new Dictionary<T, string>()));
+
+        if (!texts.TryGetValue(value, out var text))
+        {
+            if (texts.Count >= MaxCachedTexts) texts.Clear();
+            texts[value] = text = FormatValue(value, format, culture);
+        }
+        return text;
+    }
+
+    private static string FormatValue(T value, string format, CultureInfo culture)
+    {
+        try { return value.ToString(format, culture); }
+        catch { return value.ToString() ?? ""; }
+    }
+
     // ── Terminator ──────────────────────────────────────────────────
 
     public void Show()
@@ -196,9 +230,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         // Format current value to a string for the underlying TextField. The text reflects
         // the live value every frame, which means a parse failure (e.g. user typed a stray
         // letter) gracefully reverts to the last good value as soon as we re-render.
-        string text;
-        try { text = _value.ToString(_format, _culture); }
-        catch { text = _value.ToString(); }
+        string text = FormatCached(_value, _format, _culture);
 
         // Translate validator on T into validator on string for the underlying TextField.
         Func<string, (bool, string?)>? stringValidator = null;
