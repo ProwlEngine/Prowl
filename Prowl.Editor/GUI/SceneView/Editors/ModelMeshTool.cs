@@ -1975,11 +1975,11 @@ public sealed class ModelMeshTool : SceneTool
             CSGStatus.Flash(Loc.Get("model.shrinkwrap_nothing"));
             return;
         }
-        EditMeshes("Shrinkwrap", (model, mesh, s) =>
+        RunRemembered("Shrinkwrap", [new(Loc.Get("model.field_offset"), 0.002f), new(Loc.Get("model.field_reach"), 1f)], v => EditMeshes("Shrinkwrap", (model, mesh, s) =>
         {
             IEnumerable<GeometryData.Vertex> points = s.Vertices.Count > 0 ? s.Vertices : mesh.Vertices.Where(v => !_hidden[model].Vertices.Contains(v));
-            Operators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), 0.002f, 1f);
-        });
+            Operators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), v[0], MathF.Max(0f, v[1]));
+        }));
     }
 
     private void GridFill()

@@ -180,6 +180,7 @@
   "model.field_average_normal": "Along average normal",
   "model.field_span": "Span",
   "model.field_offset": "Offset",
+  "model.field_reach": "Reach",
   "model.face_slot": "Face Material Slot",
   "model.origin_to_selection": "Origin to Selection",
   "model.origin_to_geometry": "Origin to Geometry",
