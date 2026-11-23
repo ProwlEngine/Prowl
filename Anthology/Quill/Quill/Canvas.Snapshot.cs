@@ -49,7 +49,7 @@ namespace Prowl.Quill
             _captureIndexStart = _indices.Count;
             _captureDrawCall = _drawCalls.Count - 1;
             _captureDrawCallElements = _captureDrawCall >= 0 ? _drawCalls[_captureDrawCall].ElementCount : 0;
-            _captureStateDepth = _savedStates.Count;
+            _captureStateDepth = _savedStateCount;
             _captureBroken = false;
             _captureState = _state;
             _captureAnchorVersion = _anchorVersion;
@@ -88,7 +88,7 @@ namespace Prowl.Quill
             _captureStateDepth = -1;
 
             bool valid = !_captureBroken
-                && _savedStates.Count == savedStates
+                && _savedStateCount == savedStates
                 && _globalAlpha == s.GlobalAlpha
                 && _antiAlias == s.AntiAlias
                 && _scribeRenderer.FontEngine.AtlasVersion == s.AtlasVersion
