@@ -1406,8 +1406,9 @@ public class HierarchyPanel : DockPanel
             AssetCreateMenu.CreatePrefabIn(go, folder);
     }
 
-    private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
+    internal static void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
     {
+        Selection.FastPing(primary.Identifier);
         var targets = allTargets.ToList();
         string goId = NodeId(primary);
         RenameOverlay.Begin(goId, primary.Name, newName =>

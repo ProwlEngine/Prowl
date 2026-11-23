@@ -21,7 +21,7 @@ namespace Prowl.Editor.GUI.SceneView;
 public static class SceneViewMenu
 {
     /// <summary>The camera of the scene view the menu was opened in.</summary>
-    public static EditorCamera? Camera { get; private set; }
+    public static EditorCamera? Camera { get; internal set; }
 
     /// <summary>The scene being edited in that view.</summary>
     public static Scene? Scene { get; private set; }
@@ -246,25 +246,25 @@ public static class SceneViewMenu
     private static void FrameSelected() => Camera?.FocusSelection();
 
     [MenuItem("SceneView/View/Top", priority: 61, SelectionWide = true)]
-    private static void ViewTop() => Look(new Float3(0, -1, 0));
+    internal static void ViewTop() => Look(new Float3(0, -1, 0));
 
     [MenuItem("SceneView/View/Bottom", priority: 62, SelectionWide = true)]
-    private static void ViewBottom() => Look(new Float3(0, 1, 0));
+    internal static void ViewBottom() => Look(new Float3(0, 1, 0));
 
     [MenuItem("SceneView/View/Front", priority: 63, SelectionWide = true)]
-    private static void ViewFront() => Look(new Float3(0, 0, 1));
+    internal static void ViewFront() => Look(new Float3(0, 0, 1));
 
     [MenuItem("SceneView/View/Back", priority: 64, SelectionWide = true)]
-    private static void ViewBack() => Look(new Float3(0, 0, -1));
+    internal static void ViewBack() => Look(new Float3(0, 0, -1));
 
     [MenuItem("SceneView/View/Left", priority: 65, SelectionWide = true)]
-    private static void ViewLeft() => Look(new Float3(1, 0, 0));
+    internal static void ViewLeft() => Look(new Float3(1, 0, 0));
 
     [MenuItem("SceneView/View/Right", priority: 66, SelectionWide = true)]
-    private static void ViewRight() => Look(new Float3(-1, 0, 0));
+    internal static void ViewRight() => Look(new Float3(-1, 0, 0));
 
     [MenuItem("SceneView/View/Toggle Perspective", priority: 67, Separator = true, SelectionWide = true)]
-    private static void TogglePerspective() => Camera?.ToggleProjection();
+    internal static void TogglePerspective() => Camera?.ToggleProjection();
 
     [MenuItem("SceneView/View/Show Grid", priority: 68, SelectionWide = true)]
     private static void ToggleGrid()

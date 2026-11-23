@@ -670,6 +670,19 @@ public class SceneViewPanel : DockPanel
 
                 if (ShortcutManager.IsPressed("Scene/ToggleMaximize"))
                     EditorApplication.Instance?.Maximizer.RequestToggle(this);
+
+                if (ShortcutManager.IsPressed("Scene/Rename") && Selection.GetSelected<GameObject>().FirstOrDefault() is { } renamed && renamed.IsValid())
+                    HierarchyPanel.StartRenameGO(renamed, Selection.GetSelected<GameObject>());
+
+                SceneViewMenu.Camera = _editorCamera;
+                if (ShortcutManager.IsPressed("Scene/FrameSelected")) _editorCamera.FocusSelection();
+                else if (ShortcutManager.IsPressed("Scene/ViewFront")) SceneViewMenu.ViewFront();
+                else if (ShortcutManager.IsPressed("Scene/ViewBack")) SceneViewMenu.ViewBack();
+                else if (ShortcutManager.IsPressed("Scene/ViewRight")) SceneViewMenu.ViewRight();
+                else if (ShortcutManager.IsPressed("Scene/ViewLeft")) SceneViewMenu.ViewLeft();
+                else if (ShortcutManager.IsPressed("Scene/ViewTop")) SceneViewMenu.ViewTop();
+                else if (ShortcutManager.IsPressed("Scene/ViewBottom")) SceneViewMenu.ViewBottom();
+                else if (ShortcutManager.IsPressed("Scene/TogglePerspective")) SceneViewMenu.TogglePerspective();
             }
 
             // Paper-space pointer to viewport-local via the cached viewport rect. CurrentParent here is an

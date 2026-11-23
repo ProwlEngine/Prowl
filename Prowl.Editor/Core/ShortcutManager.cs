@@ -348,6 +348,15 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolScale", "Scale Tool", KeyCode.R);
         ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
         ShortcutManager.Register("Scene/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
+        ShortcutManager.Register("Scene/Rename", "Rename Selected", KeyCode.F2);
+        ShortcutManager.Register("Scene/FrameSelected", "Frame Selected", KeyCode.KeypadDecimal);
+        ShortcutManager.Register("Scene/ViewFront", "Front View", KeyCode.Keypad1);
+        ShortcutManager.Register("Scene/ViewBack", "Back View", KeyCode.Keypad1, ctrl: true);
+        ShortcutManager.Register("Scene/ViewRight", "Right View", KeyCode.Keypad3);
+        ShortcutManager.Register("Scene/ViewLeft", "Left View", KeyCode.Keypad3, ctrl: true);
+        ShortcutManager.Register("Scene/ViewTop", "Top View", KeyCode.Keypad7);
+        ShortcutManager.Register("Scene/ViewBottom", "Bottom View", KeyCode.Keypad7, ctrl: true);
+        ShortcutManager.Register("Scene/TogglePerspective", "Toggle Perspective", KeyCode.Keypad5);
 
         // Game View
         ShortcutManager.Register("Game/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
