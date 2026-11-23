@@ -26,18 +26,26 @@ public interface ITerrainInstances
     event Action<Double2, Double2>? Changed;
 }
 
-/// <summary>The terrain's trees, see <see cref="TerrainData.Trees"/>, sorted into cells, following the trees as they change.</summary>
+/// <summary>
+/// The terrain's trees, see <see cref="TerrainData.Trees"/>, sorted into cells, each standing on the ground under it when
+/// its cell is asked for, following the trees, the ground and the terrain's position as they change. Any thread.
+/// </summary>
 public sealed class TerrainTreeInstances : ITerrainInstances, IDisposable
 {
     private readonly TerrainData _data;
-    private volatile Dictionary<(int, int), TerrainInstance[]> _cells = new();
+    private volatile Dictionary<(int, int), (int Index, TerrainTree Tree)[]> _sorted = new();
+    private readonly ConcurrentDictionary<(int, int), TerrainInstance[]> _cells = new();
+    private Double3 _placedAt;
+    private long _version;
 
     public TerrainTreeInstances(TerrainData data, double cellSize = 64)
     {
         _data = data;
         CellSize = cellSize;
+        _placedAt = data.Position;
         Sort();
         data.TreesChanged += OnTreesChanged;
+        data.Edited += OnEdited;
     }
 
     public double CellSize { get; }
@@ -46,33 +54,91 @@ public sealed class TerrainTreeInstances : ITerrainInstances, IDisposable
 
     public event Action<Double2, Double2>? Changed;
 
-    public IReadOnlyList<TerrainInstance> Cell(int x, int z) => _cells.TryGetValue((x, z), out TerrainInstance[]? cell) ? cell : [];
+    public IReadOnlyList<TerrainInstance> Cell(int x, int z)
+    {
+        Forget(_data.Position);
+        if (_cells.TryGetValue((x, z), out TerrainInstance[]? cached))
+            return cached;
+        long version = Interlocked.Read(ref _version);
+        TerrainInstance[] built = Build(x, z);
+        if (Interlocked.Read(ref _version) == version)
+            _cells.TryAdd((x, z), built);
+        return built;
+    }
 
-    public void Dispose() => _data.TreesChanged -= OnTreesChanged;
+    public void Dispose()
+    {
+        _data.TreesChanged -= OnTreesChanged;
+        _data.Edited -= OnEdited;
+    }
+
+    private void OnEdited(TerrainEdited edited)
+    {
+        if (!edited.Heights)
+            return;
+        Interlocked.Increment(ref _version);
+        int x0 = (int)Math.Floor((edited.Min.X - Origin.X) / CellSize), x1 = (int)Math.Floor((edited.Max.X - Origin.X) / CellSize);
+        int z0 = (int)Math.Floor((edited.Min.Y - Origin.Y) / CellSize), z1 = (int)Math.Floor((edited.Max.Y - Origin.Y) / CellSize);
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
+                _cells.TryRemove((x, z), out _);
+        Changed?.Invoke(edited.Min, edited.Max);
+    }
 
     private void OnTreesChanged()
     {
         Sort();
+        Interlocked.Increment(ref _version);
+        _cells.Clear();
         Changed?.Invoke(Origin, Origin + new Double2(_data.SizeX, _data.SizeZ));
+    }
+
+    // Grounded cells hold world positions, so they go when the terrain moves
+    private void Forget(Double3 position)
+    {
+        lock (_cells)
+        {
+            if (position == _placedAt)
+                return;
+            _placedAt = position;
+            Interlocked.Increment(ref _version);
+            _cells.Clear();
+        }
     }
 
     private void Sort()
     {
-        Dictionary<(int, int), List<TerrainInstance>> cells = new();
+        Dictionary<(int, int), List<(int, TerrainTree)>> cells = new();
         IReadOnlyList<TerrainTree> trees = _data.Trees;
         for (int i = 0; i < trees.Count; i++)
         {
             TerrainTree tree = trees[i];
             (int, int) cell = ((int)Math.Floor(tree.Position.X / CellSize), (int)Math.Floor(tree.Position.Z / CellSize));
-            if (!cells.TryGetValue(cell, out List<TerrainInstance>? list))
-                cells[cell] = list = new List<TerrainInstance>();
-            list.Add(new TerrainInstance((ulong)i, tree.Prototype, _data.Position + tree.Position, tree.Yaw,
-                new Float3(tree.WidthScale, tree.HeightScale, tree.WidthScale), new Float3(0f, 1f, 0f), tree.Tint));
+            if (!cells.TryGetValue(cell, out List<(int, TerrainTree)>? list))
+                cells[cell] = list = new List<(int, TerrainTree)>();
+            list.Add((i, tree));
         }
-        Dictionary<(int, int), TerrainInstance[]> sorted = new(cells.Count);
-        foreach ((var key, List<TerrainInstance> list) in cells)
+        Dictionary<(int, int), (int, TerrainTree)[]> sorted = new(cells.Count);
+        foreach ((var key, List<(int, TerrainTree)> list) in cells)
             sorted[key] = list.ToArray();
-        _cells = sorted;
+        _sorted = sorted;
+    }
+
+    private TerrainInstance[] Build(int x, int z)
+    {
+        if (!_sorted.TryGetValue((x, z), out (int Index, TerrainTree Tree)[]? trees))
+            return [];
+        TerrainInstance[] built = new TerrainInstance[trees.Length];
+        for (int i = 0; i < trees.Length; i++)
+        {
+            TerrainTree tree = trees[i].Tree;
+            Double3 at = _data.Position + tree.Position;
+            if (_data.TryGetHeight(new Double2(at.X, at.Z), out double ground))
+                at = new Double3(at.X, ground, at.Z);
+            built[i] = new TerrainInstance((ulong)trees[i].Index, tree.Prototype, at, tree.Yaw,
+                new Float3(tree.WidthScale, tree.HeightScale, tree.WidthScale), new Float3(0f, 1f, 0f), tree.Tint);
+        }
+        return built;
     }
 }
 
@@ -88,11 +154,13 @@ public sealed class TerrainDetailInstances : ITerrainInstances, IDisposable
     private readonly TerrainData _data;
     private readonly TerrainDetailPrototype[] _prototypes;
     private readonly ConcurrentDictionary<(int, int), TerrainInstance[]> _cells = new();
+    private Double3 _placedAt;
     private long _version;
 
     public TerrainDetailInstances(TerrainData data, IReadOnlyList<TerrainDetailPrototype> prototypes, double cellSize = 32)
     {
         _data = data;
+        _placedAt = data.Position;
         _prototypes = [.. prototypes];
         CellSize = cellSize;
         data.Edited += OnEdited;
@@ -106,6 +174,7 @@ public sealed class TerrainDetailInstances : ITerrainInstances, IDisposable
 
     public IReadOnlyList<TerrainInstance> Cell(int x, int z)
     {
+        Forget(_data.Position);
         if (_cells.TryGetValue((x, z), out TerrainInstance[]? cached))
             return cached;
         long version = Interlocked.Read(ref _version);
@@ -116,6 +185,19 @@ public sealed class TerrainDetailInstances : ITerrainInstances, IDisposable
     }
 
     public void Dispose() => _data.Edited -= OnEdited;
+
+    // Cached cells hold world positions, so they go when the terrain moves
+    private void Forget(Double3 position)
+    {
+        lock (_cells)
+        {
+            if (position == _placedAt)
+                return;
+            _placedAt = position;
+            Interlocked.Increment(ref _version);
+            _cells.Clear();
+        }
+    }
 
     private void OnEdited(TerrainEdited edited)
     {

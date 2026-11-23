@@ -33,8 +33,11 @@ public enum TerrainBrush : byte
 /// <summary>One edit: a brush over a circle of world x and z, fading to nothing at its edge. Height is Flatten's target, Layer is Paint's layer or Detail's prototype.</summary>
 public readonly record struct TerrainEdit(TerrainBrush Brush, Double2 Center, double Radius, double Strength, double Height = 0, int Layer = 0);
 
-/// <summary>What an edit changed: the world x and z box whose finest samples it changed, normals and occlusion included, and every page of every level it rewrote.</summary>
-public sealed record TerrainEdited(Double2 Min, Double2 Max, IReadOnlyList<TerrainPageKey> Pages);
+/// <summary>
+/// What an edit changed: the world x and z box whose finest samples it changed, normals and occlusion included, every
+/// page of every level it rewrote, and whether heights changed or only the surface's weights, holes and densities.
+/// </summary>
+public sealed record TerrainEdited(Double2 Min, Double2 Max, IReadOnlyList<TerrainPageKey> Pages, bool Heights = true);
 
 public sealed partial class TerrainData
 {
@@ -210,7 +213,12 @@ public sealed partial class TerrainData
                     continue;
                 int px = Math.Min(i / TerrainPage.Quads, pagesX - 1), pz = Math.Min(j / TerrainPage.Quads, pagesZ - 1);
                 TerrainPage page = Editable(new TerrainPageKey(0, px, pz), pages, surface: true);
-                changed |= Paint(page, TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads), edit, Soft(d) * edit.Strength);
+                int index = TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads);
+                if (Paint(page, index, edit, Soft(d) * edit.Strength))
+                {
+                    changed = true;
+                    ShareSample(page, index, i, j, pages);
+                }
             }
         if (!changed)
             return new TerrainEdited(edit.Center, edit.Center, []);
@@ -228,7 +236,33 @@ public sealed partial class TerrainData
         }
         Double2 min = new(Position.X + i0 * spacing, Position.Z + j0 * spacing);
         Double2 max = new(Position.X + (i1 + 1) * spacing, Position.Z + (j1 + 1) * spacing);
-        return new TerrainEdited(min, max, keys);
+        return new TerrainEdited(min, max, keys, Heights: false);
+    }
+
+    // Copies a finest sample's surface layers into the edges and aprons of the other finest pages that hold it
+    private void ShareSample(TerrainPage owner, int index, int i, int j, Dictionary<TerrainPageKey, TerrainPage> pages)
+    {
+        (int pagesX, int pagesZ) = PagesAt(0);
+        int px0 = Math.Max(FloorDiv(i - TerrainPage.Apron - 1, TerrainPage.Quads), 0), px1 = Math.Min(FloorDiv(i + TerrainPage.Apron, TerrainPage.Quads), pagesX - 1);
+        int pz0 = Math.Max(FloorDiv(j - TerrainPage.Apron - 1, TerrainPage.Quads), 0), pz1 = Math.Min(FloorDiv(j + TerrainPage.Apron, TerrainPage.Quads), pagesZ - 1);
+        for (int pz = pz0; pz <= pz1; pz++)
+            for (int px = px0; px <= px1; px++)
+            {
+                TerrainPageKey key = new(0, px, pz);
+                if (key == owner.Key || !_entries.ContainsKey(key))
+                    continue;
+                TerrainPage page = Editable(key, pages, surface: true);
+                int to = TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads);
+                if (owner.Holes != null)
+                    page.Holes![to] = owner.Holes[index];
+                if (owner.Splat != null)
+                    for (int map = 0; map < owner.SplatMaps; map++)
+                        for (int c = 0; c < 4; c++)
+                            page.Splat![(map * TerrainPage.Samples + to) * 4 + c] = owner.Splat[(map * TerrainPage.Samples + index) * 4 + c];
+                if (owner.Details != null)
+                    for (int d = 0; d < owner.DetailCount; d++)
+                        page.Details![d * TerrainPage.Samples + to] = owner.Details[d * TerrainPage.Samples + index];
+            }
     }
 
     // Full inside seven tenths of the radius, easing to nothing at its edge

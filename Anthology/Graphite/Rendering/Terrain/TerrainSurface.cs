@@ -103,8 +103,25 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
             ArgumentNullException.ThrowIfNull(value);
             _material = value;
             Bind(value);
+            Brush = _brush;
         }
     }
+
+    /// <summary>The editor's brush, tinted over the ground by the lit passes, or null for none.</summary>
+    public TerrainBrushOverlay? Brush
+    {
+        get => _brush;
+        set
+        {
+            _brush = value;
+            TerrainBrushOverlay brush = value ?? default;
+            Double3 position = Data.Position;
+            _material.SetFloat4("_TerrainBrush", new Float4((float)(brush.Center.X - position.X), (float)(brush.Center.Y - position.Z), (float)brush.Radius, Math.Clamp(brush.Falloff, 0.001f, 1f)));
+            _material.SetColor("_TerrainBrushColor", value == null ? default : new Float4(brush.Color.X, brush.Color.Y, brush.Color.Z, brush.Strength));
+        }
+    }
+
+    private TerrainBrushOverlay? _brush;
 
     /// <summary>A level's range over its nodes' width. Higher keeps finer levels further out. At least 1.5.</summary>
     public double LodQuality { get; set; } = 2.0;
@@ -114,6 +131,9 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     /// very nodes the camera does, so the ground never shadows itself. Null for each view's own position.
     /// </summary>
     public Double3? Viewer { get; set; }
+
+    /// <summary>Where the views that drew the terrain last frame looked from, and <see cref="Viewer"/>. Host thread.</summary>
+    public IReadOnlyList<Double3> Viewers => _viewers;
 
     /// <summary>The material layers the splat maps weigh, by index, or null for plain ground.</summary>
     public TerrainLayers? Layers
@@ -707,6 +727,12 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
             => owner._cache!.Render(context.Command, owner._cacheFrame!, owner._pool, owner.Data, owner._layers);
     }
 }
+
+/// <summary>
+/// An editor brush drawn over the ground: its centre at a world x and z, its radius in metres, the share of the radius
+/// it softens over, its tint, and how strongly the inside takes the tint while the rim takes it fully.
+/// </summary>
+public readonly record struct TerrainBrushOverlay(Double2 Center, double Radius, float Falloff, Float3 Color, float Strength = 0.3f);
 
 /// <summary>What <see cref="TerrainSurface.DebugView"/> shows on the default material.</summary>
 public enum TerrainDebugView

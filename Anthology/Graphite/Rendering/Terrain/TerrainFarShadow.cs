@@ -132,7 +132,6 @@ internal sealed class TerrainFarShadow : IDisposable
     public void Dispose()
     {
         Map.Dispose();
-        _program.Dispose();
         _point.Dispose();
         _linear.Dispose();
         foreach (Texture texture in _heights)

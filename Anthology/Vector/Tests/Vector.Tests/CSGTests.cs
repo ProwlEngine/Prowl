@@ -434,6 +434,37 @@ public class CSGTests
         return scene;
     }
 
+    /// <summary>
+    /// Inverted output is the inside of the solid: every face turns to face inward, and its texture runs the other way
+    /// across so it reads unmirrored from inside.
+    /// </summary>
+    [Fact]
+    public void InvertedOutput_FacesInwardWithTexturesReadingFromInside()
+    {
+        CSGScene normal = SceneWithProjection(scale: Float2.One);
+        CSGScene inverted = SceneWithProjection(scale: Float2.One);
+        inverted.InvertOutput = true;
+
+        GeometryData outside = normal.Build(), inside = inverted.Build();
+        Assert.Equal(outside.Faces.Count, inside.Faces.Count);
+
+        foreach (var face in inside.Faces)
+        {
+            Float3 centre = face.Center();
+            Assert.True(Float3.Dot(face.Normal(), centre) < 0f, $"face at {centre} faces {face.Normal()}");
+        }
+
+        var before = UVs(outside).ToDictionary(t => (t.surface, Round(t.pos)), t => t.uv);
+        foreach (var (surface, pos, uv) in UVs(inside))
+        {
+            Float2 was = before[(surface, Round(pos))];
+            Assert.Equal(-was.X, uv.X, 4);
+            Assert.Equal(was.Y, uv.Y, 4);
+        }
+
+        static (int, int, int) Round(Float3 p) => ((int)MathF.Round(p.X * 100), (int)MathF.Round(p.Y * 100), (int)MathF.Round(p.Z * 100));
+    }
+
     private static Dictionary<(int, int, int), Float2> UVByPosition(CSGScene scene)
     {
         var map = new Dictionary<(int, int, int), Float2>();
@@ -764,5 +795,21 @@ public class CSGTests
 
         Assert.False(brush.IsValid);
         Assert.Empty(scene.Build().Faces);
+    }
+
+    /// <summary>A 45 degree face picks the same texture axes whichever way rounding tips its normal.</summary>
+    [Fact]
+    public void FacesAt45DegreesPickOneBasisDespiteRounding()
+    {
+        float a = 0.70710677f, b = 0.70710683f;
+        SurfaceTexSpace.BasisFor(new Float3(a, b, 0f), out Float3 u1, out Float3 v1);
+        SurfaceTexSpace.BasisFor(new Float3(b, a, 0f), out Float3 u2, out Float3 v2);
+        Assert.Equal(u1, u2);
+        Assert.Equal(v1, v2);
+
+        SurfaceTexSpace.BasisFor(new Float3(0f, a, b), out u1, out v1);
+        SurfaceTexSpace.BasisFor(new Float3(0f, b, a), out u2, out v2);
+        Assert.Equal(u1, u2);
+        Assert.Equal(v1, v2);
     }
 }

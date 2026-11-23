@@ -260,7 +260,6 @@ internal sealed class TerrainGrass : IDisposable
 
     public void Dispose()
     {
-        _program.Dispose();
         _point.Dispose();
         _linear.Dispose();
         Instances.Dispose();

@@ -160,7 +160,7 @@ internal sealed class TerrainScene : DemoScene
         {
             if (File.Exists(path))
             {
-                TerrainHeightmap cached = TerrainHeightmap.Load(path);
+                TerrainHeightmap cached = TerrainHeightmapFile.Load(path);
                 if (cached.Width == Samples && cached.Height == Samples)
                     return cached;
             }

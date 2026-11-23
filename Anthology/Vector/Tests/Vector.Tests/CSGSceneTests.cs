@@ -255,4 +255,42 @@ public class CSGSceneTests
             } while (loop != face.Loop);
         }
     }
+
+    [Fact]
+    public void MirroredBrushStaysOutsideOut()
+    {
+        var scene = new CSGScene();
+        scene.Add(Box(new Float3(2, 2, 2)), CSGOperation.Additive, Float4x4.CreateScale(-1f, 1f, 1f));
+
+        GeometryData result = scene.Build();
+
+        Assert.True(result.Volume() > 7.9f);
+        foreach (var face in result.Faces)
+            Assert.True(Float3.Dot(face.Normal(), face.Center()) > 0f);
+    }
+
+    [Fact]
+    public void DiscardedKeepsTheFacesOperationsRemove()
+    {
+        var scene = new CSGScene { KeepDiscarded = true };
+        scene.Add(Box(new Float3(2, 2, 2)));
+        var carver = scene.Add(Box(new Float3(2, 2, 2), new Float3(5, 0, 0)), CSGOperation.Subtractive);
+        scene.Build();
+
+        // A subtraction in empty space carves nothing, so all six of its faces are discarded
+        var faces = scene.Discarded().Where(d => d.BrushId == carver.Id).ToList();
+        Assert.Equal(6, faces.Select(d => d.SourceFaceIndex).Distinct().Count());
+        Assert.All(faces, d => Assert.True(d.Corners.Length >= 3));
+    }
+
+    [Fact]
+    public void DiscardedIsEmptyUnlessAskedFor()
+    {
+        var scene = new CSGScene();
+        scene.Add(Box(new Float3(2, 2, 2)));
+        scene.Add(Box(new Float3(2, 2, 2), new Float3(5, 0, 0)), CSGOperation.Subtractive);
+        scene.Build();
+
+        Assert.Empty(scene.Discarded());
+    }
 }

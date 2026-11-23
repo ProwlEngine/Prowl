@@ -84,6 +84,13 @@ public sealed partial class TerrainData : IDisposable
         TreesChanged?.Invoke();
     }
 
+    public void AddTrees(IEnumerable<TerrainTree> trees)
+    {
+        lock (_trees)
+            _trees.AddRange(trees);
+        TreesChanged?.Invoke();
+    }
+
     /// <summary>Removes the trees whose base lies within a radius of a world x and z, returning how many.</summary>
     public int RemoveTrees(Double2 center, double radius)
     {

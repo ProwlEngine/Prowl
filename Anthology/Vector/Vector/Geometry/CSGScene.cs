@@ -57,7 +57,7 @@ public sealed class CSGBrushHandle
 }
 
 /// <summary>
-/// An incremental N-ary CSG scene built from convex brushes (after Sander van Rossen's Realtime-CSG
+/// An incremental N-ary CSG scene built from brushes (after Sander van Rossen's Realtime-CSG
 /// model). Brushes form an ordered list; later brushes override earlier ones where they overlap, so
 /// the final solid is "the last brush whose volume contains a point decides whether it is solid".
 ///
@@ -66,7 +66,9 @@ public sealed class CSGBrushHandle
 /// cached surface. Overlap queries go through a <see cref="Bvh{T}"/> broadphase so large scenes stay
 /// cheap to edit.
 ///
-/// Every brush MUST be a convex closed solid. Build a concave shape from several brushes. Vertex,
+/// A brush is any closed, consistently wound mesh: concave, with bent faces, or with holes through it. Convex brushes
+/// are clipped by their planes, others cut fragments along the faces that reach them and decide inside or outside by
+/// winding number. A brush that is not quite closed is still classified by what it nearly encloses. Vertex,
 /// edge, loop, and face attributes are carried through; where two brushes define an attribute of the
 /// same name, the earlier brush's schema wins.
 ///
@@ -124,7 +126,58 @@ public sealed class CSGScene
     private bool _flat;                  // no groups and no Intersect: the last brush containing a point decides it
     private GeometryData? _cachedOutput;
 
+    // The assembled mesh, kept between builds and patched where brushes changed
+    private GeometryData? _output;
+    private bool _reassemble = true;
+    private bool _hasAttributes;
+    private readonly Dictionary<SnapKey, List<GeometryData.Vertex>> _vertexGrid = new();
+    private readonly Dictionary<SnapKey, List<RepPoint>> _representatives = new();
+    private readonly DynamicBvh<RepPoint> _representativeTree = new();
+    private readonly DynamicBvh<SceneBrush> _brushTree = new();
+    private bool _brushTreeStale = true;
+    private bool _deferRepresentativeTree;
+
     private bool _weldTJunctions = true;
+    private bool _keepDiscarded;
+    private bool _invertOutput;
+
+    /// <summary>
+    /// Builds the inside of the solid instead of its outside: every face turns to face inward and its texture runs the
+    /// other way across, so it reads unmirrored from inside. Brushes then read as rooms carved out of an endless solid.
+    /// </summary>
+    public bool InvertOutput
+    {
+        get => _invertOutput;
+        set
+        {
+            if (_invertOutput == value) return;
+            _invertOutput = value;
+            InvalidateOutput();
+        }
+    }
+
+    /// <summary>
+    /// Whether <see cref="Build"/> also keeps the face pieces the operations remove, for <see cref="Discarded"/>. Off by
+    /// default, as an editor wants them only to show or pick what is buried or carves nothing.
+    /// </summary>
+    public bool KeepDiscarded
+    {
+        get => _keepDiscarded;
+        set
+        {
+            if (_keepDiscarded == value) return;
+            _keepDiscarded = value;
+            MarkEvaluationDirty();
+        }
+    }
+
+    /// <summary>The face pieces the last <see cref="Build"/> removed, while <see cref="KeepDiscarded"/> is on.</summary>
+    public IEnumerable<CSGDiscardedFace> Discarded()
+    {
+        foreach (var brush in _brushes)
+            foreach (var frag in brush.Discarded)
+                yield return new CSGDiscardedFace(brush.Id, frag.Source.SourceIndex, frag.Poly, frag.Source.Plane);
+    }
 
     /// <summary>Whether <see cref="Build"/> runs a T-junction welding pass for watertight output. Default true.</summary>
     public bool WeldTJunctions
@@ -182,6 +235,7 @@ public sealed class CSGScene
     private void InvalidateOutput(bool reweld)
     {
         _cachedOutput = null;
+        _reassemble = true;
         if (!reweld) return;
         foreach (var brush in _brushes) brush.WeldDirty = true;
     }
@@ -377,7 +431,8 @@ public sealed class CSGScene
 
     /// <summary>
     /// Evaluates the scene into a single mesh. Only brushes flagged dirty since the last call are
-    /// re-evaluated; the rest reuse their cached surface. The merged mesh is rebuilt each call.
+    /// re-evaluated; the rest reuse their cached surface. The merged mesh is kept and only the faces of changed
+    /// brushes and their neighbours are replaced, so each call hands back the same object with a new Version.
     /// </summary>
     /// <summary>
     /// Read the brush id an output face was attributed to, or -1 if the face did not come from a
@@ -420,7 +475,18 @@ public sealed class CSGScene
             foreach (var b in _brushes) b.Dirty = true;
         _evalDirty = false;
 
-        var bvh = new Bvh<SceneBrush>(_brushes, BrushBox, new BvhBuildSettings { Quality = BvhBuildQuality.Fast, MaxLeafSize = 4 });
+        var bvh = _brushTree;
+        if (_brushTreeStale)
+        {
+            int[] handles = bvh.Rebuild(_brushes, _brushes.ConvertAll(BrushBox));
+            for (int i = 0; i < handles.Length; i++) _brushes[i].TreeHandle = handles[i];
+            _brushTreeStale = false;
+        }
+        else
+        {
+            foreach (var brush in _brushes)
+                bvh.Update(brush.TreeHandle, BrushBox(brush));
+        }
 
         // Propagate pending dirty regions to whatever brushes now occupy them.
         if (_pendingDirtyRegions.Count > 0)
@@ -429,7 +495,7 @@ public sealed class CSGScene
             foreach (var region in _pendingDirtyRegions)
             {
                 hits.Clear();
-                bvh.QueryAABB(region, hits);
+                bvh.QueryAABB(region.Expanded(DistanceEpsilon), hits);
                 foreach (var b in hits) b.Dirty = true;
             }
             _pendingDirtyRegions.Clear();
@@ -444,6 +510,7 @@ public sealed class CSGScene
             Recompute(brush, bvh, neighborBuffer);
             brush.Dirty = false;
             brush.WeldDirty = true;
+            brush.OutputChanged = true;
             changed.Add(brush);
             recomputed++;
         }
@@ -461,7 +528,7 @@ public sealed class CSGScene
             foreach (var brush in changed)
             {
                 neighborBuffer.Clear();
-                bvh.QueryAABB(BrushBox(brush), neighborBuffer);
+                bvh.QueryAABB(BrushBox(brush).Expanded(WeldTolerance), neighborBuffer);
                 foreach (var n in neighborBuffer) n.WeldDirty = true;
             }
         }
@@ -512,6 +579,7 @@ public sealed class CSGScene
         if (!_treeDirty) return;
         _treeDirty = false;
 
+        _brushTreeStale = true;
         _brushes.Clear();
         _hasIntersect = false;
         bool hasGroups = false;
@@ -591,6 +659,9 @@ public sealed class CSGScene
         AABB brushBounds = default;
         bool firstBrush = true;
 
+        // A mirroring transform turns the winding inside out, so it is read backwards
+        bool mirrored = Float4x4.Determinant(brush.Transform) < 0f;
+
         for (int faceIndex = 0; faceIndex < brush.Shape.Faces.Count; faceIndex++)
         {
             var face = brush.Shape.Faces[faceIndex];
@@ -609,6 +680,13 @@ public sealed class CSGScene
                 world[i] = Float4x4.TransformPoint(verts[i].Point, brush.Transform);
             }
 
+            if (mirrored)
+            {
+                Array.Reverse(world);
+                Array.Reverse(srcVerts);
+                Array.Reverse(srcLoops);
+            }
+
             // Plane and normal from the transformed winding (Newell's method).
             Float3 normal = Float3.Zero;
             Float3 centroid = Float3.Zero;
@@ -625,30 +703,111 @@ public sealed class CSGScene
 
             var plane = Plane.FromNormalAndPoint(Float3.Normalize(normal), centroid / n);
 
-            Float3 faceMin = world[0], faceMax = world[0];
-            for (int i = 1; i < n; i++)
+            int before = brush.Faces.Count;
+            if (IsFlat(world, plane) && IsConvex(world, plane.Normal))
+                brush.Faces.Add(Piece(faceIndex, face, world, srcVerts, srcLoops, plane, plane));
+            else
+                AddTriangles(brush, faceIndex, face, world, srcVerts, srcLoops, plane);
+
+            for (int i = before; i < brush.Faces.Count; i++)
             {
-                faceMin = Maths.Min(faceMin, world[i]);
-                faceMax = Maths.Max(faceMax, world[i]);
+                if (firstBrush) { brushBounds = brush.Faces[i].Bounds; firstBrush = false; }
+                else brushBounds = brushBounds.Encapsulating(brush.Faces[i].Bounds);
             }
-            AABB faceBounds = new AABB(faceMin, faceMax);
-
-            brush.Faces.Add(new FaceData
-            {
-                SourceIndex = faceIndex,
-                World = world,
-                Plane = plane,
-                Source = face,
-                SrcVerts = srcVerts,
-                SrcLoops = srcLoops,
-                Bounds = faceBounds
-            });
-
-            if (firstBrush) { brushBounds = faceBounds; firstBrush = false; }
-            else brushBounds = brushBounds.Encapsulating(faceBounds);
         }
 
         brush.Bounds = brushBounds;
+        brush.Convex = brush.Shape.IsClosed() && IsConvexSolid(brush);
+    }
+
+    private static FaceData Piece(int sourceIndex, GeometryData.Face face, Float3[] world, GeometryData.Vertex[] srcVerts,
+                                  GeometryData.Loop?[] srcLoops, Plane plane, Plane surfacePlane)
+    {
+        Float3 min = world[0], max = world[0];
+        for (int i = 1; i < world.Length; i++)
+        {
+            min = Maths.Min(min, world[i]);
+            max = Maths.Max(max, world[i]);
+        }
+
+        return new FaceData
+        {
+            SourceIndex = sourceIndex,
+            World = world,
+            Plane = plane,
+            SurfacePlane = surfacePlane,
+            Source = face,
+            SrcVerts = srcVerts,
+            SrcLoops = srcLoops,
+            Bounds = new AABB(min, max),
+        };
+    }
+
+    /// <summary>
+    /// Splits a concave or bent face into flat triangles, ear clipped in the face's fitted plane. Each keeps the face's
+    /// index and fitted plane, so the pieces stay one surface with one texture projection.
+    /// </summary>
+    private static void AddTriangles(SceneBrush brush, int sourceIndex, GeometryData.Face face, Float3[] world,
+                                     GeometryData.Vertex[] srcVerts, GeometryData.Loop?[] srcLoops, Plane surfacePlane)
+    {
+        PlaneBasis(surfacePlane.Normal, out Float3 u, out Float3 v);
+        var flat = new Float2[world.Length];
+        for (int i = 0; i < world.Length; i++) flat[i] = new Float2(Float3.Dot(world[i], u), Float3.Dot(world[i], v));
+
+        List<int> triangles = Polygon2D.Triangulate(flat);
+        for (int t = 0; t + 2 < triangles.Count; t += 3)
+        {
+            int a = triangles[t], b = triangles[t + 1], c = triangles[t + 2];
+            Float3[] corners = [world[a], world[b], world[c]];
+            Float3 normal = Float3.Cross(corners[1] - corners[0], corners[2] - corners[0]);
+            if (Float3.LengthSquared(normal) < DegenerateEpsilon * DegenerateEpsilon) continue;
+
+            var plane = Plane.FromNormalAndPoint(Float3.Normalize(normal), corners[0]);
+            brush.Faces.Add(Piece(sourceIndex, face, corners, [srcVerts[a], srcVerts[b], srcVerts[c]],
+                [srcLoops[a], srcLoops[b], srcLoops[c]], plane, surfacePlane));
+        }
+    }
+
+    /// <summary>Two axes across a plane, so that with its normal they make a right handed frame.</summary>
+    private static void PlaneBasis(Float3 normal, out Float3 u, out Float3 v)
+    {
+        Float3 helper = Maths.Abs(normal.Y) < 0.9f ? Float3.UnitY : Float3.UnitX;
+        u = Float3.Normalize(Float3.Cross(helper, normal));
+        v = Float3.Cross(normal, u);
+    }
+
+    private static bool IsFlat(Float3[] world, Plane plane)
+    {
+        foreach (var p in world)
+            if (Maths.Abs(Float3.Dot(plane.Normal, p) - plane.D) > DegenerateEpsilon) return false;
+        return true;
+    }
+
+    /// <summary>Whether a flat polygon turns the same way at every corner.</summary>
+    private static bool IsConvex(Float3[] world, Float3 normal)
+    {
+        int n = world.Length;
+        for (int i = 0; i < n; i++)
+        {
+            Float3 a = world[i], b = world[(i + 1) % n], c = world[(i + 2) % n];
+            if (Float3.Dot(Float3.Cross(b - a, c - b), normal) < -DegenerateEpsilon) return false;
+        }
+        return true;
+    }
+
+    /// <summary>A closed brush is convex when every face is one flat convex piece and every corner lies behind every face.</summary>
+    private static bool IsConvexSolid(SceneBrush brush)
+    {
+        int pieces = 0;
+        var sources = new HashSet<int>();
+        foreach (var face in brush.Faces) { pieces++; sources.Add(face.SourceIndex); }
+        if (pieces != sources.Count) return false;
+
+        foreach (var face in brush.Faces)
+            foreach (var other in brush.Faces)
+                foreach (var p in other.World)
+                    if (Float3.Dot(face.Plane.Normal, p) - face.Plane.D > 1e-3f) return false;
+        return true;
     }
 
     #endregion
@@ -674,10 +833,12 @@ public sealed class CSGScene
     }
 
     private static readonly Comparison<SceneBrush> s_latestFirst = (a, b) => b.EvalOrder.CompareTo(a.EvalOrder);
+    private static readonly Comparison<SceneBrush> s_earliestFirst = (a, b) => a.EvalOrder.CompareTo(b.EvalOrder);
 
-    private void Recompute(SceneBrush self, Bvh<SceneBrush> bvh, List<SceneBrush> neighborBuffer)
+    private void Recompute(SceneBrush self, DynamicBvh<SceneBrush> bvh, List<SceneBrush> neighborBuffer)
     {
         self.Output.Clear();
+        self.Discarded.Clear();
         if (!self.Emits) return;
 
         // Boxes are widened by the tolerance, or two faces a hair apart would never be tested against each other
@@ -686,7 +847,7 @@ public sealed class CSGScene
 
         // In a flat scene a fragment inside a brush is decided by that brush and the ones after it,
         // so walking the neighbours latest first lets such a fragment stop early.
-        if (_flat) neighborBuffer.Sort(s_latestFirst);
+        neighborBuffer.Sort(_flat ? s_latestFirst : s_earliestFirst);
 
         var work = new List<Fragment>();
         var next = new List<Fragment>();
@@ -706,19 +867,87 @@ public sealed class CSGScene
                 foreach (var frag in work)
                 {
                     if (frag.Final || !Reaches(frag.Poly, b.Bounds)) next.Add(frag);
-                    else SplitByBrush(frag, b, face.Plane, self, next);
+                    else if (b.Convex) SplitByBrush(frag, b, face.Plane, self, next);
+                    else SplitByConcave(frag, b, face.Plane, self, next);
                 }
 
                 (work, next) = (next, work);
             }
 
+            int emitted = self.Output.Count;
             foreach (var frag in work)
             {
                 if (frag.Poly.Count < 3) continue;
                 if (Visible(frag.Rels, self, out bool flip))
                     self.Output.Add(new OutFrag { Poly = frag.Poly.ToArray(), Source = face, Flip = flip });
+                else if (_keepDiscarded)
+                    self.Discarded.Add(new OutFrag { Poly = frag.Poly.ToArray(), Source = face });
+            }
+            MergePieces(self.Output, emitted);
+        }
+    }
+
+    /// <summary>
+    /// Joins pieces of one face back together where cutting by a concave neighbour split more than it had to: two
+    /// pieces facing the same way that share an edge become one, as long as the result stays convex. Every corner is
+    /// kept, even where it is now in a straight line, as a neighbouring piece may still meet the face there.
+    /// </summary>
+    private static void MergePieces(List<OutFrag> output, int start)
+    {
+        for (bool merged = true; merged;)
+        {
+            merged = false;
+            for (int i = start; i < output.Count && !merged; i++)
+            {
+                for (int j = i + 1; j < output.Count && !merged; j++)
+                {
+                    OutFrag a = output[i], b = output[j];
+                    if (a.Flip != b.Flip || !TryJoin(a.Poly, b.Poly, a.Source.Plane.Normal, out Float3[] joined)) continue;
+
+                    output[i] = new OutFrag { Poly = joined, Source = a.Source, Flip = a.Flip };
+                    output.RemoveAt(j);
+                    merged = true;
+                }
             }
         }
+    }
+
+    /// <summary>The convex polygon two convex polygons make when they share an edge, or false.</summary>
+    private static bool TryJoin(Float3[] p, Float3[] q, Float3 normal, out Float3[] joined)
+    {
+        joined = Array.Empty<Float3>();
+        for (int i = 0; i < p.Length; i++)
+        {
+            Float3 a = p[i], b = p[(i + 1) % p.Length];
+            for (int k = 0; k < q.Length; k++)
+            {
+                if (!Same(q[k], b) || !Same(q[(k + 1) % q.Length], a)) continue;
+
+                // Round the first polygon from the end of the shared edge back to its start, then the rest of the second
+                var ring = new List<Float3>(p.Length + q.Length - 2);
+                for (int n = 1; n <= p.Length; n++) ring.Add(p[(i + n) % p.Length]);
+                for (int n = 2; n < q.Length; n++) ring.Add(q[(k + n) % q.Length]);
+
+                if (!IsConvex(ring.ToArray(), normal) || DoublesBack(ring)) return false;
+                joined = ring.ToArray();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool Same(Float3 a, Float3 b) => Float3.DistanceSquared(a, b) < 1e-10f;
+
+    /// <summary>Whether a ring turns straight back on itself anywhere, which a convexity test alone lets through.</summary>
+    private static bool DoublesBack(List<Float3> ring)
+    {
+        for (int i = 0; i < ring.Count; i++)
+        {
+            Float3 before = ring[(i + ring.Count - 1) % ring.Count], at = ring[i], after = ring[(i + 1) % ring.Count];
+            Float3 into = at - before, outOf = after - at;
+            if (Float3.Dot(into, outOf) < 0f && Float3.LengthSquared(Float3.Cross(into, outOf)) <= 1e-12f * Float3.LengthSquared(into) * Float3.LengthSquared(outOf)) return true;
+        }
+        return false;
     }
 
     // Whether every corner of a polygon lies on a plane. Measured at the corners themselves, because
@@ -802,6 +1031,244 @@ public sealed class CSGScene
     }
 
     /// <summary>
+    /// Splits a face fragment by a neighbour that is not convex. The fragment is cut where the neighbour's surface meets
+    /// its plane: the segments its faces cross the plane along, and the outline of its faces lying in the plane. A cell
+    /// is only cut by a segment that runs through it, so the split stays around the neighbour, and every cell ends up
+    /// wholly inside, wholly outside, or on it. Each cell is then classified on its own: lying on a neighbour face gives
+    /// the shared surface relation, otherwise the neighbour's winding number at the cell's centre says whether it is inside.
+    /// </summary>
+    private void SplitByConcave(Fragment frag, SceneBrush b, Plane facePlane, SceneBrush self, List<Fragment> results)
+    {
+        AABB fragBox = PolyBounds(frag.Poly).Expanded(DistanceEpsilon);
+        var cuts = new List<(Plane Plane, Float3 A, Float3 B)>();
+        var coplanar = new List<(FaceData Face, Relation Relation)>();
+
+        foreach (var f in b.Faces)
+        {
+            if (!f.Bounds.Expanded(DistanceEpsilon).Intersects(fragBox)) continue;
+
+            float dn = Float3.Dot(f.Plane.Normal, facePlane.Normal);
+            if (Maths.Abs(dn) >= 1.0f - NormalEpsilon && (LiesOn(frag.Poly, f.Plane) || LiesOn(f.World, facePlane)))
+            {
+                coplanar.Add((f, dn > 0 ? Relation.Aligned : Relation.Opposite));
+                continue;
+            }
+
+            if (Touches(f.World, facePlane) && CrossingSegment(f, facePlane, out Float3 a, out Float3 c))
+                cuts.Add((f.Plane, a, c));
+        }
+
+        // A face in the plane covers the fragment only within its outline. Edges two of its pieces share run inside it.
+        foreach (var (f, _) in coplanar)
+        {
+            for (int i = 0; i < f.World.Length; i++)
+            {
+                Float3 a = f.World[i], c = f.World[(i + 1) % f.World.Length];
+                if (SharedWithinPlane(coplanar, f, a, c)) continue;
+
+                Float3 n = Float3.Cross(c - a, facePlane.Normal);
+                if (Float3.LengthSquared(n) < DegenerateEpsilon * DegenerateEpsilon) continue;
+                n = Float3.Normalize(n);
+                cuts.Add((new Plane(n, Float3.Dot(n, a)), a, c));
+            }
+        }
+
+        var cells = new List<List<Float3>> { frag.Poly };
+        var back = new List<Float3>();
+        var front = new List<Float3>();
+        foreach (var (plane, a, c) in cuts)
+        {
+            var split = new List<List<Float3>>(cells.Count + 2);
+            foreach (var cell in cells)
+            {
+                if (!RunsThrough(cell, facePlane.Normal, a, c))
+                {
+                    split.Add(cell);
+                    continue;
+                }
+
+                ClipByPlane(cell, plane, back, front, out bool anyBack, out bool anyFront);
+                if (anyBack && anyFront && back.Count >= 3 && front.Count >= 3)
+                {
+                    split.Add(new List<Float3>(back));
+                    split.Add(new List<Float3>(front));
+                }
+                else split.Add(cell);
+            }
+            cells = split;
+        }
+
+        foreach (var cell in cells)
+        {
+            Float3 centre = Float3.Zero;
+            foreach (var p in cell) centre += p;
+            centre /= cell.Count;
+
+            Relation? relation = null;
+            foreach (var (f, rel) in coplanar)
+                if (InsideConvex(f.World, f.Plane.Normal, centre)) { relation = rel; break; }
+            if (relation == null && WindingNumber(b, centre) > 0.5f) relation = Relation.Interior;
+
+            if (relation == null)
+            {
+                results.Add(new Fragment(cell, frag.Rels));
+                continue;
+            }
+
+            // Two brushes sharing a surface would each emit it. The later one in traversal order owns it.
+            if (relation == Relation.Aligned && b.EvalOrder > self.EvalOrder) continue;
+
+            var rels = new List<Rel>(frag.Rels) { new Rel(b, relation.Value) };
+            var piece = new Fragment(cell, rels);
+            if (_flat && relation == Relation.Interior)
+            {
+                if (!Visible(rels, self, out _)) continue;
+                piece.Final = true;
+            }
+            results.Add(piece);
+        }
+    }
+
+    /// <summary>Where a flat convex face crosses a plane, as a segment, or false when it only grazes it at a point.</summary>
+    private bool CrossingSegment(FaceData face, Plane plane, out Float3 a, out Float3 c)
+    {
+        a = c = default;
+        Float3 along = Float3.Cross(face.Plane.Normal, plane.Normal);
+        if (Float3.LengthSquared(along) < DegenerateEpsilon * DegenerateEpsilon) return false;
+
+        float min = float.MaxValue, max = float.MinValue;
+        var poly = face.World;
+        for (int i = 0; i < poly.Length; i++)
+        {
+            Float3 p = poly[i], q = poly[(i + 1) % poly.Length];
+            float dp = Float3.Dot(plane.Normal, p) - plane.D, dq = Float3.Dot(plane.Normal, q) - plane.D;
+
+            Float3? point = null;
+            if (Maths.Abs(dp) <= DistanceEpsilon) point = p;
+            else if ((dp > DistanceEpsilon && dq < -DistanceEpsilon) || (dp < -DistanceEpsilon && dq > DistanceEpsilon))
+                point = p + (q - p) * (dp / (dp - dq));
+            if (point is not Float3 at) continue;
+
+            float t = Float3.Dot(at, along);
+            if (t < min) { min = t; a = at; }
+            if (t > max) { max = t; c = at; }
+        }
+
+        return max - min > DistanceEpsilon * Float3.Length(along);
+    }
+
+    /// <summary>Whether another piece of the same face in the plane has the edge too, run the other way, so it lies inside the face.</summary>
+    private static bool SharedWithinPlane(List<(FaceData Face, Relation Relation)> coplanar, FaceData face, Float3 a, Float3 c)
+    {
+        foreach (var (other, _) in coplanar)
+        {
+            if (ReferenceEquals(other, face) || other.SourceIndex != face.SourceIndex) continue;
+            for (int i = 0; i < other.World.Length; i++)
+                if (Same(other.World[i], c) && Same(other.World[(i + 1) % other.World.Length], a)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether a segment in a convex cell's plane runs through the cell's inside, not only along or outside its edges.</summary>
+    private bool RunsThrough(List<Float3> cell, Float3 normal, Float3 a, Float3 c)
+    {
+        Float3 centre = Float3.Zero;
+        foreach (var p in cell) centre += p;
+        centre /= cell.Count;
+
+        float t0 = 0f, t1 = 1f;
+        Float3 d = c - a;
+        for (int i = 0; i < cell.Count; i++)
+        {
+            Float3 p = cell[i], q = cell[(i + 1) % cell.Count];
+            Float3 inward = Float3.Cross(normal, q - p);
+            float length = Float3.Length(inward);
+            if (length < DegenerateEpsilon) continue;
+            inward /= length;
+            if (Float3.Dot(inward, centre - p) < 0f) inward = -inward;
+
+            // Inside by more than the tolerance, so a segment lying along an edge does not count
+            float start = Float3.Dot(inward, a - p) - DistanceEpsilon;
+            float rate = Float3.Dot(inward, d);
+            if (Maths.Abs(rate) < 1e-12f)
+            {
+                if (start < 0f) return false;
+                continue;
+            }
+
+            float t = -start / rate;
+            if (rate > 0f) t0 = MathF.Max(t0, t);
+            else t1 = MathF.Min(t1, t);
+            if (t0 >= t1) return false;
+        }
+
+        return (t1 - t0) * Float3.Length(d) > DistanceEpsilon;
+    }
+
+    private static AABB PolyBounds(List<Float3> poly)
+    {
+        Float3 min = poly[0], max = poly[0];
+        for (int i = 1; i < poly.Count; i++)
+        {
+            min = Maths.Min(min, poly[i]);
+            max = Maths.Max(max, poly[i]);
+        }
+        return new AABB(min, max);
+    }
+
+    /// <summary>Whether a polygon reaches a plane: corners on both sides of it, or on it.</summary>
+    private bool Touches(Float3[] poly, Plane plane)
+    {
+        bool below = false, above = false;
+        foreach (var p in poly)
+        {
+            float d = Float3.Dot(plane.Normal, p) - plane.D;
+            if (d <= DistanceEpsilon) below = true;
+            if (d >= -DistanceEpsilon) above = true;
+        }
+        return below && above;
+    }
+
+    /// <summary>Whether a point in a convex polygon's plane lies inside it, edges included within the tolerance.</summary>
+    private bool InsideConvex(Float3[] poly, Float3 normal, Float3 point)
+    {
+        for (int i = 0; i < poly.Length; i++)
+        {
+            Float3 a = poly[i], c = poly[(i + 1) % poly.Length];
+            Float3 inward = Float3.Cross(normal, c - a);
+            float length = Float3.Length(inward);
+            if (length < DegenerateEpsilon) continue;
+            if (Float3.Dot(inward / length, point - a) < -DistanceEpsilon) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// How many times a brush's surface wraps around a point: one inside a closed brush, zero outside, and in between
+    /// for a brush that is not quite closed. The sum of the solid angles its faces fill seen from the point.
+    /// </summary>
+    private static float WindingNumber(SceneBrush brush, Float3 point)
+    {
+        float total = 0f;
+        foreach (var face in brush.Faces)
+        {
+            Float3 a = face.World[0] - point;
+            for (int i = 1; i + 1 < face.World.Length; i++)
+                total += SolidAngle(a, face.World[i] - point, face.World[i + 1] - point);
+        }
+        return total / (4f * MathF.PI);
+    }
+
+    /// <summary>The signed solid angle a triangle fills seen from the origin, positive when it winds counter clockwise toward it.</summary>
+    private static float SolidAngle(Float3 a, Float3 b, Float3 c)
+    {
+        float la = Float3.Length(a), lb = Float3.Length(b), lc = Float3.Length(c);
+        float numerator = Float3.Dot(a, Float3.Cross(b, c));
+        float denominator = la * lb * lc + Float3.Dot(a, b) * lc + Float3.Dot(a, c) * lb + Float3.Dot(b, c) * la;
+        return 2f * MathF.Atan2(numerator, denominator);
+    }
+
+    /// <summary>
     /// Whether a fully classified fragment lies on the final solid's surface: true exactly when the
     /// volume behind the face and the volume in front disagree about being solid. Each side is
     /// evaluated against the whole tree.
@@ -810,9 +1277,11 @@ public sealed class CSGScene
     {
         flip = false;
 
-        // Two brushes sharing a surface would each emit it. The later one in traversal order owns it.
+        // Two brushes sharing a surface would each emit it, whichever way their faces point. The later one in traversal
+        // order owns it. The earlier one always meets the later one before its fragment is settled, so it is the one
+        // that can reliably step aside.
         foreach (var r in rels)
-            if (r.Relation == Relation.Aligned && r.Brush.EvalOrder > self.EvalOrder)
+            if (r.Relation != Relation.Interior && r.Brush.EvalOrder > self.EvalOrder)
                 return false;
 
         bool innerSolid = _flat ? FlatSolid(rels, self, inner: true) : EvaluateTree(_root, rels, self, inner: true);
@@ -822,6 +1291,7 @@ public sealed class CSGScene
             return false; // both sides solid or both empty: not a boundary
 
         flip = !innerSolid && outerSolid; // solid is in front: the face must point the other way
+
         return true;
     }
 
@@ -938,8 +1408,39 @@ public sealed class CSGScene
 
     private GeometryData Assemble()
     {
+        bool fresh = _output == null || _reassemble || _brushes.TrueForAll(b => b.WeldDirty);
+        if (fresh) StartAssembly();
+
+        var output = _output!;
+        if (WeldTJunctions)
+        {
+            _deferRepresentativeTree = fresh;
+            foreach (var brush in _brushes)
+                if (brush.OutputChanged) Reference(brush);
+            _deferRepresentativeTree = false;
+            if (fresh) RebuildRepresentativeTree();
+        }
+
+        foreach (var brush in _brushes)
+        {
+            brush.OutputChanged = false;
+            if (!brush.WeldDirty) continue;
+            brush.WeldDirty = false;
+
+            if (!fresh) RemoveEmitted(output, brush);
+            Reweld(brush);
+            foreach (var item in brush.Welded)
+                EmitPolygon(output, _vertexGrid, item, _hasAttributes);
+        }
+
+        return output;
+    }
+
+    // Drops everything assembled so far and starts an empty mesh every brush emits into again.
+    private void StartAssembly()
+    {
         var result = new GeometryData();
-        bool hasAttributes = RegisterAttributes(result);
+        _hasAttributes = RegisterAttributes(result);
 
         // Written for every face regardless of what attributes the source shapes declare.
         result.AddFaceAttribute(BrushIdAttribute, GeometryData.AttributeBaseType.Int, 1);
@@ -948,87 +1449,122 @@ public sealed class CSGScene
         if (SurfaceUV != null && !result.HasLoopAttribute(UVAttributeName))
             result.AddLoopAttribute(UVAttributeName, GeometryData.AttributeBaseType.Float, 2);
 
-        var items = BuildEmitItems();
-
-        var weld = new Dictionary<SnapKey, List<GeometryData.Vertex>>();
-        foreach (var item in items)
-            EmitPolygon(result, weld, item, hasAttributes);
-
-        return result;
+        _output = result;
+        _reassemble = false;
+        _vertexGrid.Clear();
+        _representatives.Clear();
+        foreach (var brush in _brushes)
+        {
+            brush.Emitted.Clear();
+            brush.References.Clear();
+            brush.OutputChanged = true;
+            brush.WeldDirty = true;
+        }
     }
 
-    /// <summary>Collect the polygons to emit, re-welding only brushes whose rings could have
-    /// changed. Anything untouched, and not neighbouring something touched, keeps its cached rings.</summary>
-    private List<EmitItem> BuildEmitItems()
+    // Points within the weld tolerance of each other become one point before anything else, the same way the
+    // emitted vertices weld, so every ring agrees on where a corner is before T-junctions are filled in. Each brush
+    // holds the representative of every corner of its output, and a representative lives while anything holds it.
+    private void Reference(SceneBrush brush)
     {
-        if (!WeldTJunctions)
-        {
-            var plain = new List<EmitItem>();
-            foreach (var brush in _brushes)
-                foreach (var frag in brush.Output)
-                    plain.Add(new EmitItem { Brush = brush, Ring = new List<Float3>(frag.Poly), Source = frag.Source, Flip = frag.Flip });
-            return plain;
-        }
+        foreach (var held in brush.References) Release(held);
+        brush.References.Clear();
 
-        // The point set the welder snaps against is global, so it is gathered from every brush -
-        // including ones whose own rings will not be re-welded.
-        var seen = new HashSet<SnapKey>();
-        var points = new List<Float3>();
-        foreach (var brush in _brushes)
-            foreach (var frag in brush.Output)
-                foreach (var p in frag.Poly)
-                    if (seen.Add(new SnapKey(p, WeldTolerance)))
-                        points.Add(p);
+        foreach (var frag in brush.Output)
+            foreach (var p in frag.Poly)
+                brush.References.Add(Representative(p));
+    }
 
-        Bvh<Float3>? pointBvh = null;
-        var candidates = new List<Float3>();
-        var items = new List<EmitItem>();
-
-        foreach (var brush in _brushes)
-        {
-            if (brush.WeldDirty)
+    private void RebuildRepresentativeTree()
+    {
+        var all = new List<RepPoint>();
+        var boxes = new List<AABB>();
+        foreach (var bucket in _representatives.Values)
+            foreach (var rep in bucket)
             {
-                pointBvh ??= new Bvh<Float3>(points, p => new AABB(p, p).Expanded(WeldTolerance), BvhBuildSettings.Default);
-
-                brush.Welded.Clear();
-                foreach (var frag in brush.Output)
-                {
-                    brush.Welded.Add(new EmitItem
-                    {
-                        Brush = brush,
-                        Ring = InsertCollinearPoints(new List<Float3>(frag.Poly), pointBvh, candidates),
-                        Source = frag.Source,
-                        Flip = frag.Flip
-                    });
-                }
-                brush.WeldDirty = false;
+                all.Add(rep);
+                boxes.Add(new AABB(rep.Point, rep.Point).Expanded(WeldTolerance));
             }
 
-            items.AddRange(brush.Welded);
+        int[] handles = _representativeTree.Rebuild(all, boxes);
+        for (int i = 0; i < handles.Length; i++) all[i].TreeHandle = handles[i];
+    }
+
+    // Rebuilds a brush's rings after T-junction welding from its output and the representatives it holds.
+    private void Reweld(SceneBrush brush)
+    {
+        brush.Welded.Clear();
+        if (!WeldTJunctions)
+        {
+            foreach (var frag in brush.Output)
+                brush.Welded.Add(new EmitItem { Brush = brush, Ring = new List<Float3>(frag.Poly), Source = frag.Source, Flip = frag.Flip });
+            return;
         }
 
-        return items;
+        var candidates = new List<RepPoint>();
+        int held = 0;
+        foreach (var frag in brush.Output)
+        {
+            var ring = new List<Float3>(frag.Poly.Length);
+            for (int i = 0; i < frag.Poly.Length; i++)
+            {
+                Float3 snapped = brush.References[held++].Point;
+                if (ring.Count == 0 || ring[^1] != snapped) ring.Add(snapped);
+            }
+            if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
+            if (ring.Count < 3) continue;
+
+            brush.Welded.Add(new EmitItem
+            {
+                Brush = brush,
+                Ring = InsertCollinearPoints(ring, candidates),
+                Source = frag.Source,
+                Flip = frag.Flip
+            });
+        }
     }
 
-    // Inserts existing vertices that lie on the interior of another polygon's edge, removing the
-    // T-junctions that arise when independent cuts subdivide a shared face.
-    private void WeldTJunctionPass(List<EmitItem> items)
+    // Takes a brush's faces out of the mesh, with the edges and vertices nothing else uses any more.
+    private void RemoveEmitted(GeometryData output, SceneBrush brush)
     {
-        var seen = new HashSet<SnapKey>();
-        var points = new List<Float3>();
-        foreach (var item in items)
-            foreach (var p in item.Ring)
-                if (seen.Add(new SnapKey(p, WeldTolerance)))
-                    points.Add(p);
+        if (brush.Emitted.Count == 0) return;
 
-        var bvh = new Bvh<Float3>(points, p => new AABB(p, p).Expanded(WeldTolerance), BvhBuildSettings.Default);
-        var candidates = new List<Float3>();
+        var edges = new List<GeometryData.Edge>();
+        var verts = new List<GeometryData.Vertex>();
+        foreach (var face in brush.Emitted)
+        {
+            if (face.Owner != output) continue;
+            var loop = face.Loop;
+            if (loop != null)
+            {
+                do
+                {
+                    edges.Add(loop.Edge);
+                    verts.Add(loop.Vert);
+                    loop = loop.Next;
+                } while (loop != null && loop != face.Loop);
+            }
+            output.RemoveFace(face);
+        }
+        brush.Emitted.Clear();
 
-        foreach (var item in items)
-            item.Ring = InsertCollinearPoints(item.Ring, bvh, candidates);
+        foreach (var edge in edges)
+            if (edge.Owner == output && edge.Loop == null)
+                output.RemoveEdge(edge);
+
+        foreach (var vertex in verts)
+        {
+            if (vertex.Owner != output || vertex.Edge != null) continue;
+            var home = VertexHome(vertex.Point);
+            if (_vertexGrid.TryGetValue(home, out var bucket) && bucket.Remove(vertex) && bucket.Count == 0)
+                _vertexGrid.Remove(home);
+            output.RemoveVertex(vertex);
+        }
     }
 
-    private List<Float3> InsertCollinearPoints(List<Float3> ring, Bvh<Float3> points, List<Float3> candidates)
+    // Inserts representatives lying on the interior of a ring's edges, removing the T-junctions that arise when
+    // independent cuts subdivide a shared face.
+    private List<Float3> InsertCollinearPoints(List<Float3> ring, List<RepPoint> candidates)
     {
         float tol2 = WeldTolerance * WeldTolerance;
         int n = ring.Count;
@@ -1046,11 +1582,12 @@ public sealed class CSGScene
             if (abLen2 < tol2) continue;
 
             candidates.Clear();
-            points.QueryAABB(new AABB(Maths.Min(a, b), Maths.Max(a, b)).Expanded(WeldTolerance), candidates);
+            _representativeTree.QueryAABB(new AABB(Maths.Min(a, b), Maths.Max(a, b)).Expanded(WeldTolerance), candidates);
 
             inserts.Clear();
-            foreach (var c in candidates)
+            foreach (var rep in candidates)
             {
+                Float3 c = rep.Point;
                 if (Float3.LengthSquared(c - a) < tol2 || Float3.LengthSquared(c - b) < tol2) continue;
                 float t = Float3.Dot(c - a, ab) / abLen2;
                 if (t <= 0.0f || t >= 1.0f) continue;
@@ -1087,7 +1624,7 @@ public sealed class CSGScene
 
         for (int idx = 0; idx < count; idx++)
         {
-            Float3 point = item.Flip ? ring[count - 1 - idx] : ring[idx];
+            Float3 point = item.Flip != _invertOutput ? ring[count - 1 - idx] : ring[idx];
             var vertex = GetOrAddVertex(result, weld, point);
             if (verts.Count > 0 && verts[verts.Count - 1] == vertex) continue;
             verts.Add(vertex);
@@ -1106,6 +1643,7 @@ public sealed class CSGScene
         var face = result.AddFace(verts.ToArray());
         if (face == null)
             return;
+        item.Brush.Emitted.Add(face);
 
         face.Attributes[BrushIdAttribute] = new GeometryData.IntAttributeValue(item.Brush.Id);
         face.Attributes[SourceFaceAttribute] = new GeometryData.IntAttributeValue(item.Source.SourceIndex);
@@ -1119,7 +1657,7 @@ public sealed class CSGScene
         SurfaceTexSpace texSpace = default;
         if (SurfaceUV != null)
         {
-            Plane plane = source.Plane;
+            Plane plane = source.SurfacePlane;
             projectUV = SurfaceUV(item.Brush.Id, source.SourceIndex, in plane, out texSpace);
         }
 
@@ -1130,6 +1668,7 @@ public sealed class CSGScene
                 var loop = face.GetLoop(verts[i]);
                 if (loop == null) continue;
                 Float2 uv = texSpace.Project(positions[i]);
+                if (_invertOutput) uv = new Float2(-uv.X, uv.Y);
                 loop.Attributes[UVAttributeName] = new GeometryData.FloatAttributeValue(uv.X, uv.Y);
             }
         }
@@ -1276,6 +1815,62 @@ public sealed class CSGScene
         return new GeometryData.IntAttributeValue { Data = rounded };
     }
 
+    /// <summary>
+    /// The representative already standing within the weld tolerance of this point, or a new one for it, now standing
+    /// for every later point that close. Held once more either way. Searched by grid as <see cref="GetOrAddVertex"/> does.
+    /// </summary>
+    private RepPoint Representative(Float3 point)
+    {
+        float cell = WeldTolerance * 4;
+        int x0 = (int)MathF.Floor((point.X - WeldTolerance) / cell), x1 = (int)MathF.Floor((point.X + WeldTolerance) / cell);
+        int y0 = (int)MathF.Floor((point.Y - WeldTolerance) / cell), y1 = (int)MathF.Floor((point.Y + WeldTolerance) / cell);
+        int z0 = (int)MathF.Floor((point.Z - WeldTolerance) / cell), z1 = (int)MathF.Floor((point.Z + WeldTolerance) / cell);
+
+        for (int x = x0; x <= x1; x++)
+            for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++)
+                {
+                    if (!_representatives.TryGetValue(new SnapKey(x, y, z), out var bucket)) continue;
+                    foreach (var candidate in bucket)
+                    {
+                        Float3 d = candidate.Point - point;
+                        if (MathF.Abs(d.X) <= WeldTolerance && MathF.Abs(d.Y) <= WeldTolerance && MathF.Abs(d.Z) <= WeldTolerance)
+                        {
+                            candidate.Count++;
+                            return candidate;
+                        }
+                    }
+                }
+
+        var rep = new RepPoint { Point = point, Home = VertexHome(point), Count = 1 };
+        if (!_representatives.TryGetValue(rep.Home, out var list)) _representatives[rep.Home] = list = new List<RepPoint>(1);
+        list.Add(rep);
+        if (!_deferRepresentativeTree) rep.TreeHandle = _representativeTree.Add(rep, new AABB(point, point).Expanded(WeldTolerance));
+        return rep;
+    }
+
+    private void Release(RepPoint rep)
+    {
+        if (--rep.Count > 0) return;
+        if (_representatives.TryGetValue(rep.Home, out var bucket) && bucket.Remove(rep) && bucket.Count == 0)
+            _representatives.Remove(rep.Home);
+        _representativeTree.Remove(rep.TreeHandle);
+    }
+
+    private SnapKey VertexHome(Float3 point)
+    {
+        float cell = WeldTolerance * 4;
+        return new SnapKey((int)MathF.Floor(point.X / cell), (int)MathF.Floor(point.Y / cell), (int)MathF.Floor(point.Z / cell));
+    }
+
+    internal sealed class RepPoint
+    {
+        public Float3 Point;
+        public SnapKey Home;
+        public int Count;
+        public int TreeHandle;
+    }
+
     // Finds the vertex already standing within the weld tolerance of a point, or adds one. Vertices are
     // kept in a grid, and every cell the tolerance reaches is searched, so two points a hair apart
     // still weld when a cell border runs between them.
@@ -1301,13 +1896,13 @@ public sealed class CSGScene
                 }
 
         var vertex = result.AddVertex(point);
-        var home = new SnapKey((int)MathF.Floor(point.X / cell), (int)MathF.Floor(point.Y / cell), (int)MathF.Floor(point.Z / cell));
+        var home = VertexHome(point);
         if (!weld.TryGetValue(home, out var list)) weld[home] = list = new List<GeometryData.Vertex>(1);
         list.Add(vertex);
         return vertex;
     }
 
-    private readonly struct SnapKey : IEquatable<SnapKey>
+    internal readonly struct SnapKey : IEquatable<SnapKey>
     {
         private readonly int _x, _y, _z;
         public SnapKey(int x, int y, int z) { _x = x; _y = y; _z = z; }
@@ -1332,6 +1927,9 @@ public sealed class CSGScene
         public int SourceIndex = -1;
         public Float3[] World = Array.Empty<Float3>();
         public Plane Plane;
+
+        /// <summary>The fitted plane of the whole source face, which a concave or bent face's pieces share for texturing.</summary>
+        public Plane SurfacePlane;
         public GeometryData.Face Source = null!;
         public GeometryData.Vertex[] SrcVerts = Array.Empty<GeometryData.Vertex>();
         public GeometryData.Loop?[] SrcLoops = Array.Empty<GeometryData.Loop?>();
@@ -1369,15 +1967,32 @@ public sealed class CSGScene
         public bool Dirty;
         public bool Emits = true;
 
+        /// <summary>Every face one flat convex piece with all corners behind it, so neighbours can clip by its planes.</summary>
+        public bool Convex = true;
+
         public readonly List<FaceData> Faces = new();
         public AABB Bounds;
         public readonly List<OutFrag> Output = new();
+        public readonly List<OutFrag> Discarded = new();
 
         /// <summary>Rings after T-junction welding. Cached because welding a brush's rings only
         /// depends on points from brushes it overlaps, so an untouched brush keeps its result.</summary>
         public readonly List<EmitItem> Welded = new();
         public bool WeldDirty = true;
+
+        /// <summary>Faces this brush put in the assembled mesh, taken out again when it is re-welded.</summary>
+        public readonly List<GeometryData.Face> Emitted = new();
+
+        /// <summary>The representative of every corner of <see cref="Output"/>, in order.</summary>
+        public readonly List<RepPoint> References = new();
+        public bool OutputChanged = true;
+
+        /// <summary>Handle in the scene's brush tree.</summary>
+        public int TreeHandle = -1;
     }
 
     #endregion
 }
+
+/// <summary>A face piece a <see cref="CSGScene"/> build removed: the brush and source face it came from, its corners and the face's plane, in scene space.</summary>
+public readonly record struct CSGDiscardedFace(int BrushId, int SourceFaceIndex, Float3[] Corners, Plane Plane);

@@ -387,13 +387,39 @@ public struct FogVolumeDesc : IEquatable<FogVolumeDesc>
 }
 
 /// <summary>A world's wind: the way it blows across the ground, how hard, and how fast its gusts come and go.</summary>
-public struct WindDesc
+public struct WindDesc : IEquatable<WindDesc>
 {
     public Float2 Direction = new(1f, 0f);
     public float Strength = 0.6f;
     public float GustSpeed = 1.3f;
 
     public WindDesc() { }
+
+    public readonly bool Equals(WindDesc other) => Direction == other.Direction && Strength == other.Strength && GustSpeed == other.GustSpeed;
+    public override readonly bool Equals(object? obj) => obj is WindDesc other && Equals(other);
+    public override readonly int GetHashCode() => HashCode.Combine(Direction, Strength, GustSpeed);
+}
+
+/// <summary>
+/// A sphere of downwash, the air under something hovering: it comes down through the middle, spreads out across the
+/// ground and dies at the rim, calm at the very centre. Strength is the push where the outflow peaks, Turbulence varies it
+/// by place as a share of Strength, and gusts of PulseMagnitude times Strength roll outward PulseFrequency times a second.
+/// </summary>
+public struct WindZoneDesc : IEquatable<WindZoneDesc>
+{
+    public Double3 Center;
+    public float Radius = 10f;
+    public float Strength = 1f;
+    public float Turbulence = 0.5f;
+    public float PulseMagnitude = 0.5f;
+    public float PulseFrequency = 0.25f;
+
+    public WindZoneDesc() { }
+
+    public readonly bool Equals(WindZoneDesc other) => Center == other.Center && Radius == other.Radius && Strength == other.Strength
+        && Turbulence == other.Turbulence && PulseMagnitude == other.PulseMagnitude && PulseFrequency == other.PulseFrequency;
+    public override readonly bool Equals(object? obj) => obj is WindZoneDesc other && Equals(other);
+    public override readonly int GetHashCode() => HashCode.Combine(Center, Radius, Strength, Turbulence, PulseMagnitude, PulseFrequency);
 }
 
 /// <summary>A world's ambient light, fog and sun. Changes to the world's own instance apply at the next frame.</summary>
@@ -412,6 +438,11 @@ public sealed class EnvironmentDesc
     public FogVolumeDesc[] FogVolumes = [];
 
     public const int MaxFogVolumes = 64;
+
+    /// <summary>Local wind adding to <see cref="Wind"/>, the first <see cref="MaxWindZones"/> taken. Replace the array to change them.</summary>
+    public WindZoneDesc[] WindZones = [];
+
+    public const int MaxWindZones = 4;
 
     /// <summary>The directional light that is the sun, else the most intense directional light is.</summary>
     public LightHandle Sun;
@@ -444,6 +475,7 @@ public sealed class EnvironmentDesc
         => Ambient == other.Ambient && AmbientColor == other.AmbientColor && AmbientSky == other.AmbientSky && AmbientGround == other.AmbientGround
         && AmbientIntensity == other.AmbientIntensity && Fog == other.Fog && VolumetricFog == other.VolumetricFog
         && FogVolumes.AsSpan().SequenceEqual(other.FogVolumes) && Sun == other.Sun
+        && Wind.Equals(other.Wind) && WindZones.AsSpan().SequenceEqual(other.WindZones)
         && Sky == other.Sky && SkyColor == other.SkyColor && SkyCapture == other.SkyCapture
         && SkyProbeResolution == other.SkyProbeResolution && SkyCaptureInterval == other.SkyCaptureInterval && CaptureEV100 == other.CaptureEV100;
 }
@@ -503,7 +535,7 @@ internal struct WorldLightingRecord
     public uint DirectionalCount;
     public uint FogVolumeCount;
     public uint HasProbes;
-    private uint _pad1;
+    public uint WindZoneCount;
     public uint ProbeSlot;
     public uint ProbeSampler;
     public uint ProbeMips;
@@ -526,6 +558,17 @@ internal struct WorldLightingRecord
 
     /// <summary>The wind's way along x and z, strength and gust speed.</summary>
     public Float4 Wind;
+
+    /// <summary>Each wind zone's centre split high and low like the camera's with its radius in the high w, then its strength, turbulence, pulse magnitude and pulse frequency.</summary>
+    public WindZoneRecords WindZoneHigh;
+    public WindZoneRecords WindZoneLow;
+    public WindZoneRecords WindZoneParams;
+}
+
+[System.Runtime.CompilerServices.InlineArray(EnvironmentDesc.MaxWindZones)]
+internal struct WindZoneRecords
+{
+    private Float4 _first;
 }
 
 /// <summary>A fog volume as the shaders read it, 112 bytes, matching Graphite_FogVolumeRecord.</summary>
@@ -1173,6 +1216,16 @@ internal sealed class WorldLighting
         float length = MathF.Sqrt(blows.X * blows.X + blows.Y * blows.Y);
         blows = length > 1e-5f ? blows / length : new Float2(1f, 0f);
         record.Wind = new Float4(blows.X, blows.Y, MathF.Max(env.Wind.Strength, 0f), MathF.Max(env.Wind.GustSpeed, 0f));
+        int zones = Math.Min(env.WindZones.Length, EnvironmentDesc.MaxWindZones);
+        for (int i = 0; i < zones; i++)
+        {
+            WindZoneDesc zone = env.WindZones[i];
+            (Float3 high, Float3 low) = Precise.Split(zone.Center);
+            record.WindZoneHigh[i] = new Float4(high.X, high.Y, high.Z, MathF.Max(zone.Radius, 1e-4f));
+            record.WindZoneLow[i] = new Float4(low.X, low.Y, low.Z, 0f);
+            record.WindZoneParams[i] = new Float4(zone.Strength, zone.Turbulence, zone.PulseMagnitude, zone.PulseFrequency);
+        }
+        record.WindZoneCount = (uint)zones;
         int volumes = Math.Min(env.FogVolumes.Length, EnvironmentDesc.MaxFogVolumes);
         for (int i = 0; i < volumes; i++)
             FogVolumes.Set((uint)i, FogVolume(env.FogVolumes[i]));
