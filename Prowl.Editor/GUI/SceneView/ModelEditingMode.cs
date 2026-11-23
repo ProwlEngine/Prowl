@@ -299,6 +299,65 @@ public static class ModelEditingMode
         }
     }
 
+    [Flags]
+    public enum TransformParts { Location = 1, Rotation = 2, Scale = 4, All = Location | Rotation | Scale }
+
+    /// <summary>Bakes parts of each model object's own transform into its mesh, the mesh and its children staying where they are in the world.</summary>
+    public static void ApplyTransform(IReadOnlyList<GameObject> selected, TransformParts parts)
+    {
+        const string name = "Apply Transform";
+        foreach (GameObject go in selected)
+        {
+            if (go.GetComponent<ModelObject>() is not { } model || model.IsNotValid()) continue;
+            Transform transform = go.Transform;
+            Float3 position = parts.HasFlag(TransformParts.Location) ? Float3.Zero : transform.LocalPosition;
+            Quaternion rotation = parts.HasFlag(TransformParts.Rotation) ? Quaternion.Identity : transform.LocalRotation;
+            Float3 scale = parts.HasFlag(TransformParts.Scale) ? Float3.One : transform.LocalScale;
+            Float4x4 change = Float4x4.CreateTRS(position, rotation, scale).Invert() * Float4x4.CreateTRS(transform.LocalPosition, transform.LocalRotation, transform.LocalScale);
+
+            Undo.RecordObject(model, name);
+            Undo.RecordObject(go, name);
+            foreach (GameObject child in go.Children) Undo.RecordObject(child, name);
+
+            List<string> shapes = [.. model.Mesh.LoopAttributeNames().Where(n => n.StartsWith(MeshGeometry.BlendShapePrefix, StringComparison.Ordinal))];
+            Vector.Geometry.GeometryOperators.Transform(model.Mesh, change, shapes, [MeshGeometry.Normal]);
+            change.Decompose(out _, out Quaternion turn, out Float3 stretch);
+            Float4x4 back = change.Invert();
+            foreach (PMeshBone bone in model.Bones)
+            {
+                if (bone.Parent < 0)
+                {
+                    bone.Position = Float4x4.TransformPoint(bone.Position, change);
+                    bone.Rotation = turn * bone.Rotation;
+                    bone.Scale *= stretch;
+                }
+                bone.BindPose *= back;
+            }
+
+            transform.SetLocalTransform(position, rotation, scale);
+            foreach (GameObject child in go.Children)
+            {
+                Transform c = child.Transform;
+                (change * Float4x4.CreateTRS(c.LocalPosition, c.LocalRotation, c.LocalScale)).Decompose(out Float3 t, out Quaternion r, out Float3 s);
+                c.SetLocalTransform(t, r, s);
+            }
+            model.RefreshPreview();
+        }
+    }
+
+    /// <summary>Sets parts of each object's own transform back to none: no move, no turn, a scale of one.</summary>
+    public static void ClearTransform(IReadOnlyList<GameObject> selected, TransformParts parts)
+    {
+        Undo.RecordObjects([.. selected], "Clear Transform");
+        foreach (GameObject go in selected)
+        {
+            Transform transform = go.Transform;
+            if (parts.HasFlag(TransformParts.Location)) transform.LocalPosition = Float3.Zero;
+            if (parts.HasFlag(TransformParts.Rotation)) transform.LocalRotation = Quaternion.Identity;
+            if (parts.HasFlag(TransformParts.Scale)) transform.LocalScale = Float3.One;
+        }
+    }
+
     /// <summary>Moves a model object's origin to a point of its mesh, leaving the mesh where it is in the world.</summary>
     internal static void MoveOrigin(ModelObject model, Float3 local, string undoName)
     {

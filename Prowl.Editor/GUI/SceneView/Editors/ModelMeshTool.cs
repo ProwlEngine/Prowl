@@ -930,7 +930,12 @@ public sealed class ModelMeshTool : SceneTool
         List<GameObject> selected = [.. Selection.GetSelected<GameObject>()];
         if (selected.Count > 1 && Selection.ActiveObject is GameObject active)
             menu.Item(Loc.Get("model.join"), () => ModelEditingMode.Join(selected, active), shortcut: Chord("ModelEdit/Join"));
-        if (selected.Count > 0) menu.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selected));
+        if (selected.Count > 0)
+        {
+            menu.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selected));
+            menu.Submenu(Loc.Get("model.menu.apply"), m => ApplyItems(m, selected));
+            menu.Submenu(Loc.Get("model.menu.clear"), m => ClearItems(m, selected));
+        }
         List<ModelObject> models = [.. selected.Select(go => go.GetComponent<ModelObject>()).Where(m => m.IsValid())];
         if (models.Count > 0)
         {
@@ -956,6 +961,10 @@ public sealed class ModelMeshTool : SceneTool
 
         if (handles.IsPressed("ModelEdit/Join") && Selection.ActiveObject is GameObject active) ModelEditingMode.Join(selected, active);
         else if (handles.IsPressed("ModelEdit/Add")) AddMenu();
+        else if (handles.IsPressed("ModelEdit/Apply") && selected.Count > 0) ApplyMenu(selected);
+        else if (handles.IsPressed("ModelEdit/ClearLocation")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Location);
+        else if (handles.IsPressed("ModelEdit/ClearRotation")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Rotation);
+        else if (handles.IsPressed("ModelEdit/ClearScale")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Scale);
         else if (handles.IsPressed("MeshEdit/SelectAll")) Selection.ReplaceSelection(WorldObjects());
         else if (handles.IsPressed("MeshEdit/SelectNone")) Selection.Clear();
         else if (handles.IsPressed("MeshEdit/Invert")) Selection.ReplaceSelection(WorldObjects().Where(go => !Selection.IsSelected(go)).ToList());
@@ -978,6 +987,33 @@ public sealed class ModelMeshTool : SceneTool
             menu.Title(Loc.Get("model.menu.add"));
             ModelEditingMode.BuildCreateMenu(menu);
         });
+    }
+
+    private static void ApplyMenu(List<GameObject> selected)
+    {
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.apply"));
+            ApplyItems(menu, selected);
+        });
+    }
+
+    private static void ApplyItems(OrigamiUI.ContextBuilder menu, List<GameObject> selected)
+    {
+        void Item(string label, ModelEditingMode.TransformParts parts) => menu.Item(Loc.Get(label), () => ModelEditingMode.ApplyTransform(selected, parts));
+        Item("model.menu.apply_location", ModelEditingMode.TransformParts.Location);
+        Item("model.menu.apply_rotation", ModelEditingMode.TransformParts.Rotation);
+        Item("model.menu.apply_scale", ModelEditingMode.TransformParts.Scale);
+        Item("model.menu.apply_all", ModelEditingMode.TransformParts.All);
+        Item("model.menu.apply_rotation_scale", ModelEditingMode.TransformParts.Rotation | ModelEditingMode.TransformParts.Scale);
+    }
+
+    private static void ClearItems(OrigamiUI.ContextBuilder menu, List<GameObject> selected)
+    {
+        menu.Item(Loc.Get("model.menu.clear_location"), () => ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Location), shortcut: Chord("ModelEdit/ClearLocation"));
+        menu.Item(Loc.Get("model.menu.clear_rotation"), () => ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Rotation), shortcut: Chord("ModelEdit/ClearRotation"));
+        menu.Item(Loc.Get("model.menu.clear_scale"), () => ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Scale), shortcut: Chord("ModelEdit/ClearScale"));
     }
 
     private static void HideObjects(IEnumerable<GameObject> objects)
