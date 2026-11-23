@@ -168,6 +168,35 @@ internal static class TopologyOp
         return targets.Count;
     }
 
+    internal static int ShrinkFatten(GeometryData mesh, IEnumerable<Vertex> vertices, float distance)
+    {
+        List<Vertex> targets = vertices.Where(mesh.Contains).Distinct().ToList();
+        // Every normal is taken before any vertex moves, so moving one does not turn the next
+        Float3[] normals = [.. targets.Select(v => v.Normal())];
+        for (int i = 0; i < targets.Count; i++) targets[i].Point += normals[i] * distance;
+        mesh.MarkChanged();
+        return targets.Count;
+    }
+
+    internal static int ToSphere(GeometryData mesh, IEnumerable<Vertex> vertices, float factor)
+    {
+        List<Vertex> targets = vertices.Where(mesh.Contains).Distinct().ToList();
+        if (targets.Count < 2) return 0;
+        Float3 centre = Float3.Zero;
+        foreach (Vertex vertex in targets) centre += vertex.Point;
+        centre /= targets.Count;
+        float radius = targets.Average(v => Float3.Distance(v.Point, centre));
+        float t = Math.Clamp(factor, 0f, 1f);
+        foreach (Vertex vertex in targets)
+        {
+            Float3 away = vertex.Point - centre;
+            float length = Float3.Length(away);
+            if (length > 1e-6f) vertex.Point += (centre + away / length * radius - vertex.Point) * t;
+        }
+        mesh.MarkChanged();
+        return targets.Count;
+    }
+
     /// <summary>
     /// A copy of the mesh with its mirror image across a plane, the axis being 0, 1 or 2 for X, Y or Z and the offset
     /// where along it the plane stands. Vertices within the merge distance of the plane are shared by both halves and put on it, and the mirrored

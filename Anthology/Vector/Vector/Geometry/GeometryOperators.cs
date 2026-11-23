@@ -899,6 +899,23 @@ public static class GeometryOperators
         return TopologyOp.Smooth(mesh, vertices, factor, iterations);
     }
 
+    /// <summary>Moves vertices along their normals by a distance, out for positive and in for negative.</summary>
+    /// <returns>How many vertices moved.</returns>
+    public static int ShrinkFatten(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices, float distance)
+    {
+        return TopologyOp.ShrinkFatten(mesh, vertices, distance);
+    }
+
+    /// <summary>
+    /// Pulls vertices towards a sphere round their middle, as big as their average distance from it, by a factor
+    /// from 0 for not at all to 1 for onto it.
+    /// </summary>
+    /// <returns>How many vertices moved.</returns>
+    public static int ToSphere(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices, float factor)
+    {
+        return TopologyOp.ToSphere(mesh, vertices, factor);
+    }
+
     /// <summary>
     /// A copy of the mesh with its mirror image across a plane. Vertices within the merge distance of the plane
     /// are shared by both halves and put on it. The mesh given is not changed.
@@ -977,6 +994,16 @@ public static class GeometryOperators
     public static List<GeometryData.Vertex> SplitEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
     {
         return CutOp.SplitEdges(mesh, edges);
+    }
+
+    /// <summary>
+    /// Splits faces off the rest of the mesh where they meet it along edges: every vertex on that outline is copied, so
+    /// the faces keep their place but no longer share it.
+    /// </summary>
+    /// <returns>The new vertices.</returns>
+    public static List<GeometryData.Vertex> SplitFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
+    {
+        return CutOp.SplitFaces(mesh, faces);
     }
 
     /// <summary>

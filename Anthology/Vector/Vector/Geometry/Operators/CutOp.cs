@@ -81,6 +81,16 @@ internal static class CutOp
     /// around it, so the faces either side no longer share it. Where a run of edges ends inside the surface the end
     /// stays joined, which opens a slit. Returns the new vertices.
     /// </summary>
+    internal static List<Vertex> SplitFaces(GeometryData mesh, IEnumerable<Face> faces)
+    {
+        var region = new HashSet<Face>(faces.Where(mesh.Contains));
+        var outline = new HashSet<Edge>();
+        foreach (Face face in region)
+            foreach (Edge edge in face.NeighborEdges())
+                if (edge.NeighborFaces().Exists(f => !region.Contains(f))) outline.Add(edge);
+        return SplitEdges(mesh, outline);
+    }
+
     internal static List<Vertex> SplitEdges(GeometryData mesh, IEnumerable<Edge> edges)
     {
         var selected = new HashSet<Edge>(edges.Where(mesh.Contains));

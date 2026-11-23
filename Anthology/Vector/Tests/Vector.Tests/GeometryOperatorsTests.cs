@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Vector;
@@ -12,6 +14,42 @@ namespace Prowl.Vector.Tests;
 
 public class GeometryOperatorsTests
 {
+    [Fact]
+    public void ShrinkFatten_MovesVerticesAlongTheirNormals()
+    {
+        GeometryData mesh = GeometryGenerator.Box(new Float3(2f));
+        float before = mesh.Volume();
+
+        GeometryOperators.ShrinkFatten(mesh, mesh.Vertices, MathF.Sqrt(3f));
+
+        Assert.All(mesh.Vertices, v => Assert.Equal(2f, MathF.Abs(v.Point.X), 4));
+        Assert.Equal(before * 8f, mesh.Volume(), 2);
+    }
+
+    [Fact]
+    public void ToSphere_PutsVerticesOnASphereRoundTheirMiddle()
+    {
+        GeometryData mesh = GeometryGenerator.Box(new Float3(2f, 4f, 6f));
+
+        GeometryOperators.ToSphere(mesh, mesh.Vertices, 1f);
+
+        float radius = Float3.Length(mesh.Vertices[0].Point);
+        Assert.All(mesh.Vertices, v => Assert.Equal(radius, Float3.Length(v.Point), 4));
+    }
+
+    [Fact]
+    public void SplitFaces_TakesFacesOffTheRest()
+    {
+        GeometryData mesh = GeometryGenerator.Box(new Float3(2f));
+        GeometryData.Face top = mesh.Faces.First(f => f.Normal().Y > 0.9f);
+
+        List<GeometryData.Vertex> made = GeometryOperators.SplitFaces(mesh, [top]);
+
+        Assert.Equal(4, made.Count);
+        Assert.Equal(12, mesh.Vertices.Count);
+        Assert.All(mesh.Faces.First(f => f.Normal().Y > 0.9f).NeighborVertices(), v => Assert.Single(v.NeighborFaces()));
+    }
+
     [Fact]
     public void Transform_MovesOffsetsAndNormalsAndTurnsMirroredFaces()
     {

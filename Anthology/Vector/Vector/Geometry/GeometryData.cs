@@ -83,6 +83,14 @@ public partial class GeometryData
             }
             return faces.ToList();
         }
+
+        /// <summary>The average normal of the faces using this vertex, or zero when it has none.</summary>
+        public Float3 Normal()
+        {
+            Float3 sum = Float3.Zero;
+            foreach (Face face in NeighborFaces()) sum += face.Normal();
+            return Float3.LengthSquared(sum) > 1e-12f ? Float3.Normalize(sum) : Float3.Zero;
+        }
     }
 
     /// <summary>
