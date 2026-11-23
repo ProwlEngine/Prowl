@@ -150,7 +150,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
             NetSession session = Networking.Networking.Host();
             Assert.IsType<LocalTransport>(session.Transport);
             Assert.Equal(3, session.Options.MaxPeers);
-            Assert.Equal(NetworkSchema.AppVersion(17), session.Options.AppVersion);
+            Assert.Equal(17u, session.Options.AppVersion);
             Assert.Equal(20, Networking.Networking.TickRate);
             Assert.Equal(75, Networking.Networking.InterpolationDelay.TotalMilliseconds);
             NetworkConfiguration changed = Networking.Networking.Configuration;
@@ -168,7 +168,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
         var config = new NetworkConfiguration { Port = 0, ProtocolId = 1234, AppVersion = 12,
             BatchMessages = false, Execution = NetworkExecution.Inline };
         using var transport = new KcpTransport(config.CreateKcpOptions());
-        using NetSession host = NetSession.Host(transport, options: config.CreateSessionOptions() with { AppVersion = NetworkSchema.AppVersion(12) });
+        using NetSession host = NetSession.Host(transport, options: config.CreateSessionOptions() with { AppVersion = 12 });
         config.Port = transport.LocalPort;
         try
         {
@@ -182,7 +182,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
                 Thread.Sleep(1);
             }
             Assert.True(Networking.Networking.IsActive);
-            Assert.Equal(NetworkSchema.AppVersion(12), client.Options.AppVersion);
+            Assert.Equal(12u, client.Options.AppVersion);
             Assert.NotEqual(transport.LocalPort, ((KcpTransport)client.Transport).LocalPort);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }

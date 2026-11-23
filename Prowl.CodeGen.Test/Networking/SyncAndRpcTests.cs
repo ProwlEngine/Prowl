@@ -465,7 +465,7 @@ public class SyncAndRpcTests
             });
             Component = Net.SpawnFactory("hosted", default, Prowl.Vector.Quaternion.Identity).GetComponent(type)!;
             Client = NetSession.Join(new LocalTransport(network, "client"), "host", "client",
-                options: new NetSessionOptions { AppVersion = NetworkSchema.AppVersion(0) });
+                options: new NetSessionOptions { AppVersion = 0 });
             // Told which scenes to load, it answers that it has them, and the host spawns for it.
             Client.OnRaw(Scene, (NetPeer _, ref NetReader r, Delivery _, byte _) =>
             {

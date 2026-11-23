@@ -42,8 +42,7 @@ public static partial class Networking
     /// <summary>
     ///     Sync and transform ticks per second, rounded to a whole number of fixed steps. RPCs flush every frame.
     ///     <see cref="Configure" /> sets it from <see cref="NetworkConfiguration.TickRate" />. Set it before the session
-    ///     starts, the same on every peer: a peer whose tick is a different length is refused when it joins, as one
-    ///     with another app version is.
+    ///     starts, the same on every peer.
     /// </summary>
     public static float TickRate { get; set; } = 30;
 
@@ -90,7 +89,7 @@ public static partial class Networking
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        NetSessionOptions session = WithSchema(options);
+        NetSessionOptions session = options ?? s_configuration.CreateSessionOptions();
         PrepareTransport(transport);
         try
         {
@@ -301,7 +300,7 @@ public static partial class Networking
         BeginSession();
         NetworkSystem.ValidateMessageLimit(options);
         using FrameStatScope stats = FrameStats.Network.Scope();
-        NetSessionOptions session = WithSchema(options);
+        NetSessionOptions session = options ?? s_configuration.CreateSessionOptions();
         PrepareTransport(transport);
         try
         {
@@ -314,12 +313,5 @@ public static partial class Networking
             Shutdown();
             throw;
         }
-    }
-
-    private static NetSessionOptions WithSchema(NetSessionOptions? options)
-    {
-        NetSessionOptions session = options ?? s_configuration.CreateSessionOptions();
-        session.AppVersion = NetworkSchema.AppVersion(session.AppVersion, s_configuration.ValidatedCopy().PositionPrecision);
-        return session;
     }
 }

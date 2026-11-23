@@ -323,7 +323,7 @@ public sealed class FakePeer : IDisposable
     public static FakePeer Host(LocalNetwork network) => new(NetSession.Host(new LocalTransport(network, "host"), "FakeHost", SchemaOptions));
 
     /// <summary>Options with the app version the engine sends, so a bare session can join or host it.</summary>
-    public static NetSessionOptions SchemaOptions => new() { AppVersion = NetworkSchema.AppVersion(0) };
+    public static NetSessionOptions SchemaOptions => new() { AppVersion = 0 };
 
     private static byte[] ReadEnginePayload(ushort id, ref NetReader reader)
     {

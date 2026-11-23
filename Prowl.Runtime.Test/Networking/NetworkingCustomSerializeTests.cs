@@ -216,7 +216,4 @@ public partial class NetworkingTests
         Assert.Equal([true, false], copy.Initial);
     }
 
-    [Fact]
-    public void ComponentsWritingTheirOwnStateArePartOfTheSchema() =>
-        Assert.Contains(NetworkSchema.Describe(typeof(PackedGridTestComponent)), e => e.Contains("serialize"));
 }
