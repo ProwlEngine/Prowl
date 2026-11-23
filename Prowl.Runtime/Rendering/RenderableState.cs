@@ -34,6 +34,9 @@ public sealed class RenderableState
         public Float4 Custom0, Custom1;
         public AABB? Bounds;
         public sbyte SortBias;
+
+        /// <summary>Multiplies the vertex colour in shaders that read the object colour. Null for white.</summary>
+        public Float4? Color;
     }
 
     private RenderableHandle _handle;
@@ -47,6 +50,7 @@ public sealed class RenderableState
     private Float4 _custom0, _custom1;
     private AABB? _bounds;
     private sbyte _sortBias;
+    private Float4 _color;
     private RenderWorld? _world;
 
     /// <summary>The renderable, invalid while there is nothing to draw.</summary>
@@ -78,6 +82,7 @@ public sealed class RenderableState
                 ObjectId = desc.ObjectId,
                 Lightmap = desc.Lightmap,
                 SortBias = desc.SortBias,
+                Color = desc.Color ?? Float4.One,
             };
             _handle = world.Add(add, desc.Materials);
             _world = world;
@@ -91,6 +96,7 @@ public sealed class RenderableState
             _custom0 = desc.Custom0;
             _custom1 = desc.Custom1;
             _sortBias = desc.SortBias;
+            _color = add.Color;
             _bounds = desc.Bounds;
             if (desc.Bounds is { } bounds) world.SetBounds(_handle, bounds);
             return;
@@ -105,6 +111,8 @@ public sealed class RenderableState
         if (!_lightmap.Equals(desc.Lightmap)) { world.SetLightmap(_handle, desc.Lightmap); _lightmap = desc.Lightmap; }
         if (_custom0 != desc.Custom0 || _custom1 != desc.Custom1) { world.SetCustomData(_handle, desc.Custom0, desc.Custom1); (_custom0, _custom1) = (desc.Custom0, desc.Custom1); }
         if (_sortBias != desc.SortBias) { world.SetSortBias(_handle, desc.SortBias); _sortBias = desc.SortBias; }
+        Float4 color = desc.Color ?? Float4.One;
+        if (_color != color) { world.SetColor(_handle, color); _color = color; }
         if (!Nullable.Equals(_bounds, desc.Bounds))
         {
             if (desc.Bounds is { } bounds) world.SetBounds(_handle, bounds);

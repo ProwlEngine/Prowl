@@ -30,13 +30,10 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     void IMaterialRenderer.SetMaterial(int slot, Material? material) { MaterialSlots.CheckSingle(slot); Material = material; }
     Color IColorTint.Tint { get => Color; set => Color = value; }
 
-    /// <summary>Sorting-order spacing along Z (world units) so higher orders sort in front for the transparent queue.</summary>
-    private const float SortBias = 0.0001f;
-
     public Sprite? Sprite { get => sprite; set { sprite = value; Wake(); } }
     [SerializeField] private Sprite? sprite;
 
-    /// <summary>Tint multiplied into the sprite. Baked into vertex color.</summary>
+    /// <summary>Tint multiplied into the sprite, given to the shader as the object colour.</summary>
     public Color Color { get => color; set { color = value; Wake(); } }
     [SerializeField] private Color color = Color.White;
 
@@ -49,7 +46,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     public Material? Material { get => material; set { material = value; Wake(); } }
     [SerializeField] private Material? material;
 
-    /// <summary>Higher values render in front of lower ones (applied as a small Z bias for the transparent queue).</summary>
+    /// <summary>Higher values draw in front of lower ones in the same render queue, before depth. Clamped to -128 to 127.</summary>
     public int SortingOrder { get => sortingOrder; set { sortingOrder = value; Wake(); } }
     [SerializeField] private int sortingOrder;
 
@@ -61,13 +58,11 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     [System.NonSerialized, NotHeld] private readonly OwnedMaterial _material = new();
     [System.NonSerialized, NotHeld] private readonly GMaterial[] _gpuMaterials = new GMaterial[1];
     [System.NonSerialized] private uint _worldVersion, _transformVersion;
-    [System.NonSerialized] private int _sortingOrder;
 
     // Snapshot of the inputs the baked mesh was built from, so we only rebuild when something changes.
     [System.NonSerialized] private Sprite? _bakedSprite;
     [System.NonSerialized] private int _bakedContent;
     [System.NonSerialized] private bool _bakedFlipX, _bakedFlipY;
-    [System.NonSerialized] private Color _bakedColor;
 
     private static Material? s_defaultMaterial;
 
@@ -113,25 +108,24 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
             if (secondary.Value.IsValid()) _material.SetTexture(secondary.Key, secondary.Value);
         _gpuMaterials[0] = gpu;
 
-        Float4x4 matrix = Transform.LocalToWorldMatrix;
-        if (SortingOrder != 0)
-            matrix *= Float4x4.CreateTranslation(new Float3(0, 0, SortingOrder * SortBias));
-        if (_worldVersion != Transform.WorldVersion || _sortingOrder != SortingOrder)
+        if (_worldVersion != Transform.WorldVersion)
         {
             _worldVersion = Transform.WorldVersion;
-            _sortingOrder = SortingOrder;
             _transformVersion++;
         }
 
+        Color color = Color;
         _renderable.Sync(world, new RenderableState.Desc
         {
             Mesh = mesh.GpuIfLoaded,
             Materials = _gpuMaterials,
-            Transform = (Double4x4)matrix,
+            Transform = (Double4x4)Transform.LocalToWorldMatrix,
             TransformVersion = _transformVersion,
             Flags = RenderableState.FlagsFor(GameObject, false, false) | ShadowCasting.ToFlags(),
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
+            SortBias = (sbyte)System.Math.Clamp(SortingOrder, sbyte.MinValue, sbyte.MaxValue),
+            Color = new Float4(color.R, color.G, color.B, color.A),
         });
         return material.IsLoaded && tex.IsLoaded;
     }
@@ -166,13 +160,10 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
 
         var verts = new Float3[n];
         var uvs = new Float2[n];
-        var colors = new Color32[n];
-        Color32 tint = (Color32)Color;
         for (int i = 0; i < n; i++)
         {
             verts[i] = new Float3(srcVerts[i].X * flipX, srcVerts[i].Y * flipY, 0f);
             uvs[i] = srcUV[i];
-            colors[i] = tint;
         }
 
         uint[] idx = new uint[srcIdx.Length];
@@ -186,7 +177,6 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
 
         _mesh.Vertices = verts; // sets first so length-matched arrays below validate
         _mesh.UV = uvs;
-        _mesh.Colors32 = colors;
         _mesh.Indices = idx;
         _mesh.RecalculateBounds();
         _mesh.Upload();
@@ -197,15 +187,13 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     private bool NeedsRebuild(Sprite sprite) =>
         _mesh.IsNotValid() ||
         !ReferenceEquals(_bakedSprite, sprite) || _bakedContent != sprite.ContentVersion ||
-        _bakedFlipX != FlipX || _bakedFlipY != FlipY ||
-        !_bakedColor.Equals(Color);
+        _bakedFlipX != FlipX || _bakedFlipY != FlipY;
 
     private void Snapshot(Sprite sprite)
     {
         _bakedSprite = sprite;
         _bakedContent = sprite.ContentVersion;
         _bakedFlipX = FlipX; _bakedFlipY = FlipY;
-        _bakedColor = Color;
     }
 
     public override void DrawGizmosSelected()
