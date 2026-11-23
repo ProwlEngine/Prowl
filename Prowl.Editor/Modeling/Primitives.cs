@@ -17,6 +17,8 @@ public enum PrimitiveKind
     Plane,
     Cylinder,
     Sphere,
+    Icosphere,
+    Cone,
     Torus,
     Grid,
 }
@@ -32,12 +34,14 @@ public static class Primitives
             PrimitiveKind.Grid => GeometryGenerator.Plane(new Float2(1f), default, new Int2(10, 10)),
             PrimitiveKind.Cylinder => GeometryGenerator.Cylinder(0.5f, 1f),
             PrimitiveKind.Sphere => GeometryGenerator.Sphere(0.5f),
+            PrimitiveKind.Icosphere => GeometryGenerator.Icosphere(0.5f),
+            PrimitiveKind.Cone => GeometryGenerator.Cone(0.5f, 1f),
             PrimitiveKind.Torus => GeometryGenerator.Torus(0.5f, 0.15f),
             _ => GeometryGenerator.Box(new Float3(1f)),
         };
         // Some generators repeat the points along a seam, which would leave the surface open there
         GeometryOperators.MergeByDistance(mesh, null, 1e-5f);
-        if (kind is PrimitiveKind.Cylinder or PrimitiveKind.Sphere or PrimitiveKind.Torus) UVs.Cylinder(mesh, mesh.Faces);
+        if (kind is PrimitiveKind.Cylinder or PrimitiveKind.Sphere or PrimitiveKind.Icosphere or PrimitiveKind.Cone or PrimitiveKind.Torus) UVs.Cylinder(mesh, mesh.Faces);
         else UVs.Cube(mesh, mesh.Faces);
         return mesh;
     }

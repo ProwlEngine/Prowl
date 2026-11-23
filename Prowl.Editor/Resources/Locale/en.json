@@ -176,6 +176,8 @@
   "model.primitive_plane": "Plane",
   "model.primitive_cylinder": "Cylinder",
   "model.primitive_sphere": "Sphere",
+  "model.primitive_icosphere": "Icosphere",
+  "model.primitive_cone": "Cone",
   "model.primitive_torus": "Torus",
   "model.primitive_grid": "Grid",
   "save.saved": "Saved",
