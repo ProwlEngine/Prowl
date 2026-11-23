@@ -164,11 +164,6 @@ internal sealed partial class FramePipeline : IDisposable
             builder.Read(texture, TextureState.Sampled);
         if (camera.FogWritten && camera.FogVolume != null)
             builder.Read(graph.Import(camera.FogVolume), TextureState.Sampled);
-        if (camera.World.World.FarShadow is { Active: true } far)
-        {
-            builder.Read(graph.Import(far.Heights!), TextureState.Sampled);
-            builder.Read(graph.Import(far.Data), BufferAccess.AllReads);
-        }
         if (screenVisibility && camera.ScreenVisibility != null)
             builder.Read(graph.Import(camera.ScreenVisibility), TextureState.Sampled, TextureState.Sampled);
         if (screenIrradiance && camera.ScreenIrradiance != null)

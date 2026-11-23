@@ -353,65 +353,6 @@ public sealed class TerrainSurfaceTests : IDisposable
         return sum / pixels.Length;
     }
 
-    // A far shadow map the host fills darkens the ground under heights above it, and leaves it lit under heights below
-    [Fact]
-    public void FarShadow_DarkensWhatLiesBelowItsHeights()
-    {
-        using TerrainData data = Flat(600);
-        TerrainSurface surface = new(_harness.Renderer, data);
-        _harness.Owned.Add(surface);
-        _harness.World.Providers.Add(surface);
-        _harness.World.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, -1, 0), Color = new Float3(1, 1, 1), Intensity = 10f });
-
-        Texture heights = _harness.Device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R32_Float, TextureUsage.Sampled));
-        FarShadowMap far = new(_harness.Renderer) { Heights = heights, Min = new Double2(200, 120), Size = 200, Softness = 1f, Bias = 0f };
-        _harness.Owned.Add(far);
-        _harness.Owned.Add(heights);
-        _harness.World.FarShadow = far;
-
-        RenderView view = _harness.View();
-        Float4x4 down = new(new Float4(1, 0, 0, 0), new Float4(0, 0, -1, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 0, 1));
-        view.Camera = new ViewCamera(new ViewLayer { View = down, Projection = RendererHarness.Projection, Position = new Double3(300.5, 60, 220.25) });
-
-        _harness.Device.UpdateTexture<float>(heights, Enumerable.Repeat(10f, 16).ToArray(), TextureRegion.Whole(heights, 0, 0));
-        float lit = Brightness(view);
-        _harness.Device.UpdateTexture<float>(heights, Enumerable.Repeat(90f, 16).ToArray(), TextureRegion.Whole(heights, 0, 0));
-        float shadowed = Brightness(view);
-        Assert.True(lit > 0.05f, $"lit {lit}");
-        Assert.True(shadowed < lit * 0.5f, $"shadowed {shadowed} lit {lit}");
-    }
-
-    // A package of the given quads a side shaped by a height in metres over 0 to 100 m at each finest sample
-    private static TerrainData Shaped(int quads, Func<int, int, double> metres)
-    {
-        TerrainHeader header = new() { Spacing = 1, Bottom = 0, Range = 100, QuadsX = quads, QuadsZ = quads, Levels = TerrainHeader.LevelsFor(quads, quads), SplatLevels = 1 };
-        MemoryStream stream = new();
-        TerrainPackage.Writer writer = TerrainPackage.Begin(stream, header);
-        for (int level = 0; level < header.Levels; level++)
-            for (int z = 0; z < header.PagesZ(level); z++)
-                for (int x = 0; x < header.PagesX(level); x++)
-                {
-                    ushort[] heights = new ushort[TerrainPage.Samples];
-                    byte[] normals = new byte[TerrainPage.Samples * 4];
-                    ushort low = ushort.MaxValue, high = 0;
-                    for (int j = -1; j <= TerrainPage.Quads + 1; j++)
-                        for (int i = -1; i <= TerrainPage.Quads + 1; i++)
-                        {
-                            int sx = Math.Clamp((x * TerrainPage.Quads + i) << level, 0, quads), sz = Math.Clamp((z * TerrainPage.Quads + j) << level, 0, quads);
-                            ushort h = (ushort)Math.Round(metres(sx, sz) / 100.0 * 65535);
-                            int index = TerrainPage.Index(i, j);
-                            heights[index] = h;
-                            (normals[index * 4], normals[index * 4 + 1], normals[index * 4 + 2], normals[index * 4 + 3]) = (128, 128, 255, 128);
-                            low = Math.Min(low, h);
-                            high = Math.Max(high, h);
-                        }
-                    writer.Add(new TerrainPage(new TerrainPageKey(level, x, z), heights, normals), [low, high, low, high, low, high, low, high]);
-                }
-        writer.Finish();
-        stream.Position = 0;
-        return TerrainData.Load(stream);
-    }
-
     [Fact]
     public void GrassShader_Compiles()
     {

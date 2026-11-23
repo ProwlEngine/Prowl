@@ -62,8 +62,6 @@ internal static class GraphiteBindings
     public const int FogVolume = 43;
     public const int FogVolumes = 44;
     public const int Voxels = 45;
-    public const int FarShadowMap = 46;
-    public const int FarShadowData = 47;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -139,9 +137,7 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_Ltc", ResourceKind.TextureReadOnly, Graphics, Ltc),
         new ResourceLayoutElementDescription("Graphite_FogVolume", ResourceKind.TextureReadOnly, Graphics, FogVolume),
         new ResourceLayoutElementDescription("Graphite_FogVolumes", ResourceKind.StructuredBufferReadOnly, Graphics, FogVolumes),
-        new ResourceLayoutElementDescription("Graphite_Voxels", ResourceKind.StructuredBufferReadWrite, ShaderStages.Fragment | ShaderStages.Compute, Voxels),
-        new ResourceLayoutElementDescription("Graphite_FarShadowMap", ResourceKind.TextureReadOnly, Graphics, FarShadowMap),
-        new ResourceLayoutElementDescription("Graphite_FarShadowData", ResourceKind.StructuredBufferReadOnly, Graphics, FarShadowData))
+        new ResourceLayoutElementDescription("Graphite_Voxels", ResourceKind.StructuredBufferReadWrite, ShaderStages.Fragment | ShaderStages.Compute, Voxels))
     {
         Table = true,
     };
