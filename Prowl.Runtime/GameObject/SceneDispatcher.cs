@@ -379,7 +379,7 @@ internal sealed class SceneDispatcher
         for (int i = 0; i < count; i++)
         {
             Component c = items[i];
-            if (c.IsDisposed || !c.EnabledInHierarchy) continue;
+            if (c.IsDisposed || !c.EnabledInHierarchy || !c.RunsGameplay) continue;
 
             try { ((Networking.INetworkTick)c).OnNetworkTick(tick); }
             catch (Exception ex) { Report(c, nameof(Networking.INetworkTick.OnNetworkTick), ex); }
