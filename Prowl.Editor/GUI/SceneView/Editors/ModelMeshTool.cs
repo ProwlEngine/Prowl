@@ -75,9 +75,12 @@ public sealed class ModelMeshTool : SceneTool
     // An operator whose amount follows the mouse: the meshes and selections it started from, what it runs, and its count
     private AmountOperator? _operator;
     private readonly Dictionary<ModelObject, (GeometrySnapshot Mesh, ModelEditPart Selection)> _start = new();
-    private Float2 _operatorFrom;
+    private Float2 _operatorFrom, _operatorVirtual, _operatorLast;
+    private Float3 _operatorPivot, _operatorNormal;
     private int _operatorCount;
-    private float _operatorKey = float.NaN;
+    private (float Amount, int Count)? _operatorKey;
+    private (float Amount, int Count) _operatorGood;
+    private string _operatorTyped = "";
     private HandleContext? _operatorHandles;
 
     // A loop cut: the object and edge of its ring by point indices, whether a click has picked it, and how many cuts
@@ -89,15 +92,30 @@ public sealed class ModelMeshTool : SceneTool
     private ModelObject? _knifeModel;
     private readonly List<(Float2 Pixel, KnifePoint Point)> _knife = new();
 
+    /// <summary>How the mouse sets a distance operator's amount.</summary>
+    private enum OperatorDrag
+    {
+        /// <summary>How much further from the middle of the selection the mouse is than where it started.</summary>
+        AwayFromPivot,
+
+        /// <summary>How far the mouse moves along the selection's normal on screen, either way.</summary>
+        AlongNormal,
+
+        /// <summary>How much nearer the middle of the selection the mouse is than where it started.</summary>
+        TowardPivot,
+    }
+
     /// <summary>
-    /// An operator run with an amount from the mouse and a count from the wheel. A distance amount is the mouse's travel
-    /// in world units at the selection and snaps to the grid, any other is the travel in pixels.
+    /// An operator run with an amount from the mouse and a count from the wheel. A distance amount is in world units at
+    /// the selection, measured as <see cref="Drag"/> says, and snaps to the grid. Any other is the mouse's travel in pixels.
     /// </summary>
     private sealed record AmountOperator(string Name, bool Distance, Func<float, float> Amount, string Format,
                                          Action<GeometryData, ElementSelection, float, int> Run, SelectMode? Selects, int StartCount = 1, int MaxCount = 1)
     {
         /// <summary>When set the amount is the mouse's travel along this screen direction, from -1 to 1, as for a slide.</summary>
         public Float2? Along { get; init; }
+
+        public OperatorDrag Drag { get; init; }
     }
 
     public SelectMode Mode { get; private set; } = SelectMode.Vertex;
@@ -455,7 +473,8 @@ public sealed class ModelMeshTool : SceneTool
         switch (Mode)
         {
             case SelectMode.Face:
-                StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s), SelectMode.Face));
+                StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s), SelectMode.Face)
+                    { Drag = OperatorDrag.AlongNormal });
                 break;
             case SelectMode.Edge:
                 Edit("Extrude Model Edges", (mesh, s) => Operators.ExtrudeEdges(mesh, [.. s.Edges], s), SelectMode.Edge);
@@ -562,7 +581,8 @@ public sealed class ModelMeshTool : SceneTool
     }
 
     private void Inset(SceneToolContext ctx)
-        => StartOperator(ctx, new AmountOperator("Inset Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.Inset(mesh, [.. s.Faces], d, s), SelectMode.Face));
+        => StartOperator(ctx, new AmountOperator("Inset Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.Inset(mesh, [.. s.Faces], d, s), SelectMode.Face)
+            { Drag = OperatorDrag.TowardPivot });
 
     private void Subdivide(SceneToolContext ctx)
     {
@@ -1284,9 +1304,12 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited)
             _start[model] = (model.Mesh.Capture(), Indices(model));
         _operator = op;
-        _operatorFrom = ctx.Handles.MousePosition;
+        _operatorFrom = _operatorVirtual = _operatorLast = ctx.Handles.MousePosition;
         _operatorCount = op.StartCount;
-        _operatorKey = float.NaN;
+        _operatorKey = null;
+        _operatorGood = (0f, op.StartCount);
+        _operatorTyped = "";
+        (_operatorPivot, _operatorNormal) = SelectionPivotAndNormal();
         ctx.Handles.Modal = true;
         _operatorHandles = ctx.Handles;
     }
@@ -1302,18 +1325,31 @@ public sealed class ModelMeshTool : SceneTool
         float wheel = Input.MouseWheelDelta;
         if (wheel != 0f && op.MaxCount > 1) _operatorCount = Math.Clamp(_operatorCount + (wheel > 0f ? 1 : -1), 1, op.MaxCount);
 
-        float pixels = Float2.Distance(handles.MousePosition, _operatorFrom);
-        float amount = op.Along is { } along ? Along(handles.MousePosition - _operatorFrom, along) : op.Amount(op.Distance ? pixels * WorldPerPixel(ctx) : pixels);
-        if (op.Distance && SceneTools.GridSnap != handles.Ctrl && SceneTools.MoveSnap > 0f) amount = MathF.Round(amount / SceneTools.MoveSnap) * SceneTools.MoveSnap;
+        // Shift slows the mouse, a typed number stands in for it
+        _operatorVirtual += (handles.MousePosition - _operatorLast) * (handles.Shift ? 0.1f : 1f);
+        _operatorLast = handles.MousePosition;
+        TypeNumber(handles, ref _operatorTyped);
+        if (handles.GetKeyDown(KeyCode.Minus) || handles.GetKeyDown(KeyCode.KeypadSubtract))
+            _operatorTyped = _operatorTyped.StartsWith('-') ? _operatorTyped[1..] : "-" + _operatorTyped;
 
-        float key = amount + _operatorCount * 100000f;
-        if (key != _operatorKey)
+        float amount;
+        if (float.TryParse(_operatorTyped, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float typed)) amount = typed;
+        else
         {
-            _operatorKey = key;
-            RunFromStart(op, amount);
+            amount = op.Along is { } along ? Along(_operatorVirtual - _operatorFrom, along) : op.Amount(op.Distance ? DragDistance(ctx, op.Drag) : Float2.Distance(_operatorVirtual, _operatorFrom));
+            if (op.Distance && SceneTools.GridSnap != handles.Ctrl && SceneTools.MoveSnap > 0f) amount = MathF.Round(amount / SceneTools.MoveSnap) * SceneTools.MoveSnap;
         }
-        string count = op.MaxCount > 1 ? $"  {_operatorCount}" : "";
-        ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, amount.ToString(op.Format) + count, PickedColor);
+
+        if (_operatorKey != (amount, _operatorCount))
+        {
+            _operatorKey = (amount, _operatorCount);
+            // An amount the operator refuses, such as a bevel too wide, falls back to the last one that worked
+            if (RunFromStart(op, amount, _operatorCount)) _operatorGood = (amount, _operatorCount);
+            else RunFromStart(op, _operatorGood.Amount, _operatorGood.Count);
+        }
+        string count = op.MaxCount > 1 ? $"  {_operatorGood.Count}" : "";
+        string entry = _operatorTyped.Length > 0 ? $"  [{_operatorTyped}]" : "";
+        ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, _operatorGood.Amount.ToString(op.Format) + count + entry, PickedColor);
 
         if (handles.GetKeyDown(KeyCode.Escape) || handles.ViewportHovered && Input.GetMouseButtonDown(1))
         {
@@ -1330,28 +1366,69 @@ public sealed class ModelMeshTool : SceneTool
         EndOperator();
         RestoreStart();
         _start.Clear();
-        RunAsLast(op, amount, _operatorCount);
+        RunAsLast(op, _operatorGood.Amount, _operatorGood.Count);
     }
 
-    private void RunFromStart(AmountOperator op, float amount)
+    /// <summary>Runs the operator on every mesh from where it started. False when it could not be made on one, which is put back.</summary>
+    private bool RunFromStart(AmountOperator op, float amount, int count)
     {
+        bool made = true;
         foreach ((ModelObject model, (GeometrySnapshot mesh, ModelEditPart selection)) in _start)
         {
             model.Mesh.Restore(mesh);
             ElementSelection running = FromIndices(model.Mesh, selection);
             try
             {
-                op.Run(model.Mesh, running, amount, _operatorCount);
+                op.Run(model.Mesh, running, amount, count);
             }
             catch (InvalidOperationException)
             {
                 model.Mesh.Restore(mesh);
                 running = FromIndices(model.Mesh, selection);
+                made = false;
             }
             if (op.Selects is { } lead) Selecting.ToMode(running, lead, Mode);
             _selection[model] = running;
             model.RefreshPreview();
         }
+        return made;
+    }
+
+    // A distance in world units at the selection from how the mouse has moved, as the operator measures it
+    private float DragDistance(SceneToolContext ctx, OperatorDrag drag)
+    {
+        HandleContext handles = ctx.Handles;
+        float worldPerPixel = WorldPerPixel(ctx);
+        if (handles.WorldToScreen(_operatorPivot) is not { } centre) return Float2.Distance(_operatorVirtual, _operatorFrom) * worldPerPixel;
+        switch (drag)
+        {
+            case OperatorDrag.AlongNormal:
+                if (handles.WorldToScreen(_operatorPivot + _operatorNormal) is { } tip && Float2.Distance(tip, centre) is float perUnit && perUnit > 1f)
+                    return Float2.Dot(_operatorVirtual - _operatorFrom, (tip - centre) / perUnit) / perUnit;
+                return -(_operatorVirtual.Y - _operatorFrom.Y) * worldPerPixel;
+            case OperatorDrag.TowardPivot:
+                return (Float2.Distance(_operatorFrom, centre) - Float2.Distance(_operatorVirtual, centre)) * worldPerPixel;
+            default:
+                return MathF.Abs(Float2.Distance(_operatorVirtual, centre) - Float2.Distance(_operatorFrom, centre)) * worldPerPixel;
+        }
+    }
+
+    // The middle of the selected points and the average normal of the selected faces, in the world
+    private (Float3 Pivot, Float3 Normal) SelectionPivotAndNormal()
+    {
+        Float3 sum = Float3.Zero, normal = Float3.Zero;
+        int count = 0;
+        foreach (ModelObject model in _edited)
+        {
+            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+            foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
+            {
+                sum += Float4x4.TransformPoint(vertex.Point, toWorld);
+                count++;
+            }
+            foreach (GeometryData.Face face in _selection[model].Faces) normal += Float4x4.TransformNormal(face.Normal(), toWorld);
+        }
+        return (count > 0 ? sum / count : Float3.Zero, Float3.LengthSquared(normal) > 1e-12f ? Float3.Normalize(normal) : Float3.UnitY);
     }
 
     private void EndOperator()
