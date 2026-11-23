@@ -106,6 +106,12 @@ public struct TransientDraw
     }
 }
 
+/// <summary>
+/// Where a transparent renderable draws: higher orders draw later, before the render queue and depth decide. Renderables
+/// sharing a nonzero group draw together, ranked as one item at the anchor, then among themselves by inner order and depth.
+/// </summary>
+public readonly record struct TransparentOrder(int Order = 0, uint Group = 0, Double3 Anchor = default, int InnerOrder = 0);
+
 public struct RenderableDesc
 {
     /// <summary>The mesh, and level 0 when <see cref="Lods"/> is set.</summary>
@@ -137,8 +143,8 @@ public struct RenderableDesc
     public uint ObjectId;
     public LightmapBinding Lightmap;
 
-    /// <summary>Transparent order inside a queue, applied before depth.</summary>
-    public sbyte SortBias;
+    /// <summary>Where it draws among transparent renderables, ranked above the render queue and depth.</summary>
+    public TransparentOrder Sort;
 
     public RenderableDesc()
     {
@@ -353,7 +359,7 @@ public sealed partial class RenderWorld : IDisposable
     private Float4[] _custom1 = [];
     private uint[] _objectId = [];
     private LightmapBinding[] _lightmap = [];
-    private sbyte[] _sortBias = [];
+    private TransparentOrder[] _sort = [];
     private AABB[] _boundsOverride = [];
     private bool[] _hasBoundsOverride = [];
     private Float4x4[]?[] _bones = [];
@@ -432,7 +438,7 @@ public sealed partial class RenderWorld : IDisposable
         _custom1[index] = desc.Custom1;
         _objectId[index] = desc.ObjectId;
         _lightmap[index] = desc.Lightmap;
-        _sortBias[index] = desc.SortBias;
+        _sort[index] = desc.Sort;
         _hasBoundsOverride[index] = false;
         _bones[index] = null;
         _shapeWeights[index] = null;
@@ -616,10 +622,13 @@ public sealed partial class RenderWorld : IDisposable
         }
     }
 
-    public void SetSortBias(RenderableHandle handle, sbyte sortBias)
+    /// <summary>Sets where it draws among transparent renderables, see <see cref="RenderableDesc.Sort"/>.</summary>
+    public void SetSort(RenderableHandle handle, in TransparentOrder sort)
     {
         int index = Check(handle);
-        _sortBias[index] = sortBias;
+        if (_sort[index] == sort)
+            return;
+        _sort[index] = sort;
         MarkDirty(index, Dirt.Attributes);
     }
 
@@ -814,7 +823,7 @@ public sealed partial class RenderWorld : IDisposable
         Array.Resize(ref _custom1, capacity);
         Array.Resize(ref _objectId, capacity);
         Array.Resize(ref _lightmap, capacity);
-        Array.Resize(ref _sortBias, capacity);
+        Array.Resize(ref _sort, capacity);
         Array.Resize(ref _boundsOverride, capacity);
         Array.Resize(ref _hasBoundsOverride, capacity);
         Array.Resize(ref _bones, capacity);
@@ -927,7 +936,7 @@ public sealed partial class RenderWorld : IDisposable
         public uint[] LayerMask = [];
         public RenderableFlags[] Flags = [];
         public bool[] Mirrored = [];
-        public sbyte[] SortBias = [];
+        public TransparentOrder[] Sort = [];
         public AABB?[] BoundsOverride = [];
         public Double3[] WorldCenter = [];
         public Float3[] WorldExtents = [];
@@ -1079,7 +1088,7 @@ public sealed partial class RenderWorld : IDisposable
             Name[index] = host._name[index];
             Flags[index] = host._flags[index];
             LayerMask[index] = host._layerMask[index];
-            SortBias[index] = host._sortBias[index];
+            Sort[index] = host._sort[index];
             LodBias[index] = host._lodBias[index];
             ForcedLod[index] = host._forcedLod[index];
             Span<uint> cull = CullObjects.Edit((uint)index);
@@ -1587,7 +1596,7 @@ public sealed partial class RenderWorld : IDisposable
             Array.Resize(ref LayerMask, capacity);
             Array.Resize(ref Flags, capacity);
             Array.Resize(ref Mirrored, capacity);
-            Array.Resize(ref SortBias, capacity);
+            Array.Resize(ref Sort, capacity);
             Array.Resize(ref BoundsOverride, capacity);
             Array.Resize(ref WorldCenter, capacity);
             Array.Resize(ref WorldExtents, capacity);

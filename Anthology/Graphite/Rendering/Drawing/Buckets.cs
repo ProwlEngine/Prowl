@@ -802,7 +802,7 @@ internal sealed class BucketSet
     private readonly List<(ulong Key, int Bucket, ushort Program, int FirstInstance, int Count)> _prepass = new();
     private readonly List<ItemDraw> _transparent = new();
     private List<ItemDraw>?[] _transparentOf = [];
-    private readonly List<(ulong Key, ItemDraw Item)> _sorted = new();
+    private readonly List<(SortKey Key, ItemDraw Item)> _sorted = new();
     private bool[] _visible = [];
     private byte[] _level = [];
     private byte[] _from = [];
@@ -1094,7 +1094,7 @@ internal sealed class BucketSet
             foreach (ItemDraw item in provided)
                 _sorted.Add((ProvidedKey(item, ranks), item));
         }
-        _sorted.Sort(static (a, b) => a.Key != b.Key ? a.Key.CompareTo(b.Key) : a.Item.Object.CompareTo(b.Item.Object));
+        _sorted.Sort(static (a, b) => a.Key.CompareTo(b.Key));
 
         DrawCommandRef previous = new(0, -1, default, false, 0, -1);
         foreach ((_, ItemDraw item) in _sorted)
@@ -1151,13 +1151,8 @@ internal sealed class BucketSet
         return _unionRanks;
     }
 
-    // [queueRank 6][sortBias 8, the middle][depth 32 back to front][program 12][spare 6]
-    private static ulong ProvidedKey(ItemDraw item, Dictionary<int, int> ranks)
-    {
-        ulong rank = (ulong)ranks.GetValueOrDefault(item.Queue);
-        ulong depth = ~BitConverter.SingleToUInt32Bits(MathF.Max(item.Depth, 0)) & 0xFFFFFFFFu;
-        return (rank << 58) | (128ul << 50) | (depth << 18) | (((ulong)item.Program & 0xFFF) << 6);
-    }
+    private static SortKey ProvidedKey(ItemDraw item, Dictionary<int, int> ranks)
+        => SortKey.Of(default, ranks.GetValueOrDefault(item.Queue), MathF.Max(item.Depth, 0), 0, item);
 
     /// <summary>A provider's item into a list: a command per chunk, through its own object or shared by its instances.</summary>
     internal static void EmitProvided(DrawList list, ItemDraw item)
@@ -1190,13 +1185,34 @@ internal sealed class BucketSet
     /// <summary>The commands an item adds to a list, before culling of its chunks.</summary>
     internal static int CommandsOf(ItemDraw item) => item.Chunks.Length * (item.BackProgram >= 0 ? 2 : 1);
 
-    // [queueRank 6][sortBias 8][depth 32 back to front][program 12][spare 6]
-    private ulong TransparentKey(ItemDraw item, in CullFrustum frustum, Dictionary<int, int> ranks)
+    private SortKey TransparentKey(ItemDraw item, in CullFrustum frustum, Dictionary<int, int> ranks)
     {
-        ulong rank = (ulong)ranks.GetValueOrDefault(item.Queue);
-        ulong bias = (ulong)(_world.SortBias[item.Object] + 128);
-        ulong depth = ~BitConverter.SingleToUInt32Bits(Distance(frustum, item.Object)) & 0xFFFFFFFFu;
-        return (rank << 58) | (bias << 50) | (depth << 18) | (((ulong)item.Program & 0xFFF) << 6);
+        TransparentOrder order = _world.Sort[item.Object];
+        float depth = Distance(frustum, item.Object);
+        float anchor = order.Group == 0 ? depth : Distance(frustum, order.Anchor, 0);
+        return SortKey.Of(order, ranks.GetValueOrDefault(item.Queue), anchor, depth, item);
+    }
+
+    // Order, queue rank, group depth back to front, group, inner order, own depth back to front, program, object
+    private readonly record struct SortKey(ulong Order, ulong Group, ulong Inner, ulong Tie) : IComparable<SortKey>
+    {
+        public static SortKey Of(in TransparentOrder order, int rank, float anchor, float depth, ItemDraw item)
+            => new(Signed(order.Order) << 32 | (uint)rank, Depth(anchor) << 32 | order.Group, Signed(order.InnerOrder) << 32 | Depth(depth),
+                (ulong)item.Program << 32 | (uint)item.Object);
+
+        private static ulong Signed(int value) => (uint)value ^ 0x80000000u;
+
+        private static ulong Depth(float distance) => ~BitConverter.SingleToUInt32Bits(distance) & 0xFFFFFFFFu;
+
+        public int CompareTo(SortKey other)
+        {
+            int c = Order.CompareTo(other.Order);
+            if (c != 0) return c;
+            c = Group.CompareTo(other.Group);
+            if (c != 0) return c;
+            c = Inner.CompareTo(other.Inner);
+            return c != 0 ? c : Tie.CompareTo(other.Tie);
+        }
     }
 
     // A level with a material of its own reads that material's slot rather than the renderable's slice
@@ -1441,12 +1457,14 @@ internal sealed class BucketSet
         return _chunkVisible[_chunkStart[index] + chunkInMesh];
     }
 
-    private float Distance(in CullFrustum frustum, int index)
+    private float Distance(in CullFrustum frustum, int index) => Distance(frustum, _world.WorldCenter[index], _world.WorldRadius[index]);
+
+    private static float Distance(in CullFrustum frustum, Double3 center, float radius)
     {
-        Float3 c = frustum.Relative(_world.WorldCenter[index]);
+        Float3 c = frustum.Relative(center);
         if (frustum.DepthPlane is { } plane)
             return MathF.Max(0, plane.X * c.X + plane.Y * c.Y + plane.Z * c.Z + plane.W);
-        return MathF.Max(0, MathF.Sqrt(c.X * c.X + c.Y * c.Y + c.Z * c.Z) - _world.WorldRadius[index]);
+        return MathF.Max(0, MathF.Sqrt(c.X * c.X + c.Y * c.Y + c.Z * c.Z) - radius);
     }
 
     private void AddObject(int index)
