@@ -585,6 +585,8 @@ namespace Prowl.PaperUI
             _paper = paper;
         }
 
+        internal void Rebind(ElementHandle handle) => _handle = handle;
+
         private protected override Paper? SinkPaper => _paper;
 
         /// <summary>

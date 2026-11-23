@@ -189,6 +189,7 @@ namespace Prowl.PaperUI
             _IDStack.Clear();
             _IDStack.Push(0);
             _createdElements.Clear();
+            _builderCount = 0;
 
             StartInputFrame();
 
@@ -865,7 +866,19 @@ namespace Prowl.PaperUI
                 throw new Exception($"Element already exists with this ID: {stringID}:{intID}:{lineID} = {storageHash} Parent: {CurrentParent.Data.ID}\nPlease use a different ID.");
 
             var handle = CreateElement(storageHash);
-            var builder = new ElementBuilder(this, handle);
+
+            ElementBuilder builder;
+            if (_builderCount < _builders.Count)
+            {
+                builder = _builders[_builderCount];
+                builder.Rebind(handle);
+            }
+            else
+            {
+                builder = new ElementBuilder(this, handle);
+                _builders.Add(builder);
+            }
+            _builderCount++;
 
             AddChild(ref handle);
 
@@ -943,6 +956,11 @@ namespace Prowl.PaperUI
                 RenderAction = renderAction,
             });
         }
+
+        // Builders handed out this frame. A builder is only a handle to its element, so the same
+        // ones are bound to the next frame's elements in order instead of allocating one each.
+        private readonly List<ElementBuilder> _builders = new List<ElementBuilder>();
+        private int _builderCount;
 
         // Command lists handed back by element slots as they are reused, so a frame allocates none.
         private readonly Stack<List<ElementRenderCommand>> _commandLists = new Stack<List<ElementRenderCommand>>();
