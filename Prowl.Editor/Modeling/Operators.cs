@@ -275,11 +275,7 @@ public static class Operators
         // Every normal is taken first, so moving one point does not turn the next one's
         var rays = new List<(GeometryData.Vertex Vertex, Float3 Normal)>();
         foreach (GeometryData.Vertex vertex in points)
-        {
-            Float3 normal = Float3.Zero;
-            foreach (GeometryData.Face face in vertex.NeighborFaces()) normal += face.Normal();
-            if (Float3.LengthSquared(normal) > 1e-12f) rays.Add((vertex, Float3.Normalize(normal)));
-        }
+            if (vertex.Normal() is var normal && normal != Float3.Zero) rays.Add((vertex, normal));
         int moved = 0;
         foreach ((GeometryData.Vertex vertex, Float3 normal) in rays)
         {
@@ -789,11 +785,11 @@ public static class Operators
     }
 
     /// <summary>Moves points towards the middle of the points they share an edge with, by a strength from 0 to 1. They stay selected.</summary>
-    public static void Smooth(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after)
+    public static void Smooth(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after, int repeats = 1)
     {
         if (vertices.Count == 0 || strength <= 0f) return;
         var points = new List<GeometryData.Vertex>(vertices);
-        GeometryOperators.SmoothVertices(mesh, points, Math.Clamp(strength, 0f, 1f));
+        GeometryOperators.SmoothVertices(mesh, points, Math.Clamp(strength, 0f, 1f), Math.Max(1, repeats));
         after.Clear();
         after.Vertices.UnionWith(points);
     }
@@ -811,11 +807,11 @@ public static class Operators
     /// Evens out the spacing of points, moving each towards the middle of its neighbours along the surface rather than
     /// through it, by a strength from 0 to 1. They stay selected.
     /// </summary>
-    public static void Relax(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after)
+    public static void Relax(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after, int repeats = 1)
     {
         if (vertices.Count == 0 || strength <= 0f) return;
         var points = new List<GeometryData.Vertex>(vertices);
-        GeometryOperators.RelaxVertices(mesh, points, Math.Clamp(strength, 0f, 1f));
+        GeometryOperators.RelaxVertices(mesh, points, Math.Clamp(strength, 0f, 1f), Math.Max(1, repeats));
         after.Clear();
         after.Vertices.UnionWith(points);
     }

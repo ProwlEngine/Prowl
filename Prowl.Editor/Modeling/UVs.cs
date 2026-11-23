@@ -79,10 +79,7 @@ public static class UVs
 
     /// <summary>Marks every edge flagged sharp, or whose two faces turn against each other by more than the angle, as a seam.</summary>
     public static void SeamsFromSharp(GeometryData mesh, float degrees)
-    {
-        float limit = MathF.Cos(degrees * MathF.PI / 180f);
-        SetSeams(mesh, mesh.Edges.Where(e => e.IsSharp || e.NeighborFaces() is { Count: 2 } f && Float3.Dot(f[0].Normal(), f[1].Normal()) < limit).ToList(), true);
-    }
+        => SetSeams(mesh, [.. mesh.Edges.Where(e => e.IsSharp).Union(GeometryOperators.EdgesSharperThan(mesh, degrees))], true);
 
     /// <summary>Takes the UV map and its pins off the mesh. Seams are kept.</summary>
     public static void Clear(GeometryData mesh)

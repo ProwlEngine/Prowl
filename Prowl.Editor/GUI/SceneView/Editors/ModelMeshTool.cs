@@ -583,16 +583,12 @@ public sealed class ModelMeshTool : SceneTool
             Operators.MergeByDistance(mesh, s.Vertices.Count > 0 ? [.. s.Vertices] : null, d, s), SelectMode.Vertex));
 
     private void SmoothPoints(SceneToolContext ctx)
-        => StartOperator(ctx, new AmountOperator("Smooth Model Points", false, p => p * 0.005f, "0.##", (mesh, s, t, repeats) =>
-        {
-            for (int i = 0; i < repeats; i++) Operators.Smooth(mesh, [.. s.Vertices], Math.Clamp(t, 0f, 1f), s);
-        }, SelectMode.Vertex, 1, 50));
+        => StartOperator(ctx, new AmountOperator("Smooth Model Points", false, p => p * 0.005f, "0.##",
+            (mesh, s, t, repeats) => Operators.Smooth(mesh, [.. s.Vertices], t, s, repeats), SelectMode.Vertex, 1, 50));
 
     private void RelaxPoints(SceneToolContext ctx)
-        => StartOperator(ctx, new AmountOperator("Relax Model Points", false, p => p * 0.005f, "0.##", (mesh, s, t, repeats) =>
-        {
-            for (int i = 0; i < repeats; i++) Operators.Relax(mesh, [.. s.Vertices], Math.Clamp(t, 0f, 1f), s);
-        }, SelectMode.Vertex, 1, 50));
+        => StartOperator(ctx, new AmountOperator("Relax Model Points", false, p => p * 0.005f, "0.##",
+            (mesh, s, t, repeats) => Operators.Relax(mesh, [.. s.Vertices], t, s, repeats), SelectMode.Vertex, 1, 50));
 
     private void SubdivideSmooth(SceneToolContext ctx)
         => StartOperator(ctx, new AmountOperator("Subdivide Smooth", false, _ => 0f, "0", (mesh, s, _, levels) => Operators.SubdivideSmooth(mesh, levels, s), null, 1, 4));
