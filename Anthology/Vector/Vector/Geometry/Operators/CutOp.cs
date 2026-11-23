@@ -76,11 +76,6 @@ internal static class CutOp
         return result;
     }
 
-    /// <summary>
-    /// Pulls a surface apart along edges: every vertex on them is copied for each group of faces the edges separate
-    /// around it, so the faces either side no longer share it. Where a run of edges ends inside the surface the end
-    /// stays joined, which opens a slit. Returns the new vertices.
-    /// </summary>
     internal static List<Face> SplitFaces(GeometryData mesh, IEnumerable<Face> faces)
     {
         var region = new HashSet<Face>(faces.Where(mesh.Contains));
@@ -95,6 +90,11 @@ internal static class CutOp
         return [.. region];
     }
 
+    /// <summary>
+    /// Pulls a surface apart along edges: every vertex on them is copied for each group of faces the edges separate
+    /// around it, so the faces either side no longer share it. Where a run of edges ends inside the surface the end
+    /// stays joined, which opens a slit. Returns the new vertices.
+    /// </summary>
     /// <param name="rebuilt">Told of each face put back as a new one, and what replaced it.</param>
     internal static List<Vertex> SplitEdges(GeometryData mesh, IEnumerable<Edge> edges, Action<Face, Face?>? rebuilt = null)
     {
