@@ -1555,6 +1555,29 @@ public class UndoTests : EditorTestHarness
     }
 
     [Fact]
+    public void HeldRecord_TakesInRecordsOfItsTargetInLaterFrames()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        object held = Undo.HoldRecords([comp], "Tool");
+        for (int frame = 1; frame <= 3; frame++)
+        {
+            int value = frame;
+            Frame(edits: () =>
+            {
+                Undo.RecordObject(comp, "Tool");
+                comp.Value = value;
+            });
+        }
+        Undo.ReleaseRecords(held, revert: false);
+        Frame();
+
+        Assert.Single(Undo.UndoSteps);
+        Undo.PerformUndo();
+        Assert.Equal(0, comp.Value);
+    }
+
+    [Fact]
     public void WatchedObject_RecordsOnlyRealChanges_AndIsNoInteraction()
     {
         Scene scene = OpenScene();

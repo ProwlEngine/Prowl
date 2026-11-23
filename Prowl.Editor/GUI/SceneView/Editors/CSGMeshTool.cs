@@ -489,6 +489,7 @@ public sealed class CSGMeshTool : SceneTool
     // started from and the move to run again when it is committed
     private TransformSession? _session;
     private CSGBrush? _sessionBrush;
+    private object? _actionUndo;
     private CSGControlMesh? _sessionStart;
     private SurfaceData[]? _sessionSurfaces;
     private System.Action? _sessionMove;
@@ -1780,6 +1781,7 @@ public sealed class CSGMeshTool : SceneTool
         }
         else if (!handles.PrimaryUp && handles.PrimaryHeld) return;
 
+        ReleaseActionUndo();
         switch (_action)
         {
             case Action.Extrude: CommitExtrude(amount); break;
@@ -1829,7 +1831,7 @@ public sealed class CSGMeshTool : SceneTool
             (CSGControlMesh mesh, SurfaceData[] surfaces) = target.ToBrush(after, out HashSet<int> points, out List<int> faces);
             if (after.IsEmpty) KeepActionResult(_actionPoints, _actionFaces, Mode);
             else KeepActionResult(points, faces, lead);
-            Undo.RecordObject(Target!, name);
+            HoldActionUndo(name);
             ApplyShape(Target!, mesh, surfaces);
             return true;
         }
@@ -2249,7 +2251,7 @@ public sealed class CSGMeshTool : SceneTool
             return;
         }
 
-        Undo.RecordObject(Target!, "Chamfer CSG Brush");
+        HoldActionUndo("Chamfer CSG Brush");
         ApplyShape(Target!, chamfered.Mesh, chamfered.Surfaces);
     }
 
@@ -2286,7 +2288,7 @@ public sealed class CSGMeshTool : SceneTool
         SurfaceData cap = CSGSelection.NearestSurface(Target!, cut.Normal, _startSurfaces!.Length);
         if (CSGSelection.CutAway(_startMesh!, _startSurfaces, cut, cap) is not { } chamfered) return;
 
-        Undo.RecordObject(Target!, "Chamfer CSG Brush");
+        HoldActionUndo("Chamfer CSG Brush");
         ApplyShape(Target!, chamfered.Mesh, chamfered.Surfaces);
     }
 
@@ -2395,8 +2397,22 @@ public sealed class CSGMeshTool : SceneTool
         return ring.Count > 0 ? sum / ring.Count : sum;
     }
 
+    // Previews of an action write the brush over many frames, so its record stays open until the action ends
+    private void HoldActionUndo(string name)
+    {
+        _actionUndo ??= Undo.HoldRecords([Target!], name);
+    }
+
+    private void ReleaseActionUndo()
+    {
+        if (_actionUndo == null) return;
+        Undo.ReleaseRecords(_actionUndo, revert: false);
+        _actionUndo = null;
+    }
+
     private void EndAction()
     {
+        ReleaseActionUndo();
         if (_modalHandles != null)
         {
             _modalHandles.Modal = false;

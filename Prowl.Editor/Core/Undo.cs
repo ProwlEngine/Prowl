@@ -316,13 +316,13 @@ public static class Undo
         _pending.Add(new PendingObject(target, key, owner, Capture.Of(target)) { Group = group, Name = name });
     }
 
-    // A pending capture of the same target in the same group with no structural change to it since.
+    // A pending capture of the same target, in the same group or held open, with no structural change to it since.
     private static PendingObject? FindMergeablePending(TargetKey key, int group)
     {
         for (int i = _pending.Count - 1; i >= 0; i--)
         {
             Entry e = _pending[i];
-            if (e.Group != group) continue;
+            if (e.Group != group && e is not PendingObject { Held: true }) continue;
             if (e is PendingObject po && po.Key.Same(key)) return po;
             if (key.ObjectId != Guid.Empty && e.Touches(key.ObjectId)) return null;
         }
