@@ -4,17 +4,39 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Runtime;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor.Modeling;
+
+/// <summary>What a transform modal moves, each call measured from where things started.</summary>
+public interface ITransformSession
+{
+    /// <summary>Where the moving things started, in the world.</summary>
+    IReadOnlyList<Float3> Points { get; }
+
+    Float3 Median { get; }
+
+    Float3 Pivot { get; }
+
+    void Translate(Float3 delta);
+
+    /// <summary>Turns by an angle in radians, by the right hand rule about the axis.</summary>
+    void Rotate(Float3 axis, float angle);
+
+    /// <summary>Scales along three axes turned by a rotation.</summary>
+    void Scale(Float3 factors, Quaternion axes);
+
+    void Restore();
+}
 
 /// <summary>
 /// Moves the selected points of an edit target, and can put them back. Every move is measured from where the points
 /// started, in world space, so a modal transform or a gizmo calls it again each frame with the whole amount. With a
 /// falloff, unselected points within it are pulled along too, less the further they are from the selection.
 /// </summary>
-public sealed class TransformSession
+public sealed class TransformSession : ITransformSession
 {
     private readonly IReadOnlyList<(EditTarget Target, ElementSelection Selection)> _parts;
     private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight, Float4x4 ToLocal)> _points = new();
@@ -163,5 +185,73 @@ public sealed class TransformSession
             foreach (GeometryData.Vertex vertex in island) centres[vertex] = centre;
         }
         return centres;
+    }
+}
+
+/// <summary>Whole objects moved, turned and scaled in the world about the middle of where they stand.</summary>
+public sealed class ObjectTransformSession : ITransformSession
+{
+    private readonly List<(Transform Transform, Float3 Position, Quaternion Rotation, Float3 Scale)> _start = new();
+    private readonly List<Float3> _points = new();
+
+    public ObjectTransformSession(IEnumerable<GameObject> objects)
+    {
+        foreach (GameObject go in objects)
+        {
+            Transform transform = go.Transform;
+            _start.Add((transform, transform.Position, transform.Rotation, transform.LocalScale));
+            _points.Add(transform.Position);
+        }
+        Float3 sum = Float3.Zero;
+        foreach (Float3 point in _points) sum += point;
+        Median = _points.Count > 0 ? sum / _points.Count : Float3.Zero;
+    }
+
+    public IReadOnlyList<Float3> Points => _points;
+
+    public Float3 Median { get; }
+
+    public Float3 Pivot => Median;
+
+    public void Translate(Float3 delta)
+    {
+        Restore();
+        foreach (var start in _start) start.Transform.Position = start.Position + delta;
+    }
+
+    public void Rotate(Float3 axis, float angle)
+    {
+        Quaternion turn = Quaternion.AxisAngle(Float3.Normalize(axis), angle);
+        Restore();
+        foreach (var start in _start)
+        {
+            start.Transform.Position = Pivot + turn * (start.Position - Pivot);
+            start.Transform.Rotation = turn * start.Rotation;
+        }
+    }
+
+    public void Scale(Float3 factors, Quaternion axes)
+    {
+        Quaternion back = Quaternion.Inverse(axes);
+        Restore();
+        foreach (var start in _start)
+        {
+            start.Transform.Position = Pivot + axes * ((back * (start.Position - Pivot)) * factors);
+            // Each local axis grows by how much the scale stretches its direction
+            Float3 grown = new(Float3.Length((back * (start.Rotation * Float3.UnitX)) * factors),
+                               Float3.Length((back * (start.Rotation * Float3.UnitY)) * factors),
+                               Float3.Length((back * (start.Rotation * Float3.UnitZ)) * factors));
+            start.Transform.LocalScale = start.Scale * grown;
+        }
+    }
+
+    public void Restore()
+    {
+        foreach (var start in _start)
+        {
+            start.Transform.Position = start.Position;
+            start.Transform.Rotation = start.Rotation;
+            start.Transform.LocalScale = start.Scale;
+        }
     }
 }

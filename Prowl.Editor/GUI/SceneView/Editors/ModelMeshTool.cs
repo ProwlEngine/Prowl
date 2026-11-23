@@ -60,6 +60,11 @@ public sealed class ModelMeshTool : SceneTool
     private HandleContext? _modalHandles;
     private TransformSession? _session;
     private System.Action? _sessionMove;
+
+    // A grab, rotate or scale of whole objects in object mode, with its undo record held open until it ends
+    private TransformModal? _objectModal;
+    private ObjectTransformSession? _objectSession;
+    private object? _objectUndo;
     private bool _gizmoDragging;
     private Float3 _gizmoRaw, _gizmoApplied, _gizmoStart;
     private bool _marquee;
@@ -127,7 +132,7 @@ public sealed class ModelMeshTool : SceneTool
             if (go.GetComponent<ModelObject>() is { } model && model.IsValid()) _edited.Add(model);
         if (_edited.Count == 0 && ModelEditingMode.World is { } world)
             foreach (GameObject go in world.Objects)
-                if (go.GetComponent<ModelObject>() is { } model && model.IsValid()) _edited.Add(model);
+                if (go.GetComponent<ModelObject>() is { } model && model.IsValid() && !model.Hidden) _edited.Add(model);
         _selection.Clear();
         _hidden.Clear();
         _meshes.Clear();
@@ -142,6 +147,7 @@ public sealed class ModelMeshTool : SceneTool
     private void Leave()
     {
         CancelModal();
+        EndObjectModal(cancel: true);
         if (_loopCut)
         {
             RestoreStart();
@@ -182,7 +188,7 @@ public sealed class ModelMeshTool : SceneTool
             _enteredFor = IsolatedWorld.Current;
             Enter();
         }
-        if (_modal == null && handles.IsPressed("ModelEdit/Toggle"))
+        if (_modal == null && _objectModal == null && handles.IsPressed("ModelEdit/Toggle"))
         {
             if (Editing) Leave();
             else Enter();
@@ -190,8 +196,8 @@ public sealed class ModelMeshTool : SceneTool
         }
         if (!Editing)
         {
-            if (handles.IsPressed("ModelEdit/Join") && Selection.ActiveObject is GameObject active)
-                ModelEditingMode.Join([.. Selection.GetSelected<GameObject>()], active);
+            if (_objectModal != null) TickObjectModal(ctx);
+            else ObjectKeys(ctx);
             return;
         }
 
@@ -298,7 +304,7 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/HideUnselected")) Hide(unselected: true);
         else if (handles.IsPressed("MeshEdit/Reveal")) Reveal();
         else if (handles.IsPressed("MeshEdit/Hide")) Hide(unselected: false);
-        else if (handles.IsPressed("MeshEdit/Frame")) Frame(ctx);
+        else if (handles.IsPressed("MeshEdit/Frame") || handles.IsPressed("Scene/FrameSelected")) Frame(ctx);
         else if (handles.IsPressed("MeshEdit/Fill")) Fill();
         else if (handles.IsPressed("MeshEdit/Grab")) StartModal(ctx, TransformKind.Translate);
         else if (handles.IsPressed("MeshEdit/Rotate")) StartModal(ctx, TransformKind.Rotate);
@@ -839,6 +845,117 @@ public sealed class ModelMeshTool : SceneTool
             menu.Item(Loc.Get("model.join"), () => ModelEditingMode.Join(selected, active), shortcut: Chord("ModelEdit/Join"));
         if (selected.Count > 0) menu.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selected));
         menu.Item(Loc.Get("model.export"), ModelEditingMode.ExportGlb);
+    }
+
+    // ================================================================
+    //  Object mode
+    // ================================================================
+
+    private void ObjectKeys(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        List<GameObject> selected = [.. Selection.GetSelected<GameObject>()];
+
+        // The scene view's scale tool key stands down, object mode takes R for rotate
+        handles.IsPressed("Scene/ToolScale");
+
+        if (handles.IsPressed("ModelEdit/Join") && Selection.ActiveObject is GameObject active) ModelEditingMode.Join(selected, active);
+        else if (handles.IsPressed("ModelEdit/Add")) AddMenu();
+        else if (handles.IsPressed("MeshEdit/SelectAll")) Selection.ReplaceSelection(WorldObjects());
+        else if (handles.IsPressed("MeshEdit/SelectNone")) Selection.Clear();
+        else if (handles.IsPressed("MeshEdit/Invert")) Selection.ReplaceSelection(WorldObjects().Where(go => !Selection.IsSelected(go)).ToList());
+        else if (handles.IsPressed("MeshEdit/HideUnselected")) HideObjects(WorldObjects().Where(go => !Selection.IsSelected(go)));
+        else if (handles.IsPressed("MeshEdit/Reveal")) RevealObjects();
+        else if (handles.IsPressed("MeshEdit/Hide")) HideObjects(selected);
+        else if (handles.IsPressed("MeshEdit/DeleteMenu")) ObjectDeleteMenu();
+        else if (handles.IsPressed("MeshEdit/Grab")) StartObjectModal(ctx, TransformKind.Translate);
+        else if (handles.IsPressed("MeshEdit/Rotate")) StartObjectModal(ctx, TransformKind.Rotate);
+        else if (handles.IsPressed("MeshEdit/Scale")) StartObjectModal(ctx, TransformKind.Scale);
+    }
+
+    private static List<GameObject> WorldObjects() => ModelEditingMode.World is { } world ? [.. world.Objects] : [];
+
+    private static void AddMenu()
+    {
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.add"));
+            ModelEditingMode.BuildCreateMenu(menu);
+        });
+    }
+
+    private static void HideObjects(IEnumerable<GameObject> objects)
+    {
+        foreach (GameObject go in objects)
+        {
+            if (go.GetComponent<ModelObject>() is not { } model || model.IsNotValid()) continue;
+            model.Hidden = true;
+            Selection.RemoveFromSelection(go);
+        }
+    }
+
+    private static void RevealObjects()
+    {
+        foreach (GameObject go in WorldObjects())
+            if (go.GetComponent<ModelObject>() is { } model && model.IsValid() && model.Hidden)
+            {
+                model.Hidden = false;
+                Selection.AddToSelection(go);
+            }
+    }
+
+    private static void ObjectDeleteMenu()
+    {
+        List<GameObject> selected = HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]);
+        if (selected.Count == 0) return;
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.delete"));
+            menu.Item(Loc.Get("model.menu.delete_objects", new { count = selected.Count }), () =>
+            {
+                HierarchyPanel.DeleteGameObjects(selected);
+                Selection.Clear();
+            }, danger: true);
+        });
+    }
+
+    private void StartObjectModal(SceneToolContext ctx, TransformKind kind)
+    {
+        List<GameObject> moving = HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]);
+        if (moving.Count == 0) return;
+        _objectSession = new ObjectTransformSession(moving);
+        Quaternion local = Selection.ActiveObject is GameObject active ? active.Transform.Rotation : Quaternion.Identity;
+        _objectModal = new TransformModal(kind, _objectSession, local, null);
+        _objectUndo = Undo.HoldRecords([.. moving], kind switch
+        {
+            TransformKind.Translate => "Move Objects",
+            TransformKind.Rotate => "Rotate Objects",
+            _ => "Scale Objects",
+        });
+        ctx.Handles.Modal = true;
+        _modalHandles = ctx.Handles;
+    }
+
+    private void TickObjectModal(SceneToolContext ctx)
+    {
+        ModalState state = _objectModal!.Tick(ctx);
+        ctx.Draw.Label(_objectSession!.Pivot, _objectModal.Status, PickedColor);
+        if (state == ModalState.Running) _objectModal.Replay();
+        else EndObjectModal(cancel: state == ModalState.Cancelled);
+    }
+
+    private void EndObjectModal(bool cancel)
+    {
+        if (_objectModal == null) return;
+        if (cancel) _objectSession!.Restore();
+        Undo.ReleaseRecords(_objectUndo!, revert: false);
+        _objectModal = null;
+        _objectSession = null;
+        _objectUndo = null;
+        if (_modalHandles != null) _modalHandles.Modal = false;
+        _modalHandles = null;
     }
 
     // ================================================================

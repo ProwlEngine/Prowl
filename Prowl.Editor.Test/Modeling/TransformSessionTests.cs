@@ -156,4 +156,29 @@ public class TransformSessionTests
         session.Restore();
         Assert.All(rightTop.Vertices, v => Assert.Equal(1f, v.Point.Y, 4));
     }
+
+    [Fact]
+    public void ObjectsTurnAndScaleAboutTheirMiddle()
+    {
+        var a = new Prowl.Runtime.GameObject("A");
+        var b = new Prowl.Runtime.GameObject("B");
+        a.Transform.Position = new Float3(-1f, 0f, 0f);
+        b.Transform.Position = new Float3(1f, 0f, 0f);
+        b.Transform.Rotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI / 2f);
+        var session = new ObjectTransformSession([a, b]);
+
+        session.Rotate(Float3.UnitY, MathF.PI);
+        Near(new Float3(1f, 0f, 0f), a.Transform.Position);
+        Near(new Float3(-1f, 0f, 0f), b.Transform.Position);
+
+        session.Scale(new Float3(2f, 1f, 1f), Quaternion.Identity);
+        Near(new Float3(-2f, 0f, 0f), a.Transform.Position);
+        Near(new Float3(2f, 1f, 1f), a.Transform.LocalScale);
+        // B is turned a quarter, so its own Z axis lies along the world X that grew
+        Near(new Float3(1f, 1f, 2f), b.Transform.LocalScale);
+
+        session.Restore();
+        Near(new Float3(1f, 0f, 0f), b.Transform.Position);
+        Near(Float3.One, b.Transform.LocalScale);
+    }
 }

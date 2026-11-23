@@ -37,7 +37,7 @@ public enum AxisSpace
 }
 
 /// <summary>
-/// Grab, rotate and scale by moving the mouse with no button held, through a <see cref="TransformSession"/>. X, Y and
+/// Grab, rotate and scale by moving the mouse with no button held, through an <see cref="ITransformSession"/>. X, Y and
 /// Z lock to an axis, pressed again for the object's axis and then the normal's, with Shift to the plane across it.
 /// Typing a number sets the amount, Shift slows the mouse, grid snapping follows the toggle with Ctrl inverting it.
 /// Left click or Enter confirms, Escape or right click puts everything back.
@@ -56,7 +56,7 @@ public sealed class TransformModal
         (KeyCode.Period, '.'), (KeyCode.KeypadDecimal, '.'),
     ];
 
-    private readonly TransformSession _session;
+    private readonly ITransformSession _session;
     private readonly Quaternion _local;
     private readonly Quaternion? _normal;
     private bool _started;
@@ -73,7 +73,7 @@ public sealed class TransformModal
 
     /// <param name="local">The object's rotation, for the second press of an axis key.</param>
     /// <param name="normal">The selection's normal frame, for the third press, or null when it has none.</param>
-    public TransformModal(TransformKind kind, TransformSession session, Quaternion local, Quaternion? normal)
+    public TransformModal(TransformKind kind, ITransformSession session, Quaternion local, Quaternion? normal)
     {
         Kind = kind;
         _session = session;

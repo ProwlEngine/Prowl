@@ -56,6 +56,18 @@ public sealed class ModelObject : Component
     public List<PMeshShape> Shapes = new();
 
     [NonSerialized] private Mesh? _preview;
+    [NonSerialized] private bool _hidden;
+
+    /// <summary>Left out of the view, and so of picking, while the model is open. Not saved.</summary>
+    public bool Hidden
+    {
+        get => _hidden;
+        set
+        {
+            _hidden = value;
+            if (GameObject.GetComponent<MeshRenderer>() is { } renderer && renderer.IsValid()) renderer.Mesh = value ? null : _preview;
+        }
+    }
 
     // The point of the mesh each preview vertex sits on, and the mesh and version it was built from, so a drag that only
     // moves points rewrites the preview's positions instead of building it again
@@ -95,7 +107,7 @@ public sealed class ModelObject : Component
         _previewFrom = Mesh;
         _previewVersion = Mesh.Version;
         _previewStale = false;
-        renderer!.Mesh = _preview;
+        renderer!.Mesh = _hidden ? null : _preview;
 
         var materials = new List<Material>();
         foreach (Guid id in Materials)
