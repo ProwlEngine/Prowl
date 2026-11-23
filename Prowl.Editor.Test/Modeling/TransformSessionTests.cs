@@ -181,4 +181,24 @@ public class TransformSessionTests
         Near(new Float3(1f, 0f, 0f), b.Transform.Position);
         Near(Float3.One, b.Transform.LocalScale);
     }
+
+    [Fact]
+    public void MirrorClipKeepsPointsOnThePlaneAndStopsOthersCrossingIt()
+    {
+        EditTarget box = Box();
+        var target = new EditTarget(box.Mesh, Float4x4.Identity) { MirrorClip = (0, 0f) };
+        GeometryData.Vertex onPlane = target.Mesh.AddVertex(0f, 3f, 0f);
+        GeometryData.Vertex right = target.Mesh.Vertices.First(v => v.Point.X > 0.5f);
+        var selection = new ElementSelection();
+        selection.Vertices.UnionWith([onPlane, right]);
+        var session = new TransformSession(target, selection);
+
+        session.Translate(new Float3(-5f, 0f, 0f));
+
+        Assert.Equal(0f, onPlane.Point.X);
+        Assert.Equal(0f, right.Point.X);
+        session.Translate(new Float3(0.5f, 0f, 0f));
+        Assert.Equal(0f, onPlane.Point.X);
+        Assert.Equal(1.5f, right.Point.X, 4);
+    }
 }

@@ -39,7 +39,7 @@ public interface ITransformSession
 public sealed class TransformSession : ITransformSession
 {
     private readonly IReadOnlyList<(EditTarget Target, ElementSelection Selection)> _parts;
-    private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight, Float4x4 ToLocal)> _points = new();
+    private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight, Float4x4 ToLocal, (int Axis, float Offset)? Clip)> _points = new();
     private readonly List<Float3> _selected = new();
     private float _falloff;
     private Func<Float3, Float3, Float3>? _last;
@@ -115,12 +115,18 @@ public sealed class TransformSession : ITransformSession
     private void Apply(Func<Float3, Float3, Float3> move)
     {
         _last = move;
-        foreach ((GeometryData.Vertex vertex, _, Float3 world, Float3 origin, float weight, Float4x4 toLocal) in _points)
+        foreach ((GeometryData.Vertex vertex, Float3 local, Float3 world, Float3 origin, float weight, Float4x4 toLocal, (int Axis, float Offset)? clip) in _points)
         {
             Float3 moved = move(world, Individual ? origin : Pivot);
-            vertex.Point = Float4x4.TransformPoint(world + (moved - world) * weight, toLocal);
+            Float3 point = Float4x4.TransformPoint(world + (moved - world) * weight, toLocal);
+            if (clip is ({ } axis, { } offset) && (MathF.Abs(local[axis] - offset) < ClipDistance || local[axis] > offset != point[axis] > offset))
+                point[axis] = offset;
+            vertex.Point = point;
         }
     }
+
+    // How near the mirror plane a point counts as on it
+    private const float ClipDistance = 1e-4f;
 
     /// <summary>The selected points at full weight, and with a falloff the unselected points within it, weighted by a smooth curve.</summary>
     private void Gather()
@@ -134,7 +140,7 @@ public sealed class TransformSession : ITransformSession
             foreach (GeometryData.Vertex vertex in selection.Vertices)
             {
                 Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
-                _points.Add((vertex, vertex.Point, world, origins.TryGetValue(vertex, out Float3 origin) ? origin : world, 1f, toLocal));
+                _points.Add((vertex, vertex.Point, world, origins.TryGetValue(vertex, out Float3 origin) ? origin : world, 1f, toLocal, target.MirrorClip));
                 _selected.Add(world);
             }
         }
@@ -154,7 +160,7 @@ public sealed class TransformSession : ITransformSession
                 if (distance >= _falloff) continue;
 
                 float t = 1f - distance / _falloff;
-                _points.Add((vertex, vertex.Point, world, world, t * t * (3f - 2f * t), toLocal));
+                _points.Add((vertex, vertex.Point, world, world, t * t * (3f - 2f * t), toLocal, target.MirrorClip));
             }
         }
     }

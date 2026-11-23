@@ -60,6 +60,7 @@
   "model.menu.delete": "Delete",
   "model.menu.delete_objects": "Delete {{count}} objects",
   "model.menu.add": "Add",
+  "model.menu.mirror_clip": "Clip at mirror",
   "model.menu.select_loops": "Edge Loops",
   "model.menu.select_rings": "Edge Rings",
   "model.menu.select_non_quads": "Non Quads",

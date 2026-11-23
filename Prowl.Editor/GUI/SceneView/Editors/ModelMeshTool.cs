@@ -106,6 +106,9 @@ public sealed class ModelMeshTool : SceneTool
 
     /// <summary>Unselected points near the selection move with it, less the further they are.</summary>
     public bool Proportional { get; set; }
+
+    /// <summary>With a mirror modifier on, moved points on its plane stay there and the rest do not cross it.</summary>
+    public bool MirrorClip { get; set; } = true;
     public float ProportionalRadius { get; set; } = 1f;
 
     /// <summary>Whether edit mode is on.</summary>
@@ -666,6 +669,7 @@ public sealed class ModelMeshTool : SceneTool
             m.Toggle(Loc.Get("csg.xray"), () => XRay = !XRay, () => XRay);
             m.Toggle(Loc.Get("model.menu.snap"), () => SnapToObjects = !SnapToObjects, () => SnapToObjects);
             m.Toggle(Loc.Get("csg.proportional"), () => Proportional = !Proportional, () => Proportional);
+            m.Toggle(Loc.Get("model.menu.mirror_clip"), () => MirrorClip = !MirrorClip, () => MirrorClip);
             m.Toggle(Loc.Get("uv.checker_world"), () => ModelEditingMode.SetChecker(!ModelObject.ShowChecker), () => ModelObject.ShowChecker);
         });
         menu.Separator();
@@ -1359,12 +1363,15 @@ public sealed class ModelMeshTool : SceneTool
         var parts = new List<(EditTarget, ElementSelection)>();
         foreach (ModelObject model in _edited)
             if (_selection[model].Vertices.Count > 0)
-                parts.Add((new EditTarget(model.Mesh, model.Transform.LocalToWorldMatrix), _selection[model]));
+                parts.Add((new EditTarget(model.Mesh, model.Transform.LocalToWorldMatrix) { MirrorClip = ClipOf(model) }, _selection[model]));
         if (parts.Count == 0) return null;
         _session = new TransformSession(parts, Proportional ? ProportionalRadius : 0f) { Individual = SceneTools.Pivot == PivotMode.Individual };
         _sessionMove = null;
         return _session;
     }
+
+    private (int Axis, float Offset)? ClipOf(ModelObject model)
+        => MirrorClip && model.Modifiers.Find(m => m.Enabled && m is MirrorModifier) is MirrorModifier mirror ? (Math.Clamp(mirror.Axis, 0, 2), mirror.Offset) : null;
 
     private void PreviewSession(System.Action move)
     {

@@ -23,6 +23,9 @@ public sealed class EditTarget
 
     public Float4x4 LocalToWorld { get; set; }
 
+    /// <summary>A mirror plane in the mesh's space, by axis and offset, that moved points stay on and do not cross.</summary>
+    public (int Axis, float Offset)? MirrorClip { get; init; }
+
     /// <summary>Why the mesh as it now stands may not be kept, or null when it may.</summary>
     public Func<GeometryData, string?>? Validate { get; }
 }
