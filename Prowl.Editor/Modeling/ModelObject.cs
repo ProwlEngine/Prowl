@@ -74,6 +74,9 @@ public sealed class ModelObject : Component
         if (_previewStale) RefreshPreview();
     }
 
+    // Undo and the inspector can change modifiers or materials without touching the mesh
+    public override void OnValidate() => _previewStale = true;
+
     /// <summary>Marks the preview out of date, to be rebuilt on the next update.</summary>
     public void MarkPreviewStale() => _previewStale = true;
 

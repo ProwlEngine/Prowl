@@ -168,6 +168,31 @@ public class ModelWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void UndoingAnAddedModifierTakesItOffThePreview()
+    {
+        Guid guid = WriteModel(out _);
+        ModelEditingMode.Open(guid);
+        ModelObject model = ModelEditingMode.World!.FindObject("Body")!.GetComponent<ModelObject>()!;
+        MeshRenderer renderer = model.GameObject.GetComponent<MeshRenderer>()!;
+        model.RefreshPreview();
+        int plain = renderer.Mesh!.VertexCount;
+
+        Undo.RecordObject(model, "Add Modifier");
+        model.Modifiers.Add(new MirrorModifier());
+        model.RefreshPreview();
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        Assert.NotEqual(plain, renderer.Mesh!.VertexCount);
+
+        Undo.PerformUndo();
+        model.Update();
+
+        Assert.Empty(model.Modifiers);
+        Assert.Equal(plain, renderer.Mesh!.VertexCount);
+        ModelEditingMode.Exit();
+    }
+
+    [Fact]
     public void JoiningMergesObjectsIntoTheActiveOne()
     {
         Guid guid = WriteModel(out _);
