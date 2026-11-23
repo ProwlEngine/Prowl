@@ -89,6 +89,15 @@ public sealed class TransformModal
     /// <summary>For a slide, the far ends of the edges the point can slide along, in the world.</summary>
     public IReadOnlyList<Float3> SlideEnds { get; init; } = [];
 
+    /// <summary>The last move in the world, for a grab or a slide.</summary>
+    public Float3 Moved { get; private set; }
+
+    /// <summary>The last turn, about an axis in the world by degrees.</summary>
+    public (Float3 Axis, float Degrees) Turned { get; private set; } = (Float3.UnitY, 0f);
+
+    /// <summary>The last scale, along three axes turned by a rotation.</summary>
+    public (Float3 Factors, Quaternion Axes) Scaled { get; private set; } = (Float3.One, Quaternion.Identity);
+
     /// <summary>What the modal is doing, for the status line.</summary>
     public string Status { get; private set; } = "";
 
@@ -228,6 +237,7 @@ public sealed class TransformModal
             if (snap) delta = SnapIn(delta, Axes);
         }
 
+        Moved = delta;
         _replay = () => _session.Translate(delta);
         _replay();
         Status = string.Create(CultureInfo.InvariantCulture, $"Move{Lock()}  {delta.X:0.###}  {delta.Y:0.###}  {delta.Z:0.###}{TypedText()}");
@@ -247,6 +257,7 @@ public sealed class TransformModal
         float degrees = Typed ?? -seen * sign * 180f / MathF.PI;
         if (Typed == null && SceneTools.GridSnap != handles.Ctrl) degrees = Round(degrees, SceneTools.RotateSnap);
 
+        Turned = (axis, degrees);
         _replay = () => _session.Rotate(axis, degrees * MathF.PI / 180f);
         _replay();
         Status = string.Create(CultureInfo.InvariantCulture, $"Rotate{Lock()}  {degrees:0.#} degrees{TypedText()}");
@@ -265,6 +276,7 @@ public sealed class TransformModal
                 if ((i == _axis) == _plane) factors[i] = 1f;
 
         Quaternion axes = Axes;
+        Scaled = (factors, axes);
         _replay = () => _session.Scale(factors, axes);
         _replay();
         Status = string.Create(CultureInfo.InvariantCulture, $"Scale{Lock()}  {factor:0.###}{TypedText()}");
@@ -305,6 +317,7 @@ public sealed class TransformModal
         }
 
         Float3 delta = (target - from) * t;
+        Moved = delta;
         _replay = () => _session.Translate(delta);
         _replay();
         Status = string.Create(CultureInfo.InvariantCulture, $"Slide  {t:0.###}{TypedText()}");

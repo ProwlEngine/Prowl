@@ -1076,11 +1076,15 @@ public sealed class ModelMeshTool : SceneTool
                    .BackgroundColor(EditorTheme.Neutral200).Rounded(6).Padding(8, 8, 6, 6).Gap(2).Enter())
         {
             Origami.Label(paper, $"{id}_last_name", last.Name).Show();
-            PropertyGridUtils.DrawField(paper, $"{id}_last_amount", Loc.Get("model.amount"), typeof(float), last.Amount,
-                v => AdjustLast(v is float amount ? amount : last.Amount, last.Count));
-            if (last.MaxCount > 1)
-                PropertyGridUtils.DrawField(paper, $"{id}_last_count", Loc.Get("model.count"), typeof(int), last.Count,
-                    v => AdjustLast(last.Amount, v is int count ? count : last.Count));
+            for (int i = 0; i < last.Fields.Length; i++)
+            {
+                int index = i;
+                (string label, float value, bool whole) = last.Fields[i];
+                if (whole)
+                    PropertyGridUtils.DrawField(paper, $"{id}_last_{i}", label, typeof(int), (int)value, v => AdjustLast(index, v is int n ? n : value));
+                else
+                    PropertyGridUtils.DrawField(paper, $"{id}_last_{i}", label, typeof(float), value, v => AdjustLast(index, v is float f ? f : value));
+            }
         }
     }
 
@@ -1120,14 +1124,16 @@ public sealed class ModelMeshTool : SceneTool
         => selection.Faces.Count > 0 ? [.. selection.Faces] : [.. mesh.Faces];
 
     // The last amount operator: its settings, its undo step, and the meshes it left, so a later change to them ends it
-    private sealed record LastOperator(AmountOperator Op, float Amount, int Count, int Group, long Step, List<(ModelObject Model, GeometryData Mesh, int Version)> Left);
-    private LastOperator? _last;
+    // The last step that can be run again with other settings: what it ran with, how to run it, and the step and meshes it left
+    private sealed record LastStep(string Name, (string Label, float Value, bool Whole)[] Fields, Action<float[]> Run, int Group, long Step,
+                                   List<(ModelObject Model, GeometryData Mesh, int Version)> Left);
+    private LastStep? _last;
 
-    /// <summary>The last operator run, while nothing else has changed the meshes or the history since.</summary>
-    public (string Name, float Amount, bool Distance, string Format, int Count, int MaxCount)? Last
-        => _last is { } last && LastStillHolds(last) ? (last.Op.Name, last.Amount, last.Op.Distance, last.Op.Format, last.Count, last.Op.MaxCount) : null;
+    /// <summary>The last operator or transform run, while nothing else has changed the meshes or the history since.</summary>
+    public (string Name, (string Label, float Value, bool Whole)[] Fields)? Last
+        => _last is { } last && LastStillHolds(last) ? (last.Name, last.Fields) : null;
 
-    private static bool LastStillHolds(LastOperator last)
+    private static bool LastStillHolds(LastStep last)
     {
         IReadOnlyList<UndoStepInfo> steps = Undo.UndoSteps;
         if (steps.Count == 0 || steps[^1].Id != last.Step) return false;
@@ -1136,27 +1142,83 @@ public sealed class ModelMeshTool : SceneTool
         return true;
     }
 
-    /// <summary>Runs the last operator again from before it, with a new amount and count, in place of its step.</summary>
-    public void AdjustLast(float amount, int count)
+    /// <summary>Runs the last step again from before it, with one setting changed, in place of its step.</summary>
+    public void AdjustLast(int field, float value)
     {
-        if (_last is not { } last || !LastStillHolds(last)) return;
+        if (_last is not { } last || !LastStillHolds(last) || field < 0 || field >= last.Fields.Length) return;
+        var fields = ((string Label, float Value, bool Whole)[])last.Fields.Clone();
+        fields[field] = (fields[field].Label, value, fields[field].Whole);
         Undo.RevertAllDownToGroup(last.Group);
         RestoreHeld();
-        RunAsLast(last.Op, amount, Math.Clamp(count, 1, Math.Max(1, last.Op.MaxCount)));
+        RunRemembered(last.Name, fields, last.Run);
     }
 
     /// <summary>Runs an amount operator as one undo step of its own, remembered for adjusting.</summary>
     private void RunAsLast(AmountOperator op, float amount, int count)
     {
+        // An operator whose amount ignores the mouse, such as a subdivide, has only its count to adjust
+        bool hasAmount = op.Along != null || op.Amount(0f) != op.Amount(1f);
+        bool hasCount = op.MaxCount > 1;
+        var fields = new List<(string, float, bool)>();
+        if (hasAmount) fields.Add((Loc.Get("model.amount"), amount, false));
+        if (hasCount) fields.Add((Loc.Get("model.count"), count, true));
+        RunRemembered(op.Name, [.. fields], v =>
+        {
+            float runAmount = hasAmount ? v[0] : amount;
+            int runCount = hasCount ? Math.Clamp((int)v[^1], 1, op.MaxCount) : count;
+            Edit(op.Name, (mesh, s) => op.Run(mesh, s, runAmount, runCount), op.Selects);
+        });
+    }
+
+    /// <summary>Runs a step as one undo step of its own, remembered with its settings for adjusting.</summary>
+    private void RunRemembered(string name, (string Label, float Value, bool Whole)[] fields, Action<float[]> run)
+    {
         Undo.FlushUndoRecordObjects();
         Undo.IncrementCurrentGroup();
         int group = Undo.GetCurrentGroup();
-        Edit(op.Name, (mesh, s) => op.Run(mesh, s, amount, count), op.Selects);
+        run([.. fields.Select(f => f.Value)]);
         Undo.FlushUndoRecordObjects();
-        // An operator that changed nothing pushed no step, and the step on top belongs to something else
+        // A step that changed nothing pushed none, and the step on top belongs to something else
         IReadOnlyList<UndoStepInfo> steps = Undo.UndoSteps;
         _last = steps.Count == 0 || steps[^1].Group != group ? null
-            : new LastOperator(op, amount, count, group, steps[^1].Id, [.. _edited.Select(m => (m, m.Mesh, m.Mesh.Version))]);
+            : new LastStep(name, fields, run, group, steps[^1].Id, [.. _edited.Select(m => (m, m.Mesh, m.Mesh.Version))]);
+    }
+
+    /// <summary>Moves, turns or scales the selected points as one remembered step, with every setting adjustable after.</summary>
+    private void TransformAsLast(TransformKind kind, Float3 vector, float degrees, Quaternion axes, float falloff)
+    {
+        string x = Loc.Get("model.field_x"), y = Loc.Get("model.field_y"), z = Loc.Get("model.field_z"), reach = Loc.Get("model.field_falloff");
+        switch (kind)
+        {
+            case TransformKind.Rotate:
+                RunRemembered("Rotate Model Points",
+                    [(Loc.Get("model.field_axis_x"), vector.X, false), (Loc.Get("model.field_axis_y"), vector.Y, false), (Loc.Get("model.field_axis_z"), vector.Z, false),
+                     (Loc.Get("model.field_degrees"), degrees, false), (reach, falloff, false)],
+                    v => RunTransform("Rotate Model Points", v[4], s =>
+                    {
+                        var axis = new Float3(v[0], v[1], v[2]);
+                        if (Float3.LengthSquared(axis) > 1e-12f) s.Rotate(axis, v[3] * MathF.PI / 180f);
+                    }));
+                break;
+            case TransformKind.Scale:
+                RunRemembered("Scale Model Points", [(x, vector.X, false), (y, vector.Y, false), (z, vector.Z, false), (reach, falloff, false)],
+                    v => RunTransform("Scale Model Points", v[3], s => s.Scale(new Float3(v[0], v[1], v[2]), axes)));
+                break;
+            default:
+                string name = kind == TransformKind.Slide ? "Slide Model Points" : "Move Model Points";
+                RunRemembered(name, [(x, vector.X, false), (y, vector.Y, false), (z, vector.Z, false), (reach, falloff, false)],
+                    v => RunTransform(name, v[3], s => s.Translate(new Float3(v[0], v[1], v[2]))));
+                break;
+        }
+    }
+
+    // A session over the selected points with a falloff, moved and committed as one step
+    private void RunTransform(string name, float falloff, Action<TransformSession> move)
+    {
+        if (StartSession() is not { } session) return;
+        session.Falloff = MathF.Max(0f, falloff);
+        _sessionMove = () => move(session);
+        CommitSession(name);
     }
 
     // ================================================================
@@ -1613,13 +1675,15 @@ public sealed class ModelMeshTool : SceneTool
         }
 
         EndModal();
-        if (state == ModalState.Cancelled) CancelSession();
-        else CommitSession(modal.Kind switch
+        float falloff = _session?.Falloff ?? 0f;
+        CancelSession();
+        if (state == ModalState.Cancelled) return;
+        switch (modal.Kind)
         {
-            TransformKind.Translate => "Move Model Points",
-            TransformKind.Rotate => "Rotate Model Points",
-            _ => "Scale Model Points",
-        });
+            case TransformKind.Rotate: TransformAsLast(modal.Kind, modal.Turned.Axis, modal.Turned.Degrees, Quaternion.Identity, falloff); break;
+            case TransformKind.Scale: TransformAsLast(modal.Kind, modal.Scaled.Factors, 0f, modal.Scaled.Axes, falloff); break;
+            default: TransformAsLast(modal.Kind, modal.Moved, 0f, Quaternion.Identity, falloff); break;
+        }
     }
 
     /// <summary>
@@ -2522,12 +2586,19 @@ public sealed class ModelMeshTool : SceneTool
         }
         if (_gizmoDragging && !hot)
         {
-            CommitSession(Gizmo switch
+            float falloff = _session?.Falloff ?? 0f;
+            bool moved = _session != null;
+            CancelSession();
+            if (moved)
             {
-                EditGizmo.Rotate => "Rotate Model Points",
-                EditGizmo.Scale => "Scale Model Points",
-                _ => "Move Model Points",
-            });
+                if (Gizmo == EditGizmo.Rotate)
+                {
+                    (Float3 axis, float degrees) = AxisAngle(_gizmoTurn);
+                    TransformAsLast(TransformKind.Rotate, axis, degrees, Quaternion.Identity, falloff);
+                }
+                else if (Gizmo == EditGizmo.Scale) TransformAsLast(TransformKind.Scale, _gizmoScale, 0f, _gizmoAxes, falloff);
+                else TransformAsLast(TransformKind.Translate, _gizmoApplied, 0f, Quaternion.Identity, falloff);
+            }
             _gizmoTurn = Quaternion.Identity;
             _gizmoScale = Float3.One;
         }
@@ -2554,6 +2625,14 @@ public sealed class ModelMeshTool : SceneTool
                 PreviewSession(() => session.Translate(total));
                 break;
         }
+    }
+
+    private static (Float3 Axis, float Degrees) AxisAngle(Quaternion turn)
+    {
+        turn = Quaternion.Normalize(turn);
+        if (turn.W < 0f) turn = new Quaternion(-turn.X, -turn.Y, -turn.Z, -turn.W);
+        float half = MathF.Acos(Math.Clamp(turn.W, -1f, 1f)), sin = MathF.Sin(half);
+        return sin > 1e-6f ? (new Float3(turn.X, turn.Y, turn.Z) / sin, half * 2f * 180f / MathF.PI) : (Float3.UnitY, 0f);
     }
 
     private static Float3 Round(Float3 value, float step)
