@@ -294,7 +294,11 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Triangulate")) Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face);
         else if (handles.IsPressed("MeshEdit/Flatten")) Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s));
         else if (handles.IsPressed("MeshEdit/Merge")) Edit("Merge Model Points", MergeAtCentre, SelectMode.Vertex);
-        else if (handles.IsPressed("MeshEdit/Bridge")) Edit("Bridge Model Faces", Bridge, SelectMode.Face);
+        else if (handles.IsPressed("MeshEdit/Bridge"))
+        {
+            if (Mode == SelectMode.Edge) Edit("Bridge Model Edges", Operators.BridgeEdges);
+            else Edit("Bridge Model Faces", Bridge, SelectMode.Face);
+        }
         else if (handles.IsPressed("MeshEdit/Separate")) SeparateSelected();
         else if (handles.IsPressed("MeshEdit/Extrude")) Extrude(ctx);
         else if (handles.IsPressed("MeshEdit/Bevel"))
@@ -605,6 +609,7 @@ public sealed class ModelMeshTool : SceneTool
     {
         menu.Item(Loc.Get("model.menu.extrude"), () => Extrude(ctx), shortcut: Chord("MeshEdit/Extrude"));
         menu.Item(Loc.Get("model.menu.fill"), Fill, shortcut: Chord("MeshEdit/Fill"));
+        menu.Item(Loc.Get("model.menu.bridge_edges"), () => Edit("Bridge Model Edges", Operators.BridgeEdges), shortcut: Chord("MeshEdit/Bridge"));
         menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)), shortcut: Chord("MeshEdit/Bevel"));
         menu.Item(Loc.Get("model.menu.slide"), () =>
         {

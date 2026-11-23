@@ -42,6 +42,7 @@
   "model.menu.faces": "{{count}} faces",
   "model.menu.extrude": "Extrude",
   "model.menu.fill": "Fill",
+  "model.menu.bridge_edges": "Bridge Edge Loops",
   "model.menu.slide": "Slide",
   "model.menu.separate": "Separate into a New Object",
   "model.menu.transform": "Transform",

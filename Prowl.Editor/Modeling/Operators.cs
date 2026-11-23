@@ -56,6 +56,20 @@ public static class Operators
         mesh.MarkChanged();
     }
 
+    /// <summary>Joins two chains or rings of edges with a strip of faces, which are selected after.</summary>
+    public static void BridgeEdges(GeometryData mesh, ElementSelection selection)
+    {
+        List<GeometryData.Face> made = GeometryOperators.BridgeEdges(mesh, [.. selection.Edges]);
+        selection.Clear();
+        foreach (GeometryData.Face face in made)
+        {
+            selection.Faces.Add(face);
+            selection.Vertices.UnionWith(face.NeighborVertices());
+            foreach (GeometryData.Edge edge in face.NeighborEdges()) selection.Edges.Add(edge);
+        }
+        mesh.MarkChanged();
+    }
+
     /// <summary>
     /// Fills the selection: two points get an edge between them, a chain or ring of edges gets a face through it, turned
     /// to face the way of a face already beside it. The new face is selected after.

@@ -103,6 +103,21 @@ public class OperatorTests
     }
 
     [Fact]
+    public void BridgingTwoChainsOfEdgesJoinsThemWithFaces()
+    {
+        var mesh = new GeometryData();
+        GeometryData.Vertex a = mesh.AddVertex(0, 0, 0), b = mesh.AddVertex(1, 0, 0), c = mesh.AddVertex(2, 0, 0);
+        GeometryData.Vertex d = mesh.AddVertex(0, 0, 1), e = mesh.AddVertex(1, 0, 1), f = mesh.AddVertex(2, 0, 1);
+        var selection = new ElementSelection();
+        selection.Edges.UnionWith([mesh.AddEdge(a, b), mesh.AddEdge(b, c), mesh.AddEdge(d, e), mesh.AddEdge(e, f)]);
+
+        Operators.BridgeEdges(mesh, selection);
+
+        Assert.Equal(2, mesh.Faces.Count);
+        Assert.Equal(2, selection.Faces.Count);
+    }
+
+    [Fact]
     public void FillingTwoPointsJoinsThemWithAnEdge()
     {
         var mesh = new GeometryData();
