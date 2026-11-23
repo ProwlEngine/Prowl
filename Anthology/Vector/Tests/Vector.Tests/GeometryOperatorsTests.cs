@@ -15,6 +15,15 @@ namespace Prowl.Vector.Tests;
 public class GeometryOperatorsTests
 {
     [Fact]
+    public void Bounds_HoldsEveryVertex()
+    {
+        AABB bounds = GeometryGenerator.Box(new Float3(2f, 4f, 6f), new Float3(1f, 0f, 0f)).Bounds();
+
+        Assert.Equal(new Float3(0f, -2f, -3f), bounds.Min);
+        Assert.Equal(new Float3(2f, 2f, 3f), bounds.Max);
+    }
+
+    [Fact]
     public void EdgesSharperThan_FindsTheCornersOfABox()
     {
         GeometryData mesh = GeometryGenerator.Box(new Float3(2f));

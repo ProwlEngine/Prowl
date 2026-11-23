@@ -565,6 +565,15 @@ public partial class GeometryData
 
     #region Measurements
 
+    /// <summary>The box round every vertex, or an empty box at the origin for a mesh with none.</summary>
+    public AABB Bounds()
+    {
+        if (Vertices.Count == 0) return new AABB(Float3.Zero, Float3.Zero);
+        var bounds = new AABB(Vertices[0].Point, Vertices[0].Point);
+        foreach (Vertex vertex in Vertices) bounds.Encapsulate(vertex.Point);
+        return bounds;
+    }
+
     /// <summary>The volume enclosed by the faces, positive when they face outwards. Only meaningful for a closed mesh.</summary>
     public float Volume()
     {
