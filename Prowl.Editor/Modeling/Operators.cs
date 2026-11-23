@@ -144,10 +144,13 @@ public static class Operators
         mesh.MarkChanged();
     }
 
-    /// <summary>Fills a ring of edges with a grid of four sided faces, which are selected after.</summary>
-    public static void GridFill(GeometryData mesh, ElementSelection selection)
+    /// <summary>
+    /// Fills a ring of edges with a grid of four sided faces, which are selected after. The span sets how many edges
+    /// make one side of the grid, the offset turns which edge it starts at.
+    /// </summary>
+    public static void GridFill(GeometryData mesh, ElementSelection selection, int span = 1, int offset = 0)
     {
-        List<GeometryData.Face> made = GeometryOperators.GridFill(mesh, [.. selection.Edges]);
+        List<GeometryData.Face> made = GeometryOperators.GridFill(mesh, [.. selection.Edges], Math.Max(1, span), offset);
         selection.Clear();
         foreach (GeometryData.Face face in made)
         {

@@ -779,7 +779,7 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("model.menu.extrude"), () => Extrude(ctx), shortcut: Chord("MeshEdit/Extrude"));
         menu.Item(Loc.Get("model.menu.fill"), Fill, shortcut: Chord("MeshEdit/Fill"));
         menu.Item(Loc.Get("model.menu.bridge_edges"), () => Edit("Bridge Model Edges", Operators.BridgeEdges), shortcut: Chord("MeshEdit/Bridge"));
-        menu.Item(Loc.Get("model.menu.grid_fill"), () => Edit("Grid Fill", Operators.GridFill, SelectMode.Face));
+        menu.Item(Loc.Get("model.menu.grid_fill"), GridFill);
         menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)), shortcut: Chord("MeshEdit/Bevel"));
         menu.Item(Loc.Get("model.menu.slide"), () => Slide(ctx), shortcut: Chord("MeshEdit/Slide"));
         menu.Item(Loc.Get("model.menu.crease"), () => Crease(ctx), shortcut: Chord("MeshEdit/Crease"));
@@ -1981,6 +1981,10 @@ public sealed class ModelMeshTool : SceneTool
             Operators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), 0.002f, 1f);
         });
     }
+
+    private void GridFill()
+        => RunRemembered("Grid Fill", [new(Loc.Get("model.field_span"), 1f, FieldKind.Whole), new(Loc.Get("model.field_offset"), 0f, FieldKind.Whole)],
+            v => Edit("Grid Fill", (mesh, s) => Operators.GridFill(mesh, s, (int)v[0], (int)v[1]), SelectMode.Face));
 
     // How far along a world ray the nearest of the surfaces is, within a reach
     private Func<Ray, float, float?> SurfaceHit(List<ModelObject> surfaces) => (ray, reach) =>
