@@ -1803,16 +1803,33 @@ public sealed class ModelMeshTool : SceneTool
         if (_loopEdge is not { } chosen) return;
         int cuts = _loopCuts;
         EndLoopCut();
-        Edit("Loop Cut Model", (mesh, s) =>
+        // The cuts slide together along the ring as the mouse moves, the wheel still sets how many
+        StartOperator(ctx, new AmountOperator("Loop Cut Model", false, f => f, "0.###", (mesh, s, slide, count) =>
         {
             if (!ReferenceEquals(mesh, chosen.Model.Mesh) || EdgeOf(chosen) is not { } cut) return;
-            Operators.LoopCut(mesh, cut, cuts, 0f, s);
-        }, SelectMode.Edge);
-        if (cuts == 1 && _selection[chosen.Model].Edges.Count > 0)
-            StartOperator(ctx, new AmountOperator("Slide Model Edges", false, f => f, "0.###", (mesh, s, f, _) => Operators.SlideEdges(mesh, [.. s.Edges], f), SelectMode.Edge)
-            {
-                Along = SlideDirection(ctx, chosen.Model),
-            });
+            Operators.LoopCut(mesh, cut, count, Math.Clamp(slide, -1f, 1f), s);
+        }, SelectMode.Edge, cuts, 64)
+        {
+            Along = LoopSlideDirection(ctx, chosen, cuts),
+        });
+    }
+
+    // Which way on screen the cuts of a loop cut move as their slide goes from 0 to 1
+    private static Float2 LoopSlideDirection(SceneToolContext ctx, (ModelObject Model, int A, int B) at, int cuts)
+    {
+        Float3? CutPoint(float slide)
+        {
+            var copy = new GeometryData();
+            copy.Restore(at.Model.Mesh.Capture());
+            if (at.A >= copy.Vertices.Count || at.B >= copy.Vertices.Count || copy.FindEdge(copy.Vertices[at.A], copy.Vertices[at.B]) is not { } edge) return null;
+            List<GeometryData.Edge> made = GeometryOperators.LoopCut(copy, edge, cuts, slide);
+            return made.Count > 0 ? made[0].Vert1.Point : null;
+        }
+        Float4x4 toWorld = at.Model.Transform.LocalToWorldMatrix;
+        if (CutPoint(0f) is { } from && CutPoint(1f) is { } to
+            && ctx.Handles.WorldToScreen(Float4x4.TransformPoint(from, toWorld)) is { } a && ctx.Handles.WorldToScreen(Float4x4.TransformPoint(to, toWorld)) is { } b)
+            return b - a;
+        return Float2.Zero;
     }
 
     /// <summary>Lines across the ring of four sided faces through an edge, where each cut will run.</summary>
