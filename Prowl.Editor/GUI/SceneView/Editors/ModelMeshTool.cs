@@ -489,7 +489,12 @@ public sealed class ModelMeshTool : SceneTool
     /// <summary>V: rips along the selected edges, then grabs the copies.</summary>
     private void Rip(SceneToolContext ctx)
     {
-        Edit("Rip Model", Operators.Rip, SelectMode.Vertex);
+        Float2 mouse = ctx.Handles.MousePosition;
+        Edit("Rip Model", (mesh, s) =>
+        {
+            Float4x4 toWorld = _edited.Find(m => ReferenceEquals(m.Mesh, mesh)) is { } model && model.IsValid() ? model.Transform.LocalToWorldMatrix : Float4x4.Identity;
+            Operators.Rip(mesh, s, p => ctx.Handles.WorldToScreen(Float4x4.TransformPoint(p, toWorld)) is { } at ? Float2.Distance(at, mouse) : float.PositiveInfinity);
+        }, SelectMode.Vertex);
         StartModal(ctx, TransformKind.Translate);
     }
 

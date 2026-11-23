@@ -142,6 +142,22 @@ public class OperatorTests
         Assert.Single(selection.Edges);
     }
 
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(2f)]
+    public void RippingKeepsTheSideNearerThePointer(float pointerX)
+    {
+        GeometryData mesh = Strip();
+        var selection = new ElementSelection();
+        selection.Edges.Add(mesh.FindEdge(mesh.Vertices[1], mesh.Vertices[4])!);
+
+        Operators.Rip(mesh, selection, p => MathF.Abs(p.X - pointerX));
+
+        Assert.Equal(2, selection.Vertices.Count);
+        foreach (GeometryData.Vertex vertex in selection.Vertices)
+            Assert.All(vertex.NeighborFaces(), f => Assert.Contains(f.NeighborVertices(), v => v.Point.X == pointerX));
+    }
+
     [Fact]
     public void DuplicatingAFaceCopiesItAndSelectsTheCopy()
     {

@@ -64,18 +64,38 @@ public static class Operators
 
     /// <summary>
     /// Pulls the surface apart along the selected edges, each point on them copied for every side the edges separate.
-    /// The copies are selected after, so a grab can pull that side away.
+    /// One side is selected after, so a grab can pull it away: the copies, or with <paramref name="distance"/> the side
+    /// whose faces are nearer by it.
     /// </summary>
-    public static void Rip(GeometryData mesh, ElementSelection selection)
+    public static void Rip(GeometryData mesh, ElementSelection selection, Func<Float3, float>? distance = null)
     {
         if (selection.Edges.Count == 0) throw new InvalidOperationException("Select the edges to rip along");
+        var originals = new HashSet<GeometryData.Vertex>();
+        foreach (GeometryData.Edge edge in selection.Edges) originals.UnionWith([edge.Vert1, edge.Vert2]);
         var made = new HashSet<GeometryData.Vertex>(GeometryOperators.SplitEdges(mesh, [.. selection.Edges]));
+        HashSet<GeometryData.Vertex> side = distance != null && SideDistance(originals, distance) < SideDistance(made, distance) ? originals : made;
         selection.Clear();
-        selection.Vertices.UnionWith(made);
-        foreach (GeometryData.Vertex vertex in made)
+        selection.Vertices.UnionWith(side);
+        foreach (GeometryData.Vertex vertex in side)
             foreach (GeometryData.Edge edge in vertex.NeighborEdges())
-                if (made.Contains(edge.OtherVertex(vertex))) selection.Edges.Add(edge);
+                if (side.Contains(edge.OtherVertex(vertex))) selection.Edges.Add(edge);
         mesh.MarkChanged();
+    }
+
+    // How far the middle of the faces on one side of a rip is, leaving out the points of the side itself
+    private static float SideDistance(HashSet<GeometryData.Vertex> side, Func<Float3, float> distance)
+    {
+        Float3 sum = Float3.Zero;
+        int count = 0;
+        foreach (GeometryData.Vertex vertex in side)
+            foreach (GeometryData.Face face in vertex.NeighborFaces())
+                foreach (GeometryData.Vertex corner in face.NeighborVertices())
+                {
+                    if (side.Contains(corner)) continue;
+                    sum += corner.Point;
+                    count++;
+                }
+        return count > 0 ? distance(sum / count) : float.PositiveInfinity;
     }
 
     /// <summary>
