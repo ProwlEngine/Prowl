@@ -482,18 +482,10 @@ internal sealed partial class NetworkSystem
             SendEngine(peer, EngineMessage.SectionAdd, message.WrittenSpan);
         }
 
-        // A peer still loading gets them with everything else once it is ready, and one in the middle of its join
-        // run has them added to the end of it.
+        // A peer still loading gets them with everything else once it is ready.
         NetPeer[] ready = [.. peers.Where(IsPeerReady)];
         NetworkObject[] entries = [.. Entries.Values.Where(e => e.GameObject.IsValid() && !e.TearingDown &&
             ReferenceEquals(e.GameObject.Section, section))];
-        foreach (PeerReadiness joining in LoadingPeers.Values)
-        {
-            if (joining.Run is { } run)
-            {
-                joining.Run = [.. run, .. entries];
-            }
-        }
         foreach (NetworkObject entry in entries)
         {
             NetPeer[] seeing = [.. ready.Where(p => Sees(entry, p))];
@@ -701,48 +693,23 @@ internal sealed partial class NetworkSystem
         state!.Stage = NetworkJoinState.Synchronizing;
         Transforms.Restart(peer);
         SendSceneGeneration(peer, EngineMessage.SpawnStarted);
-        state.Run = [.. Entries.Values];
-        ContinueJoin(peer, state);
-    }
 
-    /// <summary>
-    ///     Sends the next spawns of a peer's join run, as many as this tick's budget and the peer's send queue allow, and
-    ///     finishes the run after the last.
-    /// </summary>
-    private void ContinueJoin(NetPeer peer, PeerReadiness state)
-    {
+        // Every object it may have goes in one go, between the started and finished messages.
         NetSession session = Session!;
-        NetworkObject[] run = state.Run!;
-        int budget = Configuration.JoinSpawnBytesPerTick;
-        int sent = 0;
-        bool any = false;
-        while (state.Next < run.Length)
+        foreach (NetworkObject entry in Entries.Values.ToArray())
         {
-            if (any && ((budget > 0 && sent >= budget) || SendQueueIsFilling(peer)))
-            {
-                // Still making progress, so the load is not what is timing out.
-                state.Deadline = Now + Configuration.SceneLoadTimeoutSeconds;
-                return;
-            }
-
-            NetworkObject entry = run[state.Next++];
             if (!entry.GameObject.IsValid() || entry.TearingDown || FindEntry(entry.GameObject) != entry ||
                 !Sees(entry, peer))
             {
                 continue;
             }
 
-            _lastSpawnBytes = 0;
             SendSpawn(entry, [peer], true);
-            sent += _lastSpawnBytes;
-            any = true;
             if (Session != session || !StillLoading(peer, state))
             {
                 return;
             }
         }
-
-        state.Run = null;
 
         // What only an owner gets follows its spawn as state, and has to be there before the spawns finish.
         Sync.SendSyncChanges();
@@ -767,13 +734,6 @@ internal sealed partial class NetworkSystem
             }
         });
     }
-
-    // The bytes of the spawn message written last, for pacing a join.
-    private int _lastSpawnBytes;
-
-    private static bool SendQueueIsFilling(NetPeer peer) =>
-        peer.Connection is { } connection && connection.MaxPendingSendBytes != long.MaxValue &&
-        connection.PendingSendBytes > connection.MaxPendingSendBytes / 2;
 
     private bool StillLoading(NetPeer peer, PeerReadiness state) =>
         Session is { } session && session.TryGetPeer(peer.Id, out NetPeer? current) && ReferenceEquals(current, peer) &&

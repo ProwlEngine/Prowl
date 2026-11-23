@@ -14,7 +14,6 @@ namespace Prowl.Runtime.Networking;
 internal sealed partial class NetworkSystem
 {
     private readonly List<(int Peer, NetworkJoinState Stage)> _timedOut = new();
-    private readonly List<(int Peer, PeerReadiness State)> _continuing = new();
 
     /// <summary>Current connection, admission, scene loading, or gameplay readiness stage.</summary>
     internal NetworkJoinState JoinState
@@ -245,33 +244,6 @@ internal sealed partial class NetworkSystem
         }
 
         NetSession session = Session!;
-        _continuing.Clear();
-        foreach ((int id, PeerReadiness state) in LoadingPeers)
-        {
-            if (state.Run != null)
-            {
-                _continuing.Add((id, state));
-            }
-        }
-
-        foreach ((int id, PeerReadiness state) in _continuing)
-        {
-            if (Session != session)
-            {
-                return;
-            }
-
-            if (session.TryGetPeer(id, out NetPeer? joining) && StillLoading(joining!, state))
-            {
-                ContinueJoin(joining!, state);
-            }
-        }
-
-        if (Session != session)
-        {
-            return;
-        }
-
         double now = Now;
         _timedOut.Clear();
         foreach ((int id, PeerReadiness state) in LoadingPeers)
@@ -299,10 +271,6 @@ internal sealed partial class NetworkSystem
     internal sealed class PeerReadiness(ulong generation, double deadline)
     {
         public double Deadline = deadline;
-
-        /// <summary>The objects of the peer's join run still to be looked at, from <see cref="Next" /> on, or null.</summary>
-        public NetworkObject[]? Run;
-        public int Next;
         public readonly ulong Generation = generation;
         public NetworkJoinState Stage = NetworkJoinState.Loading;
     }

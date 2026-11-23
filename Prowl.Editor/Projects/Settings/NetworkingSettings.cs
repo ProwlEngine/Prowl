@@ -70,7 +70,6 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         Integer(paper, "message", "Maximum Message Size (bytes)", Configuration.MaxMessageSize, v => Configuration.MaxMessageSize = v, 1024, 1073741824);
         Number(paper, "join", "Join Timeout (s)", Configuration.JoinTimeoutSeconds, v => Configuration.JoinTimeoutSeconds = v, 0.1f, 300);
         Number(paper, "sceneload", "Scene Load Timeout (s)", Configuration.SceneLoadTimeoutSeconds, v => Configuration.SceneLoadTimeoutSeconds = v, 1, 3600);
-        Integer(paper, "joinspawn", "Join Spawn Bytes Per Tick (0 = all at once)", Configuration.JoinSpawnBytesPerTick, v => Configuration.JoinSpawnBytesPerTick = v, 0, 1073741824);
         Integer(paper, "clientmessage", "Maximum Client Message Size (bytes)", Configuration.MaxClientMessageSize, v => Configuration.MaxClientMessageSize = v, 1024, 1073741824);
         Integer(paper, "clientrate", "Client Messages Per Second (0 = no limit)", Configuration.MaxClientMessagesPerSecond, v => Configuration.MaxClientMessagesPerSecond = v, 0, 1000000);
 

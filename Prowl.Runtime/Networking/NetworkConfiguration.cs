@@ -76,12 +76,6 @@ public sealed class NetworkConfiguration
     /// <summary>Messages a second the host takes from each client, with a second's worth of burst, or 0 for no limit.</summary>
     public int MaxClientMessagesPerSecond = 1000;
 
-    /// <summary>
-    ///     The bytes of spawns the host sends a joining client each tick, so a large world doesn't flood its connection
-    ///     at once. A join always moves at least one object a tick. 0 sends them all in one.
-    /// </summary>
-    public int JoinSpawnBytesPerTick = 256 * 1024;
-
     /// <summary>The most peers a session holds, the host included.</summary>
     public int MaxPeers = 64;
 
@@ -195,7 +189,6 @@ public sealed class NetworkConfiguration
         copy.MaxMessageSize = Math.Clamp(copy.MaxMessageSize, 1024, 1024 * 1024 * 1024);
         copy.MaxClientMessageSize = Math.Clamp(copy.MaxClientMessageSize, 1024, copy.MaxMessageSize);
         copy.MaxClientMessagesPerSecond = Math.Max(0, copy.MaxClientMessagesPerSecond);
-        copy.JoinSpawnBytesPerTick = Math.Max(0, copy.JoinSpawnBytesPerTick);
         copy.SceneLoadTimeoutSeconds = Limit(copy.SceneLoadTimeoutSeconds, 0.1f, 600, 60);
         copy.JoinTimeoutSeconds = Limit(copy.JoinTimeoutSeconds, 0.1f, 300, 10);
         copy.ConnectTimeoutSeconds = Limit(copy.ConnectTimeoutSeconds, 0.1f, 300, 5);
