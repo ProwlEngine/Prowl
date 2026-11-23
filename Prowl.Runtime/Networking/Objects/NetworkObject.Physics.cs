@@ -43,12 +43,12 @@ internal sealed partial class NetworkObject
         }
     }
 
-    // True if one of this object's transforms sends where go is.
+    // True if one of this object's transforms sends where go is: one with every channel off sends nothing.
     private bool Moves(GameObject go)
     {
         foreach (NetworkTransform transform in Transforms)
         {
-            if (transform.IsValid() && ReferenceEquals(transform.Moved, go))
+            if (transform.IsValid() && transform.Syncs && ReferenceEquals(transform.Moved, go))
             {
                 return true;
             }
