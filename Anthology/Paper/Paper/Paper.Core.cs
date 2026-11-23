@@ -1060,13 +1060,18 @@ namespace Prowl.PaperUI
         // re-parse or re-shape is actually needed.
         internal const string RichTextBlockKey = "_pp_rt_block";
 
-        // Storage keys for the per-element plain-text layout cache (width-independent text only).
-        internal const string PlainTextLayoutKey = "_pp_pt_layout";
-        internal const string PlainTextKeyKey = "_pp_pt_key";
+        // Plain text layouts by element ID, kept across frames and rebuilt in place when their inputs change.
+        private readonly Dictionary<int, TextLayoutCache> _textCache = new Dictionary<int, TextLayoutCache>();
 
-        // Storage keys for the per-element truncated-text layout cache (keyed on source text + width).
-        internal const string TruncTextLayoutKey = "_pp_tr_layout";
-        internal const string TruncTextKeyKey = "_pp_tr_key";
+        // Layout reused for measurements that are thrown away, such as fitting truncated text.
+        internal readonly TextLayout _textScratch = new TextLayout();
+
+        internal TextLayoutCache GetTextCache(int id)
+        {
+            if (!_textCache.TryGetValue(id, out var cache))
+                _textCache[id] = cache = new TextLayoutCache();
+            return cache;
+        }
 
         private void EndOfFrameCleanupStorage()
         {
@@ -1084,6 +1089,16 @@ namespace Prowl.PaperUI
 
             for (int i = 0; i < _storageCleanupScratch.Count; i++)
                 _storage.Remove(_storageCleanupScratch[i]);
+
+            _storageCleanupScratch.Clear();
+            foreach (var storedID in _textCache.Keys)
+            {
+                if (!_createdElements.Contains(storedID))
+                    _storageCleanupScratch.Add(storedID);
+            }
+
+            for (int i = 0; i < _storageCleanupScratch.Count; i++)
+                _textCache.Remove(_storageCleanupScratch[i]);
         }
 
         #endregion

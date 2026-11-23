@@ -1398,7 +1398,7 @@ namespace Prowl.Quill
             AddTriangleCount(indices.Count / 3);
         }
 
-        private void AddTriangleCount(int count)
+        internal void AddTriangleCount(int count)
         {
             // Fast path: the state has not been touched since it was last verified against the draw
             // call still on the end of the list, so nothing can have changed and no hash or field

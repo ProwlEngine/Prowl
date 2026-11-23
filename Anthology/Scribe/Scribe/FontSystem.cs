@@ -36,9 +36,13 @@ namespace Prowl.Scribe
         private int atlasWidth;
         private int atlasHeight;
 
-        // Reusable scratch buffers for DrawLayout - avoid per-frame List/array allocations.
-        private readonly List<IFontRenderer.Vertex> drawVertices = new List<IFontRenderer.Vertex>(1024);
-        private readonly List<int> drawIndices = new List<int>(1536);
+        // Reusable scratch buffers for DrawLayout. Every draw starts at vertex 0, so the index
+        // pattern is the same each time and is only ever extended.
+        private IFontRenderer.Vertex[] drawVertices = new IFontRenderer.Vertex[1024];
+        private int[] drawIndices = Array.Empty<int>();
+
+        // Glyphs of the line a layout is currently building, shared so a new layout allocates no scratch.
+        internal readonly List<GlyphInstance> _lineScratch = new List<GlyphInstance>(256);
 
         private bool useWhiteRect;
         private float whiteU0, whiteV0, whiteU1, whiteV1;
@@ -205,6 +209,7 @@ namespace Prowl.Scribe
 
             // Fallback list changed -> cached glyphs may resolve to different fonts now.
             glyphCache.Clear();
+            ClearWords();
             layoutCache.Clear();
             AtlasVersion++;
         }
@@ -454,6 +459,7 @@ namespace Prowl.Scribe
             // Clear bin packer and glyph cache
             binPacker.Clear(atlasWidth, atlasHeight);
             glyphCache.Clear();
+            ClearWords();
 
             // Clear the Layout Cache
             layoutCache.Clear();
@@ -559,6 +565,120 @@ namespace Prowl.Scribe
             List<GlyphStyle> styles, List<ShapedGlyph> output)
         {
             output.Clear();
+
+            // A uniformly styled word shapes the same wherever it appears, so it is shaped once and replayed.
+            int length = end - start;
+            if (styles.Count > 0 || settings.Font == null || length <= 0 || length > MaxCachedWordLength)
+            {
+                ShapeRunUncached(text, start, end, settings, styles, output);
+                return;
+            }
+
+            int hash = WordHash(text, start, length, settings);
+            var span = text.AsSpan(start, length);
+            _words.TryGetValue(hash, out var first);
+            for (var word = first; word != null; word = word.Next)
+            {
+                if (!word.Matches(span, settings)) continue;
+
+                var cached = word.Glyphs;
+                for (int g = 0; g < cached.Length; g++)
+                {
+                    var glyph = cached[g];
+                    glyph.Cluster += start;
+                    output.Add(glyph);
+                }
+                return;
+            }
+
+            int atlasVersion = AtlasVersion;
+            ShapeRunUncached(text, start, end, settings, styles, output);
+
+            // The atlas grew while shaping, so some of these glyphs already point at the old one.
+            if (atlasVersion != AtlasVersion) return;
+
+            // Only a word seen before is kept, so a counter that changes every frame does not fill the cache.
+            int slot = hash & (_seenWords.Length - 1);
+            if (_seenWords[slot] != hash)
+            {
+                _seenWords[slot] = hash;
+                return;
+            }
+
+            if (_wordCount >= MaxCachedWords)
+                ClearWords();
+
+            var glyphs = new ShapedGlyph[output.Count];
+            for (int g = 0; g < glyphs.Length; g++)
+            {
+                var glyph = output[g];
+                glyph.Cluster -= start;
+                glyphs[g] = glyph;
+            }
+
+            _words.TryGetValue(hash, out first);
+            _words[hash] = new ShapedWord(span.ToString(), settings, glyphs, first);
+            _wordCount++;
+        }
+
+        private const int MaxCachedWordLength = 32;
+        private const int MaxCachedWords = 8192;
+
+        // Shaped words by hash, chained on collision. Holds atlas glyphs, so it empties with the glyph cache.
+        private readonly Dictionary<int, ShapedWord> _words = new Dictionary<int, ShapedWord>();
+        private int _wordCount;
+        private readonly int[] _seenWords = new int[4096];
+
+        private void ClearWords()
+        {
+            _words.Clear();
+            _wordCount = 0;
+        }
+
+        private static int WordHash(string text, int start, int length, in TextLayoutSettings settings)
+        {
+            unchecked
+            {
+                int h = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(settings.Font);
+                h = h * 31 + settings.PixelSize.GetHashCode();
+                for (int i = 0; i < length; i++)
+                    h = h * 31 + text[start + i];
+                return h;
+            }
+        }
+
+        private sealed class ShapedWord
+        {
+            public readonly ShapedGlyph[] Glyphs; // clusters relative to the word start
+            public readonly ShapedWord Next;
+
+            private readonly string _text;
+            private readonly FontFile _font;
+            private readonly float _pixelSize, _letterSpacing;
+            private readonly FontQuality _quality;
+            private readonly bool _noLigatures;
+
+            public ShapedWord(string text, in TextLayoutSettings settings, ShapedGlyph[] glyphs, ShapedWord next)
+            {
+                _text = text;
+                _font = settings.Font;
+                _pixelSize = settings.PixelSize;
+                _letterSpacing = settings.LetterSpacing;
+                _quality = settings.Quality;
+                _noLigatures = settings.NoLigatures;
+                Glyphs = glyphs;
+                Next = next;
+            }
+
+            public bool Matches(ReadOnlySpan<char> text, in TextLayoutSettings settings)
+                => ReferenceEquals(_font, settings.Font) && _pixelSize == settings.PixelSize
+                   && _letterSpacing == settings.LetterSpacing && _quality == settings.Quality
+                   && _noLigatures == settings.NoLigatures && text.SequenceEqual(_text.AsSpan());
+        }
+
+        private void ShapeRunUncached(string text, int start, int end, in TextLayoutSettings settings,
+            List<GlyphStyle> styles, List<ShapedGlyph> output)
+        {
             var buf = _shapeBuf ??= new List<GsubGlyph>();
             buf.Clear();
 
@@ -634,8 +754,17 @@ namespace Prowl.Scribe
                 var gg = buf[k];
                 var atlas = GetOrCreateGlyphByIndex(gg.Glyph, font, style.Quality);
 
-                int adv = 0, lsb = 0;
-                font.GetGlyphHorizontalMetrics(gg.Glyph, ref adv, ref lsb);
+                int adv;
+                if (atlas != null)
+                {
+                    adv = atlas.Advance;
+                }
+                else
+                {
+                    int lsb = 0;
+                    adv = 0;
+                    font.GetGlyphHorizontalMetrics(gg.Glyph, ref adv, ref lsb);
+                }
                 float advance = adv * scale;
                 if (k + 1 < buf.Count)
                     advance += font.GetGlyphKerningAdvance(gg.Glyph, buf[k + 1].Glyph) * scale;
@@ -772,20 +901,34 @@ namespace Prowl.Scribe
             var quads = layout._drawQuads;
             if (quads.Count == 0) return;
 
+            EnsureDrawCapacity(quads.Count);
             var vertices = drawVertices;
-            var indices = drawIndices;
-            vertices.Clear();
-            indices.Clear();
             int vertexCount = 0;
+            float px = position.X, py = position.Y;
 
-            for (int i = 0; i < quads.Count; i++)
+            if (modifier == null)
             {
-                var q = quads[i];
-                float x0 = position.X + q.X0, y0 = position.Y + q.Y0;
-                float x1 = position.X + q.X1, y1 = position.Y + q.Y1;
-
-                if (modifier != null)
+                for (int i = 0; i < quads.Count; i++)
                 {
+                    var q = quads[i];
+                    float x0 = px + q.X0, y0 = py + q.Y0;
+                    float x1 = px + q.X1, y1 = py + q.Y1;
+
+                    WriteVertex(ref vertices[vertexCount], x0, y0, color, q.U0, q.V0);
+                    WriteVertex(ref vertices[vertexCount + 1], x1, y0, color, q.U1, q.V0);
+                    WriteVertex(ref vertices[vertexCount + 2], x0, y1, color, q.U0, q.V1);
+                    WriteVertex(ref vertices[vertexCount + 3], x1, y1, color, q.U1, q.V1);
+                    vertexCount += 4;
+                }
+            }
+            else
+            {
+                for (int i = 0; i < quads.Count; i++)
+                {
+                    var q = quads[i];
+                    float x0 = px + q.X0, y0 = py + q.Y0;
+                    float x1 = px + q.X1, y1 = py + q.Y1;
+
                     var glyph = new GlyphDraw
                     {
                         CharIndex = q.CharIndex,
@@ -802,49 +945,54 @@ namespace Prowl.Scribe
 
                     modifier(ref glyph);
                     if (!glyph.Visible)
-                    {
                         continue;
-                    }
 
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyph.TopLeft.X, glyph.TopLeft.Y, 0), glyph.Color, new Float2(q.U0, q.V0)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyph.TopRight.X, glyph.TopRight.Y, 0), glyph.Color, new Float2(q.U1, q.V0)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyph.BottomLeft.X, glyph.BottomLeft.Y, 0), glyph.Color, new Float2(q.U0, q.V1)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyph.BottomRight.X, glyph.BottomRight.Y, 0), glyph.Color, new Float2(q.U1, q.V1)));
-
-                    indices.Add(vertexCount);
-                    indices.Add(vertexCount + 1);
-                    indices.Add(vertexCount + 2);
-                    indices.Add(vertexCount + 1);
-                    indices.Add(vertexCount + 3);
-                    indices.Add(vertexCount + 2);
+                    WriteVertex(ref vertices[vertexCount], glyph.TopLeft.X, glyph.TopLeft.Y, glyph.Color, q.U0, q.V0);
+                    WriteVertex(ref vertices[vertexCount + 1], glyph.TopRight.X, glyph.TopRight.Y, glyph.Color, q.U1, q.V0);
+                    WriteVertex(ref vertices[vertexCount + 2], glyph.BottomLeft.X, glyph.BottomLeft.Y, glyph.Color, q.U0, q.V1);
+                    WriteVertex(ref vertices[vertexCount + 3], glyph.BottomRight.X, glyph.BottomRight.Y, glyph.Color, q.U1, q.V1);
                     vertexCount += 4;
-                    continue;
                 }
-
-                vertices.Add(new IFontRenderer.Vertex(new Float3(x0, y0, 0), color, new Float2(q.U0, q.V0)));
-                vertices.Add(new IFontRenderer.Vertex(new Float3(x1, y0, 0), color, new Float2(q.U1, q.V0)));
-                vertices.Add(new IFontRenderer.Vertex(new Float3(x0, y1, 0), color, new Float2(q.U0, q.V1)));
-                vertices.Add(new IFontRenderer.Vertex(new Float3(x1, y1, 0), color, new Float2(q.U1, q.V1)));
-
-                // Six Add calls - no per-quad array allocation.
-                indices.Add(vertexCount);
-                indices.Add(vertexCount + 1);
-                indices.Add(vertexCount + 2);
-                indices.Add(vertexCount + 1);
-                indices.Add(vertexCount + 3);
-                indices.Add(vertexCount + 2);
-                vertexCount += 4;
             }
 
-            if (vertices.Count > 0)
+            if (vertexCount > 0)
             {
-#if NET5_0_OR_GREATER
                 renderer.DrawQuads(atlasTexture,
-                    CollectionsMarshal.AsSpan(vertices),
-                    CollectionsMarshal.AsSpan(indices));
-#else
-                renderer.DrawQuads(atlasTexture, vertices.ToArray(), indices.ToArray());
-#endif
+                    new ReadOnlySpan<IFontRenderer.Vertex>(vertices, 0, vertexCount),
+                    new ReadOnlySpan<int>(drawIndices, 0, vertexCount / 4 * 6));
+            }
+        }
+
+        private static void WriteVertex(ref IFontRenderer.Vertex v, float x, float y, FontColor color, float u, float tv)
+        {
+            v.Position.X = x;
+            v.Position.Y = y;
+            v.Position.Z = 0;
+            v.Color = color;
+            v.TextureCoordinate.X = u;
+            v.TextureCoordinate.Y = tv;
+        }
+
+        // Makes room for a draw of this many quads and extends the shared index pattern to cover it.
+        private void EnsureDrawCapacity(int quadCount)
+        {
+            if (drawVertices.Length < quadCount * 4)
+                drawVertices = new IFontRenderer.Vertex[Math.Max(quadCount * 4, drawVertices.Length * 2)];
+
+            int have = drawIndices.Length / 6;
+            if (have >= quadCount) return;
+
+            int want = Math.Max(quadCount, Math.Max(256, have * 2));
+            Array.Resize(ref drawIndices, want * 6);
+            for (int q = have; q < want; q++)
+            {
+                int v = q * 4, o = q * 6;
+                drawIndices[o] = v;
+                drawIndices[o + 1] = v + 1;
+                drawIndices[o + 2] = v + 2;
+                drawIndices[o + 3] = v + 1;
+                drawIndices[o + 4] = v + 3;
+                drawIndices[o + 5] = v + 2;
             }
         }
 
@@ -854,6 +1002,10 @@ namespace Prowl.Scribe
         {
             var quads = layout._drawQuads;
             quads.Clear();
+
+            FontFile primary = layout.Settings.Font;
+            FontFile scaleFont = null;
+            float scaleSize = 0f, sc = 0f;
 
             foreach (var line in layout.Lines)
             {
@@ -901,11 +1053,16 @@ namespace Prowl.Scribe
                     // distance-field margin, so it is larger than the glyph's ink bounds. The region
                     // is in font units; scale it to this instance's pixel size.
                     float ps = glyphInstance.PixelSize;
-                    var gm = GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, ps, layout.Settings.Font) ?? default;
-                    float sc = GetScale(glyph.Font, layout.Settings.Font, ps);
+                    if (!ReferenceEquals(glyph.Font, scaleFont) || ps != scaleSize)
+                    {
+                        scaleFont = glyph.Font;
+                        scaleSize = ps;
+                        sc = GetScale(glyph.Font, primary, ps);
+                    }
+                    glyph.GetOffset(sc, out float offsetX, out float offsetY);
 
-                    float penX = line.Position.X + glyphInstance.Position.X - gm.OffsetX;
-                    float baselineY = line.Position.Y + glyphInstance.Position.Y - gm.OffsetY;
+                    float penX = line.Position.X + glyphInstance.Position.X - offsetX;
+                    float baselineY = line.Position.Y + glyphInstance.Position.Y - offsetY;
 
                     quads.Add(new TextLayout.DrawQuad
                     {
