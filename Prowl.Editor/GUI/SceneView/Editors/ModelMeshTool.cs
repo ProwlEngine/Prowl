@@ -117,6 +117,11 @@ public sealed class ModelMeshTool : SceneTool
     /// <summary>Which gizmo the selected points show.</summary>
     public EditGizmo Gizmo { get; set; } = EditGizmo.Move;
 
+    public enum SnapKind { Anything, Points, Edges, Faces }
+
+    /// <summary>What a snapping move lands on.</summary>
+    public SnapKind SnapTo { get; set; } = SnapKind.Anything;
+
     /// <summary>After every move, turn and scale the moved points land on the nearest other model, for retopology.</summary>
     public bool AutoShrinkwrap { get; set; }
     public float ProportionalRadius { get; set; } = 1f;
@@ -601,6 +606,9 @@ public sealed class ModelMeshTool : SceneTool
                 face = handles.MouseRay.Origin + handles.MouseRay.Direction * distance;
             }
         }
+        if (SnapTo is SnapKind.Edges or SnapKind.Faces) corners.Clear();
+        if (SnapTo is SnapKind.Points or SnapKind.Faces) edges.Clear();
+        if (SnapTo is SnapKind.Points or SnapKind.Edges) face = null;
         return Snapping.Find(corners, edges, face, handles.WorldToScreen, mouse, out Float3 point) ? point : null;
     }
 
@@ -694,6 +702,14 @@ public sealed class ModelMeshTool : SceneTool
             m.Separator();
             m.Toggle(Loc.Get("csg.xray"), () => XRay = !XRay, () => XRay);
             m.Toggle(Loc.Get("model.menu.snap"), () => SnapToObjects = !SnapToObjects, () => SnapToObjects);
+            m.Submenu(Loc.Get("model.menu.snap_to"), sub =>
+            {
+                foreach (SnapKind kind in Enum.GetValues<SnapKind>())
+                {
+                    SnapKind chosen = kind;
+                    sub.Item(Loc.Get($"model.menu.snap_{kind.ToString().ToLowerInvariant()}"), () => SnapTo = chosen, on: SnapTo == chosen);
+                }
+            });
             m.Submenu(Loc.Get("model.menu.gizmo"), sub =>
             {
                 foreach (EditGizmo kind in Enum.GetValues<EditGizmo>())
