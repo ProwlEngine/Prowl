@@ -1217,6 +1217,29 @@ public static class GeometryOperators
         return SoftenOp.SoftenByAngle(mesh, edges, degrees);
     }
 
+    /// <summary>The edges between two faces that turn against each other by more than the angle.</summary>
+    public static List<GeometryData.Edge> EdgesSharperThan(GeometryData mesh, float degrees)
+    {
+        float limit = MathF.Cos(degrees * Maths.Deg2Rad);
+        return [.. mesh.Edges.Where(e => e.DihedralCosine() is float cosine && cosine < limit)];
+    }
+
+    /// <summary>
+    /// A new mesh of a closed mesh combined with another, placed by a matrix into its space: the other added, cut
+    /// away, or kept only where both are. Attributes of both are carried, the first mesh's where they share a name.
+    /// The meshes given are not changed.
+    /// </summary>
+    public static GeometryData Boolean(GeometryData mesh, GeometryData other, Float4x4 otherToMesh, CSGOperation operation)
+    {
+        var scene = new CSGScene();
+        scene.Add(mesh, CSGOperation.Additive);
+        scene.Add(other, operation, otherToMesh);
+        GeometryData result = scene.Build();
+        result.RemoveFaceAttribute(CSGScene.BrushIdAttribute);
+        result.RemoveFaceAttribute(CSGScene.SourceFaceAttribute);
+        return result;
+    }
+
     /// <summary>Sets whether edges are soft.</summary>
     public static void SetSoft(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, bool soft)
     {

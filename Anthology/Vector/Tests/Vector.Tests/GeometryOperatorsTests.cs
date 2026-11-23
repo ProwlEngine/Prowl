@@ -15,6 +15,29 @@ namespace Prowl.Vector.Tests;
 public class GeometryOperatorsTests
 {
     [Fact]
+    public void EdgesSharperThan_FindsTheCornersOfABox()
+    {
+        GeometryData mesh = GeometryGenerator.Box(new Float3(2f));
+
+        Assert.Equal(12, GeometryOperators.EdgesSharperThan(mesh, 30f).Count);
+        Assert.Empty(GeometryOperators.EdgesSharperThan(mesh, 95f));
+    }
+
+    [Fact]
+    public void Boolean_CutsAPlacedMeshAway()
+    {
+        GeometryData box = GeometryGenerator.Box(new Float3(2f));
+        GeometryData cutter = GeometryGenerator.Box(new Float3(2f));
+
+        GeometryData result = GeometryOperators.Boolean(box, cutter, Float4x4.CreateTranslation(new Float3(1f, 0f, 0f)), CSGOperation.Subtractive);
+
+        Assert.True(result.IsClosed());
+        Assert.Equal(4f, result.Volume(), 3);
+        Assert.False(result.HasFaceAttribute(CSGScene.BrushIdAttribute));
+        Assert.Equal(8f, box.Volume(), 3);
+    }
+
+    [Fact]
     public void ShrinkFatten_MovesVerticesAlongTheirNormals()
     {
         GeometryData mesh = GeometryGenerator.Box(new Float3(2f));
