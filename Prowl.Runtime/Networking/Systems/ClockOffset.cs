@@ -24,6 +24,10 @@ internal struct ClockOffset
         {
             (_current, _previous, _windowStart, _started) = (delay, delay, now, true);
         }
+        else if (now - _windowStart >= 2 * WindowSeconds)
+        {
+            (_previous, _current, _windowStart) = (delay, delay, now);
+        }
         else if (now - _windowStart >= WindowSeconds)
         {
             (_previous, _current, _windowStart) = (_current, delay, now);

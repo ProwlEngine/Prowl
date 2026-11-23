@@ -16,6 +16,17 @@ public class ClockOffsetTests
     }
 
     [Fact]
+    public void AfterTwoQuietWindowsTheNextMessageAloneSetsTheOffset()
+    {
+        ClockOffset clock = default;
+        clock.Take(10.1, 10);
+        Assert.True(clock.Take(10.2, 1e12) < -1e11);
+
+        // Nothing for longer than two windows: what came before is too old to keep.
+        Assert.Equal(0.1, clock.Take(30.1, 30.0), 6);
+    }
+
+    [Fact]
     public void OneMessageClaimingAnImpossibleTimeDoesNotSetTheOffsetForGood()
     {
         ClockOffset clock = default;
