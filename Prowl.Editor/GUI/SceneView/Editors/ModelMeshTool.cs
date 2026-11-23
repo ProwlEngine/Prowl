@@ -148,6 +148,8 @@ public sealed class ModelMeshTool : SceneTool
             EndLoopCut();
         }
         if (!ReferenceEquals(_knifeModel, null)) EndKnife();
+        if (!ReferenceEquals(_lineModel, null)) EndLine();
+        if (!ReferenceEquals(_quadModel, null)) EndQuads();
         if (_operator != null)
         {
             EndOperator();
@@ -225,6 +227,18 @@ public sealed class ModelMeshTool : SceneTool
             DrawElements(ctx);
             return;
         }
+        if (!ReferenceEquals(_lineModel, null))
+        {
+            TickLine(ctx);
+            DrawElements(ctx);
+            return;
+        }
+        if (!ReferenceEquals(_quadModel, null))
+        {
+            TickQuads(ctx);
+            DrawElements(ctx);
+            return;
+        }
 
         Keys(ctx);
         DrawElements(ctx);
@@ -279,6 +293,8 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Inset")) Inset(ctx);
         else if (handles.IsPressed("MeshEdit/LoopCut")) StartLoopCut(ctx);
         else if (handles.IsPressed("MeshEdit/Knife")) StartKnife(ctx);
+        else if (handles.IsPressed("MeshEdit/DrawLine")) StartLine(ctx);
+        else if (handles.IsPressed("MeshEdit/DrawQuads")) StartQuads(ctx);
         else if (handles.IsPressed("MeshEdit/HideUnselected")) Hide(unselected: true);
         else if (handles.IsPressed("MeshEdit/Reveal")) Reveal();
         else if (handles.IsPressed("MeshEdit/Hide")) Hide(unselected: false);
@@ -628,6 +644,8 @@ public sealed class ModelMeshTool : SceneTool
         {
             m.Item(Loc.Get("csg.loop_cut"), () => StartLoopCut(ctx), shortcut: Chord("MeshEdit/LoopCut"));
             m.Item(Loc.Get("csg.knife"), () => StartKnife(ctx), shortcut: Chord("MeshEdit/Knife"));
+            m.Item(Loc.Get("model.menu.draw_lines"), () => StartLine(ctx), shortcut: Chord("MeshEdit/DrawLine"));
+            m.Item(Loc.Get("model.menu.draw_quads"), () => StartQuads(ctx), shortcut: Chord("MeshEdit/DrawQuads"));
         });
         menu.Submenu(Loc.Get("model.menu.hide"), m =>
         {
@@ -662,6 +680,7 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("csg.connect"), () => Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge), shortcut: Chord("MeshEdit/Connect"));
         menu.Item(Loc.Get("csg.smooth"), () => SmoothPoints(ctx), shortcut: Chord("MeshEdit/Smooth"));
         menu.Item(Loc.Get("csg.flatten"), () => Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s)), shortcut: Chord("MeshEdit/Flatten"));
+        menu.Item(Loc.Get("model.menu.shrinkwrap"), Shrinkwrap);
         menu.Separator();
         menu.Item(Loc.Get("csg.dissolve"), () => Edit("Dissolve Model Elements", (mesh, s) => Operators.Dissolve(mesh, s, Mode, s), SelectMode.Face), shortcut: Chord("MeshEdit/Dissolve"));
         menu.Item(Loc.Get("model.menu.delete_points"), () => Edit("Delete Model Elements", Delete), danger: true);
@@ -1593,6 +1612,478 @@ public sealed class ModelMeshTool : SceneTool
         if (!handles.IsNearest(owner) || !handles.TryBeginDrag(owner)) return;
         handles.TryEndDrag(owner);
         _knife.Add((pixel, landed));
+    }
+
+    // ================================================================
+    //  Shrinkwrap
+    // ================================================================
+
+    /// <summary>
+    /// Moves the selected points, or all shown ones when none is selected, onto the nearest surface of the model
+    /// objects not being edited, along their normals.
+    /// </summary>
+    private void Shrinkwrap()
+    {
+        List<ModelObject> surfaces = OtherModels();
+        if (surfaces.Count == 0)
+        {
+            CSGStatus.Flash(Loc.Get("model.shrinkwrap_nothing"));
+            return;
+        }
+        float? Hit(Ray ray, float reach)
+        {
+            float? nearest = null;
+            foreach (ModelObject other in surfaces)
+                if (Tree(other.Mesh).Raycast(other.Transform.LocalToWorldMatrix, ray, out _, out float distance) && distance <= reach && (nearest == null || distance < nearest))
+                    nearest = distance;
+            return nearest;
+        }
+        EditMeshes("Shrinkwrap", (model, mesh, s) =>
+        {
+            IEnumerable<GeometryData.Vertex> points = s.Vertices.Count > 0 ? s.Vertices : mesh.Vertices.Where(v => !_hidden[model].Vertices.Contains(v));
+            Operators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, Hit, 0.002f, 1f);
+        });
+    }
+
+    /// <summary>The model objects of the world that are not being edited, which drawing and shrinkwrap land on.</summary>
+    private List<ModelObject> OtherModels()
+    {
+        var others = new List<ModelObject>();
+        if (ModelEditingMode.World is not { } world) return others;
+        foreach (GameObject go in world.Objects)
+            if (go.GetComponent<ModelObject>() is { } model && model.IsValid() && !_edited.Contains(model)) others.Add(model);
+        return others;
+    }
+
+    /// <summary>The edited object new drawing goes into: the first with something selected, else the first.</summary>
+    private ModelObject DrawTarget() => _edited.Find(m => _selection[m].Vertices.Count > 0) is { } selected ? selected : _edited[0];
+
+    // ================================================================
+    //  Line drawing
+    // ================================================================
+
+    private const float LineVertexRadius = 14f, LineMiddleRadius = 12f, LineEdgeRadius = 9f, LineHandleRadius = 12f, LineMinDrag = 5f;
+    private static readonly Color32 LineColor = new(255, 220, 90, 255), SnapColor = new(120, 255, 140, 255), HandleColor = new(90, 200, 255, 255);
+
+    // An end of a drawn line in the world, on a point or an edge of the drawn object when it snapped to one
+    private readonly record struct DrawEnd(Float3 World, GeometryData.Vertex? Vertex = null, GeometryData.Edge? Edge = null)
+    {
+        public bool Snapped => Vertex != null || Edge != null;
+    }
+
+    private ModelObject? _lineModel;
+    private DrawEnd _lineStart, _lineEnd;
+    private readonly Float3[] _lineHandles = new Float3[2];
+    private Float3 _linePlane, _lineDirection;
+    private Float2 _lineFrom;
+    private bool _lineHasPlane, _lineDragging, _linePending, _lineCurved;
+    private int _lineGrabbed = -1, _lineSegments = 12;
+    private string _lineTyped = "";
+
+    /// <summary>
+    /// Draws edges into the object on a plane facing the view, as for tracing a reference. Drag from one end to the
+    /// other; ends snap to points, to the middle of edges and to edges. Two handles then bend the line and the wheel
+    /// sets how many edges the bend is made of, or a typed number sets its length. Enter or Space keeps it, as does
+    /// starting the next. Escape drops it, and leaves when there is none.
+    /// </summary>
+    private void StartLine(SceneToolContext ctx)
+    {
+        _lineModel = DrawTarget();
+        _lineDragging = _linePending = _lineCurved = _lineHasPlane = false;
+        _lineGrabbed = -1;
+        ctx.Handles.Modal = true;
+        _operatorHandles = ctx.Handles;
+    }
+
+    private void EndLine()
+    {
+        _lineModel = null;
+        if (_operatorHandles != null) _operatorHandles.Modal = false;
+        _operatorHandles = null;
+    }
+
+    private void TickLine(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        if (_lineModel is not { } model || model.IsNotValid())
+        {
+            EndLine();
+            return;
+        }
+        ControlID owner = handles.GetControlID(ModalControl);
+        handles.AddControl(owner, HandleContext.BodyDistance, float.MaxValue - 1f);
+        DrawEnd under = LineSnap(ctx, model);
+        bool pressed = handles.ViewportHovered && Input.GetMouseButtonDown(0), held = Input.GetMouseButton(0);
+
+        if (_lineDragging)
+        {
+            _lineEnd = handles.Shift && !under.Snapped ? Stepped(ctx, under) : under;
+            if (!held)
+            {
+                _lineDragging = false;
+                if (Float2.Distance(handles.MousePosition, _lineFrom) >= LineMinDrag)
+                {
+                    _linePending = true;
+                    _lineCurved = false;
+                    _lineTyped = "";
+                    _lineDirection = Float3.NormalizeSafe(_lineEnd.World - _lineStart.World, Float3.UnitX);
+                    StraightHandles();
+                }
+            }
+        }
+        else if (_lineGrabbed >= 0)
+        {
+            _lineHandles[_lineGrabbed] = OnLinePlane(ctx);
+            _lineCurved = true;
+            if (!held) _lineGrabbed = -1;
+        }
+        else if (pressed)
+        {
+            _lineGrabbed = _linePending ? HandleUnder(ctx) : -1;
+            if (_lineGrabbed < 0)
+            {
+                KeepLine();
+                _lineStart = _lineEnd = under;
+                _lineFrom = handles.MousePosition;
+                _linePlane = under.World;
+                _lineHasPlane = true;
+                _lineDragging = true;
+            }
+        }
+
+        // A length typed after the drag puts the end that far from the start, the way the line was drawn
+        if (_linePending && !_lineCurved && TypeNumber(handles, ref _lineTyped) && float.TryParse(_lineTyped, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float length) && length > 0f)
+        {
+            _lineEnd = new DrawEnd(_lineStart.World + _lineDirection * length);
+            StraightHandles();
+        }
+        float wheel = Input.MouseWheelDelta;
+        if (_linePending && wheel != 0f) _lineSegments = Math.Clamp(_lineSegments + (wheel > 0f ? 1 : -1), 2, 64);
+        DrawLine(ctx, under);
+
+        if (handles.GetKeyDown(KeyCode.Enter) || handles.GetKeyDown(KeyCode.KeypadEnter) || handles.GetKeyDown(KeyCode.Space))
+        {
+            if (_linePending) KeepLine();
+            else EndLine();
+        }
+        else if (handles.GetKeyDown(KeyCode.Escape) || handles.ViewportHovered && Input.GetMouseButtonDown(1))
+        {
+            if (_linePending || _lineDragging) _linePending = _lineDragging = false;
+            else EndLine();
+        }
+    }
+
+    private void StraightHandles()
+    {
+        _lineHandles[0] = _lineStart.World + (_lineEnd.World - _lineStart.World) / 3f;
+        _lineHandles[1] = _lineStart.World + (_lineEnd.World - _lineStart.World) * (2f / 3f);
+    }
+
+    /// <summary>Digits, a point and Backspace typed into a number. True when it changed.</summary>
+    private static bool TypeNumber(HandleContext handles, ref string text)
+    {
+        string before = text;
+        for (int d = 0; d <= 9; d++)
+            if (handles.GetKeyDown((KeyCode)((int)KeyCode.Number0 + d)) || handles.GetKeyDown((KeyCode)((int)KeyCode.Keypad0 + d))) text += d;
+        if ((handles.GetKeyDown(KeyCode.Period) || handles.GetKeyDown(KeyCode.KeypadDecimal)) && !text.Contains('.')) text += ".";
+        if (handles.GetKeyDown(KeyCode.Backspace) && text.Length > 0) text = text[..^1];
+        return text != before;
+    }
+
+    // The end turned to the nearest fifteen degrees from level in the view, at the length it has
+    private DrawEnd Stepped(SceneToolContext ctx, DrawEnd end)
+    {
+        Transform view = ctx.Camera.GameObject.Transform;
+        Float3 right = view.Right, up = view.Up, line = end.World - _lineStart.World;
+        float length = Float3.Length(line);
+        if (length < 1e-6f) return end;
+        float step = MathF.PI / 12f;
+        float angle = MathF.Round(MathF.Atan2(Float3.Dot(line, up), Float3.Dot(line, right)) / step) * step;
+        return new DrawEnd(_lineStart.World + (right * MathF.Cos(angle) + up * MathF.Sin(angle)) * length);
+    }
+
+    /// <summary>The line as the points its edges run through: its ends when straight, else along the bend of its handles.</summary>
+    private Float3[] LinePoints()
+    {
+        if (!_lineCurved) return [_lineStart.World, _lineEnd.World];
+        var points = new Float3[_lineSegments + 1];
+        for (int i = 0; i <= _lineSegments; i++)
+        {
+            float t = (float)i / _lineSegments, u = 1f - t;
+            points[i] = _lineStart.World * (u * u * u) + _lineHandles[0] * (3f * u * u * t) + _lineHandles[1] * (3f * u * t * t) + _lineEnd.World * (t * t * t);
+        }
+        return points;
+    }
+
+    private void KeepLine()
+    {
+        if (!_linePending || _lineModel is not { } model) return;
+        _linePending = false;
+        Float4x4 toLocal = model.Transform.LocalToWorldMatrix.Invert();
+        Float3[] points = [.. LinePoints().Select(p => Float4x4.TransformPoint(p, toLocal))];
+        var start = new LineAnchor(points[0], _lineStart.Vertex, _lineStart.Edge);
+        var end = new LineAnchor(points[^1], _lineEnd.Vertex, _lineEnd.Edge);
+        EditMeshes("Draw Line", (owner, mesh, s) =>
+        {
+            if (owner == model) Operators.AddLine(mesh, points, start, end, s);
+        });
+    }
+
+    private void DrawLine(SceneToolContext ctx, DrawEnd under)
+    {
+        Prowl.Graphite.Rendering.GizmoBatch batch = Runtime.Resources.Scene.Active.Gizmos.Batch;
+        if (_lineDragging || _linePending)
+        {
+            Float3[] points = LinePoints();
+            for (int i = 1; i < points.Length; i++) batch.Line(points[i - 1], points[i], LineColor, 2f);
+            batch.Point(_lineStart.World, _lineStart.Snapped ? SnapColor : LineColor, 8f);
+            batch.Point(_lineEnd.World, _lineEnd.Snapped ? SnapColor : LineColor, 8f);
+            if (_lineCurved)
+                foreach (Float3 point in points[1..^1]) batch.Point(point, LineColor, 4f);
+        }
+        if (_linePending)
+        {
+            batch.Line(_lineStart.World, _lineHandles[0], HandleColor, 1f);
+            batch.Line(_lineEnd.World, _lineHandles[1], HandleColor, 1f);
+            batch.Point(_lineHandles[0], HandleColor, 10f);
+            batch.Point(_lineHandles[1], HandleColor, 10f);
+            string length = _lineTyped.Length > 0 ? _lineTyped : Float3.Distance(_lineStart.World, _lineEnd.World).ToString("0.###");
+            ctx.Draw.Label(_lineEnd.World, length, LineColor);
+        }
+        if (!_lineDragging && _lineGrabbed < 0) batch.Point(under.World, under.Snapped ? SnapColor : LineColor, under.Snapped ? 9f : 5f);
+    }
+
+    private int HandleUnder(SceneToolContext ctx)
+    {
+        for (int i = 0; i < 2; i++)
+            if (ctx.Handles.WorldToScreen(_lineHandles[i]) is { } at && Float2.Distance(at, ctx.Handles.MousePosition) < LineHandleRadius) return i;
+        return -1;
+    }
+
+    /// <summary>The mouse on the plane facing the view through where the line started, or through the selection before any line.</summary>
+    private Float3 OnLinePlane(SceneToolContext ctx)
+    {
+        Ray ray = ctx.Handles.MouseRay;
+        Float3 normal = ctx.Camera.GameObject.Transform.Forward;
+        float facing = Float3.Dot(ray.Direction, normal);
+        Float3 through = _lineHasPlane ? _linePlane : Focus();
+        float distance = MathF.Abs(facing) > 1e-4f ? Float3.Dot(through - ray.Origin, normal) / facing : 1f;
+        return ray.Origin + ray.Direction * distance;
+    }
+
+    // The middle of the selected points, or of the drawn object
+    private Float3 Focus()
+    {
+        Float3 sum = Float3.Zero;
+        int count = 0;
+        foreach (ModelObject model in _edited)
+            foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
+            {
+                sum += Float4x4.TransformPoint(vertex.Point, model.Transform.LocalToWorldMatrix);
+                count++;
+            }
+        if (count > 0) return sum / count;
+        return _lineModel is { } target ? target.Transform.Position : Float3.Zero;
+    }
+
+    /// <summary>What the mouse is on for a line end: a point of the drawn object, the middle of an edge, an edge, else the drawing plane.</summary>
+    private DrawEnd LineSnap(SceneToolContext ctx, ModelObject model)
+    {
+        HandleContext handles = ctx.Handles;
+        Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+        Float2 mouse = handles.MousePosition;
+        ElementSelection hidden = _hidden[model];
+
+        GeometryData.Vertex? nearVertex = null;
+        float best = LineVertexRadius;
+        foreach (GeometryData.Vertex vertex in model.Mesh.Vertices)
+        {
+            if (hidden.Vertices.Contains(vertex)) continue;
+            if (handles.WorldToScreen(Float4x4.TransformPoint(vertex.Point, toWorld)) is not { } at || Float2.Distance(at, mouse) >= best) continue;
+            best = Float2.Distance(at, mouse);
+            nearVertex = vertex;
+        }
+        if (nearVertex != null) return new DrawEnd(Float4x4.TransformPoint(nearVertex.Point, toWorld), nearVertex);
+
+        GeometryData.Edge? nearEdge = null;
+        Float3 onEdge = default;
+        best = float.PositiveInfinity;
+        foreach (GeometryData.Edge edge in model.Mesh.Edges)
+        {
+            if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
+            Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
+            if (handles.WorldToScreen(a) is not { } pa || handles.WorldToScreen(b) is not { } pb) continue;
+            Float2 along = pb - pa;
+            float lengthSq = Float2.Dot(along, along);
+            if (lengthSq < 1e-6f) continue;
+            float t = Math.Clamp(Float2.Dot(mouse - pa, along) / lengthSq, 0f, 1f);
+            // The middle of an edge pulls from further away than the rest of it, and wins when both are in reach
+            float toMiddle = Float2.Distance(pa + along * 0.5f, mouse) - LineMiddleRadius - LineEdgeRadius;
+            float toEdge = Float2.Distance(pa + along * t, mouse) - LineEdgeRadius;
+            if (toMiddle < -LineEdgeRadius && toMiddle < best)
+            {
+                best = toMiddle;
+                nearEdge = edge;
+                onEdge = (a + b) * 0.5f;
+            }
+            else if (toEdge < 0f && toEdge < best)
+            {
+                best = toEdge;
+                nearEdge = edge;
+                onEdge = a + (b - a) * t;
+            }
+        }
+        return nearEdge != null ? new DrawEnd(onEdge, null, nearEdge) : new DrawEnd(OnLinePlane(ctx));
+    }
+
+    // ================================================================
+    //  Quad drawing
+    // ================================================================
+
+    private const float QuadSnapRadius = 14f;
+
+    // New corners sit this far in front of the surface they are drawn on, in metres, so the faces are not drawn through it
+    private const float QuadLift = 0.002f;
+
+    private ModelObject? _quadModel;
+    private readonly List<(Float3 World, GeometryData.Vertex? Existing)> _quadCorners = new();
+    private GeometryData.Vertex? _quadHeld;
+    private Float2 _quadPress;
+    private Float3 _quadHeldStart;
+    private bool _quadHeldMoved;
+
+    /// <summary>
+    /// Draws quads over the surfaces of the other model objects, as for retopology. Click four corners on a surface, near
+    /// a point of the drawn object to share it. Drag such a point to slide it over the surface. Backspace takes back a
+    /// corner, Escape leaves.
+    /// </summary>
+    private void StartQuads(SceneToolContext ctx)
+    {
+        _quadModel = DrawTarget();
+        _quadCorners.Clear();
+        _quadHeld = null;
+        ctx.Handles.Modal = true;
+        _operatorHandles = ctx.Handles;
+    }
+
+    private void EndQuads()
+    {
+        _quadModel = null;
+        _quadCorners.Clear();
+        _quadHeld = null;
+        if (_operatorHandles != null) _operatorHandles.Modal = false;
+        _operatorHandles = null;
+    }
+
+    private void TickQuads(SceneToolContext ctx)
+    {
+        HandleContext handles = ctx.Handles;
+        if (_quadModel is not { } model || model.IsNotValid())
+        {
+            EndQuads();
+            return;
+        }
+        ControlID owner = handles.GetControlID(ModalControl);
+        handles.AddControl(owner, HandleContext.BodyDistance, float.MaxValue - 1f);
+        Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+
+        GeometryData.Vertex? near = NearestPoint(ctx, model);
+        Float3 point = default;
+        bool onSurface = near != null || SurfaceUnder(handles.MouseRay, out point);
+        if (near != null) point = Float4x4.TransformPoint(near.Point, toWorld);
+        else if (onSurface) point -= handles.MouseRay.Direction * QuadLift;
+
+        Prowl.Graphite.Rendering.GizmoBatch batch = Runtime.Resources.Scene.Active.Gizmos.Batch;
+        for (int i = 1; i < _quadCorners.Count; i++) batch.Line(_quadCorners[i - 1].World, _quadCorners[i].World, LineColor, 2f);
+        if (onSurface)
+        {
+            if (_quadCorners.Count > 0) batch.Line(_quadCorners[^1].World, point, LineColor, 1.5f);
+            if (_quadCorners.Count == 3) batch.Line(point, _quadCorners[0].World, LineColor, 1.5f);
+            batch.Point(point, near != null ? SnapColor : LineColor, 8f);
+        }
+        ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("model.quads_status", new { count = _quadCorners.Count }), PickedColor);
+
+        if (handles.GetKeyDown(KeyCode.Backspace) && _quadCorners.Count > 0) _quadCorners.RemoveAt(_quadCorners.Count - 1);
+
+        // A point pressed and dragged slides over the surface, pressed and let go it becomes a corner
+        if (_quadHeld is { } held)
+        {
+            if (!_quadHeldMoved && Float2.Distance(handles.MousePosition, _quadPress) > 5f) _quadHeldMoved = true;
+            if (_quadHeldMoved && SurfaceUnder(handles.MouseRay, out Float3 hit))
+            {
+                held.Point = Float4x4.TransformPoint(hit - handles.MouseRay.Direction * QuadLift, toWorld.Invert());
+                model.RefreshPreview(dragging: true);
+            }
+            if (!Input.GetMouseButton(0))
+            {
+                _quadHeld = null;
+                if (_quadHeldMoved)
+                {
+                    Float3 moved = held.Point;
+                    held.Point = _quadHeldStart;
+                    EditMeshes("Move Corner", (owner, mesh, _) =>
+                    {
+                        if (owner == model) held.Point = moved;
+                    });
+                }
+                else AddCorner(ctx, model, Float4x4.TransformPoint(held.Point, toWorld), held);
+            }
+            return;
+        }
+        if (handles.ViewportHovered && Input.GetMouseButtonDown(0))
+        {
+            if (near != null && !_quadCorners.Exists(c => c.Existing == near))
+            {
+                _quadHeld = near;
+                _quadPress = handles.MousePosition;
+                _quadHeldStart = near.Point;
+                _quadHeldMoved = false;
+            }
+            else if (onSurface && near == null) AddCorner(ctx, model, point, null);
+        }
+        else if (handles.GetKeyDown(KeyCode.Escape) || handles.GetKeyDown(KeyCode.Enter) || handles.ViewportHovered && Input.GetMouseButtonDown(1))
+            EndQuads();
+    }
+
+    private void AddCorner(SceneToolContext ctx, ModelObject model, Float3 world, GeometryData.Vertex? existing)
+    {
+        _quadCorners.Add((world, existing));
+        if (_quadCorners.Count < 4) return;
+        Float4x4 toLocal = model.Transform.LocalToWorldMatrix.Invert();
+        Float3[] corners = [.. _quadCorners.Select(c => Float4x4.TransformPoint(c.World, toLocal))];
+        GeometryData.Vertex?[] shared = [.. _quadCorners.Select(c => c.Existing)];
+        Float3 view = Float4x4.TransformNormal(ctx.Camera.GameObject.Transform.Forward, toLocal);
+        _quadCorners.Clear();
+        EditMeshes("Draw Quad", (owner, mesh, s) =>
+        {
+            if (owner == model) Operators.AddQuad(mesh, corners, shared, view, s);
+        });
+    }
+
+    /// <summary>The nearest point of the other model objects' surfaces under a ray.</summary>
+    private bool SurfaceUnder(Ray ray, out Float3 hit)
+    {
+        float nearest = float.PositiveInfinity;
+        foreach (ModelObject other in OtherModels())
+            if (Tree(other.Mesh).Raycast(other.Transform.LocalToWorldMatrix, ray, out _, out float distance) && distance < nearest)
+                nearest = distance;
+        hit = ray.Origin + ray.Direction * (float.IsPositiveInfinity(nearest) ? 0f : nearest);
+        return !float.IsPositiveInfinity(nearest);
+    }
+
+    private GeometryData.Vertex? NearestPoint(SceneToolContext ctx, ModelObject model)
+    {
+        Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
+        GeometryData.Vertex? best = null;
+        float nearest = QuadSnapRadius;
+        foreach (GeometryData.Vertex vertex in model.Mesh.Vertices)
+        {
+            if (_hidden[model].Vertices.Contains(vertex)) continue;
+            if (ctx.Handles.WorldToScreen(Float4x4.TransformPoint(vertex.Point, toWorld)) is not { } at || Float2.Distance(at, ctx.Handles.MousePosition) >= nearest) continue;
+            nearest = Float2.Distance(at, ctx.Handles.MousePosition);
+            best = vertex;
+        }
+        return best;
     }
 
     private void EndKnife()

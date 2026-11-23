@@ -10,6 +10,12 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor.Modeling;
 
+/// <summary>Where an end of a drawn line sits, in the mesh's space: on a point of the mesh, on one of its edges, or free.</summary>
+public readonly record struct LineAnchor(Float3 Point, GeometryData.Vertex? Vertex = null, GeometryData.Edge? Edge = null)
+{
+    public bool Snapped => Vertex != null || Edge != null;
+}
+
 /// <summary>
 /// Mesh edits for <see cref="MeshEdit.Run"/>, each marking what should be selected after it. The inputs are copied
 /// before anything changes, so <c>after</c> may be the selection they came from.
@@ -162,6 +168,114 @@ public static class Operators
             selection.Vertices.UnionWith(face.NeighborVertices());
             foreach (GeometryData.Edge edge in face.NeighborEdges()) selection.Edges.Add(edge);
         }
+    }
+
+    /// <summary>
+    /// Adds a run of edges through points in the mesh's space. An end on a point uses it, an end on an edge splits the
+    /// edge there, unless that is at one of its ends. The new edges are selected after.
+    /// </summary>
+    public static List<GeometryData.Edge> AddLine(GeometryData mesh, IReadOnlyList<Float3> points, LineAnchor start, LineAnchor end, ElementSelection after)
+    {
+        var made = new List<GeometryData.Edge>();
+        if (points.Count < 2) return made;
+        var pieces = new Dictionary<GeometryData.Edge, List<GeometryData.Edge>>();
+        var vertices = new GeometryData.Vertex[points.Count];
+        vertices[0] = Resolve(mesh, start, pieces);
+        vertices[^1] = Resolve(mesh, end, pieces);
+        for (int i = 1; i + 1 < points.Count; i++) vertices[i] = mesh.AddVertex(points[i]);
+        for (int i = 1; i < vertices.Length; i++)
+            if (vertices[i] != vertices[i - 1]) made.Add(mesh.FindEdge(vertices[i - 1], vertices[i]) ?? mesh.AddEdge(vertices[i - 1], vertices[i]));
+        after.Clear();
+        foreach (GeometryData.Edge edge in made)
+        {
+            after.Edges.Add(edge);
+            after.Vertices.UnionWith([edge.Vert1, edge.Vert2]);
+        }
+        mesh.MarkChanged();
+        return made;
+    }
+
+    // The point an end of a line lands on. Pieces remembers what an edge was split into, so two ends on one edge both find their part
+    private static GeometryData.Vertex Resolve(GeometryData mesh, LineAnchor anchor, Dictionary<GeometryData.Edge, List<GeometryData.Edge>> pieces)
+    {
+        if (anchor.Vertex != null) return anchor.Vertex;
+        if (anchor.Edge == null) return mesh.AddVertex(anchor.Point);
+        if (!pieces.TryGetValue(anchor.Edge, out List<GeometryData.Edge>? parts)) pieces[anchor.Edge] = parts = [anchor.Edge];
+        GeometryData.Edge best = parts[0];
+        float nearest = float.PositiveInfinity, factor = 0f;
+        foreach (GeometryData.Edge part in parts)
+        {
+            Float3 along = part.Vert2.Point - part.Vert1.Point;
+            float lengthSq = Float3.Dot(along, along);
+            float t = lengthSq > 1e-12f ? Math.Clamp(Float3.Dot(anchor.Point - part.Vert1.Point, along) / lengthSq, 0f, 1f) : 0f;
+            float distance = Float3.Distance(part.Vert1.Point + along * t, anchor.Point);
+            if (distance >= nearest) continue;
+            nearest = distance;
+            best = part;
+            factor = t;
+        }
+        if (factor < 0.001f) return best.Vert1;
+        if (factor > 0.999f) return best.Vert2;
+        GeometryData.Vertex split = GeometryOperators.SplitEdge(mesh, best, best.Vert1, factor, out GeometryData.Edge other);
+        parts.Add(other);
+        return split;
+    }
+
+    /// <summary>
+    /// Adds a four sided face through corners in the mesh's space, using the points given where there are some, turned
+    /// to face against the view direction. It is selected after.
+    /// </summary>
+    public static GeometryData.Face AddQuad(GeometryData mesh, IReadOnlyList<Float3> corners, IReadOnlyList<GeometryData.Vertex?> existing, Float3 viewDirection,
+                                            ElementSelection after)
+    {
+        Float3 normal = Float3.Cross(corners[1] - corners[0], corners[2] - corners[0]);
+        int[] order = Float3.Dot(normal, viewDirection) > 0f ? [3, 2, 1, 0] : [0, 1, 2, 3];
+        var vertices = new GeometryData.Vertex[4];
+        foreach (int i in order) vertices[i] = existing[i] ?? mesh.AddVertex(corners[i]);
+        GeometryData.Face face = mesh.AddFace([.. order.Select(i => vertices[i])]) ?? throw new InvalidOperationException("The four corners do not make a face");
+        after.Clear();
+        after.Faces.Add(face);
+        after.Vertices.UnionWith(face.NeighborVertices());
+        foreach (GeometryData.Edge edge in face.NeighborEdges()) after.Edges.Add(edge);
+        mesh.MarkChanged();
+        return face;
+    }
+
+    /// <summary>
+    /// Moves points onto the nearest surface along their own normal, either way, within reach, then out by the offset.
+    /// <paramref name="hit"/> gives how far along a world ray the nearest other surface is, within a distance, or null.
+    /// Returns how many points moved.
+    /// </summary>
+    public static int Shrinkwrap(GeometryData mesh, IEnumerable<GeometryData.Vertex> points, Float4x4 toWorld, Func<Ray, float, float?> hit, float offset, float reach)
+    {
+        Float4x4 toLocal = toWorld.Invert();
+        // Every normal is taken first, so moving one point does not turn the next one's
+        var rays = new List<(GeometryData.Vertex Vertex, Float3 Normal)>();
+        foreach (GeometryData.Vertex vertex in points)
+        {
+            Float3 normal = Float3.Zero;
+            foreach (GeometryData.Face face in vertex.NeighborFaces()) normal += face.Normal();
+            if (Float3.LengthSquared(normal) > 1e-12f) rays.Add((vertex, Float3.Normalize(normal)));
+        }
+        int moved = 0;
+        foreach ((GeometryData.Vertex vertex, Float3 normal) in rays)
+        {
+            Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
+            Float3 direction = Float3.Normalize(Float4x4.TransformNormal(normal, toWorld));
+            float best = float.PositiveInfinity;
+            Float3 landed = world;
+            foreach (float sign in (float[])[1f, -1f])
+                if (hit(new Ray(world, direction * sign), MathF.Min(best, reach)) is { } distance && distance < best)
+                {
+                    best = distance;
+                    landed = world + direction * (sign * distance);
+                }
+            if (float.IsPositiveInfinity(best)) continue;
+            vertex.Point = Float4x4.TransformPoint(landed + direction * offset, toLocal);
+            moved++;
+        }
+        mesh.MarkChanged();
+        return moved;
     }
 
     /// <summary>Joins two chains or rings of edges with a strip of faces, which are selected after.</summary>

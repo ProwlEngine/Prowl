@@ -433,6 +433,8 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("MeshEdit/Crease", "Crease", KeyCode.E, shift: true);
         ShortcutManager.Register("MeshEdit/Duplicate", "Duplicate", KeyCode.D, shift: true);
         ShortcutManager.Register("MeshEdit/Unwrap", "Unwrap", KeyCode.U);
+        ShortcutManager.Register("MeshEdit/DrawLine", "Draw Lines", KeyCode.L);
+        ShortcutManager.Register("MeshEdit/DrawQuads", "Draw Quads", KeyCode.Q, ctrl: true);
         ShortcutManager.Register("MeshEdit/DeleteFace", "Delete Face", KeyCode.Delete, ctrl: true);
         ShortcutManager.Register("MeshEdit/Merge", "Merge", KeyCode.M);
         ShortcutManager.Register("MeshEdit/Connect", "Connect Points", KeyCode.J);

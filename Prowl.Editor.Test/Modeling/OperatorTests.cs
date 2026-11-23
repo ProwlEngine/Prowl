@@ -192,6 +192,57 @@ public class OperatorTests
     }
 
     [Fact]
+    public void ADrawnLineSplitsTheEdgeItEndsOnAndJoinsThePointItStartsOn()
+    {
+        GeometryData mesh = Strip();
+        GeometryData.Vertex corner = mesh.Vertices[0];
+        GeometryData.Edge far = mesh.FindEdge(mesh.Vertices[2], mesh.Vertices[5])!;
+        var after = new ElementSelection();
+
+        Operators.AddLine(mesh, [corner.Point, new Float3(1, 1, 0.25f), new Float3(2, 0, 0.5f)],
+            new LineAnchor(corner.Point, corner), new LineAnchor(new Float3(2, 0, 0.5f), Edge: far), after);
+
+        Assert.Equal(8, mesh.Vertices.Count);
+        Assert.Equal(2, after.Edges.Count);
+        GeometryData.Vertex split = mesh.Vertices.First(v => Float3.Distance(v.Point, new Float3(2, 0, 0.5f)) < 1e-5f);
+        Assert.Equal(3, split.NeighborEdges().Count);
+        Assert.Contains(after.Edges, e => e.Vert1 == corner || e.Vert2 == corner);
+    }
+
+    [Fact]
+    public void ADrawnQuadFacesTheViewAndSharesTheCornersItSnappedTo()
+    {
+        GeometryData mesh = Strip();
+        GeometryData.Vertex shared = mesh.Vertices[2];
+        var after = new ElementSelection();
+
+        GeometryData.Face made = Operators.AddQuad(mesh, [shared.Point, new Float3(3, 0, 0), new Float3(3, 0, 1), new Float3(2, 0, 1)],
+            [shared, null, null, null], new Float3(0, -1, 0), after);
+
+        Assert.Contains(shared, made.NeighborVertices());
+        Assert.True(made.Normal().Y > 0.99f);
+        Assert.Single(after.Faces);
+    }
+
+    [Fact]
+    public void ShrinkwrapMovesPointsOntoTheNearestSurfaceAlongTheirNormal()
+    {
+        GeometryData mesh = Strip();
+        float? Hit(Ray ray, float reach)
+        {
+            // A floor at y = -0.5
+            if (MathF.Abs(ray.Direction.Y) < 1e-6f) return null;
+            float t = (-0.5f - ray.Origin.Y) / ray.Direction.Y;
+            return t >= 0f && t <= reach ? t : null;
+        }
+
+        int moved = Operators.Shrinkwrap(mesh, [.. mesh.Vertices], Float4x4.Identity, Hit, 0.01f, 1f);
+
+        Assert.Equal(6, moved);
+        Assert.All(mesh.Vertices, v => Assert.Equal(-0.49f, v.Point.Y, 4));
+    }
+
+    [Fact]
     public void FillingTwoPointsJoinsThemWithAnEdge()
     {
         var mesh = new GeometryData();
