@@ -226,7 +226,7 @@ internal sealed class BvhFormat : IModelFormat
             context.Log.Warning("Zero animation frames were found in the file. Only the hierarchy will be imported.", nameof(BvhFormat));
 
         // Add every non-empty binding to an animation.
-        var animation = new IntermediateAnimation { Name = "Animation" };
+        var animation = new IntermediateAnimation { Name = Path.GetFileNameWithoutExtension(context.SourcePath) ?? "Animation" };
         foreach (Joint joint in joints)
         {
             if (joint.PositionBinding.Times.Count > 0)
