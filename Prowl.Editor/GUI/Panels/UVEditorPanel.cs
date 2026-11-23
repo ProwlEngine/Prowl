@@ -53,6 +53,9 @@ public class UVEditorPanel : DockPanel
     private Float2 _pivot;
     private readonly List<(ModelObject Model, GeometryData.Loop Corner, Float2 UV)> _moving = new();
 
+    // Corners picked in this view, so the two sides of a seam can be told apart. Dropped once the points selected in the scene change
+    private readonly HashSet<GeometryData.Loop> _corners = new();
+
     // With a pinned point moving, every shown corner as it started and the faces unwrapped again around the pins
     private readonly List<(GeometryData.Loop Corner, Float2 UV)> _before = new();
     private readonly List<Shown> _unwrapped = new();
@@ -75,6 +78,7 @@ public class UVEditorPanel : DockPanel
             return;
         }
 
+        SyncCorners(tool);
         List<Shown> faces = ShownFaces(tool);
         DrawToolbar(paper, tool, faces);
 
@@ -115,10 +119,54 @@ public class UVEditorPanel : DockPanel
         return shown;
     }
 
-    private static bool Picked(ModelMeshTool tool, ModelObject model, GeometryData.Loop corner) => tool.SelectionOf(model).Vertices.Contains(corner.Vert);
+    private bool Picked(ModelMeshTool tool, ModelObject model, GeometryData.Loop corner)
+        => _corners.Count > 0 ? _corners.Contains(corner) : tool.SelectionOf(model).Vertices.Contains(corner.Vert);
 
-    /// <summary>The corners of the shown faces whose points are selected, which is what UV edits move.</summary>
-    private static List<(ModelObject Model, GeometryData.Loop Corner)> SelectedCorners(ModelMeshTool tool, List<Shown> faces)
+    private void SyncCorners(ModelMeshTool tool)
+    {
+        if (_corners.Count == 0) return;
+        var selected = new HashSet<GeometryData.Vertex>(tool.EditedObjects.SelectMany(m => tool.SelectionOf(m).Vertices));
+        bool stillThere = _corners.All(c => tool.EditedObjects.Any(m => m.Mesh.Contains(c)));
+        if (!stillThere || !selected.SetEquals(_corners.Select(c => c.Vert))) _corners.Clear();
+    }
+
+    /// <summary>Picks corners, and selects their points in the scene so the rest of the editor follows.</summary>
+    private void PickCorners(ModelMeshTool tool, List<Shown> faces, IEnumerable<(ModelObject Model, GeometryData.Loop Corner)> picked, bool add)
+    {
+        if (add && _corners.Count == 0)
+            foreach ((_, GeometryData.Loop corner) in SelectedCorners(tool, faces)) _corners.Add(corner);
+        if (!add) _corners.Clear();
+        foreach ((_, GeometryData.Loop corner) in picked) _corners.Add(corner);
+
+        var points = new Dictionary<ModelObject, List<GeometryData.Vertex>>();
+        foreach (ModelObject model in tool.EditedObjects)
+            points[model] = [.. _corners.Where(model.Mesh.Contains).Select(c => c.Vert).Distinct()];
+        tool.SelectPoints(points, false);
+    }
+
+    /// <summary>The shown corners on one point of a face that sit at the same UV as it, so a seam's other side is left out.</summary>
+    private static IEnumerable<(ModelObject, GeometryData.Loop)> SameUV(List<Shown> faces, ModelObject model, GeometryData.Loop corner)
+    {
+        Float2 at = UVs.Get(corner);
+        foreach (Shown shown in faces)
+        {
+            if (!ReferenceEquals(shown.Model, model) || UVs.CornerAt(shown.Face, corner.Vert) is not { } other) continue;
+            if (Float2.Distance(UVs.Get(other), at) < 1e-5f) yield return (model, other);
+        }
+    }
+
+    /// <summary>Every shown corner of the UV island the corner is on.</summary>
+    private static IEnumerable<(ModelObject, GeometryData.Loop)> IslandOf(List<Shown> faces, ModelObject model, GeometryData.Loop corner)
+    {
+        List<GeometryData.Face> mine = [.. faces.Where(f => ReferenceEquals(f.Model, model)).Select(f => f.Face)];
+        foreach (List<GeometryData.Face> island in UVs.Islands(model.Mesh, mine))
+            if (island.Contains(corner.Face))
+                return island.SelectMany(UVs.Corners).Select(c => (model, c)).ToList();
+        return [];
+    }
+
+    /// <summary>The corners of the shown faces that are picked, which is what UV edits move.</summary>
+    private List<(ModelObject Model, GeometryData.Loop Corner)> SelectedCorners(ModelMeshTool tool, List<Shown> faces)
     {
         var corners = new List<(ModelObject, GeometryData.Loop)>();
         foreach (Shown shown in faces)
@@ -191,7 +239,7 @@ public class UVEditorPanel : DockPanel
         }
     }
 
-    private static void EditCorners(ModelMeshTool tool, List<Shown> faces, string name, Action<GeometryData, List<GeometryData.Loop>> run)
+    private void EditCorners(ModelMeshTool tool, List<Shown> faces, string name, Action<GeometryData, List<GeometryData.Loop>> run)
     {
         List<(ModelObject Model, GeometryData.Loop Corner)> corners = SelectedCorners(tool, faces);
         tool.EditMeshes(name, (model, mesh, _) =>
@@ -201,7 +249,7 @@ public class UVEditorPanel : DockPanel
         });
     }
 
-    private static void EditCornersOnFaces(ModelMeshTool tool, List<Shown> faces, string name, Action<GeometryData, List<GeometryData.Loop>, List<GeometryData.Face>> run)
+    private void EditCornersOnFaces(ModelMeshTool tool, List<Shown> faces, string name, Action<GeometryData, List<GeometryData.Loop>, List<GeometryData.Face>> run)
     {
         List<(ModelObject Model, GeometryData.Loop Corner)> corners = SelectedCorners(tool, faces);
         tool.EditMeshes(name, (model, mesh, _) =>
@@ -479,6 +527,7 @@ public class UVEditorPanel : DockPanel
         bool alt = paper.IsKeyDown(PaperKey.LeftAlt) || paper.IsKeyDown(PaperKey.RightAlt);
 
         if (paper.IsKeyPressed(PaperKey.F)) Frame();
+        else if (paper.IsKeyPressed(PaperKey.L) && Nearest(faces, float.MaxValue) is { } under) PickCorners(tool, faces, IslandOf(faces, under.Item1, under.Item2), shift);
         else if (paper.IsKeyPressed(PaperKey.G)) Begin(tool, faces, Gesture.Grab);
         else if (paper.IsKeyPressed(PaperKey.R)) Begin(tool, faces, Gesture.Rotate);
         else if (paper.IsKeyPressed(PaperKey.S)) Begin(tool, faces, Gesture.Scale);
@@ -499,16 +548,16 @@ public class UVEditorPanel : DockPanel
         }
         if (hit is { } clicked)
         {
-            tool.SelectPoints(new Dictionary<ModelObject, List<GeometryData.Vertex>> { [clicked.Model] = [clicked.Corner.Vert] }, shift);
+            PickCorners(tool, faces, SameUV(faces, clicked.Model, clicked.Corner), shift);
             return;
         }
         _gesture = Gesture.Box;
     }
 
-    private (ModelObject, GeometryData.Loop)? Nearest(List<Shown> faces)
+    private (ModelObject, GeometryData.Loop)? Nearest(List<Shown> faces, float reach = PickRadius)
     {
         (ModelObject, GeometryData.Loop)? best = null;
-        float nearest = PickRadius;
+        float nearest = reach;
         foreach (Shown shown in faces)
             foreach (GeometryData.Loop corner in UVs.Corners(shown.Face))
             {
@@ -525,16 +574,14 @@ public class UVEditorPanel : DockPanel
         _gesture = Gesture.None;
         Float2 min = new(MathF.Min(_from.X, Pointer.X), MathF.Min(_from.Y, Pointer.Y)), max = new(MathF.Max(_from.X, Pointer.X), MathF.Max(_from.Y, Pointer.Y));
         bool shift = paper.IsKeyDown(PaperKey.LeftShift) || paper.IsKeyDown(PaperKey.RightShift);
-        var points = new Dictionary<ModelObject, List<GeometryData.Vertex>>();
+        var inside = new List<(ModelObject, GeometryData.Loop)>();
         foreach (Shown shown in faces)
             foreach (GeometryData.Loop corner in UVs.Corners(shown.Face))
             {
                 Float2 at = ToScreen(UVs.Get(corner));
-                if (at.X < min.X || at.X > max.X || at.Y < min.Y || at.Y > max.Y) continue;
-                if (!points.TryGetValue(shown.Model, out List<GeometryData.Vertex>? list)) points[shown.Model] = list = new();
-                list.Add(corner.Vert);
+                if (at.X >= min.X && at.X <= max.X && at.Y >= min.Y && at.Y <= max.Y) inside.Add((shown.Model, corner));
             }
-        tool.SelectPoints(points, shift);
+        PickCorners(tool, faces, inside, shift);
     }
 
     /// <summary>Starts moving the selected UV points, keeping where each started.</summary>
