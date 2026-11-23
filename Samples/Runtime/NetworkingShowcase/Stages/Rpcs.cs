@@ -29,7 +29,9 @@ public class Bell : Component
     [Rpc.Broadcast]
     public void Ring(int colorIndex, string by)
     {
-        _color = SyncLamp.Colors[colorIndex % SyncLamp.Colors.Length];
+        // Wrapped into the palette, negative ones too: a client picks the index.
+        int count = SyncLamp.Colors.Length;
+        _color = SyncLamp.Colors[(colorIndex % count + count) % count];
         _ring = 1f;
         Note($"{by} rang it");
     }
