@@ -230,6 +230,18 @@ public partial class GeometryData
             }
         }
 
+        /// <summary>The face's corners in winding order.</summary>
+        public IEnumerable<Loop> Corners()
+        {
+            if (Loop == null) yield break;
+            Loop it = Loop;
+            do
+            {
+                yield return it;
+                it = it.Next!;
+            } while (it != Loop);
+        }
+
         public Loop? GetLoop(Vertex v)
         {
             if (Loop != null)

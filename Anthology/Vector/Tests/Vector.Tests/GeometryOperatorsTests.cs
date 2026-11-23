@@ -15,6 +15,18 @@ namespace Prowl.Vector.Tests;
 public class GeometryOperatorsTests
 {
     [Fact]
+    public void Clone_IsAWholeSeparateCopy()
+    {
+        GeometryData mesh = GeometryGenerator.Box(new Float3(2f));
+        GeometryData copy = mesh.Clone();
+        copy.Vertices[0].Point += new Float3(5f, 0f, 0f);
+
+        Assert.Equal(mesh.Faces.Count, copy.Faces.Count);
+        Assert.NotEqual(mesh.Vertices[0].Point, copy.Vertices[0].Point);
+        Assert.Equal(4, mesh.Faces[0].Corners().Count());
+    }
+
+    [Fact]
     public void Array_WithoutWeld_KeepsEveryCopyWhole()
     {
         GeometryData mesh = GeometryGenerator.Box(new Float3(2f));

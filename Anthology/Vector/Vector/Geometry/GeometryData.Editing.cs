@@ -683,6 +683,14 @@ public partial class GeometryData
 
     #region Snapshots
 
+    /// <summary>A separate copy of the whole mesh, every attribute included.</summary>
+    public GeometryData Clone()
+    {
+        var copy = new GeometryData();
+        copy.Restore(Capture());
+        return copy;
+    }
+
     /// <summary>A copy of the whole mesh, every attribute included, to come back to with <see cref="Restore"/>.</summary>
     public GeometrySnapshot Capture() => GeometrySnapshot.From(this);
 
