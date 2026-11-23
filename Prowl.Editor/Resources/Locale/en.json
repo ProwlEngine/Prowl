@@ -177,6 +177,7 @@
   "model.field_axis_z": "Axis Z",
   "model.field_degrees": "Degrees",
   "model.field_falloff": "Falloff",
+  "model.field_average_normal": "Along average normal",
   "model.face_slot": "Face Material Slot",
   "model.origin_to_selection": "Origin to Selection",
   "model.origin_to_geometry": "Origin to Geometry",

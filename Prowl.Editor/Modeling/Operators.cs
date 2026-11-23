@@ -382,12 +382,13 @@ public static class Operators
     /// Pulls faces out along their normals as one region, walled to where they were, so the solid grows. A negative
     /// distance pushes them in. The moved faces are selected after.
     /// </summary>
-    public static void ExtrudeRegion(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, float distance, ElementSelection after)
+    public static void ExtrudeRegion(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, float distance, ElementSelection after,
+                                     ExtrudeMode mode = ExtrudeMode.AlongNormals)
     {
         if (faces.Count == 0) return;
 
         var oldPoints = new HashSet<GeometryData.Vertex>(mesh.Vertices);
-        GeometryOperators.ExtrudeFaces(mesh, [.. faces], distance, ExtrudeMode.AlongNormals);
+        GeometryOperators.ExtrudeFaces(mesh, [.. faces], distance, mode);
         SelectFacesOnNewPoints(mesh, oldPoints, after);
     }
 

@@ -116,6 +116,9 @@ public sealed class ModelMeshTool : SceneTool
         public Float2? Along { get; init; }
 
         public OperatorDrag Drag { get; init; }
+
+        /// <summary>An on and off setting shown when adjusting the step after, by locale key, and how the operator runs with it on.</summary>
+        public (string Label, Action<GeometryData, ElementSelection, float, int> Run)? Flag { get; init; }
     }
 
     public SelectMode Mode { get; private set; } = SelectMode.Vertex;
@@ -474,7 +477,10 @@ public sealed class ModelMeshTool : SceneTool
         {
             case SelectMode.Face:
                 StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s), SelectMode.Face)
-                    { Drag = OperatorDrag.AlongNormal });
+                {
+                    Drag = OperatorDrag.AlongNormal,
+                    Flag = ("model.field_average_normal", (GeometryData mesh, ElementSelection s, float d, int _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s, ExtrudeMode.AverageNormal)),
+                });
                 break;
             case SelectMode.Edge:
                 Edit("Extrude Model Edges", (mesh, s) => Operators.ExtrudeEdges(mesh, [.. s.Edges], s), SelectMode.Edge);
@@ -1072,18 +1078,26 @@ public sealed class ModelMeshTool : SceneTool
     public override void OnSceneOverlayGUI(SceneToolContext ctx, Paper paper, string id, Float2 viewportSize)
     {
         if (!Editing || Last is not { } last) return;
-        using (paper.Column($"{id}_last").PositionType(PositionType.SelfDirected).Position(12, viewportSize.Y - 96).Width(220).Height(UnitValue.Auto)
+        using (paper.Column($"{id}_last").PositionType(PositionType.SelfDirected).Position(12, viewportSize.Y - 40 - 24 * last.Fields.Length).Width(220).Height(UnitValue.Auto)
                    .BackgroundColor(EditorTheme.Neutral200).Rounded(6).Padding(8, 8, 6, 6).Gap(2).Enter())
         {
             Origami.Label(paper, $"{id}_last_name", last.Name).Show();
             for (int i = 0; i < last.Fields.Length; i++)
             {
                 int index = i;
-                (string label, float value, bool whole) = last.Fields[i];
-                if (whole)
-                    PropertyGridUtils.DrawField(paper, $"{id}_last_{i}", label, typeof(int), (int)value, v => AdjustLast(index, v is int n ? n : value));
-                else
-                    PropertyGridUtils.DrawField(paper, $"{id}_last_{i}", label, typeof(float), value, v => AdjustLast(index, v is float f ? f : value));
+                LastField field = last.Fields[i];
+                switch (field.Kind)
+                {
+                    case FieldKind.Whole:
+                        PropertyGridUtils.DrawField(paper, $"{id}_last_{i}", field.Label, typeof(int), (int)field.Value, v => AdjustLast(index, v is int n ? n : field.Value));
+                        break;
+                    case FieldKind.Toggle:
+                        PropertyGridUtils.DrawField(paper, $"{id}_last_{i}", field.Label, typeof(bool), field.Value != 0f, v => AdjustLast(index, v is true ? 1f : 0f));
+                        break;
+                    default:
+                        PropertyGridUtils.DrawField(paper, $"{id}_last_{i}", field.Label, typeof(float), field.Value, v => AdjustLast(index, v is float f ? f : field.Value));
+                        break;
+                }
             }
         }
     }
@@ -1125,12 +1139,17 @@ public sealed class ModelMeshTool : SceneTool
 
     // The last amount operator: its settings, its undo step, and the meshes it left, so a later change to them ends it
     // The last step that can be run again with other settings: what it ran with, how to run it, and the step and meshes it left
-    private sealed record LastStep(string Name, (string Label, float Value, bool Whole)[] Fields, Action<float[]> Run, int Group, long Step,
+    public enum FieldKind { Number, Whole, Toggle }
+
+    /// <summary>One setting of the last step: a number, a whole number, or on and off as 1 and 0.</summary>
+    public readonly record struct LastField(string Label, float Value, FieldKind Kind = FieldKind.Number);
+
+    private sealed record LastStep(string Name, LastField[] Fields, Action<float[]> Run, int Group, long Step,
                                    List<(ModelObject Model, GeometryData Mesh, int Version)> Left);
     private LastStep? _last;
 
     /// <summary>The last operator or transform run, while nothing else has changed the meshes or the history since.</summary>
-    public (string Name, (string Label, float Value, bool Whole)[] Fields)? Last
+    public (string Name, LastField[] Fields)? Last
         => _last is { } last && LastStillHolds(last) ? (last.Name, last.Fields) : null;
 
     private static bool LastStillHolds(LastStep last)
@@ -1146,8 +1165,8 @@ public sealed class ModelMeshTool : SceneTool
     public void AdjustLast(int field, float value)
     {
         if (_last is not { } last || !LastStillHolds(last) || field < 0 || field >= last.Fields.Length) return;
-        var fields = ((string Label, float Value, bool Whole)[])last.Fields.Clone();
-        fields[field] = (fields[field].Label, value, fields[field].Whole);
+        var fields = (LastField[])last.Fields.Clone();
+        fields[field] = fields[field] with { Value = value };
         Undo.RevertAllDownToGroup(last.Group);
         RestoreHeld();
         RunRemembered(last.Name, fields, last.Run);
@@ -1159,19 +1178,22 @@ public sealed class ModelMeshTool : SceneTool
         // An operator whose amount ignores the mouse, such as a subdivide, has only its count to adjust
         bool hasAmount = op.Along != null || op.Amount(0f) != op.Amount(1f);
         bool hasCount = op.MaxCount > 1;
-        var fields = new List<(string, float, bool)>();
-        if (hasAmount) fields.Add((Loc.Get("model.amount"), amount, false));
-        if (hasCount) fields.Add((Loc.Get("model.count"), count, true));
+        var fields = new List<LastField>();
+        if (hasAmount) fields.Add(new(Loc.Get("model.amount"), amount));
+        if (hasCount) fields.Add(new(Loc.Get("model.count"), count, FieldKind.Whole));
+        if (op.Flag is { } flag) fields.Add(new(Loc.Get(flag.Label), 0f, FieldKind.Toggle));
         RunRemembered(op.Name, [.. fields], v =>
         {
-            float runAmount = hasAmount ? v[0] : amount;
-            int runCount = hasCount ? Math.Clamp((int)v[^1], 1, op.MaxCount) : count;
-            Edit(op.Name, (mesh, s) => op.Run(mesh, s, runAmount, runCount), op.Selects);
+            int i = 0;
+            float runAmount = hasAmount ? v[i++] : amount;
+            int runCount = hasCount ? Math.Clamp((int)v[i++], 1, op.MaxCount) : count;
+            if (op.Flag is { } flagged && v[i] != 0f) Edit(op.Name, (mesh, s) => flagged.Run(mesh, s, runAmount, runCount), op.Selects);
+            else Edit(op.Name, (mesh, s) => op.Run(mesh, s, runAmount, runCount), op.Selects);
         });
     }
 
     /// <summary>Runs a step as one undo step of its own, remembered with its settings for adjusting.</summary>
-    private void RunRemembered(string name, (string Label, float Value, bool Whole)[] fields, Action<float[]> run)
+    private void RunRemembered(string name, LastField[] fields, Action<float[]> run)
     {
         Undo.FlushUndoRecordObjects();
         Undo.IncrementCurrentGroup();
@@ -1192,8 +1214,8 @@ public sealed class ModelMeshTool : SceneTool
         {
             case TransformKind.Rotate:
                 RunRemembered("Rotate Model Points",
-                    [(Loc.Get("model.field_axis_x"), vector.X, false), (Loc.Get("model.field_axis_y"), vector.Y, false), (Loc.Get("model.field_axis_z"), vector.Z, false),
-                     (Loc.Get("model.field_degrees"), degrees, false), (reach, falloff, false)],
+                    [new(Loc.Get("model.field_axis_x"), vector.X), new(Loc.Get("model.field_axis_y"), vector.Y), new(Loc.Get("model.field_axis_z"), vector.Z),
+                     new(Loc.Get("model.field_degrees"), degrees), new(reach, falloff)],
                     v => RunTransform("Rotate Model Points", v[4], s =>
                     {
                         var axis = new Float3(v[0], v[1], v[2]);
@@ -1201,12 +1223,12 @@ public sealed class ModelMeshTool : SceneTool
                     }));
                 break;
             case TransformKind.Scale:
-                RunRemembered("Scale Model Points", [(x, vector.X, false), (y, vector.Y, false), (z, vector.Z, false), (reach, falloff, false)],
+                RunRemembered("Scale Model Points", [new(x, vector.X), new(y, vector.Y), new(z, vector.Z), new(reach, falloff)],
                     v => RunTransform("Scale Model Points", v[3], s => s.Scale(new Float3(v[0], v[1], v[2]), axes)));
                 break;
             default:
                 string name = kind == TransformKind.Slide ? "Slide Model Points" : "Move Model Points";
-                RunRemembered(name, [(x, vector.X, false), (y, vector.Y, false), (z, vector.Z, false), (reach, falloff, false)],
+                RunRemembered(name, [new(x, vector.X), new(y, vector.Y), new(z, vector.Z), new(reach, falloff)],
                     v => RunTransform(name, v[3], s => s.Translate(new Float3(v[0], v[1], v[2]))));
                 break;
         }
