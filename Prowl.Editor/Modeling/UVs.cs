@@ -440,12 +440,11 @@ public static class UVs
         {
             float surface = 0f, texture = 0f;
             foreach (GeometryData.Face face in island)
-                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in Triangles(face))
-                {
-                    surface += 0.5f * Float3.Length(Float3.Cross(b.Vert.Point - a.Vert.Point, c.Vert.Point - a.Vert.Point));
-                    Float2 ua = Get(a), ub = Get(b), uc = Get(c);
-                    texture += 0.5f * MathF.Abs((ub.X - ua.X) * (uc.Y - ua.Y) - (uc.X - ua.X) * (ub.Y - ua.Y));
-                }
+            {
+                (float s, float t) = Areas(face);
+                surface += s;
+                texture += t;
+            }
             areas.Add((surface, texture));
             surfaceTotal += surface;
             textureTotal += texture;
@@ -684,7 +683,7 @@ public static class UVs
                         }
 
             Float3 sum = Float3.Zero;
-            foreach (GeometryData.Face face in group) sum += face.Normal() * Areas(face);
+            foreach (GeometryData.Face face in group) sum += face.Normal() * Areas(face).Surface;
             var frame = new PlaneFrame(Float3.LengthSquared(sum) > 1e-12f ? sum : lead, Float3.Zero);
             var at = new List<GeometryData.Loop>();
             foreach (GeometryData.Face face in group)
@@ -700,12 +699,17 @@ public static class UVs
         mesh.MarkChanged();
     }
 
-    private static float Areas(GeometryData.Face face)
+    /// <summary>How much surface a face covers, and how much texture its UVs do, both over its triangles.</summary>
+    public static (float Surface, float Texture) Areas(GeometryData.Face face)
     {
-        float area = 0f;
+        float surface = 0f, texture = 0f;
         foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in Triangles(face))
-            area += 0.5f * Float3.Length(Float3.Cross(b.Vert.Point - a.Vert.Point, c.Vert.Point - a.Vert.Point));
-        return area;
+        {
+            surface += 0.5f * Float3.Length(Float3.Cross(b.Vert.Point - a.Vert.Point, c.Vert.Point - a.Vert.Point));
+            Float2 ua = Get(a), ub = Get(b), uc = Get(c);
+            texture += 0.5f * MathF.Abs((ub.X - ua.X) * (uc.Y - ua.Y) - (uc.X - ua.X) * (ub.Y - ua.Y));
+        }
+        return (surface, texture);
     }
 
     /// <summary>

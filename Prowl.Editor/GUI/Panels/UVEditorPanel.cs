@@ -526,24 +526,12 @@ public class UVEditorPanel : DockPanel
         return length > 1e-12f ? MathF.Acos(Math.Clamp(Float3.Dot(a, b) / length, -1f, 1f)) : 0f;
     }
 
-    private static (float Surface, float Texture) Areas(GeometryData.Face face)
-    {
-        float surface = 0f, texture = 0f;
-        foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in UVs.Triangles(face))
-        {
-            surface += 0.5f * Float3.Length(Float3.Cross(b.Vert.Point - a.Vert.Point, c.Vert.Point - a.Vert.Point));
-            Float2 ua = UVs.Get(a), ub = UVs.Get(b), uc = UVs.Get(c);
-            texture += 0.5f * MathF.Abs((ub.X - ua.X) * (uc.Y - ua.Y) - (uc.X - ua.X) * (ub.Y - ua.Y));
-        }
-        return (surface, texture);
-    }
-
     private static float Density(List<Shown> faces)
     {
         float surface = 0f, texture = 0f;
         foreach (Shown shown in faces)
         {
-            (float s, float t) = Areas(shown.Face);
+            (float s, float t) = UVs.Areas(shown.Face);
             surface += s;
             texture += t;
         }
@@ -553,7 +541,7 @@ public class UVEditorPanel : DockPanel
     /// <summary>How far a face's share of texture is from the average, 0 for none and 1 for twice or half as much.</summary>
     private static float AreaStretch(GeometryData.Face face, float density)
     {
-        (float surface, float texture) = Areas(face);
+        (float surface, float texture) = UVs.Areas(face);
         if (surface <= 0f || density <= 0f) return 0f;
         float ratio = texture / surface / density;
         return ratio > 0f ? MathF.Abs(MathF.Log2(ratio)) : 1f;
