@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Clay.Formats.Bvh;
 using Prowl.Clay.Importer;
 using Prowl.Vector;
 
@@ -162,10 +163,10 @@ public sealed class BvhAnimationTests
     public void FormatDetector_CanDetectBvhFromPath()
     {
         // Act
-        string? format = FormatDetector.FromPath(TestModels.Bvh("one_root.bvh"));
+        IModelFormat? format = ModelImporter.DetectFromPath(TestModels.Bvh("one_root.bvh"));
 
         // Assert
-        Assert.Equal("bvh", format);
+        Assert.IsType<BvhFormat>(format);
     }
 
     [Fact]
@@ -173,11 +174,10 @@ public sealed class BvhAnimationTests
     {
         // Act
         using Stream stream = File.OpenRead(TestModels.Bvh("one_root.bvh"));
-        bool success = FormatDetector.TryDetectFromStream(stream, out string format);
+        IModelFormat? format = ModelImporter.DetectFromStream(stream);
 
         // Assert
-        Assert.True(success);
-        Assert.Equal("bvh", format);
+        Assert.IsType<BvhFormat>(format);
     }
 
     // Helpers to convert from right-handed (BVH) to left-handed (Prowl) coordinate system.

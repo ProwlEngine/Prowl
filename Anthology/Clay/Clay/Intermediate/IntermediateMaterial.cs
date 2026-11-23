@@ -5,13 +5,13 @@ using System.Text.Json;
 
 using Prowl.Vector;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>
 /// Writable material form. Mirrors the public <see cref="Material"/> shape but with mutable
 /// fields so format readers and post-process steps can fill it in piecewise.
 /// </summary>
-internal sealed class IntermediateMaterial
+public sealed class IntermediateMaterial
 {
     public string Name { get; set; } = string.Empty;
     public MaterialAlphaMode AlphaMode { get; set; } = MaterialAlphaMode.Opaque;
@@ -48,7 +48,7 @@ internal sealed class IntermediateMaterial
     public DiffuseTransmissionExtension? DiffuseTransmission { get; set; }
 }
 
-internal sealed class IntermediateTextureSlot
+public sealed class IntermediateTextureSlot
 {
     public int TextureIndex { get; set; }
     public int UVChannel { get; set; }

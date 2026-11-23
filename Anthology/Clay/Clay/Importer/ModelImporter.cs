@@ -14,6 +14,28 @@ namespace Prowl.Clay.Importer;
 /// </summary>
 public static class ModelImporter
 {
+    private static readonly List<IModelFormat> _formats = [];
+
+    /// <summary>Registers built-in formats.</summary>
+    static ModelImporter()
+    {
+        // Register built-in formats.
+        Register<GltfFormat>();
+        Register<GlbFormat>();
+        Register<ObjFormat>();
+        Register<FbxFormat>();
+        Register<BvhFormat>();
+    }
+
+    /// <summary>
+    /// Registers a custom importer.
+    /// </summary>
+    /// <typeparam name="T">The custom format implementation type.</typeparam>
+    public static void Register<T>() where T : IModelFormat, new()
+    {
+        _formats.Add(new T());
+    }
+
     /// <summary>
     /// Loads a model from a file on disk. The format is detected from the file extension and,
     /// if that fails, from the first few bytes of the file.
@@ -26,34 +48,26 @@ public static class ModelImporter
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(path)) throw new ArgumentException("Path must not be null or empty.", nameof(path));
-        settings ??= ModelImporterSettings.GameQuality;
         resolver ??= new DefaultFileResolver();
-
-        string? format = FormatDetector.FromPath(path);
-        using var stream = resolver.OpenRead(path);
-        if (format is null && !FormatDetector.TryDetectFromStream(stream, out format))
-            throw new ImportException("Could not determine model format from path or content.", path);
-
+        using Stream stream = resolver.OpenRead(path);
+        IModelFormat? format = DetectFromPath(path);
         return LoadCore(stream, format, settings, resolver, path, cancellationToken);
     }
 
     /// <summary>
-    /// Loads a model from a stream. The caller must supply a <paramref name="formatHint"/> and, if external
-    /// resources are referenced, a <paramref name="resolver"/>.
+    /// Loads a model from a stream. The caller must supply a <paramref name="resolver"/> if external
+    /// resources are referenced.
     /// </summary>
     public static Model Load(
         Stream stream,
-        string formatHint,
+        string? formatHint = null,
         ModelImporterSettings? settings = null,
         IFileResolver? resolver = null,
         CancellationToken cancellationToken = default)
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
-        if (string.IsNullOrEmpty(formatHint)) throw new ArgumentException("Format hint must not be null or empty.", nameof(formatHint));
-        settings ??= ModelImporterSettings.GameQuality;
-        resolver ??= new DefaultFileResolver();
-
-        return LoadCore(stream, formatHint, settings, resolver, sourcePath: null, cancellationToken);
+        IModelFormat? format = formatHint is null ? null : DetectFromPath(formatHint);
+        return LoadCore(stream, format, settings, resolver, sourcePath: null, cancellationToken);
     }
 
     /// <summary>Convenience async wrapper. The import is performed on a thread-pool worker.</summary>
@@ -66,18 +80,18 @@ public static class ModelImporter
         return Task.Run(() => Load(path, settings, resolver, cancellationToken), cancellationToken);
     }
 
-    /// <summary>Peeks the stream's first bytes to identify the model format.</summary>
-    public static bool TryDetectFormat(Stream peekableStream, out string format) =>
-        FormatDetector.TryDetectFromStream(peekableStream, out format);
-
     private static Model LoadCore(
         Stream stream,
-        string format,
-        ModelImporterSettings settings,
-        IFileResolver resolver,
+        IModelFormat? format,
+        ModelImporterSettings? settings,
+        IFileResolver? resolver,
         string? sourcePath,
         CancellationToken cancellationToken)
     {
+        settings ??= ModelImporterSettings.GameQuality;
+        resolver ??= new DefaultFileResolver();
+        format ??= DetectFromStream(stream) ?? throw new ImportException("Could not determine model format from path or content.", sourcePath, format);
+
         var log = new ImportLog { Sink = settings.OnLog };
         var context = new ImportContext
         {
@@ -89,16 +103,7 @@ public static class ModelImporter
             Format = format,
         };
 
-        IModelFormat reader = format switch
-        {
-            "gltf" or "glb" or "vrm" => new GltfFormat(),
-            "obj" => new ObjFormat(),
-            "fbx" => new FbxFormat(),
-            "bvh" => new BvhFormat(),
-            _ => throw new ImportException($"Unsupported model format '{format}'.", sourcePath, format),
-        };
-
-        var scene = Guarded(() => reader.Read(stream, context), "read", sourcePath, format);
+        var scene = Guarded(() => format.Read(stream, context), "read", sourcePath, format);
 
         return Guarded(() =>
         {
@@ -117,7 +122,7 @@ public static class ModelImporter
     /// <see cref="IndexOutOfRangeException"/> naming neither the file nor the format, and callers
     /// catching <see cref="ImportException"/> did not catch it at all.
     /// </remarks>
-    private static T Guarded<T>(Func<T> stage, string what, string? sourcePath, string format)
+    private static T Guarded<T>(Func<T> stage, string what, string? sourcePath, IModelFormat format)
     {
         try
         {
@@ -135,6 +140,58 @@ public static class ModelImporter
         catch (Exception ex)
         {
             throw new ImportException($"Failed to {what} {format} model: {ex.Message}", sourcePath, format, ex);
+        }
+    }
+
+    /// <summary>
+    /// Determines the <see cref="IModelFormat"/> implementation that can import the file with the given <paramref name="path"/>.
+    /// </summary>
+    /// <param name="path">The path of the file.</param>
+    /// <returns>The <see cref="IModelFormat"/> implementation, or <see langword="null"/> if none can handle the file.</returns>
+    internal static IModelFormat? DetectFromPath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        string extension = Path.GetExtension(path);
+        if (extension == string.Empty)
+            // The path doesn't have a dot ('.') so assume the whole path is an extension (e.g. "obj").
+            extension = path;
+        else
+            extension = extension.Substring(startIndex: 1);
+        extension = extension.ToLowerInvariant();
+        foreach (IModelFormat format in _formats)
+        {
+            if (format.CanRead(extension))
+                return format;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Peeks the first few bytes of a seekable stream to identify the format. Restores the
+    /// stream's position before returning.
+    /// </summary>
+    /// <param name="stream">The stream to read.</param>
+    /// <returns>The <see cref="IModelFormat"/> implementation, or <see langword="null"/> if none can handle the file.</returns>
+    internal static IModelFormat? DetectFromStream(Stream stream)
+    {
+        if (!stream.CanSeek)
+            return null;
+        long origin = stream.Position;
+        try
+        {
+            Span<byte> head = stackalloc byte[32];
+            int read = stream.Read(head);
+            head = head.Slice(0, read);
+            foreach (IModelFormat format in ModelImporter._formats)
+            {
+                if (format.CanRead(head))
+                    return format;
+            }
+            return null;
+        }
+        finally
+        {
+            stream.Position = origin;
         }
     }
 }

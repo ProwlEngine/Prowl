@@ -3,9 +3,9 @@
 
 using Prowl.Vector;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
-internal sealed class IntermediateTexture
+public sealed class IntermediateTexture
 {
     public string? Name { get; set; }
     public string? SourcePath { get; set; }
@@ -21,7 +21,7 @@ internal sealed class IntermediateTexture
     public float UVRotation { get; set; }
 }
 
-internal sealed class IntermediateTextureSampler
+public sealed class IntermediateTextureSampler
 {
     public TextureWrapMode WrapU { get; set; } = TextureWrapMode.Repeat;
     public TextureWrapMode WrapV { get; set; } = TextureWrapMode.Repeat;

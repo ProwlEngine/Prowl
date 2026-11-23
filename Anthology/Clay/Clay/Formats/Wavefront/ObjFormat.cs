@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 
 using Prowl.Clay.Importer;
+using Prowl.Clay.Intermediate;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
 
@@ -29,9 +30,30 @@ namespace Prowl.Clay.Formats.Wavefront;
 /// </remarks>
 internal sealed class ObjFormat : IModelFormat
 {
-    public string Token => "obj";
-    public bool CanRead(string formatToken) => formatToken == "obj";
+    /// <summary>
+    /// Determines whether a file with the given file extension can be read by this importer.
+    /// </summary>
+    /// <param name="extension"> The lowercase file extension WITHOUT the leading period ('.'). </param>
+    /// <returns><see langword="true"/> if the file extension is readable by this importer.</returns>
+    public bool CanRead(string extension) => extension == "obj";
 
+    /// <summary>
+    /// Determines via the initial file content whether the file can be read by this importer.
+    /// </summary>
+    /// <param name="initialBytes"> The initial 32 bytes of data from the file, if the file is at least that size. </param>
+    /// <returns><see langword="true"/> if the file data is readable by this importer.</returns>
+    public bool CanRead(ReadOnlySpan<byte> initialBytes)
+    {
+        // OBJ files do not have a header.
+        return false;
+    }
+
+    /// <summary>
+    /// Reads the source into an <see cref="IntermediateScene"/>. The source may be either
+    /// <see cref="ImportContext.SourcePath"/> (when not null) or <paramref name="stream"/>.
+    /// </summary>
+    /// <param name="stream">The stream to read from.</param>
+    /// <param name="context">Importer context.</param>
     public IntermediateScene Read(Stream stream, ImportContext context)
     {
         string text;
@@ -229,7 +251,6 @@ internal sealed class ObjFormat : IModelFormat
         public ParserState(ImportContext ctx)
         {
             _ctx = ctx;
-            _scene.Format = ctx.Format;
             _scene.SourceCoordinateSystem = CoordinateSystem.RightHandedYUp;
             _scene.SourceUnitToMeters = 1f;
 

@@ -1,10 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Clay;
 using Prowl.Clay.Importer;
-
-using Xunit;
 
 namespace Prowl.Clay.Tests;
 
@@ -19,7 +16,7 @@ public sealed class FbxGeometryTests
     {
         var model = ModelImporter.Load(TestModels.Fbx("box.fbx"), cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal("fbx", model.Metadata.Format);
+        Assert.IsType<Formats.Fbx.FbxFormat>(model.Metadata.Format);
         Assert.Equal("7400", model.Metadata.FormatVersion);
         Assert.NotEmpty(model.Meshes);
 
@@ -68,7 +65,7 @@ public sealed class FbxGeometryTests
         // 7.5.0 ASCII with named per-cube nodes.
         var model = ModelImporter.Load(TestModels.Fbx("cubes_with_names.fbx"), cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal("fbx", model.Metadata.Format);
+        Assert.IsType<Formats.Fbx.FbxFormat>(model.Metadata.Format);
         Assert.NotEmpty(model.Nodes);
         Assert.NotEmpty(model.Meshes);
         // Named nodes survive: at least one node should not be a synthetic placeholder.

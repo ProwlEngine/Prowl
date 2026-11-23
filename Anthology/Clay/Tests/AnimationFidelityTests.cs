@@ -6,8 +6,6 @@ using System.Text;
 using Prowl.Clay.Importer;
 using Prowl.Vector;
 
-using Xunit;
-
 namespace Prowl.Clay.Tests;
 
 /// <summary>

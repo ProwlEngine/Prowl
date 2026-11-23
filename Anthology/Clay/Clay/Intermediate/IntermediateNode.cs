@@ -3,13 +3,13 @@
 
 using Prowl.Vector;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>
 /// Mutable counterpart of <see cref="ModelNode"/>. Owns its own children list; parent references
 /// are upward-only pointers maintained by the format readers and post-process steps.
 /// </summary>
-internal sealed class IntermediateNode
+public sealed class IntermediateNode
 {
     public string Name { get; set; } = string.Empty;
     public IntermediateNode? Parent { get; set; }

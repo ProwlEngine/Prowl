@@ -3,11 +3,8 @@
 
 using System.Text;
 
-using Prowl.Clay;
 using Prowl.Clay.Importer;
 using Prowl.Vector;
-
-using Xunit;
 
 namespace Prowl.Clay.Tests;
 
@@ -21,13 +18,13 @@ public sealed class CoreApiTests
     [Fact]
     public void FormatDetector_RecognizesEveryKnownExtension()
     {
-        Assert.Equal("gltf", FormatDetector.FromPath("foo.gltf"));
-        Assert.Equal("glb", FormatDetector.FromPath("foo.glb"));
-        Assert.Equal("vrm", FormatDetector.FromPath("foo.vrm"));
-        Assert.Equal("obj", FormatDetector.FromPath("foo.obj"));
-        Assert.Equal("fbx", FormatDetector.FromPath("foo.FBX"));   // case insensitive
-        Assert.Null(FormatDetector.FromPath("foo.bin"));            // unknown extension
-        Assert.Null(FormatDetector.FromPath("noext"));              // no extension at all
+        Assert.IsType<Formats.Gltf.GltfFormat>(ModelImporter.DetectFromPath("foo.gltf"));
+        Assert.IsType<Formats.Gltf.GlbFormat>(ModelImporter.DetectFromPath("foo.glb"));
+        Assert.IsType<Formats.Gltf.GlbFormat>(ModelImporter.DetectFromPath("foo.vrm"));
+        Assert.IsType<Formats.Wavefront.ObjFormat>(ModelImporter.DetectFromPath("foo.obj"));
+        Assert.IsType<Formats.Fbx.FbxFormat>(ModelImporter.DetectFromPath("foo.FBX"));   // case insensitive
+        Assert.Null(ModelImporter.DetectFromPath("foo.bin"));           // unknown extension
+        Assert.Null(ModelImporter.DetectFromPath("noext"));             // no extension at all
     }
 
     [Fact]
@@ -36,8 +33,7 @@ public sealed class CoreApiTests
         // glb magic = 'glTF' (0x46546C67) followed by little-endian version 2.
         byte[] bytes = { 0x67, 0x6C, 0x54, 0x46, 0x02, 0, 0, 0 };
         using var ms = new MemoryStream(bytes);
-        Assert.True(FormatDetector.TryDetectFromStream(ms, out string fmt));
-        Assert.Equal("glb", fmt);
+        Assert.IsType<Formats.Gltf.GlbFormat>(ModelImporter.DetectFromStream(ms));
     }
 
     [Fact]
@@ -45,8 +41,7 @@ public sealed class CoreApiTests
     {
         byte[] bytes = Encoding.ASCII.GetBytes("Kaydara FBX Binary  ");
         using var ms = new MemoryStream(bytes);
-        Assert.True(FormatDetector.TryDetectFromStream(ms, out string fmt));
-        Assert.Equal("fbx", fmt);
+        Assert.IsType<Formats.Fbx.FbxFormat>(ModelImporter.DetectFromStream(ms));
     }
 
     [Fact]
@@ -58,7 +53,7 @@ public sealed class CoreApiTests
         var model = ModelImporter.Load(ms, "gltf", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(model);
-        Assert.Equal("gltf", model.Metadata.Format);
+        Assert.IsType<Formats.Gltf.GltfFormat>(model.Metadata.Format);
         Assert.Equal("2.0", model.Metadata.FormatVersion);
         Assert.Single(model.Nodes);             // synthetic root
         Assert.Empty(model.Meshes);
