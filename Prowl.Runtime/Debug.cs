@@ -5,17 +5,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
-using Material = Prowl.Runtime.Resources.Material;
-using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -450,46 +447,13 @@ public static class Debug
         });
     }
 
-    public static void If(bool condition, string message = "")
+    /// <summary>Throws an <see cref="AssertionFailedException"/> when <paramref name="condition"/> is false, in every build.</summary>
+    /// <param name="condition"> The condition to check. </param>
+    /// <param name="message"> An optional message to include in the excepton message. </param>
+    public static void Assert([DoesNotReturnIf(false)] bool condition, string? message = null)
     {
-        if (condition)
-            throw new Exception(message);
-    }
-
-    public static void IfNull(object value, string message = "")
-    {
-        if (value is null)
-            throw new Exception(message);
-    }
-
-    public static void IfNullOrEmpty(string value, string message = "")
-    {
-        if (string.IsNullOrEmpty(value))
-            throw new Exception(message);
-    }
-
-    internal static void ErrorGuard(Action value)
-    {
-        try
-        {
-            value();
-        }
-        catch (Exception e)
-        {
-            LogError(e.Message);
-        }
-    }
-
-    /// <summary>Logs an error when <paramref name="condition"/> is false, in every build, and carries on.</summary>
-    public static void Assert(bool condition, string? message)
-    {
-        if (!condition) LogCore(message == null ? "Assertion failed" : $"Assertion failed: {message}", LogSeverity.Error);
-    }
-
-    /// <inheritdoc cref="Assert(bool, string?)"/>
-    public static void Assert(bool condition)
-    {
-        if (!condition) LogCore("Assertion failed", LogSeverity.Error);
+        if (!condition)
+            throw new AssertionFailedException(message == null ? "Assertion failed" : $"Assertion failed: {message}");
     }
 
     #region Gizmos
@@ -702,6 +666,12 @@ public static class Debug
     #endregion
 
 }
+
+/// <summary>
+/// The exception that is thrown if <see cref="Debug.Assert"/> fails.
+/// </summary>
+/// <param name="message"> The exception message. </param>
+public class AssertionFailedException(string message) : Exception(message);
 
 /// <summary>
 /// A scene's gizmos, drawn through Graphite's gizmo feature. Draws fill one batch while the renderer shows the other,
