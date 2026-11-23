@@ -161,6 +161,8 @@ Graphite_ProbeSet Graphite_SkyProbeSet(vec3 relativePos, float sky)
 // Keeps the highest priority probes holding the point, weighted by how far inside their boxes it is
 Graphite_ProbeSet Graphite_FindProbes(vec3 relativePos)
 {
+    if (Graphite_SetIsEmpty(GRAPHITE_SET_PROBES))
+        return Graphite_SkyProbeSet(relativePos, 1.0);
     Graphite_ProbeSet set = Graphite_SkyProbeSet(relativePos, 0.0);
     float priority[GRAPHITE_MAX_BLENDED_PROBES];
     for (int i = 0; i < GRAPHITE_MAX_BLENDED_PROBES; i++)
