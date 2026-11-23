@@ -282,13 +282,8 @@ internal static class CutOp
                 if (count == 0) continue;
                 Float3 move = (sum / count - vertex.Point) * Math.Clamp(factor, 0f, 1f);
 
-                Float3 normal = Float3.Zero;
-                foreach (Face face in vertex.NeighborFaces()) normal += face.Normal();
-                if (Float3.LengthSquared(normal) > 1e-12f)
-                {
-                    normal = Float3.Normalize(normal);
-                    move -= normal * Float3.Dot(move, normal);
-                }
+                Float3 normal = vertex.Normal();
+                move -= normal * Float3.Dot(move, normal);
                 moved[i] = vertex.Point + move;
             }
             for (int i = 0; i < targets.Count; i++)

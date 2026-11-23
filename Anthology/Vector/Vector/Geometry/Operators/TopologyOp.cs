@@ -275,9 +275,7 @@ internal static class TopologyOp
         {
             Vertex vertex = source.Vertices[i];
             index[vertex] = i;
-            Float3 normal = Float3.Zero;
-            foreach (Face face in vertex.NeighborFaces()) normal += face.Normal();
-            if (Float3.LengthSquared(normal) > 1e-12f) normal = Float3.Normalize(normal);
+            Float3 normal = vertex.Normal();
             outer[i] = result.AddVertex(vertex.Point + normal * outward);
             outer[i].Attributes = AttributeTransfer.Copy(vertex.Attributes);
             inner[i] = result.AddVertex(vertex.Point - normal * inward);
