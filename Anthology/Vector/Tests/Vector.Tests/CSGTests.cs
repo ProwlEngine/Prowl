@@ -61,6 +61,20 @@ public class CSGTests
         AssertManifold(result.Solid);
     }
 
+    /// <summary>Corners from different faces that land either side of a weld grid line still weld.</summary>
+    [Theory]
+    [InlineData(5.3969007f, 1.000365f, 2.8727002f)]
+    [InlineData(9.995896f, 2.7138524f, 16.681404f)]
+    [InlineData(1.085032f, 0.5289711f, 17.261707f)]
+    [InlineData(18.432064f, 2.0313525f, 2.2211041f)]
+    public void ConvexFromPlanes_WeldsBoxCornersAtAnySize(float x, float y, float z)
+    {
+        var result = GeometryGenerator.ConvexFromPlanes(GeometryGenerator.BoxPlanes(new Float3(x, y, z)));
+
+        Assert.Equal(8, result.Solid!.Vertices.Count);
+        AssertManifold(result.Solid);
+    }
+
     /// <summary>Catches a flipped half-space convention, which still yields six faces.</summary>
     [Fact]
     public void ConvexFromPlanes_PutsCornersWhereExpected()

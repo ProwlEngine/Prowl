@@ -216,13 +216,33 @@ public static partial class GeometryGenerator
     private static GeometryData BuildSolid(List<List<Float3>> faces, float weldTolerance)
     {
         var mesh = new GeometryData();
-        var weld = new Dictionary<(int, int, int), GeometryData.Vertex>();
-        float inv = 1f / MathF.Max(weldTolerance, 1e-6f);
+        float tolerance = MathF.Max(weldTolerance, 1e-6f);
+        float inv = 1f / tolerance;
+        var cells = new Dictionary<(int, int, int), List<GeometryData.Vertex>>();
 
-        (int, int, int) Key(Float3 p) => (
-            (int)MathF.Round(p.X * inv),
-            (int)MathF.Round(p.Y * inv),
-            (int)MathF.Round(p.Z * inv));
+        (int, int, int) Cell(Float3 p) => (
+            (int)MathF.Floor(p.X * inv),
+            (int)MathF.Floor(p.Y * inv),
+            (int)MathF.Floor(p.Z * inv));
+
+        // Cells are the tolerance wide, so a corner within it of another lies in one of the 27 around it
+        GeometryData.Vertex Weld(Float3 p)
+        {
+            (int cx, int cy, int cz) = Cell(p);
+            for (int x = cx - 1; x <= cx + 1; x++)
+                for (int y = cy - 1; y <= cy + 1; y++)
+                    for (int z = cz - 1; z <= cz + 1; z++)
+                    {
+                        if (!cells.TryGetValue((x, y, z), out var near)) continue;
+                        foreach (var v in near)
+                            if (Float3.DistanceSquared(v.Point, p) <= tolerance * tolerance) return v;
+                    }
+
+            var vert = mesh.AddVertex(p);
+            if (!cells.TryGetValue((cx, cy, cz), out var list)) cells[(cx, cy, cz)] = list = new List<GeometryData.Vertex>();
+            list.Add(vert);
+            return vert;
+        }
 
         foreach (var ring in faces)
         {
@@ -231,12 +251,7 @@ public static partial class GeometryGenerator
             var verts = new List<GeometryData.Vertex>(ring.Count);
             foreach (Float3 p in ring)
             {
-                var key = Key(p);
-                if (!weld.TryGetValue(key, out var vert))
-                {
-                    vert = mesh.AddVertex(p);
-                    weld[key] = vert;
-                }
+                var vert = Weld(p);
                 // Clipping can leave near-duplicate corners; a face must not reference one twice.
                 if (verts.Count == 0 || !ReferenceEquals(verts[^1], vert))
                     verts.Add(vert);
