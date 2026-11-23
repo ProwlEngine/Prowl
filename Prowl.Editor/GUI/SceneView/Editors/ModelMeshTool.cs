@@ -383,6 +383,9 @@ public sealed class ModelMeshTool : SceneTool
             BevelPoints(ctx);
         else if (handles.IsPressed("MeshEdit/ExtrudeMenu"))
             ExtrudeMenu(ctx);
+        else if (handles.IsPressed("MeshEdit/ShrinkFatten")) ShrinkFatten(ctx);
+        else if (handles.IsPressed("MeshEdit/ToSphere")) ToSphere(ctx);
+        else if (handles.IsPressed("MeshEdit/Split")) Split();
         else if (handles.IsPressed("MeshEdit/LimitedDissolve")) LimitedDissolve(ctx);
         else if (handles.IsPressed("MeshEdit/TrisToQuads")) TrisToQuads(ctx);
         else if (handles.IsPressed("MeshEdit/MergeByDistance")) MergeByDistance(ctx);
@@ -778,6 +781,8 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("csg.merge_by_distance"), () => MergeByDistance(ctx), shortcut: Chord("MeshEdit/MergeByDistance"));
         menu.Item(Loc.Get("csg.connect"), () => Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge), shortcut: Chord("MeshEdit/Connect"));
         menu.Item(Loc.Get("csg.smooth"), () => SmoothPoints(ctx), shortcut: Chord("MeshEdit/Smooth"));
+        menu.Item(Loc.Get("model.menu.shrink_fatten"), () => ShrinkFatten(ctx), shortcut: Chord("MeshEdit/ShrinkFatten"));
+        menu.Item(Loc.Get("model.menu.to_sphere"), () => ToSphere(ctx), shortcut: Chord("MeshEdit/ToSphere"));
         menu.Item(Loc.Get("csg.relax"), () => RelaxPoints(ctx));
         menu.Item(Loc.Get("csg.flatten"), () => Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s)), shortcut: Chord("MeshEdit/Flatten"));
         menu.Item(Loc.Get("model.menu.shrinkwrap"), Shrinkwrap);
@@ -810,6 +815,8 @@ public sealed class ModelMeshTool : SceneTool
     {
         menu.Item(Loc.Get("model.menu.extrude"), () => Extrude(ctx), shortcut: Chord("MeshEdit/Extrude"));
         menu.Item(Loc.Get("csg.inset"), () => Inset(ctx), shortcut: Chord("MeshEdit/Inset"));
+        menu.Item(Loc.Get("model.menu.split"), Split, shortcut: Chord("MeshEdit/Split"));
+        menu.Item(Loc.Get("model.menu.shrink_fatten"), () => ShrinkFatten(ctx), shortcut: Chord("MeshEdit/ShrinkFatten"));
         menu.Item(Loc.Get("csg.bevel"), () => BevelEdges(ctx), shortcut: Chord("MeshEdit/Bevel"));
         menu.Submenu(Loc.Get("model.menu.extrude_as"), m => ExtrudeItems(ctx, m));
         menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
@@ -1399,6 +1406,26 @@ public sealed class ModelMeshTool : SceneTool
                 else Operators.BevelPoints(mesh, [.. s.Vertices], width, s);
             },
         });
+
+    private void ShrinkFatten(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Shrink Fatten Model Points", true, d => -d, "0.###", (mesh, s, d, _) => GeometryOperators.ShrinkFatten(mesh, s.Vertices, d), null)
+            { Drag = OperatorDrag.TowardPivot });
+
+    private void ToSphere(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("To Sphere", false, p => Math.Clamp(p * 0.005f, 0f, 1f), "0.##", (mesh, s, t, _) => GeometryOperators.ToSphere(mesh, s.Vertices, t), null));
+
+    /// <summary>Y: the selected faces no longer share points with the rest, and stay selected.</summary>
+    private void Split() => Edit("Split Model Faces", (mesh, s) =>
+    {
+        List<GeometryData.Face> split = GeometryOperators.SplitFaces(mesh, s.Faces);
+        s.Clear();
+        foreach (GeometryData.Face face in split)
+        {
+            s.Faces.Add(face);
+            s.Vertices.UnionWith(face.NeighborVertices());
+            s.Edges.UnionWith(face.NeighborEdges());
+        }
+    });
 
     private void BevelPoints(SceneToolContext ctx)
         => StartOperator(ctx, new AmountOperator("Bevel Model Points", true, d => d, "0.###", (mesh, s, d, _) => Operators.BevelPoints(mesh, [.. s.Vertices], d, s), SelectMode.Face));
