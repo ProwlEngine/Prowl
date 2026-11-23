@@ -56,6 +56,114 @@ public static class Operators
         mesh.MarkChanged();
     }
 
+    /// <summary>
+    /// Pulls the surface apart along the selected edges, each point on them copied for every side the edges separate.
+    /// The copies are selected after, so a grab can pull that side away.
+    /// </summary>
+    public static void Rip(GeometryData mesh, ElementSelection selection)
+    {
+        if (selection.Edges.Count == 0) throw new InvalidOperationException("Select the edges to rip along");
+        var made = new HashSet<GeometryData.Vertex>(GeometryOperators.SplitEdges(mesh, [.. selection.Edges]));
+        selection.Clear();
+        selection.Vertices.UnionWith(made);
+        foreach (GeometryData.Vertex vertex in made)
+            foreach (GeometryData.Edge edge in vertex.NeighborEdges())
+                if (made.Contains(edge.OtherVertex(vertex))) selection.Edges.Add(edge);
+        mesh.MarkChanged();
+    }
+
+    /// <summary>
+    /// Copies the selected faces, or edges and points when no face is selected, in place. The copies are selected after,
+    /// for a grab to move them off.
+    /// </summary>
+    public static void Duplicate(GeometryData mesh, ElementSelection selection)
+    {
+        if (selection.Vertices.Count == 0) return;
+        GeometryData copy = GeometryOperators.Extract(mesh, selection.Vertices, selection.Edges, selection.Faces);
+        var vertices = new HashSet<GeometryData.Vertex>(mesh.Vertices);
+        var edges = new HashSet<GeometryData.Edge>(mesh.Edges);
+        var faces = new HashSet<GeometryData.Face>(mesh.Faces);
+        GeometryOperators.Merge(mesh, copy);
+        selection.Clear();
+        selection.Vertices.UnionWith(mesh.Vertices.Where(v => !vertices.Contains(v)));
+        selection.Edges.UnionWith(mesh.Edges.Where(e => !edges.Contains(e)));
+        selection.Faces.UnionWith(mesh.Faces.Where(f => !faces.Contains(f)));
+        mesh.MarkChanged();
+    }
+
+    /// <summary>Sets how much of their line the edges keep through smooth subdivision, from 0 to 1.</summary>
+    public static void Crease(IEnumerable<GeometryData.Edge> edges, float amount)
+    {
+        foreach (GeometryData.Edge edge in edges) edge.Crease = Math.Clamp(amount, 0f, 1f);
+    }
+
+    /// <summary>
+    /// Shades the faces smooth, every edge between them soft, or flat, every edge of them sharp, and works their corner
+    /// normals out again.
+    /// </summary>
+    public static void Shade(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, bool smooth)
+    {
+        var points = new HashSet<GeometryData.Vertex>();
+        foreach (GeometryData.Face face in faces)
+        {
+            points.UnionWith(face.NeighborVertices());
+            foreach (GeometryData.Edge edge in face.NeighborEdges())
+            {
+                if (edge.IsHidden) continue;
+                edge.IsSoft = smooth;
+                edge.IsSharp = !smooth;
+            }
+        }
+        if (mesh.HasLoopAttribute(Prowl.Runtime.Resources.MeshGeometry.Normal)) CornerNormals(mesh, points);
+        mesh.MarkChanged();
+    }
+
+    /// <summary>Fills a ring of edges with a grid of four sided faces, which are selected after.</summary>
+    public static void GridFill(GeometryData mesh, ElementSelection selection)
+    {
+        List<GeometryData.Face> made = GeometryOperators.GridFill(mesh, [.. selection.Edges]);
+        selection.Clear();
+        foreach (GeometryData.Face face in made)
+        {
+            selection.Faces.Add(face);
+            selection.Vertices.UnionWith(face.NeighborVertices());
+            foreach (GeometryData.Edge edge in face.NeighborEdges()) selection.Edges.Add(edge);
+        }
+        mesh.MarkChanged();
+    }
+
+    /// <summary>Turns faces so each surface agrees about which way is out and closed shells face outwards, with normals worked out again.</summary>
+    public static void RecalculateOutside(GeometryData mesh)
+    {
+        if (GeometryOperators.OrientFaces(mesh) == 0) return;
+        if (mesh.HasLoopAttribute(Prowl.Runtime.Resources.MeshGeometry.Normal)) CornerNormals(mesh);
+        mesh.MarkChanged();
+    }
+
+    /// <summary>Turns the faces over, with their normals worked out again.</summary>
+    public static void Flip(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces)
+    {
+        if (faces.Count == 0) return;
+        var points = new HashSet<GeometryData.Vertex>(faces.SelectMany(f => f.NeighborVertices()));
+        GeometryOperators.FlipFaces(mesh, faces);
+        if (mesh.HasLoopAttribute(Prowl.Runtime.Resources.MeshGeometry.Normal)) CornerNormals(mesh, points);
+        mesh.MarkChanged();
+    }
+
+    /// <summary>The faces whose corner count is not four.</summary>
+    public static void SelectNonQuads(GeometryData mesh, ElementSelection selection)
+    {
+        selection.Clear();
+        foreach (GeometryData.Face face in mesh.Faces)
+        {
+            if (face.LogicalFace() is { } whole && whole.Count > 1) continue;
+            if (face.VertCount == 4) continue;
+            selection.Faces.Add(face);
+            selection.Vertices.UnionWith(face.NeighborVertices());
+            foreach (GeometryData.Edge edge in face.NeighborEdges()) selection.Edges.Add(edge);
+        }
+    }
+
     /// <summary>Joins two chains or rings of edges with a strip of faces, which are selected after.</summary>
     public static void BridgeEdges(GeometryData mesh, ElementSelection selection)
     {

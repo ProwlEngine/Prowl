@@ -117,6 +117,80 @@ public class OperatorTests
         Assert.Equal(2, selection.Faces.Count);
     }
 
+    private static GeometryData Strip()
+    {
+        var mesh = new GeometryData();
+        for (int z = 0; z <= 1; z++)
+            for (int x = 0; x <= 2; x++)
+                mesh.AddVertex(x, 0, z);
+        mesh.AddFace(0, 3, 4, 1);
+        mesh.AddFace(1, 4, 5, 2);
+        return mesh;
+    }
+
+    [Fact]
+    public void RippingAnEdgeSplitsTheSurfaceAndSelectsTheCopies()
+    {
+        GeometryData mesh = Strip();
+        var selection = new ElementSelection();
+        selection.Edges.Add(mesh.FindEdge(mesh.Vertices[1], mesh.Vertices[4])!);
+
+        Operators.Rip(mesh, selection);
+
+        Assert.Equal(8, mesh.Vertices.Count);
+        Assert.Equal(2, selection.Vertices.Count);
+        Assert.Single(selection.Edges);
+    }
+
+    [Fact]
+    public void DuplicatingAFaceCopiesItAndSelectsTheCopy()
+    {
+        GeometryData mesh = Strip();
+        var selection = new ElementSelection();
+        selection.Faces.Add(mesh.Faces[0]);
+        selection.Vertices.UnionWith(mesh.Faces[0].NeighborVertices());
+        selection.Edges.UnionWith(mesh.Faces[0].NeighborEdges());
+
+        Operators.Duplicate(mesh, selection);
+
+        Assert.Equal(3, mesh.Faces.Count);
+        Assert.Equal(10, mesh.Vertices.Count);
+        Assert.DoesNotContain(mesh.Faces[0], selection.Faces);
+        Assert.Single(selection.Faces);
+    }
+
+    [Fact]
+    public void ShadingFlatAndSmoothSetsTheEdgesBetweenFaces()
+    {
+        GeometryData mesh = Strip();
+        GeometryData.Edge middle = mesh.FindEdge(mesh.Vertices[1], mesh.Vertices[4])!;
+
+        Operators.Shade(mesh, [.. mesh.Faces], smooth: true);
+        Assert.True(middle.IsSoft);
+        Operators.Shade(mesh, [.. mesh.Faces], smooth: false);
+        Assert.True(middle.IsSharp);
+        Assert.False(middle.IsSoft);
+    }
+
+    [Fact]
+    public void GridFillingARingMakesQuads()
+    {
+        var mesh = new GeometryData();
+        var ring = new List<GeometryData.Vertex>();
+        for (int i = 0; i < 8; i++)
+        {
+            float a = i * MathF.PI / 4f;
+            ring.Add(mesh.AddVertex(MathF.Cos(a), 0, MathF.Sin(a)));
+        }
+        var selection = new ElementSelection();
+        for (int i = 0; i < 8; i++) selection.Edges.Add(mesh.AddEdge(ring[i], ring[(i + 1) % 8]));
+
+        Operators.GridFill(mesh, selection);
+
+        Assert.NotEmpty(mesh.Faces);
+        Assert.All(mesh.Faces, f => Assert.Equal(4, f.VertCount));
+    }
+
     [Fact]
     public void FillingTwoPointsJoinsThemWithAnEdge()
     {
