@@ -65,6 +65,8 @@ public partial class Paper
         List<int> childIndices = elementData.ChildIndices;
         if (childIndices == null) childIndices = new List<int>();
         else childIndices.Clear();
+        ReturnCommandList(elementData._renderCommands);
+        ReturnCommandList(elementData._foregroundRenderCommands);
 
         ElementData.Init(ref elementData, id);
         elementData._elementStyle = style;

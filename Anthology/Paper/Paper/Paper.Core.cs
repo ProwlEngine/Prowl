@@ -937,11 +937,24 @@ namespace Prowl.PaperUI
             if (renderAction == null)
                 throw new ArgumentException(nameof(renderAction));
 
-            handle.Data._renderCommands ??= new List<ElementRenderCommand>();
+            handle.Data._renderCommands ??= TakeCommandList();
             handle.Data._renderCommands.Add(new ElementRenderCommand {
                 Element = handle,
                 RenderAction = renderAction,
             });
+        }
+
+        // Command lists handed back by element slots as they are reused, so a frame allocates none.
+        private readonly Stack<List<ElementRenderCommand>> _commandLists = new Stack<List<ElementRenderCommand>>();
+
+        private List<ElementRenderCommand> TakeCommandList()
+            => _commandLists.Count > 0 ? _commandLists.Pop() : new List<ElementRenderCommand>();
+
+        internal void ReturnCommandList(List<ElementRenderCommand> list)
+        {
+            if (list == null) return;
+            list.Clear();
+            _commandLists.Push(list);
         }
 
         /// <summary> Registers a custom render action on the current parent element. The action receives the Canvas and the element's bounding Rect and executes after the element's children are drawn. Throws ArgumentException if renderAction is null. </summary>
@@ -957,7 +970,7 @@ namespace Prowl.PaperUI
             if (renderAction == null)
                 throw new ArgumentException(nameof(renderAction));
 
-            handle.Data._foregroundRenderCommands ??= new List<ElementRenderCommand>();
+            handle.Data._foregroundRenderCommands ??= TakeCommandList();
             handle.Data._foregroundRenderCommands.Add(new ElementRenderCommand {
                 Element = handle,
                 RenderAction = renderAction,
