@@ -300,6 +300,41 @@ public sealed class BucketTests : IDisposable
         Assert.Equal(new uint[] { (uint)earlyNear.Index, (uint)biasedFar.Index, (uint)lateFar.Index }, Instances(Frame(Transparent)));
     }
 
+    // Looks along +Z from the origin, x and y from -10 to 10, z from 0 to 10
+    private static CullFrustum Orthographic()
+        => new(ViewCamera.Orthographic(Double3.Zero, new Float3(0, 0, 1), new Float3(0, 1, 0), 20, 0, 10, aspect: 1).Layers, 1);
+
+    [Fact]
+    public void OrthographicTransparentItems_SortByViewDepth_NotDistanceFromTheCamera()
+    {
+        Material glass = Glass();
+        RenderableHandle back = Add(_triangle, glass, At(0, 0, 8));
+        RenderableHandle front = Add(_other, glass, At(8, 0, 3));
+
+        Assert.Equal(new uint[] { (uint)back.Index, (uint)front.Index }, Instances(Frame(Transparent, frustum: Orthographic())));
+    }
+
+    [Fact]
+    public void OrthographicTransparentItems_LargeBackgroundDrawsBehindSmallerItems()
+    {
+        Material glass = Glass();
+        RenderableHandle background = Add(_triangle, glass, At(0, 0, 8) * Float4x4.CreateScale(20000));
+        RenderableHandle small = Add(_other, glass, At(0, 0, 4));
+
+        Assert.Equal(new uint[] { (uint)background.Index, (uint)small.Index }, Instances(Frame(Transparent, frustum: Orthographic())));
+    }
+
+    [Fact]
+    public void OrthographicTransparentItems_AtOneDepth_KeepAStableOrder()
+    {
+        Material glass = Glass();
+        List<uint> added = new();
+        for (int i = 0; i < 40; i++)
+            added.Add((uint)Add(i % 2 == 0 ? _triangle : _other, glass, At(9 - i * 0.45f, 0, 5)).Index);
+
+        Assert.Equal(added.Order().ToArray(), Instances(Frame(Transparent, frustum: Orthographic())));
+    }
+
     [Fact]
     public void TransparentItems_FollowCullingAndRemoval()
     {

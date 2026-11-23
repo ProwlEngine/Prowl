@@ -482,7 +482,21 @@ internal readonly struct CullFrustum
             ViewLayer layer = layers[l];
             _counts[l] = AddLayer(ref _planes, l * 6, layer.Projection * layer.View, Relative(layer.Position), true);
         }
+        DepthPlane = OrthographicNearPlane(layers[0].Projection * layers[0].View);
     }
+
+    // The reversed Z near plane of an orthographic view, null for perspective
+    private static Float4? OrthographicNearPlane(in Float4x4 viewProjection)
+    {
+        if (viewProjection.c0.W != 0 || viewProjection.c1.W != 0 || viewProjection.c2.W != 0)
+            return null;
+        Float4 plane = new(viewProjection.c0.W - viewProjection.c0.Z, viewProjection.c1.W - viewProjection.c1.Z, viewProjection.c2.W - viewProjection.c2.Z, viewProjection.c3.W - viewProjection.c3.Z);
+        float length = MathF.Sqrt(plane.X * plane.X + plane.Y * plane.Y + plane.Z * plane.Z);
+        return length <= 1e-6f ? null : plane / length;
+    }
+
+    /// <summary>Orthographic views sort by distance past this plane, relative to <see cref="Camera"/>. Null sorts by distance from the camera.</summary>
+    public Float4? DepthPlane { get; }
 
     // A layer's planes moved from its own camera to the first layer's, offset being its camera from the first
     private static int AddLayer(ref Planes planes, int first, in Float4x4 viewProjection, Float3 offset, bool nearPlane)
@@ -1080,7 +1094,7 @@ internal sealed class BucketSet
             foreach (ItemDraw item in provided)
                 _sorted.Add((ProvidedKey(item, ranks), item));
         }
-        _sorted.Sort((a, b) => a.Key.CompareTo(b.Key));
+        _sorted.Sort(static (a, b) => a.Key != b.Key ? a.Key.CompareTo(b.Key) : a.Item.Object.CompareTo(b.Item.Object));
 
         DrawCommandRef previous = new(0, -1, default, false, 0, -1);
         foreach ((_, ItemDraw item) in _sorted)
@@ -1430,6 +1444,8 @@ internal sealed class BucketSet
     private float Distance(in CullFrustum frustum, int index)
     {
         Float3 c = frustum.Relative(_world.WorldCenter[index]);
+        if (frustum.DepthPlane is { } plane)
+            return MathF.Max(0, plane.X * c.X + plane.Y * c.Y + plane.Z * c.Z + plane.W);
         return MathF.Max(0, MathF.Sqrt(c.X * c.X + c.Y * c.Y + c.Z * c.Z) - _world.WorldRadius[index]);
     }
 
