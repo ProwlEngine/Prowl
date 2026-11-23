@@ -69,6 +69,9 @@
 #ifdef GRAPHITE_VERTEX
     #define GRAPHITE_STANDARD_VARYING out
     #include "Graphite/Vertex.glsl"
+    #ifdef GRAPHITE_STANDARD_LIT
+        #include "Graphite/Ambient.glsl"
+    #endif
 #else
     #define GRAPHITE_STANDARD_VARYING in
     #include "Graphite/Core.glsl"
@@ -108,8 +111,10 @@ GRAPHITE_STANDARD_VARYING vec3 vBitangent;
 flat GRAPHITE_STANDARD_VARYING float vHasTangents;
 #endif
 
+// vAmbient is the light of an object without a lightmap along the vertex normal, see Graphite_ObjectAmbient
 #ifdef GRAPHITE_STANDARD_LIT
 GRAPHITE_STANDARD_VARYING vec2 vLightmapUV;
+GRAPHITE_STANDARD_VARYING vec3 vAmbient;
 #endif
 
 // A tangent frame for a world normal, from the mesh's tangent when it has a usable one, else from an arbitrary axis

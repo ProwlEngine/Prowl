@@ -633,11 +633,12 @@ Graphite_ProbeSet PBR_FindProbes(PBR_Closure c)
     return Graphite_FindProbes(c.position);
 }
 
-// The surroundings' light on the closure, diffuse from Graphite_IndirectDiffuse with screen occlusion applied
-PBR_Indirect PBR_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSet probes)
+// The surroundings' light on the closure, diffuse from Graphite_IndirectDiffuse with screen occlusion applied. With
+// objectAmbient the front's diffuse light without a lightmap is the one found per vertex.
+PBR_Indirect graphite_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSet probes, bool perVertex, vec3 objectAmbient)
 {
     PBR_Indirect i;
-    i.irradiance = Graphite_IndirectDiffuse(c.normal, lightmapUV) * c.occlusion;
+    i.irradiance = (perVertex ? Graphite_IndirectDiffuse(lightmapUV, objectAmbient) : Graphite_IndirectDiffuse(c.normal, lightmapUV)) * c.occlusion;
 #ifdef PBR_SHEET
     i.irradianceBack = Graphite_IndirectDiffuse(-c.normal, lightmapUV) * c.occlusion;
 #endif
@@ -655,6 +656,16 @@ PBR_Indirect PBR_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSe
 #endif
     }
     return i;
+}
+
+PBR_Indirect PBR_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSet probes)
+{
+    return graphite_GatherIndirect(c, lightmapUV, probes, false, vec3(0.0));
+}
+
+PBR_Indirect PBR_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSet probes, vec3 objectAmbient)
+{
+    return graphite_GatherIndirect(c, lightmapUV, probes, true, objectAmbient);
 }
 
 // The top specular lobe the G-buffer holds for screen space reflections, the one reflecting most: its normal, its

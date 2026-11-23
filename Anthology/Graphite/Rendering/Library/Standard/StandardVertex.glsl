@@ -56,6 +56,7 @@ void Graphite_StandardVertex()
 
 #ifdef GRAPHITE_STANDARD_LIT
     vLightmapUV = Graphite_LightmapUV();
+    vAmbient = Graphite_ObjectAmbient(Graphite_ObjectToWorldNormal(v.normal));
 #endif
 }
 

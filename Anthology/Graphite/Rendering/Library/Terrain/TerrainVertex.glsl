@@ -89,6 +89,7 @@ void Terrain_Vertex()
 
 #ifdef GRAPHITE_STANDARD_LIT
     vLightmapUV = vec2(0.0);
+    vAmbient = Graphite_ObjectAmbient(v.normal);
 #endif
 }
 
