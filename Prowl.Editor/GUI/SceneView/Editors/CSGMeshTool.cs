@@ -43,7 +43,7 @@ public sealed class CSGMeshTool : SceneTool
     private static readonly Color32 HoverEdgeColor = new(210, 235, 255, 255);
 
     /// <summary>Editing a brush's points: Edit is the tool and the selection is one brush.</summary>
-    public bool Active => CSGEditMode.Is(CSGMode.Edit) && CSGSelection.Brushes().Count == 1;
+    public bool Active => CSGEditMode.Is(CSGMode.Edit) && CSGSelection.SingleBrush().IsValid();
 
     /// <summary>Which elements clicks pick and commands act on.</summary>
     public SelectMode Mode { get; private set; } = SelectMode.Vertex;
@@ -430,9 +430,6 @@ public sealed class CSGMeshTool : SceneTool
     /// <summary>One face is selected, so the bracket keys taper it instead of changing the grid.</summary>
     public bool TapersFace => Active && _faces.Count == 1;
 
-    /// <summary>A face of the edited brush has been pulled out of its plane, so the shape only approximates the points.</summary>
-    public bool NonPlanar { get; private set; }
-
     // The selection by index: points, edges as point pairs with the lower first, and polygons. All three are kept in
     // step through Selecting, led by the mode's own set
     private readonly HashSet<int> _vertices = new();
@@ -576,6 +573,7 @@ public sealed class CSGMeshTool : SceneTool
             if (Target.IsNotValid()) return;
         }
         HoldSelection();
+        ForgetVisibility();
 
         HandleContext handles = ctx.Handles;
 
@@ -638,8 +636,7 @@ public sealed class CSGMeshTool : SceneTool
     /// </summary>
     private bool ResolveTarget()
     {
-        List<CSGBrush> selected = CSGSelection.Brushes();
-        CSGBrush? brush = selected.Count == 1 ? selected[0] : null;
+        CSGBrush? brush = CSGSelection.SingleBrush();
 
         if (!ReferenceEquals(brush, Target))
         {
@@ -664,8 +661,6 @@ public sealed class CSGMeshTool : SceneTool
         _vertices.RemoveWhere(i => i >= points);
         _selectedEdges.RemoveWhere(e => e.B >= points);
         _faces.RemoveAll(f => f >= _mesh.Polygons.Count);
-
-        NonPlanar = !_mesh.IsPlanar();
         return _mesh.Points.Count > 0;
     }
 
@@ -682,6 +677,7 @@ public sealed class CSGMeshTool : SceneTool
 
     private void HoldSelection()
     {
+        if (HeldMatchesSelection()) return;
         _held.Points = [.. _vertices];
         _held.Faces = [.. _faces];
         _held.Edges = new int[_selectedEdges.Count * 2];
@@ -691,6 +687,18 @@ public sealed class CSGMeshTool : SceneTool
             _held.Edges[i++] = a;
             _held.Edges[i++] = b;
         }
+    }
+
+    private bool HeldMatchesSelection()
+    {
+        if (_held.Points.Length != _vertices.Count || _held.Faces.Length != _faces.Count || _held.Edges.Length != _selectedEdges.Count * 2) return false;
+        foreach (int point in _held.Points)
+            if (!_vertices.Contains(point)) return false;
+        for (int i = 0; i < _faces.Count; i++)
+            if (_held.Faces[i] != _faces[i]) return false;
+        for (int i = 0; i + 1 < _held.Edges.Length; i += 2)
+            if (!_selectedEdges.Contains((_held.Edges[i], _held.Edges[i + 1]))) return false;
+        return true;
     }
 
     private void RestoreHeldSelection()
@@ -963,10 +971,10 @@ public sealed class CSGMeshTool : SceneTool
     /// A double click selects the loop through the edge under the cursor, Ctrl makes it the ring, Shift adds to the
     /// selection. The edges are taken into the current mode.
     /// </summary>
-    private bool SelectLoop(SceneToolContext ctx, bool[] seen)
+    private bool SelectLoop(SceneToolContext ctx)
     {
         HandleContext handles = ctx.Handles;
-        int index = NearestEdge(handles, seen);
+        int index = NearestEdge(handles, PickRadius * 1.5f);
         if (index < 0 || _target == null) return false;
 
         GeometryData mesh = _target.Target.Mesh;
@@ -997,17 +1005,19 @@ public sealed class CSGMeshTool : SceneTool
         return true;
     }
 
-    /// <summary>The seen edge nearest the cursor on screen, within picking reach, or -1.</summary>
-    private int NearestEdge(HandleContext handles, bool[] seen)
+    /// <summary>
+    /// The seen edge nearest the cursor on screen within <paramref name="reach"/> pixels, or -1. Only edges in reach are
+    /// tested for sight, at the point on them nearest the cursor.
+    /// </summary>
+    private int NearestEdge(HandleContext handles, float reach)
     {
         Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
         Float2 mouse = handles.MousePosition;
-        int best = -1;
-        float bestDistance = PickRadius * 1.5f;
+        _near.Clear();
         for (int i = 0; i < _edges.Count; i++)
         {
             (int a, int b) = _edges[i];
-            if (_hiddenEdges.Contains(EdgeKey(a, b)) || !EdgeSeen(handles, seen, i)) continue;
+            if (_hiddenEdges.Contains(EdgeKey(a, b))) continue;
             if (handles.WorldToScreen(Float4x4.TransformPoint(_mesh!.Points[a], toWorld)) is not { } from
                 || handles.WorldToScreen(Float4x4.TransformPoint(_mesh.Points[b], toWorld)) is not { } to) continue;
 
@@ -1015,11 +1025,15 @@ public sealed class CSGMeshTool : SceneTool
             float lengthSq = Float2.Dot(along, along);
             float t = lengthSq > 1e-6f ? Maths.Clamp(Float2.Dot(mouse - from, along) / lengthSq, 0f, 1f) : 0f;
             float distance = Float2.Distance(mouse, from + along * t);
-            if (distance >= bestDistance) continue;
-            bestDistance = distance;
-            best = i;
+            if (distance < reach) _near.Add((i, distance, t));
         }
-        return best;
+        _near.Sort((x, y) => x.Distance.CompareTo(y.Distance));
+        foreach ((int i, _, float t) in _near)
+        {
+            (int a, int b) = _edges[i];
+            if (Seen(handles, _mesh!.Points[a] + (_mesh.Points[b] - _mesh.Points[a]) * t)) return i;
+        }
+        return -1;
     }
 
     /// <summary>Changes the selection through the edit target's elements, then keeps the three sets in step with the mode.</summary>
@@ -1118,24 +1132,56 @@ public sealed class CSGMeshTool : SceneTool
         Float3 toPoint = point - origin;
         float length = Float3.Length(toPoint);
 
-        return XRay || length < 1e-6f
-            || !(mesh ?? _mesh)!.Raycast(origin, toPoint / length, out float t, out _, bothSides: true, HiddenSkip)
+        if (XRay || length < 1e-6f) return true;
+
+        CSGControlMesh against = (mesh ?? _mesh)!;
+        if (!ReferenceEquals(against, _fittedOf))
+        {
+            _fittedOf = against;
+            _fitted = against.FitPlanes();
+        }
+        return !against.Raycast(origin, toPoint / length, out float t, out _, bothSides: true, HiddenSkip, _fitted)
             || t >= length - MathF.Max(1e-3f, length * 1e-4f);
     }
 
-    private bool[] SeenPoints(HandleContext handles)
+    // Visibility found this frame, for the view being handled: the planes rays are cast against and each point's answer
+    private CSGControlMesh? _fittedOf;
+    private Plane?[]? _fitted;
+    private sbyte[] _pointSeen = [];
+
+    private void ForgetVisibility()
     {
-        var seen = new bool[_mesh!.Points.Count];
-        for (int i = 0; i < seen.Length; i++) seen[i] = Seen(handles, _mesh.Points[i]);
-        return seen;
+        _fittedOf = null;
+        _fitted = null;
+        Array.Clear(_pointSeen);
     }
 
-    /// <summary>An edge can be picked while either end or its middle is seen.</summary>
-    private bool EdgeSeen(HandleContext handles, bool[] seen, int edge)
+    private bool PointSeen(HandleContext handles, int point)
     {
-        (int a, int b) = _edges[edge];
-        return seen[a] || seen[b] || Seen(handles, (_mesh!.Points[a] + _mesh.Points[b]) * 0.5f);
+        if (_pointSeen.Length != _mesh!.Points.Count) _pointSeen = new sbyte[_mesh.Points.Count];
+        if (_pointSeen[point] == 0) _pointSeen[point] = Seen(handles, _mesh.Points[point]) ? (sbyte)1 : (sbyte)-1;
+        return _pointSeen[point] > 0;
     }
+
+    /// <summary>The seen point nearest the cursor on screen within <paramref name="reach"/> pixels, or -1. Only points in reach are tested for sight.</summary>
+    private int NearestPoint(HandleContext handles, float reach)
+    {
+        Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
+        Float2 mouse = handles.MousePosition;
+        _near.Clear();
+        for (int i = 0; i < _mesh!.Points.Count; i++)
+        {
+            if (_hiddenPoints.Contains(i) || handles.WorldToScreen(Float4x4.TransformPoint(_mesh.Points[i], toWorld)) is not { } at) continue;
+            float distance = Float2.Distance(mouse, at);
+            if (distance < reach) _near.Add((i, distance, 0f));
+        }
+        _near.Sort((x, y) => x.Distance.CompareTo(y.Distance));
+        foreach ((int i, _, _) in _near)
+            if (PointSeen(handles, i)) return i;
+        return -1;
+    }
+
+    private readonly List<(int Index, float Distance, float T)> _near = new();
 
     private void PickElements(SceneToolContext ctx)
     {
@@ -1143,7 +1189,6 @@ public sealed class CSGMeshTool : SceneTool
 
         HandleContext handles = ctx.Handles;
         Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
-        bool[] seen = SeenPoints(handles);
 
         bool doubleClick = false;
         if (handles.PrimaryDown && handles.ViewportHovered)
@@ -1158,7 +1203,7 @@ public sealed class CSGMeshTool : SceneTool
         bool Pressed(ControlID id)
         {
             if (!handles.IsNearest(id) || !handles.TryBeginDrag(id)) return false;
-            if (!doubleClick || !SelectLoop(ctx, seen)) return true;
+            if (!doubleClick || !SelectLoop(ctx)) return true;
             handles.TryEndDrag(id);
             return false;
         }
@@ -1168,51 +1213,55 @@ public sealed class CSGMeshTool : SceneTool
             if (Pressed(faceId))
             {
                 SelectFace(handles, face);
-
-                // Shift pulls the face out as its own brush.
-                if (handles.Shift) BeginAction(handles, Action.Extrude, face: face);
                 return;
             }
         }
 
-        if (Mode == SelectMode.Edge)
+        // Only the nearest seen element in reach is offered to the handles, so nothing else is tested for sight
+        if (Mode == SelectMode.Edge && NearestEdge(handles, PickRadius) is var edge and >= 0)
         {
-            for (int i = 0; i < _edges.Count; i++)
+            Float3 from = Float4x4.TransformPoint(_mesh!.Points[_edges[edge].a], toWorld);
+            Float3 to = Float4x4.TransformPoint(_mesh.Points[_edges[edge].b], toWorld);
+
+            ControlID id = handles.GetControlID(EdgeControl, edge);
+            handles.AddControl(id, from, to, PickRadius, 0f);
+
+            if (Pressed(id))
             {
-                if (_hiddenEdges.Contains(EdgeKey(_edges[i].a, _edges[i].b)) || !EdgeSeen(handles, seen, i)) continue;
-                Float3 from = Float4x4.TransformPoint(_mesh!.Points[_edges[i].a], toWorld);
-                Float3 to = Float4x4.TransformPoint(_mesh.Points[_edges[i].b], toWorld);
-
-                ControlID id = handles.GetControlID(EdgeControl, i);
-                handles.AddControl(id, from, to, PickRadius, 0f);
-
-                if (Pressed(id))
+                if (handles.Shift || handles.Ctrl)
                 {
-                    bool keep = !handles.Shift && !handles.Ctrl && _selectedEdges.Contains(EdgeKey(_edges[i].a, _edges[i].b));
-                    if (!keep) SelectEdge(handles, i);
-                    BeginAction(handles, handles.Shift ? Action.Chamfer : Action.Drag, edge: i);
-                    if (keep) _clicked = i;
+                    SelectEdge(handles, edge);
+                    handles.TryEndDrag(id);
                     return;
                 }
+
+                bool keep = _selectedEdges.Contains(EdgeKey(_edges[edge].a, _edges[edge].b));
+                if (!keep) SelectEdge(handles, edge);
+                BeginAction(handles, Action.Drag, edge: edge);
+                if (keep) _clicked = edge;
+                return;
             }
         }
 
-        if (Mode == SelectMode.Vertex)
+        if (Mode == SelectMode.Vertex && NearestPoint(handles, PickRadius) is var point and >= 0)
         {
-            for (int i = 0; i < _mesh!.Points.Count; i++)
-            {
-                if (!seen[i] || _hiddenPoints.Contains(i)) continue;
-                ControlID id = handles.GetControlID(VertexControl, i);
-                handles.AddControl(id, Float4x4.TransformPoint(_mesh.Points[i], toWorld), PickRadius);
+            ControlID id = handles.GetControlID(VertexControl, point);
+            handles.AddControl(id, Float4x4.TransformPoint(_mesh!.Points[point], toWorld), PickRadius);
 
-                if (Pressed(id))
+            if (Pressed(id))
+            {
+                if (handles.Shift || handles.Ctrl)
                 {
-                    bool keep = !handles.Shift && !handles.Ctrl && _vertices.Contains(i);
-                    if (!keep) SelectVertex(handles, i);
-                    BeginAction(handles, handles.Shift ? Action.Chamfer : Action.Drag, point: i);
-                    if (keep) _clicked = i;
+                    SelectVertex(handles, point);
+                    handles.TryEndDrag(id);
                     return;
                 }
+
+                bool keep = _vertices.Contains(point);
+                if (!keep) SelectVertex(handles, point);
+                BeginAction(handles, Action.Drag, point: point);
+                if (keep) _clicked = point;
+                return;
             }
         }
 
@@ -1361,8 +1410,8 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (!handles.Shift && !handles.Ctrl) _pickOrder.Clear();
         _pickOrder.Remove(index);
-        if (!handles.Ctrl) _pickOrder.Add(index);
         Pick(handles, _vertices, index);
+        if (_vertices.Contains(index)) _pickOrder.Add(index);
         _active = (SelectMode.Vertex, index, index);
     }
 
@@ -1595,11 +1644,11 @@ public sealed class CSGMeshTool : SceneTool
         _transformView = null;
     }
 
-    /// <summary>Shift adds, Ctrl removes, a plain click replaces.</summary>
+    /// <summary>Shift toggles, Ctrl removes, a plain click replaces.</summary>
     private void Pick<T>(HandleContext handles, ICollection<T> set, T item)
     {
         if (!handles.Shift && !handles.Ctrl) ClearSelection();
-        if (handles.Ctrl) set.Remove(item);
+        if (handles.Ctrl || handles.Shift && set.Contains(item)) set.Remove(item);
         else if (!set.Contains(item)) set.Add(item);
         Normalize();
     }
@@ -2132,18 +2181,8 @@ public sealed class CSGMeshTool : SceneTool
         GeometryData mesh = _target!.Target.Mesh;
         Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix, toLocal = Target.Transform.WorldToLocalMatrix;
         Float2 mouse = handles.MousePosition;
-        bool[] seen = SeenPoints(handles);
 
-        int nearest = -1;
-        float bestDistance = PickRadius;
-        for (int i = 0; i < _mesh!.Points.Count; i++)
-        {
-            if (!seen[i] || _hiddenPoints.Contains(i) || handles.WorldToScreen(Float4x4.TransformPoint(_mesh.Points[i], toWorld)) is not { } at) continue;
-            float distance = Float2.Distance(mouse, at);
-            if (distance >= bestDistance) continue;
-            bestDistance = distance;
-            nearest = i;
-        }
+        int nearest = NearestPoint(handles, PickRadius);
         if (nearest >= 0 && nearest < mesh.Vertices.Count)
         {
             point.Vertex = mesh.Vertices[nearest];
@@ -2152,7 +2191,7 @@ public sealed class CSGMeshTool : SceneTool
         }
 
         Ray sight = handles.MouseRay;
-        int edgeIndex = NearestEdge(handles, seen);
+        int edgeIndex = NearestEdge(handles, PickRadius * 1.5f);
         if (edgeIndex >= 0)
         {
             (int a, int b) = _edges[edgeIndex];
@@ -2367,11 +2406,10 @@ public sealed class CSGMeshTool : SceneTool
         Float2 max = Maths.Max(_dragOrigin, handles.MousePosition);
         Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
 
-        bool Inside(Float3 point)
-        {
-            if (handles.WorldToScreen(Float4x4.TransformPoint(point, toWorld)) is not { } p) return false;
-            return p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y && Seen(handles, point);
-        }
+        bool InRect(Float3 point)
+            => handles.WorldToScreen(Float4x4.TransformPoint(point, toWorld)) is { } p && p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y;
+
+        bool PointInside(int point) => InRect(_mesh!.Points[point]) && PointSeen(handles, point);
 
         void Mark<T>(ICollection<T> set, T item)
         {
@@ -2383,15 +2421,19 @@ public sealed class CSGMeshTool : SceneTool
         {
             case SelectMode.Vertex:
                 for (int i = 0; i < _mesh!.Points.Count; i++)
-                    if (!_hiddenPoints.Contains(i) && Inside(_mesh.Points[i])) Mark(_vertices, i);
+                    if (!_hiddenPoints.Contains(i) && PointInside(i)) Mark(_vertices, i);
                 break;
             case SelectMode.Edge:
                 foreach ((int a, int b) in _edges)
-                    if (!_hiddenEdges.Contains(EdgeKey(a, b)) && Inside(_mesh!.Points[a]) && Inside(_mesh.Points[b])) Mark(_selectedEdges, EdgeKey(a, b));
+                    if (!_hiddenEdges.Contains(EdgeKey(a, b)) && PointInside(a) && PointInside(b)) Mark(_selectedEdges, EdgeKey(a, b));
                 break;
             case SelectMode.Face:
                 for (int polygon = 0; polygon < _mesh!.Polygons.Count; polygon++)
-                    if (!_hiddenFaces.Contains(polygon) && _mesh.PolygonPoints(polygon).Count > 0 && Inside(FaceCentre(polygon))) Mark(_faces, polygon);
+                {
+                    if (_hiddenFaces.Contains(polygon) || _mesh.PolygonPoints(polygon).Count == 0) continue;
+                    Float3 centre = FaceCentre(polygon);
+                    if (InRect(centre) && Seen(handles, centre)) Mark(_faces, polygon);
+                }
                 break;
         }
         Normalize();
@@ -2459,7 +2501,7 @@ public sealed class CSGMeshTool : SceneTool
             _dragRaw = _dragApplied = Float3.Zero;
             _gizmoStart = before;
 
-            // Shift on a whole face pulls it out as a brush of its own, as Shift dragging the face does
+            // Shift on a whole face pulls it out as a brush of its own
             _gizmoExtrude = handles.Shift && _faces.Count == 1 && _vertices.Count == _mesh!.PolygonPoints(_faces[0]).Count;
             if (_gizmoExtrude) PrepareExtrude(_faces[0]);
         }
@@ -2624,41 +2666,38 @@ public sealed class CSGMeshTool : SceneTool
         if (model.IsValid()) model!.SetDirty();
     }
 
+    /// <summary>Draws the brush's elements into the scene's gizmos, hidden behind surfaces by depth unless X-ray is on.</summary>
     private void DrawElements(SceneToolContext ctx)
     {
+        Prowl.Graphite.Rendering.GizmoBatch batch = XRay ? Runtime.Resources.Scene.Active.Gizmos.Batch : Runtime.Resources.Scene.Active.Gizmos.SurfaceBatch;
         Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
 
         foreach (int polygon in _faces)
         {
             IReadOnlyList<int> ring = _mesh!.PolygonPoints(polygon);
             if (ring.Count < 3) continue;
-
-            var corners = new Float3[ring.Count];
-            for (int i = 0; i < ring.Count; i++)
-                corners[i] = Float4x4.TransformPoint(_mesh.Points[ring[i]], toWorld);
-
-            CSGGizmos.Polygon(corners, FaceFill);
+            Float3 first = Float4x4.TransformPoint(_mesh.Points[ring[0]], toWorld);
+            for (int i = 1; i + 1 < ring.Count; i++)
+                batch.Triangle(first, Float4x4.TransformPoint(_mesh.Points[ring[i]], toWorld), Float4x4.TransformPoint(_mesh.Points[ring[i + 1]], toWorld), FaceFill);
         }
 
-        bool[] seen = SeenPoints(ctx.Handles);
         for (int i = 0; i < _edges.Count; i++)
         {
             (int a, int b) = _edges[i];
             if (_hiddenEdges.Contains(EdgeKey(a, b))) continue;
             bool picked = _selectedEdges.Contains(EdgeKey(a, b));
             bool hovered = Mode == SelectMode.Edge && ctx.Handles.IsNearest(ctx.Handles.GetControlID(EdgeControl, i));
-            Float3 from = Float4x4.TransformPoint(_mesh!.Points[a], toWorld);
-            Float3 to = Float4x4.TransformPoint(_mesh.Points[b], toWorld);
-            CSGGizmos.Line(from, to, picked ? PickedColor : hovered ? HoverEdgeColor : IdleColor, picked || hovered ? 2.5f : 1f);
+            batch.Line(Float4x4.TransformPoint(_mesh!.Points[a], toWorld), Float4x4.TransformPoint(_mesh.Points[b], toWorld),
+                picked ? PickedColor : hovered ? HoverEdgeColor : IdleColor, picked || hovered ? 2.5f : 1f);
         }
 
         if (Mode == SelectMode.Vertex)
         {
             for (int i = 0; i < _mesh!.Points.Count; i++)
             {
+                if (_hiddenPoints.Contains(i)) continue;
                 bool picked = _vertices.Contains(i);
-                if (_hiddenPoints.Contains(i) || !seen[i] && !picked) continue;
-                ctx.Draw.Dot(Float4x4.TransformPoint(_mesh.Points[i], toWorld), picked ? PickedColor : IdleColor, picked ? 8f : 6f);
+                batch.Point(Float4x4.TransformPoint(_mesh.Points[i], toWorld), picked ? PickedColor : IdleColor, picked ? 8f : 6f);
             }
         }
         else if (Mode == SelectMode.Face)
@@ -2666,10 +2705,8 @@ public sealed class CSGMeshTool : SceneTool
             for (int polygon = 0; polygon < _mesh!.Polygons.Count; polygon++)
             {
                 if (_hiddenFaces.Contains(polygon) || _mesh.PolygonPoints(polygon).Count < 3) continue;
-                Float3 centre = FaceCentre(polygon);
                 bool picked = _faces.Contains(polygon);
-                if (!picked && !Seen(ctx.Handles, centre)) continue;
-                ctx.Draw.Dot(Float4x4.TransformPoint(centre, toWorld), picked ? PickedColor : IdleColor, picked ? 7f : 5f);
+                batch.Point(Float4x4.TransformPoint(FaceCentre(polygon), toWorld), picked ? PickedColor : IdleColor, picked ? 7f : 5f);
             }
         }
     }

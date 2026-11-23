@@ -107,6 +107,19 @@ public static class CSGSelection
 
     public static List<CSGBrush> Brushes() => Components<CSGBrush>();
 
+    private static CSGBrush? _single;
+
+    static CSGSelection() => Selection.OnSelectionChanged += () => _single = null;
+
+    /// <summary>The brush when exactly one is selected, else null. Kept until the selection changes or the brush goes.</summary>
+    public static CSGBrush? SingleBrush()
+    {
+        if (_single.IsValid()) return _single;
+        List<CSGBrush> brushes = Brushes();
+        _single = brushes.Count == 1 ? brushes[0] : null;
+        return _single;
+    }
+
     /// <summary>The selected brushes and groups, without any that sit inside another selected one.</summary>
     public static List<GameObject> Roots()
         => GameObjectClipboard.FilterToRoots(Selection.GetSelected<GameObject>()

@@ -86,6 +86,25 @@ public class CSGBrushGeometryTests
         Assert.True(box.PolygonNormal(polygon).Y > 0.99f);
     }
 
+    /// <summary>Planes fitted once give the same hits as fitting every polygon on each ray.</summary>
+    [Fact]
+    public void ControlMeshRaycastWithFittedPlanesMatchesFittingEachRay()
+    {
+        CSGControlMesh box = CSGControlMesh.FromPlanes(Box(new Float3(2f, 3f, 4f), new Float3(1f, 0f, -2f)))!;
+        Plane?[] fitted = box.FitPlanes();
+        Float3[] origins = [new(0f, 0f, -10f), new(1f, 0f, -2f), new(5f, 1f, -2f), new(1f, 8f, -2f)];
+        Float3[] directions = [Float3.UnitZ, -Float3.UnitY, -Float3.UnitX, Float3.Normalize(new Float3(0.1f, -1f, 0.2f))];
+
+        foreach (Float3 origin in origins)
+            foreach (Float3 direction in directions)
+            {
+                bool hit = box.Raycast(origin, direction, out float t, out int polygon, bothSides: true);
+                Assert.Equal(hit, box.Raycast(origin, direction, out float fittedT, out int fittedPolygon, bothSides: true, fitted: fitted));
+                Assert.Equal(polygon, fittedPolygon);
+                if (hit) Assert.Equal(t, fittedT, 4);
+            }
+    }
+
     [Fact]
     public void RaycastHitsAnOffCenterBox()
     {
