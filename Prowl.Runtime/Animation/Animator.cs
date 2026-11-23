@@ -65,11 +65,41 @@ public class Animator : Component
     [NonSerialized] private Avatar? _boundAvatarAsset;
     [NonSerialized] private int _boundAvatarContent;
 
+    // Property track bindings and playback cursor for clips that carry CurveTracks, ObjectTracks, StringTracks, or PropertyEvents.
+    private sealed class CachedPropertyBinding
+    {
+        public required SceneClipBinding Binding;
+        public required int Version;
+    }
+
+    [NonSerialized] private readonly Dictionary<AnimationClip, CachedPropertyBinding> _propertyBindings = new(ReferenceEqualityComparer.Instance);
+    [NonSerialized] private readonly Dictionary<int, int> _graphNodeLastLoopCount = [];
+    [NonSerialized] private float _propertyElapsedTime;
+    [NonSerialized] private float _propertyClipTime;
+    [NonSerialized] private bool _propertyPlaying;
+    [NonSerialized] private bool _propertyPaused;
+    [NonSerialized] private MotionSkeleton? _fallbackSkeleton;
+
     /// <summary>How long a graph has to stop changing before a running animator picks the edit up.</summary>
     private const long SettleMilliseconds = 150;
 
     /// <summary>The clip playing now, or the one being faded to.</summary>
     public AnimationClip? CurrentClip { get; private set; }
+
+    /// <summary>Current evaluated time within <see cref="CurrentClip"/> in seconds (for direct clip playback).</summary>
+    public float Time
+    {
+        get => _propertyClipTime;
+        set
+        {
+            AssertOwner();
+            _propertyElapsedTime = value;
+            _propertyClipTime = CurrentClip.IsValid() ? CurrentClip!.WrapTime(value) : MathF.Max(0f, value);
+        }
+    }
+
+    /// <summary>Whether direct clip playback is currently paused.</summary>
+    public bool IsPaused => _propertyPaused;
 
     public bool IsBound => _animator != null;
 
@@ -109,11 +139,16 @@ public class Animator : Component
     public void Rebind()
     {
         AssertOwner();
+        foreach (CachedPropertyBinding cached in _propertyBindings.Values)
+            cached.Binding.ResetActiveEvents(fireExitCallbacks: false);
         _animator = null;
         _clips = null;
         _graph = null;
         _boundAvatar = null;
         _boundAvatarAsset = null;
+        _fallbackSkeleton = null;
+        _propertyBindings.Clear();
+        _graphNodeLastLoopCount.Clear();
         _ragdoll?.Release();
         _ragdoll = null;
     }
@@ -305,9 +340,21 @@ public class Animator : Component
         if (_graph != null)
             Debug.LogWarningOnce($"Animator.PlayWithGraph.{GameObject.Name}",
                 $"[Animator] '{GameObject.Name}' runs a graph, so Play only takes effect if the graph is removed.");
+        if (CurrentClip.IsValid() && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
+        {
+            prevBinding.Binding.ResetActiveEvents(fireExitCallbacks: true);
+            if (!ReferenceEquals(CurrentClip, clip) && CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
+                prevBinding.Binding.RestoreBaseline();
+        }
+        if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? nextBinding))
+            nextBinding.Binding.CaptureBaseline();
         CurrentClip = clip;
         _pending = clip;
         _autoPlayPending = false;
+        _propertyElapsedTime = Speed >= 0f ? 0f : clip.Duration;
+        _propertyClipTime = _propertyElapsedTime;
+        _propertyPlaying = true;
+        _propertyPaused = false;
         if (_clips != null && Resolve(clip) is { } runtime)
         {
             _clips.Play(runtime, clip.Loop);
@@ -322,6 +369,93 @@ public class Animator : Component
         Debug.LogWarning($"[Animator] '{GameObject.Name}' has no clip named '{clipName}'.");
     }
 
+    /// <summary>Stops direct clip playback and resets the playhead to zero.</summary>
+    public void Stop()
+    {
+        AssertOwner();
+        if (CurrentClip.IsValid() && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
+        {
+            prevBinding.Binding.ResetActiveEvents(fireExitCallbacks: true);
+            if (CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
+                prevBinding.Binding.RestoreBaseline();
+        }
+        _propertyPlaying = false;
+        _propertyPaused = false;
+        _autoPlayPending = false;
+        _pending = null;
+        _propertyElapsedTime = 0f;
+        _propertyClipTime = 0f;
+    }
+
+    /// <summary>Pauses direct clip playback.</summary>
+    public void Pause()
+    {
+        AssertOwner();
+        _propertyPaused = true;
+    }
+
+    /// <summary>Resumes paused direct clip playback.</summary>
+    public void Resume()
+    {
+        AssertOwner();
+        _propertyPaused = false;
+    }
+
+    /// <summary>Adds a clip to <see cref="Clips"/> if it is not already present.</summary>
+    public void AddClip(AnimationClip clip)
+    {
+        AssertOwner();
+        ArgumentNullException.ThrowIfNull(clip);
+        if (!Clips.Contains(clip))
+            Clips.Add(clip);
+    }
+
+    /// <summary>Samples a specific <see cref="AnimationClip"/> at <paramref name="timeSeconds"/> (both skeletal pose and property tracks) onto the hierarchy immediately.</summary>
+    public void Sample(AnimationClip clip, float timeSeconds)
+    {
+        AssertOwner();
+        ArgumentNullException.ThrowIfNull(clip);
+        if (GameObject.IsNotValid()) return;
+
+        if (clip.State is not (AssetState.Missing or AssetState.Failed))
+            clip.Load();
+
+        CurrentClip = clip;
+        _propertyElapsedTime = timeSeconds;
+        _propertyClipTime = clip.WrapTime(timeSeconds);
+
+        // 1. Sample skeletal/humanoid pose if available
+        Avatar? avatar = Avatar.IsValid() ? Avatar : clip.Avatar;
+        if (avatar.IsValid())
+        {
+            if (avatar!.State is not (AssetState.Missing or AssetState.Failed))
+                avatar.Load();
+            if (avatar.IsLoaded && avatar.Skeleton != null)
+            {
+                MotionClip? runtime = clip.GetClip(avatar.Runtime);
+                if (runtime != null)
+                {
+                    var binding = new AnimatorBinding(Transform, avatar.Skeleton);
+                    var pose = new Pose(avatar.Skeleton);
+                    pose.SetToReferencePose(false);
+                    float norm = clip.Duration > 1e-6f ? Math.Clamp(_propertyClipTime / clip.Duration, 0f, 1f) : 0f;
+                    runtime.GetPose(norm, pose);
+                    for (int b = 0; b < pose.BoneCount; b++)
+                        binding.ApplyBone(b, pose.GetTransform(b));
+                    for (int c = 0; c < pose.FloatChannelCount; c++)
+                        binding.ApplyChannel(c, pose.GetFloat(c));
+                }
+            }
+        }
+
+        // 2. Sample property tracks layered on top
+        if (clip.HasPropertyTracks)
+        {
+            SceneClipBinding propBinding = GetOrCreatePropertyBinding(clip);
+            propBinding.Sample(_propertyClipTime);
+        }
+    }
+
     /// <summary>Blends to a clip over <paramref name="seconds"/>, from whatever is playing now.</summary>
     public void CrossFade(AnimationClip clip, float seconds)
     {
@@ -329,12 +463,25 @@ public class Animator : Component
         ArgumentNullException.ThrowIfNull(clip);
         if (_clips == null || Resolve(clip) is not { } runtime) { Play(clip); return; }
 
+        if (CurrentClip.IsValid() && !ReferenceEquals(CurrentClip, clip) && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
+        {
+            prevBinding.Binding.ResetActiveEvents(fireExitCallbacks: true);
+            if (CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
+                prevBinding.Binding.RestoreBaseline();
+        }
+        if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? nextBinding))
+            nextBinding.Binding.CaptureBaseline();
+
         CurrentClip = clip;
         _autoPlayPending = false;
+        _propertyElapsedTime = Speed >= 0f ? 0f : clip.Duration;
+        _propertyClipTime = _propertyElapsedTime;
+        _propertyPlaying = true;
+        _propertyPaused = false;
         _clips.CrossFade(runtime, seconds, clip.Loop);
     }
 
-    /// <summary>Advances the animation and pushes the pose onto the hierarchy.</summary>
+    /// <summary>Advances the animation and pushes the pose and property tracks onto the hierarchy.</summary>
     internal void Tick(float deltaTime)
     {
         if (_animator != null && (GraphOutOfDate(out AnimationGraph? edited) || AvatarChanged()))
@@ -349,32 +496,66 @@ public class Animator : Component
 
         if (!EnsureBound()) return;
 
-        _animator!.Speed = Speed;
+        float effectiveSpeed = _propertyPaused ? 0f : Speed;
+        _animator!.Speed = effectiveSpeed;
         _animator.ApplyRootMotionToEngine = ApplyRootMotion;
 
         if (_clips != null) StartPending();
         _animator.Update(deltaTime);
+
+        if (_graph != null)
+            EvaluateGraphPropertyTracks();
+        else
+            EvaluateClipPropertyTracks(deltaTime);
     }
 
-    // Binding loads the rig, the graph and everything the graph reads, so an animator starts on its first update.
-    // Whatever still fails to load is missing, and the graph plays without it.
+    // Binding loads the rig (or synthesizes a minimal one for rigless property animations), the graph and everything the graph reads,
+    // so an animator starts on its first update. Whatever still fails to load is missing, and the graph plays without it.
     private bool EnsureBound()
     {
         if (_animator != null) return true;
 
         Avatar? avatar = Avatar;
-        if (avatar.IsNotValid()) return false;
-        if (avatar.State is not (AssetState.Missing or AssetState.Failed)) avatar.Load();
-        if (!avatar.IsLoaded)
+        if (avatar.IsNotValid())
         {
-            Debug.LogWarningOnce($"Animator.Avatar.{GameObject.InstanceID}.{avatar.AssetID}",
-                $"[Animator] '{GameObject.Name}' could not load its avatar, so it does not animate.");
-            return false;
+            // Check if any assigned clip carries its own Avatar
+            for (int i = 0; i < Clips.Count; i++)
+            {
+                if (Clips[i].IsValid() && Clips[i].Avatar.IsValid())
+                {
+                    avatar = Clips[i].Avatar;
+                    break;
+                }
+            }
+            if (avatar.IsNotValid() && CurrentClip.IsValid() && CurrentClip!.Avatar.IsValid())
+                avatar = CurrentClip.Avatar;
         }
-        if (avatar.Skeleton == null) return false;
 
-        MotionAvatar? runtime = avatar.Runtime;
-        if (runtime == null) return false;
+        MotionSkeleton? skeleton = null;
+        MotionAvatar? runtime = null;
+
+        if (avatar.IsValid())
+        {
+            if (avatar!.State is not (AssetState.Missing or AssetState.Failed)) avatar.Load();
+            if (!avatar.IsLoaded)
+            {
+                Debug.LogWarningOnce($"Animator.Avatar.{GameObject.InstanceID}.{avatar.AssetID}",
+                    $"[Animator] '{GameObject.Name}' could not load its avatar, so it does not animate.");
+                return false;
+            }
+            skeleton = avatar.Skeleton;
+            runtime = avatar.Runtime;
+        }
+
+        // If no Avatar is assigned, create a minimal root-only skeleton so Animator and AnimationGraph can drive property clips on rigless objects!
+        if (skeleton == null)
+        {
+            _fallbackSkeleton ??= new MotionSkeleton(
+                [new StringID(GameObject.Name)],
+                [MotionSkeleton.InvalidIndex],
+                [new Transform3D(Transform.LocalPosition, Transform.LocalRotation, Transform.LocalScale)]);
+            skeleton = _fallbackSkeleton;
+        }
 
         AnimationGraph? graphAsset = Graph;
         if (graphAsset.IsValid())
@@ -388,21 +569,22 @@ public class Animator : Component
             }
         }
 
-        var binding = new AnimatorBinding(Transform, avatar.Skeleton);
-        if (binding.UnboundBones > 0)
+        var binding = new AnimatorBinding(Transform, skeleton);
+        if (avatar.IsValid() && binding.UnboundBones > 0)
             Debug.LogWarningOnce($"Animator.Unbound.{GameObject.Name}",
                 $"[Animator] '{GameObject.Name}' could not find {binding.UnboundBones} of the rig's bones in its hierarchy. Those bones will not animate.");
 
         _boundAvatar = runtime;
-        _boundAvatarAsset = avatar;
-        _boundAvatarContent = avatar.ContentVersion;
-        _ragdoll = new AnimatorRagdoll(this, binding, avatar.Skeleton, runtime.Humanoid);
+        _boundAvatarAsset = Avatar;
+        _boundAvatarContent = Avatar.IsValid() ? Avatar!.ContentVersion : 0;
+        if (avatar.IsValid() && runtime != null)
+            _ragdoll = new AnimatorRagdoll(this, binding, skeleton, runtime.Humanoid);
 
         // The graph as assigned, even one that failed to load, so the next frames do not keep retrying it.
         _boundGraph = Graph;
         _boundVersion = Graph is { } bound ? bound.DeepVersion : 0;
 
-        if (graphAsset.IsValid() && TryBindGraph(graphAsset!, binding, avatar.Skeleton, runtime))
+        if (graphAsset.IsValid() && TryBindGraph(graphAsset!, binding, skeleton, runtime))
         {
             ReplayPending();
             KeepExternalPoses();
@@ -411,14 +593,14 @@ public class Animator : Component
         }
 
         // Clips play when there is no graph or it failed. An edit that fixes the graph takes over again.
-        _clips = new ProwlClipAnimator(this, binding, avatar.Skeleton, runtime);
+        _clips = new ProwlClipAnimator(this, binding, skeleton, runtime);
         _animator = _clips;
         if (graphAsset.IsNotValid()) _pendingParameters.Clear();
         return true;
     }
 
     /// <summary>Compiles and binds the graph. A failure is logged once per graph version.</summary>
-    private bool TryBindGraph(AnimationGraph asset, AnimatorBinding binding, MotionSkeleton skeleton, MotionAvatar runtime)
+    private bool TryBindGraph(AnimationGraph asset, AnimatorBinding binding, MotionSkeleton skeleton, MotionAvatar? runtime)
     {
         if (ReferenceEquals(asset, _failedGraph) && _boundVersion == _failedVersion) return false;
 
@@ -464,13 +646,183 @@ public class Animator : Component
             _pending = null;
             return;
         }
-        if (Resolve(_pending) is not { } runtime) return;
+        if (Resolve(_pending!) is not { } runtime) return;
 
-        _clips!.Play(runtime, _pending.Loop);
+        _clips!.Play(runtime, _pending!.Loop);
         _pending = null;
     }
 
-    private MotionClip? Resolve(AnimationClip clip) => clip.GetClip(_boundAvatar);
+    private MotionClip? Resolve(AnimationClip clip) => clip.GetClip(_boundAvatar, _animator?.Skeleton ?? _fallbackSkeleton);
+
+    private SceneClipBinding GetOrCreatePropertyBinding(AnimationClip clip)
+    {
+        if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? cached) && cached.Version == clip.Version)
+            return cached.Binding;
+
+        var binding = new SceneClipBinding(GameObject, clip);
+        _propertyBindings[clip] = new CachedPropertyBinding { Binding = binding, Version = clip.Version };
+        return binding;
+    }
+
+    private void EvaluateClipPropertyTracks(float deltaTime)
+    {
+        AnimationClip? clip = CurrentClip;
+        if (clip.IsNotValid() || !_propertyPlaying || _propertyPaused) return;
+        if (clip!.State is not (AssetState.Missing or AssetState.Failed))
+            clip.Load();
+        if (!clip.IsLoaded || !clip.HasPropertyTracks) return;
+
+        SceneClipBinding propBinding = GetOrCreatePropertyBinding(clip);
+        float duration = clip.Duration;
+        if (duration <= 1e-6f)
+        {
+            _propertyClipTime = 0f;
+            propBinding.Sample(0f);
+            return;
+        }
+
+        float dt = deltaTime * Speed;
+        float prevClipTime = _propertyClipTime;
+        float prevElapsed = _propertyElapsedTime;
+        _propertyElapsedTime += dt;
+
+        bool forward = dt >= 0f;
+        bool looped = false;
+        bool finishedOnce = false;
+
+        SceneClipWrapMode wrap = clip.WrapMode;
+        if (!clip.Loop && wrap == SceneClipWrapMode.Loop)
+            wrap = SceneClipWrapMode.Once;
+
+        switch (wrap)
+        {
+            case SceneClipWrapMode.Once:
+                if (forward && _propertyElapsedTime >= duration)
+                {
+                    _propertyElapsedTime = duration;
+                    _propertyClipTime = duration;
+                    finishedOnce = true;
+                }
+                else if (!forward && _propertyElapsedTime <= 0f)
+                {
+                    _propertyElapsedTime = 0f;
+                    _propertyClipTime = 0f;
+                    finishedOnce = true;
+                }
+                else
+                {
+                    _propertyClipTime = Math.Clamp(_propertyElapsedTime, 0f, duration);
+                }
+                break;
+
+            case SceneClipWrapMode.ClampForever:
+                _propertyClipTime = Math.Clamp(_propertyElapsedTime, 0f, duration);
+                break;
+
+            case SceneClipWrapMode.Loop:
+            {
+                int prevCycle = (int)MathF.Floor(prevElapsed / duration);
+                int newCycle = (int)MathF.Floor(_propertyElapsedTime / duration);
+                looped = prevCycle != newCycle;
+                float wrapped = _propertyElapsedTime % duration;
+                if (wrapped < 0f) wrapped += duration;
+                _propertyClipTime = wrapped;
+                break;
+            }
+
+            case SceneClipWrapMode.PingPong:
+            {
+                _propertyClipTime = clip.WrapTime(_propertyElapsedTime);
+                forward = _propertyClipTime >= prevClipTime;
+                break;
+            }
+        }
+
+        propBinding.Sample(_propertyClipTime);
+
+        if (prevElapsed == 0f && MathF.Abs(dt) > 1e-7f && forward)
+            propBinding.FireEvents(-1e-5f, _propertyClipTime, forward: true, looped: false);
+        else if (MathF.Abs(prevElapsed - duration) <= 1e-6f && MathF.Abs(dt) > 1e-7f && !forward)
+            propBinding.FireEvents(duration + 1e-5f, _propertyClipTime, forward: false, looped: false);
+        else if (MathF.Abs(dt) > 1e-7f)
+            propBinding.FireEvents(prevClipTime, _propertyClipTime, forward, looped);
+
+        if (finishedOnce)
+        {
+            propBinding.ResetActiveEvents(fireExitCallbacks: true);
+            if (clip.CompletionMode == SceneClipCompletionMode.RestoreState)
+                propBinding.RestoreBaseline();
+            _propertyPlaying = false;
+        }
+    }
+
+    private void EvaluateGraphPropertyTracks()
+    {
+        AnimationGraph? asset = Graph;
+        AnimationGraphInstance? instance = _graph?.Graph;
+        if (asset.IsNotValid() || instance == null) return;
+        if (!asset!.TryGetCompiledClips(instance.Graph, out IReadOnlyList<(int NodeIndex, AnimationClip Clip)> clips) || clips.Count == 0)
+            return;
+
+        for (int i = 0; i < clips.Count; i++)
+        {
+            (int nodeIndex, AnimationClip clip) = clips[i];
+            if (clip.IsNotValid() || !clip.HasPropertyTracks) continue;
+            if (instance.TryGetNodeInstance(nodeIndex) is not PoseNodeInstance poseNode || !poseNode.IsInitialized)
+            {
+                if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? inactive) && inactive.Binding.HasActiveRangedEvents)
+                    inactive.Binding.ResetActiveEvents(fireExitCallbacks: true);
+                continue;
+            }
+
+            float weight = ComputeGraphNodeWeight(instance, nodeIndex);
+            if (weight <= 1e-5f)
+            {
+                if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? zeroWeight) && zeroWeight.Binding.HasActiveRangedEvents)
+                    zeroWeight.Binding.ResetActiveEvents(fireExitCallbacks: true);
+                continue;
+            }
+
+            float duration = clip.Duration;
+            float currTime = poseNode.NormalizedTime * duration;
+            float prevTime = poseNode.PreviousTime * duration;
+            bool forward = !poseNode.PlayingBackward;
+
+            int prevLoops = _graphNodeLastLoopCount.TryGetValue(nodeIndex, out int lastLoops) ? lastLoops : 0;
+            bool looped = poseNode.LoopCount != prevLoops || (forward ? currTime < prevTime - 1e-5f : currTime > prevTime + 1e-5f);
+            _graphNodeLastLoopCount[nodeIndex] = poseNode.LoopCount;
+
+            SceneClipBinding propBinding = GetOrCreatePropertyBinding(clip);
+            propBinding.SampleWeighted(currTime, weight);
+
+            if (weight >= 0.5f)
+            {
+                if (MathF.Abs(currTime - prevTime) > 1e-6f)
+                    propBinding.FireEvents(prevTime, currTime, forward, looped);
+            }
+            else if (propBinding.HasActiveRangedEvents)
+            {
+                propBinding.ResetActiveEvents(fireExitCallbacks: true);
+            }
+        }
+    }
+
+    private static float ComputeGraphNodeWeight(AnimationGraphInstance instance, int targetNodeIndex)
+    {
+        // Check if any active IBlendWeights parent node weights this node
+        Motion.AnimationGraph graph = instance.Graph;
+        for (int i = 0; i < graph.NodeCount; i++)
+        {
+            if (i == targetNodeIndex) continue;
+            GraphNodeInstance? candidate = instance.TryGetNodeInstance(i);
+            if (candidate is IBlendWeights blend && candidate.IsInitialized)
+            {
+                float w = blend.WeightOf(targetNodeIndex);
+                if (w > 0f) return w;
+            }
+        }
+        return 1f;
+    }
 
     // An edit is picked up once it stops changing, since rebinding restarts every state machine.
     private bool GraphOutOfDate(out AnimationGraph? asset)

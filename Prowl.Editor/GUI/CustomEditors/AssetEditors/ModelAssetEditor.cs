@@ -288,6 +288,12 @@ public class ModelAssetEditor : ImportSettingsEditor
             return;
         }
 
+        if (rigType == ModelRigType.Property)
+        {
+            EditorGUI.Note(paper, $"{id}_rigProp", "This model builds no skeleton rig. Node animations import directly as editable property curve tracks.");
+            return;
+        }
+
         Avatar? avatar = FindAvatar(entry);
         if (avatar.IsNotValid())
         {
@@ -446,6 +452,26 @@ public class ModelAssetEditor : ImportSettingsEditor
 
         EditorGUI.Note(paper, $"{id}_clipTrimNote",
             $"The imported clip is {clip.Duration:0.00}s at {clip.FrameCount} frames. Trimming, renaming, root motion and events take effect on the next import. Event times are in seconds of the take, before trimming.");
+
+        using (paper.Row($"{id}_clipAnimWinRow").Height(32)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.Spacing).Gap(m.SpacingMedium).Enter())
+        {
+            Origami.Button(paper, $"{id}_openAnimWin", $"{EditorIcons.Film}  Open in Animation Window", () =>
+            {
+                GUI.Panels.AnimationPanel.OpenClip(clip);
+            }).Width(UnitValue.Stretch()).Height(28).Show();
+
+            if (clip.HasMotionPayload)
+            {
+                Origami.Button(paper, $"{id}_unpackClipBtn", $"{EditorIcons.Sliders}  Unpack Curves", () =>
+                {
+                    Core.Undo.RecordObject(clip, "Unpack Motion Curves");
+                    clip.UnpackMotionToCurveTracks();
+                    Core.EditorUtility.SetDirty(clip);
+                    GUI.Panels.AnimationPanel.OpenClip(clip);
+                }).Width(UnitValue.Auto).Height(28).Show();
+            }
+        }
     }
 
     private static void DrawClipTable(Paper paper, string id, OrigamiMetrics m, PreviewRenderer preview, ViewState view)
@@ -469,11 +495,17 @@ public class ModelAssetEditor : ImportSettingsEditor
 
             foreach (AnimationClip clip in clips)
             {
+                string kindText = clip.Kind switch
+                {
+                    AnimationClipKind.Humanoid => clip.HasPropertyTracks ? "Humanoid + Props" : "Humanoid",
+                    AnimationClipKind.Property => "Property",
+                    _ => clip.HasPropertyTracks ? "Skeletal + Props" : "Skeletal",
+                };
                 table.Row()
                     .Cell(clip.Name, EditorTheme.Ink700)
                     .CellRight($"{clip.Duration:0.00}s", EditorTheme.Ink400)
                     .CellRight(clip.FrameCount.ToString(), EditorTheme.Ink400)
-                    .Cell(clip.Kind == AnimationClipKind.Humanoid ? "Humanoid" : "Skeletal", EditorTheme.Ink400);
+                    .Cell(kindText, EditorTheme.Ink400);
             }
 
             table.Show();

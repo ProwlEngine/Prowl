@@ -274,7 +274,7 @@ internal static class ClayBackedImporter
                 }
 
         // 6. The rig, then the clips that play on it.
-        bool wantsRig = settings.RigType != ModelRigType.None
+        bool wantsRig = settings.RigType is ModelRigType.Generic or ModelRigType.Humanoid
             && (clayModel.Skins.Count > 0 || (settings.ImportAnimations && clayModel.AnimationClips.Count > 0));
 
         Avatar? avatar = null;
@@ -289,6 +289,15 @@ internal static class ClayBackedImporter
 
             Animator animator = rootGO.AddComponent<Animator>();
             animator.Avatar = avatar;
+            animator.Clips = [.. animations];
+        }
+        else if (settings.RigType == ModelRigType.Property && settings.ImportAnimations && clayModel.AnimationClips.Count > 0)
+        {
+            // RigType == Property: import non-skeletal node animations directly as property curve tracks on AnimationClips
+            foreach (ClayAnim clip in clayModel.AnimationClips)
+                animations.Add(BuildPropertyClip(clip, clayModel, nodeGOs, rootGO, settings));
+
+            Animator animator = rootGO.AddComponent<Animator>();
             animator.Clips = [.. animations];
         }
 
@@ -727,6 +736,27 @@ internal static class ClayBackedImporter
             : PAnim.FromSkeletal(sampled, avatar, name, events);
 
         clip.Loop = overrides.Loop ?? settings.LoopAnimations;
+        clip.WrapMode = clip.Loop ? SceneClipWrapMode.Loop : SceneClipWrapMode.Once;
+        clip.SourceName = sourceName;
+        clip.TakeStart = start;
+        return clip;
+    }
+
+    private static PAnim BuildPropertyClip(ClayAnim source, Clay.Model clayModel, GameObject[] nodeGOs, GameObject rootGO, ModelImporterSettings settings)
+    {
+        string sourceName = string.IsNullOrEmpty(source.Name) ? "Animation" : source.Name;
+        ModelClipSettings overrides = default;
+        settings.ClipOverrides?.TryGetValue(sourceName, out overrides);
+
+        string name = string.IsNullOrWhiteSpace(overrides.Name) ? sourceName : overrides.Name!;
+        (float start, float end) = ModelRigBuilder.Trim(source, settings.AnimationSampleRate, overrides.TrimStart, overrides.TrimEnd);
+        List<ClipEvent>? events = overrides.Events is { Count: > 0 } onTake ? ModelRigBuilder.PlaceEvents(onTake, start, end) : null;
+
+        PAnim clip = ModelRigBuilder.BuildPropertyClip(
+            source, clayModel, nodeGOs, rootGO, settings.AnimationSampleRate, overrides.TrimStart, overrides.TrimEnd, name, events);
+
+        clip.Loop = overrides.Loop ?? settings.LoopAnimations;
+        clip.WrapMode = clip.Loop ? SceneClipWrapMode.Loop : SceneClipWrapMode.Once;
         clip.SourceName = sourceName;
         clip.TakeStart = start;
         return clip;

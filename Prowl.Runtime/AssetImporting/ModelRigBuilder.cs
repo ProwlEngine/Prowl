@@ -168,6 +168,122 @@ internal static class ModelRigBuilder
     }
 
     /// <summary>
+    /// Converts a Clay <see cref="ClayAnim"/> directly into <see cref="SceneCurveTrack"/> property tracks on a
+    /// <see cref="Prowl.Runtime.AnimationClip"/> without building a skeleton rig. Used when <see cref="ModelRigType.None"/>
+    /// is selected so non-skeletal node and blend-shape animations import as editable property curve tracks.
+    /// </summary>
+    public static Prowl.Runtime.AnimationClip BuildPropertyClip(
+        ClayAnim source,
+        Model model,
+        GameObject[] nodeGOs,
+        GameObject rootGO,
+        float sampleRate,
+        float trimStart = 0f,
+        float trimEnd = 0f,
+        string? name = null,
+        IEnumerable<ClipEvent>? events = null)
+    {
+        float rate = sampleRate > 0f ? sampleRate : 30f;
+        (float start, float end) = Trim(source, rate, trimStart, trimEnd);
+        float duration = end - start;
+        int frameCount = Math.Max(2, (int)MathF.Round(duration * rate) + 1);
+        float step = frameCount > 1 ? duration / (frameCount - 1) : 0f;
+
+        var clip = new Prowl.Runtime.AnimationClip
+        {
+            Name = name ?? (string.IsNullOrEmpty(source.Name) ? "Animation" : source.Name),
+            FrameRate = Math.Clamp(rate, 1f, 240f),
+        };
+        if (events != null)
+            clip.Events.AddRange(events);
+
+        foreach (AnimationBinding binding in source.Bindings)
+        {
+            if (binding.NodeIndex < 0 || binding.NodeIndex >= nodeGOs.Length || binding.Curve is not { Count: > 0 } curve)
+                continue;
+
+            GameObject nodeGo = nodeGOs[binding.NodeIndex];
+            string relPath = Transform.GetRelativePath(nodeGo.Transform, rootGO.Transform);
+
+            switch (binding.Property)
+            {
+                case AnimatedProperty.Position:
+                {
+                    SceneCurveTrack tx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.X");
+                    SceneCurveTrack ty = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Y");
+                    SceneCurveTrack tz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Z");
+                    tx.Curve.Clear(); ty.Curve.Clear(); tz.Curve.Clear();
+                    for (int f = 0; f < frameCount; f++)
+                    {
+                        float localT = f * step;
+                        float srcT = source.StartTime + start + localT;
+                        Float3 v = curve.EvaluateFloat3(srcT);
+                        tx.Curve.AddKey(new Keyframe(localT, v.X));
+                        ty.Curve.AddKey(new Keyframe(localT, v.Y));
+                        tz.Curve.AddKey(new Keyframe(localT, v.Z));
+                    }
+                    tx.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    ty.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    tz.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    break;
+                }
+
+                case AnimatedProperty.Rotation:
+                {
+                    SceneCurveTrack rx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.X");
+                    SceneCurveTrack ry = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Y");
+                    SceneCurveTrack rz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Z");
+                    SceneCurveTrack rw = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.W");
+                    rx.Curve.Clear(); ry.Curve.Clear(); rz.Curve.Clear(); rw.Curve.Clear();
+                    Quaternion prevQ = Quaternion.Identity;
+                    for (int f = 0; f < frameCount; f++)
+                    {
+                        float localT = f * step;
+                        float srcT = source.StartTime + start + localT;
+                        Quaternion q = curve.EvaluateQuaternion(srcT);
+                        if (f > 0 && Quaternion.Dot(prevQ, q) < 0f)
+                            q = new Quaternion(-q.X, -q.Y, -q.Z, -q.W);
+                        prevQ = q;
+                        rx.Curve.AddKey(new Keyframe(localT, q.X));
+                        ry.Curve.AddKey(new Keyframe(localT, q.Y));
+                        rz.Curve.AddKey(new Keyframe(localT, q.Z));
+                        rw.Curve.AddKey(new Keyframe(localT, q.W));
+                    }
+                    rx.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    ry.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    rz.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    rw.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    break;
+                }
+
+                case AnimatedProperty.Scale:
+                {
+                    SceneCurveTrack sx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.X");
+                    SceneCurveTrack sy = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Y");
+                    SceneCurveTrack sz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Z");
+                    sx.Curve.Clear(); sy.Curve.Clear(); sz.Curve.Clear();
+                    for (int f = 0; f < frameCount; f++)
+                    {
+                        float localT = f * step;
+                        float srcT = source.StartTime + start + localT;
+                        Float3 v = curve.EvaluateFloat3(srcT);
+                        sx.Curve.AddKey(new Keyframe(localT, v.X));
+                        sy.Curve.AddKey(new Keyframe(localT, v.Y));
+                        sz.Curve.AddKey(new Keyframe(localT, v.Z));
+                    }
+                    sx.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    sy.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    sz.Curve.SmoothTangents(CurveTangentMode.Auto);
+                    break;
+                }
+            }
+        }
+
+        clip.Invalidate();
+        return clip;
+    }
+
+    /// <summary>
     /// The slice of the take a clip keeps, in seconds of the take. A slice that is empty or inside out
     /// is ignored rather than obeyed: the clip the file describes is a better answer than no clip at all.
     /// </summary>

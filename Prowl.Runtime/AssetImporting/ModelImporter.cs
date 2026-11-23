@@ -213,6 +213,8 @@ public enum ModelRigType
     Generic,
     /// <summary>Bones mapped to the human body, so clips retarget across rigs.</summary>
     Humanoid,
+    /// <summary>No skeleton rig; node and blend-shape animations import directly as editable property curve tracks on AnimationClips.</summary>
+    Property,
 }
 
 /// <summary>

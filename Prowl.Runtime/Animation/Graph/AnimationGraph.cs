@@ -33,6 +33,7 @@ public sealed class AnimationGraph : Asset
         public required MotionGraph Graph;
         public required Dictionary<string, int> Nodes;
         public required Dictionary<string, int[]> States;
+        public required List<(int NodeIndex, AnimationClip Clip)> ClipBindings;
         public required int DeepVersion;
     }
 
@@ -80,6 +81,21 @@ public sealed class AnimationGraph : Asset
 
         nodes = null!;
         states = null!;
+        return false;
+    }
+
+    /// <summary>The compiled Motion node indices and their associated <see cref="AnimationClip"/> assets for a running graph.</summary>
+    internal bool TryGetCompiledClips(MotionGraph running, out IReadOnlyList<(int NodeIndex, AnimationClip Clip)> clips)
+    {
+        if (_compiles != null)
+            foreach (RigCompile compile in _compiles.Values)
+                if (ReferenceEquals(compile.Graph, running))
+                {
+                    clips = compile.ClipBindings;
+                    return true;
+                }
+
+        clips = Array.Empty<(int, AnimationClip)>();
         return false;
     }
 
@@ -193,6 +209,7 @@ public sealed class AnimationGraph : Asset
                 Graph = graph,
                 Nodes = new Dictionary<string, int>(context.Compiled),
                 States = new Dictionary<string, int[]>(context.States),
+                ClipBindings = new List<(int NodeIndex, AnimationClip Clip)>(context.ClipBindings),
                 DeepVersion = deepVersion,
             };
             _compiles[skeleton] = compile;
