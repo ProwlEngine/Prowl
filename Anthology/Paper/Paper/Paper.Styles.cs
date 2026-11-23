@@ -357,8 +357,8 @@ namespace Prowl.PaperUI
         }
 
         // The default value for every property, as a single StyleValues (mask left at 0 = "unset").
-        // BeginFrame copies this into _current to revert an element to defaults each frame.
-        private static readonly StyleValues _defaultStyleValues = CreateDefaults();
+        // BeginFrame reverts an element's set properties to these each frame. Not readonly so it can be passed by ref.
+        private static StyleValues _defaultStyleValues = CreateDefaults();
 
         #endregion
 
@@ -371,7 +371,7 @@ namespace Prowl.PaperUI
         /// </summary>
         public void BeginFrame()
         {
-            _current = _defaultStyleValues;
+            StyleValues.ResetSet(ref _current, ref _defaultStyleValues);
             // Previously declared layout properties are dirty until redeclared identically;
             // omitted declarations therefore revert to defaults without scanning every field.
             _layoutDirtyMask = _previousLayoutMask;

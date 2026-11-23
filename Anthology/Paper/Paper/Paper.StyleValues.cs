@@ -341,6 +341,16 @@ namespace Prowl.PaperUI
                     Copy((GuiProp)bit, ref from, ref to);
         }
 
+        /// <summary>Puts every explicitly set property back to its default and marks them all unset.</summary>
+        internal static void ResetSet(ref StyleValues values, ref StyleValues defaults)
+        {
+            ulong set = values._set;
+            for (int bit = 0; set != 0; bit++, set >>= 1)
+                if ((set & 1) != 0)
+                    Copy((GuiProp)bit, ref defaults, ref values);
+            values._set = 0;
+        }
+
         #endregion
 
         /// <summary>Boxing read of a property (for the compatibility shim / cold callers).</summary>
