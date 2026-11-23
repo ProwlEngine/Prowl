@@ -19,7 +19,8 @@ using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
+using Prowl.Vector.Geometry;
+using Prowl.Unwrapper;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -152,11 +153,11 @@ public class UVEditorPanel : DockPanel
     /// <summary>The shown corners on one point of a face that sit at the same UV as it, so a seam's other side is left out.</summary>
     private static IEnumerable<(ModelObject, GeometryData.Loop)> SameUV(List<Shown> faces, ModelObject model, GeometryData.Loop corner)
     {
-        Float2 at = UVs.Get(corner);
+        Float2 at = GeometryUVs.Get(corner);
         foreach (Shown shown in faces)
         {
             if (!ReferenceEquals(shown.Model, model) || shown.Face.GetLoop(corner.Vert) is not { } other) continue;
-            if (Float2.Distance(UVs.Get(other), at) < 1e-5f) yield return (model, other);
+            if (Float2.Distance(GeometryUVs.Get(other), at) < 1e-5f) yield return (model, other);
         }
     }
 
@@ -164,7 +165,7 @@ public class UVEditorPanel : DockPanel
     private static IEnumerable<(ModelObject, GeometryData.Loop)> IslandOf(List<Shown> faces, ModelObject model, GeometryData.Loop corner)
     {
         List<GeometryData.Face> mine = [.. faces.Where(f => ReferenceEquals(f.Model, model)).Select(f => f.Face)];
-        foreach (List<GeometryData.Face> island in UVs.Islands(model.Mesh, mine))
+        foreach (List<GeometryData.Face> island in GeometryUVs.Islands(model.Mesh, mine))
             if (island.Contains(corner.Face))
                 return island.SelectMany(f => f.Corners()).Select(c => (model, c)).ToList();
         return [];
@@ -207,9 +208,9 @@ public class UVEditorPanel : DockPanel
 
             Button("uv_pin", "uv.pin", () => Pin(tool, faces, true));
             Button("uv_unpin", "uv.unpin", () => Pin(tool, faces, false));
-            Button("uv_flip_u", "uv.flip_u", () => EditCorners(tool, faces, "Flip UVs", (m, c) => UVs.Flip(m, c, 0)));
-            Button("uv_flip_v", "uv.flip_v", () => EditCorners(tool, faces, "Flip UVs", (m, c) => UVs.Flip(m, c, 1)));
-            Button("uv_rotate", "uv.rotate_90", () => EditCorners(tool, faces, "Rotate UVs", (m, c) => UVs.Rotate(m, c, MathF.PI * 0.5f)));
+            Button("uv_flip_u", "uv.flip_u", () => EditCorners(tool, faces, "Flip UVs", (m, c) => GeometryUVs.Flip(m, c, 0)));
+            Button("uv_flip_v", "uv.flip_v", () => EditCorners(tool, faces, "Flip UVs", (m, c) => GeometryUVs.Flip(m, c, 1)));
+            Button("uv_rotate", "uv.rotate_90", () => EditCorners(tool, faces, "Rotate UVs", (m, c) => GeometryUVs.Rotate(m, c, MathF.PI * 0.5f)));
             Button("uv_align_u", "uv.align_u", () => Align(tool, faces, 0));
             Button("uv_align_v", "uv.align_v", () => Align(tool, faces, 1));
             Button("uv_weld", "uv.weld", () => Weld(tool, faces));
@@ -220,11 +221,11 @@ public class UVEditorPanel : DockPanel
             Button("uv_pixels", "uv.snap_pixels", () => EditCorners(tool, faces, "Snap UVs To Pixels", (m, c) =>
             {
                 (int w, int h) = TextureSize(tool);
-                UVs.SnapToPixels(m, c, w, h);
+                GeometryUVs.SnapToPixels(m, c, w, h);
             }));
             Button("uv_unwrap", "uv.unwrap", () => Unwrap(tool, faces));
             Button("uv_pack", "uv.pack", () => Pack(tool));
-            Button("uv_average", "uv.average_scale", () => EditFaces(tool, faces, "Average Island Scale", UVs.AverageIslandScale));
+            Button("uv_average", "uv.average_scale", () => EditFaces(tool, faces, "Average Island Scale", GeometryUVs.AverageIslandScale));
             Button("uv_by_angle", "uv.project_angle", () => ProjectByAngle(tool));
             Button("uv_follow", "uv.follow_quad", () => FollowQuad(tool, faces));
         }
@@ -234,39 +235,39 @@ public class UVEditorPanel : DockPanel
     //  Operations, shared by the toolbar, the right click menu and the keys
     // ================================================================
 
-    private void Pin(ModelMeshTool tool, List<Shown> faces, bool pinned) => EditCorners(tool, faces, pinned ? "Pin UVs" : "Unpin UVs", (_, c) => UVs.SetPinned(c, pinned));
+    private void Pin(ModelMeshTool tool, List<Shown> faces, bool pinned) => EditCorners(tool, faces, pinned ? "Pin UVs" : "Unpin UVs", (_, c) => GeometryUVs.SetPinned(c, pinned));
 
-    private void Align(ModelMeshTool tool, List<Shown> faces, int axis) => EditCorners(tool, faces, "Align UVs", (m, c) => UVs.Align(m, c, axis));
+    private void Align(ModelMeshTool tool, List<Shown> faces, int axis) => EditCorners(tool, faces, "Align UVs", (m, c) => GeometryUVs.Align(m, c, axis));
 
-    private void Weld(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Weld UVs", UVs.Weld);
+    private void Weld(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Weld UVs", GeometryUVs.Weld);
 
-    private void Straighten(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Straighten UVs", (m, c) => UVs.Straighten(m, c));
+    private void Straighten(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Straighten UVs", (m, c) => GeometryUVs.Straighten(m, c));
 
-    private void Distribute(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Distribute UVs", (m, c) => UVs.Distribute(m, c));
+    private void Distribute(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Distribute UVs", (m, c) => GeometryUVs.Distribute(m, c));
 
-    private void Relax(ModelMeshTool tool, List<Shown> faces) => EditCornersOnFaces(tool, faces, "Relax UVs", (m, c, f) => UVs.Relax(m, c, f, 0.5f));
+    private void Relax(ModelMeshTool tool, List<Shown> faces) => EditCornersOnFaces(tool, faces, "Relax UVs", (m, c, f) => GeometryUVs.Relax(m, c, f, 0.5f));
 
     private void Stitch(ModelMeshTool tool, List<Shown> faces) => EditCornersOnFaces(tool, faces, "Stitch UVs", (m, c, f) =>
     {
         var picked = new HashSet<GeometryData.Vertex>(c.Select(l => l.Vert));
-        UVs.Stitch(m, f.SelectMany(f => f.Corners()).Select(l => l.Edge).Distinct().Where(e => picked.Contains(e.Vert1) && picked.Contains(e.Vert2)).ToList(), f);
+        GeometryUVs.Stitch(m, f.SelectMany(f => f.Corners()).Select(l => l.Edge).Distinct().Where(e => picked.Contains(e.Vert1) && picked.Contains(e.Vert2)).ToList(), f);
     });
 
-    private static void Unwrap(ModelMeshTool tool, List<Shown> faces) => EditFaces(tool, faces, "Unwrap", UVs.Unwrap);
+    private static void Unwrap(ModelMeshTool tool, List<Shown> faces) => EditFaces(tool, faces, "Unwrap", GeometryUnwrap.Unwrap);
 
     private static void FollowQuad(ModelMeshTool tool, List<Shown> faces) => EditFaces(tool, faces, "Follow Quad", (m, f) =>
     {
-        if (f.Where(x => x.VertCount == 4).OrderBy(x => x.Index).FirstOrDefault() is { } active) UVs.FollowQuad(m, active, f);
+        if (f.Where(x => x.VertCount == 4).OrderBy(x => x.Index).FirstOrDefault() is { } active) GeometryUVs.FollowQuad(m, active, f);
     });
 
     // The faces are found again when run, as adjusting the step after runs it on the meshes undo brings back
     private static void Pack(ModelMeshTool tool)
         => tool.RunRemembered("Pack UVs", [new(Loc.Get("uv.margin"), 1f / 256f)],
-            v => EditFaces(tool, ShownFaces(tool), "Pack UVs", (m, f) => UVs.Pack(m, f, MathF.Max(0f, v[0]))));
+            v => EditFaces(tool, ShownFaces(tool), "Pack UVs", (m, f) => GeometryUnwrap.Pack(m, f, MathF.Max(0f, v[0]))));
 
     private static void ProjectByAngle(ModelMeshTool tool)
         => tool.RunRemembered("Project By Angle", [new(Loc.Get("model.field_degrees"), 66f), new(Loc.Get("uv.margin"), 1f / 256f)],
-            v => EditFaces(tool, ShownFaces(tool), "Project By Angle", (m, f) => UVs.ByAngle(m, f, v[0], MathF.Max(0f, v[1]))));
+            v => EditFaces(tool, ShownFaces(tool), "Project By Angle", (m, f) => GeometryUnwrap.ByAngle(m, f, v[0], MathF.Max(0f, v[1]))));
 
     private void SelectAll(ModelMeshTool tool, List<Shown> faces)
         => PickCorners(tool, faces, faces.SelectMany(f => f.Face.Corners().Select(c => (f.Model, c))), false);
@@ -310,7 +311,7 @@ public class UVEditorPanel : DockPanel
                 sub.Item(Loc.Get("uv.follow_quad"), () => FollowQuad(tool, faces));
                 sub.Separator();
                 sub.Item(Loc.Get("uv.pack"), () => Pack(tool));
-                sub.Item(Loc.Get("uv.average_scale"), () => EditFaces(tool, faces, "Average Island Scale", UVs.AverageIslandScale));
+                sub.Item(Loc.Get("uv.average_scale"), () => EditFaces(tool, faces, "Average Island Scale", GeometryUVs.AverageIslandScale));
             });
             menu.Toggle(Loc.Get("uv.checker_world"), () => ModelEditingMode.SetChecker(!ModelObject.ShowChecker), () => ModelObject.ShowChecker);
         });
@@ -348,7 +349,7 @@ public class UVEditorPanel : DockPanel
     private static void ExportLayout(ModelMeshTool tool, List<Shown> faces)
     {
         (int width, int height) = TextureSize(tool);
-        byte[] pixels = UVs.LayoutImage(faces.Select(f => f.Face), width, height);
+        byte[] pixels = GeometryUVs.LayoutImage(faces.Select(f => f.Face), width, height);
         EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (path == null) return;
@@ -424,14 +425,14 @@ public class UVEditorPanel : DockPanel
         canvas.Stroke();
 
         float density = _stretch == Stretch.Area ? Density(faces) : 0f;
-        HashSet<GeometryData.Face> overlapping = _stretch == Stretch.Overlap ? UVs.OverlappingFaces([.. faces.Select(f => f.Face)]) : [];
+        HashSet<GeometryData.Face> overlapping = _stretch == Stretch.Overlap ? GeometryUVs.OverlappingFaces([.. faces.Select(f => f.Face)]) : [];
         var island = new Dictionary<GeometryData.Face, int>();
         if (_stretch == Stretch.Islands)
         {
             int offset = 0;
             foreach (IGrouping<ModelObject, Shown> group in faces.GroupBy(f => f.Model))
             {
-                List<List<GeometryData.Face>> islands = UVs.Islands(group.Key.Mesh, [.. group.Select(f => f.Face)]);
+                List<List<GeometryData.Face>> islands = GeometryUVs.Islands(group.Key.Mesh, [.. group.Select(f => f.Face)]);
                 for (int i = 0; i < islands.Count; i++)
                     foreach (GeometryData.Face face in islands[i]) island[face] = offset + i;
                 offset += islands.Count;
@@ -443,7 +444,7 @@ public class UVEditorPanel : DockPanel
             canvas.BeginPath();
             for (int i = 0; i < corners.Count; i++)
             {
-                Float2 at = ToScreen(UVs.Get(corners[i]));
+                Float2 at = ToScreen(GeometryUVs.Get(corners[i]));
                 if (i == 0) canvas.MoveTo(at.X, at.Y);
                 else canvas.LineTo(at.X, at.Y);
             }
@@ -477,9 +478,9 @@ public class UVEditorPanel : DockPanel
         foreach (Shown shown in faces)
             foreach (GeometryData.Loop corner in shown.Face.Corners())
             {
-                Float2 at = ToScreen(UVs.Get(corner));
+                Float2 at = ToScreen(GeometryUVs.Get(corner));
                 bool picked = Picked(tool, shown.Model, corner);
-                Color32 colour = UVs.IsPinned(corner) ? Color32.FromArgb(255, 235, 70, 55) : picked ? EditorTheme.Accent : Color32.FromArgb(255, 20, 20, 20);
+                Color32 colour = GeometryUVs.IsPinned(corner) ? Color32.FromArgb(255, 235, 70, 55) : picked ? EditorTheme.Accent : Color32.FromArgb(255, 20, 20, 20);
                 canvas.CircleFilled(at.X, at.Y, picked ? 3.5f : 2.5f, colour);
             }
 
@@ -513,7 +514,7 @@ public class UVEditorPanel : DockPanel
         {
             GeometryData.Loop prev = corners[(i + corners.Count - 1) % corners.Count], at = corners[i], next = corners[(i + 1) % corners.Count];
             float surface = Angle(prev.Vert.Point - at.Vert.Point, next.Vert.Point - at.Vert.Point);
-            Float2 a = UVs.Get(prev) - UVs.Get(at), b = UVs.Get(next) - UVs.Get(at);
+            Float2 a = GeometryUVs.Get(prev) - GeometryUVs.Get(at), b = GeometryUVs.Get(next) - GeometryUVs.Get(at);
             float layout = Angle(new Float3(a.X, a.Y, 0f), new Float3(b.X, b.Y, 0f));
             total += MathF.Abs(surface - layout);
         }
@@ -531,7 +532,7 @@ public class UVEditorPanel : DockPanel
         float surface = 0f, texture = 0f;
         foreach (Shown shown in faces)
         {
-            (float s, float t) = UVs.Areas(shown.Face);
+            (float s, float t) = GeometryUVs.Areas(shown.Face);
             surface += s;
             texture += t;
         }
@@ -541,7 +542,7 @@ public class UVEditorPanel : DockPanel
     /// <summary>How far a face's share of texture is from the average, 0 for none and 1 for twice or half as much.</summary>
     private static float AreaStretch(GeometryData.Face face, float density)
     {
-        (float surface, float texture) = UVs.Areas(face);
+        (float surface, float texture) = GeometryUVs.Areas(face);
         if (surface <= 0f || density <= 0f) return 0f;
         float ratio = texture / surface / density;
         return ratio > 0f ? MathF.Abs(MathF.Log2(ratio)) : 1f;
@@ -644,7 +645,7 @@ public class UVEditorPanel : DockPanel
         foreach (Shown shown in faces)
             foreach (GeometryData.Loop corner in shown.Face.Corners())
             {
-                float distance = Float2.Distance(ToScreen(UVs.Get(corner)), Pointer);
+                float distance = Float2.Distance(ToScreen(GeometryUVs.Get(corner)), Pointer);
                 if (distance >= nearest) continue;
                 nearest = distance;
                 best = (shown.Model, corner);
@@ -661,7 +662,7 @@ public class UVEditorPanel : DockPanel
         foreach (Shown shown in faces)
             foreach (GeometryData.Loop corner in shown.Face.Corners())
             {
-                Float2 at = ToScreen(UVs.Get(corner));
+                Float2 at = ToScreen(GeometryUVs.Get(corner));
                 if (at.X >= min.X && at.X <= max.X && at.Y >= min.Y && at.Y <= max.Y) inside.Add((shown.Model, corner));
             }
         PickCorners(tool, faces, inside, shift);
@@ -672,20 +673,20 @@ public class UVEditorPanel : DockPanel
     {
         _moving.Clear();
         foreach ((ModelObject model, GeometryData.Loop corner) in SelectedCorners(tool, faces))
-            _moving.Add((model, corner, UVs.Get(corner)));
+            _moving.Add((model, corner, GeometryUVs.Get(corner)));
         if (_moving.Count == 0) return;
         _before.Clear();
         _unwrapped.Clear();
-        var pinnedFaces = new HashSet<GeometryData.Face>(_moving.Where(m => UVs.IsPinned(m.Corner)).Select(m => m.Corner.Face));
+        var pinnedFaces = new HashSet<GeometryData.Face>(_moving.Where(m => GeometryUVs.IsPinned(m.Corner)).Select(m => m.Corner.Face));
         if (pinnedFaces.Count > 0)
             foreach (IGrouping<ModelObject, Shown> group in faces.GroupBy(f => f.Model))
-                foreach (List<GeometryData.Face> island in UVs.Islands(group.Key.Mesh, [.. group.Select(f => f.Face)]))
+                foreach (List<GeometryData.Face> island in GeometryUVs.Islands(group.Key.Mesh, [.. group.Select(f => f.Face)]))
                 {
                     if (!island.Exists(pinnedFaces.Contains)) continue;
                     foreach (GeometryData.Face face in island)
                     {
                         _unwrapped.Add(new Shown(group.Key, face));
-                        foreach (GeometryData.Loop corner in face.Corners()) _before.Add((corner, UVs.Get(corner)));
+                        foreach (GeometryData.Loop corner in face.Corners()) _before.Add((corner, GeometryUVs.Get(corner)));
                     }
                 }
         Float2 sum = Float2.Zero;
@@ -745,7 +746,7 @@ public class UVEditorPanel : DockPanel
             foreach (GeometryData.Loop corner in shown.Face.Corners())
             {
                 if (moving.Contains(corner)) continue;
-                Float2 other = UVs.Get(corner);
+                Float2 other = GeometryUVs.Get(corner);
                 float distance = Float2.Distance(ToScreen(other), at);
                 if (distance >= nearest) continue;
                 nearest = distance;
@@ -765,15 +766,15 @@ public class UVEditorPanel : DockPanel
     private static void Move(List<(ModelObject Model, GeometryData.Loop Corner, Float2 UV)> moving, List<Shown> unwrapped, Func<Float2, Float2> change, ModelObject? only = null)
     {
         foreach ((ModelObject model, GeometryData.Loop corner, Float2 uv) in moving)
-            if (ReferenceEquals(only, null) || ReferenceEquals(model, only)) UVs.Set(corner, change(uv));
+            if (ReferenceEquals(only, null) || ReferenceEquals(model, only)) GeometryUVs.Set(corner, change(uv));
         foreach (IGrouping<ModelObject, Shown> group in unwrapped.GroupBy(f => f.Model))
-            if (ReferenceEquals(only, null) || ReferenceEquals(group.Key, only)) UVs.Unwrap(group.Key.Mesh, [.. group.Select(f => f.Face)]);
+            if (ReferenceEquals(only, null) || ReferenceEquals(group.Key, only)) GeometryUnwrap.Unwrap(group.Key.Mesh, [.. group.Select(f => f.Face)]);
     }
 
     private void Restore()
     {
-        foreach ((GeometryData.Loop corner, Float2 uv) in _before) UVs.Set(corner, uv);
-        foreach ((_, GeometryData.Loop corner, Float2 uv) in _moving) UVs.Set(corner, uv);
+        foreach ((GeometryData.Loop corner, Float2 uv) in _before) GeometryUVs.Set(corner, uv);
+        foreach ((_, GeometryData.Loop corner, Float2 uv) in _moving) GeometryUVs.Set(corner, uv);
     }
 
     private void Cancel(ModelMeshTool tool)
@@ -798,7 +799,7 @@ public class UVEditorPanel : DockPanel
         _gesture = Gesture.None;
         tool.EditMeshes("Move UVs", (model, mesh, _) =>
         {
-            UVs.EnsureUV(mesh);
+            GeometryUVs.EnsureUV(mesh);
             Move(moving, unwrapped, change, model);
             mesh.MarkChanged();
         });

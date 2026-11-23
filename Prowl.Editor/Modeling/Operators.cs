@@ -1136,7 +1136,7 @@ public static class Operators
                     if (OldCornerAt(loop.Vert, neighbour, facesBefore) is { } old && old.TryGetAttribute(UV, out GeometryData.AttributeValue? uv)) loop.SetAttribute(UV, uv!);
                     else
                     {
-                        Float2 flat = UVs.Projected(loop.Vert.Point, normal);
+                        Float2 flat = GeometryUVs.Projected(loop.Vert.Point, normal);
                         loop.SetAttribute(UV, new GeometryData.FloatAttributeValue(flat.X, flat.Y));
                     }
                 }

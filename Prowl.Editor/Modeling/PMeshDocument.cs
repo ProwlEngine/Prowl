@@ -439,6 +439,14 @@ public sealed class PMeshDocument
         ReadColumns(m["edge"], mesh.Edges);
         ReadColumns(m["loop"], loops);
         ReadColumns(m["face"], mesh.Faces);
+
+        // Seams were once saved under a lower case name
+        foreach (GeometryData.Edge edge in mesh.Edges)
+            if (edge.Attributes.ContainsKey("seam"))
+            {
+                edge.IsSeam = edge.TryGetAttribute("seam", out GeometryData.AttributeValue? old) && old is GeometryData.IntAttributeValue { Data: [not 0, ..] };
+                edge.Attributes.Remove("seam");
+            }
         return mesh;
     }
 

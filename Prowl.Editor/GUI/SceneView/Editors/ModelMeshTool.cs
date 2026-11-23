@@ -17,6 +17,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
+using Prowl.Unwrapper;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
@@ -365,7 +366,7 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Slide")) Slide(ctx);
         else if (handles.IsPressed("MeshEdit/Crease")) Crease(ctx);
         else if (handles.IsPressed("MeshEdit/Duplicate")) Duplicate(ctx);
-        else if (handles.IsPressed("MeshEdit/Unwrap")) Edit("Unwrap", (mesh, s) => UVs.Unwrap(mesh, UVFaces(mesh, s)));
+        else if (handles.IsPressed("MeshEdit/Unwrap")) Edit("Unwrap", (mesh, s) => GeometryUnwrap.Unwrap(mesh, UVFaces(mesh, s)));
         else if (handles.IsPressed("MeshEdit/Connect")) Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge);
         else if (handles.IsPressed("MeshEdit/Triangulate")) Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face);
         else if (handles.IsPressed("MeshEdit/Flatten")) Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s));
@@ -804,8 +805,8 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
         menu.Item(Loc.Get("model.menu.subdivide_smooth"), () => SubdivideSmooth(ctx));
         menu.Separator();
-        menu.Item(Loc.Get("uv.mark_seam"), () => Edit("Mark Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, true)));
-        menu.Item(Loc.Get("uv.clear_seam"), () => Edit("Clear Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, false)));
+        menu.Item(Loc.Get("uv.mark_seam"), () => Edit("Mark Seam", (mesh, s) => GeometryUVs.SetSeams(mesh, s.Edges, true)));
+        menu.Item(Loc.Get("uv.clear_seam"), () => Edit("Clear Seam", (mesh, s) => GeometryUVs.SetSeams(mesh, s.Edges, false)));
         menu.Separator();
         menu.Item(Loc.Get("csg.dissolve"), () => Edit("Dissolve Model Elements", (mesh, s) => Operators.Dissolve(mesh, s, Mode, s), SelectMode.Face), shortcut: Chord("MeshEdit/Dissolve"));
         menu.Item(Loc.Get("model.menu.delete_edges"), () => Edit("Delete Model Elements", Delete), danger: true);
@@ -844,7 +845,7 @@ public sealed class ModelMeshTool : SceneTool
                 }
             });
         menu.Separator();
-        menu.Item(Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => UVs.Unwrap(mesh, UVFaces(mesh, s))), shortcut: Chord("MeshEdit/Unwrap"));
+        menu.Item(Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => GeometryUnwrap.Unwrap(mesh, UVFaces(mesh, s))), shortcut: Chord("MeshEdit/Unwrap"));
         menu.Submenu(Loc.Get("model.menu.map_uvs"), m => MapUVItems(ctx, m));
         menu.Separator();
         menu.Item(Loc.Get("csg.dissolve"), () => Edit("Dissolve Model Elements", (mesh, s) => Operators.Dissolve(mesh, s, Mode, s), SelectMode.Face), shortcut: Chord("MeshEdit/Dissolve"));
@@ -853,30 +854,30 @@ public sealed class ModelMeshTool : SceneTool
 
     private void MapUVItems(SceneToolContext ctx, OrigamiUI.ContextBuilder menu)
     {
-        menu.Item(Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => UVs.Unwrap(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => GeometryUnwrap.Unwrap(mesh, UVFaces(mesh, s))));
         menu.Separator();
         menu.Item(Loc.Get("uv.project_view"), () => EditMeshes("Project From View", (model, mesh, s) =>
         {
             Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
-            UVs.FromView(mesh, UVFaces(mesh, s), p => ctx.Handles.WorldToScreen(Float4x4.TransformPoint(p, toWorld)) is { } at ? new Float2(at.X, -at.Y) : Float2.Zero);
+            GeometryUVs.FromView(mesh, UVFaces(mesh, s), p => ctx.Handles.WorldToScreen(Float4x4.TransformPoint(p, toWorld)) is { } at ? new Float2(at.X, -at.Y) : Float2.Zero);
         }));
         menu.Item(Loc.Get("uv.project_angle"), () => RunRemembered("Project By Angle", [new(Loc.Get("model.field_degrees"), 66f), new(Loc.Get("uv.margin"), 1f / 256f)],
-            v => Edit("Project By Angle", (mesh, s) => UVs.ByAngle(mesh, UVFaces(mesh, s), v[0], MathF.Max(0f, v[1])))));
+            v => Edit("Project By Angle", (mesh, s) => GeometryUnwrap.ByAngle(mesh, UVFaces(mesh, s), v[0], MathF.Max(0f, v[1])))));
         menu.Item(Loc.Get("uv.follow_quad"), () => Edit("Follow Quad", (mesh, s) =>
         {
             List<GeometryData.Face> faces = UVFaces(mesh, s);
-            if (faces.Where(f => f.VertCount == 4).OrderBy(f => f.Index).FirstOrDefault() is { } active) UVs.FollowQuad(mesh, active, faces);
+            if (faces.Where(f => f.VertCount == 4).OrderBy(f => f.Index).FirstOrDefault() is { } active) GeometryUVs.FollowQuad(mesh, active, faces);
         }));
-        menu.Item(Loc.Get("uv.project_cube"), () => Edit("Cube Projection", (mesh, s) => UVs.Cube(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.project_cylinder"), () => Edit("Cylinder Projection", (mesh, s) => UVs.Cylinder(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.project_sphere"), () => Edit("Sphere Projection", (mesh, s) => UVs.Sphere(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => UVs.Reset(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.clear"), () => Edit("Clear UVs", (mesh, _) => UVs.Clear(mesh)));
+        menu.Item(Loc.Get("uv.project_cube"), () => Edit("Cube Projection", (mesh, s) => GeometryUVs.Cube(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.project_cylinder"), () => Edit("Cylinder Projection", (mesh, s) => GeometryUVs.Cylinder(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.project_sphere"), () => Edit("Sphere Projection", (mesh, s) => GeometryUVs.Sphere(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => GeometryUVs.Reset(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.clear"), () => Edit("Clear UVs", (mesh, _) => GeometryUVs.Clear(mesh)));
         menu.Separator();
         menu.Item(Loc.Get("uv.seams_from_sharp"), () => RunRemembered("Seams From Sharp Edges", [new(Loc.Get("model.field_degrees"), 60f)],
-            v => Edit("Seams From Sharp Edges", (mesh, _) => UVs.SeamsFromSharp(mesh, v[0]))));
-        menu.Item(Loc.Get("uv.seams_from_materials"), () => Edit("Seams From Materials", (mesh, _) => UVs.SeamsFromMaterials(mesh)));
-        menu.Item(Loc.Get("uv.seams_from_islands"), () => Edit("Seams From Islands", (mesh, _) => UVs.SeamsFromIslands(mesh)));
+            v => Edit("Seams From Sharp Edges", (mesh, _) => GeometryUVs.SeamsFromSharp(mesh, v[0]))));
+        menu.Item(Loc.Get("uv.seams_from_materials"), () => Edit("Seams From Materials", (mesh, _) => GeometryUVs.SeamsFromMaterials(mesh, Operators.SlotOf)));
+        menu.Item(Loc.Get("uv.seams_from_islands"), () => Edit("Seams From Islands", (mesh, _) => GeometryUVs.SeamsFromIslands(mesh)));
     }
 
     private void SelectItems(OrigamiUI.ContextBuilder menu)
@@ -3101,7 +3102,7 @@ public sealed class ModelMeshTool : SceneTool
             foreach (GeometryData.Face face in selection.Faces)
             {
                 if (hidden.Faces.Contains(face)) continue;
-                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in UVs.Triangles(face))
+                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in GeometryUVs.Triangles(face))
                     batch.Triangle(Float4x4.TransformPoint(a.Vert.Point, toWorld), Float4x4.TransformPoint(b.Vert.Point, toWorld),
                         Float4x4.TransformPoint(c.Vert.Point, toWorld), FaceFill);
             }
@@ -3109,7 +3110,7 @@ public sealed class ModelMeshTool : SceneTool
             foreach (GeometryData.Edge edge in model.Mesh.Edges)
             {
                 if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
-                bool picked = selection.Edges.Contains(edge), seam = UVs.IsSeam(edge);
+                bool picked = selection.Edges.Contains(edge), seam = GeometryUVs.IsSeam(edge);
                 batch.Line(Float4x4.TransformPoint(edge.Vert1.Point, toWorld), Float4x4.TransformPoint(edge.Vert2.Point, toWorld),
                     picked ? PickedColor : seam ? SeamColor : IdleColor, picked || seam ? 2.5f : 1f);
             }
