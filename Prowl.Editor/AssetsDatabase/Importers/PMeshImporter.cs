@@ -157,8 +157,7 @@ public class PMeshImporter : AssetImporter
         bool modified = !ReferenceEquals(geometry, item.Mesh);
         if (!modified)
         {
-            geometry = new GeometryData();
-            geometry.Restore(item.Mesh.Capture());
+            geometry = item.Mesh.Clone();
         }
 
         if (modified || !geometry.HasLoopAttribute(MeshGeometry.Normal))

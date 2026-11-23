@@ -71,6 +71,22 @@ public sealed class PMeshBone
 
     /// <summary>From the mesh's space into the bone's at rest.</summary>
     public Float4x4 BindPose = Float4x4.Identity;
+
+    /// <summary>
+    /// Keeps the bone on its mesh when the mesh's points are moved by a matrix: a bone at the top moves, turns and
+    /// scales with them, and the bind pose takes the mesh's new space.
+    /// </summary>
+    public void Transform(Float4x4 change)
+    {
+        if (Parent < 0)
+        {
+            change.Decompose(out _, out Quaternion turn, out Float3 stretch);
+            Position = Float4x4.TransformPoint(Position, change);
+            Rotation = turn * Rotation;
+            Scale *= stretch;
+        }
+        BindPose *= change.Invert();
+    }
 }
 
 /// <summary>A blend shape of a model object: its name, its weight from 0 to 100, and the weight each frame is reached at.</summary>

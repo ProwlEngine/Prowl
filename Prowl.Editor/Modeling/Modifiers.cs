@@ -46,8 +46,7 @@ public abstract class ModelModifier
             if (!modifier.Enabled || dragging && modifier.SkipWhileDragging) continue;
             if (ReferenceEquals(result, mesh))
             {
-                result = new GeometryData();
-                result.Restore(mesh.Capture());
+                result = mesh.Clone();
                 skinned = Operators.SkinToWeights(result);
             }
             result = modifier.Apply(result, context);

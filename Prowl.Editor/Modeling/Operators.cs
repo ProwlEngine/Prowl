@@ -1017,7 +1017,6 @@ public static class Operators
         bool targetHadBones = targetBones.Count > 0;
 
         int[] boneOf = new int[otherBones.Count];
-        Float4x4 back = otherToTarget.Invert();
         var added = new List<int>();
         for (int i = 0; i < otherBones.Count; i++)
         {
@@ -1026,7 +1025,7 @@ public static class Operators
             if (found < 0)
             {
                 found = targetBones.Count;
-                targetBones.Add(new PMeshBone { Name = bone.Name, Position = bone.Position, Rotation = bone.Rotation, Scale = bone.Scale, BindPose = bone.BindPose * back });
+                targetBones.Add(new PMeshBone { Name = bone.Name, Position = bone.Position, Rotation = bone.Rotation, Scale = bone.Scale, BindPose = bone.BindPose });
                 added.Add(i);
             }
             boneOf[i] = found;
@@ -1035,11 +1034,7 @@ public static class Operators
         {
             PMeshBone from = otherBones[i], to = targetBones[boneOf[i]];
             to.Parent = from.Parent >= 0 && from.Parent < boneOf.Length ? boneOf[from.Parent] : -1;
-            if (to.Parent >= 0) continue;
-            Float3 x = otherToTarget.c0.XYZ, y = otherToTarget.c1.XYZ, z = otherToTarget.c2.XYZ;
-            to.Position = Float4x4.TransformPoint(from.Position, otherToTarget);
-            to.Rotation = Quaternion.FromMatrix(new Float3x3(Float3.Normalize(x), Float3.Normalize(y), Float3.Normalize(z))) * from.Rotation;
-            to.Scale = from.Scale * new Float3(Float3.Length(x), Float3.Length(y), Float3.Length(z));
+            to.Transform(otherToTarget);
         }
 
         if (targetBones.Count > 0)

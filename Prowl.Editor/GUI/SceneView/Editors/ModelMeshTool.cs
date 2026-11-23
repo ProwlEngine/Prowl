@@ -1372,19 +1372,13 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited)
         {
             ElementSelection selection = _selection[model];
-            if (selection.Vertices.Count == 0) continue;
-            Float3 centre = Float3.Zero;
-            foreach (GeometryData.Vertex vertex in selection.Vertices) centre += vertex.Point;
-            ModelEditingMode.MoveOrigin(model, centre / selection.Vertices.Count, "Origin To Selection");
+            if (selection.Vertices.Count > 0) ModelEditingMode.MoveOrigin(model, GeometryData.Centroid(selection.Vertices), "Origin To Selection");
         }
     }
 
     private static void MergeAtCentre(GeometryData mesh, ElementSelection selection)
     {
-        if (selection.Vertices.Count < 2) return;
-        Float3 centre = Float3.Zero;
-        foreach (GeometryData.Vertex vertex in selection.Vertices) centre += vertex.Point;
-        Operators.Merge(mesh, [.. selection.Vertices], centre / selection.Vertices.Count, selection);
+        if (selection.Vertices.Count >= 2) Operators.Merge(mesh, [.. selection.Vertices], GeometryData.Centroid(selection.Vertices), selection);
     }
 
     private static void Bridge(GeometryData mesh, ElementSelection selection)
@@ -3116,18 +3110,7 @@ public sealed class ModelMeshTool : SceneTool
         return true;
     }
 
-    private static Float3 Centre(List<GeometryData.Face> faces)
-    {
-        Float3 sum = Float3.Zero;
-        int count = 0;
-        foreach (GeometryData.Face face in faces)
-            foreach (GeometryData.Vertex vertex in face.NeighborVertices())
-            {
-                sum += vertex.Point;
-                count++;
-            }
-        return count > 0 ? sum / count : sum;
-    }
+    private static Float3 Centre(List<GeometryData.Face> faces) => GeometryData.Centroid(faces.SelectMany(f => f.NeighborVertices()));
 
     private static void Mark<T>(HashSet<T> set, T item, bool remove)
     {

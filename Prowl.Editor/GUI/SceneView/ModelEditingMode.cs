@@ -275,8 +275,7 @@ public static class ModelEditingMode
         foreach (ModelObject other in others)
         {
             Float4x4 otherToTarget = toTarget * other.Transform.LocalToWorldMatrix;
-            var joined = new Vector.Geometry.GeometryData();
-            joined.Restore(other.Mesh.Capture());
+            Vector.Geometry.GeometryData joined = other.Mesh.Clone();
             Operators.MergeSkins(target.Mesh, target.Bones, target.Shapes, joined, other.Bones, other.Shapes, otherToTarget);
             Operators.Join(target.Mesh, target.Materials, joined, other.Materials, otherToTarget);
             foreach (GameObject child in other.GameObject.Children.ToList())
@@ -293,9 +292,7 @@ public static class ModelEditingMode
         foreach (GameObject go in selected)
         {
             if (go.GetComponent<ModelObject>() is not { } model || model.IsNotValid() || model.Mesh.Vertices.Count == 0) continue;
-            Float3 centre = Float3.Zero;
-            foreach (Vector.Geometry.GeometryData.Vertex vertex in model.Mesh.Vertices) centre += vertex.Point;
-            MoveOrigin(model, centre / model.Mesh.Vertices.Count, "Origin To Geometry");
+            MoveOrigin(model, Vector.Geometry.GeometryData.Centroid(model.Mesh.Vertices), "Origin To Geometry");
         }
     }
 
@@ -321,18 +318,7 @@ public static class ModelEditingMode
 
             List<string> shapes = [.. model.Mesh.LoopAttributeNames().Where(n => n.StartsWith(MeshGeometry.BlendShapePrefix, StringComparison.Ordinal))];
             Vector.Geometry.GeometryOperators.Transform(model.Mesh, change, shapes, [MeshGeometry.Normal]);
-            change.Decompose(out _, out Quaternion turn, out Float3 stretch);
-            Float4x4 back = change.Invert();
-            foreach (PMeshBone bone in model.Bones)
-            {
-                if (bone.Parent < 0)
-                {
-                    bone.Position = Float4x4.TransformPoint(bone.Position, change);
-                    bone.Rotation = turn * bone.Rotation;
-                    bone.Scale *= stretch;
-                }
-                bone.BindPose *= back;
-            }
+            foreach (PMeshBone bone in model.Bones) bone.Transform(change);
 
             transform.SetLocalTransform(position, rotation, scale);
             foreach (GameObject child in go.Children)
@@ -364,15 +350,9 @@ public static class ModelEditingMode
         GameObject go = model.GameObject;
         Undo.RecordObject(model, undoName);
         Undo.RecordObject(go, undoName);
-        foreach (Vector.Geometry.GeometryData.Vertex vertex in model.Mesh.Vertices) vertex.Point -= local;
+        Vector.Geometry.GeometryOperators.Translate(model.Mesh, -local);
         model.Mesh.MarkChanged();
-        // Bones stay where they are on the mesh: roots shift with it, and bind poses take the mesh's new space
-        Float4x4 back = Float4x4.CreateTranslation(local);
-        foreach (PMeshBone bone in model.Bones)
-        {
-            if (bone.Parent < 0) bone.Position -= local;
-            bone.BindPose *= back;
-        }
+        foreach (PMeshBone bone in model.Bones) bone.Transform(Float4x4.CreateTranslation(-local));
         go.Transform.Position = go.Transform.TransformPoint(local);
         model.RefreshPreview();
     }
