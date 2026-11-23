@@ -4,6 +4,8 @@
 using Prowl.Runtime;
 using Prowl.Vector;
 
+using static Prowl.Samples.Sample;
+
 namespace NetworkingShowcase;
 
 /// <summary>Colors a renderer's own material, glowing, and only touches it when the color changes.</summary>
@@ -18,10 +20,9 @@ public sealed class Tint
             return;
         }
 
+        // Glow is in display whites, as the Lit shader takes emission in nits.
         _current = color;
-        material.SetColor("_MainColor", color);
-        material.SetInt("_Emission", glow > 0f ? 1 : 0);
-        material.SetColor("_EmissiveColor", color);
-        material.SetFloat("_EmissionIntensity", glow);
+        material.SetColor("base_color", new Color(color.R, color.G, color.B, 1f));
+        material.Emissive(color, MathF.Max(0f, glow) * DisplayLuminance);
     }
 }
