@@ -292,8 +292,8 @@ public static class GameObjectInspector
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
             }
 
-            // Reflection-based multi grid (custom single-target editors are bypassed in multi mode).
-            PropertyGridUtils.DrawMulti(paper, compId, instances);
+            if (EditorRegistries.GetCustomEditor(type) is not { } custom || !custom.OnGUIMulti(paper, compId, instances))
+                PropertyGridUtils.DrawMulti(paper, compId, instances);
 
             Origami.Separator(paper, $"{compId}_sep").Show();
         }

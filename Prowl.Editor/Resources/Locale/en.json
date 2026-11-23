@@ -62,6 +62,7 @@
   "model.menu.add": "Add",
   "model.menu.mirror_x": "Mirror X",
   "model.menu.apply_modifiers": "Apply modifiers",
+  "model.modifiers_differ": "The rest of the modifiers differ between the selected objects",
   "model.menu.mirror_clip": "Clip at mirror",
   "model.menu.snap_to": "Snap to",
   "model.menu.snap_anything": "Anything",
