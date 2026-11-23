@@ -119,9 +119,11 @@ Paper runs on real time, so transitions and the helpers below keep animating whi
 
 | Event | Fires |
 | --- | --- |
-| `OnPress`, `OnRelease`, `OnHeld` | left button down, up, every held frame. The pressed element keeps getting them when the pointer leaves |
+| `OnPress`, `OnRelease` | left or right button down and up, so check `e.Button`. The pressed element keeps getting them when the pointer leaves |
+| `OnHeld` | every frame the left button is held |
 | `OnClick` | release over the element that was pressed, if it did not become a drag |
-| `OnDoubleClick`, `OnRightClick` | second press within 0.25s, right button press |
+| `OnDoubleClick` | second press within 0.25s |
+| `OnRightClick` | right button released over the element it pressed, if it did not become a drag |
 | `OnDragStart`, `OnDragging`, `OnDragEnd` | after 5 pixels of movement. `e.Delta` this frame, `e.TotalDelta` |
 | `OnScroll` | `e.Delta` |
 | `OnHover`, `OnEnter`, `OnLeave` | pointer over, entering, leaving |
