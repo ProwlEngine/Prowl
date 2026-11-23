@@ -203,45 +203,117 @@ public class UVEditorPanel : DockPanel
         }
         using (paper.Row("uv_ops").Height(26).Gap(4).Padding(4, 4, 2, 2).Enter())
         {
-            void Corners(string id, string label, string undo, Action<GeometryData, List<GeometryData.Loop>> run)
-                => Origami.Button(paper, id, Loc.Get(label), () => EditCorners(tool, faces, undo, run)).Show();
-            void Faces(string id, string label, string undo, Action<GeometryData, List<GeometryData.Face>> run)
-                => Origami.Button(paper, id, Loc.Get(label), () => EditFaces(tool, faces, undo, run)).Show();
+            void Button(string id, string label, Action run) => Origami.Button(paper, id, Loc.Get(label), run).Show();
 
-            Corners("uv_pin", "uv.pin", "Pin UVs", (_, c) => UVs.SetPinned(c, true));
-            Corners("uv_unpin", "uv.unpin", "Unpin UVs", (_, c) => UVs.SetPinned(c, false));
-            Corners("uv_flip_u", "uv.flip_u", "Flip UVs", (m, c) => UVs.Flip(m, c, 0));
-            Corners("uv_flip_v", "uv.flip_v", "Flip UVs", (m, c) => UVs.Flip(m, c, 1));
-            Corners("uv_rotate", "uv.rotate_90", "Rotate UVs", (m, c) => UVs.Rotate(m, c, MathF.PI * 0.5f));
-            Corners("uv_align_u", "uv.align_u", "Align UVs", (m, c) => UVs.Align(m, c, 0));
-            Corners("uv_align_v", "uv.align_v", "Align UVs", (m, c) => UVs.Align(m, c, 1));
-            Corners("uv_weld", "uv.weld", "Weld UVs", UVs.Weld);
-            Corners("uv_straighten", "uv.straighten", "Straighten UVs", (m, c) => UVs.Straighten(m, c));
-            Corners("uv_distribute", "uv.distribute", "Distribute UVs", (m, c) => UVs.Distribute(m, c));
-            Origami.Button(paper, "uv_relax", Loc.Get("uv.relax"), () => EditCornersOnFaces(tool, faces, "Relax UVs", (m, c, f) => UVs.Relax(m, c, f, 0.5f))).Show();
-            Origami.Button(paper, "uv_stitch", Loc.Get("uv.stitch"), () => EditCornersOnFaces(tool, faces, "Stitch UVs", (m, c, f) =>
-            {
-                var picked = new HashSet<GeometryData.Vertex>(c.Select(l => l.Vert));
-                UVs.Stitch(m, f.SelectMany(UVs.Corners).Select(l => l.Edge).Distinct().Where(e => picked.Contains(e.Vert1) && picked.Contains(e.Vert2)).ToList(), f);
-            })).Show();
-            Corners("uv_pixels", "uv.snap_pixels", "Snap UVs To Pixels", (m, c) =>
+            Button("uv_pin", "uv.pin", () => Pin(tool, faces, true));
+            Button("uv_unpin", "uv.unpin", () => Pin(tool, faces, false));
+            Button("uv_flip_u", "uv.flip_u", () => EditCorners(tool, faces, "Flip UVs", (m, c) => UVs.Flip(m, c, 0)));
+            Button("uv_flip_v", "uv.flip_v", () => EditCorners(tool, faces, "Flip UVs", (m, c) => UVs.Flip(m, c, 1)));
+            Button("uv_rotate", "uv.rotate_90", () => EditCorners(tool, faces, "Rotate UVs", (m, c) => UVs.Rotate(m, c, MathF.PI * 0.5f)));
+            Button("uv_align_u", "uv.align_u", () => Align(tool, faces, 0));
+            Button("uv_align_v", "uv.align_v", () => Align(tool, faces, 1));
+            Button("uv_weld", "uv.weld", () => Weld(tool, faces));
+            Button("uv_straighten", "uv.straighten", () => Straighten(tool, faces));
+            Button("uv_distribute", "uv.distribute", () => Distribute(tool, faces));
+            Button("uv_relax", "uv.relax", () => Relax(tool, faces));
+            Button("uv_stitch", "uv.stitch", () => Stitch(tool, faces));
+            Button("uv_pixels", "uv.snap_pixels", () => EditCorners(tool, faces, "Snap UVs To Pixels", (m, c) =>
             {
                 (int w, int h) = TextureSize(tool);
                 UVs.SnapToPixels(m, c, w, h);
-            });
-            Faces("uv_unwrap", "uv.unwrap", "Unwrap", UVs.Unwrap);
-            // The faces are found again when run, as adjusting the step after runs it on the meshes undo brings back
-            Origami.Button(paper, "uv_pack", Loc.Get("uv.pack"), () => tool.RunRemembered("Pack UVs", [new(Loc.Get("uv.margin"), 1f / 256f)],
-                v => EditFaces(tool, ShownFaces(tool), "Pack UVs", (m, f) => UVs.Pack(m, f, MathF.Max(0f, v[0]))))).Show();
-            Faces("uv_average", "uv.average_scale", "Average Island Scale", UVs.AverageIslandScale);
-            Origami.Button(paper, "uv_by_angle", Loc.Get("uv.project_angle"), () => tool.RunRemembered("Project By Angle",
-                [new(Loc.Get("model.field_degrees"), 66f), new(Loc.Get("uv.margin"), 1f / 256f)],
-                v => EditFaces(tool, ShownFaces(tool), "Project By Angle", (m, f) => UVs.ByAngle(m, f, v[0], MathF.Max(0f, v[1]))))).Show();
-            Faces("uv_follow", "uv.follow_quad", "Follow Quad", (m, f) =>
-            {
-                if (f.Where(x => x.VertCount == 4).OrderBy(x => x.Index).FirstOrDefault() is { } active) UVs.FollowQuad(m, active, f);
-            });
+            }));
+            Button("uv_unwrap", "uv.unwrap", () => Unwrap(tool, faces));
+            Button("uv_pack", "uv.pack", () => Pack(tool));
+            Button("uv_average", "uv.average_scale", () => EditFaces(tool, faces, "Average Island Scale", UVs.AverageIslandScale));
+            Button("uv_by_angle", "uv.project_angle", () => ProjectByAngle(tool));
+            Button("uv_follow", "uv.follow_quad", () => FollowQuad(tool, faces));
         }
+    }
+
+    // ================================================================
+    //  Operations, shared by the toolbar, the right click menu and the keys
+    // ================================================================
+
+    private void Pin(ModelMeshTool tool, List<Shown> faces, bool pinned) => EditCorners(tool, faces, pinned ? "Pin UVs" : "Unpin UVs", (_, c) => UVs.SetPinned(c, pinned));
+
+    private void Align(ModelMeshTool tool, List<Shown> faces, int axis) => EditCorners(tool, faces, "Align UVs", (m, c) => UVs.Align(m, c, axis));
+
+    private void Weld(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Weld UVs", UVs.Weld);
+
+    private void Straighten(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Straighten UVs", (m, c) => UVs.Straighten(m, c));
+
+    private void Distribute(ModelMeshTool tool, List<Shown> faces) => EditCorners(tool, faces, "Distribute UVs", (m, c) => UVs.Distribute(m, c));
+
+    private void Relax(ModelMeshTool tool, List<Shown> faces) => EditCornersOnFaces(tool, faces, "Relax UVs", (m, c, f) => UVs.Relax(m, c, f, 0.5f));
+
+    private void Stitch(ModelMeshTool tool, List<Shown> faces) => EditCornersOnFaces(tool, faces, "Stitch UVs", (m, c, f) =>
+    {
+        var picked = new HashSet<GeometryData.Vertex>(c.Select(l => l.Vert));
+        UVs.Stitch(m, f.SelectMany(UVs.Corners).Select(l => l.Edge).Distinct().Where(e => picked.Contains(e.Vert1) && picked.Contains(e.Vert2)).ToList(), f);
+    });
+
+    private static void Unwrap(ModelMeshTool tool, List<Shown> faces) => EditFaces(tool, faces, "Unwrap", UVs.Unwrap);
+
+    private static void FollowQuad(ModelMeshTool tool, List<Shown> faces) => EditFaces(tool, faces, "Follow Quad", (m, f) =>
+    {
+        if (f.Where(x => x.VertCount == 4).OrderBy(x => x.Index).FirstOrDefault() is { } active) UVs.FollowQuad(m, active, f);
+    });
+
+    // The faces are found again when run, as adjusting the step after runs it on the meshes undo brings back
+    private static void Pack(ModelMeshTool tool)
+        => tool.RunRemembered("Pack UVs", [new(Loc.Get("uv.margin"), 1f / 256f)],
+            v => EditFaces(tool, ShownFaces(tool), "Pack UVs", (m, f) => UVs.Pack(m, f, MathF.Max(0f, v[0]))));
+
+    private static void ProjectByAngle(ModelMeshTool tool)
+        => tool.RunRemembered("Project By Angle", [new(Loc.Get("model.field_degrees"), 66f), new(Loc.Get("uv.margin"), 1f / 256f)],
+            v => EditFaces(tool, ShownFaces(tool), "Project By Angle", (m, f) => UVs.ByAngle(m, f, v[0], MathF.Max(0f, v[1]))));
+
+    private void SelectAll(ModelMeshTool tool, List<Shown> faces)
+        => PickCorners(tool, faces, faces.SelectMany(f => UVs.Corners(f.Face).Select(c => (f.Model, c))), false);
+
+    private void SelectNone(ModelMeshTool tool, List<Shown> faces) => PickCorners(tool, faces, [], false);
+
+    private void OpenMenu(ModelMeshTool tool, List<Shown> faces)
+    {
+        int count = SelectedCorners(tool, faces).Count;
+        (ModelObject, GeometryData.Loop)? under = Nearest(faces, float.MaxValue);
+        Float2 at = (Float2)Input.MousePosition;
+        Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(count == 0 ? Loc.Get("uv.menu_map") : count == 1 ? Loc.Get("uv.menu_corner") : Loc.Get("uv.menu_corners", new { count }));
+            if (count > 0)
+            {
+                menu.Item(Loc.Get("model.menu.grab"), () => Begin(tool, faces, Gesture.Grab), shortcut: "G");
+                menu.Item(Loc.Get("model.menu.rotate"), () => Begin(tool, faces, Gesture.Rotate), shortcut: "R");
+                menu.Item(Loc.Get("model.menu.scale"), () => Begin(tool, faces, Gesture.Scale), shortcut: "S");
+                menu.Separator();
+                menu.Item(Loc.Get("uv.pin"), () => Pin(tool, faces, true), shortcut: "P");
+                menu.Item(Loc.Get("uv.unpin"), () => Pin(tool, faces, false), shortcut: "Alt+P");
+                menu.Separator();
+                menu.Item(Loc.Get("uv.weld"), () => Weld(tool, faces), shortcut: "W");
+                menu.Item(Loc.Get("uv.stitch"), () => Stitch(tool, faces), shortcut: "V");
+                menu.Item(Loc.Get("uv.align_u"), () => Align(tool, faces, 0));
+                menu.Item(Loc.Get("uv.align_v"), () => Align(tool, faces, 1));
+                menu.Item(Loc.Get("uv.straighten"), () => Straighten(tool, faces));
+                menu.Item(Loc.Get("uv.distribute"), () => Distribute(tool, faces));
+                menu.Item(Loc.Get("uv.relax"), () => Relax(tool, faces));
+                menu.Separator();
+            }
+            if (under is { } corner) menu.Item(Loc.Get("uv.select_island"), () => PickCorners(tool, faces, IslandOf(faces, corner.Item1, corner.Item2), false), shortcut: "L");
+            menu.Item(Loc.Get("uv.select_all"), () => SelectAll(tool, faces), shortcut: "A");
+            menu.Item(Loc.Get("uv.select_none"), () => SelectNone(tool, faces), shortcut: "Alt+A");
+            menu.Separator();
+            menu.Submenu(Loc.Get("model.menu.map_uvs"), sub =>
+            {
+                sub.Item(Loc.Get("uv.unwrap"), () => Unwrap(tool, faces), shortcut: "U");
+                sub.Item(Loc.Get("uv.project_angle"), () => ProjectByAngle(tool));
+                sub.Item(Loc.Get("uv.follow_quad"), () => FollowQuad(tool, faces));
+                sub.Separator();
+                sub.Item(Loc.Get("uv.pack"), () => Pack(tool));
+                sub.Item(Loc.Get("uv.average_scale"), () => EditFaces(tool, faces, "Average Island Scale", UVs.AverageIslandScale));
+            });
+            menu.Toggle(Loc.Get("uv.checker_world"), () => ModelEditingMode.SetChecker(!ModelObject.ShowChecker), () => ModelObject.ShowChecker);
+        });
     }
 
     private void EditCorners(ModelMeshTool tool, List<Shown> faces, string name, Action<GeometryData, List<GeometryData.Loop>> run)
@@ -535,7 +607,21 @@ public class UVEditorPanel : DockPanel
         bool shift = paper.IsKeyDown(PaperKey.LeftShift) || paper.IsKeyDown(PaperKey.RightShift);
         bool alt = paper.IsKeyDown(PaperKey.LeftAlt) || paper.IsKeyDown(PaperKey.RightAlt);
 
-        if (paper.IsKeyPressed(PaperKey.F)) Frame();
+        if (paper.IsPointerPressed(PaperMouseBtn.Right))
+        {
+            OpenMenu(tool, faces);
+            return;
+        }
+        if (paper.IsKeyPressed(PaperKey.A))
+        {
+            if (alt) SelectNone(tool, faces);
+            else SelectAll(tool, faces);
+        }
+        else if (paper.IsKeyPressed(PaperKey.P)) Pin(tool, faces, !alt);
+        else if (paper.IsKeyPressed(PaperKey.W)) Weld(tool, faces);
+        else if (paper.IsKeyPressed(PaperKey.V)) Stitch(tool, faces);
+        else if (paper.IsKeyPressed(PaperKey.U)) Unwrap(tool, faces);
+        else if (paper.IsKeyPressed(PaperKey.F)) Frame();
         else if (paper.IsKeyPressed(PaperKey.L) && Nearest(faces, float.MaxValue) is { } under) PickCorners(tool, faces, IslandOf(faces, under.Item1, under.Item2), shift);
         else if (paper.IsKeyPressed(PaperKey.G)) Begin(tool, faces, Gesture.Grab);
         else if (paper.IsKeyPressed(PaperKey.R)) Begin(tool, faces, Gesture.Rotate);
