@@ -1120,7 +1120,7 @@ public static class GeometryOperators
     }
 
     /// <summary>
-    /// Copies faces and loose edges through a transform. Copies that land on existing faces merge into them
+    /// Copies faces and loose edges through a transform. With weld, copies that land on existing faces merge into them
     /// like drawn geometry. Returns the new vertices.
     /// </summary>
     /// <param name="mesh">The mesh to copy within.</param>
@@ -1128,9 +1128,9 @@ public static class GeometryOperators
     /// <param name="edges">Loose edges to copy.</param>
     /// <param name="transform">Where each point of the copy goes.</param>
     /// <param name="flip">Reverse the copies, for transforms that mirror.</param>
-    public static List<GeometryData.Vertex> CopyFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, IReadOnlyCollection<GeometryData.Edge> edges, Func<Float3, Float3> transform, bool flip = false)
+    public static List<GeometryData.Vertex> CopyFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, IReadOnlyCollection<GeometryData.Edge> edges, Func<Float3, Float3> transform, bool flip = false, bool weld = true)
     {
-        return CopyOp.Copy(mesh, faces, edges, transform, flip);
+        return CopyOp.Copy(mesh, faces, edges, transform, flip, weld);
     }
 
     /// <summary>A mirrored copy of faces and edges across a plane, wound to face the same way as the originals. Returns the new vertices.</summary>
@@ -1139,10 +1139,10 @@ public static class GeometryOperators
         return CopyOp.Mirror(mesh, faces, edges, plane);
     }
 
-    /// <summary>Copies faces and edges several times, each copy by the transform for its step, starting at 1.</summary>
-    public static void Array(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, IReadOnlyCollection<GeometryData.Edge> edges, int copies, Func<Float3, int, Float3> transform)
+    /// <summary>Copies faces and edges several times, each copy by the transform for its step, starting at 1. With weld, copies merge into what they land on.</summary>
+    public static void Array(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, IReadOnlyCollection<GeometryData.Edge> edges, int copies, Func<Float3, int, Float3> transform, bool weld = true)
     {
-        CopyOp.Array(mesh, faces, edges, copies, transform);
+        CopyOp.Array(mesh, faces, edges, copies, transform, weld);
     }
 
     /// <summary>Deletes faces, with the rest of any face they are joined to by hidden edges. Their edges stay.</summary>

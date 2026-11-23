@@ -15,6 +15,17 @@ namespace Prowl.Vector.Tests;
 public class GeometryOperatorsTests
 {
     [Fact]
+    public void Array_WithoutWeld_KeepsEveryCopyWhole()
+    {
+        GeometryData mesh = GeometryGenerator.Box(new Float3(2f));
+
+        GeometryOperators.Array(mesh, [.. mesh.Faces], [], 2, (p, i) => p + new Float3(2f * i, 0f, 0f), weld: false);
+
+        Assert.Equal(18, mesh.Faces.Count);
+        Assert.Equal(24, mesh.Vertices.Count);
+    }
+
+    [Fact]
     public void Bounds_HoldsEveryVertex()
     {
         AABB bounds = GeometryGenerator.Box(new Float3(2f, 4f, 6f), new Float3(1f, 0f, 0f)).Bounds();
