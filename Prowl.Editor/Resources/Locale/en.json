@@ -61,6 +61,7 @@
   "model.menu.delete_objects": "Delete {{count}} objects",
   "model.menu.add": "Add",
   "model.menu.mirror_clip": "Clip at mirror",
+  "model.menu.auto_shrinkwrap": "Shrinkwrap after moves",
   "model.menu.subdivide_smooth": "Subdivide smooth",
   "model.menu.select_loops": "Edge Loops",
   "model.menu.select_rings": "Edge Rings",

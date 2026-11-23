@@ -109,6 +109,9 @@ public sealed class ModelMeshTool : SceneTool
 
     /// <summary>With a mirror modifier on, moved points on its plane stay there and the rest do not cross it.</summary>
     public bool MirrorClip { get; set; } = true;
+
+    /// <summary>After every move, turn and scale the moved points land on the nearest other model, for retopology.</summary>
+    public bool AutoShrinkwrap { get; set; }
     public float ProportionalRadius { get; set; } = 1f;
 
     /// <summary>Whether edit mode is on.</summary>
@@ -686,6 +689,7 @@ public sealed class ModelMeshTool : SceneTool
             m.Toggle(Loc.Get("model.menu.snap"), () => SnapToObjects = !SnapToObjects, () => SnapToObjects);
             m.Toggle(Loc.Get("csg.proportional"), () => Proportional = !Proportional, () => Proportional);
             m.Toggle(Loc.Get("model.menu.mirror_clip"), () => MirrorClip = !MirrorClip, () => MirrorClip);
+            m.Toggle(Loc.Get("model.menu.auto_shrinkwrap"), () => AutoShrinkwrap = !AutoShrinkwrap, () => AutoShrinkwrap);
             m.Toggle(Loc.Get("uv.checker_world"), () => ModelEditingMode.SetChecker(!ModelObject.ShowChecker), () => ModelObject.ShowChecker);
         });
         menu.Separator();
@@ -1422,6 +1426,10 @@ public sealed class ModelMeshTool : SceneTool
             before[model] = Before(model.Mesh);
         }
         move();
+        if (AutoShrinkwrap && OtherModels() is { Count: > 0 } surfaces)
+            foreach (ModelObject model in _edited)
+                if (_selection[model].Vertices.Count > 0)
+                    Operators.Shrinkwrap(model.Mesh, [.. _selection[model].Vertices], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), 0.002f, 1f);
         foreach (ModelObject model in _edited)
         {
             (Dictionary<GeometryData.Vertex, Float3> points, HashSet<GeometryData.Face> faces) = before[model];
@@ -1773,20 +1781,22 @@ public sealed class ModelMeshTool : SceneTool
             CSGStatus.Flash(Loc.Get("model.shrinkwrap_nothing"));
             return;
         }
-        float? Hit(Ray ray, float reach)
-        {
-            float? nearest = null;
-            foreach (ModelObject other in surfaces)
-                if (Tree(other.Mesh).Raycast(other.Transform.LocalToWorldMatrix, ray, out _, out float distance) && distance <= reach && (nearest == null || distance < nearest))
-                    nearest = distance;
-            return nearest;
-        }
         EditMeshes("Shrinkwrap", (model, mesh, s) =>
         {
             IEnumerable<GeometryData.Vertex> points = s.Vertices.Count > 0 ? s.Vertices : mesh.Vertices.Where(v => !_hidden[model].Vertices.Contains(v));
-            Operators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, Hit, 0.002f, 1f);
+            Operators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), 0.002f, 1f);
         });
     }
+
+    // How far along a world ray the nearest of the surfaces is, within a reach
+    private Func<Ray, float, float?> SurfaceHit(List<ModelObject> surfaces) => (ray, reach) =>
+    {
+        float? nearest = null;
+        foreach (ModelObject other in surfaces)
+            if (Tree(other.Mesh).Raycast(other.Transform.LocalToWorldMatrix, ray, out _, out float distance) && distance <= reach && (nearest == null || distance < nearest))
+                nearest = distance;
+        return nearest;
+    };
 
     /// <summary>The model objects of the world that are not being edited, which drawing and shrinkwrap land on.</summary>
     private List<ModelObject> OtherModels()
