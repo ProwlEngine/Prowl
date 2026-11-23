@@ -357,7 +357,7 @@ public class UVTests
     public void ClearingTakesTheUVsAndPinsAwayAndKeepsSeams()
     {
         GeometryData mesh = Primitives.Make(PrimitiveKind.Cube);
-        UVs.SetPinned(UVs.Corners(mesh.Faces[0]), true);
+        UVs.SetPinned(mesh.Faces[0].Corners(), true);
         UVs.SeamsFromSharp(mesh, 60f);
 
         UVs.Clear(mesh);

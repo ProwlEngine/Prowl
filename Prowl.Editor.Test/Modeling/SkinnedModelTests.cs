@@ -136,13 +136,13 @@ public class SkinnedModelTests : EditorTestHarness
 
         Operators.FinishEdit(mesh, before, facesBefore);
 
-        foreach (GeometryData.Loop at in UVs.Corners(made))
+        foreach (GeometryData.Loop at in made.Corners())
         {
             (int bone, float weight) = Skin(at);
             Assert.True(MathF.Abs(weight - 1f) < 1e-4f, $"weight {weight} at {at.Vert.Point}");
             Assert.Equal(1, bone);
         }
-        GeometryData.Loop fromSide = UVs.CornerAt(made, grown)!;
+        GeometryData.Loop fromSide = made.GetLoop(grown)!;
         Assert.True(fromSide.TryGetAttribute(MeshGeometry.BlendShapePosition(0, 0), out GeometryData.AttributeValue? delta)
                     && delta is GeometryData.FloatAttributeValue d && MathF.Abs(d.Data[0] - 0.5f) < 1e-5f);
     }
@@ -168,7 +168,7 @@ public class SkinnedModelTests : EditorTestHarness
         Assert.Equal(new[] { "Bulge", "Smile" }, target.Shapes.Select(s => s.Name));
 
         foreach (GeometryData.Face face in target.Mesh.Faces)
-            foreach (GeometryData.Loop corner in UVs.Corners(face))
+            foreach (GeometryData.Loop corner in face.Corners())
             {
                 (int bone, float weight) = Skin(corner);
                 Assert.True(MathF.Abs(weight - 1f) < 1e-4f, $"weight {weight} at {corner.Vert.Point}");
@@ -178,7 +178,7 @@ public class SkinnedModelTests : EditorTestHarness
             }
 
         GeometryData.Vertex moved = target.Mesh.Vertices.First(v => Float3.Distance(v.Point, new Float3(6, 1, 0)) < 1e-4f);
-        GeometryData.Loop at = moved.NeighborFaces().Select(f => UVs.CornerAt(f, moved)!).First();
+        GeometryData.Loop at = moved.NeighborFaces().Select(f => f.GetLoop(moved)!).First();
         Assert.True(at.TryGetAttribute(MeshGeometry.BlendShapePosition(1, 0), out GeometryData.AttributeValue? smile) && smile is GeometryData.FloatAttributeValue d && MathF.Abs(d.Data[0] - 0.5f) < 1e-5f);
         Assert.True(!at.TryGetAttribute(MeshGeometry.BlendShapePosition(0, 0), out GeometryData.AttributeValue? bulge) || bulge is GeometryData.FloatAttributeValue z && z.Data.All(x => x == 0f));
     }

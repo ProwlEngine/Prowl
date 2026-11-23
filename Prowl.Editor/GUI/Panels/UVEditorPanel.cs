@@ -155,7 +155,7 @@ public class UVEditorPanel : DockPanel
         Float2 at = UVs.Get(corner);
         foreach (Shown shown in faces)
         {
-            if (!ReferenceEquals(shown.Model, model) || UVs.CornerAt(shown.Face, corner.Vert) is not { } other) continue;
+            if (!ReferenceEquals(shown.Model, model) || shown.Face.GetLoop(corner.Vert) is not { } other) continue;
             if (Float2.Distance(UVs.Get(other), at) < 1e-5f) yield return (model, other);
         }
     }
@@ -166,7 +166,7 @@ public class UVEditorPanel : DockPanel
         List<GeometryData.Face> mine = [.. faces.Where(f => ReferenceEquals(f.Model, model)).Select(f => f.Face)];
         foreach (List<GeometryData.Face> island in UVs.Islands(model.Mesh, mine))
             if (island.Contains(corner.Face))
-                return island.SelectMany(UVs.Corners).Select(c => (model, c)).ToList();
+                return island.SelectMany(f => f.Corners()).Select(c => (model, c)).ToList();
         return [];
     }
 
@@ -175,7 +175,7 @@ public class UVEditorPanel : DockPanel
     {
         var corners = new List<(ModelObject, GeometryData.Loop)>();
         foreach (Shown shown in faces)
-            foreach (GeometryData.Loop corner in UVs.Corners(shown.Face))
+            foreach (GeometryData.Loop corner in shown.Face.Corners())
                 if (Picked(tool, shown.Model, corner)) corners.Add((shown.Model, corner));
         return corners;
     }
@@ -249,7 +249,7 @@ public class UVEditorPanel : DockPanel
     private void Stitch(ModelMeshTool tool, List<Shown> faces) => EditCornersOnFaces(tool, faces, "Stitch UVs", (m, c, f) =>
     {
         var picked = new HashSet<GeometryData.Vertex>(c.Select(l => l.Vert));
-        UVs.Stitch(m, f.SelectMany(UVs.Corners).Select(l => l.Edge).Distinct().Where(e => picked.Contains(e.Vert1) && picked.Contains(e.Vert2)).ToList(), f);
+        UVs.Stitch(m, f.SelectMany(f => f.Corners()).Select(l => l.Edge).Distinct().Where(e => picked.Contains(e.Vert1) && picked.Contains(e.Vert2)).ToList(), f);
     });
 
     private static void Unwrap(ModelMeshTool tool, List<Shown> faces) => EditFaces(tool, faces, "Unwrap", UVs.Unwrap);
@@ -269,7 +269,7 @@ public class UVEditorPanel : DockPanel
             v => EditFaces(tool, ShownFaces(tool), "Project By Angle", (m, f) => UVs.ByAngle(m, f, v[0], MathF.Max(0f, v[1]))));
 
     private void SelectAll(ModelMeshTool tool, List<Shown> faces)
-        => PickCorners(tool, faces, faces.SelectMany(f => UVs.Corners(f.Face).Select(c => (f.Model, c))), false);
+        => PickCorners(tool, faces, faces.SelectMany(f => f.Face.Corners().Select(c => (f.Model, c))), false);
 
     private void SelectNone(ModelMeshTool tool, List<Shown> faces) => PickCorners(tool, faces, [], false);
 
@@ -439,7 +439,7 @@ public class UVEditorPanel : DockPanel
         }
         foreach (Shown shown in faces)
         {
-            List<GeometryData.Loop> corners = [.. UVs.Corners(shown.Face)];
+            List<GeometryData.Loop> corners = [.. shown.Face.Corners()];
             canvas.BeginPath();
             for (int i = 0; i < corners.Count; i++)
             {
@@ -475,7 +475,7 @@ public class UVEditorPanel : DockPanel
         }
 
         foreach (Shown shown in faces)
-            foreach (GeometryData.Loop corner in UVs.Corners(shown.Face))
+            foreach (GeometryData.Loop corner in shown.Face.Corners())
             {
                 Float2 at = ToScreen(UVs.Get(corner));
                 bool picked = Picked(tool, shown.Model, corner);
@@ -654,7 +654,7 @@ public class UVEditorPanel : DockPanel
         (ModelObject, GeometryData.Loop)? best = null;
         float nearest = reach;
         foreach (Shown shown in faces)
-            foreach (GeometryData.Loop corner in UVs.Corners(shown.Face))
+            foreach (GeometryData.Loop corner in shown.Face.Corners())
             {
                 float distance = Float2.Distance(ToScreen(UVs.Get(corner)), Pointer);
                 if (distance >= nearest) continue;
@@ -671,7 +671,7 @@ public class UVEditorPanel : DockPanel
         bool shift = paper.IsKeyDown(PaperKey.LeftShift) || paper.IsKeyDown(PaperKey.RightShift);
         var inside = new List<(ModelObject, GeometryData.Loop)>();
         foreach (Shown shown in faces)
-            foreach (GeometryData.Loop corner in UVs.Corners(shown.Face))
+            foreach (GeometryData.Loop corner in shown.Face.Corners())
             {
                 Float2 at = ToScreen(UVs.Get(corner));
                 if (at.X >= min.X && at.X <= max.X && at.Y >= min.Y && at.Y <= max.Y) inside.Add((shown.Model, corner));
@@ -697,7 +697,7 @@ public class UVEditorPanel : DockPanel
                     foreach (GeometryData.Face face in island)
                     {
                         _unwrapped.Add(new Shown(group.Key, face));
-                        foreach (GeometryData.Loop corner in UVs.Corners(face)) _before.Add((corner, UVs.Get(corner)));
+                        foreach (GeometryData.Loop corner in face.Corners()) _before.Add((corner, UVs.Get(corner)));
                     }
                 }
         Float2 sum = Float2.Zero;
@@ -754,7 +754,7 @@ public class UVEditorPanel : DockPanel
         Float2? best = null;
         float nearest = PickRadius * 2f;
         foreach (Shown shown in faces)
-            foreach (GeometryData.Loop corner in UVs.Corners(shown.Face))
+            foreach (GeometryData.Loop corner in shown.Face.Corners())
             {
                 if (moving.Contains(corner)) continue;
                 Float2 other = UVs.Get(corner);

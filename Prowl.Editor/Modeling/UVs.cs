@@ -37,23 +37,6 @@ public static class UVs
         if (!mesh.HasLoopAttribute(MeshGeometry.UV)) mesh.AddLoopAttribute(MeshGeometry.UV, GeometryData.AttributeBaseType.Float, 2);
     }
 
-    public static IEnumerable<GeometryData.Loop> Corners(GeometryData.Face face)
-    {
-        GeometryData.Loop loop = face.Loop!;
-        do
-        {
-            yield return loop;
-            loop = loop.Next!;
-        } while (loop != face.Loop);
-    }
-
-    /// <summary>The corner of a face at one of its points, or null when the face does not use the point.</summary>
-    public static GeometryData.Loop? CornerAt(GeometryData.Face face, GeometryData.Vertex vertex)
-    {
-        foreach (GeometryData.Loop corner in Corners(face))
-            if (corner.Vert == vertex) return corner;
-        return null;
-    }
 
     // ================================================================
     //  Seams and pins
@@ -91,21 +74,19 @@ public static class UVs
 
     /// <summary>Marks every edge between faces of different material slots as a seam.</summary>
     public static void SeamsFromMaterials(GeometryData mesh)
-        => SetSeams(mesh, mesh.Edges.Where(e => e.NeighborFaces() is { Count: 2 } f && Slot(f[0]) != Slot(f[1])).ToList(), true);
+        => SetSeams(mesh, mesh.Edges.Where(e => e.NeighborFaces() is { Count: 2 } f && Operators.SlotOf(f[0]) != Operators.SlotOf(f[1])).ToList(), true);
 
     /// <summary>Marks every edge whose faces' UVs do not meet along it as a seam, so the current islands are kept.</summary>
     public static void SeamsFromIslands(GeometryData mesh)
         => SetSeams(mesh, mesh.Edges.Where(e => e.NeighborFaces() is { Count: 2 } f && !Joined(e, f[0], f[1])).ToList(), true);
 
-    private static int Slot(GeometryData.Face face)
-        => face.TryGetAttribute(MeshGeometry.SubMesh, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue n && n.Data.Length > 0 ? n.Data[0] : 0;
 
     /// <summary>Whether two faces have the same UVs at both ends of the edge between them.</summary>
     private static bool Joined(GeometryData.Edge edge, GeometryData.Face a, GeometryData.Face b)
     {
         foreach (GeometryData.Vertex end in (GeometryData.Vertex[])[edge.Vert1, edge.Vert2])
         {
-            if (CornerAt(a, end) is not { } ca || CornerAt(b, end) is not { } cb) return false;
+            if (a.GetLoop(end) is not { } ca || b.GetLoop(end) is not { } cb) return false;
             if (Float2.Distance(Get(ca), Get(cb)) > Same) return false;
         }
         return true;
@@ -122,7 +103,7 @@ public static class UVs
             if (!seen.Add(start)) continue;
             var island = new List<GeometryData.Face> { start };
             for (int i = 0; i < island.Count; i++)
-                foreach (GeometryData.Loop corner in Corners(island[i]))
+                foreach (GeometryData.Loop corner in island[i].Corners())
                     foreach (GeometryData.Face other in corner.Edge.NeighborFaces())
                         if (other != island[i] && inSet.Contains(other) && !seen.Contains(other) && Joined(corner.Edge, island[i], other))
                         {
@@ -152,7 +133,7 @@ public static class UVs
         var corners = new List<GeometryData.Loop>();
         var cornerIndex = new Dictionary<GeometryData.Loop, int>();
         foreach (GeometryData.Face face in faces)
-            foreach (GeometryData.Loop corner in Corners(face))
+            foreach (GeometryData.Loop corner in face.Corners())
             {
                 cornerIndex[corner] = corners.Count;
                 corners.Add(corner);
@@ -167,14 +148,14 @@ public static class UVs
             return i;
         }
         foreach (GeometryData.Face face in faces)
-            foreach (GeometryData.Loop corner in Corners(face))
+            foreach (GeometryData.Loop corner in face.Corners())
             {
                 if (IsSeam(corner.Edge)) continue;
                 foreach (GeometryData.Face other in corner.Edge.NeighborFaces())
                 {
                     if (other == face || !inSet.Contains(other)) continue;
                     foreach (GeometryData.Vertex end in (GeometryData.Vertex[])[corner.Edge.Vert1, corner.Edge.Vert2])
-                        if (CornerAt(face, end) is { } mine && CornerAt(other, end) is { } theirs)
+                        if (face.GetLoop(end) is { } mine && other.GetLoop(end) is { } theirs)
                             parent[Find(cornerIndex[mine])] = Find(cornerIndex[theirs]);
                 }
             }
@@ -228,7 +209,7 @@ public static class UVs
     /// <summary>A face cut into triangles in its own plane, ear clipped so a concave face is cut inside itself.</summary>
     public static List<(GeometryData.Loop, GeometryData.Loop, GeometryData.Loop)> Triangles(GeometryData.Face face)
     {
-        List<GeometryData.Loop> corners = [.. Corners(face)];
+        List<GeometryData.Loop> corners = [.. face.Corners()];
         var result = new List<(GeometryData.Loop, GeometryData.Loop, GeometryData.Loop)>(Math.Max(0, corners.Count - 2));
         if (corners.Count > 3)
         {
@@ -248,6 +229,13 @@ public static class UVs
     //  Projections
     // ================================================================
 
+    /// <summary>A point flattened onto the axis plane a normal faces most.</summary>
+    public static Float2 Projected(Float3 point, Float3 normal)
+    {
+        Float3 size = new(MathF.Abs(normal.X), MathF.Abs(normal.Y), MathF.Abs(normal.Z));
+        return size.X >= size.Y && size.X >= size.Z ? new Float2(point.Z, point.Y) : size.Y >= size.Z ? new Float2(point.X, point.Z) : new Float2(point.X, point.Y);
+    }
+
     /// <summary>Each face takes coordinates from the axis plane it faces most, one unit of space to one of texture.</summary>
     public static void Cube(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
     {
@@ -255,18 +243,7 @@ public static class UVs
         foreach (GeometryData.Face face in faces)
         {
             Float3 normal = face.Normal();
-            Float3 size = new(MathF.Abs(normal.X), MathF.Abs(normal.Y), MathF.Abs(normal.Z));
-            int axis = size.X >= size.Y && size.X >= size.Z ? 0 : size.Y >= size.Z ? 1 : 2;
-            foreach (GeometryData.Loop corner in Corners(face))
-            {
-                Float3 p = corner.Vert.Point;
-                Set(corner, axis switch
-                {
-                    0 => new Float2(p.Z, p.Y),
-                    1 => new Float2(p.X, p.Z),
-                    _ => new Float2(p.X, p.Y),
-                } + new Float2(0.5f));
-            }
+            foreach (GeometryData.Loop corner in face.Corners()) Set(corner, Projected(corner.Vert.Point, normal) + new Float2(0.5f));
         }
         mesh.MarkChanged();
     }
@@ -282,7 +259,7 @@ public static class UVs
         {
             if (MathF.Abs(face.Normal().Y) > 0.7f)
             {
-                foreach (GeometryData.Loop corner in Corners(face)) Set(corner, new Float2(corner.Vert.Point.X, corner.Vert.Point.Z) + new Float2(0.5f));
+                foreach (GeometryData.Loop corner in face.Corners()) Set(corner, new Float2(corner.Vert.Point.X, corner.Vert.Point.Z) + new Float2(0.5f));
                 continue;
             }
             Float3 centre = face.Center();
@@ -317,7 +294,7 @@ public static class UVs
     // Sets corners from a wrapping projection, moving the corners of a face across the wrap onto one side
     private static void Wrapped(GeometryData.Face face, Func<Float3, Float2> project)
     {
-        List<(GeometryData.Loop Corner, Float2 UV)> corners = [.. Corners(face).Select(c => (c, project(c.Vert.Point)))];
+        List<(GeometryData.Loop Corner, Float2 UV)> corners = [.. face.Corners().Select(c => (c, project(c.Vert.Point)))];
         float min = corners.Min(c => c.UV.X), max = corners.Max(c => c.UV.X);
         bool across = max - min > 0.5f;
         foreach ((GeometryData.Loop corner, Float2 uv) in corners)
@@ -332,7 +309,7 @@ public static class UVs
         var projected = new Dictionary<GeometryData.Loop, Float2>();
         Float2 min = new(float.MaxValue), max = new(float.MinValue);
         foreach (GeometryData.Face face in faces)
-            foreach (GeometryData.Loop corner in Corners(face))
+            foreach (GeometryData.Loop corner in face.Corners())
             {
                 Float2 at = toScreen(corner.Vert.Point);
                 projected[corner] = at;
@@ -351,7 +328,7 @@ public static class UVs
         Float2[] square = [new(0, 0), new(1, 0), new(1, 1), new(0, 1)];
         foreach (GeometryData.Face face in faces)
         {
-            List<GeometryData.Loop> corners = [.. Corners(face)];
+            List<GeometryData.Loop> corners = [.. face.Corners()];
             if (corners.Count == 4)
             {
                 for (int i = 0; i < 4; i++) Set(corners[i], square[i]);
@@ -480,7 +457,7 @@ public static class UVs
             (float surface, float texture) = areas[i];
             if (surface <= 0f || texture <= 0f) continue;
             float scale = MathF.Sqrt(density * surface / texture);
-            List<GeometryData.Loop> corners = [.. islands[i].SelectMany(Corners)];
+            List<GeometryData.Loop> corners = [.. islands[i].SelectMany(f => f.Corners())];
             Float2 centre = Centre(corners);
             Transform(mesh, corners, uv => centre + (uv - centre) * scale);
         }
@@ -497,7 +474,7 @@ public static class UVs
             pixels[at] = pixels[at + 1] = pixels[at + 2] = pixels[at + 3] = 255;
         }
         foreach (GeometryData.Face face in faces)
-            foreach (GeometryData.Loop corner in Corners(face))
+            foreach (GeometryData.Loop corner in face.Corners())
             {
                 Float2 a = Get(corner), b = Get(corner.Next!);
                 float ax = a.X * width, ay = (1f - a.Y) * height, bx = b.X * width, by = (1f - b.Y) * height;
@@ -520,14 +497,14 @@ public static class UVs
             List<GeometryData.Face> around = [.. edge.NeighborFaces().Where(inSet.Contains)];
             for (int i = 1; i < around.Count; i++)
                 foreach (GeometryData.Vertex end in (GeometryData.Vertex[])[edge.Vert1, edge.Vert2])
-                    if (CornerAt(around[0], end) is { } keep && CornerAt(around[i], end) is { } moved)
+                    if (around[0].GetLoop(end) is { } keep && around[i].GetLoop(end) is { } moved)
                     {
                         Float2 from = Get(moved), to = Get(keep);
-                        foreach (GeometryData.Loop corner in Corners(around[i]))
+                        foreach (GeometryData.Loop corner in around[i].Corners())
                             if (corner.Vert == end) Set(corner, to);
                         // Every corner of that point on the moved face's island goes with it
                         foreach (GeometryData.Face face in faces)
-                            if (face != around[0] && CornerAt(face, end) is { } other && Float2.Distance(Get(other), from) <= Same) Set(other, to);
+                            if (face != around[0] && face.GetLoop(end) is { } other && Float2.Distance(Get(other), from) <= Same) Set(other, to);
                     }
         }
         mesh.MarkChanged();
@@ -698,7 +675,7 @@ public static class UVs
             Float3 lead = start.Normal();
             var group = new List<GeometryData.Face> { start };
             for (int i = 0; i < group.Count; i++)
-                foreach (GeometryData.Loop corner in Corners(group[i]))
+                foreach (GeometryData.Loop corner in group[i].Corners())
                     foreach (GeometryData.Face other in corner.Edge.NeighborFaces())
                         if (inSet.Contains(other) && !done.Contains(other) && Float3.Dot(other.Normal(), lead) >= limit)
                         {
@@ -741,13 +718,13 @@ public static class UVs
         if (active.VertCount != 4) return;
         EnsureUV(mesh);
         var inSet = new HashSet<GeometryData.Face>(faces.Where(f => f.VertCount == 4));
-        List<GeometryData.Loop> start = [.. Corners(active)];
+        List<GeometryData.Loop> start = [.. active.Corners()];
         Float2 s0 = Get(start[0]), s1 = Get(start[1]), s2 = Get(start[2]);
         if (MathF.Abs((s1.X - s0.X) * (s2.Y - s0.Y) - (s2.X - s0.X) * (s1.Y - s0.Y)) < 1e-10f) Reset(mesh, [active]);
 
         var placed = new Dictionary<GeometryData.Face, Dictionary<GeometryData.Vertex, Float2>>
         {
-            [active] = Corners(active).ToDictionary(c => c.Vert, Get),
+            [active] = active.Corners().ToDictionary(c => c.Vert, Get),
         };
         var queue = new Queue<GeometryData.Face>();
         queue.Enqueue(active);
@@ -755,7 +732,7 @@ public static class UVs
         {
             GeometryData.Face from = queue.Dequeue();
             Dictionary<GeometryData.Vertex, Float2> known = placed[from];
-            foreach (GeometryData.Loop corner in Corners(from))
+            foreach (GeometryData.Loop corner in from.Corners())
             {
                 GeometryData.Vertex a = corner.Vert, b = corner.Next!.Vert;
                 foreach (GeometryData.Face next in corner.Edge.NeighborFaces())
@@ -764,7 +741,7 @@ public static class UVs
 
                     // The side of the laid out quad leaving each end of the shared edge, carried on into the next quad
                     GeometryData.Vertex beforeA = corner.Prev!.Vert, afterB = corner.Next!.Next!.Vert;
-                    GeometryData.Loop atA = CornerAt(next, a)!, atB = CornerAt(next, b)!;
+                    GeometryData.Loop atA = next.GetLoop(a)!, atB = next.GetLoop(b)!;
                     GeometryData.Vertex farA = atA.Next!.Vert == b ? atA.Prev!.Vert : atA.Next!.Vert;
                     GeometryData.Vertex farB = atB.Next!.Vert == a ? atB.Prev!.Vert : atB.Next!.Vert;
                     var uvs = new Dictionary<GeometryData.Vertex, Float2>
@@ -781,7 +758,7 @@ public static class UVs
         }
 
         foreach ((GeometryData.Face face, Dictionary<GeometryData.Vertex, Float2> uvs) in placed)
-            foreach (GeometryData.Loop corner in Corners(face))
+            foreach (GeometryData.Loop corner in face.Corners())
                 if (uvs.TryGetValue(corner.Vert, out Float2 uv)) Set(corner, uv);
         mesh.MarkChanged();
     }

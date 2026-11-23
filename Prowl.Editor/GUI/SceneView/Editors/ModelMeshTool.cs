@@ -1349,7 +1349,7 @@ public sealed class ModelMeshTool : SceneTool
             foreach (ModelObject model in _edited)
                 foreach (GeometryData.Face face in _selection[model].Faces)
                 {
-                    int slot = SlotOf(face);
+                    int slot = Operators.SlotOf(face);
                     if (found == null) found = slot;
                     else if (found != slot) return -1;
                 }
@@ -1365,9 +1365,6 @@ public sealed class ModelMeshTool : SceneTool
         {
             foreach (GeometryData.Face face in s.Faces) face.SetAttribute(MeshGeometry.SubMesh, new GeometryData.IntAttributeValue(slot));
         });
-
-    private static int SlotOf(GeometryData.Face face)
-        => face.TryGetAttribute(MeshGeometry.SubMesh, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue n && n.Data.Length > 0 ? n.Data[0] : 0;
 
     /// <summary>Moves the origin of each edited object with something selected to the middle of its selected points.</summary>
     private void OriginToSelection()
@@ -1982,8 +1979,7 @@ public sealed class ModelMeshTool : SceneTool
     /// <summary>Which way on screen the edges slide at +1, found by trying a slide on a copy.</summary>
     private Float2 SlideDirection(SceneToolContext ctx, ModelObject model)
     {
-        var copy = new GeometryData();
-        copy.Restore(model.Mesh.Capture());
+        GeometryData copy = model.Mesh.Clone();
         ModelEditPart part = Indices(model);
         ElementSelection selection = FromIndices(copy, part);
         if (selection.Edges.Count == 0) return Float2.Zero;
@@ -2052,8 +2048,7 @@ public sealed class ModelMeshTool : SceneTool
     {
         Float3? CutPoint(float slide)
         {
-            var copy = new GeometryData();
-            copy.Restore(at.Model.Mesh.Capture());
+            GeometryData copy = at.Model.Mesh.Clone();
             if (at.A >= copy.Vertices.Count || at.B >= copy.Vertices.Count || copy.FindEdge(copy.Vertices[at.A], copy.Vertices[at.B]) is not { } edge) return null;
             List<GeometryData.Edge> made = GeometryOperators.LoopCut(copy, edge, cuts, slide);
             return made.Count > 0 ? made[0].Vert1.Point : null;
