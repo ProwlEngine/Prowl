@@ -27,8 +27,7 @@ internal sealed partial class NetworkSystem
             }
 
             // Replication relies on everything but RPCs sharing channel 0, so one can't overtake another.
-            if (channel != 0 && kind is not (EngineMessage.RpcToHost or EngineMessage.RpcFromHost
-                    or EngineMessage.StaticRpcToHost or EngineMessage.StaticRpcFromHost))
+            if (channel != 0 && kind is not (EngineMessage.RpcToHost or EngineMessage.RpcFromHost))
             {
                 NetworkDiagnostics.Record(kind.ToString(), "Rejected", peer, Guid.Empty, $"Sent on channel {channel}");
                 return;
@@ -135,7 +134,7 @@ internal sealed partial class NetworkSystem
     internal void SendEngine(NetPeer peer, EngineMessage kind, ReadOnlySpan<byte> payload,
         Delivery delivery = Delivery.Reliable, byte channel = 0)
     {
-        if (IsHost && kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost && !HasLoadedScene(peer))
+        if (IsHost && kind is EngineMessage.RpcFromHost && !HasLoadedScene(peer))
         {
             return;
         }
@@ -179,7 +178,7 @@ internal sealed partial class NetworkSystem
     internal void BroadcastEngine(EngineMessage kind, ReadOnlySpan<byte> payload,
         Delivery delivery = Delivery.Reliable, NetPeer? except = null, byte channel = 0)
     {
-        if (delivery == Delivery.Unreliable || kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost)
+        if (delivery == Delivery.Unreliable || kind is EngineMessage.RpcFromHost)
         {
             foreach (NetPeer peer in Session!.Peers)
             {

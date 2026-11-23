@@ -141,8 +141,6 @@ internal sealed partial class NetworkSystem : IDisposable
         RegisterEngineMessage(session, EngineMessage.SectionMove, OnSectionMove);
         RegisterEngineMessage(session, EngineMessage.Time, OnTime);
 
-        RegisterEngineMessage(session, EngineMessage.StaticRpcToHost, Rpcs.OnStaticRpcToHost);
-        RegisterEngineMessage(session, EngineMessage.StaticRpcFromHost, Rpcs.OnStaticRpcFromHost);
         RegisterEngineMessage(session, EngineMessage.Orphaned, OnOrphaned);
         RegisterEngineMessage(session, EngineMessage.OwnershipState, OnOwnershipState);
         RegisterEngineMessage(session, EngineMessage.Player, OnPlayer);

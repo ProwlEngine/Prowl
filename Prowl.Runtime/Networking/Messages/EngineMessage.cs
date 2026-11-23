@@ -16,8 +16,6 @@ internal enum EngineMessage : ushort
     Ready,
     SpawnStarted,
     SpawnFinished,
-    StaticRpcToHost,
-    StaticRpcFromHost,
     Orphaned,
     OwnershipState,
     TransformAck,

@@ -88,11 +88,10 @@ public sealed class FakePeer : IDisposable
     public const ushort Scene = Networking.Networking.EngineMessageIds, Spawn = Scene + 1, Despawn = Scene + 2,
         Owner = Scene + 3, Sync = Scene + 4, Transform = Scene + 5, RpcToHost = Scene + 6, RpcFromHost = Scene + 7,
         Ready = Scene + 8, SpawnStarted = Scene + 9, SpawnFinished = Scene + 10,
-        StaticRpcToHost = Scene + 11, StaticRpcFromHost = Scene + 12,
-        Orphaned = Scene + 13, OwnershipState = Scene + 14,
-        TransformAck = Scene + 15,
-        SectionAdd = Scene + 16, SectionRemove = Scene + 17, SectionMove = Scene + 18, Time = Scene + 19,
-        Player = Scene + 20;
+        Orphaned = Scene + 11, OwnershipState = Scene + 12,
+        TransformAck = Scene + 13,
+        SectionAdd = Scene + 14, SectionRemove = Scene + 15, SectionMove = Scene + 16, Time = Scene + 17,
+        Player = Scene + 18;
 
     private FakePeer(NetSession session)
     {

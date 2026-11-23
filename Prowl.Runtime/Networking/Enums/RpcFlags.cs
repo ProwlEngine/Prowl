@@ -14,7 +14,7 @@ public enum RpcFlags : uint
     /// <summary>Send it unreliably: cheaper and lower latency, but it may be lost. Arguments must fit in one packet.</summary>
     Unreliable = 1,
 
-    /// <summary>Only the host may call it. Calls from clients are dropped. For static RPCs and host RPCs: the other kinds are the host's alone already.</summary>
+    /// <summary>Only the host may call it. Calls from clients are dropped. For host RPCs: the other kinds are the host's alone already.</summary>
     HostOnly = 2,
 
     /// <summary>

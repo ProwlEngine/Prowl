@@ -7,6 +7,26 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
+/// <summary>What the script compiler generates for an unreliable <c>[Rpc.Broadcast] Shout(string)</c> and <c>[Rpc.Host] Ask(string)</c>.</summary>
+public class LoudTestComponent : Component
+{
+    private static readonly RpcMember<LoudTestComponent> s_shout = new(991, "Shout(string)", RpcMode.Broadcast, RpcFlags.Unreliable,
+        static (LoudTestComponent c, ref NetReader r, bool execute) => { NetSerializer<string>.Read(ref r); if (execute) RpcMember.ArgumentsRead(); });
+
+    private static readonly RpcMember<LoudTestComponent> s_ask = new(992, "Ask(string)", RpcMode.Host, RpcFlags.Unreliable,
+        static (LoudTestComponent c, ref NetReader r, bool execute) => { NetSerializer<string>.Read(ref r); if (execute) RpcMember.ArgumentsRead(); });
+
+    public void Shout(string text)
+    {
+        if (s_shout.Begin(this, out NetWriter w)) { NetSerializer<string>.Write(w, text); s_shout.Send(this, w); }
+    }
+
+    public void Ask(string text)
+    {
+        if (s_ask.Begin(this, out NetWriter w)) { NetSerializer<string>.Write(w, text); s_ask.Send(this, w); }
+    }
+}
+
 public partial class NetworkingTests
 {
     [Fact]
@@ -61,6 +81,7 @@ public partial class NetworkingTests
             {
                 GameObject go = CreateGameObject($"Object {i}");
                 go.AddComponent<NetworkTransform>();
+                go.AddComponent<LoudTestComponent>();
                 scene.Add(go);
                 go.SpawnBuilt();
                 return go;
@@ -74,16 +95,12 @@ public partial class NetworkingTests
             Assert.All(small.Deliveries.Where(m => m.Id == FakePeer.Transform), m =>
                 Assert.Equal(smallLimit < TransformBatchMessage.MinMessageSize ? Delivery.Reliable : Delivery.Unreliable, m.Delivery));
 
-            StaticRpcMember rpc = new(typeof(NetworkingTests), 998, "Broadcast", RpcMode.Broadcast, RpcFlags.Unreliable,
-                static (ref NetReader reader, bool execute) => { });
-            using NetWriter arguments = new();
-            arguments.WriteString(new string('x', 512));
-            Networking.Networking.System!.Rpcs.SendStaticRpc(rpc, arguments);
-            Pump(() => peers.All(p => p.Has(FakePeer.StaticRpcFromHost)), peers);
-            Assert.Equal(Delivery.Reliable, small.Deliveries.Last(m => m.Id == FakePeer.StaticRpcFromHost).Delivery);
-            Assert.Equal(Delivery.Reliable, wide.Deliveries.Last(m => m.Id == FakePeer.StaticRpcFromHost).Delivery);
+            objects[0].GetComponent<LoudTestComponent>()!.Shout(new string('x', 512));
+            Pump(() => peers.All(p => p.Has(FakePeer.RpcFromHost)), peers);
+            Assert.Equal(Delivery.Reliable, small.Deliveries.Last(m => m.Id == FakePeer.RpcFromHost).Delivery);
+            Assert.Equal(Delivery.Reliable, wide.Deliveries.Last(m => m.Id == FakePeer.RpcFromHost).Delivery);
             Assert.Equal(deliveries == DeliverySupport.Reliable ? Delivery.Reliable : Delivery.Unreliable,
-                sender.Deliveries.Last(m => m.Id == FakePeer.StaticRpcFromHost).Delivery);
+                sender.Deliveries.Last(m => m.Id == FakePeer.RpcFromHost).Delivery);
 
             NetPeer owner = Networking.Networking.Session!.Peers.Single(p => p.Name == "sender");
             foreach (GameObject go in objects) go.Network.AssignOwnership(owner);
@@ -116,6 +133,7 @@ public partial class NetworkingTests
         NetworkTestScene.Current.WriteScene(scene, snapshot);
         GameObject ship = CreateGameObject("Ship");
         ship.AddComponent<NetworkTransform>();
+        ship.AddComponent<LoudTestComponent>();
         ship.Network.Networked = true;
         using NetWriter spawn = new();
         NetworkTestScene.Current.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, spawn);
@@ -142,13 +160,9 @@ public partial class NetworkingTests
                 .Single(r => r.NetId == shipNetId);
             Assert.Equal(new Float3(42, 0, 0), moved.Position);
 
-            StaticRpcMember rpc = new(typeof(NetworkingTests), 999, "Test", RpcMode.Host, RpcFlags.Unreliable,
-                static (ref NetReader reader, bool execute) => { });
-            using NetWriter arguments = new();
-            arguments.WriteString("request");
-            Networking.Networking.System!.Rpcs.SendStaticRpc(rpc, arguments);
-            Pump(() => host.Has(FakePeer.StaticRpcToHost), host);
-            Assert.Equal(Delivery.Reliable, host.Deliveries.Last(m => m.Id == FakePeer.StaticRpcToHost).Delivery);
+            local.GetComponent<LoudTestComponent>()!.Ask("request");
+            Pump(() => host.Has(FakePeer.RpcToHost), host);
+            Assert.Equal(Delivery.Reliable, host.Deliveries.Last(m => m.Id == FakePeer.RpcToHost).Delivery);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
     }

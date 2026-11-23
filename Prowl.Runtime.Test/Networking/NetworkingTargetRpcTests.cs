@@ -49,45 +49,6 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void ATargetRpcGoesNowhereTheRecipientFiltersLeaveOut()
-    {
-        Scene scene = CreateScene();
-        GameObject go = CreateGameObject("Speaker");
-        WhisperTestComponent speaker = go.AddComponent<WhisperTestComponent>();
-        scene.Add(go);
-        MakeCurrent(scene);
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice");
-        try
-        {
-            Pump(() => alice.IsReady, alice);
-            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
-            go.SpawnBuilt();
-            Pump(() => alice.Has(FakePeer.Spawn), alice);
-
-            using (Rpc.FilterInclude(_ => false))
-            {
-                speaker.Whisper(aliceHere, "filtered");
-                speaker.Whisper(Networking.Networking.Session!.LocalPeer!, "filtered here");
-            }
-
-            PumpFor(30, alice);
-            Assert.Equal(0, RpcsFromHost(alice, WhisperTestComponent.WhisperId));
-            Assert.Empty(speaker.Heard);
-
-            // Left in by the filter, it goes as usual.
-            using (Rpc.FilterInclude(p => p == aliceHere))
-            {
-                speaker.Whisper(aliceHere, "allowed");
-            }
-
-            Pump(() => RpcsFromHost(alice, WhisperTestComponent.WhisperId) == 1, alice);
-        }
-        finally { Networking.Networking.Shutdown(); }
-    }
-
-    [Fact]
     public void ATargetRpcReachesOnlyItsPeerAndExcludeOwnerSkipsTheOwner()
     {
         Scene scene = CreateScene();

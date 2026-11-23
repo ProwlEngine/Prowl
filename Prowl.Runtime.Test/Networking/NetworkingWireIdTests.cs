@@ -113,28 +113,4 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
-    [Fact]
-    public void AStaticRpcNamesItsTypeByHash()
-    {
-        Scene scene = CreateScene();
-        MakeCurrent(scene);
-        LocalNetwork network = new();
-        Networking.Networking.Host(new LocalTransport(network, "host"));
-        using FakePeer alice = FakePeer.Join(network, "alice");
-        ClearStaticProbe();
-        try
-        {
-            Pump(() => alice.IsReady, alice);
-            StaticRpcProbe.Call(901, 5);
-            Pump(() => alice.Has(FakePeer.StaticRpcFromHost), alice);
-            NetReader wire = new(alice.WireReceived.Last(m => m.Id == FakePeer.StaticRpcFromHost).Data);
-            wire.ReadVarUInt32();
-            Assert.Equal(StaticRpcMember.HashOf(typeof(StaticRpcProbe)), wire.ReadUInt32());
-            Assert.Equal(901u, wire.ReadUInt32());
-            NetReader arguments = new(wire.ReadBytesWithLength());
-            Assert.Equal(5, NetSerializer<int>.Read(ref arguments));
-            Assert.True(wire.IsAtEnd);
-        }
-        finally { Networking.Networking.Shutdown(); ClearStaticProbe(); }
-    }
 }

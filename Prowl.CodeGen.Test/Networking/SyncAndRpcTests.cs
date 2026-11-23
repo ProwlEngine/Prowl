@@ -187,7 +187,6 @@ public class SyncAndRpcTests
 
     [Theory]
     [InlineData("[Rpc.Target] public void Whisper(string text) { }")]
-    [InlineData("[Rpc.Target] public static void Whisper(Prowl.Courier.NetPeer target) { }")]
     public void ATargetRpcNeedsAnInstanceMethodTakingItsPeerFirst(string method) =>
         Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Bell : Component { " + method + " }").Errors,
             e => e.Id == "PROWLNET011");
@@ -322,7 +321,6 @@ public class SyncAndRpcTests
                                                 [Rpc.Broadcast(Channel = 2)] public void Chat(string text) { }
                                                 [Rpc.Host(RpcFlags.Unreliable, Channel = 1)] public void Ping() { }
                                                 [Rpc.Broadcast] public void Plain() { }
-                                                [Rpc.Broadcast(Channel = 3)] public static void Announce(int code) { }
                                             }
                                             """);
         Type radio = assembly.GetType("Radio")!;
@@ -334,10 +332,6 @@ public class SyncAndRpcTests
             Assert.Equal((RpcFlags.Unreliable, (byte)1), (ping.Flags, ping.Channel));
             Assert.Equal(0, members.Rpc(NetworkCodeGen.NetworkId("Plain()"))!.Channel);
         });
-
-        StaticRpcMember announce = StaticRpcMember.Find(StaticRpcMember.HashOf(radio),
-            NetworkCodeGen.NetworkId("Announce(int)"))!;
-        Assert.Equal(3, announce.Channel);
     }
 
     [Fact]

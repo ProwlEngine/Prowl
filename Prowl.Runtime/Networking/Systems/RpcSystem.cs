@@ -45,7 +45,6 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         _rpcWriter.Dispose();
         _envelope.Dispose();
         _fromHost.Dispose();
-        _staticWriter.Dispose();
     }
 
     internal bool BeginRpc(Component component, RpcMember rpc, out NetWriter writer)
@@ -63,12 +62,12 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        if (mode == RpcMode.Host && scene.IsHost && !Rpc.HasFilters)
+        if (mode == RpcMode.Host && scene.IsHost)
         {
             return false;
         }
 
-        if (mode == RpcMode.Owner && scene.IsHost && scene.HasControl(component.GameObject) && !Rpc.HasFilters)
+        if (mode == RpcMode.Owner && scene.IsHost && scene.HasControl(component.GameObject))
         {
             return false;
         }
@@ -119,32 +118,14 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             throw new ArgumentNullException(nameof(target), "A target RPC needs the peer to run on.");
         }
 
-        RpcRecipients? recipients = WithoutOwner(Rpc.CaptureRecipients(session), component.GameObject, flags);
-        bool localIncluded = RpcRecipients.Includes(recipients, session.LocalPeer!);
-        if (mode == RpcMode.Target && (target!.IsLocal || !RpcRecipients.Includes(recipients, target)))
+        if (mode == RpcMode.Target && target!.IsLocal)
         {
-            return target.IsLocal && localIncluded;
-        }
-
-        if (recipients != null && recipients.Ids.Count == (localIncluded ? 1 : 0) && mode == RpcMode.Broadcast)
-        {
-            return localIncluded;
+            return true;
         }
 
         if ((mode == RpcMode.Host && scene.IsHost) || (mode == RpcMode.Owner && scene.HasControl(component.GameObject)))
         {
-            return localIncluded;
-        }
-
-        if (mode == RpcMode.Host && !RpcRecipients.Includes(recipients, session.HostPeer!))
-        {
-            return false;
-        }
-
-        if (mode == RpcMode.Owner &&
-            !RpcRecipients.Includes(recipients, scene.GetOwner(component.GameObject) ?? session.HostPeer!))
-        {
-            return false;
+            return true;
         }
 
         // The call is copied out of the shared argument writer before anything else runs: sending state below can run
@@ -158,7 +139,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         _sending = true;
         try
         {
-            return SendEnvelope(component, rpc, envelope, nested, networked, target, recipients, localIncluded, delivery);
+            return SendEnvelope(component, rpc, envelope, nested, networked, target, delivery);
         }
         finally
         {
@@ -174,7 +155,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
     private bool _sending;
 
     private bool SendEnvelope(Component component, RpcMember rpc, NetWriter envelope, bool nested, NetworkObject networked,
-        NetPeer? target, RpcRecipients? recipients, bool localIncluded, Delivery delivery)
+        NetPeer? target, Delivery delivery)
     {
         NetSession session = scene.Session!;
         (uint id, RpcMode mode) = (rpc.Id, rpc.Mode);
@@ -187,7 +168,6 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         if (!scene.IsHost)
         {
-            new RpcRecipientMessage(recipients).Write(envelope);
             scene.SendEngine(session.HostPeer!, EngineMessage.RpcToHost, envelope.WrittenSpan, delivery,
                 rpc.Channel);
             if (NetworkDiagnostics.Enabled)
@@ -213,13 +193,14 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         switch (mode)
         {
             case RpcMode.Broadcast:
-                SendRpcRecipients(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, recipients,
-                    channel: rpc.Channel, target: component.GameObject);
-                return localIncluded;
+                NetPeer? skipped = (rpc.Flags & RpcFlags.ExcludeOwner) != 0 ? scene.GetOwner(component.GameObject) : null;
+                SendToPeers(EngineMessage.RpcFromHost, message.WrittenSpan, delivery, skipped, rpc.Channel,
+                    component.GameObject);
+                return true;
 
             case RpcMode.Owner:
                 // The prologue only sends when another peer controls it.
-                if (scene.GetOwner(component.GameObject) is { } owner && RpcRecipients.Includes(recipients, owner))
+                if (scene.GetOwner(component.GameObject) is { } owner)
                 {
                     scene.SendEngine(owner, EngineMessage.RpcFromHost, message.WrittenSpan, delivery, rpc.Channel);
                 }
@@ -248,7 +229,10 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         RpcCallMessage message = RpcCallMessage.Read(ref reader);
         ReadOnlySpan<byte> arguments = message.Arguments;
-        RpcRecipients? recipients = RpcRecipientMessage.Read(ref reader, scene.Session!.Options.MaxPeers).Recipients;
+        if (!reader.IsAtEnd)
+        {
+            throw new InvalidDataException("RPC contains trailing bytes.");
+        }
 
         if (!Resolve(message, out Component? component, out RpcMember? rpc) ||
             NetworkAccessor.IsExcludedFromNetwork(component.GameObject))
@@ -285,34 +269,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         NetReader validation = new(arguments);
         rpc.ValidateArguments(component, ref validation);
-        if (RpcRecipients.Includes(recipients, scene.Session!.LocalPeer!))
-        {
-            Invoke(component, rpc, arguments, sender);
-        }
-    }
-
-    /// <summary>The recipients, less the object's owner when the RPC takes <see cref="RpcFlags.ExcludeOwner" />.</summary>
-    private RpcRecipients? WithoutOwner(RpcRecipients? recipients, GameObject go, RpcFlags flags)
-    {
-        if ((flags & RpcFlags.ExcludeOwner) == 0 || scene.GetOwner(go) is not { } owner)
-        {
-            return recipients;
-        }
-
-        HashSet<int> ids = new();
-        if (recipients != null)
-        {
-            ids.UnionWith(recipients.Ids);
-        }
-        else
-        {
-            foreach (NetPeer peer in scene.Session!.Peers)
-            {
-                ids.Add(peer.Id);
-            }
-        }
-        ids.Remove(owner.Id);
-        return new RpcRecipients(ids);
+        Invoke(component, rpc, arguments, sender);
     }
 
     internal void OnRpcFromHost(NetPeer sender, ref NetReader reader, Delivery delivery)
@@ -421,12 +378,13 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         }
     }
 
-    internal void SendRpcRecipients(EngineMessage kind, ReadOnlySpan<byte> payload, Delivery delivery,
-        RpcRecipients? recipients, NetPeer? except = null, byte channel = 0, GameObject? target = null)
+    // Sends to every remote peer but except that has target, or every one when there is no target.
+    private void SendToPeers(EngineMessage kind, ReadOnlySpan<byte> payload, Delivery delivery, NetPeer? except,
+        byte channel, GameObject? target)
     {
         foreach (NetPeer peer in scene.Session!.Peers)
         {
-            if (!peer.IsLocal && peer != except && RpcRecipients.Includes(recipients, peer) &&
+            if (!peer.IsLocal && peer != except &&
                 (target.IsNotValid() || scene.Sees(target, peer)))
             {
                 scene.SendEngine(peer, kind, payload, delivery, channel);

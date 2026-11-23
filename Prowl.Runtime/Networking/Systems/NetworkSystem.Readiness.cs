@@ -213,12 +213,12 @@ internal sealed partial class NetworkSystem
     internal bool CanReceiveEngineMessage(NetPeer peer, EngineMessage kind)
     {
         if (IsHost && !peer.IsLocal && kind is EngineMessage.Sync or EngineMessage.Transform or EngineMessage.TransformAck
-                or EngineMessage.RpcToHost or EngineMessage.StaticRpcToHost)
+                or EngineMessage.RpcToHost)
         {
             return IsPeerReady(peer);
         }
 
-        if (IsClient && kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost)
+        if (IsClient && kind is EngineMessage.RpcFromHost)
         {
             return IsReady;
         }

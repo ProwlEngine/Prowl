@@ -65,30 +65,6 @@ internal static class NetworkValidation
         }
     }
 
-    internal static void RecipientCount(uint count, int maxPeers)
-    {
-        if (count > (uint)maxPeers + 1)
-        {
-            throw new InvalidDataException("RPC recipient list exceeds the session peer limit.");
-        }
-    }
-
-    internal static void AddRecipient(HashSet<int> ids, int id)
-    {
-        if (!ids.Add(id))
-        {
-            throw new InvalidDataException("RPC recipient list contains duplicate peers.");
-        }
-    }
-
-    internal static void RecipientEnd(bool atEnd)
-    {
-        if (!atEnd)
-        {
-            throw new InvalidDataException("RPC recipient list contains trailing bytes.");
-        }
-    }
-
     internal static bool Finite(Float3 value) =>
         float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
 }

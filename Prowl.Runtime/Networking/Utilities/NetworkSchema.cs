@@ -74,8 +74,7 @@ internal static class NetworkSchema
         foreach (FieldInfo field in type.GetFields(DescriptorFields))
         {
             bool sync = typeof(SyncMember).IsAssignableFrom(field.FieldType);
-            if (!sync && !typeof(RpcMember).IsAssignableFrom(field.FieldType) &&
-                field.FieldType != typeof(StaticRpcMember))
+            if (!sync && !typeof(RpcMember).IsAssignableFrom(field.FieldType))
             {
                 continue;
             }
@@ -93,9 +92,6 @@ internal static class NetworkSchema
                     break;
                 case RpcMember rpc:
                     yield return $"{type} rpc {rpc.Signature}#{rpc.Id} {rpc.Mode} {rpc.Flags} {rpc.Channel}";
-                    break;
-                case StaticRpcMember rpc when rpc.DeclaringType == type:
-                    yield return $"{type} static {rpc.Signature}#{rpc.Id} {rpc.Mode} {rpc.Flags} {rpc.Channel}";
                     break;
             }
         }

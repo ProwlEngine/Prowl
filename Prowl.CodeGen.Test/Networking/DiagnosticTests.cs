@@ -25,9 +25,6 @@ public class DiagnosticTests
     [InlineData(
         "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public async void F() { await System.Threading.Tasks.Task.Yield(); } }",
         "PROWLNET002")]
-    [InlineData(
-        "public class A { [Prowl.Runtime.Networking.Rpc.Broadcast] public static async void F() { await System.Threading.Tasks.Task.Yield(); } }",
-        "PROWLNET002")]
     [InlineData("public struct A { [Prowl.Runtime.Networking.Sync] public int X { get; set; } }", "PROWLNET003")]
     [InlineData("public class A { [Prowl.Runtime.Networking.Sync] public int X { get; set; } }", "PROWLNET003")]
     // Values
@@ -130,22 +127,19 @@ public class DiagnosticTests
                                   [Rpc.Owner(RpcFlags.HostOnly)] public void Tell() { }
                                   [Rpc.Host(RpcFlags.AnyCaller | RpcFlags.HostOnly)] public void Fine() { }
                                   [Rpc.Broadcast(RpcFlags.ExcludeOwner | RpcFlags.Unreliable)] public void AlsoFine() { }
-                                  [Rpc.Broadcast(RpcFlags.HostOnly)] public static void StaticFine() { }
-                                  [Rpc.Host(RpcFlags.AnyCaller)] public static void StaticAsk() { }
                               }
                               """;
         string[] warnings = [.. Scripts.Warnings(script).Where(w => w.Id == "PROWLNET014").Select(w => w.GetMessage())];
-        Assert.Equal(4, warnings.Length);
+        Assert.Equal(3, warnings.Length);
         Assert.Contains(warnings, w => w.Contains("AnyCaller") && w.Contains("'Shout'") && w.Contains("host RPC"));
         Assert.Contains(warnings, w => w.Contains("ExcludeOwner") && w.Contains("'Ask'"));
         Assert.Contains(warnings, w => w.Contains("HostOnly") && w.Contains("'Tell'"));
-        Assert.Contains(warnings, w => w.Contains("AnyCaller") && w.Contains("'StaticAsk'"));
         Assert.NotNull(Scripts.Compile(script));
     }
 
     [Fact]
-    public void AStaticRpcInAStructIsToldItNeedsAClass() => Assert.Contains(Scripts.Build(
-        "public struct S { [Prowl.Runtime.Networking.Rpc.Broadcast] public static void F() { } }").Errors,
+    public void AStaticRpcIsAnError() => Assert.Contains(Scripts.Build(
+        "public class S : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public static void F() { } }").Errors,
         e => e.Id == "PROWLNET008");
 
     [Fact]

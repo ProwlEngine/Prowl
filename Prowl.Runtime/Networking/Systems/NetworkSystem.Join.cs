@@ -823,5 +823,5 @@ internal sealed partial class NetworkSystem
     /// <summary>A call the host sent while this peer's spawns were still arriving, held until the last one has.</summary>
     internal bool AwaitsActivation(EngineMessage kind) =>
         IsClient && LocalJoinState == NetworkJoinState.Synchronizing &&
-        kind is EngineMessage.RpcFromHost or EngineMessage.StaticRpcFromHost;
+        kind is EngineMessage.RpcFromHost;
 }

@@ -106,9 +106,7 @@ internal sealed partial class NetworkCodeGen
 
             Changed = true;
             StringBuilder prologue = new();
-            prologue.Append(rpc.Static
-                ? $"if ({rpc.Descriptor}.Begin(out {WriterType} __rpc_w)) {{ "
-                : $"if ({rpc.Descriptor}.Begin(this, out {WriterType} __rpc_w)) {{ ");
+            prologue.Append($"if ({rpc.Descriptor}.Begin(this, out {WriterType} __rpc_w)) {{ ");
             prologue.Append("using (global::Prowl.Runtime.Diagnostics.FrameStats.Network.Scope()) { ");
             foreach (ParameterSyntax parameter in node.ParameterList.Parameters.Skip(rpc.Targeted ? 1 : 0))
             {
@@ -117,17 +115,12 @@ internal sealed partial class NetworkCodeGen
             }
 
             string sendTo = rpc.Targeted ? $", {node.ParameterList.Parameters[0].Identifier.Text}" : "";
-            prologue.Append(rpc.Static
-                ? $"if (!{rpc.Descriptor}.Send(__rpc_w)) return; }} }} "
-                : $"if (!{rpc.Descriptor}.Send(this, __rpc_w{sendTo})) return; }} }} ");
+            prologue.Append($"if (!{rpc.Descriptor}.Send(this, __rpc_w{sendTo})) return; }} }} ");
             List<StatementSyntax> checks = [SyntaxFactory.ParseStatement(prologue.ToString())];
 
-            // Instance RPCs can be overridden: a base call made from the running body runs here, not sent again.
-            if (!rpc.Static)
-            {
-                checks.Add(SyntaxFactory.ParseStatement(
-                    $"using global::Prowl.Runtime.Networking.RpcBodyScope __rpc_body = {rpc.Descriptor}.EnterBody(this); "));
-            }
+            // RPCs can be overridden: a base call made from the running body runs here, not sent again.
+            checks.Add(SyntaxFactory.ParseStatement(
+                $"using global::Prowl.Runtime.Networking.RpcBodyScope __rpc_body = {rpc.Descriptor}.EnterBody(this); "));
 
             // Inserted right after the opening brace, on its line, taking over whatever followed the brace, so
             // the body's own lines don't change at all.
@@ -191,19 +184,14 @@ internal sealed partial class NetworkCodeGen
                 }
                 else if (member is MethodDeclarationSyntax method && Rpc(method) is { } rpc)
                 {
-                    StringBuilder invoke = new(rpc.Static
-                        ? $"static (ref {ReaderType} __r, bool __execute) => {{ "
-                        : $"static ({self} __c, ref {ReaderType} __r, bool __execute) => {{ ");
+                    StringBuilder invoke = new($"static ({self} __c, ref {ReaderType} __r, bool __execute) => {{ ");
                     List<string> sent = rpc.SentTypes.ToList();
                     for (int i = 0; i < sent.Count; i++)
                     {
                         invoke.Append($"{sent[i]} __a{i} = {Serializer}<{sent[i]}>.Read(ref __r); ");
                     }
 
-                    string argumentsRead = rpc.Static
-                        ? "global::Prowl.Runtime.Networking.StaticRpcMember.ArgumentsRead()"
-                        : "global::Prowl.Runtime.Networking.RpcMember.ArgumentsRead()";
-                    string target = rpc.Static ? self : "__c";
+                    const string argumentsRead = "global::Prowl.Runtime.Networking.RpcMember.ArgumentsRead()";
                     IEnumerable<string> arguments = Enumerable.Range(0, sent.Count).Select(i => "__a" + i);
                     if (rpc.Targeted)
                     {
@@ -211,11 +199,9 @@ internal sealed partial class NetworkCodeGen
                     }
 
                     invoke.Append(
-                        $"if (!__execute) return; {argumentsRead}; {target}.{rpc.Name}({string.Join(", ", arguments)}); }}");
-                    string descriptorType = rpc.Static ? "StaticRpcMember" : $"RpcMember<{self}>";
-                    string declaringType = rpc.Static ? $"typeof({self}), " : "";
+                        $"if (!__execute) return; {argumentsRead}; __c.{rpc.Name}({string.Join(", ", arguments)}); }}");
                     members.Add(
-                        $"{Descriptor} global::Prowl.Runtime.Networking.{descriptorType} {rpc.Descriptor} = new({declaringType}{rpc.Id}u, "
+                        $"{Descriptor} global::Prowl.Runtime.Networking.RpcMember<{self}> {rpc.Descriptor} = new({rpc.Id}u, "
                         + $"{SymbolDisplay.FormatLiteral(rpc.Signature, true)}, {RpcModeType}.{rpc.Mode}, ({RpcFlagsType}){rpc.Flags}u, {invoke}"
                         + (rpc.Channel == 0 ? "" : $", {rpc.Channel}") + ");");
                 }
@@ -439,11 +425,15 @@ internal sealed partial class NetworkCodeGen
             }
 
             Location location = node.Identifier.GetLocation();
-            if (node.Parent is not ClassDeclarationSyntax ||
-                (!method.IsStatic && !DerivesFrom(method.ContainingType, context.Symbols.Component)))
+            if (method.IsStatic)
             {
-                // A static RPC needs a class, any class. Only the others need a Component.
-                context.Report(method.IsStatic ? s_staticRpc : s_notInClass, location, method.Name);
+                context.Report(s_staticRpc, location, method.Name);
+                return null;
+            }
+
+            if (node.Parent is not ClassDeclarationSyntax || !DerivesFrom(method.ContainingType, context.Symbols.Component))
+            {
+                context.Report(s_notInClass, location, method.Name);
                 return null;
             }
 
@@ -465,35 +455,26 @@ internal sealed partial class NetworkCodeGen
 
             // Flags that only mean something for another kind of RPC, which compile and then do nothing.
             bool hostRpc = kind.Name == "HostAttribute", broadcast = kind.Name == "BroadcastAttribute";
-            if ((flags & 4u) != 0 && (method.IsStatic || !hostRpc))
+            if ((flags & 4u) != 0 && !hostRpc)
             {
-                context.Report(s_uselessFlag, location, method.Name, "AnyCaller", method.IsStatic
-                    ? "any client may call a static RPC already"
-                    : broadcast
-                        ? "only the host calls a broadcast. For a client to reach everyone, have it call a host RPC that calls the broadcast"
-                        : "only the host calls it");
+                context.Report(s_uselessFlag, location, method.Name, "AnyCaller", broadcast
+                    ? "only the host calls a broadcast. For a client to reach everyone, have it call a host RPC that calls the broadcast"
+                    : "only the host calls it");
             }
 
-            if ((flags & 8u) != 0 && (method.IsStatic || !broadcast))
+            if ((flags & 8u) != 0 && !broadcast)
             {
                 context.Report(s_uselessFlag, location, method.Name, "ExcludeOwner",
                     "it skips the owner of the object a broadcast is called on");
             }
 
-            if ((flags & 2u) != 0 && !hostRpc && !(method.IsStatic && broadcast))
+            if ((flags & 2u) != 0 && !hostRpc)
             {
                 context.Report(s_uselessFlag, location, method.Name, "HostOnly", "only the host calls it already");
             }
 
-            if (method.IsStatic && (kind.Name == "OwnerAttribute" ||
-                                    GenericContainer(method.ContainingType)))
-            {
-                context.Report(s_staticRpc, location, method.Name);
-                return null;
-            }
-
             bool targeted = kind.Name == "TargetAttribute";
-            if (targeted && (method.IsStatic || method.Parameters.Length == 0 ||
+            if (targeted && (method.Parameters.Length == 0 ||
                              method.Parameters[0].Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
                                  .ToDisplayString() != "Prowl.Courier.NetPeer"))
             {
@@ -511,13 +492,8 @@ internal sealed partial class NetworkCodeGen
             List<string> types = node.ParameterList.Parameters.Select(p => OneLine(p.Type!)).ToList();
             string key = $"{method.Name}({string.Join(",", WrittenParameterTypes(RootDeclaration(method)) ?? types)})";
             context.ClaimId(method.ContainingType, true, key, location);
-            if (method.IsStatic)
-            {
-                context.ClaimStaticType(method.ContainingType, location);
-            }
-
-            return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types,
-                method.IsStatic, channel, targeted);
+            return new RpcInfo(method.Name, NetworkId(key), kind.Name[..^"Attribute".Length], flags, types, channel,
+                targeted);
         }
 
         private static MethodDeclarationSyntax? RootDeclaration(IMethodSymbol method)
@@ -534,19 +510,6 @@ internal sealed partial class NetworkCodeGen
 
         private static IEnumerable<string>? WrittenParameterTypes(MethodDeclarationSyntax? declaration) =>
             declaration?.ParameterList.Parameters.Select(p => OneLine(p.Type!));
-
-        private static bool GenericContainer(INamedTypeSymbol? type)
-        {
-            for (; type != null; type = type.ContainingType)
-            {
-                if (type.IsGenericType)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
 
         private static AttributeData? Find(ISymbol symbol, INamedTypeSymbol attribute) =>
             symbol.GetAttributes()
