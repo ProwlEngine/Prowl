@@ -20,6 +20,26 @@ public sealed class TableCell
     internal Color Color;
     internal IOrigamiIcon? Icon;
     internal TextAlignment Align = TextAlignment.MiddleLeft;
+
+    // Cells and rows only live until the table is shown, so they are reused from frame to frame.
+    [ThreadStatic] private static Stack<TableCell>? _pool;
+
+    internal static TableCell Take(string text, Color color, IOrigamiIcon? icon, TextAlignment align)
+    {
+        var cell = _pool != null && _pool.Count > 0 ? _pool.Pop() : new TableCell();
+        cell.Text = text;
+        cell.Color = color;
+        cell.Icon = icon;
+        cell.Align = align;
+        return cell;
+    }
+
+    internal void Return()
+    {
+        Text = "";
+        Icon = null;
+        (_pool ??= new Stack<TableCell>()).Push(this);
+    }
 }
 
 /// <summary>A row of cells in a <see cref="TableBuilder"/>. Chain <see cref="Cell(string, Color)"/> calls.</summary>
@@ -27,24 +47,35 @@ public sealed class TableRow
 {
     internal readonly List<TableCell> Cells = new();
 
+    [ThreadStatic] private static Stack<TableRow>? _pool;
+
+    internal static TableRow Take() => _pool != null && _pool.Count > 0 ? _pool.Pop() : new TableRow();
+
+    internal void Return()
+    {
+        for (int i = 0; i < Cells.Count; i++) Cells[i].Return();
+        Cells.Clear();
+        (_pool ??= new Stack<TableRow>()).Push(this);
+    }
+
     /// <summary>Append a text cell.</summary>
     public TableRow Cell(string text, Color color)
     {
-        Cells.Add(new TableCell { Text = text, Color = color });
+        Cells.Add(TableCell.Take(text, color, null, TextAlignment.MiddleLeft));
         return this;
     }
 
     /// <summary>Append a right-aligned text cell (e.g. numbers).</summary>
     public TableRow CellRight(string text, Color color)
     {
-        Cells.Add(new TableCell { Text = text, Color = color, Align = TextAlignment.MiddleRight });
+        Cells.Add(TableCell.Take(text, color, null, TextAlignment.MiddleRight));
         return this;
     }
 
     /// <summary>Append a text cell with a leading vector icon (host paints into the slot rect).</summary>
     public TableRow Cell(string text, Color color, IOrigamiIcon icon)
     {
-        Cells.Add(new TableCell { Text = text, Color = color, Icon = icon });
+        Cells.Add(TableCell.Take(text, color, icon, TextAlignment.MiddleLeft));
         return this;
     }
 }
@@ -204,7 +235,7 @@ public sealed class TableBuilder
     /// <summary>Begin a new row. Chain <c>.Cell(...)</c> on the returned row.</summary>
     public TableRow Row()
     {
-        var r = new TableRow();
+        var r = TableRow.Take();
         _rows.Add(r);
         return r;
     }
@@ -520,5 +551,8 @@ public sealed class TableBuilder
                     _paper.Box("rd", i).Width(UnitValue.Stretch()).Height(1).BackgroundColor(bdSoft).IsNotInteractable();
             }
         }
+
+        for (int i = 0; i < _rows.Count; i++) _rows[i].Return();
+        _rows.Clear();
     }
 }
