@@ -241,6 +241,7 @@ public class EditorApplication : Game
         PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
         RangeSliderDrawer.Register(PropertyGridConfig.Drawers); // wraps the built-in float/int drawers
+        PropertyGridConfig.Drawers.Register(typeof(SortingLayer), new Projects.Settings.SortingLayerDrawer());
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
         PropertyGridConfig.OnBeginRoot = Undo.InspectorBaseline;
         PropertyGridConfig.OnFieldChanged = target =>

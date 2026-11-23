@@ -218,6 +218,9 @@ public static class PlayerSettingsLoader
             if (settings.TryGet("Layers", out EchoObject? layersProp) && Serializer.Deserialize<string[]>(layersProp) is { } layers)
                 Array.Copy(layers, TagLayerManager.layers, Math.Min(layers.Length, TagLayerManager.layers.Length));
 
+            if (settings.TryGet("SortingLayers", out EchoObject? sortingProp) && Serializer.Deserialize<List<SortingLayerInfo>>(sortingProp) is { } sorting)
+                TagLayerManager.SetSortingLayers(sorting);
+
             Debug.Log("[PlayerSettings] Tags & Layers applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }

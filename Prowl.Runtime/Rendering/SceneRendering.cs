@@ -58,6 +58,7 @@ public sealed class SceneRendering : IDisposable
     private readonly Action<Mesh> _onMeshChanged;
     private int _lightingVersion = -1;
     private int _qualityVersion = -1;
+    private int _sortingLayersVersion = -1;
 
     /// <summary>
     /// Moves once every scene sync. A Transform pushes its move to its renderers and its children's at most once a sync,
@@ -177,13 +178,14 @@ public sealed class SceneRendering : IDisposable
         _spareUserSets.Clear();
     }
 
-    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake or a quality change
+    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake, a quality change or a sorting layer change
     internal void WakeChanged()
     {
-        if (_scene.BakedLightingVersion != _lightingVersion || QualitySettings.Version != _qualityVersion)
+        if (_scene.BakedLightingVersion != _lightingVersion || QualitySettings.Version != _qualityVersion || TagLayerManager.SortingLayersVersion != _sortingLayersVersion)
         {
             _lightingVersion = _scene.BakedLightingVersion;
             _qualityVersion = QualitySettings.Version;
+            _sortingLayersVersion = TagLayerManager.SortingLayersVersion;
             UnparkAll();
         }
         while (_changedMeshes.TryDequeue(out Mesh? mesh))

@@ -1829,6 +1829,29 @@ public class BuildSystemTests : IDisposable
         finally { TagLayerManager.ResetDefault(); }
     }
 
+    [Fact]
+    public void CustomSortingLayers_ReachThePlayer_InTheirOrder()
+    {
+        var settings = new TagsAndLayersSettings();
+        settings.SortingLayers.Insert(0, new SortingLayerInfo { Id = 4, Name = "Background" });
+        settings.SortingLayers.Add(new SortingLayerInfo { Id = 9, Name = "Foreground" });
+
+        string dir = Path.Combine(_root, "Settings");
+        Directory.CreateDirectory(dir);
+        EchoObject echo = Prowl.Echo.Serializer.Serialize(typeof(TagsAndLayersSettings), settings, Prowl.Echo.TypeMode.None);
+        File.WriteAllText(Path.Combine(dir, PlayerSettingsFiles.TagsAndLayers + ".yaml"), echo.WriteToYaml());
+
+        TagLayerManager.ResetDefault();
+        try
+        {
+            PlayerSettingsLoader.Apply(dir);
+
+            Assert.Equal(["Background", "Default", "Foreground"], TagLayerManager.SortingLayers.Select(l => l.Name));
+            Assert.Equal([4, SortingLayer.DefaultId, 9], TagLayerManager.SortingLayers.Select(l => l.Id));
+        }
+        finally { TagLayerManager.ResetDefault(); }
+    }
+
     // ---------------------------------------------------------------- BuildTargetProviderScanTests
 
     public const string Family = "test-only";

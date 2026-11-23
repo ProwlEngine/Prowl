@@ -46,7 +46,11 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     public Material? Material { get => material; set { material = value; Wake(); } }
     [SerializeField] private Material? material;
 
-    /// <summary>Higher values draw in front of lower ones in the same render queue, before depth. Clamped to -128 to 127.</summary>
+    /// <summary>The layer it draws in. Later layers draw in front, whatever the render queue or depth.</summary>
+    public SortingLayer SortingLayer { get => sortingLayer; set { sortingLayer = value; Wake(); } }
+    [SerializeField] private SortingLayer sortingLayer;
+
+    /// <summary>Higher values draw in front of lower ones in the same sorting layer. Clamped to -32768 to 32767.</summary>
     public int SortingOrder { get => sortingOrder; set { sortingOrder = value; Wake(); } }
     [SerializeField] private int sortingOrder;
 
@@ -74,7 +78,22 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     public RenderableHandle Renderable => _renderable.Handle;
 
     // Syncs it again next frame, for a setting that changed
-    private void Wake() => SceneRendering.Wake(this, GameObject);
+    internal void Wake() => SceneRendering.Wake(this, GameObject);
+
+    /// <summary>Its own sorting layer and order, or inside the nearest enabled <see cref="SortingGroup"/> above it, the group's first.</summary>
+    internal TransparentOrder SortOrder()
+    {
+        int own = TagLayerManager.SortingOrderOf(SortingLayer.Id, SortingOrder);
+        for (GameObject? go = GameObject; go.IsValid(); go = go.Parent)
+        {
+            if (go.GetComponent<SortingGroup>() is not { } group || !group.IsValid() || !group.EnabledInHierarchy)
+                continue;
+            Float3 anchor = group.Transform.Position;
+            return new TransparentOrder(TagLayerManager.SortingOrderOf(group.SortingLayer.Id, group.SortingOrder), (uint)group.InstanceID,
+                new Double3(anchor.X, anchor.Y, anchor.Z), own);
+        }
+        return new TransparentOrder(own);
+    }
 
     bool IRenderSync.Sync(RenderWorld world)
     {
@@ -124,7 +143,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
             Flags = RenderableState.FlagsFor(GameObject, false, false) | ShadowCasting.ToFlags(),
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
-            SortBias = (sbyte)System.Math.Clamp(SortingOrder, sbyte.MinValue, sbyte.MaxValue),
+            Sort = SortOrder(),
             Color = new Float4(color.R, color.G, color.B, color.A),
         });
         return material.IsLoaded && tex.IsLoaded;
@@ -237,6 +256,33 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
         if (_mesh.IsValid()) _mesh.Dispose();
         _mesh = null;
         base.OnDispose();
+    }
+}
+
+/// <summary>
+/// Draws every <see cref="SpriteRenderer"/> below it together: they sort as one item at this GameObject's position by the
+/// group's sorting layer and order, then among themselves by their own.
+/// </summary>
+[AddComponentMenu("Rendering/Sorting Group")]
+public class SortingGroup : Component
+{
+    /// <summary>The layer the group draws in, as one item.</summary>
+    public SortingLayer SortingLayer { get => sortingLayer; set { sortingLayer = value; WakeMembers(); } }
+    [SerializeField] private SortingLayer sortingLayer;
+
+    /// <summary>The group's order in its layer. Clamped to -32768 to 32767.</summary>
+    public int SortingOrder { get => sortingOrder; set { sortingOrder = value; WakeMembers(); } }
+    [SerializeField] private int sortingOrder;
+
+    public override void OnEnable() => WakeMembers();
+
+    public override void OnDisable() => WakeMembers();
+
+    private void WakeMembers()
+    {
+        if (GameObject.IsNotValid()) return;
+        foreach (SpriteRenderer sprite in GameObject.GetComponentsInChildren<SpriteRenderer>())
+            sprite.Wake();
     }
 }
 

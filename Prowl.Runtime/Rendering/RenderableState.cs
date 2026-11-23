@@ -33,7 +33,7 @@ public sealed class RenderableState
         public GLightmapBinding Lightmap;
         public Float4 Custom0, Custom1;
         public AABB? Bounds;
-        public sbyte SortBias;
+        public TransparentOrder Sort;
 
         /// <summary>Multiplies the vertex colour in shaders that read the object colour. Null for white.</summary>
         public Float4? Color;
@@ -49,7 +49,7 @@ public sealed class RenderableState
     private GLightmapBinding _lightmap;
     private Float4 _custom0, _custom1;
     private AABB? _bounds;
-    private sbyte _sortBias;
+    private TransparentOrder _sort;
     private Float4 _color;
     private RenderWorld? _world;
 
@@ -81,7 +81,7 @@ public sealed class RenderableState
                 Custom1 = desc.Custom1,
                 ObjectId = desc.ObjectId,
                 Lightmap = desc.Lightmap,
-                SortBias = desc.SortBias,
+                Sort = desc.Sort,
                 Color = desc.Color ?? Float4.One,
             };
             _handle = world.Add(add, desc.Materials);
@@ -95,7 +95,7 @@ public sealed class RenderableState
             _lightmap = desc.Lightmap;
             _custom0 = desc.Custom0;
             _custom1 = desc.Custom1;
-            _sortBias = desc.SortBias;
+            _sort = desc.Sort;
             _color = add.Color;
             _bounds = desc.Bounds;
             if (desc.Bounds is { } bounds) world.SetBounds(_handle, bounds);
@@ -110,7 +110,7 @@ public sealed class RenderableState
         if (_objectId != desc.ObjectId) { world.SetObjectId(_handle, desc.ObjectId); _objectId = desc.ObjectId; }
         if (!_lightmap.Equals(desc.Lightmap)) { world.SetLightmap(_handle, desc.Lightmap); _lightmap = desc.Lightmap; }
         if (_custom0 != desc.Custom0 || _custom1 != desc.Custom1) { world.SetCustomData(_handle, desc.Custom0, desc.Custom1); (_custom0, _custom1) = (desc.Custom0, desc.Custom1); }
-        if (_sortBias != desc.SortBias) { world.SetSortBias(_handle, desc.SortBias); _sortBias = desc.SortBias; }
+        if (_sort != desc.Sort) { world.SetSort(_handle, desc.Sort); _sort = desc.Sort; }
         Float4 color = desc.Color ?? Float4.One;
         if (_color != color) { world.SetColor(_handle, color); _color = color; }
         if (!Nullable.Equals(_bounds, desc.Bounds))
