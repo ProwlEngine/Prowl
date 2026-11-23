@@ -60,6 +60,8 @@
   "model.menu.delete": "Delete",
   "model.menu.delete_objects": "Delete {{count}} objects",
   "model.menu.add": "Add",
+  "model.menu.mirror_x": "Mirror X",
+  "model.menu.apply_modifiers": "Apply modifiers",
   "model.menu.mirror_clip": "Clip at mirror",
   "model.menu.snap_to": "Snap to",
   "model.menu.snap_anything": "Anything",

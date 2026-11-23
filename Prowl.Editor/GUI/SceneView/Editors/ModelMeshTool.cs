@@ -931,6 +931,14 @@ public sealed class ModelMeshTool : SceneTool
         if (selected.Count > 1 && Selection.ActiveObject is GameObject active)
             menu.Item(Loc.Get("model.join"), () => ModelEditingMode.Join(selected, active), shortcut: Chord("ModelEdit/Join"));
         if (selected.Count > 0) menu.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selected));
+        List<ModelObject> models = [.. selected.Select(go => go.GetComponent<ModelObject>()).Where(m => m.IsValid())];
+        if (models.Count > 0)
+        {
+            bool mirrored = models.TrueForAll(m => m.Modifiers.Exists(x => x.Enabled && x is MirrorModifier));
+            menu.Toggle(Loc.Get("model.menu.mirror_x"), () => SetMirror(models, !mirrored), () => mirrored);
+            if (models.Exists(m => m.Modifiers.Exists(x => x.Enabled)))
+                menu.Item(Loc.Get("model.menu.apply_modifiers"), () => ApplyModifiers(models));
+        }
         menu.Item(Loc.Get("model.export"), ModelEditingMode.ExportGlb);
     }
 
@@ -1043,6 +1051,32 @@ public sealed class ModelMeshTool : SceneTool
         _objectUndo = null;
         if (_modalHandles != null) _modalHandles.Modal = false;
         _modalHandles = null;
+    }
+
+    /// <summary>Turns mirroring on, by a mirror modifier first in the stack, or off by taking every mirror away.</summary>
+    private static void SetMirror(List<ModelObject> models, bool on)
+    {
+        Undo.RecordObjects([.. models], on ? "Mirror On" : "Mirror Off");
+        foreach (ModelObject model in models)
+        {
+            if (!on) model.Modifiers.RemoveAll(m => m is MirrorModifier);
+            else if (model.Modifiers.OfType<MirrorModifier>().FirstOrDefault() is { } off) off.Enabled = true;
+            else model.Modifiers.Insert(0, new MirrorModifier());
+            model.RefreshPreview();
+        }
+    }
+
+    /// <summary>Bakes every enabled modifier into the mesh and takes it out of the stack.</summary>
+    private static void ApplyModifiers(List<ModelObject> models)
+    {
+        Undo.RecordObjects([.. models], "Apply Modifiers");
+        foreach (ModelObject model in models)
+        {
+            model.Mesh = ModelModifier.Run(model.Mesh, model.Modifiers, false, [.. model.Bones.Select(b => b.Name)]);
+            model.Mesh.MarkChanged();
+            model.Modifiers.RemoveAll(m => m.Enabled);
+            model.RefreshPreview();
+        }
     }
 
     // ================================================================
