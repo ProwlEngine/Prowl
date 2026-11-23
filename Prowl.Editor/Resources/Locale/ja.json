@@ -80,7 +80,6 @@
   "game.pause": "一時停止",
   "game.resume": "再開",
   "game.step": "1フレーム進める",
-  "game.multiplayer.launch": "クライアントを追加で起動",
   "game.settings": "ゲーム設定",
 
   "dialog.delete_assets": "アセットを削除",

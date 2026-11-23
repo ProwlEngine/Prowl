@@ -80,7 +80,6 @@
   "game.pause": "Wstrzymaj",
   "game.resume": "Wznow",
   "game.step": "Przejdz o jedna klatke",
-  "game.multiplayer.launch": "Uruchom kolejnego klienta",
   "game.settings": "Ustawienia gry",
 
   "dialog.delete_assets": "Usun assety",

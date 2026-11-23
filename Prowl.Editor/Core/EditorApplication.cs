@@ -842,15 +842,6 @@ public class EditorApplication : Game
                 () => { paper.ClearFocus(); StepOneFrame(); })
                 .Tooltip(Loc.Get("game.step"))
                 .Style(ButtonStyle.Ghost).Show();
-
-            // While the game hosts a session: launch another client instance into it.
-            if (MultiplayerPlay.CanLaunchClient)
-            {
-                Origami.IconButton(paper, "btn_multiplayer", EditorIcons.Users_I,
-                    () => { paper.ClearFocus(); MultiplayerPlay.LaunchClient(); })
-                    .Tooltip(Loc.Get("game.multiplayer.launch"))
-                    .Style(ButtonStyle.Ghost).Show();
-            }
         }
     }
 
@@ -2137,7 +2128,6 @@ public class EditorApplication : Game
         XR.Stop();
         XR.ForgetHandlers();
         Networking.Shutdown();
-        MultiplayerPlay.OnPlayStopped();
 
         // Play objects go with the play world. The edit selection comes back once the edit world is bound again.
         Selection.Clear();
@@ -2341,7 +2331,6 @@ public class EditorApplication : Game
     {
         s_closing = true;
         CliServer.Shutdown();
-        MultiplayerPlay.CloseAll();
         base.Closing();
     }
 

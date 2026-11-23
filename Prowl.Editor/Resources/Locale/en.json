@@ -95,7 +95,6 @@
   "game.pause": "Pause",
   "game.resume": "Resume",
   "game.step": "Step One Frame",
-  "game.multiplayer.launch": "Launch another client",
   "game.settings": "Game Settings",
 
   "dialog.delete_assets": "Delete Assets",

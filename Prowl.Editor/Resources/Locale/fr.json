@@ -80,7 +80,6 @@
   "game.pause": "Mettre en pause",
   "game.resume": "Reprendre",
   "game.step": "Avancer d'une image",
-  "game.multiplayer.launch": "Lancer un autre client",
   "game.settings": "Parametres du jeu",
 
   "dialog.delete_assets": "Supprimer les assets",

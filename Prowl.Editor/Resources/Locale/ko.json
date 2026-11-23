@@ -80,7 +80,6 @@
   "game.pause": "일시 정지",
   "game.resume": "재개",
   "game.step": "한 프레임 진행",
-  "game.multiplayer.launch": "클라이언트 하나 더 실행",
   "game.settings": "게임 설정",
 
   "dialog.delete_assets": "에셋 삭제",

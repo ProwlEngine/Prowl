@@ -80,7 +80,6 @@
   "game.pause": "Приостановить",
   "game.resume": "Продолжить",
   "game.step": "На один кадр вперёд",
-  "game.multiplayer.launch": "Запустить ещё клиент",
   "game.settings": "Настройки игры",
 
   "dialog.delete_assets": "Удалить ассеты",

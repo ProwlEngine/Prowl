@@ -80,7 +80,6 @@
   "game.pause": "暂停",
   "game.resume": "继续",
   "game.step": "前进一帧",
-  "game.multiplayer.launch": "再启动一个客户端",
   "game.settings": "游戏设置",
 
   "dialog.delete_assets": "删除资产",
