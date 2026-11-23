@@ -127,22 +127,25 @@ public sealed class CSGOverlayTool : SceneTool
 
     public override void OnSceneContextMenu(SceneToolContext ctx, ContextBuilder menu)
     {
-        menu.Title($"{Loc.Get("csg.title")}  {Loc.Get(ModeLabel(CSGEditMode.Current))}");
-
-        if (CSGEditMode.Is(CSGMode.Create)) ShapeCommands(menu);
-        else if (CSGEditMode.IsUV) SurfaceCommands(menu);
+        if (SceneToolManager.Get<CSGMeshTool>() is { Active: true } mesh)
+        {
+            MeshMenu(menu, mesh);
+            menu.Submenu(Loc.Get("csg.menu.brush"), BrushCommands);
+        }
         else
         {
-            if (SceneToolManager.Get<CSGMeshTool>() is { Active: true } mesh) MeshCommands(menu, mesh);
-            SelectionCommands(menu);
+            menu.Title($"{Loc.Get("csg.title")}  {Loc.Get(ModeLabel(CSGEditMode.Current))}");
+            if (CSGEditMode.Is(CSGMode.Create)) ShapeCommands(menu);
+            else if (CSGEditMode.IsUV) SurfaceCommands(menu);
+            else BrushCommands(menu);
         }
 
+        menu.Separator();
         menu.Submenu(Loc.Get("csg.tools"), sub =>
         {
             foreach ((CSGMode mode, string label, _, string shortcut, _) in Modes)
                 sub.Item(Loc.Get(label), () => CSGEditMode.Current = mode, shortcut: Keys(shortcut), on: CSGEditMode.Is(mode));
         });
-        menu.Separator();
     }
 
     private static string Keys(string shortcut)
@@ -174,68 +177,177 @@ public sealed class CSGOverlayTool : SceneTool
         menu.Separator();
     }
 
-    private static void MeshCommands(ContextBuilder menu, CSGMeshTool mesh)
+    private static void MeshMenu(ContextBuilder menu, CSGMeshTool mesh)
     {
-        bool any = false;
-        if (mesh.CanBevel) { Command(menu, "csg.bevel", mesh.BevelSelected, "MeshEdit/Bevel"); any = true; }
-        if (mesh.Active) { Command(menu, "csg.loop_cut", mesh.LoopCut, "MeshEdit/LoopCut"); Command(menu, "csg.knife", mesh.Knife, "MeshEdit/Knife"); any = true; }
-        if (mesh.CanExtrude) { Command(menu, "csg.extrude", mesh.ExtrudeSelected); any = true; }
-        if (mesh.CanInset) { Command(menu, "csg.inset", mesh.InsetSelected); any = true; }
-        if (mesh.CanExtrudeRegion) { Command(menu, "csg.extrude_region", mesh.ExtrudeRegionSelected, "MeshEdit/Extrude"); any = true; }
-        if (mesh.CanDissolve) { Command(menu, "csg.dissolve", mesh.DissolveSelected, "MeshEdit/Dissolve"); any = true; }
-        if (mesh.Active) { Command(menu, "csg.limited_dissolve", mesh.LimitedDissolveSelected, "MeshEdit/LimitedDissolve"); any = true; }
-        if (mesh.CanMerge && mesh.Mode == Prowl.Editor.Modeling.SelectMode.Vertex) { Command(menu, "csg.merge_centre", mesh.MergeAtCentre); any = true; }
-        if (mesh.CanMergeAtFirst) { Command(menu, "csg.merge_first", mesh.MergeAtFirst); any = true; }
-        if (mesh.CanMergeAtActive) { Command(menu, "csg.merge_active", mesh.MergeAtActive); any = true; }
-        if (mesh.CanSubdivide) { Command(menu, "csg.collapse", mesh.CollapseSelected); Command(menu, "csg.subdivide", mesh.SubdivideSelected); any = true; }
-        if (mesh.CanConnect) { Command(menu, "csg.connect", mesh.ConnectSelected, "MeshEdit/Connect"); any = true; }
-        if (mesh.CanFlatten) { Command(menu, "csg.flatten", mesh.FlattenSelected, "MeshEdit/Flatten"); any = true; }
-        if (mesh.CanTriangulate) { Command(menu, "csg.triangulate", mesh.TriangulateSelected, "MeshEdit/Triangulate"); any = true; }
-        if (mesh.Active) { Command(menu, "csg.tris_to_quads", mesh.TrisToQuadsSelected, "MeshEdit/TrisToQuads"); any = true; }
-        if (mesh.CanBridge) { Command(menu, "csg.bridge", mesh.BridgeSelected, "MeshEdit/Bridge"); any = true; }
-        if (mesh.Active) { Command(menu, "csg.merge_by_distance", mesh.MergeByDistanceSelected, "MeshEdit/MergeByDistance"); any = true; }
-        if (mesh.CanSmooth) { Command(menu, "csg.smooth", mesh.SmoothSelected, "MeshEdit/Smooth"); Command(menu, "csg.relax", mesh.RelaxSelected); any = true; }
-        if (mesh.CanSeparate) { Command(menu, "csg.separate", mesh.SeparateSelected, "MeshEdit/Separate"); any = true; }
-        if (mesh.Active)
+        switch (mesh.Mode)
+        {
+            case Prowl.Editor.Modeling.SelectMode.Vertex:
+                menu.Title(Count(mesh.SelectedCount, "model.menu.point", "model.menu.points"));
+                if (mesh.SelectedCount > 0) PointCommands(menu, mesh);
+                break;
+            case Prowl.Editor.Modeling.SelectMode.Edge:
+                menu.Title(Count(mesh.SelectedEdgeCount, "model.menu.edge", "model.menu.edges"));
+                if (mesh.SelectedEdgeCount > 0) EdgeCommands(menu, mesh);
+                break;
+            default:
+                menu.Title(Count(mesh.SelectedFaceCount, "model.menu.face", "model.menu.faces"));
+                if (mesh.SelectedFaceCount > 0) FaceCommands(menu, mesh);
+                break;
+        }
+        if (mesh.SelectedCount > 0) menu.Separator();
+
+        menu.Submenu(Loc.Get("model.menu.tools"), sub =>
+        {
+            Command(sub, "csg.loop_cut", mesh.LoopCut, "MeshEdit/LoopCut");
+            Command(sub, "csg.knife", mesh.Knife, "MeshEdit/Knife");
+        });
+        menu.Submenu(Loc.Get("csg.menu.clean_up"), sub =>
+        {
+            Command(sub, "csg.merge_by_distance", mesh.MergeByDistanceSelected, "MeshEdit/MergeByDistance");
+            Command(sub, "csg.limited_dissolve", mesh.LimitedDissolveSelected, "MeshEdit/LimitedDissolve");
+            Command(sub, "csg.tris_to_quads", mesh.TrisToQuadsSelected, "MeshEdit/TrisToQuads");
+        });
+        menu.Submenu(Loc.Get("csg.symmetrize"), sub =>
         {
             for (int axis = 0; axis < 3; axis++)
             {
                 int chosen = axis;
                 string name = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
-                menu.Item(Loc.Get("csg.symmetrize") + "  " + Loc.Get("csg.symmetrize_side", new { from = "+" + name, to = "-" + name }), () => mesh.Symmetrize(chosen, true));
+                sub.Item(Loc.Get("csg.symmetrize_side", new { from = "+" + name, to = "-" + name }), () => mesh.Symmetrize(chosen, true));
             }
-            any = true;
-        }
-        if (mesh.CanSnap) { Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid"); any = true; }
-        if (mesh.CanDeleteFaces) { Command(menu, "csg.delete_face", mesh.DeleteSelectedFaces, "MeshEdit/DeleteFace"); any = true; }
-        if (any) menu.Separator();
+        });
+        menu.Submenu(Loc.Get("model.menu.view"), sub =>
+        {
+            sub.Toggle(Loc.Get("csg.xray"), () => mesh.XRay = !mesh.XRay, () => mesh.XRay);
+            sub.Toggle(Loc.Get("csg.snap_brushes"), () => mesh.SnapToBrushes = !mesh.SnapToBrushes, () => mesh.SnapToBrushes);
+            sub.Toggle(Loc.Get("csg.proportional"), () => mesh.Proportional = !mesh.Proportional, () => mesh.Proportional);
+        });
     }
 
-    private static void SelectionCommands(ContextBuilder menu)
+    private static string Count(int count, string one, string many)
+        => count == 1 ? Loc.Get(one) : Loc.Get(many, new { count });
+
+    private static void PointCommands(ContextBuilder menu, CSGMeshTool mesh)
     {
-        if (SceneToolManager.Get<CSGClipTool>() is { } clip) Command(menu, "csg.cut_with_plane", clip.Begin);
-        menu.Separator();
-        Command(menu, "csg.duplicate", CSGSelection.Duplicate, "Scene/Duplicate");
-        Command(menu, "csg.repeat_clone", CSGSelection.RepeatClone, "CSG/RepeatClone");
-        Command(menu, "csg.group_selection", CSGMenuItems.GroupSelection, "CSG/GroupSelection");
-        Command(menu, "csg.earlier", () => CSGSelection.MoveInOrder(-1), "CSG/Earlier");
-        Command(menu, "csg.later", () => CSGSelection.MoveInOrder(1), "CSG/Later");
-        menu.Separator();
-        menu.Submenu(Loc.Get("csg.flip"), sub =>
+        if (mesh.CanBevel) Command(menu, "csg.bevel", mesh.BevelSelected, "MeshEdit/Bevel");
+        if (mesh.CanConnect) Command(menu, "csg.connect", mesh.ConnectSelected, "MeshEdit/Connect");
+        MergeCommands(menu, mesh);
+        if (mesh.CanSmooth)
         {
-            Command(sub, "csg.flip_x", () => CSGSelection.Flip(Float3.UnitX), "CSG/FlipX");
-            Command(sub, "csg.flip_y", () => CSGSelection.Flip(Float3.UnitY), "CSG/FlipY");
-            Command(sub, "csg.flip_z", () => CSGSelection.Flip(Float3.UnitZ), "CSG/FlipZ");
-        });
-        Command(menu, "csg.rotate_left", () => RotateBySnap(-1f), "CSG/RotateLeft");
-        Command(menu, "csg.rotate_right", () => RotateBySnap(1f), "CSG/RotateRight");
-        Command(menu, "csg.snap_to_grid", CSGSelection.SnapToGrid, "CSG/SnapToGrid");
-        Command(menu, "csg.centre_pivot", CSGSelection.CentrePivot);
-        menu.Separator();
-        Command(menu, "csg.hide_selected", () => CSGVisibility.Hide(CSGSelection.Brushes()), "CSG/Hide");
-        menu.Item(Loc.Get("csg.unhide_all", new { count = CSGVisibility.HiddenCount }), CSGVisibility.UnhideAll, shortcut: Keys("CSG/UnhideAll"));
-        menu.Separator();
+            Command(menu, "csg.smooth", mesh.SmoothSelected, "MeshEdit/Smooth");
+            Command(menu, "csg.relax", mesh.RelaxSelected);
+        }
+        if (mesh.CanFlatten) Command(menu, "csg.flatten", mesh.FlattenSelected, "MeshEdit/Flatten");
+        if (mesh.CanSnap) Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid");
+        if (mesh.CanDissolve)
+        {
+            menu.Separator();
+            Command(menu, "csg.dissolve", mesh.DissolveSelected, "MeshEdit/Dissolve");
+        }
     }
+
+    private static void EdgeCommands(ContextBuilder menu, CSGMeshTool mesh)
+    {
+        if (mesh.CanBevel) Command(menu, "csg.bevel", mesh.BevelSelected, "MeshEdit/Bevel");
+        if (mesh.CanSubdivide)
+        {
+            Command(menu, "csg.subdivide", mesh.SubdivideSelected);
+            Command(menu, "csg.collapse", mesh.CollapseSelected);
+        }
+        MergeCommands(menu, mesh);
+        if (mesh.CanFlatten) Command(menu, "csg.flatten", mesh.FlattenSelected, "MeshEdit/Flatten");
+        if (mesh.CanSnap) Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid");
+        if (mesh.CanDissolve)
+        {
+            menu.Separator();
+            Command(menu, "csg.dissolve", mesh.DissolveSelected, "MeshEdit/Dissolve");
+        }
+    }
+
+    private static void FaceCommands(ContextBuilder menu, CSGMeshTool mesh)
+    {
+        if (mesh.CanExtrudeRegion) Command(menu, "csg.extrude_region", mesh.ExtrudeRegionSelected, "MeshEdit/Extrude");
+        if (mesh.CanExtrude) Command(menu, "csg.extrude", mesh.ExtrudeSelected);
+        if (mesh.CanInset) Command(menu, "csg.inset", mesh.InsetSelected, "MeshEdit/Inset");
+        if (mesh.CanBevel) Command(menu, "csg.bevel", mesh.BevelSelected, "MeshEdit/Bevel");
+        if (mesh.CanSubdivide) Command(menu, "csg.subdivide", mesh.SubdivideSelected);
+        if (mesh.CanBridge) Command(menu, "csg.bridge", mesh.BridgeSelected, "MeshEdit/Bridge");
+        if (mesh.CanTriangulate) Command(menu, "csg.triangulate", mesh.TriangulateSelected, "MeshEdit/Triangulate");
+        if (mesh.CanFlatten) Command(menu, "csg.flatten", mesh.FlattenSelected, "MeshEdit/Flatten");
+        if (mesh.CanSnap) Command(menu, "csg.snap", mesh.SnapSelectedToGrid, "CSG/SnapToGrid");
+        if (mesh.CanSeparate) Command(menu, "csg.separate", mesh.SeparateSelected, "MeshEdit/Separate");
+        menu.Separator();
+        if (mesh.CanDissolve) Command(menu, "csg.dissolve", mesh.DissolveSelected, "MeshEdit/Dissolve");
+        menu.Item(Loc.Get("csg.delete_face"), mesh.DeleteSelectedFaces, enabled: mesh.CanDeleteFaces, shortcut: Keys("Scene/Delete"), danger: true);
+    }
+
+    private static void MergeCommands(ContextBuilder menu, CSGMeshTool mesh)
+    {
+        if (!mesh.CanMerge) return;
+        menu.Submenu(Loc.Get("csg.menu.merge"), sub =>
+        {
+            Command(sub, "csg.merge_centre", mesh.MergeAtCentre);
+            if (mesh.CanMergeAtFirst) Command(sub, "csg.merge_first", mesh.MergeAtFirst);
+            if (mesh.CanMergeAtActive) Command(sub, "csg.merge_active", mesh.MergeAtActive);
+            Command(sub, "csg.merge_by_distance", mesh.MergeByDistanceSelected, "MeshEdit/MergeByDistance");
+        });
+    }
+
+    private static void BrushCommands(ContextBuilder menu)
+    {
+        List<CSGBrush> brushes = CSGSelection.Brushes();
+        List<CSGGroup> groups = CSGSelection.Groups();
+        if (brushes.Count > 0 || groups.Count > 0)
+        {
+            menu.Submenu(Loc.Get("csg.operation"), sub =>
+            {
+                OperationItem(sub, "csg.additive", Operation.Additive, "CSG/SetAdditive", brushes, groups);
+                OperationItem(sub, "csg.subtractive", Operation.Subtractive, "CSG/SetSubtractive", brushes, groups);
+                OperationItem(sub, "csg.intersect", Operation.Intersect, "CSG/SetIntersecting", brushes, groups);
+                if (groups.Count > 0)
+                {
+                    sub.Separator();
+                    sub.Item(Loc.Get("csg.pass_through"), CSGSelection.SetPassThrough, shortcut: Keys("CSG/SetPassThrough"), on: groups.TrueForAll(g => g.PassThrough));
+                }
+            });
+            if (SceneToolManager.Get<CSGClipTool>() is { } clip) Command(menu, "csg.cut_with_plane", clip.Begin);
+            menu.Separator();
+            Command(menu, "csg.duplicate", CSGSelection.Duplicate, "Scene/Duplicate");
+            Command(menu, "csg.repeat_clone", CSGSelection.RepeatClone, "CSG/RepeatClone");
+            Command(menu, "csg.group_selection", CSGMenuItems.GroupSelection, "CSG/GroupSelection");
+            menu.Submenu(Loc.Get("model.menu.transform"), sub =>
+            {
+                Command(sub, "csg.flip_x", () => CSGSelection.Flip(Float3.UnitX), "CSG/FlipX");
+                Command(sub, "csg.flip_y", () => CSGSelection.Flip(Float3.UnitY), "CSG/FlipY");
+                Command(sub, "csg.flip_z", () => CSGSelection.Flip(Float3.UnitZ), "CSG/FlipZ");
+                sub.Separator();
+                Command(sub, "csg.rotate_left", () => RotateBySnap(-1f), "CSG/RotateLeft");
+                Command(sub, "csg.rotate_right", () => RotateBySnap(1f), "CSG/RotateRight");
+                sub.Separator();
+                Command(sub, "csg.snap_to_grid", CSGSelection.SnapToGrid, "CSG/SnapToGrid");
+                Command(sub, "csg.centre_pivot", CSGSelection.CentrePivot);
+            });
+            menu.Submenu(Loc.Get("csg.menu.order"), sub =>
+            {
+                Command(sub, "csg.earlier", () => CSGSelection.MoveInOrder(-1), "CSG/Earlier");
+                Command(sub, "csg.later", () => CSGSelection.MoveInOrder(1), "CSG/Later");
+            });
+        }
+        menu.Submenu(Loc.Get("model.menu.hide"), sub =>
+        {
+            if (brushes.Count > 0)
+            {
+                Command(sub, "csg.hide_selected", () => CSGVisibility.Hide(CSGSelection.Brushes()), "CSG/Hide");
+                Command(sub, "csg.hide_unselected", CSGVisibility.HideUnselected, "CSG/HideUnselected");
+            }
+            Command(sub, "csg.toggle_visibility", CSGVisibility.ToggleAll, "CSG/ToggleVisibility");
+            sub.Item(Loc.Get("csg.unhide_all", new { count = CSGVisibility.HiddenCount }), CSGVisibility.UnhideAll, shortcut: Keys("CSG/UnhideAll"));
+        });
+    }
+
+    private static void OperationItem(ContextBuilder menu, string label, Operation operation, string shortcut, List<CSGBrush> brushes, List<CSGGroup> groups)
+        => menu.Item(Loc.Get(label), () => SetOperation(operation), shortcut: Keys(shortcut),
+            on: brushes.TrueForAll(b => b.Operation == operation) && groups.TrueForAll(g => g.Operation == operation));
 
     /// <summary>Selection shortcuts, in every mode but Create, which only sets up the next brush. The mesh tool keeps rotate and snap for its own points.</summary>
     private static void HandleShortcuts(HandleContext handles)

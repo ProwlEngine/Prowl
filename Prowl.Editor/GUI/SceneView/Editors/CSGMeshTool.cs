@@ -63,6 +63,8 @@ public sealed class CSGMeshTool : SceneTool
 
     public int SelectedFaceCount => _faces.Count;
 
+    public int SelectedEdgeCount => _selectedEdges.Count;
+
     /// <summary>Whether a chamfer has something to cut: a selected edge, or a selected corner.</summary>
     public bool CanBevel => Active && _vertices.Count > 0;
 
