@@ -67,6 +67,8 @@ public sealed class ModelMeshTool : SceneTool
     private object? _objectUndo;
     private bool _gizmoDragging;
     private Float3 _gizmoRaw, _gizmoApplied, _gizmoStart;
+    private Quaternion _gizmoAxes = Quaternion.Identity, _gizmoTurn = Quaternion.Identity;
+    private Float3 _gizmoScale = Float3.One;
     private bool _marquee;
     private Float2 _marqueeFrom;
 
@@ -109,6 +111,11 @@ public sealed class ModelMeshTool : SceneTool
 
     /// <summary>With a mirror modifier on, moved points on its plane stay there and the rest do not cross it.</summary>
     public bool MirrorClip { get; set; } = true;
+
+    public enum EditGizmo { Move, Rotate, Scale, Off }
+
+    /// <summary>Which gizmo the selected points show.</summary>
+    public EditGizmo Gizmo { get; set; } = EditGizmo.Move;
 
     /// <summary>After every move, turn and scale the moved points land on the nearest other model, for retopology.</summary>
     public bool AutoShrinkwrap { get; set; }
@@ -259,7 +266,7 @@ public sealed class ModelMeshTool : SceneTool
             TickMarquee(ctx);
             return;
         }
-        MoveGizmo(ctx);
+        SelectionGizmo(ctx);
         Pick(ctx);
     }
 
@@ -687,6 +694,14 @@ public sealed class ModelMeshTool : SceneTool
             m.Separator();
             m.Toggle(Loc.Get("csg.xray"), () => XRay = !XRay, () => XRay);
             m.Toggle(Loc.Get("model.menu.snap"), () => SnapToObjects = !SnapToObjects, () => SnapToObjects);
+            m.Submenu(Loc.Get("model.menu.gizmo"), sub =>
+            {
+                foreach (EditGizmo kind in Enum.GetValues<EditGizmo>())
+                {
+                    EditGizmo chosen = kind;
+                    sub.Item(Loc.Get($"model.menu.gizmo_{kind.ToString().ToLowerInvariant()}"), () => Gizmo = chosen, on: Gizmo == chosen);
+                }
+            });
             m.Toggle(Loc.Get("csg.proportional"), () => Proportional = !Proportional, () => Proportional);
             m.Toggle(Loc.Get("model.menu.mirror_clip"), () => MirrorClip = !MirrorClip, () => MirrorClip);
             m.Toggle(Loc.Get("model.menu.auto_shrinkwrap"), () => AutoShrinkwrap = !AutoShrinkwrap, () => AutoShrinkwrap);
@@ -2367,8 +2382,8 @@ public sealed class ModelMeshTool : SceneTool
         _modalHandles = null;
     }
 
-    /// <summary>The move gizmo at the middle of the selected points, moving them through a session.</summary>
-    private void MoveGizmo(SceneToolContext ctx)
+    /// <summary>The gizmo at the middle of the selected points, moving, turning or scaling them through a session.</summary>
+    private void SelectionGizmo(SceneToolContext ctx)
     {
         HandleContext handles = ctx.Handles;
         Float3 sum = Float3.Zero;
@@ -2382,34 +2397,70 @@ public sealed class ModelMeshTool : SceneTool
                 count++;
             }
         }
-        if (count == 0)
+        if (count == 0 || Gizmo == EditGizmo.Off)
         {
             _gizmoDragging = false;
             return;
         }
 
-        Float3 centre = sum / count, before = centre;
-        Quaternion axes = SceneTools.Orientation switch
+        Float3 centre = sum / count;
+        if (!_gizmoDragging)
+            _gizmoAxes = SceneTools.Orientation switch
+            {
+                PivotOrientation.Global => Quaternion.Identity,
+                PivotOrientation.Normal => NormalFrame() ?? LocalFrame(),
+                _ => LocalFrame(),
+            };
+        // A turn or scale keeps the gizmo where the drag began, a move follows the points
+        Float3 position = Gizmo == EditGizmo.Move || !_gizmoDragging ? centre : _gizmoStart, before = position;
+        Quaternion rotation = _gizmoTurn * _gizmoAxes;
+        Float3 scale = _gizmoScale;
+        OrigamiUI.Gizmo.TransformGizmoMode mode = Gizmo switch
         {
-            PivotOrientation.Global => Quaternion.Identity,
-            PivotOrientation.Normal => NormalFrame() ?? LocalFrame(),
-            _ => LocalFrame(),
+            EditGizmo.Rotate => OrigamiUI.Gizmo.TransformGizmoMode.Rotate,
+            EditGizmo.Scale => OrigamiUI.Gizmo.TransformGizmoMode.ScaleAll,
+            _ => OrigamiUI.Gizmo.TransformGizmoMode.Translate,
         };
-        bool moved = TransformHandles.PositionHandle(handles, MoveHandle, ref centre, axes, out bool hot);
+        bool changed = TransformHandles.TransformHandle(handles, MoveHandle, mode, ref position, ref rotation, ref scale, out bool hot);
         if (hot && !_gizmoDragging)
         {
             _gizmoRaw = _gizmoApplied = Float3.Zero;
             _gizmoStart = before;
         }
-        if (_gizmoDragging && !hot) CommitSession("Move Model Points");
+        if (_gizmoDragging && !hot)
+        {
+            CommitSession(Gizmo switch
+            {
+                EditGizmo.Rotate => "Rotate Model Points",
+                EditGizmo.Scale => "Scale Model Points",
+                _ => "Move Model Points",
+            });
+            _gizmoTurn = Quaternion.Identity;
+            _gizmoScale = Float3.One;
+        }
         _gizmoDragging = hot;
-        if (!moved) return;
+        if (!changed || (_session ?? StartSession()) is not { } session) return;
 
-        _gizmoRaw += centre - before;
-        _gizmoApplied = SceneTools.GridSnap != handles.Ctrl ? Round(_gizmoRaw, SceneTools.MoveSnap) : _gizmoRaw;
-        if ((_session ?? StartSession()) is not { } session) return;
-        Float3 total = _gizmoApplied;
-        PreviewSession(() => session.Translate(total));
+        session.Pivot = _gizmoStart;
+        Quaternion axes = _gizmoAxes;
+        switch (Gizmo)
+        {
+            case EditGizmo.Rotate:
+                _gizmoTurn = rotation * Quaternion.Inverse(_gizmoAxes);
+                Quaternion turn = _gizmoTurn;
+                PreviewSession(() => session.Rotate(turn));
+                break;
+            case EditGizmo.Scale:
+                _gizmoScale = scale;
+                PreviewSession(() => session.Scale(scale, axes));
+                break;
+            default:
+                _gizmoRaw += position - before;
+                _gizmoApplied = SceneTools.GridSnap != handles.Ctrl ? Round(_gizmoRaw, SceneTools.MoveSnap) : _gizmoRaw;
+                Float3 total = _gizmoApplied;
+                PreviewSession(() => session.Translate(total));
+                break;
+        }
     }
 
     private static Float3 Round(Float3 value, float step)

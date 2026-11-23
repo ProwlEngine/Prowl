@@ -94,11 +94,9 @@ public sealed class TransformSession : ITransformSession
     public void Translate(Float3 delta) => Apply((p, _) => p + delta);
 
     /// <summary>Turns by an angle in radians, by the right hand rule about the axis.</summary>
-    public void Rotate(Float3 axis, float angle)
-    {
-        Quaternion turn = Quaternion.AxisAngle(Float3.Normalize(axis), angle);
-        Apply((p, origin) => origin + turn * (p - origin));
-    }
+    public void Rotate(Float3 axis, float angle) => Rotate(Quaternion.AxisAngle(Float3.Normalize(axis), angle));
+
+    public void Rotate(Quaternion turn) => Apply((p, origin) => origin + turn * (p - origin));
 
     /// <summary>Scales along three axes turned by a rotation.</summary>
     public void Scale(Float3 factors, Quaternion axes)
