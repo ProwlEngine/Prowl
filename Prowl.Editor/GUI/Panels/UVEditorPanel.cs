@@ -51,6 +51,11 @@ public class UVEditorPanel : DockPanel
     private Gesture _gesture;
     private Float2 _from;
     private Float2 _pivot;
+
+    // The moving corner nearest the pointer when the move began, which Ctrl snaps onto other points, and the axis a
+    // move or scale is held to: -1 for none, 0 for U, 1 for V
+    private Float2 _anchor;
+    private int _axis = -1;
     private readonly List<(ModelObject Model, GeometryData.Loop Corner, Float2 UV)> _moving = new();
 
     // Corners picked in this view, so the two sides of a seam can be told apart. Dropped once the points selected in the scene change
@@ -493,11 +498,15 @@ public class UVEditorPanel : DockPanel
         Pointer = paper.PointerPos;
         bool over = paper.IsPointerOverRect((float)_rect.Min.X, (float)_rect.Min.Y, (float)_rect.Size.X, (float)_rect.Size.Y);
 
+        bool ctrl = paper.IsKeyDown(PaperKey.LeftControl) || paper.IsKeyDown(PaperKey.RightControl);
         if (_gesture is Gesture.Grab or Gesture.Rotate or Gesture.Scale)
         {
-            Preview(tool, Modal(Pointer));
+            if (paper.IsKeyPressed(PaperKey.X)) _axis = _axis == 0 ? -1 : 0;
+            else if (paper.IsKeyPressed(PaperKey.Y)) _axis = _axis == 1 ? -1 : 1;
+            Func<Float2, Float2> change = Modal(Pointer, faces, ctrl);
+            Preview(tool, change);
             if (paper.IsKeyPressed(PaperKey.Escape) || paper.IsPointerPressed(PaperMouseBtn.Right)) Cancel(tool);
-            else if (paper.IsKeyPressed(PaperKey.Enter) || paper.IsPointerPressed(PaperMouseBtn.Left)) Commit(tool, Modal(Pointer));
+            else if (paper.IsKeyPressed(PaperKey.Enter) || paper.IsPointerPressed(PaperMouseBtn.Left)) Commit(tool, change);
             return;
         }
 
@@ -509,11 +518,11 @@ public class UVEditorPanel : DockPanel
         }
         if (_gesture == Gesture.Move)
         {
-            Float2 delta = ToUV(Pointer) - ToUV(_from);
-            Preview(tool, uv => uv + delta);
+            Func<Float2, Float2> change = Modal(Pointer, faces, ctrl);
+            Preview(tool, change);
             if (paper.IsPointerDown(PaperMouseBtn.Left)) return;
             if (Float2.Distance(Pointer, _from) < 2f) Cancel(tool);
-            else Commit(tool, uv => uv + delta);
+            else Commit(tool, change);
             return;
         }
         if (_gesture == Gesture.Box)
@@ -609,11 +618,13 @@ public class UVEditorPanel : DockPanel
         foreach ((_, _, Float2 uv) in _moving) sum += uv;
         _pivot = sum / _moving.Count;
         _from = Pointer;
+        _anchor = _moving.MinBy(m => Float2.Distance(ToScreen(m.UV), Pointer)).UV;
+        _axis = -1;
         _gesture = gesture;
     }
 
-    /// <summary>What the G, R or S gesture does to a UV with the pointer at a point.</summary>
-    private Func<Float2, Float2> Modal(Float2 pointer)
+    /// <summary>What the gesture does to a UV with the pointer at a point. With snap a move lands its anchor on the nearest point that is not moving.</summary>
+    private Func<Float2, Float2> Modal(Float2 pointer, List<Shown> faces, bool snap)
     {
         Float2 pivot = ToScreen(_pivot);
         switch (_gesture)
@@ -634,15 +645,39 @@ public class UVEditorPanel : DockPanel
             {
                 float start = Float2.Distance(_from, pivot);
                 float scale = start > 1f ? Float2.Distance(pointer, pivot) / start : 1f;
+                var factors = new Float2(_axis == 1 ? 1f : scale, _axis == 0 ? 1f : scale);
                 Float2 centre = _pivot;
-                return uv => centre + (uv - centre) * scale;
+                return uv => centre + (uv - centre) * factors;
             }
             default:
             {
                 Float2 delta = ToUV(pointer) - ToUV(_from);
+                if (_axis == 0) delta.Y = 0f;
+                else if (_axis == 1) delta.X = 0f;
+                if (snap && SnapTarget(faces, _anchor + delta) is { } target) delta = target - _anchor;
                 return uv => uv + delta;
             }
         }
+    }
+
+    // The nearest shown point that is not moving, within reach of a UV on screen
+    private Float2? SnapTarget(List<Shown> faces, Float2 uv)
+    {
+        var moving = new HashSet<GeometryData.Loop>(_moving.Select(m => m.Corner));
+        Float2 at = ToScreen(uv);
+        Float2? best = null;
+        float nearest = PickRadius * 2f;
+        foreach (Shown shown in faces)
+            foreach (GeometryData.Loop corner in UVs.Corners(shown.Face))
+            {
+                if (moving.Contains(corner)) continue;
+                Float2 other = UVs.Get(corner);
+                float distance = Float2.Distance(ToScreen(other), at);
+                if (distance >= nearest) continue;
+                nearest = distance;
+                best = other;
+            }
+        return best;
     }
 
     /// <summary>Shows the moved points live, without recording anything.</summary>
