@@ -117,12 +117,13 @@ public class EnvironmentPanel : DockPanel
                     });
         });
 
-        EditorGUI.SettingsRow(paper, $"{id}_bg", Loc.Get("env.background_color"), () =>
-            Origami.ColorField(paper, $"{id}_bg_v", env.SkyColor, v => { RecordEnvironment("Background Color"); env.SkyColor = v; }).Show());
-
         Material? material = env.SkyMaterial;
         if (material.IsNotValid())
         {
+            // Sky Color is the background when there is no sky material. With one it only stands in for the frames before
+            // the sky draws and its ambient is first read back, which is nothing worth tuning, so it is only offered here.
+            EditorGUI.SettingsRow(paper, $"{id}_bg", Loc.Get("env.background_color"), () =>
+                Origami.ColorField(paper, $"{id}_bg_v", env.SkyColor, v => { RecordEnvironment("Background Color"); env.SkyColor = v; }).Show());
             Hint(paper, $"{id}_none", font, Loc.Get("env.no_sky_hint"));
         }
         else if (material.AssetID != Guid.Empty)
