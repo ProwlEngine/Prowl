@@ -122,6 +122,9 @@ public static class FileDialog
         public string Renaming = "";
         public string RenameName = "";
 
+        // The table rows of the current frame, reused so a large folder does not allocate a list per frame.
+        public readonly List<(int Kind, string Name, string Path, bool IsDir, string Size, string Mod, string Ext)> Rows = [];
+
         // Parent of Path, looked up again only when Path changes.
         public string ParentFor = "";
         public string? Parent;
@@ -298,8 +301,12 @@ public static class FileDialog
             Reload();
         }
 
-        IOrigamiIcon Ico(IconPainter p, Color col) =>
-            new IconAction((canvas, rect, _, _) => DrawIcon(canvas, rect, p, (float)rect.Size.X, col));
+        static IOrigamiIcon Ico(IconPainter p, Color col)
+        {
+            if (!_icons.TryGetValue((p, col), out var icon))
+                _icons[(p, col)] = icon = new IconAction((canvas, rect, _, _) => DrawIcon(canvas, rect, p, (float)rect.Size.X, col));
+            return icon;
+        }
 
         void RowContextMenu(int kind, string name, string path, bool isDir)
         {
@@ -543,11 +550,12 @@ public static class FileDialog
                     // Row model: optional ".." parent + entries, or an empty-message sentinel.
                     // Kind: 0 = entry, 1 = parent (".."), 2 = message.
                     var parent = ParentOf(st);
-                    var rows = new List<(int Kind, string Name, string Path, bool IsDir, long Size, DateTime Mod)>();
-                    if (parent != null) rows.Add((1, "..", parent, true, 0L, default));
-                    foreach (var e in display) rows.Add((0, e.Name, e.FullPath, e.IsDirectory, e.Size, e.LastModified));
+                    var rows = st.Rows;
+                    rows.Clear();
+                    if (parent != null) rows.Add((1, "..", parent, true, "", "", ""));
+                    foreach (var e in display) rows.Add((0, e.Name, e.FullPath, e.IsDirectory, e.SizeText, e.ModifiedText, e.Extension));
                     if (display.Count == 0)
-                        rows.Add((2, string.IsNullOrEmpty(st.Search) ? "This folder is empty" : "No matches", "", false, 0L, default));
+                        rows.Add((2, string.IsNullOrEmpty(st.Search) ? "This folder is empty" : "No matches", "", false, "", "", ""));
 
                     int selIndex = -1;
                     for (int i = 0; i < rows.Count; i++)
@@ -589,13 +597,12 @@ public static class FileDialog
                     {
                         if (it.Kind == 2) { table.Row().Cell(it.Name, ink.C200); continue; }
 
-                        string ext = it.IsDir ? "" : Path.GetExtension(it.Name);
-                        var painter = it.IsDir ? DrawFolder : FileGlyph(ext);
-                        var iconCol = it.IsDir ? theme.Amber.C500 : FileTint(theme, ink, ext);
+                        var painter = it.IsDir ? DrawFolder : FileGlyph(it.Ext);
+                        var iconCol = it.IsDir ? theme.Amber.C500 : FileTint(theme, ink, it.Ext);
                         table.Row()
                             .Cell(it.Name, it.Kind == 1 ? ink.C300 : ink.C400, Ico(painter, iconCol))
-                            .CellRight(it.IsDir ? "" : FormatSize(it.Size), ink.C200)
-                            .Cell(it.Kind == 1 ? "" : it.Mod.ToString("yyyy-MM-dd  HH:mm"), ink.C200);
+                            .CellRight(it.Size, ink.C200)
+                            .Cell(it.Mod, ink.C200);
                     }
 
                     table.Show();
@@ -656,6 +663,19 @@ public static class FileDialog
     // ── Vector icons (Origami's icon font is empty, so these stroke onto the canvas) ──
 
     private delegate void IconPainter(Canvas canvas, float cx, float cy, float size, Color color);
+
+    // One icon per painter and colour, shared by every row that uses it.
+    private static readonly Dictionary<(IconPainter, Color), IOrigamiIcon> _icons = new(new IconKeyComparer());
+
+    // Painters are compared by reference, which avoids the reflection a delegate's own hash does.
+    private sealed class IconKeyComparer : IEqualityComparer<(IconPainter Painter, Color Color)>
+    {
+        public bool Equals((IconPainter Painter, Color Color) a, (IconPainter Painter, Color Color) b)
+            => ReferenceEquals(a.Painter, b.Painter) && a.Color.ToArgb() == b.Color.ToArgb();
+
+        public int GetHashCode((IconPainter Painter, Color Color) key)
+            => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(key.Painter) ^ key.Color.ToArgb();
+    }
 
     private static readonly HashSet<string> _imgExts = new(StringComparer.OrdinalIgnoreCase)
         { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tga", ".tiff" };
@@ -927,13 +947,13 @@ public static class FileDialog
             foreach (var dir in di.EnumerateDirectories())
             {
                 if (!showHidden && (dir.Attributes & FileAttributes.Hidden) != 0) continue;
-                list.Add(new FileEntry { Name = dir.Name, FullPath = dir.FullName, IsDirectory = true, LastModified = dir.LastWriteTime });
+                list.Add(new FileEntry(dir.Name, dir.FullName, true, 0, dir.LastWriteTime));
             }
             foreach (var file in di.EnumerateFiles())
             {
                 if (!showHidden && (file.Attributes & FileAttributes.Hidden) != 0) continue;
                 if (filters is { Length: > 0 } && !MatchesFilter(file.Name, filters)) continue;
-                list.Add(new FileEntry { Name = file.Name, FullPath = file.FullName, IsDirectory = false, Size = file.Length, LastModified = file.LastWriteTime });
+                list.Add(new FileEntry(file.Name, file.FullName, false, file.Length, file.LastWriteTime));
             }
         }
         catch { }
@@ -969,5 +989,20 @@ public static class FileDialog
         public bool IsDirectory;
         public long Size;
         public DateTime LastModified;
+
+        // What the list shows for this entry, formatted once when the folder is read.
+        public string SizeText, ModifiedText, Extension;
+
+        public FileEntry(string name, string fullPath, bool isDirectory, long size, DateTime lastModified)
+        {
+            Name = name;
+            FullPath = fullPath;
+            IsDirectory = isDirectory;
+            Size = size;
+            LastModified = lastModified;
+            SizeText = isDirectory ? "" : FormatSize(size);
+            ModifiedText = lastModified.ToString("yyyy-MM-dd  HH:mm");
+            Extension = isDirectory ? "" : Path.GetExtension(name);
+        }
     }
 }
