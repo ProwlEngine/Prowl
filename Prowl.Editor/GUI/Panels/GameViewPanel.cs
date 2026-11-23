@@ -32,7 +32,7 @@ public enum ScriptChangesDuringPlay { HotReload, StopPlaying, WaitUntilStopped }
 [EditorPreferences("Play Mode", EditorIcons.Play, order: 25)]
 public sealed class PlayModePreferences : EditorPreferences
 {
-    [Tooltip("Saves the open scene before play starts without asking first. An untitled scene is not saved.")]
+    [Tooltip("Saves the open scene before play starts. An untitled scene is not saved.")]
     public bool SaveSceneOnPlay;
 
     [Tooltip("What the Game view does when play starts.")]
