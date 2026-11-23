@@ -518,7 +518,8 @@ public sealed class CSGMeshTool : SceneTool
     private readonly List<int> _actionAfterFaces = new();
     private SelectMode _actionAfterLead;
     private int _actionCount;
-    private float _previewKey = float.NaN;
+    private (float Amount, int Count)? _previewKey;
+    private bool _previewFailed;
 
     // How a bevel cuts, chosen once when it starts: Vector's bevel where it can, else planes cut across the corners
     private enum BevelKind { Planes, Edges, Points }
@@ -602,7 +603,11 @@ public sealed class CSGMeshTool : SceneTool
         else
         {
             if (handles.IsPressed("MeshEdit/DeleteFace")) DeleteFaces();
-            else if (handles.KeyDown(KeyCode.Delete) || handles.KeyDown(KeyCode.Backspace)) DissolveSelected();
+            else if (handles.KeyDown(KeyCode.Delete) || handles.KeyDown(KeyCode.Backspace))
+            {
+                if (Mode == SelectMode.Face && _faces.Count > 0) DeleteFaces();
+                else DissolveSelected();
+            }
             if (handles.IsPressed("CSG/SnapToGrid")) SnapSelection();
             if (handles.IsPressed("MeshEdit/VertexMode")) SetMode(SelectMode.Vertex);
             if (handles.IsPressed("MeshEdit/EdgeMode")) SetMode(SelectMode.Edge);
@@ -1284,7 +1289,7 @@ public sealed class CSGMeshTool : SceneTool
         _actionPoints.Clear();
         _actionEdges.Clear();
         _actionFaces.Clear();
-        _previewKey = float.NaN;
+        _previewKey = null;
         if (fromMenu || action == Action.Chamfer)
         {
             _actionPoints.UnionWith(_vertices);
@@ -1811,10 +1816,11 @@ public sealed class CSGMeshTool : SceneTool
     /// Runs again only when <paramref name="key"/> changes. What the operator selects, filled into the set
     /// <paramref name="lead"/> names, is kept for when the action ends.
     /// </summary>
-    private bool PreviewOperator(string name, float key, bool unchanged, Action<CSGBrushTarget, ElementSelection> run, SelectMode lead)
+    private bool PreviewOperator(string name, (float Amount, int Count) key, bool unchanged, Action<CSGBrushTarget, ElementSelection> run, SelectMode lead)
     {
-        if (key == _previewKey) return true;
+        if (key == _previewKey) return !_previewFailed;
         _previewKey = key;
+        _previewFailed = false;
 
         if (!unchanged)
         {
@@ -1824,6 +1830,7 @@ public sealed class CSGMeshTool : SceneTool
             if (problem != null)
             {
                 CSGStatus.Flash(Loc.Get(problem));
+                _previewFailed = true;
                 return false;
             }
 
@@ -1848,8 +1855,7 @@ public sealed class CSGMeshTool : SceneTool
     private void PreviewOperator(string name, float amount, int count, int maxCount, bool unchanged,
                                  Func<float, int, Action<CSGBrushTarget, ElementSelection>> make, SelectMode lead)
     {
-        float key = (float.IsNaN(amount) ? 0f : amount) + count * 100000f;
-        if (PreviewOperator(name, key, unchanged, make(amount, count), lead))
+        if (PreviewOperator(name, (float.IsNaN(amount) ? 0f : amount, count), unchanged, make(amount, count), lead))
             _pendingLast = unchanged ? null : new LastOperator(name, amount, count, maxCount, make, lead, _startMesh!, _startSurfaces!, Target!, null);
     }
 
@@ -2029,7 +2035,7 @@ public sealed class CSGMeshTool : SceneTool
         {
             int cuts = _actionCount;
             float s = slide;
-            PreviewOperator("Loop Cut CSG Brush", HashCode.Combine(edge.A, edge.B, cuts, (int)MathF.Round(slide * 1000f)), false, (target, selected) =>
+            PreviewOperator("Loop Cut CSG Brush", (slide, HashCode.Combine(edge.A, edge.B, cuts)), false, (target, selected) =>
             {
                 if (EdgesOf(target, [edge]) is [GeometryData.Edge ring]) Operators.LoopCut(target.Target.Mesh, ring, cuts, s, selected);
             }, SelectMode.Edge);
@@ -2037,7 +2043,7 @@ public sealed class CSGMeshTool : SceneTool
         else
         {
             RestoreStart();
-            _previewKey = float.NaN;
+            _previewKey = null;
         }
         ctx.Draw.Label(handles.MouseRay.Origin + handles.MouseRay.Direction * 5f, Loc.Get("csg.cuts", new { count = _actionCount }), PickedColor);
 
