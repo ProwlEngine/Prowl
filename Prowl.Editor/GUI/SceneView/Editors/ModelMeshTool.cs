@@ -525,8 +525,19 @@ public sealed class ModelMeshTool : SceneTool
             Operators.MergeByDistance(mesh, s.Vertices.Count > 0 ? [.. s.Vertices] : null, d, s), SelectMode.Vertex));
 
     private void SmoothPoints(SceneToolContext ctx)
-        => StartOperator(ctx, new AmountOperator("Smooth Model Points", false, p => p * 0.005f, "0.##", (mesh, s, t, _) =>
-            Operators.Smooth(mesh, [.. s.Vertices], Math.Clamp(t, 0f, 1f), s), SelectMode.Vertex));
+        => StartOperator(ctx, new AmountOperator("Smooth Model Points", false, p => p * 0.005f, "0.##", (mesh, s, t, repeats) =>
+        {
+            for (int i = 0; i < repeats; i++) Operators.Smooth(mesh, [.. s.Vertices], Math.Clamp(t, 0f, 1f), s);
+        }, SelectMode.Vertex, 1, 50));
+
+    private void RelaxPoints(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Relax Model Points", false, p => p * 0.005f, "0.##", (mesh, s, t, repeats) =>
+        {
+            for (int i = 0; i < repeats; i++) Operators.Relax(mesh, [.. s.Vertices], Math.Clamp(t, 0f, 1f), s);
+        }, SelectMode.Vertex, 1, 50));
+
+    private void SubdivideSmooth(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Subdivide Smooth", false, _ => 0f, "0", (mesh, s, _, levels) => Operators.SubdivideSmooth(mesh, levels, s), null, 1, 4));
 
     private void Fill() => Edit("Fill", Operators.Fill);
 
@@ -694,6 +705,7 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("csg.merge_by_distance"), () => MergeByDistance(ctx), shortcut: Chord("MeshEdit/MergeByDistance"));
         menu.Item(Loc.Get("csg.connect"), () => Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge), shortcut: Chord("MeshEdit/Connect"));
         menu.Item(Loc.Get("csg.smooth"), () => SmoothPoints(ctx), shortcut: Chord("MeshEdit/Smooth"));
+        menu.Item(Loc.Get("csg.relax"), () => RelaxPoints(ctx));
         menu.Item(Loc.Get("csg.flatten"), () => Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s)), shortcut: Chord("MeshEdit/Flatten"));
         menu.Item(Loc.Get("model.menu.shrinkwrap"), Shrinkwrap);
         menu.Separator();
@@ -712,6 +724,7 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("model.menu.crease"), () => Crease(ctx), shortcut: Chord("MeshEdit/Crease"));
         menu.Item(Loc.Get("model.menu.rip"), () => Rip(ctx), shortcut: Chord("MeshEdit/Rip"));
         menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
+        menu.Item(Loc.Get("model.menu.subdivide_smooth"), () => SubdivideSmooth(ctx));
         menu.Separator();
         menu.Item(Loc.Get("uv.mark_seam"), () => Edit("Mark Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, true)));
         menu.Item(Loc.Get("uv.clear_seam"), () => Edit("Clear Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, false)));
@@ -726,6 +739,7 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("csg.inset"), () => Inset(ctx), shortcut: Chord("MeshEdit/Inset"));
         menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)), shortcut: Chord("MeshEdit/Bevel"));
         menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
+        menu.Item(Loc.Get("model.menu.subdivide_smooth"), () => SubdivideSmooth(ctx));
         menu.Item(Loc.Get("csg.triangulate"), () => Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face), shortcut: Chord("MeshEdit/Triangulate"));
         menu.Item(Loc.Get("csg.tris_to_quads"), () => TrisToQuads(ctx), shortcut: Chord("MeshEdit/TrisToQuads"));
         menu.Item(Loc.Get("csg.bridge"), () => Edit("Bridge Model Faces", Bridge, SelectMode.Face), shortcut: Chord("MeshEdit/Bridge"));

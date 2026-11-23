@@ -159,6 +159,20 @@ public class OperatorTests
     }
 
     [Fact]
+    public void SubdividingSmoothRoundsTheWholeMeshInPlace()
+    {
+        GeometryData mesh = Primitives.Make(PrimitiveKind.Cube);
+        var selection = new ElementSelection();
+        selection.Faces.Add(mesh.Faces[0]);
+
+        Operators.SubdivideSmooth(mesh, 1, selection);
+
+        Assert.Equal(24, mesh.Faces.Count);
+        Assert.Equal(26, mesh.Vertices.Count);
+        Assert.True(selection.IsEmpty);
+    }
+
+    [Fact]
     public void DuplicatingAFaceCopiesItAndSelectsTheCopy()
     {
         GeometryData mesh = Strip();

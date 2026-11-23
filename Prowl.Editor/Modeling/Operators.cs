@@ -794,6 +794,15 @@ public static class Operators
         after.Vertices.UnionWith(points);
     }
 
+    /// <summary>Rounds the whole mesh, cutting every face into quads and smoothing, once for each level. Nothing is selected after.</summary>
+    public static void SubdivideSmooth(GeometryData mesh, int levels, ElementSelection after)
+    {
+        if (levels <= 0) return;
+        mesh.Restore(GeometryOperators.SubdivideSmooth(mesh, Math.Min(levels, 6)).Capture());
+        after.Clear();
+        mesh.MarkChanged();
+    }
+
     /// <summary>
     /// Evens out the spacing of points, moving each towards the middle of its neighbours along the surface rather than
     /// through it, by a strength from 0 to 1. They stay selected.
