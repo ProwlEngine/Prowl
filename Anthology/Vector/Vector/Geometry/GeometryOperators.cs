@@ -1000,8 +1000,8 @@ public static class GeometryOperators
     /// Splits faces off the rest of the mesh where they meet it along edges: every vertex on that outline is copied, so
     /// the faces keep their place but no longer share it.
     /// </summary>
-    /// <returns>The new vertices.</returns>
-    public static List<GeometryData.Vertex> SplitFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
+    /// <returns>The faces split off, as they are after, since some are put back as new faces.</returns>
+    public static List<GeometryData.Face> SplitFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
     {
         return CutOp.SplitFaces(mesh, faces);
     }

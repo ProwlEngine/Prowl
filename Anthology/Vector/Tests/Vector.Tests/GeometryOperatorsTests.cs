@@ -43,11 +43,13 @@ public class GeometryOperatorsTests
         GeometryData mesh = GeometryGenerator.Box(new Float3(2f));
         GeometryData.Face top = mesh.Faces.First(f => f.Normal().Y > 0.9f);
 
-        List<GeometryData.Vertex> made = GeometryOperators.SplitFaces(mesh, [top]);
+        List<GeometryData.Face> split = GeometryOperators.SplitFaces(mesh, [top]);
 
-        Assert.Equal(4, made.Count);
         Assert.Equal(12, mesh.Vertices.Count);
-        Assert.All(mesh.Faces.First(f => f.Normal().Y > 0.9f).NeighborVertices(), v => Assert.Single(v.NeighborFaces()));
+        GeometryData.Face after = Assert.Single(split);
+        Assert.True(mesh.Contains(after));
+        Assert.True(after.Normal().Y > 0.9f);
+        Assert.All(after.NeighborVertices(), v => Assert.Single(v.NeighborFaces()));
     }
 
     [Fact]
