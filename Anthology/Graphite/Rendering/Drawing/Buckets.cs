@@ -534,9 +534,11 @@ internal readonly struct CullFrustum
 
     public Float3 Relative(Double3 world) => new((float)(world.X - Camera.X), (float)(world.Y - Camera.Y), (float)(world.Z - Camera.Z));
 
-    public bool Sphere(Double3 center, float radius)
+    public bool Sphere(Double3 center, float radius) => Sphere(Relative(center), radius);
+
+    /// <summary>Whether a sphere relative to the camera meets any layer.</summary>
+    public bool Sphere(Float3 c, float radius)
     {
-        Float3 c = Relative(center);
         for (int l = 0; l < _layers; l++)
         {
             bool inside = true;

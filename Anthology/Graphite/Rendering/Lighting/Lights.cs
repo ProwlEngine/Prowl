@@ -1286,6 +1286,109 @@ internal struct RegionEntry
 }
 
 /// <summary>
+/// The items nearest a view by a key, at most a limit of them. Items past the limit are dropped as they come, so the
+/// farthest key kept is known early and whole groups of items past it can be left unvisited.
+/// </summary>
+internal sealed class NearestItems(int limit)
+{
+    private float[] _keys = new float[64];
+    private int[] _items = new int[64];
+
+    public int Count { get; private set; }
+
+    /// <summary>Whether an item was dropped for being past the limit.</summary>
+    public bool Full { get; private set; }
+
+    /// <summary>No item with a key above this can be among the nearest.</summary>
+    public float Farthest { get; private set; } = float.MaxValue;
+
+    public ReadOnlySpan<int> Items => _items.AsSpan(0, Count);
+
+    public void Clear()
+    {
+        Count = 0;
+        Full = false;
+        Farthest = float.MaxValue;
+    }
+
+    /// <summary>Says items were left unvisited for lying past <see cref="Farthest"/>.</summary>
+    public void Skipped() => Full = true;
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public void Add(float key, int item)
+    {
+        if (key > Farthest)
+        {
+            Full = true;
+            return;
+        }
+        if (Count == _keys.Length)
+            Grow();
+        _keys[Count] = key;
+        _items[Count++] = item;
+        if (Count >= limit * 2)
+            Trim();
+    }
+
+    private void Grow()
+    {
+        Array.Resize(ref _keys, Count * 2);
+        Array.Resize(ref _items, Count * 2);
+    }
+
+    /// <summary>Drops what is past the limit and orders the rest nearest first.</summary>
+    public void Finish()
+    {
+        Trim();
+        _keys.AsSpan(0, Count).Sort(_items.AsSpan(0, Count));
+    }
+
+    private void Trim()
+    {
+        if (Count <= limit)
+            return;
+        Select(limit);
+        Count = limit;
+        Full = true;
+        float farthest = float.MinValue;
+        for (int i = 0; i < limit; i++)
+            farthest = MathF.Max(farthest, _keys[i]);
+        Farthest = farthest;
+    }
+
+    // Moves the k smallest keys to the front, in no order
+    private void Select(int k)
+    {
+        int low = 0, high = Count - 1;
+        while (low < high)
+        {
+            float pivot = _keys[(low + high) >> 1];
+            int i = low, j = high;
+            while (i <= j)
+            {
+                while (_keys[i] < pivot)
+                    i++;
+                while (_keys[j] > pivot)
+                    j--;
+                if (i <= j)
+                {
+                    (_keys[i], _keys[j]) = (_keys[j], _keys[i]);
+                    (_items[i], _items[j]) = (_items[j], _items[i]);
+                    i++;
+                    j--;
+                }
+            }
+            if (k <= j)
+                high = j;
+            else if (k >= i)
+                low = i;
+            else
+                return;
+        }
+    }
+}
+
+/// <summary>
 /// Static items of one kind, split into regions of space with a tree each, built around the region's own origin, so
 /// positions stay precise at any distance from the world origin. A region rebuilds only when one of its items is added,
 /// removed or moved. Each view walks a small tree over the regions it sees, built every frame from the camera's offset
@@ -1309,7 +1412,13 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
         public uint Root = LightTreeBuilder.Invalid;
         public bool Dirty;
         public int Live = -1;
+
+        /// <summary>The tree as built, around Origin, and the items in its leaves' order, for walks on the CPU.</summary>
+        public LightTreeNode[] Tree = [];
+        public int[] Ordered = [];
     }
+
+    private readonly Stack<int> _walk = new();
 
     private readonly Dictionary<(long, long, long), Region> _regions = new();
     private readonly List<Region> _live = new();
@@ -1442,11 +1551,107 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
         return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
     }
 
-    /// <summary>Adds the items of the regions the last <see cref="BuildView"/> found in view. Render thread.</summary>
-    public void AddVisibleItems(List<int> items)
+    /// <summary>Whether the last <see cref="BuildView"/> found a region in view.</summary>
+    public bool AnyVisible => _visible.Count > 0;
+
+    /// <summary>
+    /// Adds the items the frustum holds, of the regions the last <see cref="BuildView"/> found in view, keyed by how near
+    /// they start: along forward, or by distance. Each region's tree is walked nearest child first, leaving out what
+    /// lies outside the frustum or past the farthest item kept. Render thread.
+    /// </summary>
+    public void AddVisibleItems(in CullFrustum frustum, Float3 forward, bool byDistance, NearestItems into)
     {
+        Float3 reach = new(MathF.Abs(forward.X), MathF.Abs(forward.Y), MathF.Abs(forward.Z));
+        Span<float> near = stackalloc float[4];
+        Span<int> state = stackalloc int[4];
+        Span<uint> child = stackalloc uint[4];
         foreach (Region region in _visible)
-            items.AddRange(region.Items);
+        {
+            Float3 origin = frustum.Relative(region.Origin);
+            LightTreeNode[] tree = region.Tree;
+            _walk.Clear();
+            if (tree.Length > 0)
+                _walk.Push(0);
+            while (_walk.Count > 0)
+            {
+                ref readonly LightTreeNode node = ref tree[_walk.Pop()];
+                for (int c = 0; c < 4; c++)
+                {
+                    state[c] = 0;
+                    child[c] = node.Child(c);
+                    if (child[c] == LightTreeBuilder.Invalid)
+                        continue;
+                    LightBounds box = node.Box(c);
+                    System.Numerics.Vector3 half = (box.Max - box.Min) * 0.5f + new System.Numerics.Vector3(0.01f);
+                    System.Numerics.Vector3 middle = (box.Max + box.Min) * 0.5f;
+                    Float3 center = new(middle.X + origin.X, middle.Y + origin.Y, middle.Z + origin.Z);
+                    Float3 extents = new(half.X, half.Y, half.Z);
+                    int inside = frustum.Classify(center, extents);
+                    if (inside == 0)
+                        continue;
+                    if (byDistance)
+                    {
+                        Float3 gap = new(MathF.Max(MathF.Abs(center.X) - extents.X, 0), MathF.Max(MathF.Abs(center.Y) - extents.Y, 0), MathF.Max(MathF.Abs(center.Z) - extents.Z, 0));
+                        near[c] = MathF.Sqrt(gap.X * gap.X + gap.Y * gap.Y + gap.Z * gap.Z);
+                    }
+                    else
+                    {
+                        near[c] = center.X * forward.X + center.Y * forward.Y + center.Z * forward.Z - (reach.X * extents.X + reach.Y * extents.Y + reach.Z * extents.Z);
+                    }
+                    state[c] = inside;
+                }
+
+                // Leaves nearest first, so the farthest key kept tightens before the inner children are weighed
+                for (int pass = 0; pass < 4; pass++)
+                {
+                    int next = -1;
+                    for (int c = 0; c < 4; c++)
+                    {
+                        if (state[c] != 0 && (child[c] & LightTreeBuilder.LeafBit) != 0 && (next < 0 || near[c] < near[next]))
+                            next = c;
+                    }
+                    if (next < 0)
+                        break;
+                    int inside = state[next];
+                    state[next] = 0;
+                    if (near[next] > into.Farthest)
+                    {
+                        into.Skipped();
+                        continue;
+                    }
+                    int first = (int)(child[next] & ~LightTreeBuilder.LeafBit);
+                    int end = first + (int)node.Count(next);
+                    for (int i = first; i < end; i++)
+                    {
+                        int item = region.Ordered[i];
+                        Float3 p = frustum.Relative(_center[item]);
+                        float radius = _radius[item];
+                        if (inside != 2 && !frustum.Sphere(p, radius))
+                            continue;
+                        float depth = byDistance ? MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z) : p.X * forward.X + p.Y * forward.Y + p.Z * forward.Z;
+                        into.Add(depth - radius, item);
+                    }
+                }
+
+                // Inner children pushed farthest first, so the nearest is walked next
+                for (int pass = 0; pass < 4; pass++)
+                {
+                    int next = -1;
+                    for (int c = 0; c < 4; c++)
+                    {
+                        if (state[c] != 0 && (next < 0 || near[c] > near[next]))
+                            next = c;
+                    }
+                    if (next < 0)
+                        break;
+                    state[next] = 0;
+                    if (near[next] > into.Farthest)
+                        into.Skipped();
+                    else
+                        _walk.Push((int)child[next]);
+                }
+            }
+        }
     }
 
     // A camera relative corner rounded outward, so the float box still holds the region
@@ -1547,9 +1752,13 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
         region.Records = records;
         region.Nodes = nodes;
         ReadOnlySpan<int> order = _builder.Order;
+        region.Tree = _builder.Nodes.ToArray();
+        if (region.Ordered.Length != count)
+            region.Ordered = new int[count];
         for (int i = 0; i < count; i++)
         {
             int item = region.Items[order[i]];
+            region.Ordered[i] = item;
             _recordIndex[item] = records.Offset + (uint)i;
             Records.Set(records.Offset + (uint)i, _pack(item, region.Origin));
         }
@@ -1686,9 +1895,7 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
     private readonly Action<RendererError> _report;
     private readonly List<int> _moving = new();
     private readonly List<int> _culled = new();
-    private readonly List<int> _binned = new();
-    private float[] _binKeys = new float[64];
-    private int[] _binItems = new int[64];
+    private readonly NearestItems _binned = new(MaxBinned);
     private int[] _movingSlot = [];
     private Double3[] _center = [];
     private float[] _radius = [];
@@ -1782,47 +1989,27 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
 
     public override int BuildBins(in CullFrustum frustum, Float3 forward, SpatialView view, Uploader uploader, List<System.Numerics.Vector4> spheres)
     {
-        // The moving items BuildView kept, then every item of the static regions in view that the frustum holds
+        // The moving items BuildView kept, then the items of the static regions in view that the frustum holds, nearest
+        // first. A view of several layers looks many ways, so its items go by distance, kept for every layer alike.
+        if (_culled.Count == 0 && !_static.AnyVisible)
+            return 0;
+        bool byDistance = frustum.Layers > 1;
         _binned.Clear();
-        _binned.AddRange(_culled);
-        int moving = _binned.Count;
-        _static.AddVisibleItems(_binned);
-        int kept = moving;
-        for (int i = moving; i < _binned.Count; i++)
+        foreach (int item in _culled)
         {
-            int item = _binned[i];
-            if (frustum.Sphere(_center[item], _radius[item]))
-                _binned[kept++] = item;
+            Float3 p = frustum.Relative(_center[item]);
+            float depth = byDistance ? MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z) : p.X * forward.X + p.Y * forward.Y + p.Z * forward.Z;
+            _binned.Add(depth - _radius[item], item);
         }
-        _binned.RemoveRange(kept, _binned.Count - kept);
+        _static.AddVisibleItems(frustum, forward, byDistance, _binned);
+        _binned.Finish();
         int count = _binned.Count;
         if (count == 0)
             return 0;
 
-        if (_binKeys.Length < count)
-        {
-            _binKeys = new float[count * 2];
-            _binItems = new int[count * 2];
-        }
-        // A view of several layers looks many ways, so its items go nearest the camera first, kept for every layer alike
-        bool byDistance = frustum.Layers > 1;
-        Span<float> keys = _binKeys.AsSpan(0, count);
-        Span<int> items = _binItems.AsSpan(0, count);
-        for (int i = 0; i < count; i++)
-        {
-            int item = _binned[i];
-            Float3 p = frustum.Relative(_center[item]);
-            float depth = byDistance ? MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z) : p.X * forward.X + p.Y * forward.Y + p.Z * forward.Z;
-            keys[i] = depth - _radius[item];
-            items[i] = item;
-        }
-        keys.Sort(items);
-
-        if (count > MaxBinned)
-        {
-            _report(new RendererError("lighting.bins.full", $"A view sees {count} items of spatial set {Slot}, more than the {MaxBinned} it bins, so the farthest are left out."));
-            count = MaxBinned;
-        }
+        if (_binned.Full)
+            _report(new RendererError("lighting.bins.full", $"A view sees more items of spatial set {Slot} than the {MaxBinned} it bins, so the farthest are left out."));
+        ReadOnlySpan<int> items = _binned.Items;
         if (_scratch.Length < count)
             _scratch = new TRecord[count * 2];
         for (int i = 0; i < count; i++)
