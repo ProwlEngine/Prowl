@@ -34,7 +34,6 @@ public sealed class CSGOverlayTool : SceneTool
         (CSGMode.Create, "csg.mode_create", "csg.mode_create_tip", "CSG/ModeCreate", EditorIcons.SquarePlus),
         (CSGMode.Edit, "csg.mode_edit", "csg.mode_edit_tip", "CSG/ModeEdit", EditorIcons.DrawPolygon),
         (CSGMode.Surface, "csg.mode_surface", "csg.mode_surface_tip", "CSG/ModeSurface", EditorIcons.BorderAll),
-        (CSGMode.Pivot, "csg.mode_pivot", "csg.mode_pivot_tip", "CSG/ModePivot", EditorIcons.Bullseye),
     };
 
     private static readonly EditorGlyphIcon[] ModeIcons = Array.ConvertAll(Modes, m => new EditorGlyphIcon(m.icon));
@@ -205,6 +204,12 @@ public sealed class CSGOverlayTool : SceneTool
         {
             Command(sub, "csg.loop_cut", mesh.LoopCut, "MeshEdit/LoopCut");
             Command(sub, "csg.knife", mesh.Knife, "MeshEdit/Knife");
+        });
+        menu.Submenu(Loc.Get("csg.menu.pivot"), sub =>
+        {
+            if (mesh.SelectedCount > 0) Command(sub, "csg.pivot_to_selection", mesh.PivotToSelection);
+            Command(sub, "csg.pivot_to_cursor", mesh.PivotToCursor);
+            Command(sub, "csg.centre_pivot", CSGSelection.CentrePivot);
         });
         menu.Submenu(Loc.Get("csg.menu.clean_up"), sub =>
         {

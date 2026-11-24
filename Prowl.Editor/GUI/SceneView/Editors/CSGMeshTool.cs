@@ -417,6 +417,30 @@ public sealed class CSGMeshTool : SceneTool
 
     public void SnapSelectedToGrid() => SnapSelection();
 
+    /// <summary>Moves the brush's pivot to the middle of the selected points, its shape staying where it is.</summary>
+    public void PivotToSelection()
+    {
+        if (!Active || _vertices.Count == 0) return;
+        Float3 sum = Float3.Zero;
+        foreach (int i in _vertices) sum += _mesh!.Points[i];
+        MovePivot(sum / _vertices.Count);
+    }
+
+    /// <summary>Moves the brush's pivot to the 3D cursor, its shape staying where it is.</summary>
+    public void PivotToCursor()
+    {
+        if (Active) MovePivot(Float4x4.TransformPoint(SceneTools.Cursor, Target!.Transform.WorldToLocalMatrix));
+    }
+
+    private void MovePivot(Float3 local)
+    {
+        CSGBrush brush = Target!;
+        CSGSelection.Record("Move CSG Pivot", [brush.GameObject, .. brush.GameObject.Children]);
+        CSGSelection.MovePivot(brush, local);
+        Reload();
+        MarkDirty();
+    }
+
     public void DeleteSelectedFaces() => DeleteFaces();
 
     /// <summary>One face is selected, so the bracket keys taper it instead of changing the grid.</summary>

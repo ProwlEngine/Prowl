@@ -18,8 +18,6 @@ public enum CSGMode
     Edit,
     /// <summary>Pick surfaces and drag their texture, moving, turning or scaling it as the surface tool's drag says.</summary>
     Surface,
-    /// <summary>Move a brush's pivot without moving its shape.</summary>
-    Pivot,
 }
 
 /// <summary>The one CSG tool in force, exclusive since every tool wants the primary button.</summary>
