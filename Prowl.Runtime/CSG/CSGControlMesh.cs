@@ -332,8 +332,22 @@ public sealed class CSGControlMesh
         return directed.Count > 0;
     }
 
-    /// <summary>Whether the polygons enclose a solid: closed, facing out, with room inside.</summary>
-    public bool IsValid() => IsClosed() && Volume() > 1e-9f;
+    /// <summary>Whether the polygons enclose a solid: closed, facing out, with room inside for their size.</summary>
+    public bool IsValid() => IsClosed() && HasRoom(Volume());
+
+    // Thinner than a millionth of its size reads as flat, whatever the size
+    private bool HasRoom(float volume)
+    {
+        Float3 min = new(float.MaxValue), max = new(float.MinValue);
+        foreach (Float3 point in points)
+        {
+            min = Maths.Min(min, point);
+            max = Maths.Max(max, point);
+        }
+        Float3 size = max - min;
+        float extent = MathF.Max(size.X, MathF.Max(size.Y, size.Z));
+        return extent > 0f && volume > 1e-6f * extent * extent * extent;
+    }
 
     /// <summary>
     /// The first problem keeping the polygons from enclosing a solid cleanly, checked from the cheapest: repeated points,
@@ -349,18 +363,10 @@ public sealed class CSGControlMesh
         for (int p = 0; p < polygons.Count; p++) triangles[p] = Triangles(p);
 
         float volume = 0f;
-        Float3 min = new(float.MaxValue), max = new(float.MinValue);
         foreach (var list in triangles)
             foreach ((Float3 a, Float3 b, Float3 c) in list)
                 volume += Float3.Dot(a, Float3.Cross(b, c)) / 6f;
-        foreach (Float3 point in points)
-        {
-            min = Maths.Min(min, point);
-            max = Maths.Max(max, point);
-        }
-        Float3 size = max - min;
-        float extent = MathF.Max(size.X, MathF.Max(size.Y, size.Z));
-        if (extent <= 0f || volume <= 1e-6f * extent * extent * extent) return CSGMeshProblem.InsideOut;
+        if (!HasRoom(volume)) return CSGMeshProblem.InsideOut;
 
         return CrossesItself(triangles) ? CSGMeshProblem.SelfIntersecting : CSGMeshProblem.None;
     }
