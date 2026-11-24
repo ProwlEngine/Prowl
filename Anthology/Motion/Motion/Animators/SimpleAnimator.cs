@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
@@ -10,12 +8,12 @@ namespace Prowl.Motion;
 /// </summary>
 public abstract class SimpleAnimator : AnimatorBase
 {
-    private readonly List<ClipState> _layers = new();
+    private readonly List<ClipState> _layers = [];
     private readonly Stack<ClipState> _pool = new();
 
-    private Skeleton[] _secondarySkeletons = Array.Empty<Skeleton>();
-    private Pose[] _secondaryPoses = Array.Empty<Pose>();
-    private AnimationClipBase[] _secondaryClips = Array.Empty<AnimationClipBase>();
+    private Skeleton[] _secondarySkeletons = [];
+    private Pose[] _secondaryPoses = [];
+    private AnimationClipBase[] _secondaryClips = [];
     private AnimationClipBase? _secondarySource;
 
     protected SimpleAnimator(Skeleton skeleton, Avatar? avatar = null) : base(skeleton, avatar)
@@ -31,30 +29,46 @@ public abstract class SimpleAnimator : AnimatorBase
     /// <summary>The clip currently playing (the destination clip while cross-fading), or null.</summary>
     public AnimationClipBase? CurrentClip => _layers.Count > 0 ? _layers[^1].Clip : null;
 
+    /// <summary>The normalized (0-1) playback time of the currently playing clip (<see cref="CurrentClip"/>), or
+    /// <c>0</c> if nothing is playing.</summary>
+    public float NormalizedTime => _layers.Count > 0 ? _layers[^1].NormalizedTime : 0;
+
+    /// <summary>The playback time (in seconds) of the currently playing clip (<see cref="CurrentClip"/>), or
+    /// <c>0</c> if nothing is playing.</summary>
+    public float CurrentTime => CurrentClip is not null ? NormalizedTime * CurrentClip.Duration : 0;
+
+
     /// <summary>True while a cross-fade is in progress.</summary>
     public bool IsCrossFading => _layers.Count > 1;
 
     /// <summary>Plays a clip immediately, cancelling any cross-fade.</summary>
-    public void Play(AnimationClipBase clip, bool loop = true)
+    /// <param name="clip">The clip to play.</param>
+    /// <param name="normalizedStartTime">The time (normalized to 0-1) in <paramref name="clip"/> to start playing.</param>
+    /// <param name="loop">Indicates whether playback should loop.</param>
+    public void Play(AnimationClipBase clip, float normalizedStartTime = 0, bool loop = true)
     {
         ArgumentNullException.ThrowIfNull(clip);
         ClearLayers();
-        _layers.Add(Rent(clip, loop, 0f));
+        _layers.Add(Rent(clip, normalizedStartTime, loop, fadeDuration: 0f));
     }
 
     /// <summary>
-    /// Cross fades to a new clip over <paramref name="duration"/> seconds. A fade already in progress
+    /// Cross fades to a new clip over <paramref name="fadeDuration"/> seconds. A fade already in progress
     /// keeps playing underneath, so the new clip blends in from the current mix.
     /// </summary>
-    public void CrossFade(AnimationClipBase clip, float duration, bool loop = true)
+    /// <param name="clip">The clip to play.</param>
+    /// <param name="normalizedStartTime">The time (normalized to 0-1) in <paramref name="clip"/> to start playing.</param>
+    /// <param name="fadeDuration">The duration, in seconds, of the cross-fade.</param>
+    /// <param name="loop">Indicates whether playback should loop.</param>
+    public void CrossFade(AnimationClipBase clip, float normalizedStartTime = 0, float fadeDuration = 0, bool loop = true)
     {
         ArgumentNullException.ThrowIfNull(clip);
-        if (_layers.Count == 0 || !(duration > 0f))
+        if (_layers.Count == 0 || !(fadeDuration > 0f))
         {
-            Play(clip, loop);
+            Play(clip, normalizedStartTime, loop);
             return;
         }
-        _layers.Add(Rent(clip, loop, duration));
+        _layers.Add(Rent(clip, normalizedStartTime, loop, fadeDuration));
     }
 
     protected override void Evaluate(float scaledDeltaTime, out Transform3D rootMotionDelta)
@@ -155,10 +169,10 @@ public abstract class SimpleAnimator : AnimatorBase
         }
     }
 
-    private ClipState Rent(AnimationClipBase clip, bool loop, float fadeDuration)
+    private ClipState Rent(AnimationClipBase clip, float normalizedStartTime, bool loop, float fadeDuration)
     {
         ClipState state = _pool.Count > 0 ? _pool.Pop() : new ClipState(Skeleton);
-        state.Start(clip, loop, fadeDuration);
+        state.Start(clip, float.Clamp(normalizedStartTime, 0, 1), loop, fadeDuration);
         return state;
     }
 
@@ -186,12 +200,12 @@ public abstract class SimpleAnimator : AnimatorBase
         public Pose Pose { get; }
         public float NormalizedTime => _cursor.Time;
 
-        public void Start(AnimationClipBase clip, bool loop, float fadeDuration)
+        public void Start(AnimationClipBase clip, float normalizedStartTime, bool loop, float fadeDuration)
         {
             Clip = clip;
             _mapping = clip.GetMappingTo(Pose.Skeleton);
             _loop = loop;
-            _cursor = default;
+            _cursor = new ClipCursor { Time = normalizedStartTime };
             _firstUpdate = true;
             _fadeTime = 0f;
             _fadeDuration = fadeDuration;
