@@ -413,16 +413,6 @@ public sealed class CSGMeshTool : SceneTool
         return (mesh, surfaces);
     }
 
-    /// <summary>Takes the face's corners, direction and look, ready for an extrude.</summary>
-    private void PrepareExtrude(int face)
-    {
-        _actionRing.Clear();
-        foreach (int i in _mesh!.PolygonPoints(face)) _actionRing.Add(_mesh.Points[i]);
-        _actionCorner = _mesh.PolygonNormal(face);
-        int plane = PlaneOf(face);
-        _actionSurface = plane >= 0 ? Target!.Surfaces[plane] : SurfaceData.Default;
-    }
-
     public void SnapSelectedToGrid() => SnapSelection();
 
     public void DeleteSelectedFaces() => DeleteFaces();
@@ -452,7 +442,6 @@ public sealed class CSGMeshTool : SceneTool
     private bool _dragging;
 
     // A gizmo drag that began with Shift on a whole face, extruding it rather than moving it
-    private bool _gizmoExtrude;
     private Float3 _gizmoStart;
     private Float3 _dragRaw, _dragApplied;
     private Float3 _dragAnchor, _dragAnchorStart, _dragStartHit;
@@ -2485,9 +2474,6 @@ public sealed class CSGMeshTool : SceneTool
         foreach (int i in _vertices) centre += _mesh!.Points[i];
         centre = Float4x4.TransformPoint(centre / _vertices.Count, toWorld);
 
-        // While extruding the points stay put, so the handle is carried along by the drag instead
-        if (_gizmoExtrude && _dragging) centre += _dragRaw;
-
         Float3 before = centre;
         Quaternion axes = SceneTools.Orientation switch
         {
@@ -2500,16 +2486,6 @@ public sealed class CSGMeshTool : SceneTool
         {
             _dragRaw = _dragApplied = Float3.Zero;
             _gizmoStart = before;
-
-            // Shift on a whole face pulls it out as a brush of its own
-            _gizmoExtrude = handles.Shift && _faces.Count == 1 && _vertices.Count == _mesh!.PolygonPoints(_faces[0]).Count;
-            if (_gizmoExtrude) PrepareExtrude(_faces[0]);
-        }
-
-        if (_dragging && !hot && _gizmoExtrude)
-        {
-            _gizmoExtrude = false;
-            CommitExtrude(GizmoExtrudeAmount(toWorld));
         }
         if (_dragging && !hot) CommitSession("Edit CSG Brush");
 
@@ -2519,11 +2495,12 @@ public sealed class CSGMeshTool : SceneTool
         Float3 step = Float3.Zero;
         if (moved)
         {
-            _dragRaw += centre - before;
+            // Shift slows the drag for fine moves
+            _dragRaw += (centre - before) * (handles.Shift ? 0.1f : 1f);
             Float3 snapped = axes * CSGSnap.Value(handles, Quaternion.Inverse(axes) * _dragRaw);
 
             // Snapping to a brush carries the gizmo's starting centre onto the target, along only the axes being dragged
-            if (SnapToBrushes && !_gizmoExtrude && FindSnap(handles, handles.MousePosition) is { } target)
+            if (SnapToBrushes && FindSnap(handles, handles.MousePosition) is { } target)
             {
                 Float3 raw = Quaternion.Inverse(axes) * _dragRaw, onto = Quaternion.Inverse(axes) * (target - _gizmoStart);
                 float still = 1e-6f + Float3.Length(raw) * 1e-4f;
@@ -2536,26 +2513,12 @@ public sealed class CSGMeshTool : SceneTool
             _dragApplied = snapped;
         }
 
-        if (_gizmoExtrude)
-        {
-            if (hot) PreviewExtrude(ctx, MathF.Max(0f, GizmoExtrudeAmount(toWorld)));
-            return;
-        }
-
         if (hot) DrawDistance(ctx, centre, _dragApplied);
         if (!moved || Float3.LengthSquared(step) < 1e-12f) return;
         if ((_session ?? StartSession()) is not { } session) return;
 
         Float3 total = _dragApplied;
         PreviewSession(() => session.Translate(total));
-    }
-
-    /// <summary>How far the gizmo has been dragged along the face being extruded, in the brush's own units.</summary>
-    private float GizmoExtrudeAmount(Float4x4 toWorld)
-    {
-        Float3 normal = Float4x4.TransformNormal(_actionCorner, toWorld);
-        float scale = Float3.Length(normal);
-        return scale < 1e-6f ? 0f : Float3.Dot(_dragApplied, normal / scale) / scale;
     }
 
     /// <summary>Scales the selected face about its centre and rotates a selected edge about itself.</summary>

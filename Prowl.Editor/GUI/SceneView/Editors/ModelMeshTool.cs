@@ -2840,19 +2840,23 @@ public sealed class ModelMeshTool : SceneTool
 
         session.Pivot = _gizmoStart;
         Quaternion axes = _gizmoAxes;
+        // Shift slows the drag for fine changes
+        float pace = handles.Shift ? 0.1f : 1f;
         switch (Gizmo)
         {
             case EditGizmo.Rotate:
-                _gizmoTurn = rotation * Quaternion.Inverse(_gizmoAxes);
+                (Float3 axis, float degrees) = AxisAngle(rotation * Quaternion.Inverse(_gizmoTurn * _gizmoAxes));
+                _gizmoTurn = Quaternion.AxisAngle(axis, degrees * pace * MathF.PI / 180f) * _gizmoTurn;
                 Quaternion turn = _gizmoTurn;
                 PreviewSession(() => session.Rotate(turn));
                 break;
             case EditGizmo.Scale:
-                _gizmoScale = scale;
-                PreviewSession(() => session.Scale(scale, axes));
+                _gizmoScale *= Float3.One + (scale / _gizmoScale - Float3.One) * pace;
+                Float3 scaled = _gizmoScale;
+                PreviewSession(() => session.Scale(scaled, axes));
                 break;
             default:
-                _gizmoRaw += position - before;
+                _gizmoRaw += (position - before) * pace;
                 _gizmoApplied = SceneTools.GridSnap != handles.Ctrl ? Round(_gizmoRaw, SceneTools.MoveSnap) : _gizmoRaw;
                 Float3 total = _gizmoApplied;
                 PreviewSession(() => session.Translate(total));
