@@ -213,6 +213,40 @@ internal sealed class CameraFrame : IDisposable
     public DeviceBuffer? CullState;
     private readonly PersistentBuffer _cullState;
 
+    /// <summary>
+    /// The view's lights, decals and probes binned by screen tile and depth, see <see cref="SpatialBinPass"/>, null while
+    /// the view bins none: shadow and voxel views, views drawing no renderables and views seeing no such item.
+    /// </summary>
+    public DeviceBuffer? SpatialBins;
+    private readonly PersistentBuffer _spatialBins;
+
+    /// <summary>The camera relative spheres of the binned items, each binned set's after the one before.</summary>
+    public readonly GpuArray BinSpheres;
+    public readonly List<System.Numerics.Vector4> BinSphereList = new();
+
+    /// <summary>How many items of each binned set the view binned this frame, and its screen tiles across and down.</summary>
+    public readonly int[] BinCounts = new int[SpatialBinPass.Sets];
+    public uint BinTilesX, BinTilesY;
+
+    /// <summary>Sizes the view's bins for this frame's binned items at width by height pixels, and uploads their spheres.</summary>
+    public void PlanBins(Uploader uploader, uint width, uint height)
+    {
+        int total = 0;
+        foreach (int count in BinCounts)
+            total += count;
+        if (total == 0)
+        {
+            SpatialBins = null;
+            BinTilesX = BinTilesY = 0;
+            return;
+        }
+        BinTilesX = (width + SpatialBinPass.TileSize - 1) / SpatialBinPass.TileSize;
+        BinTilesY = (height + SpatialBinPass.TileSize - 1) / SpatialBinPass.TileSize;
+        uint words = SpatialBinPass.Words(Math.Max(LayerCount, 1), BinTilesX * BinTilesY, BinCounts);
+        SpatialBins = _spatialBins.Resolve(_device, _frame.Store, System.Numerics.BitOperations.RoundUpToPowerOf2(words * 4));
+        BinSpheres.Write<System.Numerics.Vector4>(uploader, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(BinSphereList));
+    }
+
     /// <summary>Whether this frame's lists have commands the GPU cull fills, and the stamp of that cull.</summary>
     public bool GpuCulls;
     public uint CullStamp = 1;
@@ -379,6 +413,8 @@ internal sealed class CameraFrame : IDisposable
         CullView = _tables.Array("CullView");
         CullMaps = _tables.Array("CullMaps");
         _cullState = new PersistentBuffer(RenderResourceID.Intern($"Graphite.Camera{viewId}.CullState"), BufferUsage.StructuredBufferReadWrite);
+        BinSpheres = _tables.Array("BinSpheres");
+        _spatialBins = new PersistentBuffer(RenderResourceID.Intern($"Graphite.Camera{viewId}.SpatialBins"), BufferUsage.StructuredBufferReadWrite, keepContents: false);
         _device = device;
     }
 
@@ -500,6 +536,9 @@ internal sealed class CameraFrame : IDisposable
         Buffers.Add(CullMaps.Persistent);
         if (_cullState.Buffer != null)
             Buffers.Add(_cullState);
+        Buffers.Add(BinSpheres.Persistent);
+        if (SpatialBins != null)
+            Buffers.Add(SpatialBins);
         foreach (SpatialView? view in Spatial)
             view?.AddBuffers(Buffers);
     }
@@ -693,9 +732,10 @@ internal sealed class CameraFrame : IDisposable
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
         Shadows.Dispose();
-        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades, CullView, CullMaps })
+        foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades, CullView, CullMaps, BinSpheres })
             array.Release();
         _cullState.Release(_frame.Store);
+        _spatialBins.Release(_frame.Store);
         foreach (SpatialView? view in Spatial)
             view?.Release();
         _visibilityView.View?.Dispose();

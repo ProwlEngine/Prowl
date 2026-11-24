@@ -84,6 +84,8 @@ internal sealed class RendererResources : IDisposable
         }
         NoFogVolume = factory.CreateTexture(TextureDescription.Texture3D(1, 1, 1, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
         device.UpdateTexture<ushort>(NoFogVolume, [0, 0, 0, 0x3C00], TextureRegion.Whole(NoFogVolume, 0, 0));
+        NoSpatialBins = factory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadOnly));
+        device.UpdateBuffer<uint>(NoSpatialBins, 0, new uint[64]);
         NoVoxels = factory.CreateBuffer(new BufferDescription(VoxelHeader.Size + 4, BufferUsage.StructuredBufferReadWrite));
         device.UpdateBuffer(NoVoxels, 0, new VoxelHeader());
         NoCube = factory.CreateTexture(TextureDescription.CreateCube(1, 1, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
@@ -153,6 +155,9 @@ internal sealed class RendererResources : IDisposable
 
     /// <summary>The fog volume a view without volumetric fog reads: no light and everything let through.</summary>
     public Texture NoFogVolume { get; }
+
+    /// <summary>What views binning nothing bind as their bins and binned records: all zero, a header of no tiles, so no items.</summary>
+    public DeviceBuffer NoSpatialBins { get; }
 
     /// <summary>What views other than a world's voxel view bind as the voxel volume, empty.</summary>
     public DeviceBuffer NoVoxels { get; }
@@ -280,6 +285,7 @@ internal sealed class RendererResources : IDisposable
         NoSceneColor.Dispose();
         NoSceneDepth.Dispose();
         NoFogVolume.Dispose();
+        NoSpatialBins.Dispose();
         NoVoxels.Dispose();
         NoCube.Dispose();
         NoExposure.Dispose();

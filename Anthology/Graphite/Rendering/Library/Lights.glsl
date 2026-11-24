@@ -126,6 +126,46 @@ void Graphite_ReadLight(uint array, uint index, vec3 offset, vec3 offsetLow, out
     L.innerSpotCos = 1.0;
 }
 
+#ifdef GRAPHITE_BINNED
+// The lights whose spheres hold a point and that light the surface's layers, found through the view's bins as each is
+// asked for, so a fragment holds no list of them. Each light's shadow is looked up as it is shaded.
+struct Graphite_LightIterator
+{
+    Graphite_BinWalk walk;
+    vec3 position;
+    uint layers;
+};
+
+Graphite_LightIterator Graphite_BeginLights(vec3 relativePos)
+{
+    Graphite_LightIterator it;
+    Graphite_BeginBins(it.walk, relativePos, GRAPHITE_SET_LIGHTS);
+    it.position = relativePos;
+    it.layers = Graphite_SurfaceLayers();
+    return it;
+}
+
+bool Graphite_NextLight(inout Graphite_LightIterator it, out Graphite_LightSample L)
+{
+    uint array = Graphite_BinnedRecords(GRAPHITE_SET_LIGHTS);
+    vec3 offsetLow = Graphite_View().treeOffset.xyz;
+    uint index;
+    while (Graphite_NextBin(it.walk, index))
+    {
+        vec4 positionRange = Graphite_SpatialVec4(array, index * 9u);
+        precise vec3 position = positionRange.xyz - offsetLow;
+        vec3 d = it.position - position;
+        if (dot(d, d) > positionRange.w * positionRange.w || (floatBitsToUint(Graphite_SpatialVec4(array, index * 9u + 6u).w) & it.layers) == 0u)
+            continue;
+        Graphite_ReadLight(array, index, vec3(0.0), offsetLow, L);
+        return true;
+    }
+    return false;
+}
+
+// Binned lights look their shadows up as they are shaded
+void Graphite_ShadowLights(Graphite_LightIterator it, vec3 relativePos, vec3 geomNormal) {}
+#else
 // The lights whose spheres hold a point and that light the surface's layers, the first GRAPHITE_MAX_HITS of them, found
 // before any is read so walking the trees and shading the lights never hold their registers at once. Queries share the
 // hit list, so shade a point's lights before beginning another query.
@@ -165,7 +205,7 @@ bool Graphite_NextLight(inout Graphite_LightIterator it, out Graphite_LightSampl
     uvec2 hit = graphite_Hits[it.next++];
     vec3 offset, offsetLow;
     Graphite_HitOffsets(GRAPHITE_SET_LIGHTS, hit.y, offset, offsetLow);
-    Graphite_ReadLight(GRAPHITE_SET_LIGHTS * 2u + (hit.x >> 31), hit.x & 0x7FFFFFFFu, offset, offsetLow, L);
+    Graphite_ReadLight(Graphite_HitArray(GRAPHITE_SET_LIGHTS, hit), Graphite_HitIndex(hit), offset, offsetLow, L);
     return true;
 }
 
@@ -185,6 +225,7 @@ void Graphite_ShadowLights(Graphite_LightIterator it, vec3 relativePos, vec3 geo
         graphite_HitShadows[it.next - 1u] = shadow;
     }
 }
+#endif
 
 // Where and how a point is lit, each specular lobe with its own normal and GGX alpha. A model defines GRAPHITE_LIGHT_COAT
 // to have the coat lobe lit and GRAPHITE_LIGHT_BACK to have the light reaching its back, else neither is computed.
@@ -580,10 +621,14 @@ bool Graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
     return graphite_ContributeLocal(L, f, backLit, true, 1.0, c);
 }
 
-// The same with the shadow Graphite_ShadowLights found for the light the iterator last gave
+// The same with the shadow Graphite_ShadowLights found for the light the iterator last gave, looked up here for binned lights
 bool Graphite_ContributeLocal(Graphite_LightIterator it, Graphite_LightSample L, Graphite_LightFrame f, bool backLit, out Graphite_LightContribution c)
 {
+#ifdef GRAPHITE_BINNED
+    return graphite_ContributeLocal(L, f, backLit, true, 1.0, c);
+#else
     return graphite_ContributeLocal(L, f, backLit, false, graphite_HitShadows[it.next - 1u], c);
+#endif
 }
 
 // A shadowed directional light's shadow map alone

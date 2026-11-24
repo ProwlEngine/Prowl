@@ -98,6 +98,41 @@ vec3 Graphite_SampleReflectionProbe(Graphite_ReflectionProbe probe, vec3 p, vec3
 }
 
 // Walks the reflection probes whose box holds the point, giving each with the point in its box space
+#ifdef GRAPHITE_BINNED
+struct Graphite_ProbeIterator
+{
+    Graphite_BinWalk walk;
+    vec3 position;
+    uint index;              // the binned record of the probe last given
+};
+
+Graphite_ProbeIterator Graphite_BeginProbes(vec3 relativePos)
+{
+    Graphite_ProbeIterator it;
+    Graphite_BeginBins(it.walk, relativePos, GRAPHITE_SET_PROBES);
+    it.position = relativePos;
+    it.index = 0u;
+    return it;
+}
+
+bool Graphite_NextProbe(inout Graphite_ProbeIterator it, out Graphite_ReflectionProbe probe, out vec3 local)
+{
+    uint array = Graphite_BinnedRecords(GRAPHITE_SET_PROBES);
+    vec3 offsetLow = Graphite_View().treeOffset.xyz;
+    while (Graphite_NextBin(it.walk, it.index))
+    {
+        probe = Graphite_ProbeAt(array, it.index);
+        local = Graphite_ProbeLocal(probe, it.position, vec3(0.0), offsetLow);
+        vec3 inside = probe.box.xyz - abs(local);
+        if (min(inside.x, min(inside.y, inside.z)) > 0.0)
+            return true;
+    }
+    return false;
+}
+
+// The hit of the probe the iterator last gave
+uvec2 graphite_ProbeHit(Graphite_ProbeIterator it) { return uvec2(it.index, GRAPHITE_HIT_BINNED); }
+#else
 struct Graphite_ProbeIterator
 {
     Graphite_TreeQuery query;
@@ -133,9 +168,11 @@ bool Graphite_NextProbe(inout Graphite_ProbeIterator it, out Graphite_Reflection
     return false;
 }
 
-// The most important probes around a point, each kept as its record's index with the moving tree in the top bit and the
-// region entry it was found through, and its share of the blend, the sky taking what is left. Found once, then sampled by
-// every lobe. Slots are only indexed by unrolled loops, so they stay in registers.
+uvec2 graphite_ProbeHit(Graphite_ProbeIterator it) { return uvec2((it.k - 1u) | ((it.tree & 1u) << 31), it.query.region); }
+#endif
+
+// The most important probes around a point, each kept as its hit, see Graphite_HitArray, and its share of the blend,
+// the sky taking what is left. Found once, then sampled by every lobe. Slots are only indexed by unrolled loops, so they stay in registers.
 struct Graphite_ProbeSet
 {
     uvec2 probe[GRAPHITE_MAX_BLENDED_PROBES];
@@ -158,15 +195,20 @@ Graphite_ProbeSet Graphite_SkyProbeSet(vec3 relativePos, float sky)
     return set;
 }
 
-// Keeps the highest priority probes holding the point, weighted by how far inside their boxes it is
+// Keeps the highest priority probes holding the point, weighted by how far inside their boxes it is. Probes of equal
+// priority rank by their cube's slot, so the pick never depends on the order they were found in.
 Graphite_ProbeSet Graphite_FindProbes(vec3 relativePos)
 {
     if (Graphite_SetIsEmpty(GRAPHITE_SET_PROBES))
         return Graphite_SkyProbeSet(relativePos, 1.0);
     Graphite_ProbeSet set = Graphite_SkyProbeSet(relativePos, 0.0);
     float priority[GRAPHITE_MAX_BLENDED_PROBES];
+    uint cube[GRAPHITE_MAX_BLENDED_PROBES];
     for (int i = 0; i < GRAPHITE_MAX_BLENDED_PROBES; i++)
+    {
         priority[i] = -3.0e38;
+        cube[i] = 0xFFFFFFFFu;
+    }
 
     Graphite_ProbeIterator it = Graphite_BeginProbes(relativePos);
     Graphite_ReflectionProbe probe;
@@ -177,14 +219,16 @@ Graphite_ProbeSet Graphite_FindProbes(vec3 relativePos)
         float inside = min(inside3.x, min(inside3.y, inside3.z));
         float w = probe.box.w > 0.0 ? clamp(inside / probe.box.w, 0.0, 1.0) : 1.0;
         float pr = probe.params.z;
-        uvec2 id = uvec2((it.k - 1u) | ((it.tree & 1u) << 31), it.query.region);
+        uint cb = floatBitsToUint(probe.params.w) & 0xFFFFu;
+        uvec2 id = graphite_ProbeHit(it);
 
         // The candidate sinks through the slots, swapping with each it outranks, so the slots stay ordered
         for (int j = 0; j < GRAPHITE_MAX_BLENDED_PROBES; j++)
         {
-            if (pr > priority[j])
+            if (pr > priority[j] || (pr == priority[j] && cb < cube[j]))
             {
                 float tp = priority[j]; priority[j] = pr; pr = tp;
+                uint tc = cube[j]; cube[j] = cb; cb = tc;
                 float tw = set.weight[j]; set.weight[j] = w; w = tw;
                 uvec2 ti = set.probe[j]; set.probe[j] = id; id = ti;
             }
@@ -217,7 +261,7 @@ vec3 Graphite_SampleProbes(Graphite_ProbeSet set, vec3 dir, float alpha)
     {
         if (set.weight[i] <= 0.0)
             continue;
-        Graphite_ReflectionProbe probe = Graphite_ProbeAt(GRAPHITE_SET_PROBES * 2u + (set.probe[i].x >> 31), set.probe[i].x & 0x7FFFFFFFu);
+        Graphite_ReflectionProbe probe = Graphite_ProbeAt(Graphite_HitArray(GRAPHITE_SET_PROBES, set.probe[i]), Graphite_HitIndex(set.probe[i]));
         vec3 offset, offsetLow;
         Graphite_HitOffsets(GRAPHITE_SET_PROBES, set.probe[i].y, offset, offsetLow);
         vec3 local = Graphite_ProbeLocal(probe, set.position, offset, offsetLow);

@@ -6,6 +6,13 @@
 // sees, camera relative, whose leaves hold each region's root and the camera's offset to its origin. Moving ones live in
 // a tree per view around the camera. Every set's buffers sit in bindless arrays indexed by the set: its records and
 // nodes, static then the view's, and the view's regions.
+//
+// Fragments find lights, decals and reflection probes by bins instead, see Graphite_BeginBins: the view's items of each
+// sit nearest first in a record array after every set's, and a pass before the view draws marks which reach each depth
+// bin and screen tile, so a fragment walks a few mask words in registers and never holds a traversal stack. Compute
+// shaders, host sets and a shader defining GRAPHITE_SPATIAL_TREES walk the trees. A binned query finds what may reach the
+// fragment's own pixel at the point's depth, so query at the surface the fragment shades: a shader lighting a point
+// elsewhere on screen, a ray marched hit say, defines GRAPHITE_SPATIAL_TREES.
 #pragma once
 
 #extension GL_EXT_nonuniform_qualifier : require
@@ -40,7 +47,17 @@ struct Graphite_TreeNode
 // A region the view sees: the camera minus its origin split high and low, and its tree's root
 struct Graphite_RegionEntry { vec3 offset; uint root; vec3 offsetLow; uint pad; };
 
-layout(set = 1, binding = 3, std430) readonly buffer Graphite_SpatialRecords { uvec4 words[]; } graphite_SpatialRecords[GRAPHITE_SPATIAL_SETS * 2];
+// The sets fragments find by bins, whose binned records follow every set's static and moving ones
+#define GRAPHITE_BINNED_SETS 3u
+
+#if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_SPATIAL_TREES)
+#define GRAPHITE_BINNED 1
+#endif
+
+// The region of a hit found through the bins, whose record is camera relative as a moving one's
+#define GRAPHITE_HIT_BINNED 0xFFFFFFFEu
+
+layout(set = 1, binding = 3, std430) readonly buffer Graphite_SpatialRecords { uvec4 words[]; } graphite_SpatialRecords[GRAPHITE_SPATIAL_SETS * 2 + GRAPHITE_BINNED_SETS];
 layout(set = 1, binding = 4, std430) readonly buffer Graphite_SpatialNodes { Graphite_TreeNode nodes[]; } graphite_SpatialNodes[GRAPHITE_SPATIAL_SETS * 3];
 layout(set = 1, binding = 5, std430) readonly buffer Graphite_SpatialRegions { Graphite_RegionEntry entries[]; } graphite_SpatialRegions[GRAPHITE_SPATIAL_SETS];
 
@@ -50,6 +67,14 @@ layout(set = 1, binding = 6, std430) readonly buffer Graphite_SpatialRoots { uve
 // The records of a set: its static ones at set * 2, the view's moving ones at set * 2 + 1
 uint Graphite_StaticRecords(uint set) { return set * 2u; }
 uint Graphite_MovingRecords(uint set) { return set * 2u + 1u; }
+
+// The view's binned records of lights, decals or probes, camera relative and nearest first
+uint Graphite_BinnedRecords(uint set) { return uint(GRAPHITE_SPATIAL_SETS) * 2u + set; }
+
+// The record array and index of a hit: its index with the moving tree in the top bit, and its region entry, invalid
+// for the moving tree, GRAPHITE_HIT_BINNED for one found through the bins
+uint Graphite_HitArray(uint set, uvec2 hit) { return hit.y == GRAPHITE_HIT_BINNED ? Graphite_BinnedRecords(set) : set * 2u + (hit.x >> 31); }
+uint Graphite_HitIndex(uvec2 hit) { return hit.x & 0x7FFFFFFFu; }
 
 // Whether the view has no item of a set, static or moving
 bool Graphite_SetIsEmpty(uint set)
@@ -256,7 +281,7 @@ void Graphite_HitOffsets(uint set, uint region, out vec3 offset, out vec3 offset
     vec3 base = Graphite_View().treeOffset.xyz;
     offset = vec3(0.0);
     offsetLow = base;
-    if (region == GRAPHITE_TREE_INVALID)
+    if (region == GRAPHITE_TREE_INVALID || region == GRAPHITE_HIT_BINNED)
         return;
     Graphite_RegionEntry entry = graphite_SpatialRegions[nonuniformEXT(set)].entries[region];
     offset = entry.offset;
@@ -309,6 +334,89 @@ bool Graphite_NextItem(inout Graphite_ItemIterator it, out uint array, out uint 
     }
     return false;
 }
+
+// The depth bins of a view: log spaced from the near plane to a few kilometres along its forward axis, the first taking
+// everything nearer and the last everything farther. scale and bias come from the bins' header.
+#define GRAPHITE_Z_BINS 128u
+#define GRAPHITE_BIN_TILE 32u
+#define GRAPHITE_BIN_HEADER 16u
+
+uint Graphite_ZBin(float depth, float scale, float bias)
+{
+    return uint(clamp(log2(max(depth, 1e-30)) * scale + bias, 0.0, float(GRAPHITE_Z_BINS - 1u)));
+}
+
+// The bits of mask word of the items first to last, both included
+uint Graphite_BinRangeMask(uint word, uint first, uint last)
+{
+    uint lo = word == (first >> 5) ? (first & 31u) : 0u;
+    uint hi = word == (last >> 5) ? (last & 31u) : 31u;
+    return (0xFFFFFFFFu << lo) & (0xFFFFFFFFu >> (31u - hi));
+}
+
+#ifdef GRAPHITE_BINNED
+// Word 0 the words of a layer, then each layer's: forward axis, bin scale and bias, tiles across and down, each set's
+// mask words a tile and where its masks start, then per set GRAPHITE_Z_BINS first and last items as 16 bits each,
+// all ones for none, then per set every tile's mask words together. See SpatialBinPass.
+layout(set = 1, binding = 46, std430) readonly buffer Graphite_SpatialBins { uint graphite_SpatialBins[]; };
+
+// The items of a set whose depth bin and screen tile hold a fragment, nearest first. Their records are in
+// Graphite_BinnedRecords(set), camera relative to the first layer, so offset by Graphite_View().treeOffset.
+struct Graphite_BinWalk
+{
+    uint masks;              // the tile's first mask word of the set
+    uint word;               // the mask word being walked
+    uint first;              // the bin's first and last items
+    uint last;
+    uint bits;               // the items of word not given yet
+};
+
+void Graphite_BeginBins(out Graphite_BinWalk w, vec3 relativePos, uint set)
+{
+    w.masks = 0u;
+    w.word = 0u;
+    w.first = 1u;
+    w.last = 0u;
+    w.bits = 0u;
+    uint base = 1u + (graphite_Push.viewBase + GRAPHITE_VIEW_INDEX) * graphite_SpatialBins[0];
+    uvec2 tiles = uvec2(graphite_SpatialBins[base + 5u], graphite_SpatialBins[base + 6u]);
+    if (tiles.x == 0u)
+        return;
+    vec3 forward = uintBitsToFloat(uvec3(graphite_SpatialBins[base], graphite_SpatialBins[base + 1u], graphite_SpatialBins[base + 2u]));
+    vec2 scaleBias = uintBitsToFloat(uvec2(graphite_SpatialBins[base + 3u], graphite_SpatialBins[base + 4u]));
+    uint bin = Graphite_ZBin(dot(relativePos, forward), scaleBias.x, scaleBias.y);
+    uint range = graphite_SpatialBins[base + GRAPHITE_BIN_HEADER + set * GRAPHITE_Z_BINS + bin];
+    if (range == 0xFFFFFFFFu)
+        return;
+    uvec2 tile = min(uvec2(gl_FragCoord.xy) / GRAPHITE_BIN_TILE, tiles - 1u);
+    uint words = graphite_SpatialBins[base + 7u + set];
+    w.masks = base + graphite_SpatialBins[base + 10u + set] + (tile.y * tiles.x + tile.x) * words;
+    w.first = range & 0xFFFFu;
+    w.last = range >> 16;
+    w.word = w.first >> 5;
+    w.bits = graphite_SpatialBins[w.masks + w.word] & Graphite_BinRangeMask(w.word, w.first, w.last);
+}
+
+// The next item's index in the set's binned records
+bool Graphite_NextBin(inout Graphite_BinWalk w, out uint index)
+{
+    index = 0u;
+    for (;;)
+    {
+        if (w.bits != 0u)
+        {
+            index = w.word * 32u + uint(findLSB(w.bits));
+            w.bits &= w.bits - 1u;
+            return true;
+        }
+        if (w.first > w.last || w.word >= (w.last >> 5))
+            return false;
+        w.word++;
+        w.bits = graphite_SpatialBins[w.masks + w.word] & Graphite_BinRangeMask(w.word, w.first, w.last);
+    }
+    return false;
+}
+#endif
 
 // The layer mask of the surface being shaded, all layers outside the fragment stage
 uint Graphite_SurfaceLayers()

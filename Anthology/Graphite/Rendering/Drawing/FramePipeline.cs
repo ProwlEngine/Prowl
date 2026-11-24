@@ -51,6 +51,9 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly VoxelPass _voxels;
     private readonly DeformPass _deform;
     private readonly GpuCullPass _gpuCull;
+
+    /// <summary>Bins each view's lights, decals and probes by screen tile and depth before its features draw.</summary>
+    internal SpatialBinPass SpatialBins { get; }
     private readonly Dictionary<int, CameraFrame> _cameras = new();
     private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
     private readonly List<PlannedInstance> _planned = new();
@@ -121,6 +124,7 @@ internal sealed partial class FramePipeline : IDisposable
             InternalShaders.Compute(device, compiler, "Internal/VoxelCacheUpdate.glsl", policy, lit: true));
         _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl", policy), geometry);
         _gpuCull = new GpuCullPass(InternalShaders.Compute(device, compiler, "Internal/Cull.glsl", policy), geometry);
+        SpatialBins = new SpatialBinPass(InternalShaders.Compute(device, compiler, "Internal/SpatialBins.glsl", policy, lit: true));
         _readback = new ReadbackStaging(device, report);
     }
 
@@ -931,6 +935,8 @@ internal sealed partial class FramePipeline : IDisposable
         bool drawsPrepass = camera.Selected.Exists(static feature => feature is DrawPassFeature { Type: var type } && type == PassType.Prepass);
         LodView lod = shadow || view.Kind == ViewKind.Voxelization ? camera.OwnLod : LodView.Of(view, world.World.LodSnapshot, camera.LodState, time.Time, drawsPrepass);
         Array.Fill(camera.Roots, SpatialRoots.None);
+        Array.Clear(camera.BinCounts);
+        camera.BinSphereList.Clear();
         if (shadow)
         {
             world.Buckets.Cull(frustum, view.CullingMask, lod, camera.ShadowFilter, camera.ShadowHidden);
@@ -965,7 +971,19 @@ internal sealed partial class FramePipeline : IDisposable
 
             foreach (SpatialIndex set in world.World.SpatialSets)
                 camera.Roots[set.Slot] = set.BuildView(frustum, camera.SpatialFor(set.Slot), _uploader);
+
+            // Fragments find the lights, decals and probes they shade by screen tile and depth, nearest first
+            if (view.Kind != ViewKind.Voxelization)
+            {
+                Float3 forward = BinForward(view.Layers[0]);
+                foreach (SpatialIndex set in world.World.SpatialSets)
+                {
+                    if (set.Slot < SpatialBinPass.Sets)
+                        camera.BinCounts[set.Slot] = set.BuildBins(frustum, forward, camera.SpatialFor(set.Slot), _uploader, camera.BinSphereList);
+                }
+            }
         }
+        camera.PlanBins(_uploader, width, height);
         camera.SpatialRoots.Write<SpatialRoots>(_uploader, camera.Roots);
         ViewLayer first = view.Layers[0];
         float handedness = Determinant3(first.View) * first.Projection.c0.X * first.Projection.c1.Y;
@@ -1019,6 +1037,15 @@ internal sealed partial class FramePipeline : IDisposable
         camera.HostExposure = exposure;
         camera.Upload(_uploader, camera.Blocks.AsSpan(0, layers));
         camera.PlanCounts();
+    }
+
+    // The direction a layer looks along, the inward normal of its reversed Z near plane, for perspective and orthographic alike
+    private static Float3 BinForward(in ViewLayer layer)
+    {
+        Float4x4 m = layer.Projection * layer.View;
+        Float3 n = new(m.c0.W - m.c0.Z, m.c1.W - m.c1.Z, m.c2.W - m.c2.Z);
+        float length = MathF.Sqrt(n.X * n.X + n.Y * n.Y + n.Z * n.Z);
+        return length > 1e-12f ? n / length : new Float3(0, 0, -1);
     }
 
     /// <summary>A host view's frame state, for tests.</summary>
@@ -1100,6 +1127,7 @@ internal sealed partial class FramePipeline : IDisposable
         _voxels.Dispose();
         _deform.Dispose();
         _gpuCull.Dispose();
+        SpatialBins.Dispose();
         Programs.Dispose();
         foreach (IDisposable retired in _retired)
             retired.Dispose();

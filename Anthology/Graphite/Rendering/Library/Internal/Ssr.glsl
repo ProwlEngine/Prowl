@@ -291,6 +291,8 @@ void main()
     outColor = vec4(previous.rgb * Graphite_PostExposureRatio(Graphite_PostView()), previous.a);
 }
 #elif defined(SSR_COMBINE)
+// A fullscreen pass, whose pixels need not be the view's, so it finds probes through the trees rather than the bins
+#define GRAPHITE_SPATIAL_TREES 1
 #include "Graphite/Probes.glsl"
 #include "Graphite/Ambient.glsl"
 

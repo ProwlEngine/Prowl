@@ -116,6 +116,72 @@ bool Graphite_DecalBefore(float priority, uint sequence, float otherPriority, ui
 // Applies every decal whose box holds relativePos, camera relative, to the surface. geomNormal is the normal before
 // normal mapping, used to fade decals on surfaces turned away from them. The PBR model passes base_color,
 // geometry_normal, specular_roughness, base_metalness and occlusion.
+#ifdef GRAPHITE_BINNED
+// The bins give the decals in depth order, so they are walked again for each decal applied, each time taking the lowest
+// after the one before, which keeps the fragment free of any list of them. Only the GRAPHITE_MAX_DECALS highest apply.
+void Graphite_ApplyDecals(vec3 relativePos, vec3 geomNormal,
+                          inout vec3 baseColor, inout vec3 normal, inout float specularRoughness, inout float metalness, inout float occlusion)
+{
+#ifndef GRAPHITE_DECALS
+    return;
+#endif
+    uint layers = Graphite_SurfaceLayers();
+    uint array = Graphite_BinnedRecords(GRAPHITE_SET_DECALS);
+    vec3 offsetLow = Graphite_View().treeOffset.xyz;
+    Graphite_BinWalk start;
+    Graphite_BeginBins(start, relativePos, GRAPHITE_SET_DECALS);
+
+    uint covering = 0u;
+    Graphite_BinWalk w = start;
+    uint index;
+    while (Graphite_NextBin(w, index))
+    {
+        Graphite_DecalRecord d = Graphite_DecalAt(array, index);
+        if (Graphite_DecalCoverage(d, Graphite_DecalLocal(d, relativePos, vec3(0.0), offsetLow), geomNormal, layers) > 0.0)
+            covering++;
+    }
+    uint skip = covering > uint(GRAPHITE_MAX_DECALS) ? covering - uint(GRAPHITE_MAX_DECALS) : 0u;
+
+    float lastPriority = 0.0;
+    uint lastSequence = 0u;
+    for (uint n = 0u; n < covering; n++)
+    {
+        bool found = false;
+        float bestPriority = 0.0;
+        uint bestSequence = 0u, best = 0u;
+        w = start;
+        while (Graphite_NextBin(w, index))
+        {
+            float priority = Graphite_SpatialVec4(array, index * 10u + 6u).y;
+            uint sequence = Graphite_SpatialUVec4(array, index * 10u + 3u).x;
+            if ((n > 0u && !Graphite_DecalBefore(lastPriority, lastSequence, priority, sequence))
+                || (found && !Graphite_DecalBefore(priority, sequence, bestPriority, bestSequence)))
+                continue;
+            Graphite_DecalRecord d = Graphite_DecalAt(array, index);
+            if (Graphite_DecalCoverage(d, Graphite_DecalLocal(d, relativePos, vec3(0.0), offsetLow), geomNormal, layers) <= 0.0)
+                continue;
+            found = true;
+            bestPriority = priority;
+            bestSequence = sequence;
+            best = index;
+        }
+        if (!found)
+            break;
+        lastPriority = bestPriority;
+        lastSequence = bestSequence;
+        if (n < skip)
+            continue;
+
+        Graphite_DecalRecord d = Graphite_DecalAt(array, best);
+        vec3 local = Graphite_DecalLocal(d, relativePos, vec3(0.0), offsetLow);
+        float coverage = Graphite_DecalCoverage(d, local, geomNormal, layers);
+        Graphite_ApplyDecal(d, local, coverage, baseColor, normal, specularRoughness, metalness, occlusion);
+#ifdef GRAPHITE_DECAL_EXTRA
+        Graphite_ApplyDecalExtra(d, local.xy + 0.5, coverage);
+#endif
+    }
+}
+#else
 void Graphite_ApplyDecals(vec3 relativePos, vec3 geomNormal,
                           inout vec3 baseColor, inout vec3 normal, inout float specularRoughness, inout float metalness, inout float occlusion)
 {
@@ -195,3 +261,4 @@ void Graphite_ApplyDecals(vec3 relativePos, vec3 geomNormal,
 #endif
     }
 }
+#endif

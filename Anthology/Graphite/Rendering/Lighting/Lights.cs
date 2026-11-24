@@ -1435,6 +1435,13 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
         return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
     }
 
+    /// <summary>Adds the items of the regions the last <see cref="BuildView"/> found in view. Render thread.</summary>
+    public void AddVisibleItems(List<int> items)
+    {
+        foreach (Region region in _visible)
+            items.AddRange(region.Items);
+    }
+
     // A camera relative corner rounded outward, so the float box still holds the region
     private static System.Numerics.Vector3 Outward(in CullFrustum frustum, Double3 corner, int sign)
     {
@@ -1609,6 +1616,17 @@ internal abstract class SpatialIndex(int slot)
 
     /// <summary>Builds a view's trees over the regions and moving items it sees, around its camera. Returns their roots. Render thread.</summary>
     public abstract SpatialRoots BuildView(in CullFrustum frustum, SpatialView view, Uploader uploader);
+
+    /// <summary>The most items of a set a view bins, so an item's index fits the 16 bits of a z-bin's range.</summary>
+    public const int MaxBinned = 4096;
+
+    /// <summary>
+    /// Gathers the items the view sees for fragments to find by screen tile and depth, nearest first along forward, the
+    /// view's camera relative axis, or nearest the camera for a view of several layers: their records packed camera relative into the view's binned records, and their
+    /// camera relative spheres appended to spheres. Call after <see cref="BuildView"/>, whose regions in view it reads.
+    /// Returns how many it binned, at most <see cref="MaxBinned"/>. Render thread.
+    /// </summary>
+    public abstract int BuildBins(in CullFrustum frustum, Float3 forward, SpatialView view, Uploader uploader, List<System.Numerics.Vector4> spheres);
 }
 
 /// <summary>A set's roots in a view, matching an entry of Graphite_SpatialRoots: its regions tree and its moving tree.</summary>
@@ -1628,6 +1646,9 @@ internal sealed class SpatialView(TableHost tables)
     public readonly GpuArray Nodes = tables.Array("Nodes");
     public readonly GpuArray RegionEntries = tables.Array("RegionEntries");
     public readonly GpuArray RegionNodes = tables.Array("RegionNodes");
+
+    /// <summary>The records of the items the view bins, camera relative and nearest first, for the sets fragments find by bins.</summary>
+    public readonly GpuArray BinRecords = tables.Array("BinRecords");
     public readonly LightTreeBuilder Tree = new();
     public readonly LightTreeBuilder RegionTree = new();
 
@@ -1637,6 +1658,7 @@ internal sealed class SpatialView(TableHost tables)
         Nodes.Release();
         RegionEntries.Release();
         RegionNodes.Release();
+        BinRecords.Release();
     }
 
     public void AddBuffers(BufferSet buffers)
@@ -1645,6 +1667,7 @@ internal sealed class SpatialView(TableHost tables)
         buffers.Add(Nodes.Persistent);
         buffers.Add(RegionEntries.Persistent);
         buffers.Add(RegionNodes.Persistent);
+        buffers.Add(BinRecords.Persistent);
     }
 }
 
@@ -1656,6 +1679,9 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
     private readonly Action<RendererError> _report;
     private readonly List<int> _moving = new();
     private readonly List<int> _culled = new();
+    private readonly List<int> _binned = new();
+    private float[] _binKeys = new float[64];
+    private int[] _binItems = new int[64];
     private int[] _movingSlot = [];
     private Double3[] _center = [];
     private float[] _radius = [];
@@ -1745,6 +1771,62 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
         view.Records.Write<TRecord>(uploader, _scratch.AsSpan(0, _culled.Count));
         view.Nodes.Write(uploader, builder.Nodes);
         return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
+    }
+
+    public override int BuildBins(in CullFrustum frustum, Float3 forward, SpatialView view, Uploader uploader, List<System.Numerics.Vector4> spheres)
+    {
+        // The moving items BuildView kept, then every item of the static regions in view that the frustum holds
+        _binned.Clear();
+        _binned.AddRange(_culled);
+        int moving = _binned.Count;
+        _static.AddVisibleItems(_binned);
+        int kept = moving;
+        for (int i = moving; i < _binned.Count; i++)
+        {
+            int item = _binned[i];
+            if (frustum.Sphere(_center[item], _radius[item]))
+                _binned[kept++] = item;
+        }
+        _binned.RemoveRange(kept, _binned.Count - kept);
+        int count = _binned.Count;
+        if (count == 0)
+            return 0;
+
+        if (_binKeys.Length < count)
+        {
+            _binKeys = new float[count * 2];
+            _binItems = new int[count * 2];
+        }
+        // A view of several layers looks many ways, so its items go nearest the camera first, kept for every layer alike
+        bool byDistance = frustum.Layers > 1;
+        Span<float> keys = _binKeys.AsSpan(0, count);
+        Span<int> items = _binItems.AsSpan(0, count);
+        for (int i = 0; i < count; i++)
+        {
+            int item = _binned[i];
+            Float3 p = frustum.Relative(_center[item]);
+            float depth = byDistance ? MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z) : p.X * forward.X + p.Y * forward.Y + p.Z * forward.Z;
+            keys[i] = depth - _radius[item];
+            items[i] = item;
+        }
+        keys.Sort(items);
+
+        if (count > MaxBinned)
+        {
+            _report(new RendererError("lighting.bins.full", $"A view sees {count} items of spatial set {Slot}, more than the {MaxBinned} it bins, so the farthest are left out."));
+            count = MaxBinned;
+        }
+        if (_scratch.Length < count)
+            _scratch = new TRecord[count * 2];
+        for (int i = 0; i < count; i++)
+        {
+            int item = items[i];
+            _scratch[i] = _pack(item, frustum.Camera);
+            Float3 p = frustum.Relative(_center[item]);
+            spheres.Add(new System.Numerics.Vector4(p.X, p.Y, p.Z, _radius[item]));
+        }
+        view.BinRecords.Write<TRecord>(uploader, _scratch.AsSpan(0, count));
+        return count;
     }
 
     private void LeaveMoving(int item)

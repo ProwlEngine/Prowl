@@ -62,6 +62,7 @@ internal static class GraphiteBindings
     public const int FogVolume = 43;
     public const int FogVolumes = 44;
     public const int Voxels = 45;
+    public const int SpatialBins = 46;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -107,7 +108,7 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, Graphics, SamplerTable) { ArrayCount = samplers },
         new ResourceLayoutElementDescription("Graphite_Globals", ResourceKind.StructuredBufferReadOnly, Graphics, Globals),
         new ResourceLayoutElementDescription("Graphite_Views", ResourceKind.StructuredBufferReadOnly, Graphics, Views),
-        new ResourceLayoutElementDescription("Graphite_SpatialRecords", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialRecords) { ArrayCount = SpatialIndex.MaxSets * 2 },
+        new ResourceLayoutElementDescription("Graphite_SpatialRecords", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialRecords) { ArrayCount = SpatialIndex.MaxSets * 2 + SpatialBinPass.Sets },
         new ResourceLayoutElementDescription("Graphite_SpatialNodes", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialNodes) { ArrayCount = SpatialIndex.MaxSets * 3 },
         new ResourceLayoutElementDescription("Graphite_SpatialRegions", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialRegions) { ArrayCount = SpatialIndex.MaxSets },
         new ResourceLayoutElementDescription("Graphite_SpatialRoots", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialRoots),
@@ -137,7 +138,8 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_Ltc", ResourceKind.TextureReadOnly, Graphics, Ltc),
         new ResourceLayoutElementDescription("Graphite_FogVolume", ResourceKind.TextureReadOnly, Graphics, FogVolume),
         new ResourceLayoutElementDescription("Graphite_FogVolumes", ResourceKind.StructuredBufferReadOnly, Graphics, FogVolumes),
-        new ResourceLayoutElementDescription("Graphite_Voxels", ResourceKind.StructuredBufferReadWrite, ShaderStages.Fragment | ShaderStages.Compute, Voxels))
+        new ResourceLayoutElementDescription("Graphite_Voxels", ResourceKind.StructuredBufferReadWrite, ShaderStages.Fragment | ShaderStages.Compute, Voxels),
+        new ResourceLayoutElementDescription("Graphite_SpatialBins", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialBins))
     {
         Table = true,
     };

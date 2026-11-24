@@ -23,7 +23,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         s_skyAmbientSH = "Graphite_SkyAmbientSH", s_spatialNodes = "Graphite_SpatialNodes", s_spatialRecords = "Graphite_SpatialRecords",
         s_spatialRegions = "Graphite_SpatialRegions", s_spatialRoots = "Graphite_SpatialRoots", s_tableSampler = "Graphite_TableSampler",
         s_transforms = "Graphite_Transforms", s_views = "Graphite_Views", s_worldLighting = "Graphite_WorldLighting",
-        s_fogVolume = "Graphite_FogVolume", s_fogVolumes = "Graphite_FogVolumes", s_voxels = "Graphite_Voxels";
+        s_fogVolume = "Graphite_FogVolume", s_fogVolumes = "Graphite_FogVolumes", s_voxels = "Graphite_Voxels", s_spatialBins = "Graphite_SpatialBins";
 
     private readonly PropertySet _properties = new();
     private (DeviceBuffer? Buffer, uint Offset, uint Size) _globals;
@@ -50,6 +50,11 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
             camera.ViewTable.Set(s_spatialNodes, (uint)(slot * 3 + 2), view.RegionNodes.Buffer);
             camera.ViewTable.Set(s_spatialRegions, (uint)slot, view.RegionEntries.Buffer);
         }
+
+        // The binned sets' records follow every set's static and moving ones
+        for (int slot = 0; slot < SpatialBinPass.Sets; slot++)
+            camera.ViewTable.Set(s_spatialRecords, (uint)(SpatialIndex.MaxSets * 2 + slot), (object?)camera.Spatial[slot]?.BinRecords.Buffer ?? frame.Resources.NoSpatialBins);
+        camera.ViewTable.Set(s_spatialBins, 0, (object?)camera.SpatialBins ?? frame.Resources.NoSpatialBins);
         SetWorldBuffers(camera.ViewTable, camera.World.World);
         camera.ViewTable.Set(s_shadowSampler, 0, frame.ShadowSampler);
         camera.ViewTable.Set(s_shadowFaces, 0, camera.World.Shadows!.Faces.Buffer);
