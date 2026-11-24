@@ -42,7 +42,7 @@ public sealed class QualityLevel
     public ShadowResolution MaxShadowResolution = ShadowResolution._2048;
 
     /// <summary>The illuminance in lux where a light's automatic range ends. Higher cuts lights shorter and cheaper.</summary>
-    [Header("Lights")] public float LightCutoff = 0.01f;
+    [Header("Lights")] public float LightCutoff = 0.25f;
 
     /// <summary>The largest cube any reflection probe or the sky probe captures, its own size capped to it.</summary>
     [Header("Reflections")] public int MaxProbeResolution = 256;
