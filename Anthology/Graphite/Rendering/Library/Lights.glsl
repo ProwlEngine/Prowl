@@ -675,13 +675,18 @@ vec3 graphite_DiskDirection(Graphite_DirectionalLight d, vec3 N, vec3 V)
 }
 
 // What a directional light gives a frame. A model defining GRAPHITE_SUN_DISK has each specular lobe lit from the nearest
-// direction inside the light's disk, else from its centre. index 0 is the sun.
+// direction inside the light's disk, else from its centre. A model defining GRAPHITE_LIGHT_FRONT takes nothing from a
+// light behind its base normal, so those pixels skip the shadow. index 0 is the sun.
 bool Graphite_ContributeDirectional(Graphite_DirectionalLight d, uint index, Graphite_LightFrame f, out Graphite_LightContribution c)
 {
     if ((d.layers & Graphite_SurfaceLayers()) == 0u)
         return false;
-    float shadow = Graphite_DirectionalLightShadow(d, index, f.position, graphite_ShadowNormal(f.geomNormal, d.direction));
     float NdotL = dot(f.baseNormal, d.direction);
+#ifdef GRAPHITE_LIGHT_FRONT
+    if (NdotL <= -d.sinRadius)
+        return false;
+#endif
+    float shadow = Graphite_DirectionalLightShadow(d, index, f.position, graphite_ShadowNormal(f.geomNormal, d.direction));
     c.radiance = d.color * (Graphite_Exposure() * shadow);
     c.diffuseL = d.direction;
     c.diffuse = max(NdotL, 0.0);

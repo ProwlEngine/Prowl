@@ -69,6 +69,11 @@
 #define PBR_NO_SPECULAR_AA
 #endif
 
+// Every lobe lit here needs the light in front of the base normal
+#if !defined(GRAPHITE_CUSTOM_BRDF) && !defined(PBR_SHEET) && !defined(PBR_WRAP) && !defined(PBR_DIRECT_COAT) && !defined(PBR_DIRECT_FUZZ)
+#define GRAPHITE_LIGHT_FRONT
+#endif
+
 #include "Graphite/Lighting.glsl"
 #include "Graphite/PBR/Params.glsl"
 #include "Graphite/PBR/Microfacet.glsl"
