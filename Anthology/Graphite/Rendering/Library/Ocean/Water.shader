@@ -410,7 +410,7 @@ Shader "Graphite/Ocean"
 
                 color = mix(Graphite_SampleSceneColor(uv, 0.0), color, clamp(behind / 0.2, 0.0, 1.0));
                 fragColor = vec4(Graphite_SaturateHalf(Graphite_ApplyFog(color, vRelativePos)), 1.0);
-                Graphite_WriteMotion(graphite_MotionCurrent, graphite_MotionPrevious);
+                Graphite_WriteMotion(graphite_MotionPrevious);
                 Graphite_WriteReactive(1.0);
             }
         }

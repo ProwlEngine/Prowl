@@ -124,7 +124,7 @@ void Graphite_StandardFragment()
 #if defined(_SURFACE_TRANSPARENT) || defined(PBR_TRANSMISSION)
     fragColor = vec4(color * c.opacity, c.opacity);
 #ifdef PBR_TRANSMISSION
-    Graphite_WriteMotion(graphite_MotionCurrent, graphite_MotionPrevious);
+    Graphite_WriteMotion(graphite_MotionPrevious);
     Graphite_WriteReactive(PBR_ReactiveCoverage(c, p));
 #endif
 #else
@@ -312,7 +312,7 @@ void Graphite_StandardFragment()
 #if defined(GRAPHITE_PREPASS_NORMALS) && defined(GRAPHITE_STANDARD_UNLIT)
     Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), vec3(0.0), 1.0);
 #elif defined(GRAPHITE_STANDARD_PREPASS_MOTION)
-    Graphite_WriteMotion(graphite_MotionCurrent, graphite_MotionPrevious);
+    Graphite_WriteMotion(graphite_MotionPrevious);
 #endif
 }
 
