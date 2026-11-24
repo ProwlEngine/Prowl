@@ -61,7 +61,7 @@ public sealed class TerrainSurfaceTests : IDisposable
         Shader shader = _harness.Renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Terrain/Default.shader")!));
         foreach (ShaderPass pass in shader.Definition.Passes!)
         {
-            foreach (string tier in (string[])["FULL", "LITE"])
+            foreach (string tier in (string[])["FULL", "LITE", "MAX"])
                 TestCompiler.Shared.CompileProgram(pass, [new Keyword(GlobalAxis.PbrTier.Name, tier)]);
         }
     }
@@ -360,7 +360,7 @@ public sealed class TerrainSurfaceTests : IDisposable
         Shader shader = _harness.Renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Terrain/Grass.shader")!));
         foreach (ShaderPass pass in shader.Definition.Passes!)
         {
-            foreach (string tier in (string[])["FULL", "LITE"])
+            foreach (string tier in (string[])["FULL", "LITE", "MAX"])
                 TestCompiler.Shared.CompileProgram(pass, [new Keyword(GlobalAxis.PbrTier.Name, tier)]);
         }
     }

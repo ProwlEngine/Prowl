@@ -674,7 +674,8 @@ vec3 graphite_DiskDirection(Graphite_DirectionalLight d, vec3 N, vec3 V)
     return dot(across, across) > 1e-8 ? normalize(d.direction * d.cosRadius + normalize(across) * d.sinRadius) : d.direction;
 }
 
-// What a directional light gives a frame, each specular lobe from the nearest direction inside its disk. index 0 is the sun.
+// What a directional light gives a frame. A model defining GRAPHITE_SUN_DISK has each specular lobe lit from the nearest
+// direction inside the light's disk, else from its centre. index 0 is the sun.
 bool Graphite_ContributeDirectional(Graphite_DirectionalLight d, uint index, Graphite_LightFrame f, out Graphite_LightContribution c)
 {
     if ((d.layers & Graphite_SurfaceLayers()) == 0u)
@@ -696,6 +697,7 @@ bool Graphite_ContributeDirectional(Graphite_DirectionalLight d, uint index, Gra
 #ifdef GRAPHITE_LIGHT_BACK
     c.diffuseBack = max(-NdotL, 0.0);
 #endif
+#ifdef GRAPHITE_SUN_DISK
     if (d.sinRadius > 0.0)
     {
         float extent = 0.5 * d.sinRadius;
@@ -707,5 +709,6 @@ bool Graphite_ContributeDirectional(Graphite_DirectionalLight d, uint index, Gra
         c.coat = max(dot(f.coatNormal, c.coatL), 0.0) * Graphite_AreaEnergy(f.coatAlpha, extent, extent);
 #endif
     }
+#endif
     return true;
 }

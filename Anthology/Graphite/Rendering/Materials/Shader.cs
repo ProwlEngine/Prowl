@@ -502,8 +502,9 @@ public sealed class Shader
     public const string BackDepthTag = "BackDepth";
 
     /// <summary>
-    /// The pass tag limiting a pass's SceneColor, SceneDepth and BackDepth reads to views whose global axis has a value,
-    /// "ReadsWhen" = "AXIS VALUE", so views at other values pay for no copy. A view without the axis set takes its first value.
+    /// The pass tag limiting a pass's SceneColor, SceneDepth and BackDepth reads to views whose global axis has one of
+    /// the values, "ReadsWhen" = "AXIS VALUE VALUE", so views at other values pay for no copy. A view without the axis
+    /// set takes its first value.
     /// </summary>
     public const string ReadsWhenTag = "ReadsWhen";
 
@@ -522,7 +523,7 @@ public sealed class Shader
     private readonly bool[] _readsSceneColor;
     private readonly bool[] _readsSceneDepth;
     private readonly bool[] _readsBackDepth;
-    private readonly (string Axis, string Value)?[] _readsWhen;
+    private readonly (string Axis, string[] Values)?[] _readsWhen;
     private readonly HashSet<string>[] _passAxes;
 
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
@@ -543,14 +544,14 @@ public sealed class Shader
         _readsSceneColor = new bool[passes.Length];
         _readsSceneDepth = new bool[passes.Length];
         _readsBackDepth = new bool[passes.Length];
-        _readsWhen = new (string, string)?[passes.Length];
+        _readsWhen = new (string, string[])?[passes.Length];
         for (int i = 0; i < passes.Length; i++)
         {
             _readsSceneColor[i] = ShaderDefinition.PassHasTag(passes[i], SceneColorTag, "Read");
             _readsSceneDepth[i] = ShaderDefinition.PassHasTag(passes[i], SceneDepthTag, "Read");
             _readsBackDepth[i] = ShaderDefinition.PassHasTag(passes[i], BackDepthTag, "Read");
-            if (passes[i].Tags != null && passes[i].Tags!.TryGetValue(ReadsWhenTag, out string? when) && when.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [string axis, string value])
-                _readsWhen[i] = (axis, value);
+            if (passes[i].Tags != null && passes[i].Tags!.TryGetValue(ReadsWhenTag, out string? when) && when.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [string axis, .. string[] values] && values.Length > 0)
+                _readsWhen[i] = (axis, values);
             PremultipliedOutput |= ShaderDefinition.PassHasTag(passes[i], OutputTag, "Premultiplied");
         }
 
@@ -813,11 +814,11 @@ public sealed class Shader
     /// <summary>Whether a pass's screen reads count in a view with these global keywords, see <see cref="ReadsWhenTag"/>.</summary>
     internal bool PassReadsIn(int passIndex, IReadOnlyDictionary<string, string> keywords)
     {
-        if (passIndex < 0 || passIndex >= _readsWhen.Length || _readsWhen[passIndex] is not (string axis, string value))
+        if (passIndex < 0 || passIndex >= _readsWhen.Length || _readsWhen[passIndex] is not (string axis, string[] values))
             return true;
         if (keywords.TryGetValue(axis, out string? set))
-            return set == value;
-        return GlobalAxisDefault(axis) is not { } first || first == value;
+            return Array.IndexOf(values, set) >= 0;
+        return GlobalAxisDefault(axis) is not { } first || Array.IndexOf(values, first) >= 0;
     }
 
     private string? GlobalAxisDefault(string axis)

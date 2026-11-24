@@ -108,7 +108,7 @@ Shader "Graphite/Lit"
         Shared
         {
             #define GRAPHITE_STANDARD_FORWARD
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_COAT
             #pragma variant PBR_FUZZ
             #pragma variant PBR_THIN_FILM
@@ -137,13 +137,13 @@ Shader "Graphite/Lit"
     Pass
     {
         Name "Transmission"
-        Tags { "LightMode" = "Transmission" "Output" = "Premultiplied" "SceneColor" = "Read" "SceneDepth" = "Read" "BackDepth" = "Read" "ReadsWhen" = "PBR_TIER FULL" }
+        Tags { "LightMode" = "Transmission" "Output" = "Premultiplied" "SceneColor" = "Read" "SceneDepth" = "Read" "BackDepth" = "Read" "ReadsWhen" = "PBR_TIER FULL MAX" }
         GLSLPROGRAM
         Shared
         {
             #define GRAPHITE_STANDARD_FORWARD
             #define PBR_TRANSMISSION
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_COAT
             #pragma variant PBR_FUZZ
             #pragma variant PBR_THIN_FILM
@@ -314,7 +314,7 @@ Shader "Graphite/Lit"
         {
             #define GRAPHITE_STANDARD_FORWARD
             #define GRAPHITE_STANDARD_DEBUG
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_COAT
             #pragma variant PBR_FUZZ
             #pragma variant PBR_THIN_FILM

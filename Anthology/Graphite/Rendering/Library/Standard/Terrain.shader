@@ -113,7 +113,7 @@ Shader "Graphite/Terrain"
             #define GRAPHITE_STANDARD_INPUTS Terrain_Inputs
             #define GRAPHITE_STANDARD_FINISH Terrain_Brush
             #pragma variant TERRAIN_HOLES
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_COAT
             #pragma variant PBR_FUZZ
             #pragma variant PBR_THIN_FILM
@@ -241,7 +241,7 @@ Shader "Graphite/Terrain"
             #define GRAPHITE_STANDARD_INPUTS Terrain_Inputs
             #define GRAPHITE_STANDARD_FINISH Terrain_Brush
             #pragma variant TERRAIN_HOLES
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_COAT
             #pragma variant PBR_FUZZ
             #pragma variant PBR_THIN_FILM

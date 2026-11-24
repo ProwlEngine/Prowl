@@ -100,7 +100,7 @@ Shader "Graphite/Foliage"
             #define GRAPHITE_STANDARD_FORWARD
             #define GRAPHITE_CUSTOM_BRDF
             #define GRAPHITE_STANDARD_INPUTS Foliage_Inputs
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_SUBSURFACE
             #pragma variant PBR_THIN_WALLED
             #include "Graphite/Standard/PBRSurface.glsl"
@@ -253,7 +253,7 @@ Shader "Graphite/Foliage"
             #define GRAPHITE_STANDARD_DEBUG
             #define GRAPHITE_CUSTOM_BRDF
             #define GRAPHITE_STANDARD_INPUTS Foliage_Inputs
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_SUBSURFACE
             #pragma variant PBR_THIN_WALLED
             #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY DIFFUSE SPECULAR SPECULAR_ALBEDO THROUGHPUT DIRECT INDIRECT FURNACE COAT FUZZ THIN_FILM DARKENING SUBSURFACE BACK TRANSMISSION THICKNESS

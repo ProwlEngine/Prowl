@@ -66,7 +66,7 @@ public sealed class FoliageTests : IDisposable
         Shader shader = _harness.Renderer.LoadShader(ShaderParser.Parse(Source));
         foreach (ShaderPass pass in shader.Definition.Passes!)
         {
-            foreach (string tier in (string[])["FULL", "LITE"])
+            foreach (string tier in (string[])["FULL", "LITE", "MAX"])
                 TestCompiler.Shared.CompileProgram(pass, [new Keyword(GlobalAxis.PbrTier.Name, tier)]);
         }
     }
@@ -78,7 +78,7 @@ public sealed class FoliageTests : IDisposable
         Shader shader = _harness.Renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Foliage/Leaves.shader")!));
         foreach (ShaderPass pass in shader.Definition.Passes!)
         {
-            foreach (string tier in (string[])["FULL", "LITE"])
+            foreach (string tier in (string[])["FULL", "LITE", "MAX"])
                 TestCompiler.Shared.CompileProgram(pass, [new Keyword(GlobalAxis.PbrTier.Name, tier)]);
         }
     }

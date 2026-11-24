@@ -68,9 +68,13 @@ float PBR_ToksvigVariance(float length) { return length < 1.0 ? (1.0 - length) /
 // normal map texel
 float PBR_FilterVariance(vec3 normal, float mapVariance)
 {
+#ifdef PBR_NO_SPECULAR_AA
+    float variance = mapVariance;
+#else
     vec3 dx = dFdx(normal);
     vec3 dy = dFdy(normal);
     float variance = PBR_SPEC_AA_VARIANCE * (dot(dx, dx) + dot(dy, dy)) + mapVariance;
+#endif
     return min(2.0 * variance, PBR_SPEC_AA_THRESHOLD);
 }
 

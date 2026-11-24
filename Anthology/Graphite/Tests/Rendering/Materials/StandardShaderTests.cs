@@ -54,7 +54,7 @@ public sealed class StandardShaderTests : IDisposable
         {
             foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
             {
-                foreach (string tier in new[] { "FULL", "LITE" })
+                foreach (string tier in new[] { "FULL", "LITE", "MAX" })
                     yield return [shader, surface, tier];
             }
         }
@@ -438,7 +438,7 @@ public sealed class StandardShaderTests : IDisposable
             Assert.Equal(pass.Name == "Debug" || shadow, _compiler.GetAxes(pass).Any(a => a.Name == "PBR_TRANSMISSION"));
             Assert.Contains(_compiler.GetAxes(pass), a => a.Name == "PBR_PARALLAX");
         }
-        Assert.Contains(_pbr.GlobalAxes, a => a.Name == "PBR_TIER" && a.Values.SequenceEqual(["FULL", "LITE"]));
+        Assert.Contains(_pbr.GlobalAxes, a => a.Name == "PBR_TIER" && a.Values.SequenceEqual(["FULL", "LITE", "MAX"]));
         Assert.DoesNotContain(_unlit.GlobalAxes, a => a.Name == "PBR_TIER");
     }
 
@@ -512,7 +512,7 @@ public sealed class StandardShaderTests : IDisposable
         ShaderPass transmission = _pbr.Definition.Passes!.First(p => p.Name == "Transmission");
         ShaderPass debug = _pbr.Definition.Passes!.First(p => p.Name == "Debug");
         List<(ShaderPass, Keyword[])> variants = [];
-        foreach (string tier in new[] { "FULL", "LITE" })
+        foreach (string tier in new[] { "FULL", "LITE", "MAX" })
         {
             for (int mask = 0; mask < 1 << s_lobes.Length; mask++)
             {
@@ -563,7 +563,7 @@ public sealed class StandardShaderTests : IDisposable
         {
             foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
             {
-                foreach (string tier in new[] { "FULL", "LITE" })
+                foreach (string tier in new[] { "FULL", "LITE", "MAX" })
                 {
                     foreach (bool all in new[] { false, true })
                     {

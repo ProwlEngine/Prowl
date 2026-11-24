@@ -20,8 +20,11 @@ public sealed class GlobalAxis
         "CASCADES", "LIGHTMAP_DENSITY", "DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "THROUGHPUT", "DIRECT", "INDIRECT", "FURNACE", "COAT", "FUZZ",
         "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS");
 
-    /// <summary>The standard surfaces' quality, FULL or LITE for mobile.</summary>
-    public static readonly GlobalAxis PbrTier = Define("PBR_TIER", "FULL", "LITE");
+    /// <summary>
+    /// The standard surfaces' quality: FULL, LITE for mobile, or MAX for energy compensated lobes, exact Fresnel, rough
+    /// diffuse and the sun lit as a disk. See Graphite/PBR/Closure.glsl.
+    /// </summary>
+    public static readonly GlobalAxis PbrTier = Define("PBR_TIER", "FULL", "LITE", "MAX");
 
     /// <summary>
     /// What the standard prepass writes besides depth, set by the renderer per view: MOTION while a feature between the

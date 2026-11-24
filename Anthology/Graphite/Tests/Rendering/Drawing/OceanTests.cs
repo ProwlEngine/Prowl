@@ -26,7 +26,7 @@ public sealed class OceanTests : IDisposable
         Shader water = _harness.Renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Ocean/Water.shader")!));
         foreach (ShaderPass pass in water.Definition.Passes!)
         {
-            foreach (string tier in (string[])["FULL", "LITE"])
+            foreach (string tier in (string[])["FULL", "LITE", "MAX"])
                 TestCompiler.Shared.CompileProgram(pass, [new Keyword(GlobalAxis.PbrTier.Name, tier)]);
         }
     }

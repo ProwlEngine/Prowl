@@ -83,7 +83,7 @@ Shader "Graphite/Ocean"
         GLSLPROGRAM
         Shared
         {
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
         }
         Vertex
         {

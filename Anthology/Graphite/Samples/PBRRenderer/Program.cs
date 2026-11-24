@@ -41,6 +41,7 @@ internal sealed class DemoWindow
     private bool _noTonemap;
     private bool _noVsync;
     private int _debugView = -1;
+    private string? _tier;
     private int _voxelView = -1;
     private bool _gi;
     private int _forcedLod = -1;
@@ -71,6 +72,8 @@ internal sealed class DemoWindow
                 _timer = new PassTimer();
             else if (args[i] == "--debug" && i + 1 < args.Length)
                 _debugView = Array.IndexOf(DebugViews, args[++i].ToUpperInvariant());
+            else if (args[i] == "--tier" && i + 1 < args.Length)
+                _tier = args[++i].ToUpperInvariant();
             else if (args[i] == "--gi")
                 _gi = true;
             else if (args[i] == "--voxels" && i + 1 < args.Length)
@@ -235,7 +238,12 @@ internal sealed class DemoWindow
         view.Target = _shotTarget ?? _device.MainSwapchain.Framebuffer;
         view.EV100 = _scene.StartEV100;
         view.Camera = _camera.Camera;
-        view.Keywords = _debugView < 0 ? null : [GlobalAxis.Debug[DebugViews[_debugView]]];
+        List<GlobalKeyword> keywords = new();
+        if (_debugView >= 0)
+            keywords.Add(GlobalAxis.Debug[DebugViews[_debugView]]);
+        if (_tier != null)
+            keywords.Add(GlobalAxis.PbrTier[_tier]);
+        view.Keywords = keywords.Count == 0 ? null : [.. keywords];
         _demo.Voxels.Enabled = _voxelView >= 0;
         _demo.Voxels.Mode = (VoxelDebugMode)Math.Max(_voxelView, 0);
         _demo.Gi.Enabled = _gi;

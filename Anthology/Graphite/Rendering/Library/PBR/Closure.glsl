@@ -21,9 +21,12 @@
 //
 // Material axes, each on while its weight is not zero: PBR_COAT, PBR_FUZZ, PBR_THIN_FILM, PBR_SUBSURFACE,
 // PBR_TRANSMISSION, and PBR_ANISOTROPY while either roughness anisotropy is. PBR_THIN_WALLED follows geometry_thin_walled.
-// Axis PBR_TIER, global, FULL or LITE, the tier a view draws at. LITE blends at most one probe with the sky, has no thin
-// film and no anisotropy, and lights the coat and fuzz lobes from the surroundings only. It keeps thin walled and
-// subsurface whole, the sheet's back lighting included.
+// Axis PBR_TIER, global, FULL, LITE or MAX, the tier a view draws at. MAX adds to FULL the energy compensated lobes
+// with their directional albedo tables, exact dielectric Fresnel and the metal's F82 edge tint toward lights, rough
+// diffuse with its multiple scattering, and the sun lit as a disk. FULL lights with Schlick's Fresnel, split sum
+// albedos, Lambert diffuse and the sun as a point. LITE also drops specular antialiasing from the normal's change
+// across the pixel, blends at most one probe with the sky, has no thin film and no anisotropy, and lights the coat and
+// fuzz lobes from the surroundings only. It keeps thin walled and subsurface whole, the sheet's back lighting included.
 #pragma once
 
 #if defined(PBR_THIN_WALLED) || defined(PBR_TRANSMISSION)
@@ -53,6 +56,17 @@
 #ifdef PBR_ANISOTROPY
 #define PBR_ANISOTROPIC
 #endif
+#endif
+
+#ifdef PBR_TIER_MAX
+#define PBR_ENERGY_COMPENSATION
+#define PBR_EXACT_FRESNEL
+#define PBR_ROUGH_DIFFUSE
+#define GRAPHITE_SUN_DISK
+#endif
+
+#ifdef PBR_TIER_LITE
+#define PBR_NO_SPECULAR_AA
 #endif
 
 #include "Graphite/Lighting.glsl"
@@ -216,8 +230,14 @@ PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNorm
     unmodulatedF0 *= unmodulatedF0;
     eta = PBR_ModulatedEta(eta, weight);
     eta = eta < 1.0 ? 1.0 / eta : eta;
+#ifdef PBR_ENERGY_COMPENSATION
     float dielectricTurquin = PBR_TurquinFactor(E1, PBR_DielectricFavg(eta));
     float dielectricE = PBR_DielectricE(c.NdotV, c.roughness, eta) * dielectricTurquin;
+#else
+    float dielectricTurquin = 1.0;
+    float dielectricF0 = (eta - 1.0) / (eta + 1.0);
+    float dielectricE = dielectricF0 * dielectricF0 * dfg.x + dfg.y;
+#endif
 #ifdef PBR_ANISOTROPIC
     dielectricE *= PBR_AnisotropicScale(dfg, isotropicDfg, eta);
 #endif
@@ -229,9 +249,18 @@ PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNorm
 
     vec3 rho = clamp(p.baseWeight * p.baseColor, 0.0, 1.0);
     c.metalF0 = rho;
+#ifdef PBR_EXACT_FRESNEL
     c.metalTint = PBR_F82Tint(rho, p.specularColor);
+#else
+    c.metalTint = vec3(0.0);
+#endif
+#ifdef PBR_ENERGY_COMPENSATION
     c.metalScale = M * weight * PBR_TurquinFactor(E1, PBR_MetalFavg(rho, p.specularColor) * weight);
     vec3 metalE = PBR_TurquinMetal(dfg, rho, p.specularColor, weight);
+#else
+    c.metalScale = vec3(M * weight);
+    vec3 metalE = (rho * dfg.x + dfg.y - c.metalTint * dfg.z) * weight;
+#endif
     vec3 dielectricE3 = vec3(dielectricE);
 
 #ifdef PBR_FILM
@@ -276,13 +305,21 @@ PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNorm
     vec3 subsurface = S * opaque * clamp(p.subsurfaceColor, 0.0, 1.0);
 #endif
     float diffuse = (1.0 - S) * opaque;
+#ifdef PBR_ROUGH_DIFFUSE
+    float singleShape = 1.0 / ((1.0 + PBR_FON_C1 * rd) * GRAPHITE_PI);
     float multipleShape = max(1e-7, 1.0 - PBR_FonAlbedo(c.NdotV, rd)) / (max(1e-7, 1.0 - average) * GRAPHITE_PI);
-    c.diffuseSingle = rho * (diffuse / ((1.0 + PBR_FON_C1 * rd) * GRAPHITE_PI));
     c.diffuseMultiple = PBR_EonMultipleAlbedo(rho, average) * (diffuse * multipleShape);
     c.diffuseAlbedo = PBR_EonAlbedo(rho, rd, c.NdotV) * diffuse;
+#else
+    float singleShape = 1.0 / GRAPHITE_PI;
+    float multipleShape = 0.0;
+    c.diffuseMultiple = vec3(0.0);
+    c.diffuseAlbedo = rho * diffuse;
+#endif
+    c.diffuseSingle = rho * (diffuse * singleShape);
 #ifdef PBR_SHEET
     float g = clamp(p.subsurfaceScatterAnisotropy, -1.0, 1.0);
-    c.sheetSingle = 1.0 / ((1.0 + PBR_FON_C1 * rd) * GRAPHITE_PI);
+    c.sheetSingle = singleShape;
     c.sheetMultiple = multipleShape;
     c.sheetReflection = subsurface * (0.5 * (1.0 - g));
     c.sheetTransmission = subsurface * (0.5 * (1.0 + g));
@@ -322,8 +359,14 @@ PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNorm
     coatDfg = PBR_AnisotropicDfg(c.coatNdotV, c.coatRoughness, p.coatRoughnessAnisotropy, PBR_Azimuth(c.coatTangent, c.coatBitangent, view));
     coatScale = PBR_AnisotropicScale(coatDfg, coatIsotropic, c.coatEta);
 #endif
+#ifdef PBR_ENERGY_COMPENSATION
     float coatTurquin = PBR_TurquinFactor(PBR_DfgE1(coatDfg), PBR_DielectricFavg(c.coatEta));
     float coatE = PBR_DielectricE(c.coatNdotV, c.coatRoughness, c.coatEta) * coatScale * coatTurquin;
+#else
+    float coatTurquin = 1.0;
+    float coatF0 = (c.coatEta - 1.0) / (c.coatEta + 1.0);
+    float coatE = (coatF0 * coatF0 * coatDfg.x + coatDfg.y) * coatScale;
+#endif
     c.coatScale = C * coatTurquin;
     c.coatAlbedo = C * coatE;
     c.coatThroughput = 1.0 - coatE;
@@ -383,13 +426,32 @@ Graphite_LightFrame PBR_LightFrame(PBR_Closure c)
     return f;
 }
 
-// An EON lobe toward L from its single and multiple scattering terms at the view, without the cosine
+// A dielectric's Fresnel reflectance toward a light: exact at the MAX tier, else Schlick's from the same IOR
+float pbr_Fresnel(float cosTheta, float eta)
+{
+#ifdef PBR_EXACT_FRESNEL
+    return PBR_FresnelDielectric(cosTheta, eta);
+#else
+    float f0 = (eta - 1.0) / (eta + 1.0);
+    f0 *= f0;
+    float m = 1.0 - clamp(cosTheta, 0.0, 1.0);
+    float m2 = m * m;
+    return f0 + (1.0 - f0) * m2 * m2 * m;
+#endif
+}
+
+// A diffuse lobe toward L from its single and multiple scattering terms at the view, without the cosine: EON at the
+// MAX tier, else Lambert
 vec3 pbr_EonLobe(PBR_Closure c, vec3 single, vec3 multiple, vec3 L)
 {
+#ifdef PBR_ROUGH_DIFFUSE
     float muI = clamp(dot(c.normal, L), 0.0, 1.0);
     float s = dot(L, c.view) - muI * c.NdotV;
     float sOverT = s > 0.0 ? s / max(max(muI, c.NdotV), 1e-6) : s;
     return single * (1.0 + c.diffuseRoughness * sOverT) + multiple * max(1e-7, 1.0 - PBR_FonAlbedo(muI, c.diffuseRoughness));
+#else
+    return single;
+#endif
 }
 
 // The base lobes' diffuse BRDF toward the light along L, its throughput applied, without the cosine
@@ -434,7 +496,7 @@ vec3 PBR_EvaluateSpecular(PBR_Closure c, vec3 L)
 #else
     float dv = PBR_DistributionGGX(NdotH, c.alpha2) * PBR_VisibilitySmithGGX(c.NdotV, NdotL, c.alpha2);
 #endif
-    vec3 dielectric = vec3(c.dielectricScale * PBR_FresnelDielectric(LdotH, c.dielectricEta));
+    vec3 dielectric = vec3(c.dielectricScale * pbr_Fresnel(LdotH, c.dielectricEta));
     vec3 metal = c.metalScale * PBR_FresnelF82(LdotH, c.metalF0, c.metalTint);
 #ifdef PBR_FILM
     dielectric += c.dielectricFilm;
@@ -458,7 +520,7 @@ float PBR_EvaluateCoat(PBR_Closure c, vec3 L)
 #else
     float dv = PBR_DistributionGGX(NdotH, c.coatAlpha2) * PBR_VisibilitySmithGGX(c.coatNdotV, NdotL, c.coatAlpha2);
 #endif
-    return c.coatScale * PBR_FresnelDielectric(LdotH, c.coatEta) * dv;
+    return c.coatScale * pbr_Fresnel(LdotH, c.coatEta) * dv;
 }
 
 // What of the base reaches a light along L and the view through the coat: albedo scaling, absorption over both
