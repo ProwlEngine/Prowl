@@ -18,7 +18,7 @@ internal static class OrientOp
     /// <summary>Reverses the direction faces point. Faces joined by hidden edges flip together.</summary>
     internal static void FlipFaces(GeometryData mesh, IEnumerable<Face> faces)
     {
-        foreach (Face f in faces.Where(mesh.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList())
+        foreach (Face f in GeometryData.LogicalFaces(faces.Where(mesh.Contains)))
         {
             List<Vertex> verts = f.NeighborVertices();
             verts.Reverse();

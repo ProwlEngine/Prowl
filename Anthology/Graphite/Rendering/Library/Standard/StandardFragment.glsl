@@ -106,7 +106,7 @@ void Graphite_StandardFragment()
     PBR_Closure c = PBR_Prepare(p, vRelativePos, i.viewDir, i.geometryNormal, mapVariance);
     vec3 direct = PBR_ShadeLights(c, lights);
     Graphite_ProbeSet probes = PBR_FindProbes(c);
-    PBR_Indirect indirect = PBR_GatherIndirect(c, vLightmapUV, probes);
+    PBR_Indirect indirect = PBR_GatherIndirect(c, vLightmapUV, probes, vAmbient);
     vec3 ambient = Graphite_AmbientBRDF(c, indirect);
     vec3 transmitted = vec3(0.0);
     vec3 transmittedWhite = vec3(0.0);

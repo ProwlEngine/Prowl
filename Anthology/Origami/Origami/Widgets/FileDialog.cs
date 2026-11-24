@@ -121,6 +121,55 @@ public static class FileDialog
         // Inline rename (holds the entry's current full path while editing)
         public string Renaming = "";
         public string RenameName = "";
+
+        // The table rows of the current frame, reused so a large folder does not allocate a list per frame.
+        public readonly List<(int Kind, string Name, string Path, bool IsDir, string Size, string Mod, string Ext)> Rows = [];
+
+        // Parent of Path, looked up again only when Path changes.
+        public string ParentFor = "";
+        public string? Parent;
+    }
+
+    private static string? ParentOf(EmbeddedState st)
+    {
+        if (!ReferenceEquals(st.ParentFor, st.Path))
+        {
+            st.ParentFor = st.Path;
+            st.Parent = Directory.GetParent(st.Path)?.FullName;
+        }
+        return st.Parent;
+    }
+
+    // Quick access folders and drives, asked of the system once a second instead of every frame.
+    private static readonly List<(string Label, string Path)> _drives = [];
+    private static string _home = "", _desktop = "", _docs = "", _downloads = "";
+    private static long _placesStamp = long.MinValue;
+
+    private static void RefreshPlaces()
+    {
+        long now = Environment.TickCount64;
+        if (_placesStamp != long.MinValue && now - _placesStamp < 1000) return;
+        _placesStamp = now;
+
+        static string Existing(string path) => !string.IsNullOrEmpty(path) && Directory.Exists(path) ? path : "";
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        _home = Existing(home);
+        _desktop = Existing(Environment.GetFolderPath(Environment.SpecialFolder.Desktop));
+        _docs = Existing(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+        _downloads = Existing(string.IsNullOrEmpty(home) ? "" : Path.Combine(home, "Downloads"));
+
+        _drives.Clear();
+        try
+        {
+            foreach (var d in DriveInfo.GetDrives())
+            {
+                if (!d.IsReady) continue;
+                string dn = d.Name;
+                string label = string.IsNullOrWhiteSpace(d.VolumeLabel) ? dn : $"{d.VolumeLabel} ({dn.TrimEnd(Path.DirectorySeparatorChar)})";
+                _drives.Add((label, dn));
+            }
+        }
+        catch { }
     }
 
     private static readonly Dictionary<string, EmbeddedState> _embedded = [];
@@ -191,7 +240,7 @@ public static class FileDialog
         }
         void NavBack() { if (st.HistoryIndex > 0) { st.HistoryIndex--; st.Path = st.History[st.HistoryIndex]; st.Selected = ""; Reload(); } }
         void NavFwd() { if (st.HistoryIndex < st.History.Count - 1) { st.HistoryIndex++; st.Path = st.History[st.HistoryIndex]; st.Selected = ""; Reload(); } }
-        void NavUp() { var p = Directory.GetParent(st.Path); if (p != null) NavigateTo(p.FullName, true); }
+        void NavUp() { var p = ParentOf(st); if (p != null) NavigateTo(p, true); }
         void SetSort(int col)
         {
             if (st.SortColumn == col) st.SortAscending = !st.SortAscending;
@@ -252,8 +301,12 @@ public static class FileDialog
             Reload();
         }
 
-        IOrigamiIcon Ico(IconPainter p, Color col) =>
-            new IconAction((canvas, rect, _, _) => DrawIcon(canvas, rect, p, (float)rect.Size.X, col));
+        static IOrigamiIcon Ico(IconPainter p, Color col)
+        {
+            if (!_icons.TryGetValue((p, col), out var icon))
+                _icons[(p, col)] = icon = new IconAction((canvas, rect, _, _) => DrawIcon(canvas, rect, p, (float)rect.Size.X, col));
+            return icon;
+        }
 
         void RowContextMenu(int kind, string name, string path, bool isDir)
         {
@@ -328,7 +381,7 @@ public static class FileDialog
                 if (start > 0)
                 {
                     string tp = crumbs[start - 1].Path;
-                    var eb = paper.Box($"{id}_cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
+                    var eb = paper.Box("cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
                         .Text("...", font).TextColor(ink.C300).FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                         .Hovered.BackgroundColor(theme.Hover).End();
                     eb.OnClick(0, (_, _) => NavigateTo(tp, true));
@@ -339,7 +392,7 @@ public static class FileDialog
                 {
                     var (label, cpath) = crumbs[i];
                     bool last = i == crumbs.Count - 1;
-                    var cb = paper.Box($"{id}_cr_{i}").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
+                    var cb = paper.Box("cr", i).Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
                         .Text(label, last ? titleFont : font).TextColor(last ? ink.C500 : ink.C300)
                         .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
                     if (!last)
@@ -406,13 +459,13 @@ public static class FileDialog
             // Toolbar: back / fwd / up + breadcrumb + search + new folder (+ close X when floating).
             // Use Padding: the edge buttons set an explicit Margin for vertical
             // centering, which would override container child-margins and touch the edges.
-            using (paper.Row($"{id}_tb").Height(toolbarH)
+            using (paper.Row("tb").Height(toolbarH)
                 .BackgroundColor(theme.Glass).RoundedTop(m.ContainerRounding)
                 .Padding(10, 10, 0, 0).Gap(4).Enter())
             {
                 TbBtn($"{id}_back", DrawBack, st.HistoryIndex > 0, NavBack);
                 TbBtn($"{id}_fwd", DrawForward, st.HistoryIndex < st.History.Count - 1, NavFwd);
-                TbBtn($"{id}_up", DrawUp, Directory.GetParent(st.Path) != null, NavUp);
+                TbBtn($"{id}_up", DrawUp, ParentOf(st) != null, NavUp);
                 Breadcrumb();
                 VC($"{id}_swrap", UnitValue.Pixels(132), toolbarH, () =>
                     Origami.TextField(paper, $"{id}_search", st.Search, v => st.Search = v)
@@ -422,42 +475,31 @@ public static class FileDialog
                 if (onClose != null)
                     TbBtn($"{id}_close", DrawClose, true, onClose);
             }
-            paper.Box($"{id}_tbsep").Height(1).BackgroundColor(theme.BorderSoft);
+            paper.Box("tbsep").Height(1).BackgroundColor(theme.BorderSoft);
 
             // Body: sidebar + (column header + list)
-            using (paper.Row($"{id}_body").Height(bodyH).Enter())
+            using (paper.Row("body").Height(bodyH).Enter())
             {
-                using (paper.Column($"{id}_side").Width(sideW).Height(UnitValue.Stretch())
+                using (paper.Column("side").Width(sideW).Height(UnitValue.Stretch())
                     .BackgroundColor(SideBg)
                     .Padding(7, 7, 7, 7).Gap(1).Enter())
                 {
-                    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                    string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                    string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                    string downloads = string.IsNullOrEmpty(home) ? "" : Path.Combine(home, "Downloads");
+                    RefreshPlaces();
 
                     SideSection("qa", "Quick Access");
-                    if (Directory.Exists(home)) SideRow($"{id}_qa_home", DrawHome, theme.Primary.C500, "Home", home);
-                    if (Directory.Exists(desktop)) SideRow($"{id}_qa_desk", DrawFolder, theme.Amber.C500, "Desktop", desktop);
-                    if (Directory.Exists(docs)) SideRow($"{id}_qa_docs", DrawDoc, theme.Blue.C500, "Documents", docs);
-                    if (Directory.Exists(downloads)) SideRow($"{id}_qa_dl", DrawFolder, theme.Amber.C500, "Downloads", downloads);
+                    if (_home.Length > 0) SideRow($"{id}_qa_home", DrawHome, theme.Primary.C500, "Home", _home);
+                    if (_desktop.Length > 0) SideRow($"{id}_qa_desk", DrawFolder, theme.Amber.C500, "Desktop", _desktop);
+                    if (_docs.Length > 0) SideRow($"{id}_qa_docs", DrawDoc, theme.Blue.C500, "Documents", _docs);
+                    if (_downloads.Length > 0) SideRow($"{id}_qa_dl", DrawFolder, theme.Amber.C500, "Downloads", _downloads);
 
                     SideSep("drv");
                     SideSection("drv", "Drives");
-                    try
-                    {
-                        foreach (var d in DriveInfo.GetDrives().Where(d => d.IsReady))
-                        {
-                            string dn = d.Name;
-                            string dlabel = string.IsNullOrWhiteSpace(d.VolumeLabel) ? dn : $"{d.VolumeLabel} ({dn.TrimEnd(Path.DirectorySeparatorChar)})";
-                            SideRow($"{id}_drv_{dn}", DrawDrive, ink.C400, dlabel, dn);
-                        }
-                    }
-                    catch { }
+                    foreach (var (dlabel, dn) in _drives)
+                        SideRow($"{id}_drv_{dn}", DrawDrive, ink.C400, dlabel, dn);
                 }
-                paper.Box($"{id}_vsep").Width(1).Height(UnitValue.Stretch()).BackgroundColor(theme.BorderSoft);
+                paper.Box("vsep").Width(1).Height(UnitValue.Stretch()).BackgroundColor(theme.BorderSoft);
 
-                using (paper.Column($"{id}_list_area").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
+                using (paper.Column("list_area").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
                 {
                     // Right-click on empty list space: new folder / refresh (row clicks open their own menu).
                     ContextMenu.RightClickMenu(paper, $"{id}_bgctx", b => b
@@ -472,10 +514,10 @@ public static class FileDialog
                     if (!string.IsNullOrEmpty(st.Renaming))
                     {
                         tableH -= m.RowHeight + 4f;
-                        using (paper.Row($"{id}_rn").Height(m.RowHeight).BackgroundColor(theme.Selected)
+                        using (paper.Row("rn").Height(m.RowHeight).BackgroundColor(theme.Selected)
                             .PaddingLeft(rowPadL).Gap(6).Margin(0, 0, 0, 4).Enter())
                         {
-                            using (paper.Box($"{id}_rn_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
+                            using (paper.Box("rn_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
                                 paper.Draw((canvas, rect) => DrawIcon(canvas, rect, DrawPencil, 15f, theme.Primary.C500));
                             Origami.TextField(paper, $"{id}_rn_n", st.RenameName, v => st.RenameName = v)
                                 .Placeholder("New name").Width(UnitValue.Stretch()).Show();
@@ -488,10 +530,10 @@ public static class FileDialog
                     if (st.CreatingFolder)
                     {
                         tableH -= m.RowHeight + 4f;
-                        using (paper.Row($"{id}_nf").Height(m.RowHeight).BackgroundColor(theme.Selected)
+                        using (paper.Row("nf").Height(m.RowHeight).BackgroundColor(theme.Selected)
                             .PaddingLeft(rowPadL).Gap(6).Margin(0, 0, 0, 4).Enter())
                         {
-                            using (paper.Box($"{id}_nf_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
+                            using (paper.Box("nf_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
                                 paper.Draw((canvas, rect) => DrawIcon(canvas, rect, DrawFolder, 15f, theme.Amber.C500));
                             Origami.TextField(paper, $"{id}_nf_n", st.NewFolderName, v => st.NewFolderName = v)
                                 .Placeholder("Name").Width(UnitValue.Stretch()).Show();
@@ -507,12 +549,13 @@ public static class FileDialog
 
                     // Row model: optional ".." parent + entries, or an empty-message sentinel.
                     // Kind: 0 = entry, 1 = parent (".."), 2 = message.
-                    var parent = Directory.GetParent(st.Path);
-                    var rows = new List<(int Kind, string Name, string Path, bool IsDir, long Size, DateTime Mod)>();
-                    if (parent != null) rows.Add((1, "..", parent.FullName, true, 0L, default));
-                    foreach (var e in display) rows.Add((0, e.Name, e.FullPath, e.IsDirectory, e.Size, e.LastModified));
+                    var parent = ParentOf(st);
+                    var rows = st.Rows;
+                    rows.Clear();
+                    if (parent != null) rows.Add((1, "..", parent, true, "", "", ""));
+                    foreach (var e in display) rows.Add((0, e.Name, e.FullPath, e.IsDirectory, e.SizeText, e.ModifiedText, e.Extension));
                     if (display.Count == 0)
-                        rows.Add((2, string.IsNullOrEmpty(st.Search) ? "This folder is empty" : "No matches", "", false, 0L, default));
+                        rows.Add((2, string.IsNullOrEmpty(st.Search) ? "This folder is empty" : "No matches", "", false, "", "", ""));
 
                     int selIndex = -1;
                     for (int i = 0; i < rows.Count; i++)
@@ -554,13 +597,12 @@ public static class FileDialog
                     {
                         if (it.Kind == 2) { table.Row().Cell(it.Name, ink.C200); continue; }
 
-                        string ext = it.IsDir ? "" : Path.GetExtension(it.Name);
-                        var painter = it.IsDir ? DrawFolder : FileGlyph(ext);
-                        var iconCol = it.IsDir ? theme.Amber.C500 : FileTint(theme, ink, ext);
+                        var painter = it.IsDir ? DrawFolder : FileGlyph(it.Ext);
+                        var iconCol = it.IsDir ? theme.Amber.C500 : FileTint(theme, ink, it.Ext);
                         table.Row()
                             .Cell(it.Name, it.Kind == 1 ? ink.C300 : ink.C400, Ico(painter, iconCol))
-                            .CellRight(it.IsDir ? "" : FormatSize(it.Size), ink.C200)
-                            .Cell(it.Kind == 1 ? "" : it.Mod.ToString("yyyy-MM-dd  HH:mm"), ink.C200);
+                            .CellRight(it.Size, ink.C200)
+                            .Cell(it.Mod, ink.C200);
                     }
 
                     table.Show();
@@ -568,18 +610,18 @@ public static class FileDialog
             }
 
             // Foot: filename field + Cancel + primary action (label follows the mode)
-            paper.Box($"{id}_fsep").Height(1).BackgroundColor(theme.BorderSoft);
+            paper.Box("fsep").Height(1).BackgroundColor(theme.BorderSoft);
             string primaryLabel = mode switch
             {
                 FileDialogMode.Save => "Save",
                 FileDialogMode.SelectFolder => "Select Folder",
                 _ => "Open",
             };
-            using (paper.Row($"{id}_foot").Height(footH)
+            using (paper.Row("foot").Height(footH)
                 .BackgroundColor(theme.Glass).RoundedBottom(m.ContainerRounding)
                 .Padding(11, 11, 0, 0).Gap(8).Enter())
             {
-                paper.Box($"{id}_foot_l").Width(UnitValue.Auto).Height(footH)
+                paper.Box("foot_l").Width(UnitValue.Auto).Height(footH)
                     .Text(mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font).TextColor(ink.C200)
                     .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 VC($"{id}_fnwrap", UnitValue.Stretch(), footH, () =>
@@ -621,6 +663,19 @@ public static class FileDialog
     // ── Vector icons (Origami's icon font is empty, so these stroke onto the canvas) ──
 
     private delegate void IconPainter(Canvas canvas, float cx, float cy, float size, Color color);
+
+    // One icon per painter and colour, shared by every row that uses it.
+    private static readonly Dictionary<(IconPainter, Color), IOrigamiIcon> _icons = new(new IconKeyComparer());
+
+    // Painters are compared by reference, which avoids the reflection a delegate's own hash does.
+    private sealed class IconKeyComparer : IEqualityComparer<(IconPainter Painter, Color Color)>
+    {
+        public bool Equals((IconPainter Painter, Color Color) a, (IconPainter Painter, Color Color) b)
+            => ReferenceEquals(a.Painter, b.Painter) && a.Color.ToArgb() == b.Color.ToArgb();
+
+        public int GetHashCode((IconPainter Painter, Color Color) key)
+            => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(key.Painter) ^ key.Color.ToArgb();
+    }
 
     private static readonly HashSet<string> _imgExts = new(StringComparer.OrdinalIgnoreCase)
         { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tga", ".tiff" };
@@ -892,13 +947,13 @@ public static class FileDialog
             foreach (var dir in di.EnumerateDirectories())
             {
                 if (!showHidden && (dir.Attributes & FileAttributes.Hidden) != 0) continue;
-                list.Add(new FileEntry { Name = dir.Name, FullPath = dir.FullName, IsDirectory = true, LastModified = dir.LastWriteTime });
+                list.Add(new FileEntry(dir.Name, dir.FullName, true, 0, dir.LastWriteTime));
             }
             foreach (var file in di.EnumerateFiles())
             {
                 if (!showHidden && (file.Attributes & FileAttributes.Hidden) != 0) continue;
                 if (filters is { Length: > 0 } && !MatchesFilter(file.Name, filters)) continue;
-                list.Add(new FileEntry { Name = file.Name, FullPath = file.FullName, IsDirectory = false, Size = file.Length, LastModified = file.LastWriteTime });
+                list.Add(new FileEntry(file.Name, file.FullName, false, file.Length, file.LastWriteTime));
             }
         }
         catch { }
@@ -934,5 +989,20 @@ public static class FileDialog
         public bool IsDirectory;
         public long Size;
         public DateTime LastModified;
+
+        // What the list shows for this entry, formatted once when the folder is read.
+        public string SizeText, ModifiedText, Extension;
+
+        public FileEntry(string name, string fullPath, bool isDirectory, long size, DateTime lastModified)
+        {
+            Name = name;
+            FullPath = fullPath;
+            IsDirectory = isDirectory;
+            Size = size;
+            LastModified = lastModified;
+            SizeText = isDirectory ? "" : FormatSize(size);
+            ModifiedText = lastModified.ToString("yyyy-MM-dd  HH:mm");
+            Extension = isDirectory ? "" : Path.GetExtension(name);
+        }
     }
 }

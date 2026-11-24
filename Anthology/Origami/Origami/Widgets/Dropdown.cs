@@ -215,7 +215,7 @@ public sealed class DropdownBuilder<T>
                     // Inline (.sel) prefix label on the left.
                     if (_prefixLabel != null)
                     {
-                        _paper.Box($"{_id}_pfx")
+                        _paper.Box("pfx")
                             .Width(UnitValue.Auto)
                             .Margin(m.Padding, m.SpacingMedium, 0, 0)
                             .Alignment(TextAlignment.MiddleLeft)
@@ -226,7 +226,7 @@ public sealed class DropdownBuilder<T>
                     }
 
                     // Value. With a prefix it is pushed to the right; otherwise it stretches.
-                    var lbl = _paper.Box($"{_id}_lbl")
+                    var lbl = _paper.Box("lbl")
                         .Width(UnitValue.Stretch())
                         .Margin(_prefixLabel != null ? 0 : m.SpacingLarge, _prefixLabel != null ? m.Padding : m.PaddingSmall, 0, 0)
                         .Alignment(_prefixLabel != null ? TextAlignment.MiddleRight : TextAlignment.MiddleLeft)
@@ -239,7 +239,7 @@ public sealed class DropdownBuilder<T>
                     {
                         bool up = isOpen;
                         var chevCol = chevColor;
-                        _paper.Box($"{_id}_chev")
+                        _paper.Box("chev")
                             .Width(m.IconWidth)
                             .Margin(0, m.Padding, 0, 0)
                             .IsNotInteractable()

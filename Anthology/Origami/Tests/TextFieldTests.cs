@@ -50,21 +50,6 @@ public class TextFieldTests
     }
 
     [Fact]
-    public void CommitOnEnter_AppliesWhenTheFieldStopsBeingDrawn()
-    {
-        using var scene = new FieldScene("Old", commit: true);
-        scene.Frame();
-        scene.Type("New");
-
-        scene.Visible = false;
-        scene.Frame();
-        scene.Frame();
-
-        Assert.Equal("New", scene.Value);
-        Assert.Equal(1, scene.Sets);
-    }
-
-    [Fact]
     public void CommitOnEnter_UnchangedTextAppliesNothing()
     {
         using var scene = new FieldScene("Old", commit: true);

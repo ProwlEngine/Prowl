@@ -83,6 +83,14 @@ public partial class GeometryData
             }
             return faces.ToList();
         }
+
+        /// <summary>The average normal of the faces using this vertex, or zero when it has none.</summary>
+        public Float3 Normal()
+        {
+            Float3 sum = Float3.Zero;
+            foreach (Face face in NeighborFaces()) sum += face.Normal();
+            return Float3.LengthSquared(sum) > 1e-12f ? Float3.Normalize(sum) : Float3.Zero;
+        }
     }
 
     /// <summary>
@@ -220,6 +228,18 @@ public partial class GeometryData
                     it = it.Next;
                 } while (it != Loop);
             }
+        }
+
+        /// <summary>The face's corners in winding order.</summary>
+        public IEnumerable<Loop> Corners()
+        {
+            if (Loop == null) yield break;
+            Loop it = Loop;
+            do
+            {
+                yield return it;
+                it = it.Next!;
+            } while (it != Loop);
         }
 
         public Loop? GetLoop(Vertex v)

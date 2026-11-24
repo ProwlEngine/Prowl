@@ -20,6 +20,9 @@ public sealed class BlendShape
 
     /// <summary>One or more deformed frames; weights interpolate between them.</summary>
     public required BlendShapeFrame[] Frames { get; init; }
+
+    /// <summary>The weight the shape has before anything animates it, on the 0..100 scale of the frames.</summary>
+    public float DefaultWeight { get; init; }
 }
 
 /// <summary>

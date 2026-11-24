@@ -170,10 +170,10 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
         {
             float trackRowH = _height;
 
-            using (_paper.Row($"{_id}_row").Width(UnitValue.Stretch()).Height(trackRowH).Gap(8).Enter())
+            using (_paper.Row("row").Width(UnitValue.Stretch()).Height(trackRowH).Gap(8).Enter())
             {
                 ElementHandle trackHandle = default;
-                var trackBuilder = _paper.Box($"{_id}_track")
+                var trackBuilder = _paper.Box("track")
                     .Width(UnitValue.Stretch())
                     .Height(trackRowH);
 
@@ -228,7 +228,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                 if (_showValue)
                 {
                     // Two compact numeric fields side by side.
-                    using (_paper.Row($"{_id}_nfs").Width(_valueWidth * 2 + 4).Height(trackRowH).Gap(4).Enter())
+                    using (_paper.Row("nfs").Width(_valueWidth * 2 + 4).Height(trackRowH).Gap(4).Enter())
                     {
                         var nfLo = new NumericFieldBuilder<T>(_paper, $"{_id}_nf_lo", lo, v =>
                             EmitOrdered(SliderInternal.Clamp(v, _min, _max), hi),
@@ -251,9 +251,9 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
             if (drawTickLabels)
             {
-                using (_paper.Row($"{_id}_ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).Gap(8).Enter())
+                using (_paper.Row("ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).Gap(8).Enter())
                 {
-                    using (_paper.Row($"{_id}_ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
+                    using (_paper.Row("ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
                     {
                         for (int i = 0; i < _tickCount; i++)
                         {
@@ -262,7 +262,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                             string label = _tickLabel!.Invoke(i, tv);
                             if (string.IsNullOrEmpty(label)) continue;
 
-                            _paper.Box($"{_id}_tk_{i}")
+                            _paper.Box("tk", i)
                                 .Width(UnitValue.Stretch()).Height(tickLabelH)
                                 .Alignment(TextAlignment.MiddleCenter)
                                 .IsNotInteractable()
@@ -272,14 +272,14 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
                     // Spacer matching the two-numeric-field width so labels align under the track.
                     if (_showValue)
-                        _paper.Box($"{_id}_ticks_pad").Width(_valueWidth * 2 + 4).Height(tickLabelH).IsNotInteractable();
+                        _paper.Box("ticks_pad").Width(_valueWidth * 2 + 4).Height(tickLabelH).IsNotInteractable();
                 }
             }
 
             if (helperH > 0f && font != null)
             {
                 Color color = hasError ? _theme.Red.C600 : ink.C300;
-                _paper.Box($"{_id}_help")
+                _paper.Box("help")
                     .Width(UnitValue.Stretch()).Height(helperH)
                     .Margin(2, 2, 2, 0)
                     .Alignment(TextAlignment.MiddleLeft)
@@ -316,8 +316,8 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
         float thumbBaseR = _thumbDiameter * 0.5f;
         float trackThicknessLocal = _trackThickness;
 
-        float hoverAnim = _paper.AnimateBool(isHovered && interactive, 0.12f, id: $"{_id}_hov");
-        float activeAnim = _paper.AnimateBool(isDragging, 0.10f, id: $"{_id}_act");
+        float hoverAnim = _paper.AnimateBool(isHovered && interactive, 0.12f);
+        float activeAnim = _paper.AnimateBool(isDragging, 0.10f);
 
         _paper.Draw((canvas, rect) =>
         {

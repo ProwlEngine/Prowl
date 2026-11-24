@@ -56,7 +56,7 @@ internal static class MoveVerticesOp
     /// Collapses each group of connected selected edges to a single point at its center. Returns how many
     /// vertices were joined.
     /// </summary>
-    internal static int CollapseEdges(GeometryData mesh, IEnumerable<Edge> edges)
+    internal static int CollapseEdges(GeometryData mesh, IEnumerable<Edge> edges, List<Float3>? centres = null)
     {
         var groups = new Dictionary<Vertex, Vertex>();
         Vertex Find(Vertex v)
@@ -84,6 +84,7 @@ internal static class MoveVerticesOp
         foreach (List<Vertex> cluster in clusters)
         {
             Float3 center = GeometryData.Centroid(cluster);
+            centres?.Add(center);
             foreach (Vertex v in cluster) v.Point = center;
             joined += cluster.Count - 1;
         }
@@ -132,5 +133,50 @@ internal static class MoveVerticesOp
 
         if (clusters.Count > 0) RebuildAround(mesh, clusters.SelectMany(c => c).ToList());
         return joined;
+    }
+
+    internal static int Shrinkwrap(GeometryData mesh, IEnumerable<Vertex> vertices, Float4x4 toWorld, Func<Ray, float, float?> hit, float offset, float reach)
+    {
+        Float4x4 toLocal = toWorld.Invert();
+        // Every normal is taken first, so moving one vertex does not turn the next one's
+        var rays = new List<(Vertex Vertex, Float3 Normal)>();
+        foreach (Vertex vertex in vertices)
+            if (vertex.Normal() is var normal && normal != Float3.Zero) rays.Add((vertex, normal));
+        int moved = 0;
+        foreach ((Vertex vertex, Float3 normal) in rays)
+        {
+            Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
+            Float3 direction = Float3.Normalize(Float4x4.TransformNormal(normal, toWorld));
+            float best = float.PositiveInfinity;
+            Float3 landed = world;
+            foreach (float sign in (float[])[1f, -1f])
+                if (hit(new Ray(world, direction * sign), MathF.Min(best, reach)) is { } distance && distance < best)
+                {
+                    best = distance;
+                    landed = world + direction * (sign * distance);
+                }
+            if (float.IsPositiveInfinity(best)) continue;
+            vertex.Point = Float4x4.TransformPoint(landed + direction * offset, toLocal);
+            moved++;
+        }
+        mesh.MarkChanged();
+        return moved;
+    }
+
+    internal static void Flatten(GeometryData mesh, IReadOnlyCollection<Vertex> vertices, IReadOnlyCollection<Face>? facing)
+    {
+        if (vertices.Count < 3) return;
+        Float3 normal = Float3.Zero;
+        if (facing is { Count: > 0 })
+            foreach (Face face in facing) normal += face.Normal();
+        else
+            foreach (Vertex vertex in vertices) normal += vertex.Normal();
+        if (Float3.LengthSquared(normal) < 1e-12f) return;
+        normal = Float3.Normalize(normal);
+
+        Float3 centre = GeometryData.Centroid(vertices);
+        foreach (Vertex vertex in vertices)
+            vertex.Point -= normal * Float3.Dot(vertex.Point - centre, normal);
+        mesh.MarkChanged();
     }
 }

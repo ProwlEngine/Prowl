@@ -141,7 +141,7 @@ public sealed class ColorFieldBuilder
         using (row.Enter())
         {
             // Swatch (rounded, subtle white rim).
-            _paper.Box($"{_id}_sw")
+            _paper.Box("sw")
                 .Width(sws).Height(sws).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                 .Rounded(metrics.SmallRounding)
                 .BackgroundColor(SysColor.FromArgb(ai, ri, gi, bi))
@@ -150,13 +150,13 @@ public sealed class ColorFieldBuilder
 
             if (font != null)
             {
-                _paper.Box($"{_id}_hex")
+                _paper.Box("hex")
                     .Width(UnitValue.Stretch()).Height(_height).Margin(8, 0, 0, 0).IsNotInteractable()
                     .Text(hexText, mono).TextColor(ink.C500)
                     .FontSize(metrics.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
 
                 if (_showAlpha)
-                    _paper.Box($"{_id}_op")
+                    _paper.Box("op")
                         .Width(UnitValue.Auto).Height(_height).IsNotInteractable()
                         .Text(opacityText, mono).TextColor(ink.C200)
                         .FontSize(metrics.FontSize - 3).Alignment(TextAlignment.MiddleRight);
@@ -212,7 +212,7 @@ public sealed class ColorFieldBuilder
             float barCount = _showAlpha ? 2 : 1;
             float svW = PopWidth - pad * 2 - (BarWidth + gap) * barCount;
 
-            using (_paper.Row($"{_id}_cf_top").Height(svW).Gap(gap).Enter())
+            using (_paper.Row("cf_top").Height(svW).Gap(gap).Enter())
             {
                 DrawSVSquare(popEl, svW, h, s, v, a);
                 DrawHueBar(popEl, svW, h, s, v, a);
@@ -223,7 +223,7 @@ public sealed class ColorFieldBuilder
             var currentColor = HSVToColor(h, s, v, a);
 
             int ni = Clamp255(currentColor.R), ng = Clamp255(currentColor.G), nb = Clamp255(currentColor.B), na = Clamp255(currentColor.A);
-            _paper.Box($"{_id}_cf_new").Height(metrics.RowHeight).Rounded(metrics.SmallRounding)
+            _paper.Box("cf_new").Height(metrics.RowHeight).Rounded(metrics.SmallRounding)
                 .BorderColor(_theme.BorderSoft).BorderWidth(1)
                 .BackgroundColor(SysColor.FromArgb(na, ni, ng, nb));
 
@@ -237,7 +237,7 @@ public sealed class ColorFieldBuilder
             // Palette
             if (_palette != null && _palette.Colors.Count > 0 || _palette?.OnAdd != null)
             {
-                _paper.Box($"{_id}_cf_psep").Height(1).BackgroundColor(_theme.BorderSoft);
+                _paper.Box("cf_psep").Height(1).BackgroundColor(_theme.BorderSoft);
                 DrawPalette(popEl);
             }
 
@@ -476,7 +476,7 @@ public sealed class ColorFieldBuilder
                         var pc = colors[idx];
                         int pr = Clamp255(pc.R), pg = Clamp255(pc.G), pb = Clamp255(pc.B), pa = Clamp255(pc.A);
 
-                        _paper.Box($"{_id}_cf_ps{idx}")
+                        _paper.Box("cf_ps", idx)
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(SysColor.FromArgb(pa, pr, pg, pb))
                             .Rounded(metrics.SmallRounding)
@@ -495,7 +495,7 @@ public sealed class ColorFieldBuilder
                     else
                     {
                         // Add button
-                        _paper.Box($"{_id}_cf_padd")
+                        _paper.Box("cf_padd")
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(ink.C100)
                             .Rounded(metrics.SmallRounding)

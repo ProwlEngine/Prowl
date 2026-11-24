@@ -63,9 +63,11 @@ internal static class GltfMeshMapper
                 primitives.Add(MapPrimitive(name, pi, srcMesh.Primitives[pi], reader, ctx, targetNames));
 
             result.MeshIndex.Add(scene.Meshes.Count);
-            scene.Meshes.Add(primitives.Count == 1
-                ? Rename(primitives[0], name)
-                : MergePrimitives(primitives, name, ctx));
+            IntermediateMesh mapped = primitives.Count == 1 ? Rename(primitives[0], name) : MergePrimitives(primitives, name, ctx);
+            // The mesh's weights are its targets' weights before animation, one a target in order, from 0 to 1
+            if (srcMesh.Weights is { } weights && weights.Length == mapped.BlendShapes.Count)
+                for (int t = 0; t < weights.Length; t++) mapped.BlendShapes[t].DefaultWeight = weights[t] * 100f;
+            scene.Meshes.Add(mapped);
         }
 
         return result;

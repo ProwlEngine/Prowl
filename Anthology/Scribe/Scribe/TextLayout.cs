@@ -93,7 +93,7 @@ namespace Prowl.Scribe
             Text = text;
             Settings = settings;
             _fontSystem = fontSystem;
-            Lines.Clear();
+            RecycleLines();
             _drawQuadsBuilt = false; // layout changed -> any cached quads are stale
 
             if (string.IsNullOrEmpty(text))
@@ -134,9 +134,11 @@ namespace Prowl.Scribe
             int i = 0;
             bool hasTrailingNewline = false;
 
-            Lines.Clear();
+            _open = fontSystem._lineScratch;
+            _open.Clear();
+            _scaleFont = null;
 
-            var line = new Line(new Float2(0, currentY), 0);
+            var line = OpenLine(currentY, 0);
 
             // Hoist Settings & constants
             var text = Text;
@@ -178,7 +180,7 @@ namespace Prowl.Scribe
                     currentY += FinalizeLine(fontSystem, ref line, currentY, i, currentX);
                     currentX = 0f;
                     i += ch == '\r' && i + 1 < len && CodepointAt(i + 1) == '\n' ? 2 : 1;
-                    line = new Line(new Float2(0, currentY), i);
+                    line = OpenLine(currentY, i);
                     StartLine();
                     hasTrailingNewline = true;
                     continue;
@@ -214,12 +216,12 @@ namespace Prowl.Scribe
                                      + PairKern(fontSystem, _prevFont, _prevGlyph, spaceFont, spaceIndex, SizeAt(s, pixelSize));
                     afterSpace = true;
 
-                    if (wrapEnabled && Exceeds(currentX + runAdvance, maxWidth) && line.Glyphs.Count > 0)
+                    if (wrapEnabled && Exceeds(currentX + runAdvance, maxWidth) && _open.Count > 0)
                     {
                         // wrap before the run
                         currentY += FinalizeLine(fontSystem, ref line, currentY, s, currentX);
                         currentX = 0f;
-                        line = new Line(new Float2(0, currentY), i);
+                        line = OpenLine(currentY, i);
                         StartLine();
                         afterSpace = false;
                     }
@@ -279,16 +281,16 @@ namespace Prowl.Scribe
                 if (wrapEnabled && Exceeds(currentX + leadKern + wordWidth, maxWidth))
                 {
                     // Wrap before the word when the line already has content.
-                    if (line.Glyphs.Count > 0)
+                    if (_open.Count > 0)
                     {
                         // A soft hyphen is invisible right up until the line breaks at it, which is
                         // this moment, and then it is a hyphen like any other.
                         if (wordStart > 0 && CodepointAt(wordStart - 1) == '­')
-                            EmitHyphen(fontSystem, line, ref currentX, SizeAt(wordStart - 1, pixelSize), wordStart - 1);
+                            EmitHyphen(fontSystem, ref currentX, SizeAt(wordStart - 1, pixelSize), wordStart - 1);
 
                         currentY += FinalizeLine(fontSystem, ref line, currentY, wordStart, currentX);
                         currentX = 0f;
-                        line = new Line(new Float2(0, currentY), wordStart);
+                        line = OpenLine(currentY, wordStart);
                         StartLine();
                         leadKern = 0f;
                     }
@@ -304,15 +306,78 @@ namespace Prowl.Scribe
 
                 currentX += leadKern;
                 for (int g = 0; g < wordGlyphs.Count; g++)
-                    EmitShaped(fontSystem, line, wordGlyphs[g], ref currentX);
+                    EmitShaped(fontSystem, wordGlyphs[g], ref currentX);
 
                 i = wordEnd;
             }
 
             // Finalize last line
             // Always finalize if: has glyphs, is the first line, or was created by a trailing newline
-            if (line.Glyphs.Count > 0 || Lines.Count == 0 || hasTrailingNewline)
+            if (_open.Count > 0 || Lines.Count == 0 || hasTrailingNewline)
                 FinalizeLine(fontSystem, ref line, currentY, i, currentX);
+
+            _open.Clear();
+            _open = null;
+        }
+
+        // Glyphs of the line being built. They move into the line's own list, sized to fit, when it closes.
+        private List<GlyphInstance> _open;
+
+        // Glyph lists of the previous layout, kept so rebuilding in place allocates nothing.
+        private List<List<GlyphInstance>> _spare;
+
+        private void RecycleLines()
+        {
+            if (Lines.Count > 0)
+            {
+                _spare ??= new List<List<GlyphInstance>>();
+                for (int l = 0; l < Lines.Count; l++)
+                {
+                    var glyphs = Lines[l].Glyphs;
+                    if (glyphs == null) continue;
+                    glyphs.Clear();
+                    _spare.Add(glyphs);
+                }
+            }
+
+            Lines.Clear();
+        }
+
+        private List<GlyphInstance> TakeList(int count)
+        {
+            if (_spare == null || _spare.Count == 0)
+                return new List<GlyphInstance>(count);
+
+            var list = _spare[_spare.Count - 1];
+            _spare.RemoveAt(_spare.Count - 1);
+            if (list.Capacity < count) list.Capacity = count;
+            return list;
+        }
+
+        private static Line OpenLine(float y, int startIndex)
+        {
+            Line line = default;
+            line.Position = new Float2(0, y);
+            line.StartIndex = startIndex;
+            line.EndIndex = startIndex;
+            return line;
+        }
+
+        // Pixel scale of the font and size the last glyph was placed with, which rarely changes.
+        private FontFile _scaleFont;
+        private float _scaleSize;
+        private float _scale;
+
+        private float ScaleFor(FontSystem fontSystem, FontFile font, float pixelSize)
+        {
+            if (!ReferenceEquals(font, _scaleFont) || pixelSize != _scaleSize)
+            {
+                _scaleFont = font;
+                _scaleSize = pixelSize;
+                _scale = fontSystem.GetScale(font, Settings.Font, pixelSize);
+            }
+
+            return _scale;
         }
 
         // Reusable shaped-glyph buffer for the current content word.
@@ -328,28 +393,28 @@ namespace Prowl.Scribe
                 var sg = glyphs[g];
                 float adv = sg.Advance + sg.LetterSpacing;
 
-                if (line.Glyphs.Count > 0 && Exceeds(currentX + adv, maxWidth))
+                if (_open.Count > 0 && Exceeds(currentX + adv, maxWidth))
                 {
                     int clusterIndex = sg.Cluster;
                     currentY += FinalizeLine(fontSystem, ref line, currentY, clusterIndex, currentX);
                     currentX = 0f;
-                    line = new Line(new Float2(0, currentY), clusterIndex);
+                    line = OpenLine(currentY, clusterIndex);
                     StartLine();
                 }
 
-                EmitShaped(fontSystem, line, sg, ref currentX);
+                EmitShaped(fontSystem, sg, ref currentX);
             }
         }
 
         // Draws the hyphen a soft hyphen turns into once a line breaks at it.
-        private void EmitHyphen(FontSystem fontSystem, Line line, ref float currentX, float pixelSize, int charIndex)
+        private void EmitHyphen(FontSystem fontSystem, ref float currentX, float pixelSize, int charIndex)
         {
             var glyph = fontSystem.GetOrCreateGlyph('-', Settings.Font, Settings.Quality);
             if (glyph == null) return;
 
             var gm = fontSystem.GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, pixelSize, Settings.Font) ?? default;
             NoteLineGlyph(glyph.Font, pixelSize);
-            line.Glyphs.Add(new GlyphInstance(glyph, new Float2(currentX + gm.OffsetX, gm.OffsetY),
+            _open.Add(new GlyphInstance(glyph, new Float2(currentX + gm.OffsetX, gm.OffsetY),
                                               '-', gm.AdvanceWidth, pixelSize, charIndex, 1)
             {
                 Decoration = DecorationAt(charIndex)
@@ -357,9 +422,8 @@ namespace Prowl.Scribe
             currentX += gm.AdvanceWidth;
         }
 
-        // Emits one shaped glyph at the current pen X, advancing the pen. (Line.Glyphs is a reference,
-        // so passing the struct by value is fine - only its list is mutated here.)
-        private void EmitShaped(FontSystem fontSystem, Line line, ShapedGlyph sg, ref float currentX)
+        // Emits one shaped glyph at the current pen X, advancing the pen.
+        private void EmitShaped(FontSystem fontSystem, in ShapedGlyph sg, ref float currentX)
         {
             float advance = sg.Advance + sg.LetterSpacing;
             var atlas = sg.Glyph;
@@ -370,7 +434,7 @@ namespace Prowl.Scribe
             }
 
             float pixelSize = sg.PixelSize;
-            var gm = fontSystem.GetGlyphMetricsByIndex(atlas.Font, atlas.GlyphIndex, pixelSize, Settings.Font) ?? default;
+            atlas.GetOffset(ScaleFor(fontSystem, atlas.Font, pixelSize), out float offsetX, out float offsetY);
             NoteLineGlyph(atlas.Font, pixelSize);
             int ch = sg.Cluster >= 0 && sg.Cluster < Text.Length ? CodepointAt(sg.Cluster) : '\0';
 
@@ -379,9 +443,9 @@ namespace Prowl.Scribe
             bool nonSpacing = IsNonSpacing(ch);
             float penX = nonSpacing ? _basePenX : currentX;
 
-            line.Glyphs.Add(new GlyphInstance(
+            _open.Add(new GlyphInstance(
                 atlas,
-                new Float2(penX + gm.OffsetX, gm.OffsetY),
+                new Float2(penX + offsetX, offsetY),
                 ch <= 0xFFFF ? (char)ch : '\0', advance, pixelSize, sg.Cluster, sg.CharCount)
             {
                 // Looked up after shaping rather than splitting runs on it, so a<u>b</u> still kerns.
@@ -554,7 +618,7 @@ namespace Prowl.Scribe
         /// which would push the rest of the line along by a cell per accent.
         /// </summary>
         private static bool IsNonSpacing(int c)
-            => c <= 0xFFFF
+            => c >= 0x300 && c <= 0xFFFF
                && System.Globalization.CharUnicodeInfo.GetUnicodeCategory((char)c)
                   == System.Globalization.UnicodeCategory.NonSpacingMark;
 
@@ -589,13 +653,16 @@ namespace Prowl.Scribe
 
             // Glyphs are placed relative to the baseline, which is not known until the line closes
             // and the tallest glyph on it has been seen.
-            var glyphs = line.Glyphs;
-            for (int g = 0; g < glyphs.Count; g++)
+            var open = _open;
+            var glyphs = TakeList(open.Count);
+            for (int g = 0; g < open.Count; g++)
             {
-                var gi = glyphs[g];
-                gi.Position = new Float2(gi.Position.X, gi.Position.Y + baseline);
-                glyphs[g] = gi;
+                var gi = open[g];
+                gi.Position.Y += baseline;
+                glyphs.Add(gi);
             }
+            open.Clear();
+            line.Glyphs = glyphs;
 
             line.Position = new Float2(0, y);
             line.Height = lineHeight;

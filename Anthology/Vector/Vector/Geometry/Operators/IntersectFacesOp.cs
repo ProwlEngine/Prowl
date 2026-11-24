@@ -26,7 +26,7 @@ internal static class IntersectFacesOp
         var points = faces.Select(f => f.NeighborVertices().Select(v => v.Point).ToList()).ToList();
         var normals = faces.Select(f => Float3.Normalize(f.Normal())).ToList();
         var boxes = points.Select(p => (Min: p.Aggregate(Maths.Min), Max: p.Aggregate(Maths.Max))).ToList();
-        var chosen = only == null ? null : only.SelectMany(f => f.LogicalFace()).ToHashSet();
+        var chosen = only == null ? null : GeometryData.LogicalFaces(only).ToHashSet();
 
         var segments = new List<(Float3 A, Float3 B)>();
         for (int i = 0; i < faces.Count; i++)

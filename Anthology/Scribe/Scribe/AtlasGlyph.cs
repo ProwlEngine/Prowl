@@ -38,6 +38,50 @@ namespace Prowl.Scribe
 
         public bool IsInAtlas => AtlasX >= 0 && AtlasY >= 0;
 
+        // Outline box and advance in font units, read from the font once instead of per placed glyph.
+        private bool _metricsRead;
+        private bool _hasBox;
+        private int _boxX0, _boxY1;
+        private int _advance;
+
+        private void ReadMetrics()
+        {
+            int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+            _hasBox = Font.GetGlyphBox(GlyphIndex, ref x0, ref y0, ref x1, ref y1) != 0;
+            _boxX0 = x0;
+            _boxY1 = y1;
+
+            int advance = 0, lsb = 0;
+            Font.GetGlyphHorizontalMetrics(GlyphIndex, ref advance, ref lsb);
+            _advance = advance;
+            _metricsRead = true;
+        }
+
+        /// <summary>Top left of the glyph's pixel box relative to the pen, the same as GlyphMetrics.OffsetX and OffsetY.</summary>
+        internal void GetOffset(float scale, out float offsetX, out float offsetY)
+        {
+            if (!_metricsRead) ReadMetrics();
+            if (!_hasBox)
+            {
+                offsetX = 0f;
+                offsetY = 0f;
+                return;
+            }
+
+            offsetX = (int)Math.Floor(_boxX0 * scale);
+            offsetY = (int)Math.Floor(-_boxY1 * scale);
+        }
+
+        /// <summary>Advance width in font units.</summary>
+        internal int Advance
+        {
+            get
+            {
+                if (!_metricsRead) ReadMetrics();
+                return _advance;
+            }
+        }
+
         public AtlasGlyph(int codepoint, FontFile font, FontQuality quality)
         {
             Codepoint = codepoint;

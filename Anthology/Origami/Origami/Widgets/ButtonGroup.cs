@@ -150,7 +150,7 @@ public sealed class ButtonGroupBuilder
                 bool isLast = i == count - 1;
 
                 float segW = _stretch ? 0 : MeasureSeg(item, font, metrics.FontSize, padX);
-                var segBox = _paper.Box($"{_id}_seg_{i}")
+                var segBox = _paper.Box("seg", i)
                     .Width(_stretch ? UnitValue.Stretch() : segW)
                     .Height(UnitValue.Stretch());
 
@@ -172,9 +172,9 @@ public sealed class ButtonGroupBuilder
                     bool isPressed = itemEnabled && _paper.IsParentActive;
                     bool isFocused = itemEnabled && _paper.IsElementFocused(handle.Data.ID);
 
-                    float hoverT = _paper.AnimateBool(isHovered, 0.10f, id: $"{_id}_h_{i}");
-                    float pressT = _paper.AnimateBool(isPressed, 0.06f, id: $"{_id}_p_{i}");
-                    float focusT = _paper.AnimateBool(isFocused, 0.12f, id: $"{_id}_f_{i}");
+                    float hoverT = _paper.AnimateBool(isHovered, 0.10f);
+                    float pressT = _paper.AnimateBool(isPressed, 0.06f);
+                    float focusT = _paper.AnimateBool(isFocused, 0.12f);
 
                     if (itemEnabled && isFocused
                         && (_paper.IsKeyPressed(PaperKey.Space) || _paper.IsKeyPressed(PaperKey.Enter)

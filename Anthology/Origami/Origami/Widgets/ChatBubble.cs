@@ -151,7 +151,7 @@ public sealed class ChatBubbleBuilder
             Color capBg = solidBg, capTop = gradTop, capBot = gradBot, capBd = border;
             float cTl = tl, cTr = tr, cBr = br, cBl = bl;
 
-            using (_paper.Column($"{_id}_wrap")
+            using (_paper.Column("wrap")
                 .Width(UnitValue.Auto).MaxWidth(_maxWidth)
                 .Height(UnitValue.Auto)
                 .Padding(13, 13, 9, 9)
@@ -187,7 +187,7 @@ public sealed class ChatBubbleBuilder
             {
                 if (!string.IsNullOrEmpty(_header) && font != null)
                 {
-                    _paper.Box($"{_id}_hdr")
+                    _paper.Box("hdr")
                         .Width(UnitValue.Auto).Height(UnitValue.Auto)
                         .IsNotInteractable()
                         .Text(_header, font).TextColor(headerCol)
@@ -199,7 +199,7 @@ public sealed class ChatBubbleBuilder
 
                 if (!string.IsNullOrEmpty(_footer) && font != null)
                 {
-                    _paper.Box($"{_id}_ftr")
+                    _paper.Box("ftr")
                         .Width(UnitValue.Stretch()).Height(UnitValue.Auto).Margin(0, 0, 2, 0)
                         .IsNotInteractable()
                         .Text(_footer, font).TextColor(footerCol)

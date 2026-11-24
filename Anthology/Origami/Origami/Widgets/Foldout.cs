@@ -149,7 +149,7 @@ public sealed class FoldoutBuilder
 
         using (container.Enter())
         {
-            var header = _paper.Row($"{_id}_header")
+            var header = _paper.Row("header")
                 .Width(UnitValue.Stretch())
                 .Height(headH);
 
@@ -181,7 +181,7 @@ public sealed class FoldoutBuilder
 
                 // Disclosure caret — vector (the glyph font is empty). Points right when collapsed
                 // and rotates to point down as the foldout opens, driven by `anim`.
-                using (_paper.Box($"{_id}_arrow")
+                using (_paper.Box("arrow")
                     .Width(14f).Height(headH)
                     .Margin(leftPad, gap, 0, 0)
                     .IsNotInteractable()
@@ -201,7 +201,7 @@ public sealed class FoldoutBuilder
                 if (_icon != null)
                 {
                     var icon = _icon;
-                    using (_paper.Box($"{_id}_icon")
+                    using (_paper.Box("icon")
                         .Width(14f).Height(headH)
                         .Margin(0, gap, 0, 0)
                         .IsNotInteractable()
@@ -227,20 +227,20 @@ public sealed class FoldoutBuilder
                     if (hasToggle)
                     {
                         var setter = _toggleSetter!;
-                        using (_paper.Column($"{_id}_chk")
+                        using (_paper.Column("chk")
                             .Width(UnitValue.Auto).Height(headH)
                             .Margin(0, gap, 0, 0)
                             .OnClick(0, (_, e) => { e.StopPropagation(); setter(!isEnabled); })
                             .Enter())
                         {
-                            _paper.Box($"{_id}_chk_top").Height(UnitValue.Stretch());
+                            _paper.Box("chk_top").Height(UnitValue.Stretch());
                             Origami.Checkbox(_paper, $"{_id}_chk_box", isEnabled, setter).Small().NoLabel().ReadOnly().Show();
-                            _paper.Box($"{_id}_chk_bottom").Height(UnitValue.Stretch());
+                            _paper.Box("chk_bottom").Height(UnitValue.Stretch());
                         }
                     }
 
                     // Label — fills the remaining width; carries the right edge padding when no badge follows.
-                    _paper.Box($"{_id}_lbl")
+                    _paper.Box("lbl")
                         .Width(UnitValue.Stretch())
                         .Margin(leftPad, drawBadge ? 0 : padX, 0, 0)
                         .Text(_label, _theme.SemiBold ?? _theme.Font)
@@ -251,7 +251,7 @@ public sealed class FoldoutBuilder
                     // Badge — last child, carries the right edge padding.
                     if (drawBadge)
                     {
-                        _paper.Box($"{_id}_badge")
+                        _paper.Box("badge")
                             .Width(UnitValue.Auto).Height(headH)
                             .Margin(metrics.BadgePadLeft, padX, 0, 0)
                             .Text(_badge, _theme.Font)
@@ -270,7 +270,7 @@ public sealed class FoldoutBuilder
             Color bodyBg = _bodyBgOverride ?? Color.Transparent;
 
             // Body wrapper collapses via an animated height and is clipped so content wipes in/out.
-            var body = _paper.Column($"{_id}_body")
+            var body = _paper.Column("body")
                 .Width(UnitValue.Stretch())
                 .Height(UnitValue.Lerp(0, UnitValue.Auto, anim))
                 .Clip();
@@ -280,12 +280,12 @@ public sealed class FoldoutBuilder
             using (body.Enter())
             {
                 // 1px bd-soft rule separating the header from the body (CSS border-top).
-                _paper.Box($"{_id}_sep")
+                _paper.Box("sep")
                     .Width(UnitValue.Stretch()).Height(1f)
                     .BackgroundColor(bdSoft)
                     .IsNotInteractable();
 
-                var content = _paper.Box($"{_id}_inner")
+                var content = _paper.Box("inner")
                     .Width(UnitValue.Stretch())
                     .Height(UnitValue.Auto)
                     .Padding(12f, 12f, 10f, 10f)

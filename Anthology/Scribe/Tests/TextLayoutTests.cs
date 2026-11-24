@@ -497,4 +497,69 @@ public class TextLayoutTests
             prevX = p.X;
         }
     }
+
+    [Fact]
+    public void RepeatedWordsLayOutTheSameEveryTime()
+    {
+        var fs = CreateSystem();
+        var settings = TextLayoutSettings.Default;
+        settings.PixelSize = 16;
+        settings.Font = fs.FallbackFonts.First();
+        settings.WrapMode = TextWrapMode.Wrap;
+        settings.MaxWidth = 120;
+        const string text = "office waffle To AVATAR office waffle\nfinal office To";
+
+        var first = new TextLayout();
+        fs.UpdateLayout(first, text, settings);
+
+        // By the third pass every word comes out of the shaped word cache.
+        var replayed = new TextLayout();
+        for (int pass = 0; pass < 3; pass++)
+            fs.UpdateLayout(replayed, text, settings);
+
+        Assert.Equal(first.Size, replayed.Size);
+        Assert.Equal(first.Lines.Count, replayed.Lines.Count);
+        for (int l = 0; l < first.Lines.Count; l++)
+        {
+            var a = first.Lines[l].Glyphs;
+            var b = replayed.Lines[l].Glyphs;
+            Assert.Equal(a.Count, b.Count);
+            for (int g = 0; g < a.Count; g++)
+            {
+                Assert.Same(a[g].Glyph, b[g].Glyph);
+                Assert.Equal(a[g].Position, b[g].Position);
+                Assert.Equal(a[g].AdvanceWidth, b[g].AdvanceWidth);
+                Assert.Equal(a[g].CharIndex, b[g].CharIndex);
+                Assert.Equal(a[g].CharCount, b[g].CharCount);
+            }
+        }
+    }
+
+    [Fact]
+    public void RepeatedWordsFollowTheAtlasWhenItGrows()
+    {
+        var fs = new FontSystem(new TestFontRenderer(), 64, 64);
+        foreach (var font in fs.EnumerateSystemFonts())
+        {
+            if (font.Style != FontStyle.Regular) continue;
+            fs.AddFallbackFont(font);
+            break;
+        }
+
+        var settings = TextLayoutSettings.Default;
+        settings.PixelSize = 16;
+        settings.Font = fs.FallbackFonts.First();
+
+        var layout = new TextLayout();
+        for (int pass = 0; pass < 3; pass++)
+            fs.UpdateLayout(layout, "hello hello", settings);
+
+        int version = fs.AtlasVersion;
+        fs.CreateLayout("ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789", settings);
+        Assert.NotEqual(version, fs.AtlasVersion);
+
+        fs.UpdateLayout(layout, "hello hello", settings);
+        foreach (var glyph in layout.Lines[0].Glyphs)
+            Assert.Same(fs.GetOrCreateGlyphByIndex(glyph.Glyph.GlyphIndex, glyph.Glyph.Font, settings.Quality), glyph.Glyph);
+    }
 }

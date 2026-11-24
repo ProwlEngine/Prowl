@@ -26,7 +26,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     private readonly TerrainPool _pool;
     private readonly PagesFeature _pages;
     private readonly CacheFeature _cacheFeature;
-    private readonly FarShadowFeature _farFeature;
     private readonly GrassFeature _grassFeature;
     private TerrainGrass? _grass;
     private TerrainGrass.Frame? _grassFrame;
@@ -34,7 +33,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     private Material? _cardMaterial;
     private IReadOnlyList<TerrainDetailPrototype> _details = [];
     private bool _grassChanged;
-    private TerrainFarShadow? _far;
     private readonly Renderer _owner;
     private TerrainCache? _cache;
     private TerrainCache.Frame? _cacheFrame;
@@ -66,7 +64,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         _snapshot = _pool.Current;
         _pages = new PagesFeature(this);
         _cacheFeature = new CacheFeature(this);
-        _farFeature = new FarShadowFeature(this);
         _grassFeature = new GrassFeature(this);
         _owner = renderer;
 
@@ -85,12 +82,8 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         data.Edited += OnEdited;
     }
 
-    // Edited pages upload again where resident, refilling the cache over them, and the far shadow rebuilds
-    private void OnEdited(TerrainEdited edited)
-    {
-        _pool.Refresh(edited.Pages);
-        _far?.Invalidate();
-    }
+    // Edited pages upload again where resident, refilling the cache over them
+    private void OnEdited(TerrainEdited edited) => _pool.Refresh(edited.Pages);
 
     public TerrainData Data { get; }
 
@@ -183,17 +176,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     public int CacheBudget { get; set; } = 1 << 19;
 
     /// <summary>
-    /// Whether the terrain shadows itself and everything on it from the sun far past the cascades, as its world's
-    /// <see cref="RenderWorld.FarShadow"/> unless the host set another: <see cref="FarShadowCoverage"/> metres square around
-    /// the viewer at <see cref="FarShadowResolution"/> texels a side, marching <see cref="FarShadowReach"/> metres toward
-    /// the sun. It fades in from four fifths of the sun's cascade distance.
-    /// </summary>
-    public bool CastFarShadow { get; set; }
-    public int FarShadowResolution { get; init; } = 1024;
-    public double FarShadowCoverage { get; set; } = 8000;
-    public double FarShadowReach { get; set; } = 3000;
-
-    /// <summary>
     /// The detail prototypes, one per density map of the terrain by index. The surface grows the grass card ones; place
     /// the mesh ones with a <see cref="TerrainProps"/> over <see cref="TerrainDetailInstances"/>.
     /// </summary>
@@ -277,7 +259,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         }
         _cacheFrame = cached ? _cache?.Current : null;
         UpdateGrass(slotFrustums);
-        UpdateFarShadow();
     }
 
     // The furthest a grass prototype of the terrain reaches, 0 without any
@@ -342,34 +323,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         };
     }
 
-    private void UpdateFarShadow()
-    {
-        RenderWorld? world = _world;
-        bool cast = CastFarShadow && world != null && world.Environment.Sun.IsValid && world.IsAlive(world.Environment.Sun);
-        if (!cast)
-        {
-            if (_far != null && world != null && world.FarShadow == _far.Map)
-                world.FarShadow = null;
-            if (_far != null)
-                _far.Map.Enabled = false;
-            return;
-        }
-        if (_far == null)
-        {
-            _far = new TerrainFarShadow(_owner, Math.Max(FarShadowResolution, 64));
-            world!.FrameFeatures.Add(_farFeature);
-        }
-        if (world!.FarShadow == null)
-            world.FarShadow = _far.Map;
-        if (_viewers.Count == 0 && Viewer == null)
-            return;
-
-        LightDesc sun = world.GetLight(world.Environment.Sun);
-        Double3 viewer = Viewer ?? _viewers[0];
-        float fade = sun.Shadow.Enabled ? sun.Shadow.Distance * 0.8f : 0f;
-        _far.Update(new Double2(viewer.X - _position.X, viewer.Z - _position.Z), sun.Direction, Math.Max(FarShadowCoverage, 1), Math.Max(FarShadowReach, 1), Data, fade);
-    }
-
     // Keeps each seen camera view in its cache slot, giving new ones a slot no view has used for a second of frames,
     // and returns each slot's viewer this frame from the terrain's corner, null for slots not seen
     private (Double2?[] Viewers, CullFrustum?[] Frustums) AssignSlots(Dictionary<RenderView, CullFrustum> seen)
@@ -408,8 +361,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         _world?.FrameFeatures.Add(_pages);
         if (_cache != null)
             _world?.FrameFeatures.Add(_cacheFeature);
-        if (_far != null)
-            _world?.FrameFeatures.Add(_farFeature);
         if (_grass != null)
             _world?.FrameFeatures.Add(_grassFeature);
     }
@@ -418,10 +369,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     {
         _world?.FrameFeatures.Remove(_pages);
         _world?.FrameFeatures.Remove(_cacheFeature);
-        _world?.FrameFeatures.Remove(_farFeature);
         _world?.FrameFeatures.Remove(_grassFeature);
-        if (_far != null && _world?.FarShadow == _far.Map)
-            _world.FarShadow = null;
         _world = null;
         base.Detach(set);
     }
@@ -643,7 +591,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         _ownMaterial?.Dispose();
         _pool.Dispose();
         _cache?.Dispose();
-        _far?.Dispose();
         _grass?.Dispose();
         _card?.Dispose();
         _cardMaterial?.Dispose();
@@ -688,21 +635,6 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
             TerrainGrass grass = owner._grass!;
             grass.Render(context, owner._grassFrame ?? grass.Current, owner._pool, owner._layers);
         }
-    }
-
-    // Fills the frame's rows of the far shadow being built, after the frame's pages are in
-    private sealed class FarShadowFeature(TerrainSurface owner) : FrameFeature(FrameSlot.BeforeViews, order: 50)
-    {
-        public override bool IsActive() => owner._far is { Rows: > 0 };
-
-        public override void Setup(FrameBuilder builder)
-        {
-            builder.Read(owner._pool.Heights);
-            builder.Read(owner._pool.PageTable);
-            builder.Write(owner._far!.Back, TextureState.Storage);
-        }
-
-        public override void Render(FrameContext context) => owner._far!.Render(context.Command, owner._pool);
     }
 
     // Fills the material cache from the pools after the frame's pages are in, and hands it to the draws

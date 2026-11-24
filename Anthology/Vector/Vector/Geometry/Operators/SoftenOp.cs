@@ -51,4 +51,56 @@ internal static class SoftenOp
             if (mesh.Contains(e)) e.IsSoft = soft;
         mesh.MarkChanged();
     }
+
+    internal static HashSet<Vertex> Shade(GeometryData mesh, IEnumerable<Face> faces, bool smooth)
+    {
+        var vertices = new HashSet<Vertex>();
+        foreach (Face face in faces)
+        {
+            vertices.UnionWith(face.NeighborVertices());
+            foreach (Edge edge in face.NeighborEdges())
+            {
+                if (edge.IsHidden) continue;
+                edge.IsSoft = smooth;
+                edge.IsSharp = !smooth;
+            }
+        }
+        mesh.MarkChanged();
+        return vertices;
+    }
+
+    internal static void CornerNormals(GeometryData mesh, string attribute, ISet<Vertex>? only)
+    {
+        if (!mesh.HasLoopAttribute(attribute)) mesh.AddLoopAttribute(attribute, GeometryData.AttributeBaseType.Float, 3);
+
+        var areaNormals = new Dictionary<Face, Float3>(mesh.Faces.Count);
+        foreach (Face face in mesh.Faces) areaNormals[face] = face.Normal() * face.Area();
+
+        var fan = new HashSet<Face>();
+        var stack = new Stack<Face>();
+        foreach (Face face in mesh.Faces)
+            foreach (GeometryData.Loop loop in face.Corners())
+            {
+                Vertex vertex = loop.Vert;
+                if (only != null && !only.Contains(vertex)) continue;
+                fan.Clear();
+                fan.Add(face);
+                stack.Push(face);
+                while (stack.Count > 0)
+                {
+                    Face at = stack.Pop();
+                    foreach (Edge edge in at.NeighborEdges())
+                    {
+                        if (!edge.ContainsVertex(vertex) || !edge.IsSoft || edge.IsSharp) continue;
+                        foreach (Face next in edge.NeighborFaces())
+                            if (fan.Add(next)) stack.Push(next);
+                    }
+                }
+
+                Float3 sum = Float3.Zero;
+                foreach (Face member in fan) sum += areaNormals[member];
+                Float3 normal = Float3.LengthSquared(sum) > 1e-20f ? Float3.Normalize(sum) : Float3.UnitY;
+                loop.Attributes[attribute] = new GeometryData.FloatAttributeValue(normal.X, normal.Y, normal.Z);
+            }
+    }
 }

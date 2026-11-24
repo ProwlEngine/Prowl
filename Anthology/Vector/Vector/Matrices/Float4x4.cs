@@ -262,6 +262,21 @@ public partial struct Float4x4 : System.IEquatable<Float4x4>, IFormattable
     }
 
     /// <summary>
+    /// Splits a matrix made by <see cref="CreateTRS"/> back into its translation, rotation and scale. A matrix that
+    /// mirrors gets a negative X scale. Shear, which no TRS can hold, is lost.
+    /// </summary>
+    public void Decompose(out Float3 translation, out Quaternion rotation, out Float3 scale)
+    {
+        translation = c3.XYZ;
+        scale = new Float3(Float3.Length(c0.XYZ), Float3.Length(c1.XYZ), Float3.Length(c2.XYZ));
+        if (Determinant(this) < 0f) scale.X = -scale.X;
+        Float3 x = scale.X != 0f ? c0.XYZ / scale.X : Float3.UnitX;
+        Float3 y = scale.Y != 0f ? c1.XYZ / scale.Y : Float3.UnitY;
+        Float3 z = scale.Z != 0f ? c2.XYZ / scale.Z : Float3.UnitZ;
+        rotation = Quaternion.Normalize(Quaternion.FromMatrix(new Float3x3(x, y, z)));
+    }
+
+    /// <summary>
     /// Creates a rotation matrix from the given Quaternion rotation value.
     /// </summary>
     /// <param name="quaternion">The source Quaternion.</param>

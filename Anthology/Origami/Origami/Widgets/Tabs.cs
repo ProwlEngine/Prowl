@@ -107,7 +107,7 @@ public sealed class TabsBuilder
         using (_paper.Row(_id).Width(_width ?? UnitValue.Auto).Height(th).Enter())
         {
             HandleKeys();
-            _paper.Box($"{_id}_bb").PositionType(PositionType.SelfDirected)
+            _paper.Box("bb").PositionType(PositionType.SelfDirected)
                 .Left(0).Top(th - 1).Width(UnitValue.Stretch()).Height(1)
                 .IsNotInteractable().BackgroundColor(_theme.Neutral.C200);
 
@@ -177,8 +177,8 @@ public sealed class TabsBuilder
         {
             var handle = _paper.CurrentParent;
             bool hovered = _paper.IsParentHovered;
-            float hoverT = _paper.AnimateBool(hovered, 0.10f, id: $"{_id}_h{i}");
-            float selT = _paper.AnimateBool(isSelected, 0.15f, id: $"{_id}_s{i}");
+            float hoverT = _paper.AnimateBool(hovered, 0.10f);
+            float selT = _paper.AnimateBool(isSelected, 0.15f);
 
             var snap = new TabSnapshot
             {
@@ -202,7 +202,7 @@ public sealed class TabsBuilder
             if (closeable && (isSelected || hovered))
             {
                 var onClose = _onClose!;
-                _paper.Box($"{_id}_x{i}")
+                _paper.Box("x", i)
                     .PositionType(PositionType.SelfDirected)
                     .Position(tabW - closeSize - padX + 4f, (th - closeSize) * 0.5f)
                     .Size(closeSize, closeSize).Rounded(MathF.Min(closeSize * 0.5f, _theme.Metrics.SmallRounding * 2.5f))

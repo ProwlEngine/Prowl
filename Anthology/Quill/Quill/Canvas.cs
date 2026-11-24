@@ -592,7 +592,9 @@ namespace Prowl.Quill
         private SubPath? _currentSubPath = null;
         private bool _isPathReady = false;
 
-        private readonly Stack<ProwlCanvasState> _savedStates = new Stack<ProwlCanvasState>();
+        // A plain array, so a save or restore is one struct copy and nothing is cleared on the way out.
+        private ProwlCanvasState[] _savedStates = new ProwlCanvasState[16];
+        private int _savedStateCount;
         private ProwlCanvasState _state;
         private float _globalAlpha;
         private bool _antiAlias = true;
@@ -741,7 +743,7 @@ namespace Prowl.Quill
             _indices.Clear();
             _vertices.Clear();
 
-            _savedStates.Clear();
+            _savedStateCount = 0;
             _state = new ProwlCanvasState();
             _state.Reset();
 
@@ -784,7 +786,12 @@ namespace Prowl.Quill
         /// <summary>
         /// Saves the current canvas state (transform, stroke, fill, scissor, brush) to a stack.
         /// </summary>
-        public void SaveState() => _savedStates.Push(_state);
+        public void SaveState()
+        {
+            if (_savedStateCount == _savedStates.Length)
+                Array.Resize(ref _savedStates, _savedStateCount * 2);
+            _savedStates[_savedStateCount++] = _state;
+        }
 
         /// <summary>
         /// Restores the most recently saved canvas state from the stack.
@@ -792,11 +799,11 @@ namespace Prowl.Quill
         /// </summary>
         public void RestoreState()
         {
-            if (_savedStates.Count == 0)
+            if (_savedStateCount == 0)
                 return;
-            if (_savedStates.Count <= _captureStateDepth)
+            if (_savedStateCount <= _captureStateDepth)
                 _captureBroken = true;
-            _state = _savedStates.Pop();
+            _state = _savedStates[--_savedStateCount];
             InvalidateDrawState();
         }
 
@@ -1398,7 +1405,7 @@ namespace Prowl.Quill
             AddTriangleCount(indices.Count / 3);
         }
 
-        private void AddTriangleCount(int count)
+        internal void AddTriangleCount(int count)
         {
             // Fast path: the state has not been touched since it was last verified against the draw
             // call still on the end of the list, so nothing can have changed and no hash or field
@@ -2511,28 +2518,56 @@ namespace Prowl.Quill
             Float2 ex = TransformPoint(new Float2(ccx + 1, ccy)) - c;
             Float2 ey = TransformPoint(new Float2(ccx, ccy + 1)) - c;
 
-            Float2 coreUV = new Float2(1f, 0f);
-            Float2 fringeUV = new Float2(0f, 0f);
-            uint b = (uint)_vertices.Count;
+            // One colour for the whole shape, so it is premultiplied once and written straight to the buffer.
+            Color32 pm = PremultiplyColor(color);
+            int ringMax = (tlSegments + trSegments + brSegments + blSegments) + 4;
+            _vertices.Reserve(1 + ringMax * 2);
+            Vertex[] verts = _vertices.Array;
+            int first = _vertices.Count;
+            int n = first;
+            uint b = (uint)first;
             int ringCount = 0;
 
-            Float2 ToPx(double px, double py) => c + ex * (float)(px - ccx) + ey * (float)(py - ccy);
+            void Put(double px, double py, float u)
+            {
+                float dx = (float)(px - ccx), dy = (float)(py - ccy);
+                ref Vertex v = ref verts[n++];
+                v.x = c.X + ex.X * dx + ey.X * dy;
+                v.y = c.Y + ex.Y * dx + ey.Y * dy;
+                v.u = u;
+                v.v = 0f;
+                v.r = pm.R;
+                v.g = pm.G;
+                v.b = pm.B;
+                v.a = pm.A;
+            }
 
             // Appends one corner's (inner core, outer fringe) vertex pairs and advances ringCount.
-            void EmitCorner(double cxc, double cyc, double radius, double startAngle, int segs,
+            void EmitCorner(double cxc, double cyc, double radius, int quarter, int segs,
                             double sharpX, double sharpY, float sgnX, float sgnY)
             {
                 if (radius > 0)
                 {
                     double innerR = radius - hp; if (innerR < 0) innerR = 0;
                     double outerR = radius + hp;
-                    double da = (Math.PI / 2) / segs;
-                    double dgx = Math.Cos(startAngle), dgy = Math.Sin(startAngle);
-                    double cda = Math.Cos(da), sda = Math.Sin(da);
+                    double dgx = s_quarterCos[quarter], dgy = s_quarterSin[quarter];
+                    double cda, sda;
+                    if (segs < s_stepCos.Length)
+                    {
+                        cda = s_stepCos[segs];
+                        sda = s_stepSin[segs];
+                    }
+                    else
+                    {
+                        double da = (Math.PI / 2) / segs;
+                        cda = Math.Cos(da);
+                        sda = Math.Sin(da);
+                    }
+
                     for (int j = 0; j <= segs; j++)
                     {
-                        AddVertex(new Vertex(ToPx(cxc + innerR * dgx, cyc + innerR * dgy), coreUV, color));
-                        AddVertex(new Vertex(ToPx(cxc + outerR * dgx, cyc + outerR * dgy), fringeUV, color));
+                        Put(cxc + innerR * dgx, cyc + innerR * dgy, 1f);
+                        Put(cxc + outerR * dgx, cyc + outerR * dgy, 0f);
                         ringCount++;
                         double ndgx = dgx * cda - dgy * sda, ndgy = dgx * sda + dgy * cda;
                         dgx = ndgx; dgy = ndgy;
@@ -2541,34 +2576,58 @@ namespace Prowl.Quill
                 else
                 {
                     // Square corner: half a pixel along each axis gives a 0.5px offset to both edges.
-                    AddVertex(new Vertex(ToPx(sharpX - sgnX * hp, sharpY - sgnY * hp), coreUV, color));
-                    AddVertex(new Vertex(ToPx(sharpX + sgnX * hp, sharpY + sgnY * hp), fringeUV, color));
+                    Put(sharpX - sgnX * hp, sharpY - sgnY * hp, 1f);
+                    Put(sharpX + sgnX * hp, sharpY + sgnY * hp, 0f);
                     ringCount++;
                 }
             }
 
-            AddVertex(new Vertex(c, coreUV, color)); // index 0: fan apex
+            Put(ccx, ccy, 1f); // index 0: fan apex
 
             // Corners in ring order (TL -> TR -> BR -> BL), each arc sweeping +90 degrees.
-            EmitCorner(x + tlRadii, y + tlRadii, tlRadii, Maths.PI, tlSegments, x, y, -1f, -1f);
-            EmitCorner(x + width - trRadii, y + trRadii, trRadii, Maths.PI * 1.5f, trSegments, x + width, y, 1f, -1f);
-            EmitCorner(x + width - brRadii, y + height - brRadii, brRadii, 0f, brSegments, x + width, y + height, 1f, 1f);
-            EmitCorner(x + blRadii, y + height - blRadii, blRadii, Maths.PI * 0.5f, blSegments, x, y + height, -1f, 1f);
+            EmitCorner(x + tlRadii, y + tlRadii, tlRadii, 0, tlSegments, x, y, -1f, -1f);
+            EmitCorner(x + width - trRadii, y + trRadii, trRadii, 1, trSegments, x + width, y, 1f, -1f);
+            EmitCorner(x + width - brRadii, y + height - brRadii, brRadii, 2, brSegments, x + width, y + height, 1f, 1f);
+            EmitCorner(x + blRadii, y + height - blRadii, blRadii, 3, blSegments, x, y + height, -1f, 1f);
+            _vertices.Count = n;
 
+            _indices.Reserve(ringCount * 9);
+            uint[] idx = _indices.Array;
+            int io = _indices.Count;
             for (int k = 0; k < ringCount; k++)
             {
-                int next = (k + 1) % ringCount;
+                int next = k + 1 == ringCount ? 0 : k + 1;
                 uint inner0 = b + 1 + (uint)(k * 2);
                 uint outer0 = b + 2 + (uint)(k * 2);
                 uint inner1 = b + 1 + (uint)(next * 2);
                 uint outer1 = b + 2 + (uint)(next * 2);
 
-                _indices.Add(b); _indices.Add(inner1); _indices.Add(inner0);          // core fan
-                _indices.Add(inner0); _indices.Add(outer1); _indices.Add(outer0);     // fringe
-                _indices.Add(inner0); _indices.Add(inner1); _indices.Add(outer1);
+                idx[io] = b; idx[io + 1] = inner1; idx[io + 2] = inner0;          // core fan
+                idx[io + 3] = inner0; idx[io + 4] = outer1; idx[io + 5] = outer0; // fringe
+                idx[io + 6] = inner0; idx[io + 7] = inner1; idx[io + 8] = outer1;
+                io += 9;
             }
+            _indices.Count = io;
 
             AddTriangleCount(ringCount * 3);
+        }
+
+        // Direction each corner arc starts in (TL, TR, BR, BL) and the rotation per segment for small
+        // segment counts, so a rounded rect needs no trig of its own.
+        private static readonly double[] s_quarterCos = { Math.Cos(Maths.PI), Math.Cos(Maths.PI * 1.5f), Math.Cos(0f), Math.Cos(Maths.PI * 0.5f) };
+        private static readonly double[] s_quarterSin = { Math.Sin(Maths.PI), Math.Sin(Maths.PI * 1.5f), Math.Sin(0f), Math.Sin(Maths.PI * 0.5f) };
+        private static readonly double[] s_stepCos = BuildSteps(true);
+        private static readonly double[] s_stepSin = BuildSteps(false);
+
+        private static double[] BuildSteps(bool cos)
+        {
+            var steps = new double[65];
+            for (int segs = 1; segs < steps.Length; segs++)
+            {
+                double da = (Math.PI / 2) / segs;
+                steps[segs] = cos ? Math.Cos(da) : Math.Sin(da);
+            }
+            return steps;
         }
 
         /// <summary>

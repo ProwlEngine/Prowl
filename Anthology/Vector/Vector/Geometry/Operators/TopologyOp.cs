@@ -168,12 +168,41 @@ internal static class TopologyOp
         return targets.Count;
     }
 
+    internal static int ShrinkFatten(GeometryData mesh, IEnumerable<Vertex> vertices, float distance)
+    {
+        List<Vertex> targets = vertices.Where(mesh.Contains).Distinct().ToList();
+        // Every normal is taken before any vertex moves, so moving one does not turn the next
+        Float3[] normals = [.. targets.Select(v => v.Normal())];
+        for (int i = 0; i < targets.Count; i++) targets[i].Point += normals[i] * distance;
+        mesh.MarkChanged();
+        return targets.Count;
+    }
+
+    internal static int ToSphere(GeometryData mesh, IEnumerable<Vertex> vertices, float factor)
+    {
+        List<Vertex> targets = vertices.Where(mesh.Contains).Distinct().ToList();
+        if (targets.Count < 2) return 0;
+        Float3 centre = Float3.Zero;
+        foreach (Vertex vertex in targets) centre += vertex.Point;
+        centre /= targets.Count;
+        float radius = targets.Average(v => Float3.Distance(v.Point, centre));
+        float t = Math.Clamp(factor, 0f, 1f);
+        foreach (Vertex vertex in targets)
+        {
+            Float3 away = vertex.Point - centre;
+            float length = Float3.Length(away);
+            if (length > 1e-6f) vertex.Point += (centre + away / length * radius - vertex.Point) * t;
+        }
+        mesh.MarkChanged();
+        return targets.Count;
+    }
+
     /// <summary>
     /// A copy of the mesh with its mirror image across a plane, the axis being 0, 1 or 2 for X, Y or Z and the offset
     /// where along it the plane stands. Vertices within the merge distance of the plane are shared by both halves and put on it, and the mirrored
     /// faces are turned so they face outwards. Attributes are copied to the mirrored side.
     /// </summary>
-    internal static GeometryData Mirror(GeometryData source, int axis, float mergeDistance, float offset = 0f)
+    internal static GeometryData Mirror(GeometryData source, int axis, float mergeDistance, float offset, List<Face>? mirroredFaces)
     {
         var result = new GeometryData();
         CopyDefinitions(source, result);
@@ -222,15 +251,81 @@ internal static class TopologyOp
             // A face lying wholly in the plane is its own mirror image
             if (corners.All(c => mirrored[index[c.Vert]] == original[index[c.Vert]])) continue;
             corners.Reverse();
-            AddCopy(result, face, corners, mirrored, index);
+            if (AddCopy(result, face, corners, mirrored, index) is { } image) mirroredFaces?.Add(image);
         }
         return result;
     }
 
-    private static void AddCopy(GeometryData result, Face face, List<Loop> corners, Vertex[] map, Dictionary<Vertex, int> index)
+    /// <summary>
+    /// A copy of the mesh given thickness: an outer and an inner shell, apart by the thickness along each vertex's
+    /// normal, joined by side faces along open borders. The offset from -1 to 1 places the shells, -1 keeping the outer
+    /// one on the surface and 1 the inner one. The inner shell faces inwards.
+    /// </summary>
+    internal static GeometryData Solidify(GeometryData source, float thickness, float offset)
+    {
+        var result = new GeometryData();
+        CopyDefinitions(source, result);
+
+        int count = source.Vertices.Count;
+        var outer = new Vertex[count];
+        var inner = new Vertex[count];
+        var index = new Dictionary<Vertex, int>(count);
+        float outward = thickness * (1f + offset) * 0.5f, inward = thickness * (1f - offset) * 0.5f;
+        for (int i = 0; i < count; i++)
+        {
+            Vertex vertex = source.Vertices[i];
+            index[vertex] = i;
+            Float3 normal = vertex.Normal();
+            outer[i] = result.AddVertex(vertex.Point + normal * outward);
+            outer[i].Attributes = AttributeTransfer.Copy(vertex.Attributes);
+            inner[i] = result.AddVertex(vertex.Point - normal * inward);
+            inner[i].Attributes = AttributeTransfer.Copy(vertex.Attributes);
+        }
+
+        foreach (Edge edge in source.Edges)
+        {
+            int a = index[edge.Vert1], b = index[edge.Vert2];
+            result.AddEdge(outer[a], outer[b]).Attributes = AttributeTransfer.Copy(edge.Attributes);
+            result.AddEdge(inner[a], inner[b]).Attributes = AttributeTransfer.Copy(edge.Attributes);
+        }
+
+        foreach (Face face in source.Faces)
+        {
+            var corners = new List<Loop>(face.VertCount);
+            Loop loop = face.Loop!;
+            do
+            {
+                corners.Add(loop);
+                loop = loop.Next!;
+            } while (loop != face.Loop);
+
+            AddCopy(result, face, corners, outer, index);
+            for (int i = 0; i < corners.Count; i++)
+            {
+                Loop from = corners[i], to = corners[(i + 1) % corners.Count];
+                Edge? edge = source.FindEdge(from.Vert, to.Vert);
+                if (edge == null || edge.NeighborFaces().Count != 1) continue;
+                int a = index[from.Vert], b = index[to.Vert];
+                Face? side = result.AddFace(outer[b], outer[a], inner[a], inner[b]);
+                if (side == null) continue;
+                side.Attributes = AttributeTransfer.Copy(face.Attributes);
+                Loop corner = side.Loop!;
+                foreach (Loop like in (Loop[])[to, from, from, to])
+                {
+                    corner.Attributes = AttributeTransfer.Copy(like.Attributes);
+                    corner = corner.Next!;
+                }
+            }
+            corners.Reverse();
+            AddCopy(result, face, corners, inner, index);
+        }
+        return result;
+    }
+
+    private static Face? AddCopy(GeometryData result, Face face, List<Loop> corners, Vertex[] map, Dictionary<Vertex, int> index)
     {
         Face? copy = result.AddFace(corners.Select(c => map[index[c.Vert]]).ToArray());
-        if (copy == null) return;
+        if (copy == null) return null;
         copy.Attributes = AttributeTransfer.Copy(face.Attributes);
         Loop corner = copy.Loop!;
         foreach (Loop from in corners)
@@ -238,6 +333,7 @@ internal static class TopologyOp
             corner.Attributes = AttributeTransfer.Copy(from.Attributes);
             corner = corner.Next!;
         }
+        return copy;
     }
 
     internal static void CopyDefinitions(GeometryData source, GeometryData target)
@@ -390,6 +486,9 @@ internal static class TopologyOp
                         }
                         target.Attributes[definition.Name] = new GeometryData.FloatAttributeValue(mixed);
                     }
+                    foreach (var pair in corner.Attributes)
+                        if (pair.Value is GeometryData.WeightsAttributeValue)
+                            target.Attributes[pair.Key] = MixWeights(pair.Key, c, corner, before, after, corners);
                     target = target.Next!;
                 }
             }
@@ -397,6 +496,125 @@ internal static class TopologyOp
         return result;
     }
 
+    // Weights at a new corner mixed as float attributes are: the old corner's own, half with a neighbour, or the face's average
+    private static GeometryData.WeightsAttributeValue MixWeights(string name, int corner, Loop own, Loop before, Loop after, List<Loop> corners)
+    {
+        var here = (GeometryData.WeightsAttributeValue)own.Attributes[name];
+        GeometryData.WeightsAttributeValue Of(Loop loop) => loop.Attributes.TryGetValue(name, out var value) && value is GeometryData.WeightsAttributeValue weights ? weights : here;
+        switch (corner)
+        {
+            case 0: return GeometryData.WeightsAttributeValue.Blend([here], [1f]);
+            case 1: return GeometryData.WeightsAttributeValue.Blend([here, Of(after)], [0.5f, 0.5f]);
+            case 3: return GeometryData.WeightsAttributeValue.Blend([here, Of(before)], [0.5f, 0.5f]);
+            default:
+                var all = new GeometryData.WeightsAttributeValue[corners.Count];
+                var shares = new float[corners.Count];
+                for (int i = 0; i < all.Length; i++)
+                {
+                    all[i] = Of(corners[i]);
+                    shares[i] = 1f / all.Length;
+                }
+                return GeometryData.WeightsAttributeValue.Blend(all, shares);
+        }
+    }
+
     private static float Component(Loop loop, string name, int index, float fallback)
         => loop.Attributes.TryGetValue(name, out var value) && value is GeometryData.FloatAttributeValue floats && index < floats.Data.Length ? floats.Data[index] : fallback;
+
+    /// <summary>Joins pairs of triangles into quads, the pairs that turn and bend least first. Returns the quads made.</summary>
+    internal static List<Face> TrisToQuads(GeometryData mesh, IEnumerable<Face>? faces, float degrees)
+    {
+        var triangles = (faces ?? mesh.Faces).Where(f => mesh.Contains(f) && f.VertCount == 3).ToHashSet();
+        float limit = degrees * MathF.PI / 180f;
+        var pairs = new List<(float Cost, Edge Edge, Face A, Face B)>();
+        foreach (Edge edge in mesh.Edges)
+        {
+            if (edge.IsSeam || edge.IsSharp) continue;
+            List<Face> sides = edge.NeighborFaces();
+            if (sides.Count != 2 || !triangles.Contains(sides[0]) || !triangles.Contains(sides[1])) continue;
+
+            float turn = MathF.Acos(Math.Clamp(Float3.Dot(sides[0].Normal(), sides[1].Normal()), -1f, 1f));
+            if (turn > limit) continue;
+
+            Vertex apexA = sides[0].NeighborVertices().First(v => v != edge.Vert1 && v != edge.Vert2);
+            Vertex apexB = sides[1].NeighborVertices().First(v => v != edge.Vert1 && v != edge.Vert2);
+            Float3[] quad = [apexA.Point, edge.Vert1.Point, apexB.Point, edge.Vert2.Point];
+            float bend = 0f;
+            for (int i = 0; i < 4; i++)
+            {
+                Float3 a = Float3.Normalize(quad[(i + 3) % 4] - quad[i]), b = Float3.Normalize(quad[(i + 1) % 4] - quad[i]);
+                bend = MathF.Max(bend, MathF.Abs(MathF.Acos(Math.Clamp(Float3.Dot(a, b), -1f, 1f)) - MathF.PI / 2f));
+            }
+            if (bend <= limit) pairs.Add((turn + bend, edge, sides[0], sides[1]));
+        }
+
+        var used = new HashSet<Face>();
+        var joins = new List<Edge>();
+        foreach ((_, Edge edge, Face a, Face b) in pairs.OrderBy(p => p.Cost))
+        {
+            if (used.Contains(a) || used.Contains(b)) continue;
+            used.Add(a);
+            used.Add(b);
+            joins.Add(edge);
+        }
+
+        var before = new HashSet<Face>(mesh.Faces);
+        GeometryOperators.DissolveEdges(mesh, joins);
+        return mesh.Faces.Where(f => !before.Contains(f)).ToList();
+    }
+
+    internal static List<Face> BridgeFaces(GeometryData mesh, Face first, Face second, int segments)
+    {
+        var a = new HashSet<Vertex>(first.NeighborVertices());
+        var b = new HashSet<Vertex>(second.NeighborVertices());
+        if (a.Overlaps(b)) throw new InvalidOperationException("Faces sharing a vertex cannot be bridged");
+        GeometryOperators.DeleteFaces(mesh, [first, second]);
+
+        // Rings join with quads only when their counts differ by an even number, at most three to one
+        while ((a.Count - b.Count) % 2 != 0 || Math.Max(a.Count, b.Count) > 3 * Math.Min(a.Count, b.Count))
+        {
+            HashSet<Vertex> shorter = a.Count <= b.Count ? a : b;
+            Edge? longest = null;
+            foreach (Edge edge in OpenEdgesOf(mesh, shorter))
+                if (longest == null || Float3.Distance(edge.Vert1.Point, edge.Vert2.Point) > Float3.Distance(longest.Vert1.Point, longest.Vert2.Point)) longest = edge;
+            if (longest == null) throw new InvalidOperationException("An outline to bridge has no edges");
+            shorter.UnionWith(GeometryOperators.SubdivideEdges(mesh, [longest], 1));
+        }
+
+        var edges = new List<Edge>(OpenEdgesOf(mesh, a));
+        edges.AddRange(OpenEdgesOf(mesh, b));
+        List<Face> made = Bridge(mesh, edges);
+        if (segments <= 1 || Rung(made, a, b) is not { } rung) return made;
+
+        // Loops cut across the strip's rungs make the segments, and the strip is every face standing on its vertices
+        var strip = new HashSet<Vertex>(a);
+        strip.UnionWith(b);
+        var before = new HashSet<Vertex>(mesh.Vertices);
+        GeometryOperators.LoopCut(mesh, rung, segments - 1);
+        foreach (Vertex vertex in mesh.Vertices)
+            if (!before.Contains(vertex)) strip.Add(vertex);
+        return [.. mesh.Faces.Where(face => face.NeighborVertices().TrueForAll(strip.Contains))];
+    }
+
+    // An edge of the strip running from one outline to the other
+    private static Edge? Rung(List<Face> strip, HashSet<Vertex> a, HashSet<Vertex> b)
+    {
+        foreach (Face face in strip)
+            foreach (Edge edge in face.NeighborEdges())
+                if (a.Contains(edge.Vert1) && b.Contains(edge.Vert2) || b.Contains(edge.Vert1) && a.Contains(edge.Vert2)) return edge;
+        return null;
+    }
+
+    // The open edges running between vertices of one outline
+    private static List<Edge> OpenEdgesOf(GeometryData mesh, HashSet<Vertex> vertices)
+        => [.. mesh.Edges.Where(e => vertices.Contains(e.Vert1) && vertices.Contains(e.Vert2) && e.NeighborFaces().Count == 1)];
+
+    internal static GeometryData Separate(GeometryData mesh, IReadOnlyCollection<Face> faces)
+    {
+        GeometryData part = GeometryOperators.Extract(mesh, [], [], faces);
+        GeometryOperators.DeleteFaces(mesh, [.. faces]);
+        foreach (Vertex vertex in mesh.Vertices.Where(v => v.NeighborFaces().Count == 0).ToList()) mesh.RemoveVertex(vertex);
+        mesh.MarkChanged();
+        return part;
+    }
 }

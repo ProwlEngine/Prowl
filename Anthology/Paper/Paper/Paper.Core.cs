@@ -189,6 +189,7 @@ namespace Prowl.PaperUI
             _IDStack.Clear();
             _IDStack.Push(0);
             _createdElements.Clear();
+            _builderCount = 0;
 
             StartInputFrame();
 
@@ -865,7 +866,19 @@ namespace Prowl.PaperUI
                 throw new Exception($"Element already exists with this ID: {stringID}:{intID}:{lineID} = {storageHash} Parent: {CurrentParent.Data.ID}\nPlease use a different ID.");
 
             var handle = CreateElement(storageHash);
-            var builder = new ElementBuilder(this, handle);
+
+            ElementBuilder builder;
+            if (_builderCount < _builders.Count)
+            {
+                builder = _builders[_builderCount];
+                builder.Rebind(handle);
+            }
+            else
+            {
+                builder = new ElementBuilder(this, handle);
+                _builders.Add(builder);
+            }
+            _builderCount++;
 
             AddChild(ref handle);
 
@@ -937,11 +950,29 @@ namespace Prowl.PaperUI
             if (renderAction == null)
                 throw new ArgumentException(nameof(renderAction));
 
-            handle.Data._renderCommands ??= new List<ElementRenderCommand>();
+            handle.Data._renderCommands ??= TakeCommandList();
             handle.Data._renderCommands.Add(new ElementRenderCommand {
                 Element = handle,
                 RenderAction = renderAction,
             });
+        }
+
+        // Builders handed out this frame. A builder is only a handle to its element, so the same
+        // ones are bound to the next frame's elements in order instead of allocating one each.
+        private readonly List<ElementBuilder> _builders = new List<ElementBuilder>();
+        private int _builderCount;
+
+        // Command lists handed back by element slots as they are reused, so a frame allocates none.
+        private readonly Stack<List<ElementRenderCommand>> _commandLists = new Stack<List<ElementRenderCommand>>();
+
+        private List<ElementRenderCommand> TakeCommandList()
+            => _commandLists.Count > 0 ? _commandLists.Pop() : new List<ElementRenderCommand>();
+
+        internal void ReturnCommandList(List<ElementRenderCommand> list)
+        {
+            if (list == null) return;
+            list.Clear();
+            _commandLists.Push(list);
         }
 
         /// <summary> Registers a custom render action on the current parent element. The action receives the Canvas and the element's bounding Rect and executes after the element's children are drawn. Throws ArgumentException if renderAction is null. </summary>
@@ -957,7 +988,7 @@ namespace Prowl.PaperUI
             if (renderAction == null)
                 throw new ArgumentException(nameof(renderAction));
 
-            handle.Data._foregroundRenderCommands ??= new List<ElementRenderCommand>();
+            handle.Data._foregroundRenderCommands ??= TakeCommandList();
             handle.Data._foregroundRenderCommands.Add(new ElementRenderCommand {
                 Element = handle,
                 RenderAction = renderAction,
@@ -1060,13 +1091,18 @@ namespace Prowl.PaperUI
         // re-parse or re-shape is actually needed.
         internal const string RichTextBlockKey = "_pp_rt_block";
 
-        // Storage keys for the per-element plain-text layout cache (width-independent text only).
-        internal const string PlainTextLayoutKey = "_pp_pt_layout";
-        internal const string PlainTextKeyKey = "_pp_pt_key";
+        // Plain text layouts by element ID, kept across frames and rebuilt in place when their inputs change.
+        private readonly Dictionary<int, TextLayoutCache> _textCache = new Dictionary<int, TextLayoutCache>();
 
-        // Storage keys for the per-element truncated-text layout cache (keyed on source text + width).
-        internal const string TruncTextLayoutKey = "_pp_tr_layout";
-        internal const string TruncTextKeyKey = "_pp_tr_key";
+        // Layout reused for measurements that are thrown away, such as fitting truncated text.
+        internal readonly TextLayout _textScratch = new TextLayout();
+
+        internal TextLayoutCache GetTextCache(int id)
+        {
+            if (!_textCache.TryGetValue(id, out var cache))
+                _textCache[id] = cache = new TextLayoutCache();
+            return cache;
+        }
 
         private void EndOfFrameCleanupStorage()
         {
@@ -1084,6 +1120,16 @@ namespace Prowl.PaperUI
 
             for (int i = 0; i < _storageCleanupScratch.Count; i++)
                 _storage.Remove(_storageCleanupScratch[i]);
+
+            _storageCleanupScratch.Clear();
+            foreach (var storedID in _textCache.Keys)
+            {
+                if (!_createdElements.Contains(storedID))
+                    _storageCleanupScratch.Add(storedID);
+            }
+
+            for (int i = 0; i < _storageCleanupScratch.Count; i++)
+                _textCache.Remove(_storageCleanupScratch[i]);
         }
 
         #endregion

@@ -144,7 +144,7 @@ public sealed class MenuBarBuilder
             if (state.Open >= 0 && state.Open != index && _paper.IsParentHovered)
                 state.Open = index;
 
-            _paper.Box($"{_id}_t{index}").Width(UnitValue.Auto).Height(UnitValue.Auto).IsNotInteractable()
+            _paper.Box("t", index).Width(UnitValue.Auto).Height(UnitValue.Auto).IsNotInteractable()
                 .Text(_menus[index].Label, font)
                 .TextColor(active ? ink.C500 : ink.C300)
                 .FontSize(_theme.Metrics.FontSize).Alignment(TextAlignment.MiddleCenter);

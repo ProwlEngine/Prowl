@@ -50,7 +50,7 @@ public struct ShadowDesc
     /// <summary>How far along the view a directional light casts, fading over the last tenth.</summary>
     public float Distance;
 
-    /// <summary>The fraction of each cascade blended into the next, 0 for a hard switch.</summary>
+    /// <summary>The fraction of each cascade dithered into the next, 0 for a hard switch.</summary>
     public float CascadeBlend;
     public float Strength;
     public ShadowFilter Filter;

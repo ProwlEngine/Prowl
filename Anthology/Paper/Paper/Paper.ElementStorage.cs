@@ -35,12 +35,11 @@ public partial class Paper
     public ElementHandle CreateElement(int id)
     {
         int index;
-        ElementData elementData = ElementData.Create(id);
         // Share the one persistent per-id style and reset it for this frame: current values revert
         // to defaults, and the builder's declarations below define the element (anything omitted
         // reverts). Persistent animation state survives the reset (it lives out-of-line).
-        elementData._elementStyle = GetOrCreateStyle(id);
-        elementData._elementStyle.BeginFrame();
+        ElementStyle style = GetOrCreateStyle(id);
+        style.BeginFrame();
 
         if (_freeIndices.Count > 0)
         {
@@ -62,12 +61,16 @@ public partial class Paper
         // The tree is rebuilt from scratch every frame, so the child list already in this slot is
         // last frame's for this same element: emptying it costs nothing and saves one allocation
         // per element per frame, which is the largest single cost of building a frame.
-        List<int> childIndices = _elements[index].ChildIndices;
+        ref ElementData elementData = ref _elements[index];
+        List<int> childIndices = elementData.ChildIndices;
         if (childIndices == null) childIndices = new List<int>();
         else childIndices.Clear();
-        elementData.ChildIndices = childIndices;
+        ReturnCommandList(elementData._renderCommands);
+        ReturnCommandList(elementData._foregroundRenderCommands);
 
-        _elements[index] = elementData;
+        ElementData.Init(ref elementData, id);
+        elementData._elementStyle = style;
+        elementData.ChildIndices = childIndices;
 
         // First writer wins, matching the old linear scan's "return first match" for duplicate ids.
         _idToIndex.TryAdd(id, index);

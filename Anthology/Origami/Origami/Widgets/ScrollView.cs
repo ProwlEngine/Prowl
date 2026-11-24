@@ -275,7 +275,7 @@ public sealed class ScrollViewBuilder
             // Width is Auto when horizontal scroll is enabled (content can extend), otherwise
             // shrunk to viewport width minus the vertical scrollbar.
             float viewportW = _width - _padLeft - _padRight - reserveV;
-            var content = _paper.Column($"{_id}_content")
+            var content = _paper.Column("content")
                 .PositionType(PositionType.SelfDirected)
                 .Position(_padLeft - animScrollX, _padTop - animScrollY)
                 .Height(UnitValue.Auto)
@@ -315,7 +315,7 @@ public sealed class ScrollViewBuilder
             // need no spacer.
             if (needsV && needsH && !_overlayScrollbars)
             {
-                _paper.Box($"{_id}_corner")
+                _paper.Box("corner")
                     .PositionType(PositionType.SelfDirected)
                     .Position(_width - vBarW, _height - hBarH)
                     .Width(vBarW).Height(hBarH)

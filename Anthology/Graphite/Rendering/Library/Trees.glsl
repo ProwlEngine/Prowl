@@ -51,6 +51,13 @@ layout(set = 1, binding = 6, std430) readonly buffer Graphite_SpatialRoots { uve
 uint Graphite_StaticRecords(uint set) { return set * 2u; }
 uint Graphite_MovingRecords(uint set) { return set * 2u + 1u; }
 
+// Whether the view has no item of a set, static or moving
+bool Graphite_SetIsEmpty(uint set)
+{
+    uvec4 roots = graphite_SpatialRoots[set];
+    return roots.x == GRAPHITE_TREE_INVALID && roots.y == GRAPHITE_TREE_INVALID;
+}
+
 // A 16 byte word of a record array, stride words to a record
 vec4 Graphite_SpatialVec4(uint array, uint word)
 {

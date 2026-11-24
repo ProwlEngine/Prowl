@@ -97,7 +97,7 @@ public sealed class ImageDiffBuilder
             });
 
             // Draw both images + bar via canvas
-            _paper.Box($"{_id}_canvas")
+            _paper.Box("canvas")
                 .PositionType(PositionType.SelfDirected)
                 .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
                 .IsNotInteractable()

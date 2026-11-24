@@ -198,7 +198,22 @@ float Graphite_CascadeLit(uint cascade, vec3 position, vec3 geomNormal, vec3 toL
     return Graphite_SampleShadow(floatBitsToUint(params.x), rect, params.y, Graphite_ShadowCoords(graphite_Cascades[cascade].viewToClip * vec4(biased, 1.0), rect), filtering);
 }
 
-// A directional light's shadow at a camera relative position: the sharpest cascade holding it, blended into the next
+// A value from 0 to 1 that differs from point to point: by pixel in a fragment, turning each frame while the view jitters
+// so TAA blends it, by position and frame elsewhere
+float graphite_ShadowDither(vec3 position)
+{
+#ifdef GRAPHITE_FRAGMENT
+    float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    vec2 jitter = Graphite_View().jitter.xy;
+    if (jitter.x == 0.0 && jitter.y == 0.0)
+        return noise;
+#else
+    float noise = fract(sin(dot(position, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+#endif
+    return fract(noise + Graphite_View().time.z * 0.618034);
+}
+
+// A directional light's shadow at a camera relative position: the sharpest cascade holding it, dithered into the next
 // over the last part of its sphere, fading out over the last tenth of the shadow distance
 float Graphite_DirectionalShadow(uint directional, vec3 toLight, float depthBias, float normalBias, float strength, float filtering, vec3 position, vec3 geomNormal)
 {
@@ -227,7 +242,7 @@ float Graphite_DirectionalShadow(uint directional, vec3 toLight, float depthBias
     if (pick < 0)
         return 1.0;
 
-    // How far into the next cascade the blend has gone, both read through one call so only one is inlined
+    // How far into the next cascade the blend has gone, which is how many of the points there read the next
     uint cascade = first + uint(pick);
     float blend = graphite_Cascades[cascade].params.w, w = 0.0;
     if (blend > 0.0 && uint(pick) + 1u < count && Graphite_InCascade(position, cascade + 1u, 3.0))
@@ -237,13 +252,9 @@ float Graphite_DirectionalShadow(uint directional, vec3 toLight, float depthBias
         float inner = sphere.w * (1.0 - 2.0 * 3.0 * graphite_Cascades[cascade].params.y);
         w = clamp((sqrt(dot(d, d)) / max(inner, 1e-6) - (1.0 - blend)) / blend, 0.0, 1.0);
     }
-    float lit = 0.0;
-    for (uint k = 0u; k < 2u; k++)
-    {
-        float weight = k == 0u ? 1.0 - w : w;
-        if (weight > 0.0)
-            lit += weight * Graphite_CascadeLit(cascade + k, position, geomNormal, toLight, depthBias, normalBias, filtering);
-    }
+    if (w > 0.0 && graphite_ShadowDither(position) < w)
+        cascade++;
+    float lit = Graphite_CascadeLit(cascade, position, geomNormal, toLight, depthBias, normalBias, filtering);
 
     float fade = smoothstep(distance * 0.9, distance, viewDepth);
     return mix(1.0, lit, strength * (1.0 - fade));

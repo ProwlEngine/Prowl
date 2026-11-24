@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Vector;
@@ -293,6 +294,35 @@ public class GeometryLoopTests
     }
 
     [Fact]
+    public void LogicalFaces_WalksEachJoinedRegionOnce_EvenWhenAllOfItIsGiven()
+    {
+        GeometryData mesh = Grid(70, 70);
+        GeometryOperators.Triangulate(mesh);
+        foreach (GeometryData.Edge edge in mesh.Edges)
+            if (edge.NeighborFaces().Count == 2) edge.IsHidden = true;
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        List<GeometryData.Face> all = GeometryData.LogicalFaces(mesh.Faces);
+
+        Assert.Equal(mesh.Faces.Count, all.Count);
+        Assert.Equal(mesh.Faces.Count, all.Distinct().Count());
+        Assert.True(watch.ElapsedMilliseconds < 2000, $"took {watch.ElapsedMilliseconds} ms");
+    }
+
+    [Fact]
+    public void MirrorCopy_NamesTheFacesItMirrored()
+    {
+        GeometryData mesh = Grid(2, 1);
+        var mirrored = new List<GeometryData.Face>();
+
+        GeometryData copy = GeometryOperators.MirrorCopy(mesh, 0, 0.001f, 0f, mirrored);
+
+        Assert.Equal(2, mirrored.Count);
+        Assert.All(mirrored, f => Assert.True(f.NeighborVertices().TrueForAll(v => v.Point.X <= 1e-5f)));
+        Assert.Equal(4, copy.Faces.Count);
+    }
+
+    [Fact]
     public void MirrorCopy_SharesVerticesOnThePlane()
     {
         GeometryData mesh = Grid(1, 1);
@@ -305,6 +335,56 @@ public class GeometryLoopTests
         Assert.All(mirrored.Faces, f => Assert.True(f.Normal().Z > 0.99f));
         Assert.Equal(-1f, mirrored.Vertices.Min(v => v.Point.X));
         Assert.Single(mesh.Faces);
+    }
+
+    [Fact]
+    public void Solidify_OfAnOpenQuad_IsAClosedSlabOfTheThickness()
+    {
+        GeometryData mesh = Grid(1, 1);
+
+        GeometryData slab = GeometryOperators.Solidify(mesh, 0.25f, -1f);
+
+        Assert.Equal(8, slab.Vertices.Count);
+        Assert.Equal(6, slab.Faces.Count);
+        Assert.All(slab.Edges, e => Assert.Equal(2, e.NeighborFaces().Count));
+        Assert.Equal(4, slab.Vertices.Count(v => MathF.Abs(v.Point.Z) < 1e-5f));
+        Assert.Equal(4, slab.Vertices.Count(v => MathF.Abs(v.Point.Z + 0.25f) < 1e-5f));
+        Assert.Contains(slab.Faces, f => f.Normal().Z > 0.99f);
+        Assert.Contains(slab.Faces, f => f.Normal().Z < -0.99f);
+        Assert.Single(mesh.Faces);
+    }
+
+    [Fact]
+    public void Solidify_OfAClosedCube_IsTwoShellsWithNoSides_AndOffsetMovesBoth()
+    {
+        GeometryData cube = Cube();
+
+        GeometryData shells = GeometryOperators.Solidify(cube, 0.5f, 0f);
+
+        Assert.Equal(16, shells.Vertices.Count);
+        Assert.Equal(12, shells.Faces.Count);
+        Assert.Equal(8, shells.Vertices.Count(v => MathF.Abs(MathF.Abs(v.Point.X) - (1f + 0.25f / MathF.Sqrt(3f))) < 1e-4f));
+    }
+
+    [Fact]
+    public void SubdivideSmooth_BlendsCornerWeightsAcrossTheFace()
+    {
+        GeometryData mesh = Grid(1, 1);
+        GeometryData.Face face = mesh.Faces[0];
+        GeometryData.Loop corner = face.Loop!;
+        for (int i = 0; i < 4; i++, corner = corner.Next!)
+            corner.Attributes["skin"] = new GeometryData.WeightsAttributeValue([i < 2 ? 0 : 1], [1f]);
+
+        GeometryData once = GeometryOperators.SubdivideSmooth(mesh);
+
+        Vertex middle = once.Vertices.First(v => Float3.Distance(v.Point, new Float3(0.5f, 0.5f, 0f)) < 1e-4f);
+        foreach (GeometryData.Face quad in middle.NeighborFaces())
+        {
+            GeometryData.Loop at = quad.GetLoop(middle)!;
+            var weights = Assert.IsType<GeometryData.WeightsAttributeValue>(at.Attributes["skin"]);
+            Assert.Equal(0.5f, weights[0], 4);
+            Assert.Equal(0.5f, weights[1], 4);
+        }
     }
 
     [Fact]
@@ -380,5 +460,91 @@ public class GeometryLoopTests
         Assert.Equal(2, mirrored.Faces.Count);
         Assert.Equal(-1f, mirrored.Vertices.Min(v => v.Point.X), 4);
         Assert.Equal(3f, mirrored.Vertices.Max(v => v.Point.X), 4);
+    }
+
+    private static GeometryData.Face Top(GeometryData mesh) => mesh.Faces.First(f => f.Normal().Y > 0.99f);
+
+    [Fact]
+    public void SubdivideFaces_SplitsOnlyTheGivenFaces_AndStaysClosed()
+    {
+        GeometryData cube = Cube();
+
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(cube, [Top(cube)]);
+
+        Assert.Equal(4, made.Count);
+        Assert.All(made, f => Assert.Equal(4, f.VertCount));
+        Assert.Equal(9, cube.Faces.Count);
+        Assert.Equal(13, cube.Vertices.Count);
+        Assert.True(cube.IsClosed());
+        Assert.Equal(8f, cube.Volume(), 3);
+    }
+
+    [Fact]
+    public void SubdivideFaces_ThreeCutsMakeAFourByFourGrid()
+    {
+        GeometryData cube = Cube();
+
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(cube, [Top(cube)], 3);
+
+        Assert.Equal(16, made.Count);
+        Assert.All(made, f => Assert.Equal(4, f.VertCount));
+        Assert.All(made, f => Assert.True(f.Normal().Y > 0.99f));
+        Assert.True(cube.IsClosed());
+        Assert.Equal(8f, cube.Volume(), 3);
+    }
+
+    [Fact]
+    public void Triangulate_OnlyTheGivenFaces()
+    {
+        GeometryData cube = Cube();
+
+        List<GeometryData.Face> made = GeometryOperators.Triangulate(cube, [Top(cube)]);
+
+        Assert.Equal(2, made.Count);
+        Assert.Equal(7, cube.Faces.Count);
+        Assert.Equal(5, cube.Faces.Count(f => f.VertCount == 4));
+        Assert.True(cube.IsClosed());
+    }
+
+    [Fact]
+    public void TrisToQuads_JoinsATriangulatedCubeBack()
+    {
+        GeometryData cube = Cube();
+        GeometryOperators.Triangulate(cube);
+        Assert.Equal(12, cube.Faces.Count);
+
+        List<GeometryData.Face> made = GeometryOperators.TrisToQuads(cube, null, 5f);
+
+        Assert.Equal(6, made.Count);
+        Assert.Equal(6, cube.Faces.Count);
+        Assert.All(cube.Faces, f => Assert.Equal(4, f.VertCount));
+        Assert.True(cube.IsClosed());
+    }
+
+    [Fact]
+    public void TrisToQuads_KeepsToTheGivenFaces()
+    {
+        GeometryData cube = Cube();
+        GeometryOperators.Triangulate(cube);
+        var top = cube.Faces.Where(f => f.Normal().Y > 0.99f).ToList();
+
+        GeometryOperators.TrisToQuads(cube, top, 5f);
+
+        Assert.Equal(11, cube.Faces.Count);
+    }
+
+    [Fact]
+    public void SubdivideFaces_FansATriangleToItsCentreAtMoreThanOneCut()
+    {
+        GeometryData mesh = new();
+        var a = mesh.AddVertex(0, 0, 0);
+        var b = mesh.AddVertex(2, 0, 0);
+        var c = mesh.AddVertex(0, 0, 2);
+        GeometryData.Face triangle = mesh.AddFace(a, c, b)!;
+
+        List<GeometryData.Face> made = GeometryOperators.SubdivideFaces(mesh, [triangle], 2);
+
+        Assert.Equal(9, made.Count);
+        Assert.All(made, f => Assert.True(f.Normal().Y > 0.99f));
     }
 }

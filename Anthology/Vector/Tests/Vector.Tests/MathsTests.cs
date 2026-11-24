@@ -8,6 +8,17 @@ namespace Prowl.Vector.Tests;
 public class MathsTests
 {
     [Fact]
+    public void Decompose_GivesBackTheTRSParts()
+    {
+        var rotation = Quaternion.Normalize(Quaternion.AxisAngle(Float3.Normalize(new Float3(1f, 2f, 3f)), 0.7f));
+        Float4x4.CreateTRS(new Float3(1f, -2f, 3f), rotation, new Float3(-2f, 3f, 0.5f)).Decompose(out Float3 t, out Quaternion r, out Float3 s);
+
+        Assert.True(Float3.Distance(t, new Float3(1f, -2f, 3f)) < 1e-4f);
+        Assert.True(Float3.Distance(s, new Float3(-2f, 3f, 0.5f)) < 1e-4f);
+        Assert.True(System.MathF.Abs(Quaternion.Dot(r, rotation)) > 0.9999f);
+    }
+
+    [Fact]
     public void SmoothDamp_GivesExpectedValues()
     {
         float currentVelocity = 0;

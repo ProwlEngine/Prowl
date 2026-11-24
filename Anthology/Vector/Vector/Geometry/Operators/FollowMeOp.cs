@@ -45,7 +45,7 @@ internal static class FollowMeOp
         List<Vertex>? chain = OrderChain(path, out bool closed);
         if (chain == null || chain.Count < 2) throw new InvalidOperationException("The path must be one connected line of edges that does not branch");
 
-        List<Face> region = profile.SelectMany(f => f.LogicalFace()).Distinct().ToList();
+        List<Face> region = GeometryData.LogicalFaces(profile);
         Float3 normal = Float3.Normalize(region[0].Normal());
         if (!region.All(f => region[0].IsCoplanarWith(f))) throw new InvalidOperationException("The profile must be flat");
 

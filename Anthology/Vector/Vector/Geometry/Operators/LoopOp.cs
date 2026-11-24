@@ -242,4 +242,77 @@ internal static class LoopOp
         if (corner == null) return null;
         return corner.Edge == along ? corner.Prev!.Vert : corner.Next!.Vert;
     }
+
+    internal static List<Edge> EdgeLoopOrOutline(Edge edge, Face? side)
+    {
+        List<Edge> loop = GeometryOperators.EdgeLoop(edge);
+        if (loop.Count > 1) return loop;
+        Face? face = side ?? edge.NeighborFaces().FirstOrDefault();
+        return face?.NeighborEdges() ?? [edge];
+    }
+
+    internal static List<Edge> EdgeRingAcross(Edge edge)
+    {
+        List<Edge> ring = GeometryOperators.EdgeRing(edge);
+        if (ring.Count > 1) return ring;
+
+        ring = [edge];
+        var seen = new HashSet<Edge> { edge };
+        foreach (Face start in edge.NeighborFaces())
+        {
+            Edge current = edge;
+            Face? face = start;
+            while (face != null)
+            {
+                Edge? next = MostParallel(face, current);
+                if (next == null || !seen.Add(next)) break;
+                ring.Add(next);
+                Face? from = face;
+                face = next.NeighborFaces().FirstOrDefault(f => f != from);
+                current = next;
+            }
+        }
+        return ring;
+    }
+
+    // The edge of a face most nearly parallel to another, not touching it, if any is within about 25 degrees
+    private static Edge? MostParallel(Face face, Edge from)
+    {
+        Float3 direction = Float3.NormalizeSafe(from.Vert2.Point - from.Vert1.Point, Float3.UnitY);
+        Edge? best = null;
+        float bestDot = 0.9f;
+        foreach (Edge edge in face.NeighborEdges())
+        {
+            if (edge == from || edge.ContainsVertex(from.Vert1) || edge.ContainsVertex(from.Vert2)) continue;
+            float dot = MathF.Abs(Float3.Dot(direction, Float3.NormalizeSafe(edge.Vert2.Point - edge.Vert1.Point, Float3.UnitY)));
+            if (dot <= bestDot) continue;
+            bestDot = dot;
+            best = edge;
+        }
+        return best;
+    }
+
+    internal static List<List<Face>> FaceRegions(IEnumerable<Face> faces)
+    {
+        var set = new HashSet<Face>(faces);
+        var done = new HashSet<Face>();
+        var regions = new List<List<Face>>();
+        foreach (Face start in set)
+        {
+            if (!done.Add(start)) continue;
+            var region = new List<Face>();
+            var stack = new Stack<Face>();
+            stack.Push(start);
+            while (stack.Count > 0)
+            {
+                Face face = stack.Pop();
+                region.Add(face);
+                foreach (Edge edge in face.NeighborEdges())
+                    foreach (Face next in edge.NeighborFaces())
+                        if (set.Contains(next) && done.Add(next)) stack.Push(next);
+            }
+            regions.Add(region);
+        }
+        return regions;
+    }
 }

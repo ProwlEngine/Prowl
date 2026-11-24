@@ -403,6 +403,7 @@ internal static class SceneBaker
             {
                 Name = sib.Name,
                 Frames = frames,
+                DefaultWeight = sib.DefaultWeight,
             };
         }
         return result;

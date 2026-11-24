@@ -114,6 +114,7 @@ public sealed class IntermediateBlendShape
 {
     public required string Name { get; init; }
     public List<IntermediateBlendShapeFrame> Frames { get; } = new();
+    public float DefaultWeight { get; set; }
 }
 
 public sealed class IntermediateBlendShapeFrame

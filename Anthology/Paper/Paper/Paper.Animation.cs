@@ -74,7 +74,8 @@ public partial class Paper
     {
         string key = AnimKey(AnimateBoolKey, id, callerLine);
         float dir = target ? 1f : 0f;
-        float progress = GetElementStorage<float>(key, dir);
+        float stored = GetElementStorage<float>(key, float.NaN);
+        float progress = float.IsNaN(stored) ? dir : stored;
 
         if (duration <= 0f)
         {
@@ -87,7 +88,8 @@ public partial class Paper
             else if (progress > dir) progress = Maths.Max(dir, progress - step);
         }
 
-        SetElementStorage(key, progress);
+        // Storing boxes the value, so a settled animation is left alone.
+        if (progress != stored) SetElementStorage(key, progress);
         return easing?.Invoke(progress) ?? progress;
     }
 
@@ -108,14 +110,15 @@ public partial class Paper
         [CallerLineNumber] int callerLine = 0)
     {
         string key = AnimKey(AnimateFloatKey, id, callerLine);
-        float current = GetElementStorage<float>(key, target);
+        float stored = GetElementStorage<float>(key, float.NaN);
+        float current = float.IsNaN(stored) ? target : stored;
         if (DeltaTime > 0f && speed > 0f)
         {
             float t = 1f - Maths.Exp(-speed * DeltaTime);
             current += (target - current) * t;
             if (MathF.Abs(target - current) <= SettledEpsilon) current = target;
         }
-        SetElementStorage(key, current);
+        if (current != stored) SetElementStorage(key, current);
         return current;
     }
 

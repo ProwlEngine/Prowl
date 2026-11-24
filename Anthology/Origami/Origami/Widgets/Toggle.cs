@@ -226,7 +226,7 @@ public sealed class ToggleBuilder
             .Enter())
         {
             // ── Row (focusable + clickable) ───────────────────────────
-            var row = _paper.Row($"{_id}_row")
+            var row = _paper.Row("row")
                 .Width(_stretch ? UnitValue.Stretch() : UnitValue.Auto)
                 .Height(rowH);
 
@@ -273,7 +273,7 @@ public sealed class ToggleBuilder
             if (helperH > 0f && font != null)
             {
                 Color color = hasError ? _theme.Red.C600 : ink.C300;
-                _paper.Box($"{_id}_help")
+                _paper.Box("help")
                     .Width(UnitValue.Stretch()).Height(helperH)
                     .Margin(4, 2, 2, 0)
                     .Alignment(TextAlignment.MiddleLeft)
@@ -307,7 +307,7 @@ public sealed class ToggleBuilder
             .IsNotInteractable()
             .Enter())
         {
-            _paper.Box($"{_id}_lbl")
+            _paper.Box("lbl")
                 .Width(colW)
                 .Height(metrics.FontSize + 4)
                 .Alignment(TextAlignment.MiddleLeft)
@@ -318,7 +318,7 @@ public sealed class ToggleBuilder
 
             if (hasDesc)
             {
-                _paper.Box($"{_id}_desc")
+                _paper.Box("desc")
                     .Width(colW)
                     .Height(metrics.FontSize + 2)
                     .Margin(0, 0, 1, 0)

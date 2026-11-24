@@ -194,45 +194,26 @@ public struct ElementData
     /// <summary> Creates a new ElementData with the given ID and all fields set to their default values. </summary>
     public static ElementData Create(int id)
     {
-        return new ElementData
-        {
-            ID = id,
-            IsFocusable = true,
-            IsNotInteractable = false,
-            StopPropagation = false,
-            StopDragPropagation = false,
-            ParentIndex = -1,
-            ChildIndices = null,   // supplied by CreateElement, which reuses the slot's existing list
-            IsHookedToParent = false,
-            IsAHookedParent = false,
-            TabIndex = -1,
-            Visible = true,
-            LayoutType = LayoutType.Column,
-            PositionType = PositionType.ParentDirected,
-            IsRichText = false,
-            Paragraph = null,
-            MaskChar = null,
-            Font = null,
-            FontStyle = FontStyle.Regular,
-            WrapMode = TextWrapMode.NoWrap,
-            Truncate = false,
-            TextAlignment = TextAlignment.Left,
-            ContentWrap = false,
-            _richText = null,
-            _textLayout = null,
-            _renderCommands = null,
-            _foregroundRenderCommands = null,
-            // Assigned from the persistent per-id style store by CreateElement instead of a fresh
-            // throwaway allocation each frame (the old new ElementStyle() here was discarded by
-            // UpdateStyles, which repoints this at the _activeStyles entry anyway).
-            _elementStyle = null,
-            _scissorEnabled = false,
-            _clampToScreen = false,
-            _isolateLayers = false,
-            // Default to Layer.Base (0). Fully qualified because the RHS shadows the LHS
-            // field name in an object initializer when the type is a static class.
-            Layer = PaperUI.Layer.Base,
-            ProcessedText = false,
-        };
+        ElementData data = default;
+        Init(ref data, id);
+        return data;
+    }
+
+    /// <summary> Resets an element in place, which avoids copying the whole struct into its slot. </summary>
+    internal static void Init(ref ElementData data, int id)
+    {
+        data = default;
+        data.ID = id;
+        data.IsFocusable = true;
+        data.ParentIndex = -1;
+        data.TabIndex = -1;
+        data.Visible = true;
+        data.LayoutType = LayoutType.Column;
+        data.PositionType = PositionType.ParentDirected;
+        data.FontStyle = FontStyle.Regular;
+        data.WrapMode = TextWrapMode.NoWrap;
+        data.TextAlignment = TextAlignment.Left;
+        // ChildIndices and _elementStyle stay null here, CreateElement supplies both.
+        data.Layer = PaperUI.Layer.Base;
     }
 }

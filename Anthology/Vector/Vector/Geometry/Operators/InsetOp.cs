@@ -32,7 +32,7 @@ internal static class InsetOp
     /// </summary>
     internal static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, float thickness, InsetMode mode = InsetMode.Shared, InsetMeasure measure = InsetMeasure.Fraction)
     {
-        var faces = facesToInset.Where(mesh.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList();
+        var faces = GeometryData.LogicalFaces(facesToInset.Where(mesh.Contains));
         if (faces.Count == 0) return;
 
         thickness = measure == InsetMeasure.Fraction ? Maths.Max(0f, Maths.Min(1f, thickness)) : Maths.Max(0f, thickness);

@@ -55,4 +55,40 @@ internal static class ExtrudeEdgesOp
         RebuildAround(mesh, copies);
         return copies.Where(mesh.Contains).ToList();
     }
+
+    internal static List<Edge> ExtrudeEdgesInPlace(GeometryData mesh, IEnumerable<Edge> edges)
+    {
+        var copies = new List<Edge>();
+        var copyOf = new Dictionary<Vertex, Vertex>();
+        Vertex Copy(Vertex v)
+        {
+            if (!copyOf.TryGetValue(v, out Vertex? copy)) copyOf[v] = copy = mesh.AddVertex(v.Point);
+            return copy;
+        }
+        foreach (Edge edge in edges.ToList())
+        {
+            if (edge.IsHidden || !mesh.Contains(edge)) continue;
+            Vertex a = edge.Vert1, b = edge.Vert2, ac = Copy(a), bc = Copy(b);
+            // Wound against the face already along the edge, so the surface stays one way round
+            bool reversed = edge.Loop != null && edge.Loop.Vert == a;
+            if (reversed) mesh.AddFace(b, a, ac, bc);
+            else mesh.AddFace(a, b, bc, ac);
+            if (mesh.FindEdge(ac, bc) is { } copied) copies.Add(copied);
+        }
+        mesh.MarkChanged();
+        return copies;
+    }
+
+    internal static List<Vertex> ExtrudeVertices(GeometryData mesh, IEnumerable<Vertex> vertices)
+    {
+        var copies = new List<Vertex>();
+        foreach (Vertex vertex in vertices.ToList())
+        {
+            Vertex copy = mesh.AddVertex(vertex.Point);
+            mesh.AddEdge(vertex, copy);
+            copies.Add(copy);
+        }
+        mesh.MarkChanged();
+        return copies;
+    }
 }

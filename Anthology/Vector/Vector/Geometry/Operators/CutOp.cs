@@ -76,12 +76,27 @@ internal static class CutOp
         return result;
     }
 
+    internal static List<Face> SplitFaces(GeometryData mesh, IEnumerable<Face> faces)
+    {
+        var region = new HashSet<Face>(faces.Where(mesh.Contains));
+        var outline = new HashSet<Edge>();
+        foreach (Face face in region)
+            foreach (Edge edge in face.NeighborEdges())
+                if (edge.NeighborFaces().Exists(f => !region.Contains(f))) outline.Add(edge);
+        SplitEdges(mesh, outline, (old, rebuilt) =>
+        {
+            if (region.Remove(old) && rebuilt != null) region.Add(rebuilt);
+        });
+        return [.. region];
+    }
+
     /// <summary>
     /// Pulls a surface apart along edges: every vertex on them is copied for each group of faces the edges separate
     /// around it, so the faces either side no longer share it. Where a run of edges ends inside the surface the end
     /// stays joined, which opens a slit. Returns the new vertices.
     /// </summary>
-    internal static List<Vertex> SplitEdges(GeometryData mesh, IEnumerable<Edge> edges)
+    /// <param name="rebuilt">Told of each face put back as a new one, and what replaced it.</param>
+    internal static List<Vertex> SplitEdges(GeometryData mesh, IEnumerable<Edge> edges, Action<Face, Face?>? rebuilt = null)
     {
         var selected = new HashSet<Edge>(edges.Where(mesh.Contains));
         var copies = new List<Vertex>();
@@ -111,14 +126,17 @@ internal static class CutOp
                 GeometryOperators.AttributeLerp(mesh, copy, vertex, vertex, 1f);
                 copies.Add(copy);
                 foreach (Face face in around.Where(f => group[f] == groups[g]).ToList())
-                    Rebuild(mesh, face, vertex, copy);
+                {
+                    Face? made = Rebuild(mesh, face, vertex, copy);
+                    rebuilt?.Invoke(face, made);
+                }
             }
         }
         return copies;
     }
 
     // Puts a face onto another vertex in place of one of its corners, keeping everything it carried
-    private static void Rebuild(GeometryData mesh, Face face, Vertex from, Vertex to)
+    private static Face? Rebuild(GeometryData mesh, Face face, Vertex from, Vertex to)
     {
         var verts = new List<Vertex>(face.VertCount);
         var corners = new List<Dictionary<string, GeometryData.AttributeValue>>(face.VertCount);
@@ -140,7 +158,7 @@ internal static class CutOp
         // Edges only this face used, and that its new outline does not, would be left hanging
         foreach (Edge edge in old)
             if (edge.Loop == null) mesh.RemoveEdge(edge);
-        if (rebuilt == null) return;
+        if (rebuilt == null) return null;
         rebuilt.Attributes = attributes;
         Loop corner = rebuilt.Loop!;
         for (int i = 0; i < corners.Count; i++)
@@ -150,6 +168,7 @@ internal static class CutOp
             if (corner.Vert == to || corner.Next!.Vert == to) AttributeTransfer.Apply(sides[i], corner.Edge.Attributes);
             corner = corner.Next!;
         }
+        return rebuilt;
     }
 
     /// <summary>
@@ -263,13 +282,8 @@ internal static class CutOp
                 if (count == 0) continue;
                 Float3 move = (sum / count - vertex.Point) * Math.Clamp(factor, 0f, 1f);
 
-                Float3 normal = Float3.Zero;
-                foreach (Face face in vertex.NeighborFaces()) normal += face.Normal();
-                if (Float3.LengthSquared(normal) > 1e-12f)
-                {
-                    normal = Float3.Normalize(normal);
-                    move -= normal * Float3.Dot(move, normal);
-                }
+                Float3 normal = vertex.Normal();
+                move -= normal * Float3.Dot(move, normal);
                 moved[i] = vertex.Point + move;
             }
             for (int i = 0; i < targets.Count; i++)
@@ -277,5 +291,31 @@ internal static class CutOp
         }
         mesh.MarkChanged();
         return targets.Count;
+    }
+
+    internal static List<Vertex> Rip(GeometryData mesh, IReadOnlyCollection<Edge> edges, Func<Float3, float>? distance)
+    {
+        if (edges.Count == 0) throw new InvalidOperationException("There are no edges to rip along");
+        var originals = new HashSet<Vertex>();
+        foreach (Edge edge in edges) originals.UnionWith([edge.Vert1, edge.Vert2]);
+        var made = new HashSet<Vertex>(SplitEdges(mesh, edges));
+        mesh.MarkChanged();
+        return [.. distance != null && SideDistance(originals, distance) < SideDistance(made, distance) ? originals : made];
+    }
+
+    // How far the middle of the faces on one side of a rip is, leaving out the vertices of the side itself
+    private static float SideDistance(HashSet<Vertex> side, Func<Float3, float> distance)
+    {
+        Float3 sum = Float3.Zero;
+        int count = 0;
+        foreach (Vertex vertex in side)
+            foreach (Face face in vertex.NeighborFaces())
+                foreach (Vertex corner in face.NeighborVertices())
+                {
+                    if (side.Contains(corner)) continue;
+                    sum += corner.Point;
+                    count++;
+                }
+        return count > 0 ? distance(sum / count) : float.PositiveInfinity;
     }
 }

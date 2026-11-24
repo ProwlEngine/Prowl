@@ -288,16 +288,98 @@ public sealed class BucketTests : IDisposable
     }
 
     [Fact]
-    public void QueueThenSortBias_OrderTransparentItems_BeforeDepth()
+    public void SortOrderThenQueue_OrderTransparentItems_BeforeDepth()
     {
         Material late = Glass(3100);
         Material early = Glass(3000);
         RenderableHandle lateFar = Add(_triangle, late, At(0, 0, 9));
         RenderableHandle earlyNear = Add(_other, early, At(1, 0, 1));
-        RenderableHandle biasedFar = Add(_other, early, At(2, 0, 9));
-        _world.SetSortBias(biasedFar, 10);
+        RenderableHandle orderedFar = Add(_other, early, At(2, 0, 9));
+        _world.SetSort(orderedFar, new TransparentOrder(100000));
 
-        Assert.Equal(new uint[] { (uint)earlyNear.Index, (uint)biasedFar.Index, (uint)lateFar.Index }, Instances(Frame(Transparent)));
+        Assert.Equal(new uint[] { (uint)earlyNear.Index, (uint)lateFar.Index, (uint)orderedFar.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void NegativeSortOrder_DrawsBeforeTheDefault()
+    {
+        Material glass = Glass();
+        RenderableHandle near = Add(_triangle, glass, At(0, 0, 1));
+        RenderableHandle far = Add(_other, glass, At(1, 0, 9));
+        _world.SetSort(near, new TransparentOrder(-70000));
+
+        Assert.Equal(new uint[] { (uint)near.Index, (uint)far.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void SortGroup_DrawsItsMembersTogether_AtItsAnchor()
+    {
+        Material glass = Glass();
+        RenderableHandle groupBack = Add(_triangle, glass, At(0, 0, 9));
+        RenderableHandle loose = Add(_other, glass, At(1, 0, 5));
+        RenderableHandle groupFront = Add(_triangle, glass, At(2, 0, 2));
+        _world.SetSort(groupBack, new TransparentOrder(0, 7, new Double3(0, 0, 8)));
+        _world.SetSort(groupFront, new TransparentOrder(0, 7, new Double3(0, 0, 8)));
+
+        Assert.Equal(new uint[] { (uint)groupBack.Index, (uint)groupFront.Index, (uint)loose.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void SortGroupMembers_OrderByInnerOrder_BeforeTheirDepth()
+    {
+        Material glass = Glass();
+        RenderableHandle front = Add(_triangle, glass, At(0, 0, 2));
+        RenderableHandle back = Add(_other, glass, At(1, 0, 9));
+        _world.SetSort(front, new TransparentOrder(0, 3, new Double3(0, 0, 5), InnerOrder: -1));
+        _world.SetSort(back, new TransparentOrder(0, 3, new Double3(0, 0, 5), InnerOrder: 1));
+
+        Assert.Equal(new uint[] { (uint)front.Index, (uint)back.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void SortGroup_RanksByItsOrder_LikeOneItem()
+    {
+        Material glass = Glass();
+        RenderableHandle member = Add(_triangle, glass, At(0, 0, 1));
+        RenderableHandle loose = Add(_other, glass, At(1, 0, 9));
+        _world.SetSort(member, new TransparentOrder(-1, 5, new Double3(0, 0, 1)));
+
+        Assert.Equal(new uint[] { (uint)member.Index, (uint)loose.Index }, Instances(Frame(Transparent)));
+    }
+
+    // Looks along +Z from the origin, x and y from -10 to 10, z from 0 to 10
+    private static CullFrustum Orthographic()
+        => new(ViewCamera.Orthographic(Double3.Zero, new Float3(0, 0, 1), new Float3(0, 1, 0), 20, 0, 10, aspect: 1).Layers, 1);
+
+    [Fact]
+    public void OrthographicTransparentItems_SortByViewDepth_NotDistanceFromTheCamera()
+    {
+        Material glass = Glass();
+        RenderableHandle back = Add(_triangle, glass, At(0, 0, 8));
+        RenderableHandle front = Add(_other, glass, At(8, 0, 3));
+
+        Assert.Equal(new uint[] { (uint)back.Index, (uint)front.Index }, Instances(Frame(Transparent, frustum: Orthographic())));
+    }
+
+    [Fact]
+    public void OrthographicTransparentItems_LargeBackgroundDrawsBehindSmallerItems()
+    {
+        Material glass = Glass();
+        RenderableHandle background = Add(_triangle, glass, At(0, 0, 8) * Float4x4.CreateScale(20000));
+        RenderableHandle small = Add(_other, glass, At(0, 0, 4));
+
+        Assert.Equal(new uint[] { (uint)background.Index, (uint)small.Index }, Instances(Frame(Transparent, frustum: Orthographic())));
+    }
+
+    [Fact]
+    public void OrthographicTransparentItems_AtOneDepth_KeepAStableOrder()
+    {
+        Material glass = Glass();
+        List<uint> added = new();
+        for (int i = 0; i < 40; i++)
+            added.Add((uint)Add(i % 2 == 0 ? _triangle : _other, glass, At(9 - i * 0.45f, 0, 5)).Index);
+
+        Assert.Equal(added.Order().ToArray(), Instances(Frame(Transparent, frustum: Orthographic())));
     }
 
     [Fact]

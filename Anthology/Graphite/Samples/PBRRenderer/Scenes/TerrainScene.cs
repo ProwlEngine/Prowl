@@ -59,7 +59,7 @@ internal sealed class TerrainScene : DemoScene
         _data.Position = new Double3(-Samples * Spacing * 0.5, 0, -Samples * Spacing * 0.5);
         _layers = new TerrainLayers(demo.Renderer, TerrainTextures.Generate(512));
         _grassCard = TerrainTextures.GrassCard(demo.Renderer, 256);
-        _surface = new TerrainSurface(demo.Renderer, _data, poolPages: 160) { Layers = _layers, CastFarShadow = true, Details = TerrainTextures.GrassTypes, GrassCards = _grassCard };
+        _surface = new TerrainSurface(demo.Renderer, _data, poolPages: 160) { Layers = _layers, Details = TerrainTextures.GrassTypes, GrassCards = _grassCard };
         World.Providers.Add(_surface);
         _forest = new TerrainForest(demo.Renderer, World, _data);
         World.Lod.ShadowOffset = 1;
@@ -94,7 +94,7 @@ internal sealed class TerrainScene : DemoScene
 
     public override string Status => $"{_surface.Drawn} nodes, {(_surface.UseCache ? "cache" : "direct")}, {_surface.DebugView}, quality {_surface.LodQuality:0.0}, pages {_surface.Streaming.Resident}/{_surface.Streaming.Capacity} by level {string.Join(" ", _surface.Streaming.ResidentByLevel)}, loading {_surface.Streaming.Loading}, {_forest.Props.Count} props in {_forest.Props.Cells} cells, last edit {_editMilliseconds:0.0} ms, {View.Camera.Layers[0].Position.Y - Ground(View.Camera.Layers[0].Position.X, View.Camera.Layers[0].Position.Z):0} m up";
 
-    public override string Controls => "L debug view, C cache, H far shadow, [ ] LOD quality, Z crater, N raise, M flatten, J smooth, P paint dirt, O hole, K cut grass, Y regrow grass, U clear trees where you look, Ctrl fast";
+    public override string Controls => "L debug view, C cache, [ ] LOD quality, Z crater, N raise, M flatten, J smooth, P paint dirt, O hole, K cut grass, Y regrow grass, U clear trees where you look, Ctrl fast";
 
     public override void Update(float time, float deltaTime)
     {
@@ -107,7 +107,6 @@ internal sealed class TerrainScene : DemoScene
         switch (key)
         {
             case Key.C: _surface.UseCache = !_surface.UseCache; break;
-            case Key.H: _surface.CastFarShadow = !_surface.CastFarShadow; break;
             case Key.L: _surface.DebugView = (TerrainDebugView)(((int)_surface.DebugView + 1) % 4); break;
             case Key.LeftBracket: _surface.LodQuality = Math.Max(1.5, _surface.LodQuality - 0.25); break;
             case Key.RightBracket: _surface.LodQuality += 0.25; break;

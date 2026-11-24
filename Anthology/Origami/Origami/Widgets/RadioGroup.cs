@@ -128,8 +128,8 @@ public sealed class RadioGroupBuilder<T>
         {
             // Group container — vertical stacks rows, horizontal flows them in a row.
             var container = _orientation == RadioGroupOrientation.Vertical
-                ? _paper.Column($"{_id}_grp").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-                : _paper.Row($"{_id}_grp").Width(UnitValue.Stretch()).Height(UnitValue.Auto);
+                ? _paper.Column("grp").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+                : _paper.Row("grp").Width(UnitValue.Stretch()).Height(UnitValue.Auto);
 
             using (container.Enter())
             {
@@ -162,9 +162,9 @@ public sealed class RadioGroupBuilder<T>
                     if (i < _items.Count - 1 && _gap > 0f)
                     {
                         if (_orientation == RadioGroupOrientation.Vertical)
-                            _paper.Box($"{_id}_gap_{i}").Width(UnitValue.Stretch()).Height(_gap).IsNotInteractable();
+                            _paper.Box("gap", i).Width(UnitValue.Stretch()).Height(_gap).IsNotInteractable();
                         else
-                            _paper.Box($"{_id}_gap_{i}").Width(_gap).Height(_size).IsNotInteractable();
+                            _paper.Box("gap", i).Width(_gap).Height(_size).IsNotInteractable();
                     }
                 }
             }
@@ -173,7 +173,7 @@ public sealed class RadioGroupBuilder<T>
             if (helperH > 0f && _theme.Font != null)
             {
                 Color color = hasError ? _theme.Red.C600 : _theme.Ink.C300;
-                _paper.Box($"{_id}_help")
+                _paper.Box("help")
                     .Width(UnitValue.Stretch()).Height(helperH)
                     .Margin(2, 2, 4, 0)
                     .Alignment(TextAlignment.MiddleLeft)

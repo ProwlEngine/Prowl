@@ -19,7 +19,7 @@ internal static class CopyOp
     /// Copies faces and loose edges through a transform. Copies that land on existing faces merge into
     /// them like drawn geometry. Returns the new vertices.
     /// </summary>
-    internal static List<Vertex> Copy(GeometryData mesh, IReadOnlyCollection<Face> faces, IReadOnlyCollection<Edge> edges, Func<Float3, Float3> transform, bool flip = false)
+    internal static List<Vertex> Copy(GeometryData mesh, IReadOnlyCollection<Face> faces, IReadOnlyCollection<Edge> edges, Func<Float3, Float3> transform, bool flip = false, bool weld = true)
     {
         var map = new Dictionary<Vertex, Vertex>();
         Vertex Map(Vertex v)
@@ -28,7 +28,7 @@ internal static class CopyOp
             return copy;
         }
 
-        var all = faces.SelectMany(f => f.LogicalFace()).ToHashSet();
+        var all = GeometryData.LogicalFaces(faces).ToHashSet();
         foreach (Face f in all)
         {
             List<Vertex> copy = f.NeighborVertices().Select(Map).ToList();
@@ -41,7 +41,7 @@ internal static class CopyOp
             if (!e.IsHidden) mesh.AddEdge(Map(e.Vert1), Map(e.Vert2), false);
 
         List<Vertex> copies = map.Values.ToList();
-        RebuildAround(mesh, copies);
+        if (weld) RebuildAround(mesh, copies);
         return copies.Where(v => mesh.Contains(v)).ToList();
     }
 
@@ -53,12 +53,12 @@ internal static class CopyOp
     }
 
     /// <summary>Copies faces and edges several times, each by the next multiple of a transform.</summary>
-    internal static void Array(GeometryData mesh, IReadOnlyCollection<Face> faces, IReadOnlyCollection<Edge> edges, int copies, Func<Float3, int, Float3> transform)
+    internal static void Array(GeometryData mesh, IReadOnlyCollection<Face> faces, IReadOnlyCollection<Edge> edges, int copies, Func<Float3, int, Float3> transform, bool weld)
     {
         for (int i = 1; i <= copies; i++)
         {
             int step = i;
-            Copy(mesh, faces, edges, p => transform(p, step));
+            Copy(mesh, faces, edges, p => transform(p, step), weld: weld);
         }
     }
 }

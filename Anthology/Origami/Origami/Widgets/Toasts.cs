@@ -277,7 +277,7 @@ public sealed class Toasts
             .Padding(PadX, PadX, PadY, PadY).Gap(Gap)
             .Enter())
         {
-            using (paper.Box($"{id}_ico")
+            using (paper.Box("ico")
                 .Width(BadgeSize).Height(BadgeSize)
                 .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                 .Rounded(BadgeRadius)
@@ -288,13 +288,13 @@ public sealed class Toasts
                 paper.Draw((canvas, rect) => DrawToastGlyph(canvas, rect, type, iconColor));
             }
 
-            using (paper.Column($"{id}_txt")
+            using (paper.Column("txt")
                 .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                 .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                 .Gap(2)
                 .Enter())
             {
-                paper.Box($"{id}_t")
+                paper.Box("t")
                     .Height(mainH)
                     .Text(title, titleFace).TextColor(titleColor)
                     .FontSize(metrics.FontSize)
@@ -302,7 +302,7 @@ public sealed class Toasts
                     .IsNotInteractable();
 
                 if (hasSub)
-                    paper.Box($"{id}_m")
+                    paper.Box("m")
                         .Height(subH)
                         .Text(message, font).TextColor(subColor)
                         .FontSize(metrics.FontSizeSmall)
@@ -310,7 +310,7 @@ public sealed class Toasts
                         .IsNotInteractable();
             }
 
-            using (paper.Box($"{id}_x")
+            using (paper.Box("x")
                 .Width(CloseSize).Height(CloseSize)
                 .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                 .IsNotInteractable()

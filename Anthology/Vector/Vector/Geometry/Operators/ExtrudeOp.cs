@@ -16,7 +16,7 @@ internal static class ExtrudeOp
     /// </summary>
     internal static void ExtrudeFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToExtrude, float distance, ExtrudeMode mode = ExtrudeMode.AlongNormals)
     {
-        var faces = facesToExtrude.Where(mesh.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList();
+        var faces = GeometryData.LogicalFaces(facesToExtrude.Where(mesh.Contains));
         if (faces.Count == 0) return;
 
         if (mode != ExtrudeMode.PerFace)

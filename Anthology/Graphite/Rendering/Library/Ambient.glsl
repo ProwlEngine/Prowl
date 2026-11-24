@@ -69,6 +69,17 @@ layout(set = 1, binding = 31) uniform texture2DArray Graphite_ScreenVisibility;
 layout(set = 1, binding = 32) uniform texture2DArray Graphite_ScreenIrradiance;
 layout(set = 1, binding = 33) uniform sampler Graphite_ScreenSampler;
 
+#if !defined(GRAPHITE_NO_OBJECT) && (defined(GRAPHITE_FRAGMENT) || defined(GRAPHITE_VERTEX))
+// The diffuse light of an object without a lightmap along a normal: its light probes, else the ambient light, pre-exposed
+vec3 Graphite_ObjectAmbient(vec3 worldNormal)
+{
+    Graphite_ObjectData object = Graphite_Object();
+    if (object.lightmapTexture == GRAPHITE_NO_LIGHTMAP && object.probeIndex != 0xFFFFFFFFu && graphite_World.counts.z != 0u)
+        return Graphite_ShadeSH9(graphite_ObjectProbes[object.probeIndex], worldNormal) * Graphite_Exposure();
+    return Graphite_AmbientLight(worldNormal) * graphite_World.ambientMode.z;
+}
+#endif
+
 #ifdef GRAPHITE_FRAGMENT
 vec3 graphite_ScreenCoord() { return vec3(gl_FragCoord.xy * Graphite_View().screen.zw, float(gl_ViewIndex)); }
 
@@ -90,6 +101,17 @@ vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV)
 {
     vec4 screen = Graphite_ScreenIndirect();
     return mix(graphite_BakedDiffuse(worldNormal, lightmapUV) * Graphite_ScreenOcclusion(), screen.rgb, screen.a);
+}
+
+// The same with the light of an object without a lightmap found per vertex by Graphite_ObjectAmbient
+vec3 Graphite_IndirectDiffuse(vec2 lightmapUV, vec3 objectAmbient)
+{
+    vec4 screen = Graphite_ScreenIndirect();
+    Graphite_ObjectData object = Graphite_Object();
+    vec3 baked = objectAmbient;
+    if (object.lightmapTexture < GRAPHITE_LIGHTMAP_LOADING)
+        baked = Graphite_DecodeLightmap(GRAPHITE_SAMPLE_2D(object.lightmapTexture, object.lightmapSampler & 0xFFFFu, lightmapUV), object.lightmapSampler >> 16, object.lightmapScale) * Graphite_Exposure();
+    return mix(baked * Graphite_ScreenOcclusion(), screen.rgb, screen.a);
 }
 
 vec3 graphite_BakedDiffuse(vec3 worldNormal, vec2 lightmapUV)

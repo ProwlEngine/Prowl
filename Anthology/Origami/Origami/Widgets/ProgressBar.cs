@@ -189,20 +189,20 @@ public sealed class ProgressBarBuilder
             {
                 if (hasLabel)
                 {
-                    _paper.Box($"{_id}_lbl")
+                    _paper.Box("lbl")
                         .Width(labelW).Height(ringRowH)
                         .Alignment(PaperUI.TextAlignment.MiddleLeft).IsNotInteractable()
                         .Text(_label!, font!).TextColor(ink.C500).FontSize(labelFontSize);
                 }
 
-                using (_paper.Box($"{_id}_ring").Width(ringBox).Height(ringBox).IsNotInteractable().Enter())
+                using (_paper.Box("ring").Width(ringBox).Height(ringBox).IsNotInteractable().Enter())
                 {
                     _paper.Draw((canvas, rect) => Paint(canvas, rect, in ringSnap));
                 }
 
                 if (hasRight)
                 {
-                    _paper.Box($"{_id}_pct")
+                    _paper.Box("pct")
                         .Width(rightW).Height(ringRowH)
                         .Alignment(PaperUI.TextAlignment.MiddleRight).IsNotInteractable()
                         .Text(rightText, font!).TextColor(ink.C500).FontSize(labelFontSize);
@@ -236,13 +236,13 @@ public sealed class ProgressBarBuilder
         {
             if (hasLabel)
             {
-                _paper.Box($"{_id}_lbl")
+                _paper.Box("lbl")
                     .Width(labelW).Height(rowH)
                     .Alignment(PaperUI.TextAlignment.MiddleLeft).IsNotInteractable()
                     .Text(_label!, font!).TextColor(ink.C500).FontSize(labelFontSize);
             }
 
-            var trackBox = _paper.Box($"{_id}_track")
+            var trackBox = _paper.Box("track")
                 .Width(_width.HasValue ? UnitValue.Pixels(_width.Value) : UnitValue.Stretch())
                 .Height(rowH).IsNotInteractable();
             using (trackBox.Enter())
@@ -252,7 +252,7 @@ public sealed class ProgressBarBuilder
 
             if (hasRight)
             {
-                _paper.Box($"{_id}_pct")
+                _paper.Box("pct")
                     .Width(rightW).Height(rowH)
                     .Alignment(PaperUI.TextAlignment.MiddleRight).IsNotInteractable()
                     .Text(rightText, font!).TextColor(ink.C500).FontSize(labelFontSize);

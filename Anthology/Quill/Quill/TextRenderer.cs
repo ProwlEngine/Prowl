@@ -54,11 +54,6 @@ namespace Prowl.Quill
 
         private FontSystem _fontSystem;
 
-        // Reused across DrawQuads calls so a whole glyph run flushes as one batch (one draw-state
-        // check, one triangle-count update) instead of one per triangle.
-        private readonly System.Collections.Generic.List<Vertex> _runVertices = new();
-        private readonly System.Collections.Generic.List<uint> _runIndices = new();
-
         /// <summary>
         /// Gets the underlying font system for advanced text operations.
         /// </summary>
@@ -103,75 +98,104 @@ namespace Prowl.Quill
             _canvas.SetFontAtlas(texture);
             _canvas._textDraws++;
 
-            // UV offset of 2.0 signals text mode to shader (UV >= 2 means text)
-            var uvOffset = new Float2(2.0f, 2.0f);
-
             var transform = _canvas.GetTransform();
             float fbScale = _canvas.FramebufferScale;
 
-            _runVertices.Clear();
-            _runIndices.Clear();
+            // Scribe hands us an indexed mesh (4 unique vertices + 6 indices per glyph). Each vertex
+            // is transformed once and written straight into the canvas buffers.
+            var vbuf = _canvas._vertices;
+            vbuf.Reserve(vertices.Length);
+            var dst = vbuf.Array;
+            int baseVertex = vbuf.Count;
+            uint baseIndex = (uint)baseVertex;
 
-            // Scribe hands us an indexed mesh (4 unique vertices + 6 indices per glyph). Transform
-            // each unique vertex once and reuse Scribe's indices offset by our base, rather than
-            // de-indexing to 6 vertices per glyph.
-            uint baseIndex = (uint)_canvas.VertexCount;
+            // A run is nearly always one colour, so it is converted and premultiplied once per change.
+            float globalAlpha = _canvas.GlobalAlpha;
+            FontColor lastColor = default;
+            byte r = 0, g = 0, b = 0, a = 0;
+            bool haveColor = false;
 
-            if (transform.IsIdentityOrTranslation)
+            bool translationOnly = transform.IsIdentityOrTranslation;
+            // Scribe positions are already in pixel space. With no rotation, scale or skew the
+            // divide to logical and multiply back by framebuffer scale cancel, leaving an offset.
+            float ox = transform.E * fbScale;
+            float oy = transform.F * fbScale;
+            float invScale = 1.0f / fbScale;
+
+            for (int i = 0; i < vertices.Length; i++)
             {
-                // Fast path for the overwhelming majority of UI text (no rotation/scale/skew).
-                // Scribe positions are already in pixel space; the divide-to-logical then
-                // re-multiply-by-framebuffer-scale round-trip cancels out, leaving a plain offset,
-                // so we skip the full affine evaluation entirely.
-                float ox = transform.E * fbScale;
-                float oy = transform.F * fbScale;
-
-                for (int i = 0; i < vertices.Length; i++)
+                ref readonly var v = ref vertices[i];
+                var c = v.Color;
+                if (!haveColor || c.R != lastColor.R || c.G != lastColor.G || c.B != lastColor.B || c.A != lastColor.A)
                 {
-                    var v = vertices[i];
-                    _runVertices.Add(new Vertex(new Float2(v.Position.X + ox, v.Position.Y + oy), v.TextureCoordinate + uvOffset, ToColor(v.Color)));
+                    lastColor = c;
+                    haveColor = true;
+                    Premultiply(c, globalAlpha, out r, out g, out b, out a);
                 }
-            }
-            else
-            {
-                // General path: rotation/scale/skew present, go through the full transform.
-                // Scribe glyph positions are in pixel space, so divide out the framebuffer scale
-                // first (TransformPoint re-applies it).
-                float invScale = 1.0f / fbScale;
 
-                for (int i = 0; i < vertices.Length; i++)
+                ref var d = ref dst[baseVertex + i];
+                if (translationOnly)
                 {
-                    var v = vertices[i];
-                    _runVertices.Add(new Vertex(_canvas.TransformPoint(new Float2(v.Position.X * invScale, v.Position.Y * invScale)), v.TextureCoordinate + uvOffset, ToColor(v.Color)));
+                    d.x = v.Position.X + ox;
+                    d.y = v.Position.Y + oy;
                 }
-            }
+                else
+                {
+                    var p = _canvas.TransformPoint(new Float2(v.Position.X * invScale, v.Position.Y * invScale));
+                    d.x = p.X;
+                    d.y = p.Y;
+                }
 
-            // Append Scribe's indices offset by our base. Each source triangle (i0,i1,i2) is emitted
-            // as (i0,i2,i1) to preserve the winding the previous de-indexed path produced.
-            for (int i = 0; i + 2 < indices.Length; i += 3)
+                // UV offset of 2.0 signals text mode to shader (UV >= 2 means text)
+                d.u = v.TextureCoordinate.X + 2.0f;
+                d.v = v.TextureCoordinate.Y + 2.0f;
+                d.r = r;
+                d.g = g;
+                d.b = b;
+                d.a = a;
+            }
+            vbuf.Count = baseVertex + vertices.Length;
+
+            // Each source triangle (i0,i1,i2) is emitted as (i0,i2,i1), the winding the canvas expects.
+            int indexCount = indices.Length / 3 * 3;
+            var ibuf = _canvas._indices;
+            ibuf.Reserve(indexCount);
+            var idst = ibuf.Array;
+            int io = ibuf.Count;
+            for (int i = 0; i < indexCount; i += 3)
             {
-                _runIndices.Add(baseIndex + (uint)indices[i]);
-                _runIndices.Add(baseIndex + (uint)indices[i + 2]);
-                _runIndices.Add(baseIndex + (uint)indices[i + 1]);
+                idst[io + i] = baseIndex + (uint)indices[i];
+                idst[io + i + 1] = baseIndex + (uint)indices[i + 2];
+                idst[io + i + 2] = baseIndex + (uint)indices[i + 1];
             }
+            ibuf.Count = io + indexCount;
 
-            // Flush the whole run as one batch: bulk vertices then bulk indices (single draw-state
-            // check + one triangle-count update) instead of per-triangle.
-            _canvas.AddVertices(_runVertices);
-            _canvas.AddTriangles(_runIndices);
+            if (indexCount > 0)
+                _canvas.AddTriangleCount(indexCount / 3);
 
             // The atlas stays bound as canvas state (persistent, part of the batch hash) so shapes
             // drawn after this text keep batching with it.
         }
 
+        // Global alpha and premultiplied alpha, the same as Canvas.AddVertices applies per vertex.
+        private static void Premultiply(FontColor c, float globalAlpha, out byte r, out byte g, out byte b, out byte a)
+        {
+            r = c.R; g = c.G; b = c.B; a = c.A;
+            if (globalAlpha != 1.0f)
+                a = (byte)(a * globalAlpha);
+
+            if (a != 255)
+            {
+                float alpha = a / 255f;
+                r = (byte)(r * alpha);
+                g = (byte)(g * alpha);
+                b = (byte)(b * alpha);
+            }
+        }
+
         private static FontColor ToFSColor(Prowl.Vector.Color32 color)
         {
             return new FontColor(color.R, color.G, color.B, color.A);
-        }
-
-        private static Color32 ToColor(FontColor color)
-        {
-            return Color32.FromArgb(color.A, color.R, color.G, color.B);
         }
     }
 }
