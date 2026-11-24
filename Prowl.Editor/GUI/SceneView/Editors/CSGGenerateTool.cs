@@ -11,6 +11,7 @@ using Prowl.PaperUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
@@ -457,6 +458,58 @@ public sealed class CSGGenerateTool : SceneTool
 
         return parts.Count > 1 ? root : root.Children[^1];
     }
+
+    /// <summary>
+    /// Turns a mesh into a brush at the 3D cursor, its flat triangles joined into the faces they read as. False when it
+    /// does not enclose a solid.
+    /// </summary>
+    public bool ImportMesh(Mesh mesh)
+    {
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (model.IsNotValid() || mesh.IsNotValid()) return false;
+
+        CSGControlMesh? shape = ShapeOf(mesh);
+        if (shape == null) return false;
+
+        GameObject go = CSGSelection.CreateObject(string.IsNullOrEmpty(mesh.Name) ? "Mesh" : mesh.Name, ParentFor(model!));
+        go.Transform.Position = SceneTools.Cursor;
+        shape.TransformPoints(go.Transform.WorldToLocalMatrix * Float4x4.CreateTranslation(SceneTools.Cursor));
+
+        CSGBrush brush = go.AddComponent<CSGBrush>();
+        brush.SetShape(shape, new SurfaceData[shape.Polygons.Count]);
+        for (int i = 0; i < shape.Polygons.Count; i++) brush.SetSurface(i, SurfaceData.Default);
+        brush.Operation = AutoOperation ? Operation.Additive : Operation;
+        if (!brush.IsShapeValid)
+        {
+            go.Destroy();
+            return false;
+        }
+
+        Undo.RegisterCreatedObjectUndo(go, "Import Mesh As CSG Brush");
+        Selection.Select(go);
+        model!.SetDirty();
+        CSGEditMode.Current = CSGMode.Edit;
+        return true;
+    }
+
+    /// <summary>
+    /// A mesh's points and faces as a brush shape: points at almost the same place are one, and flat triangles are joined
+    /// into the faces they read as.
+    /// </summary>
+    internal static CSGControlMesh? ShapeOf(Mesh mesh)
+    {
+        GeometryData geometry = MeshGeometry.ToGeometryData(mesh);
+        Float3 size = geometry.Bounds().Size;
+        GeometryOperators.MergeByDistance(geometry, null, MathF.Max(size.X, MathF.Max(size.Y, size.Z)) * 1e-5f);
+        var flat = new List<GeometryData.Edge>();
+        foreach (GeometryData.Edge edge in geometry.Edges)
+            if (edge.DihedralCosine() is float cosine && cosine >= FlatCosine) flat.Add(edge);
+        GeometryOperators.DissolveEdges(geometry, flat);
+        return CSGControlMesh.FromMesh(geometry);
+    }
+
+    // Triangles turned less than this against each other are one face of an imported brush
+    private static readonly float FlatCosine = MathF.Cos(0.5f * MathF.PI / 180f);
 
     private GameObject? PlacePolygon(CSGModel model, Operation operation)
     {

@@ -226,6 +226,12 @@ internal static class CSGSections
                 Chips(paper, font, "csg_gen_place",
                     (Loc.Get("csg.from_centre"), tool.FromCentre, Loc.Get("csg.from_centre_tip"), () => tool.FromCentre = !tool.FromCentre),
                     (Loc.Get("csg.square_base"), tool.SquareBase, Loc.Get("csg.square_base_tip"), () => tool.SquareBase = !tool.SquareBase));
+            Segments(paper, font, "csg_gen_import", new Tile(EditorIcons.FileImport, Loc.Get("csg.import_mesh"), Loc.Get("csg.import_mesh_tip"), () =>
+                PropertyEditors.EngineObjectPropertyEditor.OpenAssetSelector(typeof(Mesh), picked =>
+                {
+                    if (picked is Mesh mesh && !tool.ImportMesh(mesh))
+                        Toasts.Warning(Loc.Get("csg.import_mesh_failed"), Loc.Get("csg.import_mesh_failed_msg"));
+                })));
         }, IconColumnWidth));
 
         if (HasSettings(tool.Generator))

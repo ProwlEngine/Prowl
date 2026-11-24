@@ -149,4 +149,24 @@ public class CSGBrushTargetTests
         int face = Assert.Single(faces);
         Assert.True(Float3.Dot(mesh.PolygonNormal(face), awayNormal) > 0.99f);
     }
+
+    [Fact]
+    public void AnImportedCubeMeshIsASixFacedBrush()
+    {
+        CSGControlMesh? shape = Prowl.Editor.GUI.SceneView.Editors.CSGGenerateTool.ShapeOf(Prowl.Runtime.Resources.Mesh.CreateCube(new Float3(2f)));
+
+        Assert.NotNull(shape);
+        Assert.Equal(6, shape!.Polygons.Count);
+        Assert.Equal(8, shape.Points.Count);
+        Assert.Equal(CSGMeshProblem.None, shape.Check());
+    }
+
+    [Fact]
+    public void AnImportedSphereMeshEnclosesASolid()
+    {
+        CSGControlMesh? shape = Prowl.Editor.GUI.SceneView.Editors.CSGGenerateTool.ShapeOf(Prowl.Runtime.Resources.Mesh.CreateSphere(1f, 8, 12));
+
+        Assert.NotNull(shape);
+        Assert.True(shape!.IsValid());
+    }
 }
