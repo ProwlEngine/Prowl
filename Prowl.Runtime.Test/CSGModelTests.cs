@@ -208,6 +208,22 @@ public class CSGModelTests : RuntimeTestBase
     }
 
     [Fact]
+    public void RotatingABrushTurnsItTheWayItWasTurned()
+    {
+        CreateModel();
+        CSGBrush bar = AddBrush(new Float3(8f, 1f, 1f), Float3.Zero);
+
+        // A positive turn about Z lifts the bar's +X end
+        bar.Transform.Rotation = Quaternion.AxisAngle(Float3.UnitZ, MathF.PI / 6f);
+        Update(_scene);
+
+        Assert.True(_model.Raycast(new Ray(new Float3(3f, 10f, 0f), -Float3.UnitY), out _, out _, out Float3 right));
+        Assert.True(_model.Raycast(new Ray(new Float3(-3f, 10f, 0f), -Float3.UnitY), out _, out _, out Float3 left));
+        Assert.Equal(3f * MathF.Tan(MathF.PI / 6f) + 0.5f / MathF.Cos(MathF.PI / 6f), right.Y, 2);
+        Assert.True(left.Y < 0f, $"left end at {left.Y}");
+    }
+
+    [Fact]
     public void ChangingAnOperationRebuildsTheMesh()
     {
         CreateModel();
