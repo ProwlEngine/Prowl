@@ -117,9 +117,9 @@ public sealed class MeshBvh
         foreach (GeometryData.Vertex vertex in mesh.Vertices)
         {
             Float3 p = vertex.Point;
-            hash = (hash ^ BitConverter.SingleToUInt32Bits(p.X)) * 1099511628211UL;
-            hash = (hash ^ BitConverter.SingleToUInt32Bits(p.Y)) * 1099511628211UL;
-            hash = (hash ^ BitConverter.SingleToUInt32Bits(p.Z)) * 1099511628211UL;
+            hash = (hash ^ (uint)BitConverter.SingleToInt32Bits(p.X)) * 1099511628211UL;
+            hash = (hash ^ (uint)BitConverter.SingleToInt32Bits(p.Y)) * 1099511628211UL;
+            hash = (hash ^ (uint)BitConverter.SingleToInt32Bits(p.Z)) * 1099511628211UL;
         }
         return hash;
     }
