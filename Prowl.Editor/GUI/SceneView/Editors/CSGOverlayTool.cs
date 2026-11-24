@@ -108,6 +108,13 @@ public sealed class CSGOverlayTool : SceneTool
         CSGEditMode.Current = CSGMode.Create;
     }
 
+    public override Float3? SurfaceUnder(SceneToolContext ctx, Ray ray)
+    {
+        CSGModel? model = CSGSelection.ActiveModel();
+        return model.IsValid() && CSGSelection.PickBrush(model!, CSGSelection.BrushesIn(model!), ray, out _, out float distance)
+            ? ray.Origin + ray.Direction * distance : null;
+    }
+
     /// <summary>While a model is being worked on, the scene view's right click menu is the CSG one.</summary>
     public override bool ReplacesSceneContextMenu => true;
 

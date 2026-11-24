@@ -555,6 +555,7 @@ public static class ModelEditingMode
         GameObject go = Panels.HierarchyPanel.CreateGameObject(name, parent.IsValid() && parent!.GetComponent<ModelObject>().IsValid() ? parent : null);
         ModelObject model = go.AddComponent<ModelObject>();
         if (kind is { } primitive) model.Mesh = Primitives.Make(primitive);
+        go.Transform.Position = SceneTools.Cursor;
         model.RefreshPreview();
         return go;
     }

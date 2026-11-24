@@ -273,6 +273,8 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active)
             return Float4x4.TransformPoint(active, Target!.Transform.WorldToLocalMatrix);
+        if (SceneTools.Pivot == PivotMode.Cursor)
+            return Float4x4.TransformPoint(SceneTools.Cursor, Target!.Transform.WorldToLocalMatrix);
         if (SceneTools.Pivot == PivotMode.Center && _vertices.Count > 0)
         {
             Float3 sum = Float3.Zero;
@@ -1463,6 +1465,7 @@ public sealed class CSGMeshTool : SceneTool
             Individual = SceneTools.Pivot == PivotMode.Individual,
         };
         if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active) _session.Pivot = active;
+        if (SceneTools.Pivot == PivotMode.Cursor) _session.Pivot = SceneTools.Cursor;
         _sessionBrush = Target;
         _sessionStart = Target!.ControlMesh.Clone();
         _sessionSurfaces = (SurfaceData[])Target.Surfaces.Clone();

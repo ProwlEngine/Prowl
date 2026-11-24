@@ -195,13 +195,15 @@ public sealed class ObjectTransformSession : ITransformSession
         Float3 sum = Float3.Zero;
         foreach (Float3 point in _points) sum += point;
         Median = _points.Count > 0 ? sum / _points.Count : Float3.Zero;
+        Pivot = Median;
     }
 
     public IReadOnlyList<Float3> Points => _points;
 
     public Float3 Median { get; }
 
-    public Float3 Pivot => Median;
+    /// <summary>What rotation and scale turn about, in the world. The median unless set.</summary>
+    public Float3 Pivot { get; set; }
 
     public void Translate(Float3 delta)
     {

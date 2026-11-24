@@ -661,6 +661,13 @@ public sealed class ModelMeshTool : SceneTool
     public override bool ReplacesSceneContextMenu => Editing;
 
     // F is Fill in edit mode, so the camera does not frame the object on it
+    public override Float3? SurfaceUnder(SceneToolContext ctx, Ray ray)
+    {
+        if (!ModelEditingMode.IsEditing || ModelEditingMode.World is not { } world) return null;
+        List<ModelObject> shown = [.. world.Objects.Select(go => go.GetComponent<ModelObject>()).Where(m => m.IsValid() && !m.Hidden)];
+        return SurfaceHit(shown)(ray, float.PositiveInfinity) is { } distance ? ray.Origin + ray.Direction * distance : null;
+    }
+
     public override bool TakesShortcut(string shortcut) => Editing && shortcut == "Scene/Focus";
 
     private static string Chord(string shortcut) => ShortcutManager.Find(shortcut) is { } definition ? ShortcutManager.GetDisplayString(definition.Binding) : "";
@@ -955,6 +962,12 @@ public sealed class ModelMeshTool : SceneTool
         if (selected.Count > 0)
         {
             menu.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selected));
+            menu.Item(Loc.Get("model.origin_to_cursor"), () =>
+            {
+                foreach (GameObject go in selected)
+                    if (go.GetComponent<ModelObject>() is { } model && model.IsValid())
+                        ModelEditingMode.MoveOrigin(model, go.Transform.InverseTransformPoint(SceneTools.Cursor), "Origin To Cursor");
+            });
             menu.Submenu(Loc.Get("model.menu.apply"), m => ApplyItems(m, selected));
             menu.Submenu(Loc.Get("model.menu.clear"), m => ClearItems(m, selected));
         }
@@ -984,7 +997,7 @@ public sealed class ModelMeshTool : SceneTool
         if (handles.IsPressed("ModelEdit/Join") && Selection.ActiveObject is GameObject active) ModelEditingMode.Join(selected, active);
         else if (handles.IsPressed("ModelEdit/Add")) AddMenu();
         else if (handles.IsPressed("ModelEdit/Apply") && selected.Count > 0) ApplyMenu(selected);
-        else if (handles.IsPressed("MeshEdit/SnapMenu") && selected.Count > 0) SnapMenu();
+        else if (handles.IsPressed("MeshEdit/SnapMenu")) SnapMenu();
         else if (handles.IsPressed("ModelEdit/ClearLocation")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Location);
         else if (handles.IsPressed("ModelEdit/ClearRotation")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Rotation);
         else if (handles.IsPressed("ModelEdit/ClearScale")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Scale);
@@ -1080,6 +1093,7 @@ public sealed class ModelMeshTool : SceneTool
         List<GameObject> moving = HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]);
         if (moving.Count == 0) return;
         _objectSession = new ObjectTransformSession(moving);
+        if (SceneTools.Pivot == PivotMode.Cursor) _objectSession.Pivot = SceneTools.Cursor;
         Quaternion local = Selection.ActiveObject is GameObject active ? active.Transform.Rotation : Quaternion.Identity;
         _objectModal = new TransformModal(kind, _objectSession, local, null);
         _objectUndo = Undo.HoldRecords([.. moving], kind switch
@@ -1452,12 +1466,13 @@ public sealed class ModelMeshTool : SceneTool
             menu.Title(Loc.Get("model.menu.snap_menu"));
             if (Editing)
             {
-                menu.Item(Loc.Get("model.menu.selection_to_grid"), () => EditMeshes("Snap Points To Grid", (model, mesh, s) =>
-                {
-                    Float4x4 toWorld = model.Transform.LocalToWorldMatrix, toLocal = toWorld.Invert();
-                    foreach (GeometryData.Vertex vertex in s.Vertices)
-                        vertex.Point = Float4x4.TransformPoint(Round(Float4x4.TransformPoint(vertex.Point, toWorld), SceneTools.MoveSnap), toLocal);
-                }));
+                menu.Item(Loc.Get("model.menu.selection_to_grid"), () => MovePoints("Snap Points To Grid", p => Round(p, SceneTools.MoveSnap)));
+                menu.Item(Loc.Get("model.menu.selection_to_cursor"), () => MovePoints("Snap Points To Cursor", _ => SceneTools.Cursor));
+                Float3 middle = SelectedCentre().Centre;
+                menu.Item(Loc.Get("model.menu.selection_to_cursor_offset"), () => MovePoints("Snap Points To Cursor", p => p + SceneTools.Cursor - middle));
+                menu.Separator();
+                if (SelectedCentre().Count > 0) menu.Item(Loc.Get("model.menu.cursor_to_selected"), () => SceneTools.Cursor = SelectedCentre().Centre);
+                CursorItems(menu);
                 return;
             }
             List<GameObject> selected = HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]);
@@ -1472,8 +1487,43 @@ public sealed class ModelMeshTool : SceneTool
                     Undo.RecordObjects([.. selected], "Snap Objects To Active");
                     foreach (GameObject go in selected) go.Transform.Position = active.Transform.Position;
                 });
+            if (selected.Count > 0)
+            {
+                Float3 middle = Float3.Zero;
+                foreach (GameObject go in selected) middle += go.Transform.Position;
+                middle /= selected.Count;
+                menu.Item(Loc.Get("model.menu.selection_to_cursor"), () =>
+                {
+                    Undo.RecordObjects([.. selected], "Snap Objects To Cursor");
+                    foreach (GameObject go in selected) go.Transform.Position = SceneTools.Cursor;
+                });
+                menu.Item(Loc.Get("model.menu.selection_to_cursor_offset"), () =>
+                {
+                    Undo.RecordObjects([.. selected], "Snap Objects To Cursor");
+                    foreach (GameObject go in selected) go.Transform.Position += SceneTools.Cursor - middle;
+                });
+                menu.Separator();
+                menu.Item(Loc.Get("model.menu.cursor_to_selected"), () => SceneTools.Cursor = middle);
+                if (Selection.ActiveObject is GameObject focus)
+                    menu.Item(Loc.Get("model.menu.cursor_to_active"), () => SceneTools.Cursor = focus.Transform.Position);
+            }
+            CursorItems(menu);
         });
     }
+
+    private static void CursorItems(OrigamiUI.ContextBuilder menu)
+    {
+        menu.Item(Loc.Get("model.menu.cursor_to_origin"), () => SceneTools.Cursor = Float3.Zero);
+        menu.Item(Loc.Get("model.menu.cursor_to_grid"), () => SceneTools.Cursor = Round(SceneTools.Cursor, SceneTools.MoveSnap));
+    }
+
+    // Moves every selected point to where the function puts it in the world, as one step
+    private void MovePoints(string name, Func<Float3, Float3> to) => EditMeshes(name, (model, mesh, s) =>
+    {
+        Float4x4 toWorld = model.Transform.LocalToWorldMatrix, toLocal = toWorld.Invert();
+        foreach (GeometryData.Vertex vertex in s.Vertices)
+            vertex.Point = Float4x4.TransformPoint(to(Float4x4.TransformPoint(vertex.Point, toWorld)), toLocal);
+    });
 
     /// <summary>Ctrl E: the edge menu, whatever the select mode.</summary>
     private void EdgeMenu(SceneToolContext ctx)
@@ -1804,6 +1854,7 @@ public sealed class ModelMeshTool : SceneTool
                 parts.Add((new EditTarget(model.Mesh, model.Transform.LocalToWorldMatrix) { MirrorClip = ClipOf(model) }, _selection[model]));
         if (parts.Count == 0) return null;
         _session = new TransformSession(parts, Proportional ? ProportionalRadius : 0f) { Individual = SceneTools.Pivot == PivotMode.Individual };
+        if (SceneTools.Pivot == PivotMode.Cursor) _session.Pivot = SceneTools.Cursor;
         _sessionMove = null;
         return _session;
     }
@@ -2802,7 +2853,8 @@ public sealed class ModelMeshTool : SceneTool
                 PivotOrientation.Normal => NormalFrame() ?? LocalFrame(),
                 _ => LocalFrame(),
             };
-        // A turn or scale keeps the gizmo where the drag began, a move follows the points
+        // A turn or scale keeps the gizmo where the drag began, a move follows the points. The cursor pivot turns about the cursor
+        if (Gizmo != EditGizmo.Move && SceneTools.Pivot == PivotMode.Cursor) centre = SceneTools.Cursor;
         Float3 position = Gizmo == EditGizmo.Move || !_gizmoDragging ? centre : _gizmoStart, before = position;
         Quaternion rotation = _gizmoTurn * _gizmoAxes;
         Float3 scale = _gizmoScale;

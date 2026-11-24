@@ -256,8 +256,34 @@ public class SceneViewPanel : DockPanel
     {
         PivotMode.Active => EditorIcons.Crosshairs,
         PivotMode.Individual => EditorIcons.Cubes,
+        PivotMode.Cursor => EditorIcons.LocationCrosshairs,
         _ => EditorIcons.CircleDot,
     };
+
+    // The cursor shows while a model is open, where most things use it, or while it is the pivot
+    private static bool ShowsCursor => ModelEditingMode.IsEditing || SceneTools.Pivot == PivotMode.Cursor;
+
+    /// <summary>Shift right click: the 3D cursor goes onto what is under the mouse, or along the view plane it is on.</summary>
+    private void PlaceCursor(Ray ray)
+    {
+        Float3? best = null;
+        foreach (SceneTool tool in SceneToolManager.Live)
+            if (tool.SurfaceUnder(_toolContext, ray) is { } hit && (best == null || Float3.Distance(ray.Origin, hit) < Float3.Distance(ray.Origin, best.Value)))
+                best = hit;
+        if (best == null && RayPlane(ray, SceneTools.Cursor, _handles.Camera.GameObject.Transform.Forward, out Float3 onPlane)) best = onPlane;
+        if (best is { } at) SceneTools.Cursor = at;
+    }
+
+    private void DrawCursor()
+    {
+        Float3 at = SceneTools.Cursor;
+        float size = MathF.Max(_handles.DepthOf(at), 0.01f) * 0.035f;
+        Transform view = _handles.Camera.GameObject.Transform;
+        _handles.Draw.Circle(at, view.Forward, size, new Color32(230, 60, 60, 255), 2f);
+        _handles.Draw.Circle(at, view.Forward, size * 0.82f, new Color32(255, 255, 255, 230), 1.5f);
+        foreach (Float3 side in (Float3[])[view.Right, -view.Right, view.Up, -view.Up])
+            _handles.Draw.Line(at + side * size * 0.45f, at + side * size * 1.5f, new Color32(20, 20, 20, 230), 1.5f);
+    }
 
     private static string PivotLabel(PivotMode mode) => $"scene.pivot_{mode.ToString().ToLowerInvariant()}";
 
@@ -629,8 +655,10 @@ public class SceneViewPanel : DockPanel
             {
                 Float2 viewportOrigin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
                 Float2 pointer = _editorCamera.RightClickPointer;
-                SceneViewMenu.Open(_toolContext, scene, _editorCamera, pointer, pointer - viewportOrigin, new Float2(width, height));
+                if (_handles.Shift) PlaceCursor(_handles.RayThrough(pointer));
+                else SceneViewMenu.Open(_toolContext, scene, _editorCamera, pointer, pointer - viewportOrigin, new Float2(width, height));
             }
+            if (ShowsCursor) DrawCursor();
 
             // Scene view keyboard shortcuts (only when hovered and not right-click flying)
             if (isHovered && !_handles.KeysUsed && !_handles.Modal && !ShortcutManager.IsRebinding && !Input.GetMouseButton(1))
@@ -1515,6 +1543,10 @@ public class SceneViewPanel : DockPanel
         if (SceneTools.Pivot == PivotMode.Active)
         {
             center = firstGO.Transform.Position;
+        }
+        else if (SceneTools.Pivot == PivotMode.Cursor)
+        {
+            center = SceneTools.Cursor;
         }
         else
         {
