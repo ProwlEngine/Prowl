@@ -274,15 +274,15 @@ public class SceneViewPanel : DockPanel
         if (best is { } at) SceneTools.Cursor = at;
     }
 
+    private static Texture2D? s_cursorIcon;
+
+    // Kept the same size on screen at any distance
     private void DrawCursor()
     {
+        if (s_cursorIcon.IsNotValid() && EditorApplication.GetEmbeddedResource("cursor-3d.png") is { } stream)
+            using (stream) s_cursorIcon = Texture2D.FromStream(stream, true);
         Float3 at = SceneTools.Cursor;
-        float size = MathF.Max(_handles.DepthOf(at), 0.01f) * 0.035f;
-        Transform view = _handles.Camera.GameObject.Transform;
-        _handles.Draw.Circle(at, view.Forward, size, new Color32(230, 60, 60, 255), 2f);
-        _handles.Draw.Circle(at, view.Forward, size * 0.82f, new Color32(255, 255, 255, 230), 1.5f);
-        foreach (Float3 side in (Float3[])[view.Right, -view.Right, view.Up, -view.Up])
-            _handles.Draw.Line(at + side * size * 0.45f, at + side * size * 1.5f, new Color32(20, 20, 20, 230), 1.5f);
+        Debug.DrawIcon(s_cursorIcon!, at, MathF.Max(_handles.DepthOf(at), 0.01f) * 0.07f, Vector.Color.White);
     }
 
     private static string PivotLabel(PivotMode mode) => $"scene.pivot_{mode.ToString().ToLowerInvariant()}";
@@ -658,7 +658,6 @@ public class SceneViewPanel : DockPanel
                 if (_handles.Shift) PlaceCursor(_handles.RayThrough(pointer));
                 else SceneViewMenu.Open(_toolContext, scene, _editorCamera, pointer, pointer - viewportOrigin, new Float2(width, height));
             }
-            if (ShowsCursor) DrawCursor();
 
             // Scene view keyboard shortcuts (only when hovered and not right-click flying)
             if (isHovered && !_handles.KeysUsed && !_handles.Modal && !ShortcutManager.IsRebinding && !Input.GetMouseButton(1))
@@ -1194,6 +1193,7 @@ public class SceneViewPanel : DockPanel
     {
         if (!ShowGizmos) return;
         editor?.DrawSceneGizmos(scene);
+        if (ShowsCursor) DrawCursor();
         DrawSelectionGizmos();
 
         // Faint outline of each drag preview's extent.
