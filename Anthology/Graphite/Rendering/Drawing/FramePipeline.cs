@@ -1018,7 +1018,7 @@ internal sealed partial class FramePipeline : IDisposable
             else
                 (projection.c2.X, projection.c2.Y) = (projection.c2.X + camera.Jitter.X, projection.c2.Y + camera.Jitter.Y);
             ViewBlock block = ViewBlock.Create(layer.View, projection, layer.Position, width, height, view.Near, view.FarDistance);
-            block.Exposure = new Float4(exposure, camera.HasPrevious ? camera.HostExposure : exposure, capture ? 1 : 0, 0);
+            block.Exposure = new Float4(exposure, camera.HasPrevious ? camera.HostExposure : exposure, capture ? 1 : 0, camera.ScreenVisibility != null ? 1 : 0);
             block.Jitter = new Float4(camera.Jitter.X, camera.Jitter.Y, camera.PreviousJitter.X, camera.PreviousJitter.Y);
             float timeHigh = (float)time.Time;
             block.Time = new Float4(timeHigh, time.DeltaTime, time.FrameIndex, (float)(time.Time - timeHigh));

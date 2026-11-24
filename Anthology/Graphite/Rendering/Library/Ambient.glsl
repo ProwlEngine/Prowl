@@ -83,12 +83,21 @@ vec3 Graphite_ObjectAmbient(vec3 worldNormal)
 #ifdef GRAPHITE_FRAGMENT
 vec3 graphite_ScreenCoord() { return vec3(gl_FragCoord.xy * Graphite_View().screen.zw, float(gl_ViewIndex)); }
 
+// Whether the view has screen lighting to read
+bool Graphite_HasScreenLighting() { return Graphite_View().exposure.w > 0.5; }
+
 // How much indirect light reaches this pixel, from the view's screen lighting
-float Graphite_ScreenOcclusion() { return texture(sampler2DArray(Graphite_ScreenVisibility, Graphite_ScreenSampler), graphite_ScreenCoord()).r; }
+float Graphite_ScreenOcclusion()
+{
+    return Graphite_HasScreenLighting() ? texture(sampler2DArray(Graphite_ScreenVisibility, Graphite_ScreenSampler), graphite_ScreenCoord()).r : 1.0;
+}
 
 // Indirect irradiance the view's screen lighting found at this pixel, pre-exposed like the scene colour it comes from,
 // and how far to trust it over the baked light
-vec4 Graphite_ScreenIndirect() { return texture(sampler2DArray(Graphite_ScreenIrradiance, Graphite_ScreenSampler), graphite_ScreenCoord()); }
+vec4 Graphite_ScreenIndirect()
+{
+    return Graphite_HasScreenLighting() ? texture(sampler2DArray(Graphite_ScreenIrradiance, Graphite_ScreenSampler), graphite_ScreenCoord()) : vec4(0.0);
+}
 #endif
 
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)

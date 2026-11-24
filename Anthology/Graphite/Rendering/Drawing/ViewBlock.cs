@@ -25,7 +25,7 @@ public struct ViewBlock
     /// <summary>This layer's camera minus the view's first layer's, whose position the view's light and decal trees are built around.</summary>
     public Float4 TreeOffset;
 
-    /// <summary>The exposure shaders pre-expose light by, last frame's, 1 in a capture view, unused.</summary>
+    /// <summary>The exposure shaders pre-expose light by, last frame's, 1 in a capture view, 1 when the view has screen lighting.</summary>
     public Float4 Exposure;
 
     /// <summary>
