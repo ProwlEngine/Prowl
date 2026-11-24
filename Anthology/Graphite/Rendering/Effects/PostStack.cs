@@ -82,6 +82,9 @@ public abstract class PostEffect(Renderer renderer, RenderSlot slot, FeatureGrou
         => Resources.Program(this, file, defines, source, blend, lit);
 
     protected static PixelFormat Hdr => PixelFormat.R16_G16_B16_A16_Float;
+
+    /// <summary>HDR colour without alpha, half the size of <see cref="Hdr"/> where the device draws to it.</summary>
+    protected PixelFormat OpaqueHdr => _shared.OpaqueHdrFormat;
 }
 
 /// <summary>The resolution a screen space effect works at, as a part of the view's.</summary>
@@ -158,8 +161,8 @@ public sealed class Tonemapper : PostEffect
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        builder.WriteColor();
         builder.EncodesForDisplay();
+        builder.WriteColor();
     }
 
     public override void Render(FeatureContext context)
@@ -358,9 +361,9 @@ public sealed class Bloom : PostEffect
         state.Up.Clear();
         int count = _iterations + 1;
         for (int i = 0; i < count; i++)
-            state.Down.Add(builder.Temporary("Down", i, view.Texture(Hdr, 0.5f / (1 << i))));
+            state.Down.Add(builder.Temporary("Down", i, view.Texture(OpaqueHdr, 0.5f / (1 << i))));
         for (int i = count - 2; i >= 0; i--)
-            state.Up.Add(builder.Temporary("Up", i, view.Texture(Hdr, 0.5f / (1 << i))));
+            state.Up.Add(builder.Temporary("Up", i, view.Texture(OpaqueHdr, 0.5f / (1 << i))));
     }
 
     public override void Render(FeatureContext context)

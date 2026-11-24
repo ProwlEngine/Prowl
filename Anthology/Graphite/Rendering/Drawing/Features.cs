@@ -751,9 +751,17 @@ public sealed class FeatureBuilder
 
     /// <summary>
     /// Says the colour this feature writes or draws is display encoded, as a tonemapper's is, so the present undoes the
-    /// encode for targets that take linear light, sRGB and float ones. Later features keep it so.
+    /// encode for targets that take linear light, sRGB and float ones. Later features keep it so. Called before
+    /// WriteColor, the new colour takes the smaller display format.
     /// </summary>
-    public void EncodesForDisplay() => _pass.EncodesForDisplay = true;
+    public void EncodesForDisplay()
+    {
+        _pass.EncodesForDisplay = true;
+        View.DisplayEncoded = true;
+    }
+
+    /// <summary>The format of the view's colour: HDR with alpha, HDR without where the view keeps none, or LDR.</summary>
+    public PixelFormat ColorFormat => View.ColorFormat;
 
     /// <summary>A texture for this feature alone this frame, drawn and then read back in its pass by default.</summary>
     public TextureHandle Temporary(string name, GraphTextureDesc desc, TextureState usage = TextureState.Attachment | TextureState.Sampled)

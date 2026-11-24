@@ -48,6 +48,9 @@ internal sealed class ViewGraph
     public bool ScreenVisibilityWritten { get; set; }
     public bool ScreenIrradianceWritten { get; set; }
     public bool Upscaled { get; set; }
+
+    /// <summary>Whether a feature added so far encodes the colour for display, so colours made from here on hold 0 to 1.</summary>
+    public bool DisplayEncoded { get; set; }
     public FeatureView View { get; set; }
 
     public bool Captures => Camera.Desc.Kind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
@@ -56,14 +59,19 @@ internal sealed class ViewGraph
 
     public PixelFormat ColorFormat => ColorFormatOf(Shape);
 
-    public PixelFormat ColorFormatOf(in CameraShape shape) => shape.Ldr ? LdrColorFormat : Frame.Resources.SceneFormats[0];
+    public PixelFormat ColorFormatOf(in CameraShape shape)
+        => shape.Ldr ? LdrColorFormat : shape.KeepsAlpha ? Frame.Resources.SceneFormats[0] : Frame.Resources.OpaqueHdrFormat;
 
     private uint Layers => Shape.Layers > 1 ? (uint)Shape.Layers : 0;
 
     public RenderResourceID IdOf(RenderFeature feature, string name)
         => RenderResourceID.Intern($"{feature.GetType().Name}.{feature.Id}/{name}");
 
-    public GraphTextureDesc ColorDesc(in FeatureView view) => GraphTextureDesc.Sized((int)view.Width, (int)view.Height, ColorFormat) with { ArrayLayers = Layers };
+    public GraphTextureDesc ColorDesc(in FeatureView view)
+    {
+        PixelFormat format = DisplayEncoded && !Shape.Ldr && !Shape.KeepsAlpha ? Frame.Resources.OpaqueDisplayFormat : ColorFormat;
+        return GraphTextureDesc.Sized((int)view.Width, (int)view.Height, format) with { ArrayLayers = Layers };
+    }
 
     public GraphTextureDesc SceneDesc()
     {
@@ -71,7 +79,7 @@ internal sealed class ViewGraph
         {
             Width = (int)Camera.Info.Width,
             Height = (int)Camera.Info.Height,
-            ColorFormats = Frame.Resources.SceneTargetFormats(SceneTargetCount(Shape.Targets), Shape.Ldr),
+            ColorFormats = Frame.Resources.SceneTargetFormats(SceneTargetCount(Shape.Targets), ColorFormat),
             EnableDepth = true,
             DepthFormat = SceneDepthFormat,
             ArrayLayers = Layers,
@@ -116,7 +124,7 @@ internal sealed class ViewGraph
         Published.Clear();
         Current = Scene = default;
         CurrentIsScene = true;
-        CurrentWritten = SceneWritten = ScreenVisibilityWritten = ScreenIrradianceWritten = Upscaled = false;
+        CurrentWritten = SceneWritten = ScreenVisibilityWritten = ScreenIrradianceWritten = Upscaled = DisplayEncoded = false;
         Camera.Info = Camera.Info.Culled(Camera.SceneColorUsed, Camera.SceneDepthUsed, Camera.BackDepthUsed, Camera.Shadows.FirstCascade() != null,
             Camera.Selected.Exists(static feature => feature.ReadsHiZ && feature.Slot < RenderSlot.OpaqueColor),
             Camera.Selected.Exists(static feature => feature.ReadsHiZ && feature.Slot >= RenderSlot.OpaqueColor));

@@ -8,6 +8,9 @@ internal readonly record struct CameraShape(int Layers, bool Ldr, SceneTargets T
     /// <summary>The scene targets features between the prepass and the opaque pass read, which the prepass writes.</summary>
     public SceneTargets PrepassTargets { get; init; }
 
+    /// <summary>Whether the colour keeps an alpha channel: overlays, which blend by it, and every view that is not a camera's.</summary>
+    public bool KeepsAlpha { get; init; }
+
     /// <summary>The value of <see cref="GlobalAxis.Prepass"/> that writes <see cref="PrepassTargets"/>, null for depth alone.</summary>
     public string? PrepassValue => (PrepassTargets & SceneTargets.Normals) != 0 ? "NORMALS" : (PrepassTargets & SceneTargets.Motion) != 0 ? "MOTION" : null;
 
@@ -39,6 +42,10 @@ internal readonly record struct CameraShape(int Layers, bool Ldr, SceneTargets T
             }
         }
         int scale = upscales ? Math.Max(1, (int)MathF.Round(view.RenderScale * 256f)) : 0;
-        return new CameraShape(Math.Max((int)view.LayerCount, 1), view.Ldr, targets, scale, screen, irradiance, hostBuffers, cubes) { PrepassTargets = prepass };
+        return new CameraShape(Math.Max((int)view.LayerCount, 1), view.Ldr, targets, scale, screen, irradiance, hostBuffers, cubes)
+        {
+            PrepassTargets = prepass,
+            KeepsAlpha = view.Overlay || view.Kind is not (ViewKind.Game or ViewKind.SceneView or ViewKind.Preview or ViewKind.RenderTexture),
+        };
     }
 }

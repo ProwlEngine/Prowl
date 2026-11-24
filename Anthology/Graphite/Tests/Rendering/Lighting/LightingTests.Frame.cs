@@ -44,6 +44,7 @@ public sealed partial class LightingTests
                 {
                     #define GRAPHITE_LIGHT_COAT
                     #define GRAPHITE_LIGHT_BACK
+                    #define GRAPHITE_SUN_DISK
                     #include "Graphite/Lighting.glsl"
                     #include "Graphite/Passes.glsl"
                     uniform vec4 _CoatNormal;

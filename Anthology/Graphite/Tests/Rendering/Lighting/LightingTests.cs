@@ -49,6 +49,7 @@ public sealed partial class LightingTests : IDisposable
                 }
                 Fragment
                 {
+                    #pragma variant global PBR_TIER FULL LITE MAX
                     #include "Graphite/PBR/Closure.glsl"
                     #include "Graphite/Decals.glsl"
                     #include "Graphite/Passes.glsl"
@@ -102,6 +103,7 @@ public sealed partial class LightingTests : IDisposable
                 Fragment
                 {
                     #include "Graphite/Passes.glsl"
+                    #define GRAPHITE_SUN_DISK
                     #include "Graphite/Lighting.glsl"
                     layout(location = 0) in vec3 vNormal;
                     layout(location = 1) in vec2 vLightmapUV;
@@ -173,6 +175,7 @@ public sealed partial class LightingTests : IDisposable
                 Fragment
                 {
                     #include "Graphite/Passes.glsl"
+                    #define GRAPHITE_SUN_DISK
                     #include "Graphite/Lighting.glsl"
                     layout(location = 0) in vec3 vWorld;
                     layout(location = 0) out vec4 outColor;
@@ -245,6 +248,7 @@ public sealed partial class LightingTests : IDisposable
                 Fragment
                 {
                     #include "Graphite/Passes.glsl"
+                    #define GRAPHITE_SUN_DISK
                     #include "Graphite/Lighting.glsl"
                     uniform float _Roughness;
                     layout(location = 0) in vec3 vWorld;

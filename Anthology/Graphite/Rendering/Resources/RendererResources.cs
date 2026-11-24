@@ -18,7 +18,7 @@ internal sealed class RendererResources : IDisposable
     private GraphicsProgram? _prefilterProgram;
     private readonly GraphicsDevice _device;
     private readonly Texture _smaaArea, _smaaSearch;
-    private readonly PixelFormat[]?[] _sceneTargets = new PixelFormat[12][];
+    private readonly PixelFormat[]?[] _sceneTargets = new PixelFormat[18][];
 
     public RendererResources(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy = CompilePolicy.Sync)
     {
@@ -56,6 +56,10 @@ internal sealed class RendererResources : IDisposable
         Textures = new RendererTextures(device, LinearRepeat);
 
         SceneFormats = ViewGraph.SceneFormats(format => device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled));
+        OpaqueHdrFormat = device.GetPixelFormatSupport(PixelFormat.R11_G11_B10_Float, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled)
+            ? PixelFormat.R11_G11_B10_Float : SceneFormats[0];
+        OpaqueDisplayFormat = device.GetPixelFormatSupport(PixelFormat.R10_G10_B10_A2_UNorm, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled)
+            ? PixelFormat.R10_G10_B10_A2_UNorm : OpaqueHdrFormat;
         SceneDepthFormat = ViewGraph.SceneDepth(format => device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.DepthStencil | TextureUsage.Sampled));
 
         Noise = LoadData(device, "Noise.bin", 256, 256, mipmapped: true);
@@ -116,15 +120,20 @@ internal sealed class RendererResources : IDisposable
     public PixelFormat[] SceneFormats { get; }
     public PixelFormat SceneDepthFormat { get; }
 
-    /// <summary>The first count scene formats, the colour LDR when asked, made once each.</summary>
-    public PixelFormat[] SceneTargetFormats(int count, bool ldr)
+    /// <summary>The HDR colour format of views that keep no alpha, half the size of the scene's where the device draws to it.</summary>
+    public PixelFormat OpaqueHdrFormat { get; }
+
+    /// <summary>The format of display encoded colour on views that keep no alpha, 10 bits a channel where the device draws to it.</summary>
+    public PixelFormat OpaqueDisplayFormat { get; }
+
+    /// <summary>The first count scene formats with the colour in the given one, made once each.</summary>
+    public PixelFormat[] SceneTargetFormats(int count, PixelFormat color)
     {
-        int index = count * 2 + (ldr ? 1 : 0);
+        int index = count * 3 + (color == ViewGraph.LdrColorFormat ? 1 : color == SceneFormats[0] ? 0 : 2);
         if (_sceneTargets[index] is { } formats)
             return formats;
         formats = SceneFormats[..count];
-        if (ldr)
-            formats[0] = ViewGraph.LdrColorFormat;
+        formats[0] = color;
         return _sceneTargets[index] = formats;
     }
 

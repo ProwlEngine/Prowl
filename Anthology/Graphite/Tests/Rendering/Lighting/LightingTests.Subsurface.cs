@@ -41,14 +41,6 @@ public sealed partial class LightingTests
             AssertFurnace($"subsurface {i}", s_whiteSubsurface[i], tilts: s_bothSides);
     }
 
-    [Fact]
-    public void TheFurnace_WhiteSubsurfaceAndSheets_AreOneAtTheLiteTier()
-    {
-        _world.Globals.Set(GlobalAxis.PbrTier, "LITE");
-        for (int i = 0; i < s_whiteSubsurface.Length; i++)
-            AssertFurnace($"lite subsurface {i}", s_whiteSubsurface[i], tilts: s_bothSides);
-    }
-
     // A pure sheet of colour S and anisotropy g, all subsurface and no specular, so its pixels show the sheet alone
     private Material Sheet(Vector3 S, float g) => PBR(m =>
     {

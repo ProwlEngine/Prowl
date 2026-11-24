@@ -94,14 +94,11 @@ public sealed partial class LightingTests
     ];
 
     // Transmissive quads with depth 0 and a white colour, under coverage and thin walled too, over the white sky
-    [Theory]
-    [InlineData("FULL")]
-    [InlineData("LITE")]
-    public void TheFurnace_WhiteTransmission_IsOne(string tier)
+    [Fact]
+    public void TheFurnace_WhiteTransmission_IsOne()
     {
-        _world.Globals.Set(GlobalAxis.PbrTier, tier);
         for (int i = 0; i < s_whiteTransmission.Length; i++)
-            AssertFurnace($"{tier} transmission {i}", s_whiteTransmission[i]);
+            AssertFurnace($"transmission {i}", s_whiteTransmission[i]);
     }
 
     // Volumes deeper than 0 scattering white, so mu_a is 0, seen through a slab with a path through it

@@ -121,7 +121,7 @@ public class Animator_Tests
         animator.Play(TestClips.Const(skeleton, 0f));
         animator.Update(0.016f);
 
-        animator.CrossFade(TestClips.Const(skeleton, 10f), duration: 0.2f);
+        animator.CrossFade(TestClips.Const(skeleton, 10f), fadeDuration: 0.2f);
         animator.Update(0.1f); // halfway through the fade
         Assert.InRange(animator.Bones[0].position.Z, 1f, 9f);
 
