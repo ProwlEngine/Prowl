@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Linq;
 
 using Prowl.Vector;
@@ -147,5 +148,49 @@ public class GeometryDissolveTests
         Assert.Equal(2, GeometryOperators.DissolveFaces(mesh, faces).Count);
 
         Assert.Equal(3, mesh.Faces.Count);
+    }
+
+    // Every face fanned into triangles, the way a mesh asset arrives
+    private static GeometryData Triangulated(GeometryData source)
+    {
+        Float3[] points = source.Vertices.Select(v => v.Point).ToArray();
+        var index = source.Vertices.Select((v, i) => (v, i)).ToDictionary(p => p.v, p => p.i);
+        var triangles = new System.Collections.Generic.List<int>();
+        foreach (GeometryData.Face face in source.Faces)
+        {
+            var ring = face.NeighborVertices();
+            for (int i = 1; i + 1 < ring.Count; i++) triangles.AddRange([index[ring[0]], index[ring[i]], index[ring[i + 1]]]);
+        }
+        return GeometryGenerator.TriangleMesh(points, [.. triangles]);
+    }
+
+    [Fact]
+    public void DissolveFlat_JoinsATriangulatedBoxIntoSixFaces()
+    {
+        GeometryData mesh = Triangulated(GeometryGenerator.Box(new Float3(2f, 1f, 3f), segments: new Int3(3, 2, 4)));
+        float volume = mesh.Volume();
+
+        GeometryOperators.DissolveFlat(mesh, 0.5f, 1e-5f);
+
+        Assert.Equal(6, mesh.Faces.Count);
+        Assert.Equal(8, mesh.Vertices.Count);
+        Assert.True(mesh.IsClosed());
+        Assert.Equal(volume, mesh.Volume(), 4);
+    }
+
+    [Theory]
+    [InlineData(800)]
+    [InlineData(1000)]
+    public void DissolveFlat_KeepsAGentleCurve(int segments)
+    {
+        GeometryData mesh = Triangulated(GeometryGenerator.Cylinder(1f, 2f, segments: segments));
+        float volume = mesh.Volume();
+
+        GeometryOperators.DissolveFlat(mesh, 0.5f, 2e-5f);
+
+        // The caps join, the sides stay round
+        Assert.True(mesh.Faces.Count >= segments / 2 + 2, $"{mesh.Faces.Count} faces");
+        Assert.True(mesh.IsClosed());
+        Assert.True(MathF.Abs(mesh.Volume() - volume) < volume * 1e-3f, $"{mesh.Volume()} against {volume}");
     }
 }

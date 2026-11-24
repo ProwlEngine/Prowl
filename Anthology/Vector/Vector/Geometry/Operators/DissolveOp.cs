@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -119,6 +120,55 @@ internal static class DissolveOp
             if (MergeFaces(mesh, patch) is { } merged) result.Add(merged);
         }
         return result;
+    }
+
+    /// <summary>Merges each patch of faces lying flat on the plane of its first face. Returns how many faces came of it.</summary>
+    internal static int Flat(GeometryData mesh, float degrees, float distance)
+    {
+        float limit = MathF.Cos(degrees * Maths.Deg2Rad);
+        var left = new HashSet<GeometryData.Face>(mesh.Faces);
+        var patches = new List<List<GeometryData.Face>>();
+        foreach (GeometryData.Face seed in mesh.Faces)
+        {
+            if (!left.Contains(seed)) continue;
+            Float3 normal = seed.Normal();
+            if (Float3.LengthSquared(normal) < 0.5f) continue;
+            left.Remove(seed);
+
+            Float3 origin = seed.Loop!.Vert.Point;
+            var patch = new List<GeometryData.Face> { seed };
+            for (int i = 0; i < patch.Count; i++)
+                foreach (GeometryData.Edge edge in patch[i].NeighborEdges())
+                    foreach (GeometryData.Face other in edge.NeighborFaces())
+                        if (left.Contains(other) && OnPlane(other, normal, origin, limit, distance))
+                        {
+                            left.Remove(other);
+                            patch.Add(other);
+                        }
+            if (patch.Count > 1) patches.Add(patch);
+        }
+
+        int merged = 0;
+        var corners = new HashSet<GeometryData.Vertex>();
+        foreach (List<GeometryData.Face> patch in patches)
+        {
+            if (MergeFaces(mesh, patch) is not { } face) continue;
+            merged++;
+            corners.UnionWith(face.NeighborVertices());
+        }
+        foreach (GeometryData.Vertex vertex in corners)
+            if (mesh.Contains(vertex) && vertex.NeighborEdges().Count == 2) JoinEdges(mesh, vertex);
+        return merged;
+    }
+
+    // A face too thin to have a normal of its own goes with whatever plane its corners lie on
+    private static bool OnPlane(GeometryData.Face face, Float3 normal, Float3 origin, float limit, float distance)
+    {
+        Float3 own = face.Normal();
+        if (Float3.LengthSquared(own) >= 0.5f && Float3.Dot(own, normal) < limit) return false;
+        foreach (GeometryData.Vertex vertex in face.NeighborVerticesEnumerable())
+            if (MathF.Abs(Float3.Dot(vertex.Point - origin, normal)) > distance) return false;
+        return true;
     }
 
     /// <summary>

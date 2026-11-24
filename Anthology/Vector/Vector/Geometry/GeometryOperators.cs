@@ -839,6 +839,17 @@ public static class GeometryOperators
         return DissolveOp.Vertices(mesh, vertices);
     }
 
+    /// <summary>
+    /// Joins faces lying flat together into one face each. A patch grows from a face over neighbours turned less than
+    /// the angle in degrees from it, with every corner within the distance of its plane, so a gentle curve is not
+    /// flattened. Corners left joining only two edges go too.
+    /// </summary>
+    /// <returns>How many faces came of it.</returns>
+    public static int DissolveFlat(GeometryData mesh, float degrees, float distance)
+    {
+        return DissolveOp.Flat(mesh, degrees, distance);
+    }
+
     #endregion
 
     #region Loop Operators
