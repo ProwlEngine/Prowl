@@ -9,8 +9,8 @@ namespace Prowl.Graphite.Rendering;
 /// The world's volumetric fog for a view, built in and on while the world's <see cref="EnvironmentDesc.VolumetricFog"/>
 /// is: after the shadow cascades and before the opaques, a compute pass lights every cell of a grid fitted to the view, a
 /// cell per 8 by 8 pixels and the fog's depth slices, at a point jittered through the cell each frame, a second blends it
-/// over last frame's where the cell was then, and a third accumulates it toward the camera. Every shader's Graphite_ApplyFog then reads the grid at its
-/// point, opaques, transparents and water alike.
+/// over last frame's where the cell was then, and a third accumulates it toward the camera. <see cref="VolumetricFogSkyFeature"/>
+/// then lays it over the drawn scene, so no surface's shader reads the grid.
 /// </summary>
 public sealed class VolumetricFogFeature : RenderFeature
 {
@@ -103,15 +103,16 @@ public sealed class VolumetricFogFeature : RenderFeature
 }
 
 /// <summary>
-/// The volumetric fog over the sky, which no shader fogs as it draws: after the atmosphere, so in front of the clouds, every
-/// pixel with nothing drawn takes the fog grid's whole column.
+/// The volumetric fog over the drawn scene, which no shader fogs as it draws: after the transparent surfaces, every
+/// pixel takes the fog between the camera and the opaque surface it shows, one with none the fog grid's whole column.
+/// A transparent surface is fogged as what lies behind it.
 /// </summary>
 public sealed class VolumetricFogSkyFeature : RenderFeature
 {
     private readonly RendererResources _resources;
     private readonly PropertySet _properties = new();
 
-    internal VolumetricFogSkyFeature(RendererResources resources) : base(RenderSlot.Atmosphere, 1000, FeatureGroup.VolumetricFogSky, ViewKinds.Cameras)
+    internal VolumetricFogSkyFeature(RendererResources resources) : base(RenderSlot.AfterTransparents, -1000, FeatureGroup.VolumetricFogSky, ViewKinds.Cameras)
         => _resources = resources;
 
     // Under the sea the ocean's underwater pass fogs the view instead
