@@ -229,8 +229,15 @@ internal static class CSGSections
             Segments(paper, font, "csg_gen_import", new Tile(EditorIcons.FileImport, Loc.Get("csg.import_mesh"), Loc.Get("csg.import_mesh_tip"), () =>
                 PropertyEditors.EngineObjectPropertyEditor.OpenAssetSelector(typeof(Mesh), picked =>
                 {
-                    if (picked is Mesh mesh && !tool.ImportMesh(mesh))
-                        Toasts.Warning(Loc.Get("csg.import_mesh_failed"), Loc.Get("csg.import_mesh_failed_msg"));
+                    if (picked is not Mesh mesh) return;
+                    string? why = tool.ImportMesh(mesh) switch
+                    {
+                        CSGGenerateTool.MeshImport.NoModel => "csg.import_mesh_no_model",
+                        CSGGenerateTool.MeshImport.NotReadable => "csg.import_mesh_not_readable",
+                        CSGGenerateTool.MeshImport.NotSolid => "csg.import_mesh_failed_msg",
+                        _ => null,
+                    };
+                    if (why != null) Toasts.Warning(Loc.Get("csg.import_mesh_failed"), Loc.Get(why));
                 })));
         }, IconColumnWidth));
 

@@ -1,8 +1,10 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Editor.GUI.SceneView.Editors;
 using Prowl.Editor.Modeling;
 using Prowl.Runtime.CSG;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
@@ -153,7 +155,7 @@ public class CSGBrushTargetTests
     [Fact]
     public void AnImportedCubeMeshIsASixFacedBrush()
     {
-        CSGControlMesh? shape = Prowl.Editor.GUI.SceneView.Editors.CSGGenerateTool.ShapeOf(Prowl.Runtime.Resources.Mesh.CreateCube(new Float3(2f)));
+        CSGControlMesh? shape = CSGGenerateTool.ShapeOf(Mesh.CreateCube(new Float3(2f)));
 
         Assert.NotNull(shape);
         Assert.Equal(6, shape!.Polygons.Count);
@@ -161,12 +163,32 @@ public class CSGBrushTargetTests
         Assert.Equal(CSGMeshProblem.None, shape.Check());
     }
 
-    [Fact]
-    public void AnImportedSphereMeshEnclosesASolid()
+    private static void AssertImportKeepsItsShape(Mesh mesh)
     {
-        CSGControlMesh? shape = Prowl.Editor.GUI.SceneView.Editors.CSGGenerateTool.ShapeOf(Prowl.Runtime.Resources.Mesh.CreateSphere(1f, 8, 12));
+        float volume = MeshGeometry.ToGeometryData(mesh).Volume();
+
+        CSGControlMesh? shape = CSGGenerateTool.ShapeOf(mesh);
 
         Assert.NotNull(shape);
-        Assert.True(shape!.IsValid());
+        Assert.Equal(CSGMeshProblem.None, shape!.Check());
+        Assert.True(shape.IsValid());
+        Assert.True(MathF.Abs(shape.Volume() - volume) <= volume * 1e-3f, $"{shape.Volume()} against {volume}");
     }
+
+    [Theory]
+    [InlineData(8, 12)]
+    [InlineData(400, 12)]
+    [InlineData(16, 600)]
+    public void AnImportedSphereMeshKeepsItsShape(int rings, int slices) => AssertImportKeepsItsShape(Mesh.CreateSphere(1f, rings, slices));
+
+    [Theory]
+    [InlineData(800)]
+    [InlineData(1000)]
+    public void AnImportedFineCylinderKeepsItsShape(int slices) => AssertImportKeepsItsShape(Mesh.CreateCylinder(1f, 2f, slices));
+
+    [Fact]
+    public void AnImportedThinSlabKeepsItsShape() => AssertImportKeepsItsShape(Mesh.CreateCube(new Float3(1000f, 0.009f, 1000f)));
+
+    [Fact]
+    public void AnImportedTinyCubeKeepsItsShape() => AssertImportKeepsItsShape(Mesh.CreateCube(new Float3(0.0009f)));
 }
