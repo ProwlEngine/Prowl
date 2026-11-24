@@ -76,7 +76,8 @@ public sealed class ModelMeshTool : SceneTool
     // An operator whose amount follows the mouse: the meshes and selections it started from, what it runs, and its count
     private AmountOperator? _operator;
     private readonly Dictionary<ModelObject, (GeometrySnapshot Mesh, ModelEditPart Selection)> _start = new();
-    private Float2 _operatorFrom, _operatorVirtual, _operatorLast;
+    private Float2 _operatorFrom;
+    private readonly SlowPointer _operatorPointer = new();
     private Float3 _operatorPivot, _operatorNormal;
     private int _operatorCount;
     private (float Amount, int Count)? _operatorKey;
@@ -1613,7 +1614,8 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited)
             _start[model] = (model.Mesh.Capture(), Indices(model));
         _operator = op;
-        _operatorFrom = _operatorVirtual = _operatorLast = ctx.Handles.MousePosition;
+        _operatorFrom = ctx.Handles.MousePosition;
+        _operatorPointer.Reset(_operatorFrom);
         _operatorCount = op.StartCount;
         _operatorKey = null;
         _operatorGood = (0f, op.StartCount);
@@ -1635,8 +1637,7 @@ public sealed class ModelMeshTool : SceneTool
         if (wheel != 0f && op.MaxCount > 1) _operatorCount = Math.Clamp(_operatorCount + (wheel > 0f ? 1 : -1), 1, op.MaxCount);
 
         // Shift slows the mouse, a typed number stands in for it
-        _operatorVirtual += (handles.MousePosition - _operatorLast) * (handles.Shift ? 0.1f : 1f);
-        _operatorLast = handles.MousePosition;
+        _operatorPointer.Follow(handles);
         TypeNumber(handles, ref _operatorTyped);
         if (handles.GetKeyDown(KeyCode.Minus) || handles.GetKeyDown(KeyCode.KeypadSubtract))
             _operatorTyped = _operatorTyped.StartsWith('-') ? _operatorTyped[1..] : "-" + _operatorTyped;
@@ -1645,7 +1646,7 @@ public sealed class ModelMeshTool : SceneTool
         if (float.TryParse(_operatorTyped, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float typed)) amount = typed;
         else
         {
-            amount = op.Along is { } along ? Along(_operatorVirtual - _operatorFrom, along) : op.Amount(op.Distance ? DragDistance(ctx, op.Drag) : Float2.Distance(_operatorVirtual, _operatorFrom));
+            amount = op.Along is { } along ? Along(_operatorPointer.Position - _operatorFrom, along) : op.Amount(op.Distance ? DragDistance(ctx, op.Drag) : Float2.Distance(_operatorPointer.Position, _operatorFrom));
             if (op.Distance && SceneTools.GridSnap != handles.Ctrl && SceneTools.MoveSnap > 0f) amount = MathF.Round(amount / SceneTools.MoveSnap) * SceneTools.MoveSnap;
         }
 
@@ -1708,17 +1709,17 @@ public sealed class ModelMeshTool : SceneTool
     {
         HandleContext handles = ctx.Handles;
         float worldPerPixel = WorldPerPixel(ctx);
-        if (handles.WorldToScreen(_operatorPivot) is not { } centre) return Float2.Distance(_operatorVirtual, _operatorFrom) * worldPerPixel;
+        if (handles.WorldToScreen(_operatorPivot) is not { } centre) return Float2.Distance(_operatorPointer.Position, _operatorFrom) * worldPerPixel;
         switch (drag)
         {
             case OperatorDrag.AlongNormal:
                 if (handles.WorldToScreen(_operatorPivot + _operatorNormal) is { } tip && Float2.Distance(tip, centre) is float perUnit && perUnit > 1f)
-                    return Float2.Dot(_operatorVirtual - _operatorFrom, (tip - centre) / perUnit) / perUnit;
-                return -(_operatorVirtual.Y - _operatorFrom.Y) * worldPerPixel;
+                    return Float2.Dot(_operatorPointer.Position - _operatorFrom, (tip - centre) / perUnit) / perUnit;
+                return -(_operatorPointer.Position.Y - _operatorFrom.Y) * worldPerPixel;
             case OperatorDrag.TowardPivot:
-                return (Float2.Distance(_operatorFrom, centre) - Float2.Distance(_operatorVirtual, centre)) * worldPerPixel;
+                return (Float2.Distance(_operatorFrom, centre) - Float2.Distance(_operatorPointer.Position, centre)) * worldPerPixel;
             default:
-                return MathF.Abs(Float2.Distance(_operatorVirtual, centre) - Float2.Distance(_operatorFrom, centre)) * worldPerPixel;
+                return MathF.Abs(Float2.Distance(_operatorPointer.Position, centre) - Float2.Distance(_operatorFrom, centre)) * worldPerPixel;
         }
     }
 

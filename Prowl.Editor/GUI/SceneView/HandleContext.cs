@@ -76,6 +76,9 @@ public sealed class HandleContext
     public Float2 MouseLocal { get; private set; }
 
     public Ray MouseRay { get; private set; }
+
+    /// <summary>The camera ray through a point in absolute Paper space.</summary>
+    public Ray RayThrough(Float2 screen) => _camera.ScreenPointToRay(screen - (MousePosition - MouseLocal), ViewportSize);
     public bool ViewportHovered { get; private set; }
 
     public bool PrimaryDown { get; private set; }
@@ -405,4 +408,24 @@ public sealed class HandleContext
         float d = Float2.Length(MousePosition - screen);
         return d > grabRadiusPixels ? float.MaxValue : d;
     }
+}
+
+/// <summary>A pointer that follows the mouse, a tenth as far while Shift is held, for fine drags.</summary>
+public sealed class SlowPointer
+{
+    private Float2 _last;
+
+    public Float2 Position { get; private set; }
+
+    public void Reset(Float2 at) => Position = _last = at;
+
+    /// <summary>Moves on by how far the mouse moved since the last call.</summary>
+    public Float2 Follow(Float2 mouse, bool slow)
+    {
+        Position += (mouse - _last) * (slow ? 0.1f : 1f);
+        _last = mouse;
+        return Position;
+    }
+
+    public Float2 Follow(HandleContext handles) => Follow(handles.MousePosition, handles.Shift);
 }

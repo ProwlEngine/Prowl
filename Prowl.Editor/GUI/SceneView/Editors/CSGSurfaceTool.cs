@@ -169,6 +169,7 @@ public sealed class CSGSurfaceTool : SceneTool
             _pressPoint = Input.GetKey(KeyCode.V) ? NearestCorner(handles, point) ?? point : point;
             _pressNormal = normal;
             _pressScreen = handles.MousePosition;
+            _pointer.Reset(_pressScreen);
             _started = false;
             CSGSurfaceSelection.BeginTextureDrag();
         }
@@ -179,6 +180,7 @@ public sealed class CSGSurfaceTool : SceneTool
     private CSGSurfaceRef _pressed;
     private Float3 _pressPoint, _pressNormal;
     private Float2 _pressScreen;
+    private readonly SlowPointer _pointer = new();
     private float _startAngle, _startDistance;
     private Float3 _rotateFrom;
 
@@ -200,7 +202,8 @@ public sealed class CSGSurfaceTool : SceneTool
         }
 
         if (Float2.Distance(handles.MousePosition, _pressScreen) > 3f) _moved = true;
-        if (!_moved || !OnPressPlane(handles.MouseRay, out Float3 at)) return;
+        // Shift slows the drag for fine changes
+        if (!_moved || !OnPressPlane(handles.RayThrough(_pointer.Follow(handles)), out Float3 at)) return;
 
         Color32 colour = SelectedEdge;
         ctx.Draw.Dot(_pressPoint, colour, 7f, HandleCap.Circle);

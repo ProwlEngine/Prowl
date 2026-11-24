@@ -56,6 +56,7 @@ public class UVEditorPanel : DockPanel
     // The moving corner nearest the pointer when the move began, which Ctrl snaps onto other points, and the axis a
     // move or scale is held to: -1 for none, 0 for U, 1 for V
     private Float2 _anchor;
+    private readonly SlowPointer _slow = new();
     private int _axis = -1;
     private readonly List<(ModelObject Model, GeometryData.Loop Corner, Float2 UV)> _moving = new();
 
@@ -560,11 +561,13 @@ public class UVEditorPanel : DockPanel
         bool over = paper.IsPointerOverRect((float)_rect.Min.X, (float)_rect.Min.Y, (float)_rect.Size.X, (float)_rect.Size.Y);
 
         bool ctrl = paper.IsKeyDown(PaperKey.LeftControl) || paper.IsKeyDown(PaperKey.RightControl);
+        // Shift slows a move, turn or scale for fine changes
+        Float2 slowed = _slow.Follow(Pointer, paper.IsKeyDown(PaperKey.LeftShift) || paper.IsKeyDown(PaperKey.RightShift));
         if (_gesture is Gesture.Grab or Gesture.Rotate or Gesture.Scale)
         {
             if (paper.IsKeyPressed(PaperKey.X)) _axis = _axis == 0 ? -1 : 0;
             else if (paper.IsKeyPressed(PaperKey.Y)) _axis = _axis == 1 ? -1 : 1;
-            Func<Float2, Float2> change = Modal(Pointer, faces, ctrl);
+            Func<Float2, Float2> change = Modal(slowed, faces, ctrl);
             Preview(tool, change);
             if (paper.IsKeyPressed(PaperKey.Escape) || paper.IsPointerPressed(PaperMouseBtn.Right)) Cancel(tool);
             else if (paper.IsKeyPressed(PaperKey.Enter) || paper.IsPointerPressed(PaperMouseBtn.Left)) Commit(tool, change);
@@ -579,7 +582,7 @@ public class UVEditorPanel : DockPanel
         }
         if (_gesture == Gesture.Move)
         {
-            Func<Float2, Float2> change = Modal(Pointer, faces, ctrl);
+            Func<Float2, Float2> change = Modal(slowed, faces, ctrl);
             Preview(tool, change);
             if (paper.IsPointerDown(PaperMouseBtn.Left)) return;
             if (Float2.Distance(Pointer, _from) < 2f) Cancel(tool);
@@ -693,6 +696,7 @@ public class UVEditorPanel : DockPanel
         foreach ((_, _, Float2 uv) in _moving) sum += uv;
         _pivot = sum / _moving.Count;
         _from = Pointer;
+        _slow.Reset(Pointer);
         _anchor = _moving.MinBy(m => Float2.Distance(ToScreen(m.UV), Pointer)).UV;
         _axis = -1;
         _gesture = gesture;

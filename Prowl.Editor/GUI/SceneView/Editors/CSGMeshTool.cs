@@ -494,6 +494,7 @@ public sealed class CSGMeshTool : SceneTool
 
     private Action _action;
     private Float2 _dragOrigin;
+    private readonly SlowPointer _pointer = new();
 
     // An action started from the menu follows the mouse with no button held, and the next click commits it. It runs
     // modal, holding the viewport it started in until it ends
@@ -1282,7 +1283,7 @@ public sealed class CSGMeshTool : SceneTool
     {
         HandleContext handles = ctx.Handles;
         Float3 normal = ctx.Camera.GameObject.Transform.Forward;
-        Ray ray = handles.MouseRay;
+        Ray ray = handles.RayThrough(_pointer.Position);
 
         float denom = Float3.Dot(ray.Direction, normal);
         if (MathF.Abs(denom) < 1e-6f) return;
@@ -1338,6 +1339,7 @@ public sealed class CSGMeshTool : SceneTool
         }
         _actionView = Context.View;
         _dragOrigin = handles.MousePosition;
+        _pointer.Reset(_dragOrigin);
         _dragStarted = false;
         _passedThreshold = false;
         _clicked = -1;
@@ -1649,7 +1651,7 @@ public sealed class CSGMeshTool : SceneTool
 
         // Cursor travel in world units at the brush's distance, counted from the drag threshold. A menu action has no
         // press to tell apart from a click, so it counts from where the menu was used
-        float pixels = Float2.Distance(handles.MousePosition, _dragOrigin);
+        float pixels = Float2.Distance(_pointer.Follow(handles), _dragOrigin);
         _passedThreshold |= _fromMenu || pixels >= DragThreshold;
         bool moved = _passedThreshold;
         float amount = MathF.Max(0f, pixels - (_fromMenu ? 0f : DragThreshold)) * WorldPerPixel(ctx);
@@ -1800,7 +1802,7 @@ public sealed class CSGMeshTool : SceneTool
             case Action.EdgeSlide:
             {
                 float length = Float2.Dot(_slideDirection, _slideDirection);
-                float factor = length > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - _dragOrigin, _slideDirection) / length, -1f, 1f) : 0f;
+                float factor = length > 1e-6f ? Math.Clamp(Float2.Dot(_pointer.Position - _dragOrigin, _slideDirection) / length, -1f, 1f) : 0f;
                 List<(int A, int B)> slid = [.. _actionEdges];
                 PreviewOperator("Slide CSG Edges", factor, 1, 1, MathF.Abs(factor) <= 1e-4f, (f, _) => (target, selected) =>
                 {
@@ -2061,6 +2063,7 @@ public sealed class CSGMeshTool : SceneTool
         Float4x4 toWorld = _actionBrush!.Transform.LocalToWorldMatrix;
         if (!_loopPicked) _loopEdge = NearestStartEdge(handles, toWorld);
 
+        _pointer.Follow(handles);
         float slide = 0f;
         if (_loopPicked && _loopEdge is { } picked
             && handles.WorldToScreen(Float4x4.TransformPoint(_startMesh!.Points[picked.A], toWorld)) is { } a
@@ -2068,7 +2071,7 @@ public sealed class CSGMeshTool : SceneTool
         {
             Float2 along = b - a;
             float length = Float2.Dot(along, along);
-            slide = length > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - _dragOrigin, along) / length * 2f, -1f, 1f) : 0f;
+            slide = length > 1e-6f ? Math.Clamp(Float2.Dot(_pointer.Position - _dragOrigin, along) / length * 2f, -1f, 1f) : 0f;
         }
 
         if (_loopEdge is { } edge)
@@ -2100,6 +2103,7 @@ public sealed class CSGMeshTool : SceneTool
             if (_loopEdge == null) return;
             _loopPicked = true;
             _dragOrigin = handles.MousePosition;
+            _pointer.Reset(_dragOrigin);
             return;
         }
         TakeActionResult();
@@ -2276,7 +2280,7 @@ public sealed class CSGMeshTool : SceneTool
         if (handles.WorldToScreen(centre) is not { } from || handles.WorldToScreen(tip) is not { } to) return 1f;
         Float2 along = to - from;
         if (Float2.LengthSquared(along) < 16f) return 1f;
-        return Float2.Dot(handles.MousePosition - _dragOrigin, along) < 0f ? -1f : 1f;
+        return Float2.Dot(_pointer.Position - _dragOrigin, along) < 0f ? -1f : 1f;
     }
 
     private void PreviewChamferSelection(float amount)

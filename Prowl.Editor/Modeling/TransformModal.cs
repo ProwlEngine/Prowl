@@ -60,7 +60,8 @@ public sealed class TransformModal
     private readonly Quaternion _local;
     private readonly Quaternion? _normal;
     private bool _started;
-    private Float2 _start, _virtual, _last;
+    private Float2 _start;
+    private readonly SlowPointer _pointer = new();
     private int _axis = -1;
     private bool _plane;
     private AxisSpace _space;
@@ -127,7 +128,8 @@ public sealed class TransformModal
         if (!_started)
         {
             _started = true;
-            _start = _virtual = _last = handles.MousePosition;
+            _start = handles.MousePosition;
+            _pointer.Reset(_start);
             _anchor = _session.Median;
             float nearest = float.MaxValue;
             foreach (Float3 point in _session.Points)
@@ -137,8 +139,7 @@ public sealed class TransformModal
                 _anchor = point;
             }
         }
-        _virtual += (handles.MousePosition - _last) * (handles.Shift ? 0.1f : 1f);
-        _last = handles.MousePosition;
+        _pointer.Follow(handles);
 
         ReadKeys(handles);
 
@@ -201,7 +202,7 @@ public sealed class TransformModal
     {
         HandleContext handles = ctx.Handles;
         Float3 forward = ctx.Camera.GameObject.Transform.Forward;
-        Float3 inView = OnPlane(ctx, _virtual, forward) - OnPlane(ctx, _start, forward);
+        Float3 inView = OnPlane(ctx, _pointer.Position, forward) - OnPlane(ctx, _start, forward);
         bool snap = SceneTools.GridSnap != handles.Ctrl;
         float? typed = Typed;
         int axis = _axis < 0 && typed != null ? 0 : _axis;
@@ -233,7 +234,7 @@ public sealed class TransformModal
         else
         {
             Float3 normal = Axis(axis);
-            delta = OnPlane(ctx, _virtual, normal) - OnPlane(ctx, _start, normal);
+            delta = OnPlane(ctx, _pointer.Position, normal) - OnPlane(ctx, _start, normal);
             if (snap) delta = SnapIn(delta, Axes);
         }
 
@@ -248,7 +249,7 @@ public sealed class TransformModal
         HandleContext handles = ctx.Handles;
         Float3 forward = ctx.Camera.GameObject.Transform.Forward;
         Float2 centre = handles.WorldToScreen(_session.Pivot) ?? _start;
-        Float2 from = _start - centre, to = _virtual - centre;
+        Float2 from = _start - centre, to = _pointer.Position - centre;
 
         // Screen y runs down, so a positive screen angle is clockwise, which is a negative turn about the view direction
         float seen = MathF.Atan2(from.X * to.Y - from.Y * to.X, Float2.Dot(from, to));
@@ -267,7 +268,7 @@ public sealed class TransformModal
     {
         HandleContext handles = ctx.Handles;
         Float2 centre = handles.WorldToScreen(_session.Pivot) ?? _start;
-        float factor = Typed ?? Float2.Length(_virtual - centre) / MathF.Max(Float2.Length(_start - centre), 1f);
+        float factor = Typed ?? Float2.Length(_pointer.Position - centre) / MathF.Max(Float2.Length(_start - centre), 1f);
         if (Typed == null && SceneTools.GridSnap != handles.Ctrl) factor = Round(factor, SceneTools.ScaleSnap);
 
         Float3 factors = new(factor);
@@ -287,7 +288,7 @@ public sealed class TransformModal
     {
         HandleContext handles = ctx.Handles;
         Float3 from = _session.Median;
-        Float2 moved = _virtual - _start;
+        Float2 moved = _pointer.Position - _start;
         if (handles.WorldToScreen(from) is not { } fromScreen || SlideEnds.Count == 0) return;
 
         // The edge is the one whose direction on screen best matches the mouse's first move
