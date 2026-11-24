@@ -16,12 +16,8 @@ public enum CSGMode
     Create,
     /// <summary>Reshape the selection: shape handles, or vertices, edges and faces of a plain brush.</summary>
     Edit,
-    /// <summary>Drag the texture across selected surfaces.</summary>
-    UVMove,
-    /// <summary>Turn the texture of selected surfaces.</summary>
-    UVRotate,
-    /// <summary>Scale the texture of selected surfaces.</summary>
-    UVScale,
+    /// <summary>Pick surfaces and drag their texture, moving, turning or scaling it as the surface tool's drag says.</summary>
+    Surface,
     /// <summary>Move a brush's pivot without moving its shape.</summary>
     Pivot,
 }
@@ -45,9 +41,6 @@ public static class CSGEditMode
     }
 
     public static bool Is(CSGMode mode) => _mode == mode;
-
-    /// <summary>One of the tools that work on surfaces rather than brushes.</summary>
-    public static bool IsUV => _mode is CSGMode.UVMove or CSGMode.UVRotate or CSGMode.UVScale;
 }
 
 /// <summary>Grid snapping for the CSG tools, following the scene view's grid toggle and size. Holding Ctrl inverts it.</summary>

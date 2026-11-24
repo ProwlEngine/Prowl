@@ -1026,6 +1026,8 @@
   "csg.mode_create_tip": "Place new shapes on a surface or the grid.",
   "csg.mode_edit": "Edit",
   "csg.mode_edit_tip": "Reshape the selection: handles on a shape, or the points, edges and faces of a plain brush.",
+  "csg.mode_surface": "Surface",
+  "csg.mode_surface_tip": "Pick surfaces to paint them, and drag to move, turn or scale their texture. W, E and R pick which.",
   "csg.mode_uv_move": "UV Move",
   "csg.mode_uv_move_tip": "Drag the texture across the selected surfaces.",
   "csg.mode_uv_rotate": "UV Rotate",

@@ -68,7 +68,7 @@ internal static class CSGSections
         if (CSGEditMode.Is(CSGMode.Select)) AddSelect(columns);
         else if (CSGEditMode.Is(CSGMode.Create)) AddGenerate(columns, SceneToolManager.Get<CSGGenerateTool>());
         else if (CSGEditMode.Is(CSGMode.Edit) && SceneToolManager.Get<CSGMeshTool>() is { Active: true } mesh) AddEdit(columns, mesh);
-        else if (CSGEditMode.IsUV) AddSurface(columns);
+        else if (CSGEditMode.Is(CSGMode.Surface)) AddSurface(columns);
         else if (SceneToolManager.Get<CSGClipTool>() is { Active: true } clip) AddClip(columns, clip);
         return columns;
     }
@@ -352,6 +352,15 @@ internal static class CSGSections
     /// <summary>The selected surfaces' material, mapping and flags, for the UV tools.</summary>
     private static void AddSurface(List<Column> columns)
     {
+        if (SceneToolManager.Get<CSGSurfaceTool>() is { } tool)
+            columns.Add(new Column("csg_surf_drag", "", null, (paper, font) =>
+                Segments(paper, font, "csg_surf_drag_mode",
+                [
+                    new Tile(EditorIcons.ArrowsUpDownLeftRight, Loc.Get("csg.mode_uv_move"), Loc.Get("csg.mode_uv_move_tip"), () => tool.Drag = SurfaceDrag.Move, tool.Drag == SurfaceDrag.Move),
+                    new Tile(EditorIcons.RotateRight, Loc.Get("csg.mode_uv_rotate"), Loc.Get("csg.mode_uv_rotate_tip"), () => tool.Drag = SurfaceDrag.Rotate, tool.Drag == SurfaceDrag.Rotate),
+                    new Tile(EditorIcons.Expand, Loc.Get("csg.mode_uv_scale"), Loc.Get("csg.mode_uv_scale_tip"), () => tool.Drag = SurfaceDrag.Scale, tool.Drag == SurfaceDrag.Scale),
+                ], iconsOnly: true), NarrowColumnWidth));
+
         if (CSGSurfaceSelection.Active is not CSGSurfaceRef active || !active.IsValid)
         {
             columns.Add(new Column("csg_surf", Loc.Get("csg.surfaces_title"), Loc.Get("csg.surface_pick_hint"), (paper, font) =>

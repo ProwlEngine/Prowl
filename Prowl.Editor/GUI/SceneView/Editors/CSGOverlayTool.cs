@@ -33,9 +33,7 @@ public sealed class CSGOverlayTool : SceneTool
         (CSGMode.Select, "csg.mode_select", "csg.mode_select_tip", "CSG/ModeSelect", EditorIcons.ArrowPointer),
         (CSGMode.Create, "csg.mode_create", "csg.mode_create_tip", "CSG/ModeCreate", EditorIcons.SquarePlus),
         (CSGMode.Edit, "csg.mode_edit", "csg.mode_edit_tip", "CSG/ModeEdit", EditorIcons.DrawPolygon),
-        (CSGMode.UVMove, "csg.mode_uv_move", "csg.mode_uv_move_tip", "CSG/ModeUVMove", EditorIcons.ArrowsUpDownLeftRight),
-        (CSGMode.UVRotate, "csg.mode_uv_rotate", "csg.mode_uv_rotate_tip", "CSG/ModeUVRotate", EditorIcons.RotateRight),
-        (CSGMode.UVScale, "csg.mode_uv_scale", "csg.mode_uv_scale_tip", "CSG/ModeUVScale", EditorIcons.Expand),
+        (CSGMode.Surface, "csg.mode_surface", "csg.mode_surface_tip", "CSG/ModeSurface", EditorIcons.BorderAll),
         (CSGMode.Pivot, "csg.mode_pivot", "csg.mode_pivot_tip", "CSG/ModePivot", EditorIcons.Bullseye),
     };
 
@@ -136,7 +134,7 @@ public sealed class CSGOverlayTool : SceneTool
         {
             menu.Title($"{Loc.Get("csg.title")}  {Loc.Get(ModeLabel(CSGEditMode.Current))}");
             if (CSGEditMode.Is(CSGMode.Create)) ShapeCommands(menu);
-            else if (CSGEditMode.IsUV) SurfaceCommands(menu);
+            else if (CSGEditMode.Is(CSGMode.Surface)) SurfaceCommands(menu);
             else BrushCommands(menu);
         }
 
