@@ -466,7 +466,7 @@ public sealed class ModelMeshTool : SceneTool
             if (selection.Faces.Count == 0) continue;
 
             Undo.RecordObject(model, Name);
-            GeometryData part = Operators.Separate(model.Mesh, [.. selection.Faces]);
+            GeometryData part = GeometryOperators.Separate(model.Mesh, [.. selection.Faces]);
             selection.Clear();
             model.RefreshPreview();
 
@@ -1843,7 +1843,7 @@ public sealed class ModelMeshTool : SceneTool
         if (AutoShrinkwrap && OtherModels() is { Count: > 0 } surfaces)
             foreach (ModelObject model in _edited)
                 if (_selection[model].Vertices.Count > 0)
-                    Operators.Shrinkwrap(model.Mesh, [.. _selection[model].Vertices], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), 0.002f, 1f);
+                    GeometryOperators.Shrinkwrap(model.Mesh, [.. _selection[model].Vertices], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), 0.002f, 1f);
         foreach (ModelObject model in _edited)
         {
             (Dictionary<GeometryData.Vertex, Float3> points, HashSet<GeometryData.Face> faces) = before[model];
@@ -2212,7 +2212,7 @@ public sealed class ModelMeshTool : SceneTool
         RunRemembered("Shrinkwrap", [new(Loc.Get("model.field_offset"), 0.002f), new(Loc.Get("model.field_reach"), 1f)], v => EditMeshes("Shrinkwrap", (model, mesh, s) =>
         {
             IEnumerable<GeometryData.Vertex> points = s.Vertices.Count > 0 ? s.Vertices : mesh.Vertices.Where(v => !_hidden[model].Vertices.Contains(v));
-            Operators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), v[0], MathF.Max(0f, v[1]));
+            GeometryOperators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), v[0], MathF.Max(0f, v[1]));
         }));
     }
 

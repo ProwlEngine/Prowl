@@ -255,24 +255,6 @@ public class OperatorTests
     }
 
     [Fact]
-    public void ShrinkwrapMovesPointsOntoTheNearestSurfaceAlongTheirNormal()
-    {
-        GeometryData mesh = Strip();
-        float? Hit(Ray ray, float reach)
-        {
-            // A floor at y = -0.5
-            if (MathF.Abs(ray.Direction.Y) < 1e-6f) return null;
-            float t = (-0.5f - ray.Origin.Y) / ray.Direction.Y;
-            return t >= 0f && t <= reach ? t : null;
-        }
-
-        int moved = Operators.Shrinkwrap(mesh, [.. mesh.Vertices], Float4x4.Identity, Hit, 0.01f, 1f);
-
-        Assert.Equal(6, moved);
-        Assert.All(mesh.Vertices, v => Assert.Equal(-0.49f, v.Point.Y, 4));
-    }
-
-    [Fact]
     public void FillingTwoPointsJoinsThemWithAnEdge()
     {
         var mesh = new GeometryData();
@@ -740,22 +722,6 @@ public class OperatorTests
             Assert.True(Float3.Dot(CornerNormal(loop), radial) > 0.999f);
             loop = loop.Next!;
         } while (loop != side.Loop);
-    }
-
-    [Fact]
-    public void SeparatingFacesMovesThemIntoAMeshOfTheirOwn()
-    {
-        GeometryData mesh = Primitives.Make(PrimitiveKind.Cube);
-        GeometryData.Face top = mesh.Faces.First(f => f.Normal().Y > 0.99f);
-
-        GeometryData part = Operators.Separate(mesh, [top]);
-
-        Assert.Equal(5, mesh.Faces.Count);
-        Assert.Single(part.Faces);
-        Assert.Equal(4, part.Vertices.Count);
-        Assert.True(part.HasLoopAttribute(MeshGeometry.UV));
-        Assert.True(part.Faces[0].Normal().Y > 0.99f);
-        Assert.Equal(8, mesh.Vertices.Count);
     }
 
     /// <summary>A mesh joined into another lands where it was in the world, its slots merged by material and its faces facing out still.</summary>
