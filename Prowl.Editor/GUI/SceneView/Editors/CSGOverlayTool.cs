@@ -442,7 +442,7 @@ public sealed class CSGOverlayTool : SceneTool
 
         List<CSGSections.Column> columns = CSGSections.Columns();
         float available = MathF.Max(CSGSections.ColumnWidth, ctx.Handles.ViewportSize.X - 100f);
-        float width = MathF.Min(available, CSGSections.Width(columns));
+        float width = CSGSections.Stacked ? CSGSections.ColumnWidth : MathF.Min(available, CSGSections.Width(columns));
 
         using (paper.Column(id).Width(UnitValue.Auto).Height(UnitValue.Auto).Enter())
         {
