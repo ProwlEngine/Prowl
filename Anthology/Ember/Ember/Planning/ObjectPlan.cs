@@ -117,7 +117,15 @@ internal sealed class ObjectPlan : MigrationPlan
             switch (step.Action)
             {
                 case FieldAction.CopyMapped:
-                    value = context.Map(step.Source!.GetValue(source));
+                    object? original = step.Source!.GetValue(source);
+                    value = context.Map(original);
+
+                    // If updating an instance in place and the value didn't change,
+                    // the field already holds this reference. Skipping the write avoids
+                    // redundant reflection and prevents FieldInfo.SetValue from calling
+                    // Object.GetType() on types like Continuation.
+                    if (ReferenceEquals(source, target) && ReferenceEquals(original, value))
+                        continue;
                     break;
 
                 case FieldAction.CopyDirect:
@@ -139,6 +147,11 @@ internal sealed class ObjectPlan : MigrationPlan
             try
             {
                 step.Target.SetValue(target, value);
+            }
+            catch (NotSupportedException) when (ReferenceEquals(step.Target.GetValue(target), value))
+            {
+                // The field already holds this value, but FieldInfo.SetValue threw
+                // because .NET 11 disallows Object.GetType() on runtime-internal continuations.
             }
             catch (Exception e)
             {

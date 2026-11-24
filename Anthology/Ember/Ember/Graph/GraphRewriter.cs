@@ -143,15 +143,29 @@ internal sealed class GraphRewriter
     {
         if (value == null) return null;
 
-        var type = value.GetType();
-        var plan = _planner.For(type);
+        // Check if already mapped before inspecting type to avoid unnecessary work
+        // and to fast-path already preserved runtime objects.
+        if (_map.TryGetValue(value, out object? existing)) return existing;
 
+        Type type;
+        try
+        {
+            type = value.GetType();
+        }
+        catch (NotSupportedException)
+        {
+            // Objects like System.Runtime.CompilerServices.Continuation in .NET 11+
+            // explicitly disallow Object.GetType(). Preserve them untouched.
+            _map[value] = value;
+            _report.ObjectsVisited++;
+            _report.ObjectsPreserved++;
+            return value;
+        }
+
+        var plan = _planner.For(type);
         // A boxed struct has no identity, so it is never recorded, and it is filled now rather than queued:
         // the box is written back by value and has to be complete when it is stored.
         if (type.IsValueType) return MapBoxed(plan, value);
-
-        if (_map.TryGetValue(value, out var existing)) return existing;
-
         var allocation = SafeAllocate(plan, value);
 
         _report.ObjectsVisited++;
