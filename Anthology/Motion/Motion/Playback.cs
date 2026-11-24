@@ -46,7 +46,14 @@ public static class ClipPlayback
 /// <summary>A clip playhead: normalized time plus the number of loops completed.</summary>
 public struct ClipCursor
 {
+    /// <summary>
+    /// The normalized playback time (0-1).
+    /// </summary>
     public float Time;
+
+    /// <summary>
+    /// The number of times the clip has looped around. This is decremented when a clip is played in reverse.
+    /// </summary>
     public int LoopCount;
 
     /// <summary>
