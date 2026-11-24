@@ -42,6 +42,9 @@ internal sealed class DemoWindow
     private bool _noVsync;
     private int _debugView = -1;
     private string? _tier;
+    private int _lightCount = -1;
+    private float _lightRange = -1;
+    private bool _lightSpread;
     private int _voxelView = -1;
     private bool _gi;
     private int _forcedLod = -1;
@@ -78,6 +81,12 @@ internal sealed class DemoWindow
                 _gi = true;
             else if (args[i] == "--voxels" && i + 1 < args.Length)
                 _voxelView = (int)Enum.Parse<VoxelDebugMode>(args[++i], ignoreCase: true);
+            else if (args[i] == "--lights" && i + 1 < args.Length)
+                _lightCount = int.Parse(args[++i]);
+            else if (args[i] == "--range" && i + 1 < args.Length)
+                _lightRange = float.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture);
+            else if (args[i] == "--spread")
+                _lightSpread = true;
             else if (args[i] == "--lod" && i + 1 < args.Length)
                 _forcedLod = int.Parse(args[++i]);
             else if (args[i] == "--freeze")
@@ -132,7 +141,7 @@ internal sealed class DemoWindow
         _demo = new Demo(_device);
         _demo.Bloom.Enabled = !_noBloom;
         _demo.Tonemap.Enabled = !_noTonemap;
-        SelectScene(Math.Clamp(_startScene, 0, 6));
+        SelectScene(Math.Clamp(_startScene, 0, 7));
         _paused = _freeze;
         _scene.View.ForcedLod = _forcedLod;
         if (_hour is { } hour && _scene is ShadowsScene shadows)
@@ -175,6 +184,7 @@ internal sealed class DemoWindow
                 3 => new InstancingScene(_demo),
                 5 => new LodScene(_demo),
                 6 => new TerrainScene(_demo),
+                7 => new ManyLightsScene(_demo, _lightCount >= 0 ? _lightCount : 1000, _lightRange > 0 ? _lightRange : 8f, _lightSpread),
                 _ => new MaterialsScene(_demo),
             };
             _scenes[index] = scene;
@@ -204,6 +214,7 @@ internal sealed class DemoWindow
             case Key.Number5: SelectScene(4); break;
             case Key.Number6: SelectScene(5); break;
             case Key.Number7: SelectScene(6); break;
+            case Key.Number8: SelectScene(7); break;
             case Key.F: _debugView = _debugView + 1 < DebugViews.Length ? _debugView + 1 : -1; break;
             case Key.G: _voxelView = _voxelView + 1 < Enum.GetValues<VoxelDebugMode>().Length ? _voxelView + 1 : -1; break;
             case Key.I: _gi = !_gi; break;
@@ -261,7 +272,7 @@ internal sealed class DemoWindow
         if (_titleTimer >= 0.5)
         {
             _timer?.Print(100);
-            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 7 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}, G voxels, I GI{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? " - GI" : "")}";
+            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 8 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}, G voxels, I GI{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? " - GI" : "")}";
             _titleTimer = 0;
             _titleFrames = 0;
         }
