@@ -903,7 +903,7 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited)
         {
             ElementSelection selection = _selection[model];
-            List<GeometryData.Edge> edges = [.. selection.Edges.SelectMany(e => ring ? Selecting.Ring(e) : Selecting.Loop(e, null))];
+            List<GeometryData.Edge> edges = [.. selection.Edges.SelectMany(e => ring ? GeometryOperators.EdgeRingAcross(e) : GeometryOperators.EdgeLoopOrOutline(e, null))];
             selection.Edges.UnionWith(edges);
             foreach (GeometryData.Edge edge in edges) selection.Vertices.UnionWith([edge.Vert1, edge.Vert2]);
             Selecting.ToMode(selection, SelectMode.Edge, Mode);
@@ -924,7 +924,7 @@ public sealed class ModelMeshTool : SceneTool
         ElementSelection selection = _selection[at.Model];
         if (Mode == SelectMode.Face)
         {
-            var across = new HashSet<GeometryData.Edge>(Selecting.Ring(edge));
+            var across = new HashSet<GeometryData.Edge>(GeometryOperators.EdgeRingAcross(edge));
             foreach (GeometryData.Face face in across.SelectMany(e => e.NeighborFaces()).Distinct())
                 if (face.NeighborEdges().Count(across.Contains) >= 2)
                 {
@@ -933,7 +933,7 @@ public sealed class ModelMeshTool : SceneTool
                 }
         }
         else
-            foreach (GeometryData.Edge e in ring ? Selecting.Ring(edge) : Selecting.Loop(edge, null))
+            foreach (GeometryData.Edge e in ring ? GeometryOperators.EdgeRingAcross(edge) : GeometryOperators.EdgeLoopOrOutline(edge, null))
             {
                 selection.Edges.Add(e);
                 selection.Vertices.UnionWith([e.Vert1, e.Vert2]);

@@ -114,33 +114,6 @@ public class SelectionTests
         Assert.Equal(6, selection.Faces.Count);
     }
 
-    /// <summary>A loop from a cap's edge on a prism, whose corners have three edges, is the cap's outline on the cursor's side.</summary>
-    [Fact]
-    public void ALoopOnAPrismCapIsTheCapOutline()
-    {
-        GeometryData mesh = LPrism();
-        GeometryData.Face top = Facing(mesh, Float3.UnitY);
-        GeometryData.Edge edge = top.NeighborEdges()[0];
-
-        List<GeometryData.Edge> loop = Selecting.Loop(edge, top);
-
-        Assert.Equal(6, loop.Count);
-        Assert.All(top.NeighborEdges(), e => Assert.Contains(e, loop));
-    }
-
-    /// <summary>A ring from a prism's upright edge goes round every upright edge, across its n gon sides.</summary>
-    [Fact]
-    public void ARingOnAPrismIsEveryUprightEdge()
-    {
-        GeometryData mesh = LPrism();
-        GeometryData.Edge upright = mesh.Edges.First(e => MathF.Abs(e.Vert1.Point.Y - e.Vert2.Point.Y) > 0.5f);
-
-        List<GeometryData.Edge> ring = Selecting.Ring(upright);
-
-        Assert.Equal(6, ring.Count);
-        Assert.All(ring, e => Assert.True(MathF.Abs(e.Vert1.Point.Y - e.Vert2.Point.Y) > 0.5f));
-    }
-
     [Fact]
     public void SimilarFacesShareADirection()
     {

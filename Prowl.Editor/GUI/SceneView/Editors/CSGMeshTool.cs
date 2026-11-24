@@ -986,7 +986,7 @@ public sealed class CSGMeshTool : SceneTool
             foreach (GeometryData.Face face in _target.FacesOf([polygon]))
                 if (face.NeighborEdges().Contains(edge)) side = face;
 
-        List<GeometryData.Edge> edges = handles.Ctrl ? Selecting.Ring(edge) : Selecting.Loop(edge, side);
+        List<GeometryData.Edge> edges = handles.Ctrl ? GeometryOperators.EdgeRingAcross(edge) : GeometryOperators.EdgeLoopOrOutline(edge, side);
         ElementSelection hidden = HiddenElements();
         ElementSelection current = SelectedElements();
         EditSelection(selection =>
