@@ -3,10 +3,10 @@
 
 using Prowl.Vector;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>Mutable counterpart of <see cref="Camera"/>.</summary>
-internal sealed class IntermediateCamera
+public sealed class IntermediateCamera
 {
     public string? Name { get; set; }
     public CameraProjection Projection { get; set; } = CameraProjection.Perspective;
@@ -19,7 +19,7 @@ internal sealed class IntermediateCamera
 }
 
 /// <summary>Mutable counterpart of <see cref="Light"/>.</summary>
-internal sealed class IntermediateLight
+public sealed class IntermediateLight
 {
     public string? Name { get; set; }
     public LightType Type { get; set; } = LightType.Point;

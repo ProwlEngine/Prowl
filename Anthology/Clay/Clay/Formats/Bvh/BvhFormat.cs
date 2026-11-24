@@ -2,7 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Clay.Importer;
-using Prowl.Clay.Internal.Intermediate;
+using Prowl.Clay.Intermediate;
 using Prowl.Vector;
 
 namespace Prowl.Clay.Formats.Bvh;
@@ -15,6 +15,27 @@ namespace Prowl.Clay.Formats.Bvh;
 /// </remarks>
 internal sealed class BvhFormat : IModelFormat
 {
+    /// <summary>
+    /// Determines whether a file with the given file extension can be read by this importer.
+    /// </summary>
+    /// <param name="extension"> The lowercase file extension WITHOUT the leading period ('.'). </param>
+    /// <returns><see langword="true"/> if the file extension is readable by this importer.</returns>
+    public bool CanRead(string extension) => extension == "bvh";
+
+    /// <summary>
+    /// Determines via the initial file content whether the file can be read by this importer.
+    /// </summary>
+    /// <param name="initialBytes"> The initial 32 bytes of data from the file, if the file is at least that size. </param>
+    /// <returns><see langword="true"/> if the file data is readable by this importer.</returns>
+    public bool CanRead(ReadOnlySpan<byte> initialBytes)
+    {
+        // "HIERARCHY" a BVH file.
+        return initialBytes.Length >= 9 &&
+            initialBytes[0] == 0x48 && initialBytes[1] == 0x49 && initialBytes[2] == 0x45 && initialBytes[3] == 0x52 &&
+            initialBytes[4] == 0x41 && initialBytes[5] == 0x52 && initialBytes[6] == 0x43 && initialBytes[7] == 0x48 &&
+            initialBytes[8] == 0x59;
+    }
+
     // BVH files have three or six animation channels.
     private enum BvhChannelName
     {
@@ -55,17 +76,12 @@ internal sealed class BvhFormat : IModelFormat
         };
     }
 
-
-    /// <summary>The format token this importer handles.</summary>
-    public string Token => "bvh";
-
-    /// <summary>True when this importer can handle the supplied format token.</summary>
-    public bool CanRead(string formatToken) => formatToken == "bvh";
-
     /// <summary>
     /// Reads the source into an <see cref="IntermediateScene"/>. The source may be either
     /// <see cref="ImportContext.SourcePath"/> (when not null) or <paramref name="stream"/>.
     /// </summary>
+    /// <param name="stream">The stream to read from.</param>
+    /// <param name="context">Importer context.</param>
     public IntermediateScene Read(Stream stream, ImportContext context)
     {
         using var reader = new BvhStreamReader(stream);
@@ -210,7 +226,7 @@ internal sealed class BvhFormat : IModelFormat
             context.Log.Warning("Zero animation frames were found in the file. Only the hierarchy will be imported.", nameof(BvhFormat));
 
         // Add every non-empty binding to an animation.
-        var animation = new IntermediateAnimation { Name = "Animation" };
+        var animation = new IntermediateAnimation { Name = Path.GetFileNameWithoutExtension(context.SourcePath) ?? "Animation" };
         foreach (Joint joint in joints)
         {
             if (joint.PositionBinding.Times.Count > 0)

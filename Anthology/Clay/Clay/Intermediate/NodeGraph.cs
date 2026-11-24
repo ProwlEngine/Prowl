@@ -1,7 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>
 /// Traversal helpers for the <see cref="IntermediateNode"/> hierarchy.

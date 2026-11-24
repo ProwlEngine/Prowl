@@ -3,14 +3,14 @@
 
 using System.Text.Json;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>
 /// Mutable, writable intermediate form of a scene used between the format reader and the
 /// post-process pipeline. Flat lists of nodes, meshes, materials, textures, skins, and
 /// animations let post-process steps mutate the scene in place before bake.
 /// </summary>
-internal sealed class IntermediateScene
+public sealed class IntermediateScene
 {
     public IntermediateNode Root { get; set; } = new();
     public List<IntermediateNode> Nodes { get; } = new();
@@ -28,14 +28,13 @@ internal sealed class IntermediateScene
     public Dictionary<string, JsonElement> RawExtensions { get; } = new();
     public Dictionary<string, object?> Extras { get; } = new();
 
-    public string Format { get; set; } = string.Empty;
     public string? FormatVersion { get; set; }
     public string? Generator { get; set; }
     public string? Copyright { get; set; }
 }
 
 /// <summary>Coordinate convention of an intermediate scene.</summary>
-internal enum CoordinateSystem
+public enum CoordinateSystem
 {
     /// <summary>Right-handed, Y-up, models facing +Z (glTF native).</summary>
     RightHandedYUp,

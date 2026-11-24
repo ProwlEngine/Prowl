@@ -3,13 +3,13 @@
 
 using Prowl.Vector;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>
 /// Mutable counterpart of <see cref="Skin"/>. Bone references live as node pointers until the
 /// scene is baked, at which point they become node indices.
 /// </summary>
-internal sealed class IntermediateSkin
+public sealed class IntermediateSkin
 {
     public string? Name { get; set; }
     public IntermediateNode? RootNode { get; set; }

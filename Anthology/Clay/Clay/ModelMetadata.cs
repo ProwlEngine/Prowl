@@ -3,6 +3,8 @@
 
 using System.Text.Json;
 
+using Prowl.Clay.Importer;
+
 namespace Prowl.Clay;
 
 /// <summary>
@@ -11,8 +13,8 @@ namespace Prowl.Clay;
 /// </summary>
 public sealed class ModelMetadata
 {
-    /// <summary>Short format token, e.g. <c>"gltf"</c>, <c>"glb"</c>, <c>"obj"</c>, <c>"fbx"</c>, <c>"vrm"</c>.</summary>
-    public required string Format { get; init; }
+    /// <summary>The model importer instance.</summary>
+    public required IModelFormat Format { get; init; }
 
     /// <summary>Format version string when available, e.g. <c>"2.0"</c> for glTF, <c>"7400"</c> for FBX.</summary>
     public string? FormatVersion { get; init; }
