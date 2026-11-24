@@ -80,9 +80,6 @@ public sealed class CSGGenerateTool : SceneTool
     private Float3 _cornerB;
     private float _height;
 
-    // The height the last brush was placed with, which Shift reuses
-    private float _lastHeight;
-
     // The base was started with a click rather than a drag, so a second click finishes it
     private bool _clickedBase;
 
@@ -95,6 +92,12 @@ public sealed class CSGGenerateTool : SceneTool
 
     /// <summary>The base keeps equal width and depth.</summary>
     public bool SquareBase { get; set; }
+
+    // Held keys for this frame: Shift makes the shape uniform, Alt draws it from the centre
+    private bool _uniform, _centred, _holdsModal;
+    private HandleContext? _modalHandles;
+    private bool Square => SquareBase || _uniform;
+    private bool Centred => FromCentre || _centred;
 
     /// <summary>A shape is being drawn, so the shape keys and tool changes wait.</summary>
     public bool Busy => _stage != Stage.Idle;
@@ -115,6 +118,16 @@ public sealed class CSGGenerateTool : SceneTool
         }
 
         HandleContext handles = ctx.Handles;
+        _uniform = handles.Shift;
+        _centred = handles.Alt;
+
+        // Alt with the button down orbits the camera, except while a shape is being drawn
+        if (_stage != Stage.Idle && Input.IsAltPressed && Input.GetMouseButton(0))
+        {
+            handles.Modal = _holdsModal = true;
+            _modalHandles = handles;
+        }
+        else if (_holdsModal) handles.Modal = _holdsModal = false;
 
         // Escape abandons the shape in progress, and disarms only once there is nothing to abandon.
         if (handles.KeyDown(KeyCode.Escape))
@@ -157,7 +170,7 @@ public sealed class CSGGenerateTool : SceneTool
         DrawWorkGrid(ctx, _planeOrigin);
         DrawCursor(ctx, _planeOrigin, normal, Tint());
 
-        if (!ctx.Handles.IsNearest(id) || !ctx.Handles.TryBeginDrag(id)) return;
+        if (ctx.Handles.Alt || !ctx.Handles.IsNearest(id) || !ctx.Handles.TryBeginDrag(id)) return;
 
         // The plane is locked at the first press.
         _cornerA = Float3.Zero;
@@ -240,19 +253,15 @@ public sealed class CSGGenerateTool : SceneTool
         if (_clickedBase && ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered && FootprintIsValid()) BeginHeight(ctx);
     }
 
-    /// <summary>The base is done. Shift places it straight away at the last height, else the height follows the cursor.</summary>
-    private void BeginHeight(SceneToolContext ctx)
-    {
-        _stage = Stage.Extrude;
-        if (!ctx.Handles.Shift || _lastHeight == 0f) return;
-
-        _height = _lastHeight;
-        Commit(ctx, OperationFor());
-    }
+    private void BeginHeight(SceneToolContext ctx) => _stage = Stage.Extrude;
 
     private void TickExtrude(SceneToolContext ctx)
     {
         _height = CSGSnap.Value(ctx.Handles, HeightUnderCursor(ctx));
+
+        // Uniform takes the height from the base, the cursor only says which way
+        if (_uniform && Generator != CSGGeneratorKind.Polygon)
+            _height = Side(_height) * MathF.Max(MathF.Abs(_cornerB.X - _cornerA.X), MathF.Abs(_cornerB.Z - _cornerA.Z));
 
         HandleTyping(ctx.Handles);
         if (Generator != CSGGeneratorKind.Polygon) ApplyPlacement();
@@ -385,7 +394,6 @@ public sealed class CSGGenerateTool : SceneTool
         Undo.RegisterCreatedObjectUndo(created, "Create CSG Brush");
         Selection.Select(created);
         model!.SetDirty();
-        _lastHeight = _height;
         Cancel();
 
         // Straight to editing what was placed, as most brushes are adjusted right after
@@ -504,6 +512,8 @@ public sealed class CSGGenerateTool : SceneTool
     public void Cancel()
     {
         ClearGhost();
+        if (_holdsModal && _modalHandles != null) _modalHandles.Modal = false;
+        _holdsModal = false;
         _stage = Stage.Idle;
         ClearTyped();
     }
@@ -546,7 +556,7 @@ public sealed class CSGGenerateTool : SceneTool
         // Drawn shapes measure from the first click, which is the middle of the base when drawing from the centre
         bool drawn = Generator != CSGGeneratorKind.Polygon;
         Float3 from = drawn ? Float3.Zero : _cornerA;
-        float reach = drawn && FromCentre ? 0.5f : 1f;
+        float reach = drawn && Centred ? 0.5f : 1f;
         if (Typed(0, out float width)) _cornerB = new Float3(from.X + Side(_cornerB.X - from.X) * width * reach, _cornerB.Y, _cornerB.Z);
         if (Typed(1, out float depth)) _cornerB = new Float3(_cornerB.X, _cornerB.Y, from.Z + Side(_cornerB.Z - from.Z) * depth * reach);
         if (_stage == Stage.Extrude && Typed(2, out float height)) _height = Side(_height) * height;
@@ -559,14 +569,14 @@ public sealed class CSGGenerateTool : SceneTool
     private void ApplyPlacement()
     {
         Float3 far = _cornerB;
-        if (SquareBase)
+        if (Square)
         {
             float side = MathF.Max(MathF.Abs(far.X), MathF.Abs(far.Z));
             far = new Float3(Side(far.X) * side, far.Y, Side(far.Z) * side);
         }
 
         _cornerB = far;
-        _cornerA = FromCentre ? new Float3(-far.X, 0f, -far.Z) : Float3.Zero;
+        _cornerA = Centred ? new Float3(-far.X, 0f, -far.Z) : Float3.Zero;
     }
 
     private bool Typed(int field, out float value)
