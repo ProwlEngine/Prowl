@@ -3,7 +3,6 @@
 
 using Prowl.Clay.Importer;
 using Prowl.Clay.Intermediate;
-using Prowl.Clay.Internal.Intermediate;
 using Prowl.Clay.PostProcess;
 using Prowl.Vector;
 
