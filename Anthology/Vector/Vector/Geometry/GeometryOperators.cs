@@ -862,6 +862,30 @@ public static class GeometryOperators
     }
 
     /// <summary>
+    /// The edge loop through an edge. Where it stops at once, at a corner of three edges or beside a face that is not
+    /// four sided, it is the outline of the face on the given side instead.
+    /// </summary>
+    public static List<GeometryData.Edge> EdgeLoopOrOutline(GeometryData.Edge edge, GeometryData.Face? side = null)
+    {
+        return LoopOp.EdgeLoopOrOutline(edge, side);
+    }
+
+    /// <summary>
+    /// The edge ring through an edge. Where it stops at once, beside a face that is not four sided, it walks the faces
+    /// round taking the edge most nearly parallel to the last, as the upright edges of a prism.
+    /// </summary>
+    public static List<GeometryData.Edge> EdgeRingAcross(GeometryData.Edge edge)
+    {
+        return LoopOp.EdgeRingAcross(edge);
+    }
+
+    /// <summary>The faces in groups joined across edges to others of the faces given.</summary>
+    public static List<List<GeometryData.Face>> FaceRegions(IEnumerable<GeometryData.Face> faces)
+    {
+        return LoopOp.FaceRegions(faces);
+    }
+
+    /// <summary>
     /// Cuts new edge loops across the ring of an edge. Every edge of the ring gets the given number of new vertices,
     /// evenly spaced, and the faces between are split through them. The slide moves the cuts along the ring's edges,
     /// from -1 to 1 for the whole gap either way. Vertex and loop attributes are interpolated.
