@@ -87,7 +87,7 @@ public class EditorApplication : Game
     public override void InitializeWindow(string title, int width, int height)
     {
         EditorSettings instance = EditorSettings.Instance;
-        Window.InitWindow(title, width, height, instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal, false);
+        Window.InitWindow(title, width, height, instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal);
 
         Window.Position = new Silk.NET.Maths.Vector2D<int>(
             instance.WindowX > 0 ? instance.WindowX : Window.Position.X,
@@ -1943,7 +1943,8 @@ public class EditorApplication : Game
         if (Application.IsPlaying) return;
 
         EditorSettings settings = EditorSettings.Instance;
-        Application.VSync = settings.VSync;
+        // The preference stays a bool so saved settings still load, and on keeps the adaptive vsync it has always meant
+        Application.VSync = settings.VSync ? VSyncMode.Adaptive : VSyncMode.Mailbox;
 
         int limit = settings.TargetFrameRate;
         int unfocused = settings.UnfocusedFrameRate;
@@ -2024,7 +2025,7 @@ public class EditorApplication : Game
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts
         // unpaced and whatever the game's own code sets from here is what it runs at.
-        Application.VSync = false;
+        Application.VSync = VSyncMode.Mailbox;
         Application.TargetFrameRate = 0;
 
         Runtime.Debug.Log("Entered play mode.");

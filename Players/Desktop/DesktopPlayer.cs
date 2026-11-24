@@ -28,7 +28,7 @@ public sealed class DesktopPlayer : Game, IDisposable
                 ? Silk.NET.Windowing.WindowState.Maximized
                 : Silk.NET.Windowing.WindowState.Normal;
 
-        Window.InitWindow(title, width, height, startState, vsync: false);
+        Window.InitWindow(title, width, height, startState);
     }
 
     public override void Initialize()

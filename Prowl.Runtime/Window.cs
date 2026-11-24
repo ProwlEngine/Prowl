@@ -218,7 +218,7 @@ public static class Window
         get { return isFocused; }
     }
 
-    public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool vsync = false)
+    public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal)
     {
         WindowOptions options = WindowOptions.Default;
         options.Title = title;
@@ -227,8 +227,6 @@ public static class Window
         s_mode = startState == WindowState.Fullscreen ? WindowMode.Fullscreen : WindowMode.Windowed;
         s_windowedPosition = options.Position;
         s_windowedSize = options.Size;
-        options.VSync = vsync;
-        Application.VSync = vsync;
         // Update and Render are driven by MainLoop, and frames present through Graphite's swapchain.
         options.ShouldSwapAutomatically = false;
         options.API = new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(1, 3));
