@@ -823,6 +823,9 @@ internal sealed class WorldLighting
     /// <summary>One past the highest light index received.</summary>
     public int LightCapacity => _lights.Length;
 
+    /// <summary>The live spot and point lights with shadows on, by index, lowest first.</summary>
+    public SortedSet<int> ShadowCasters { get; } = new();
+
     public bool IsAlive(int index) => _lightAlive[index];
 
     /// <summary>A light as of the last extraction, normalized. Render thread.</summary>
@@ -859,6 +862,10 @@ internal sealed class WorldLighting
             CountFeatures(desc, _lightSlots[index], 1);
         }
 
+        if (alive && desc.Shadow.Enabled && desc.Type is LightType.Spot or LightType.Point)
+            ShadowCasters.Add(index);
+        else
+            ShadowCasters.Remove(index);
         if (wasAlive != alive || old.Type != desc.Type || old.Static != desc.Static)
             _lightMembership = true;
         if (alive && desc.Type != LightType.Directional)

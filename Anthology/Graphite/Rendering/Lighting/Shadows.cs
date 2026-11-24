@@ -1205,13 +1205,9 @@ internal sealed partial class FramePipeline
         }
         _shadowPlans.Clear();
         int minTile = ShadowTileAllocator.RoundUp(Math.Clamp(settings.MinTileSize, ShadowTileAllocator.SmallestTile, pageSize / 2));
-        for (int i = 0; i < lighting.LightCapacity; i++)
+        foreach (int i in lighting.ShadowCasters)
         {
-            if (!lighting.IsAlive(i))
-                continue;
             ref readonly LightDesc desc = ref lighting.Light(i);
-            if (!desc.Shadow.Enabled || desc.Type is not (LightType.Spot or LightType.Point))
-                continue;
             (float priority, float fade) = ShadowVisibility(desc, settings);
             if (fade <= 0)
             {
