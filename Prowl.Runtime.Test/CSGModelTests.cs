@@ -178,6 +178,36 @@ public class CSGModelTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ScalingABrushRebuildsTheMesh()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
+        Update(_scene);
+
+        brush.Transform.LocalScale = new Float3(2f, 1f, 1f);
+        Update(_scene);
+
+        Assert.Equal(16f, VolumeOf(_model.GeneratedMesh!), 1);
+    }
+
+    [Fact]
+    public void RotatingABrushRebuildsTheMesh()
+    {
+        CreateModel();
+        AddBrush(Float3.One * 4f, Float3.Zero);
+        CSGBrush cutter = AddBrush(new Float3(8f, 2f, 2f), new Float3(0, 2, 0), Operation.Subtractive);
+        Update(_scene);
+        float before = VolumeOf(_model.GeneratedMesh!);
+
+        // Standing the cutter up turns it from a groove along the top into a hole through the middle
+        cutter.Transform.Rotation = Quaternion.AxisAngle(Float3.UnitZ, MathF.PI * 0.5f);
+        Update(_scene);
+
+        Assert.Equal(64f - 8f, before, 1);
+        Assert.Equal(64f - 16f, VolumeOf(_model.GeneratedMesh!), 1);
+    }
+
+    [Fact]
     public void ChangingAnOperationRebuildsTheMesh()
     {
         CreateModel();
