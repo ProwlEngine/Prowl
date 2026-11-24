@@ -75,6 +75,29 @@ public class CSGTests
         AssertManifold(result.Solid);
     }
 
+    /// <summary>A large prism with many sides has nearly parallel neighbours whose shared corners must still weld.</summary>
+    [Theory]
+    [InlineData(32, 100f)]
+    [InlineData(64, 100f)]
+    [InlineData(128, 100f)]
+    [InlineData(128, 16f)]
+    public void ConvexFromPlanes_WeldsLargeManySidedPrisms(int sides, float radius)
+    {
+        var planes = new List<Plane>();
+        for (int i = 0; i < sides; i++)
+        {
+            float a = MathF.Tau * (i + 0.5f) / sides;
+            planes.Add(new Plane(Float3.Normalize(new Float3(MathF.Cos(a), 0f, MathF.Sin(a))), radius));
+        }
+        planes.Add(new Plane(Float3.UnitY, radius));
+        planes.Add(new Plane(-Float3.UnitY, radius));
+
+        var result = GeometryGenerator.ConvexFromPlanes(planes);
+
+        Assert.Equal(sides * 2, result.Solid!.Vertices.Count);
+        AssertManifold(result.Solid);
+    }
+
     /// <summary>Catches a flipped half-space convention, which still yields six faces.</summary>
     [Fact]
     public void ConvexFromPlanes_PutsCornersWhereExpected()

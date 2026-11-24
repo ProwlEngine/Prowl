@@ -102,16 +102,18 @@ public static partial class GeometryGenerator
         var faces = new List<List<Float3>>(planes.Count);
         bool unbounded = false;
 
+        // Clipped in double precision, so corners that several nearly parallel planes share come out
+        // the same from every face that has them, however large the solid
         for (int i = 0; i < planes.Count; i++)
         {
             if (!usable[i]) { faces.Add(new List<Float3>()); continue; }
 
-            List<Float3>? poly = BuildFaceQuad(planes[i], extent);
+            List<Double3>? poly = BuildFaceQuad(planes[i], extent);
 
             for (int j = 0; j < planes.Count && poly != null; j++)
             {
                 if (j == i || !usable[j]) continue;
-                poly = ClipPolygonByPlane(poly, planes[j]);
+                poly = ClipPolygonByPlane(poly, planes[j], extent * 1e-10);
             }
 
             if (poly == null || poly.Count < 3)
@@ -123,12 +125,14 @@ public static partial class GeometryGenerator
 
             // A corner still sitting out at the starting extent means nothing clipped it, so the
             // half-spaces never closed.
-            foreach (Float3 v in poly)
+            var corners = new List<Float3>(poly.Count);
+            foreach (Double3 v in poly)
             {
-                if (Float3.Length(v) >= extent * 0.99f) { unbounded = true; break; }
+                if (Double3.Length(v) >= extent * 0.99) unbounded = true;
+                corners.Add(new Float3((float)v.X, (float)v.Y, (float)v.Z));
             }
 
-            faces.Add(poly);
+            faces.Add(corners);
         }
 
         redundant.Sort();
@@ -169,13 +173,13 @@ public static partial class GeometryGenerator
     // ================================================================
 
     /// <summary>A quad lying in the plane, wound so its normal matches the plane's.</summary>
-    private static List<Float3> BuildFaceQuad(in Plane plane, float extent)
+    private static List<Double3> BuildFaceQuad(in Plane plane, double extent)
     {
-        Float3 n = plane.Normal;
-        Float3 helper = MathF.Abs(n.Y) > 0.99f ? Float3.UnitX : Float3.UnitY;
-        Float3 u = Float3.Normalize(Float3.Cross(helper, n));
-        Float3 v = Float3.Cross(n, u);
-        Float3 origin = n * plane.D;
+        Double3 n = plane.Normal;
+        Double3 helper = Math.Abs(n.Y) > 0.99 ? new Double3(1, 0, 0) : new Double3(0, 1, 0);
+        Double3 u = Double3.Normalize(Double3.Cross(helper, n));
+        Double3 v = Double3.Cross(n, u);
+        Double3 origin = n * (plane.D / Double3.LengthSquared(n));
 
         return
         [
@@ -188,16 +192,18 @@ public static partial class GeometryGenerator
 
     /// <summary>Sutherland-Hodgman clip, keeping the half-space behind <paramref name="plane"/>.
     /// Returns null when nothing survives.</summary>
-    private static List<Float3>? ClipPolygonByPlane(List<Float3> poly, in Plane plane, float epsilon = 1e-5f)
+    private static List<Double3>? ClipPolygonByPlane(List<Double3> poly, in Plane plane, double epsilon)
     {
-        var result = new List<Float3>(poly.Count + 1);
+        var result = new List<Double3>(poly.Count + 1);
+        Double3 normal = plane.Normal;
+        double d = plane.D;
 
         for (int i = 0; i < poly.Count; i++)
         {
-            Float3 a = poly[i];
-            Float3 b = poly[(i + 1) % poly.Count];
-            float da = plane.GetSignedDistanceToPoint(a);
-            float db = plane.GetSignedDistanceToPoint(b);
+            Double3 a = poly[i];
+            Double3 b = poly[(i + 1) % poly.Count];
+            double da = Double3.Dot(normal, a) - d;
+            double db = Double3.Dot(normal, b) - d;
 
             bool aIn = da <= epsilon;
             bool bIn = db <= epsilon;
@@ -205,7 +211,7 @@ public static partial class GeometryGenerator
             if (aIn) result.Add(a);
 
             // Straddles the plane: add the crossing point.
-            if (aIn != bIn && MathF.Abs(db - da) > 1e-12f)
+            if (aIn != bIn && Math.Abs(db - da) > 1e-12)
                 result.Add(a + (b - a) * (da / (da - db)));
         }
 
