@@ -33,10 +33,7 @@ public sealed class CSGOverlayTool : SceneTool
         (CSGMode.Select, "csg.mode_select", "csg.mode_select_tip", "CSG/ModeSelect", EditorIcons.ArrowPointer),
         (CSGMode.Create, "csg.mode_create", "csg.mode_create_tip", "CSG/ModeCreate", EditorIcons.SquarePlus),
         (CSGMode.Edit, "csg.mode_edit", "csg.mode_edit_tip", "CSG/ModeEdit", EditorIcons.DrawPolygon),
-        (CSGMode.UVMove, "csg.mode_uv_move", "csg.mode_uv_move_tip", "CSG/ModeUVMove", EditorIcons.ArrowsUpDownLeftRight),
-        (CSGMode.UVRotate, "csg.mode_uv_rotate", "csg.mode_uv_rotate_tip", "CSG/ModeUVRotate", EditorIcons.RotateRight),
-        (CSGMode.UVScale, "csg.mode_uv_scale", "csg.mode_uv_scale_tip", "CSG/ModeUVScale", EditorIcons.Expand),
-        (CSGMode.Pivot, "csg.mode_pivot", "csg.mode_pivot_tip", "CSG/ModePivot", EditorIcons.Bullseye),
+        (CSGMode.Surface, "csg.mode_surface", "csg.mode_surface_tip", "CSG/ModeSurface", EditorIcons.BorderAll),
     };
 
     private static readonly EditorGlyphIcon[] ModeIcons = Array.ConvertAll(Modes, m => new EditorGlyphIcon(m.icon));
@@ -110,6 +107,13 @@ public sealed class CSGOverlayTool : SceneTool
         CSGEditMode.Current = CSGMode.Create;
     }
 
+    public override Float3? SurfaceUnder(SceneToolContext ctx, Ray ray)
+    {
+        CSGModel? model = CSGSelection.ActiveModel();
+        return model.IsValid() && CSGSelection.PickBrush(model!, CSGSelection.BrushesIn(model!), ray, out _, out float distance)
+            ? ray.Origin + ray.Direction * distance : null;
+    }
+
     /// <summary>While a model is being worked on, the scene view's right click menu is the CSG one.</summary>
     public override bool ReplacesSceneContextMenu => true;
 
@@ -136,7 +140,7 @@ public sealed class CSGOverlayTool : SceneTool
         {
             menu.Title($"{Loc.Get("csg.title")}  {Loc.Get(ModeLabel(CSGEditMode.Current))}");
             if (CSGEditMode.Is(CSGMode.Create)) ShapeCommands(menu);
-            else if (CSGEditMode.IsUV) SurfaceCommands(menu);
+            else if (CSGEditMode.Is(CSGMode.Surface)) SurfaceCommands(menu);
             else BrushCommands(menu);
         }
 
@@ -200,6 +204,12 @@ public sealed class CSGOverlayTool : SceneTool
         {
             Command(sub, "csg.loop_cut", mesh.LoopCut, "MeshEdit/LoopCut");
             Command(sub, "csg.knife", mesh.Knife, "MeshEdit/Knife");
+        });
+        menu.Submenu(Loc.Get("csg.menu.pivot"), sub =>
+        {
+            if (mesh.SelectedCount > 0) Command(sub, "csg.pivot_to_selection", mesh.PivotToSelection);
+            Command(sub, "csg.pivot_to_cursor", mesh.PivotToCursor);
+            Command(sub, "csg.centre_pivot", CSGSelection.CentrePivot);
         });
         menu.Submenu(Loc.Get("csg.menu.clean_up"), sub =>
         {
@@ -432,7 +442,7 @@ public sealed class CSGOverlayTool : SceneTool
 
         List<CSGSections.Column> columns = CSGSections.Columns();
         float available = MathF.Max(CSGSections.ColumnWidth, ctx.Handles.ViewportSize.X - 100f);
-        float width = MathF.Min(available, CSGSections.Width(columns));
+        float width = CSGSections.Stacked ? CSGSections.ColumnWidth : MathF.Min(available, CSGSections.Width(columns));
 
         using (paper.Column(id).Width(UnitValue.Auto).Height(UnitValue.Auto).Enter())
         {

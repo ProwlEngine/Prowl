@@ -71,6 +71,22 @@ public sealed class PMeshBone
 
     /// <summary>From the mesh's space into the bone's at rest.</summary>
     public Float4x4 BindPose = Float4x4.Identity;
+
+    /// <summary>
+    /// Keeps the bone on its mesh when the mesh's points are moved by a matrix: a bone at the top moves, turns and
+    /// scales with them, and the bind pose takes the mesh's new space.
+    /// </summary>
+    public void Transform(Float4x4 change)
+    {
+        if (Parent < 0)
+        {
+            change.Decompose(out _, out Quaternion turn, out Float3 stretch);
+            Position = Float4x4.TransformPoint(Position, change);
+            Rotation = turn * Rotation;
+            Scale *= stretch;
+        }
+        BindPose *= change.Invert();
+    }
 }
 
 /// <summary>A blend shape of a model object: its name, its weight from 0 to 100, and the weight each frame is reached at.</summary>
@@ -91,6 +107,20 @@ public sealed class PMeshDocument
     private const int FormatVersion = 1;
 
     public List<PMeshObject> Objects { get; } = new();
+
+    /// <summary>What an object's modifiers see: its bones, and the document's other objects placed into its space.</summary>
+    public ModifierContext ContextFor(PMeshObject item)
+    {
+        Float4x4 toItem = WorldOf(item).Invert();
+        return new ModifierContext([.. item.Bones.Select(b => b.Name)],
+            id => id != item.Id && Objects.Find(o => o.Id == id) is { } other ? (other.Mesh, toItem * WorldOf(other)) : null);
+    }
+
+    private Float4x4 WorldOf(PMeshObject item)
+    {
+        Float4x4 local = Float4x4.CreateTRS(item.Position, item.Rotation, item.Scale);
+        return Objects.Find(o => o.Id == item.Parent) is { } parent ? WorldOf(parent) * local : local;
+    }
 
     public byte[] Write()
     {
@@ -409,6 +439,14 @@ public sealed class PMeshDocument
         ReadColumns(m["edge"], mesh.Edges);
         ReadColumns(m["loop"], loops);
         ReadColumns(m["face"], mesh.Faces);
+
+        // Seams were once saved under a lower case name
+        foreach (GeometryData.Edge edge in mesh.Edges)
+            if (edge.Attributes.ContainsKey("seam"))
+            {
+                edge.IsSeam = edge.TryGetAttribute("seam", out GeometryData.AttributeValue? old) && old is GeometryData.IntAttributeValue { Data: [not 0, ..] };
+                edge.Attributes.Remove("seam");
+            }
         return mesh;
     }
 

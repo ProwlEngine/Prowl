@@ -201,4 +201,16 @@ public class TransformSessionTests
         Assert.Equal(0f, onPlane.Point.X);
         Assert.Equal(1.5f, right.Point.X, 4);
     }
+
+    [Fact]
+    public void ObjectsTurnAboutAPivotSetElsewhere()
+    {
+        var a = new Prowl.Runtime.GameObject("A");
+        a.Transform.Position = new Float3(1f, 0f, 0f);
+        var session = new ObjectTransformSession([a]) { Pivot = new Float3(3f, 0f, 0f) };
+
+        session.Rotate(Float3.UnitY, MathF.PI);
+
+        Near(new Float3(5f, 0f, 0f), a.Transform.Position);
+    }
 }

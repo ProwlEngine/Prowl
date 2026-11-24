@@ -10,12 +10,6 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor.Modeling;
 
-/// <summary>Where an end of a drawn line sits, in the mesh's space: on a point of the mesh, on one of its edges, or free.</summary>
-public readonly record struct LineAnchor(Float3 Point, GeometryData.Vertex? Vertex = null, GeometryData.Edge? Edge = null)
-{
-    public bool Snapped => Vertex != null || Edge != null;
-}
-
 /// <summary>
 /// Mesh edits for <see cref="MeshEdit.Run"/>, each marking what should be selected after it. The inputs are copied
 /// before anything changes, so <c>after</c> may be the selection they came from.
@@ -41,25 +35,13 @@ public static class Operators
     /// </summary>
     public static void ExtrudeEdges(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, ElementSelection after)
     {
+        List<GeometryData.Edge> copies = GeometryOperators.ExtrudeEdgesInPlace(mesh, edges);
         after.Clear();
-        var copyOf = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-        GeometryData.Vertex Copy(GeometryData.Vertex v)
+        foreach (GeometryData.Edge edge in copies)
         {
-            if (!copyOf.TryGetValue(v, out GeometryData.Vertex? copy)) copyOf[v] = copy = mesh.AddVertex(v.Point);
-            return copy;
+            after.Edges.Add(edge);
+            after.Vertices.UnionWith([edge.Vert1, edge.Vert2]);
         }
-        foreach (GeometryData.Edge edge in edges.ToList())
-        {
-            if (edge.IsHidden || !mesh.Contains(edge)) continue;
-            GeometryData.Vertex a = edge.Vert1, b = edge.Vert2, ac = Copy(a), bc = Copy(b);
-            // Wound against the face already along the edge, so the surface stays one way round
-            bool reversed = edge.Loop != null && edge.Loop.Vert == a;
-            if (reversed) mesh.AddFace(b, a, ac, bc);
-            else mesh.AddFace(a, b, bc, ac);
-            if (mesh.FindEdge(ac, bc) is { } copied) after.Edges.Add(copied);
-        }
-        after.Vertices.UnionWith(copyOf.Values);
-        mesh.MarkChanged();
     }
 
     /// <summary>
@@ -70,32 +52,12 @@ public static class Operators
     public static void Rip(GeometryData mesh, ElementSelection selection, Func<Float3, float>? distance = null)
     {
         if (selection.Edges.Count == 0) throw new InvalidOperationException("Select the edges to rip along");
-        var originals = new HashSet<GeometryData.Vertex>();
-        foreach (GeometryData.Edge edge in selection.Edges) originals.UnionWith([edge.Vert1, edge.Vert2]);
-        var made = new HashSet<GeometryData.Vertex>(GeometryOperators.SplitEdges(mesh, [.. selection.Edges]));
-        HashSet<GeometryData.Vertex> side = distance != null && SideDistance(originals, distance) < SideDistance(made, distance) ? originals : made;
+        var side = new HashSet<GeometryData.Vertex>(GeometryOperators.Rip(mesh, [.. selection.Edges], distance));
         selection.Clear();
         selection.Vertices.UnionWith(side);
         foreach (GeometryData.Vertex vertex in side)
             foreach (GeometryData.Edge edge in vertex.NeighborEdges())
                 if (side.Contains(edge.OtherVertex(vertex))) selection.Edges.Add(edge);
-        mesh.MarkChanged();
-    }
-
-    // How far the middle of the faces on one side of a rip is, leaving out the points of the side itself
-    private static float SideDistance(HashSet<GeometryData.Vertex> side, Func<Float3, float> distance)
-    {
-        Float3 sum = Float3.Zero;
-        int count = 0;
-        foreach (GeometryData.Vertex vertex in side)
-            foreach (GeometryData.Face face in vertex.NeighborFaces())
-                foreach (GeometryData.Vertex corner in face.NeighborVertices())
-                {
-                    if (side.Contains(corner)) continue;
-                    sum += corner.Point;
-                    count++;
-                }
-        return count > 0 ? distance(sum / count) : float.PositiveInfinity;
     }
 
     /// <summary>
@@ -129,19 +91,8 @@ public static class Operators
     /// </summary>
     public static void Shade(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, bool smooth)
     {
-        var points = new HashSet<GeometryData.Vertex>();
-        foreach (GeometryData.Face face in faces)
-        {
-            points.UnionWith(face.NeighborVertices());
-            foreach (GeometryData.Edge edge in face.NeighborEdges())
-            {
-                if (edge.IsHidden) continue;
-                edge.IsSoft = smooth;
-                edge.IsSharp = !smooth;
-            }
-        }
+        HashSet<GeometryData.Vertex> points = GeometryOperators.Shade(mesh, faces, smooth);
         if (mesh.HasLoopAttribute(Prowl.Runtime.Resources.MeshGeometry.Normal)) CornerNormals(mesh, points);
-        mesh.MarkChanged();
     }
 
     /// <summary>
@@ -199,49 +150,14 @@ public static class Operators
     /// </summary>
     public static List<GeometryData.Edge> AddLine(GeometryData mesh, IReadOnlyList<Float3> points, LineAnchor start, LineAnchor end, ElementSelection after)
     {
-        var made = new List<GeometryData.Edge>();
-        if (points.Count < 2) return made;
-        var pieces = new Dictionary<GeometryData.Edge, List<GeometryData.Edge>>();
-        var vertices = new GeometryData.Vertex[points.Count];
-        vertices[0] = Resolve(mesh, start, pieces);
-        vertices[^1] = Resolve(mesh, end, pieces);
-        for (int i = 1; i + 1 < points.Count; i++) vertices[i] = mesh.AddVertex(points[i]);
-        for (int i = 1; i < vertices.Length; i++)
-            if (vertices[i] != vertices[i - 1]) made.Add(mesh.FindEdge(vertices[i - 1], vertices[i]) ?? mesh.AddEdge(vertices[i - 1], vertices[i]));
+        List<GeometryData.Edge> made = GeometryOperators.AddLine(mesh, points, start, end);
         after.Clear();
         foreach (GeometryData.Edge edge in made)
         {
             after.Edges.Add(edge);
             after.Vertices.UnionWith([edge.Vert1, edge.Vert2]);
         }
-        mesh.MarkChanged();
         return made;
-    }
-
-    // The point an end of a line lands on. Pieces remembers what an edge was split into, so two ends on one edge both find their part
-    private static GeometryData.Vertex Resolve(GeometryData mesh, LineAnchor anchor, Dictionary<GeometryData.Edge, List<GeometryData.Edge>> pieces)
-    {
-        if (anchor.Vertex != null) return anchor.Vertex;
-        if (anchor.Edge == null) return mesh.AddVertex(anchor.Point);
-        if (!pieces.TryGetValue(anchor.Edge, out List<GeometryData.Edge>? parts)) pieces[anchor.Edge] = parts = [anchor.Edge];
-        GeometryData.Edge best = parts[0];
-        float nearest = float.PositiveInfinity, factor = 0f;
-        foreach (GeometryData.Edge part in parts)
-        {
-            Float3 along = part.Vert2.Point - part.Vert1.Point;
-            float lengthSq = Float3.Dot(along, along);
-            float t = lengthSq > 1e-12f ? Math.Clamp(Float3.Dot(anchor.Point - part.Vert1.Point, along) / lengthSq, 0f, 1f) : 0f;
-            float distance = Float3.Distance(part.Vert1.Point + along * t, anchor.Point);
-            if (distance >= nearest) continue;
-            nearest = distance;
-            best = part;
-            factor = t;
-        }
-        if (factor < 0.001f) return best.Vert1;
-        if (factor > 0.999f) return best.Vert2;
-        GeometryData.Vertex split = GeometryOperators.SplitEdge(mesh, best, best.Vert1, factor, out GeometryData.Edge other);
-        parts.Add(other);
-        return split;
     }
 
     /// <summary>
@@ -251,54 +167,9 @@ public static class Operators
     public static GeometryData.Face AddQuad(GeometryData mesh, IReadOnlyList<Float3> corners, IReadOnlyList<GeometryData.Vertex?> existing, Float3 viewDirection,
                                             ElementSelection after)
     {
-        Float3 normal = Float3.Cross(corners[1] - corners[0], corners[2] - corners[0]);
-        int[] order = Float3.Dot(normal, viewDirection) > 0f ? [3, 2, 1, 0] : [0, 1, 2, 3];
-        var vertices = new GeometryData.Vertex[4];
-        foreach (int i in order) vertices[i] = existing[i] ?? mesh.AddVertex(corners[i]);
-        GeometryData.Face face = mesh.AddFace([.. order.Select(i => vertices[i])]) ?? throw new InvalidOperationException("The four corners do not make a face");
-        after.Clear();
-        after.Faces.Add(face);
-        after.Vertices.UnionWith(face.NeighborVertices());
-        foreach (GeometryData.Edge edge in face.NeighborEdges()) after.Edges.Add(edge);
-        mesh.MarkChanged();
+        GeometryData.Face face = GeometryOperators.AddQuad(mesh, corners, existing, viewDirection);
+        SelectFace(face, after);
         return face;
-    }
-
-    /// <summary>
-    /// Moves points onto the nearest surface along their own normal, either way, within reach, then out by the offset.
-    /// <paramref name="hit"/> gives how far along a world ray the nearest other surface is, within a distance, or null.
-    /// Returns how many points moved.
-    /// </summary>
-    public static int Shrinkwrap(GeometryData mesh, IEnumerable<GeometryData.Vertex> points, Float4x4 toWorld, Func<Ray, float, float?> hit, float offset, float reach)
-    {
-        Float4x4 toLocal = toWorld.Invert();
-        // Every normal is taken first, so moving one point does not turn the next one's
-        var rays = new List<(GeometryData.Vertex Vertex, Float3 Normal)>();
-        foreach (GeometryData.Vertex vertex in points)
-        {
-            Float3 normal = Float3.Zero;
-            foreach (GeometryData.Face face in vertex.NeighborFaces()) normal += face.Normal();
-            if (Float3.LengthSquared(normal) > 1e-12f) rays.Add((vertex, Float3.Normalize(normal)));
-        }
-        int moved = 0;
-        foreach ((GeometryData.Vertex vertex, Float3 normal) in rays)
-        {
-            Float3 world = Float4x4.TransformPoint(vertex.Point, toWorld);
-            Float3 direction = Float3.Normalize(Float4x4.TransformNormal(normal, toWorld));
-            float best = float.PositiveInfinity;
-            Float3 landed = world;
-            foreach (float sign in (float[])[1f, -1f])
-                if (hit(new Ray(world, direction * sign), MathF.Min(best, reach)) is { } distance && distance < best)
-                {
-                    best = distance;
-                    landed = world + direction * (sign * distance);
-                }
-            if (float.IsPositiveInfinity(best)) continue;
-            vertex.Point = Float4x4.TransformPoint(landed + direction * offset, toLocal);
-            moved++;
-        }
-        mesh.MarkChanged();
-        return moved;
     }
 
     /// <summary>Joins two chains or rings of edges with a strip of faces, which are selected after.</summary>
@@ -328,57 +199,15 @@ public static class Operators
             mesh.MarkChanged();
             return;
         }
-
-        var around = new Dictionary<GeometryData.Vertex, List<GeometryData.Edge>>();
-        foreach (GeometryData.Edge edge in selection.Edges)
-            foreach (GeometryData.Vertex end in (GeometryData.Vertex[])[edge.Vert1, edge.Vert2])
-            {
-                if (!around.TryGetValue(end, out List<GeometryData.Edge>? list)) around[end] = list = new List<GeometryData.Edge>();
-                list.Add(edge);
-            }
-        List<GeometryData.Vertex> tips = [.. around.Where(p => p.Value.Count == 1).Select(p => p.Key)];
-        if (around.Count < 3 || around.Values.Any(l => l.Count > 2) || tips.Count is not (0 or 2))
-            throw new InvalidOperationException("The selected edges do not run as one chain or ring");
-
-        var path = new List<GeometryData.Vertex>();
-        GeometryData.Vertex? at = tips.Count == 2 ? tips[0] : around.Keys.First();
-        GeometryData.Edge? from = null;
-        while (at != null && !path.Contains(at))
-        {
-            path.Add(at);
-            GeometryData.Edge? onward = around[at].FirstOrDefault(e => e != from);
-            if (onward == null) break;
-            from = onward;
-            at = onward.OtherVertex(at);
-        }
-        if (path.Count != around.Count) throw new InvalidOperationException("The selected edges do not run as one chain or ring");
-
-        // Against a face already along one of its sides, so the two face the same way
-        for (int i = 0; i < path.Count; i++)
-            if (mesh.FindEdge(path[i], path[(i + 1) % path.Count])?.Loop is { } loop && loop.Vert == path[i])
-            {
-                path.Reverse();
-                break;
-            }
-        GeometryData.Face made = mesh.AddFace([.. path]) ?? throw new InvalidOperationException("No face fits the selection");
-        selection.Clear();
-        selection.Faces.Add(made);
-        selection.Vertices.UnionWith(path);
-        foreach (GeometryData.Edge edge in made.NeighborEdges()) selection.Edges.Add(edge);
-        mesh.MarkChanged();
+        SelectFace(GeometryOperators.FillChain(mesh, selection.Edges), selection);
     }
 
     /// <summary>Gives each point a copy at the same place joined to it by an edge, so a grab can draw the edges out. The copies are selected after.</summary>
     public static void ExtrudePoints(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> points, ElementSelection after)
     {
+        List<GeometryData.Vertex> copies = GeometryOperators.ExtrudeVertices(mesh, points);
         after.Clear();
-        foreach (GeometryData.Vertex point in points)
-        {
-            GeometryData.Vertex copy = mesh.AddVertex(point.Point);
-            mesh.AddEdge(point, copy);
-            after.Vertices.Add(copy);
-        }
-        mesh.MarkChanged();
+        after.Vertices.UnionWith(copies);
     }
 
     /// <summary>
@@ -428,10 +257,7 @@ public static class Operators
         float limit = MathF.Cos(degrees * MathF.PI / 180f);
         var flat = new List<GeometryData.Edge>();
         foreach (GeometryData.Edge edge in scope ?? (IReadOnlyCollection<GeometryData.Edge>)mesh.Edges)
-        {
-            List<GeometryData.Face> faces = edge.NeighborFaces();
-            if (faces.Count == 2 && Float3.Dot(faces[0].Normal(), faces[1].Normal()) >= limit) flat.Add(edge);
-        }
+            if (edge.DihedralCosine() is float cosine && cosine >= limit) flat.Add(edge);
         if (flat.Count == 0) return;
 
         var oldFaces = new HashSet<GeometryData.Face>(mesh.Faces);
@@ -453,22 +279,8 @@ public static class Operators
     public static void Collapse(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, ElementSelection after)
     {
         if (edges.Count == 0) return;
-
         var centres = new List<Float3>();
-        foreach (List<GeometryData.Edge> group in Groups(edges))
-        {
-            var points = new HashSet<GeometryData.Vertex>();
-            foreach (GeometryData.Edge edge in group)
-            {
-                points.Add(edge.Vert1);
-                points.Add(edge.Vert2);
-            }
-            Float3 sum = Float3.Zero;
-            foreach (GeometryData.Vertex vertex in points) sum += vertex.Point;
-            centres.Add(sum / points.Count);
-        }
-
-        GeometryOperators.CollapseEdges(mesh, [.. edges]);
+        GeometryOperators.CollapseEdges(mesh, [.. edges], centres);
         after.Clear();
         SelectPointsAt(mesh, centres, after);
     }
@@ -499,35 +311,17 @@ public static class Operators
     /// average, or the faces around the points when no face is selected.
     /// </summary>
     public static void Flatten(GeometryData mesh, ElementSelection selection)
-    {
-        if (selection.Vertices.Count < 3) return;
-
-        Float3 normal = Float3.Zero;
-        if (selection.Faces.Count > 0)
-            foreach (GeometryData.Face face in selection.Faces) normal += face.Normal();
-        else
-            foreach (GeometryData.Vertex vertex in selection.Vertices)
-                foreach (GeometryData.Face face in vertex.NeighborFaces()) normal += face.Normal();
-        if (Float3.LengthSquared(normal) < 1e-12f) return;
-        normal = Float3.Normalize(normal);
-
-        Float3 centre = Float3.Zero;
-        foreach (GeometryData.Vertex vertex in selection.Vertices) centre += vertex.Point;
-        centre /= selection.Vertices.Count;
-
-        foreach (GeometryData.Vertex vertex in selection.Vertices)
-            vertex.Point -= normal * Float3.Dot(vertex.Point - centre, normal);
-    }
+        => GeometryOperators.FlattenVertices(mesh, selection.Vertices, selection.Faces);
 
     /// <summary>
     /// Bevels edges into strips of faces, one segment a flat chamfer, more a rounded edge. Corners where bevelled
     /// edges meet are capped. The strips and caps are selected after.
     /// </summary>
-    public static void Bevel(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, float width, int segments, ElementSelection after)
+    public static void Bevel(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, float width, int segments, ElementSelection after, float profile = 0.5f)
     {
         if (edges.Count == 0 || width <= 0f) return;
         var oldPoints = new HashSet<GeometryData.Vertex>(mesh.Vertices);
-        GeometryOperators.BevelEdges(mesh, [.. edges], width, Math.Max(1, segments));
+        GeometryOperators.BevelEdges(mesh, [.. edges], width, Math.Max(1, segments), profile);
         SelectFacesOnNewPoints(mesh, oldPoints, after);
     }
 
@@ -609,65 +403,9 @@ public static class Operators
     /// </summary>
     public static void Bridge(GeometryData mesh, GeometryData.Face first, GeometryData.Face second, int segments, ElementSelection after)
     {
-        var a = new HashSet<GeometryData.Vertex>(first.NeighborVertices());
-        var b = new HashSet<GeometryData.Vertex>(second.NeighborVertices());
-        if (a.Overlaps(b)) throw new InvalidOperationException("Faces sharing a point cannot be bridged");
-        GeometryOperators.DeleteFaces(mesh, [first, second]);
-
-        while (!BridgeFits(a.Count, b.Count))
-        {
-            HashSet<GeometryData.Vertex> shorter = a.Count <= b.Count ? a : b;
-            GeometryData.Edge? longest = null;
-            foreach (GeometryData.Edge edge in Outline(mesh, shorter))
-                if (longest == null || Float3.Distance(edge.Vert1.Point, edge.Vert2.Point) > Float3.Distance(longest.Vert1.Point, longest.Vert2.Point)) longest = edge;
-            if (longest == null) throw new InvalidOperationException("An outline to bridge has no edges");
-            shorter.UnionWith(GeometryOperators.SubdivideEdges(mesh, [longest], 1));
-        }
-
-        var edges = new List<GeometryData.Edge>(Outline(mesh, a));
-        edges.AddRange(Outline(mesh, b));
-        List<GeometryData.Face> made = GeometryOperators.BridgeEdges(mesh, edges);
+        List<GeometryData.Face> strip = GeometryOperators.BridgeFaces(mesh, first, second, segments);
         after.Clear();
-        if (segments <= 1 || Rung(made, a, b) is not { } rung)
-        {
-            after.Faces.UnionWith(made);
-            return;
-        }
-
-        // Loops cut across the strip's rungs make the segments, and the strip is every face standing on its points
-        var strip = new HashSet<GeometryData.Vertex>(a);
-        strip.UnionWith(b);
-        var before = new HashSet<GeometryData.Vertex>(mesh.Vertices);
-        GeometryOperators.LoopCut(mesh, rung, segments - 1);
-        foreach (GeometryData.Vertex vertex in mesh.Vertices)
-            if (!before.Contains(vertex)) strip.Add(vertex);
-        foreach (GeometryData.Face face in mesh.Faces)
-        {
-            bool all = true;
-            foreach (GeometryData.Vertex vertex in face.NeighborVertices())
-                if (!strip.Contains(vertex)) { all = false; break; }
-            if (all) after.Faces.Add(face);
-        }
-    }
-
-    /// <summary>An edge of the strip running from one outline to the other.</summary>
-    private static GeometryData.Edge? Rung(List<GeometryData.Face> strip, HashSet<GeometryData.Vertex> a, HashSet<GeometryData.Vertex> b)
-    {
-        foreach (GeometryData.Face face in strip)
-            foreach (GeometryData.Edge edge in face.NeighborEdges())
-                if (a.Contains(edge.Vert1) && b.Contains(edge.Vert2) || b.Contains(edge.Vert1) && a.Contains(edge.Vert2)) return edge;
-        return null;
-    }
-
-    private static bool BridgeFits(int a, int b) => (a - b) % 2 == 0 && Math.Max(a, b) <= 3 * Math.Min(a, b);
-
-    /// <summary>The open edges running between points of one outline.</summary>
-    private static List<GeometryData.Edge> Outline(GeometryData mesh, HashSet<GeometryData.Vertex> points)
-    {
-        var edges = new List<GeometryData.Edge>();
-        foreach (GeometryData.Edge edge in mesh.Edges)
-            if (points.Contains(edge.Vert1) && points.Contains(edge.Vert2) && edge.NeighborFaces().Count == 1) edges.Add(edge);
-        return edges;
+        after.Faces.UnionWith(strip);
     }
 
     /// <summary>
@@ -749,7 +487,7 @@ public static class Operators
         int Swap(int bone) => bone >= 0 && bone < other.Length ? other[bone] : bone;
 
         foreach (GeometryData.Face face in mirrored)
-            ForEachCorner(face, loop =>
+            foreach (GeometryData.Loop loop in face.Corners())
             {
                 foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in loop.Attributes.ToList())
                 {
@@ -764,7 +502,7 @@ public static class Operators
                     else if (pair.Key == Indices && pair.Value is GeometryData.IntAttributeValue ids)
                         loop.SetAttribute(Indices, new GeometryData.IntAttributeValue([.. ids.Data.Select(Swap)]));
                 }
-            });
+            }
     }
 
     private static int IndexOf(IReadOnlyList<string> names, string name)
@@ -789,11 +527,11 @@ public static class Operators
     }
 
     /// <summary>Moves points towards the middle of the points they share an edge with, by a strength from 0 to 1. They stay selected.</summary>
-    public static void Smooth(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after)
+    public static void Smooth(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after, int repeats = 1)
     {
         if (vertices.Count == 0 || strength <= 0f) return;
         var points = new List<GeometryData.Vertex>(vertices);
-        GeometryOperators.SmoothVertices(mesh, points, Math.Clamp(strength, 0f, 1f));
+        GeometryOperators.SmoothVertices(mesh, points, Math.Clamp(strength, 0f, 1f), Math.Max(1, repeats));
         after.Clear();
         after.Vertices.UnionWith(points);
     }
@@ -811,11 +549,11 @@ public static class Operators
     /// Evens out the spacing of points, moving each towards the middle of its neighbours along the surface rather than
     /// through it, by a strength from 0 to 1. They stay selected.
     /// </summary>
-    public static void Relax(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after)
+    public static void Relax(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, float strength, ElementSelection after, int repeats = 1)
     {
         if (vertices.Count == 0 || strength <= 0f) return;
         var points = new List<GeometryData.Vertex>(vertices);
-        GeometryOperators.RelaxVertices(mesh, points, Math.Clamp(strength, 0f, 1f));
+        GeometryOperators.RelaxVertices(mesh, points, Math.Clamp(strength, 0f, 1f), Math.Max(1, repeats));
         after.Clear();
         after.Vertices.UnionWith(points);
     }
@@ -825,91 +563,7 @@ public static class Operators
     /// area, so the surface is smooth across soft edges and creased across any other.
     /// </summary>
     public static void CornerNormals(GeometryData mesh, ISet<GeometryData.Vertex>? only = null)
-    {
-        const string Normal = Prowl.Runtime.Resources.MeshGeometry.Normal;
-        if (!mesh.HasLoopAttribute(Normal)) mesh.AddLoopAttribute(Normal, GeometryData.AttributeBaseType.Float, 3);
-
-        var areaNormals = new Dictionary<GeometryData.Face, Float3>(mesh.Faces.Count);
-        foreach (GeometryData.Face face in mesh.Faces) areaNormals[face] = AreaNormal(face);
-
-        var fan = new HashSet<GeometryData.Face>();
-        var stack = new Stack<GeometryData.Face>();
-        foreach (GeometryData.Face face in mesh.Faces)
-        {
-            GeometryData.Loop loop = face.Loop!;
-            do
-            {
-                GeometryData.Vertex point = loop.Vert;
-                if (only != null && !only.Contains(point))
-                {
-                    loop = loop.Next!;
-                    continue;
-                }
-                fan.Clear();
-                fan.Add(face);
-                stack.Push(face);
-                while (stack.Count > 0)
-                {
-                    GeometryData.Face at = stack.Pop();
-                    foreach (GeometryData.Edge edge in at.NeighborEdges())
-                    {
-                        if (!edge.ContainsVertex(point) || !edge.IsSoft || edge.IsSharp) continue;
-                        foreach (GeometryData.Face next in edge.NeighborFaces())
-                            if (fan.Add(next)) stack.Push(next);
-                    }
-                }
-
-                Float3 sum = Float3.Zero;
-                foreach (GeometryData.Face member in fan) sum += areaNormals[member];
-                Float3 normal = Float3.LengthSquared(sum) > 1e-20f ? Float3.Normalize(sum) : Float3.UnitY;
-                loop.Attributes[Normal] = new GeometryData.FloatAttributeValue(normal.X, normal.Y, normal.Z);
-                loop = loop.Next!;
-            } while (loop != face.Loop);
-        }
-    }
-
-    // Twice the face's area along its normal, by Newell's method, so bigger faces count for more
-    private static Float3 AreaNormal(GeometryData.Face face)
-    {
-        List<GeometryData.Vertex> ring = face.NeighborVertices();
-        Float3 normal = Float3.Zero;
-        for (int i = 0; i < ring.Count; i++)
-        {
-            Float3 a = ring[i].Point, b = ring[(i + 1) % ring.Count].Point;
-            normal += new Float3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
-        }
-        return normal;
-    }
-
-    /// <summary>
-    /// Takes faces out of a mesh into a mesh of their own, keeping every attribute. Points left with no face are dropped
-    /// from both.
-    /// </summary>
-    public static GeometryData Separate(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces)
-    {
-        var taken = new HashSet<int>();
-        foreach (GeometryData.Face face in faces)
-            if (mesh.Contains(face)) taken.Add(face.Index);
-
-        var part = new GeometryData();
-        part.Restore(mesh.Capture());
-        var others = new List<GeometryData.Face>();
-        foreach (GeometryData.Face face in part.Faces)
-            if (!taken.Contains(face.Index)) others.Add(face);
-        GeometryOperators.DeleteFaces(part, others);
-        GeometryOperators.DeleteFaces(mesh, [.. faces]);
-        DropLoosePoints(part);
-        DropLoosePoints(mesh);
-        return part;
-    }
-
-    private static void DropLoosePoints(GeometryData mesh)
-    {
-        var loose = new List<GeometryData.Vertex>();
-        foreach (GeometryData.Vertex vertex in mesh.Vertices)
-            if (vertex.NeighborFaces().Count == 0) loose.Add(vertex);
-        foreach (GeometryData.Vertex vertex in loose) mesh.RemoveVertex(vertex);
-    }
+        => GeometryOperators.CornerNormals(mesh, Prowl.Runtime.Resources.MeshGeometry.Normal, only);
 
     /// <summary>
     /// Copies another mesh into a target, moved into the target's space. A transform that mirrors flips the copy's faces
@@ -922,8 +576,7 @@ public static class Operators
         const string SubMesh = Prowl.Runtime.Resources.MeshGeometry.SubMesh, Color = Prowl.Runtime.Resources.MeshGeometry.VertexColor;
         const string Normal = Prowl.Runtime.Resources.MeshGeometry.Normal, Tangent = Prowl.Runtime.Resources.MeshGeometry.Tangent;
 
-        var copy = new GeometryData();
-        copy.Restore(other.Capture());
+        GeometryData copy = other.Clone();
         foreach (GeometryData.Vertex vertex in copy.Vertices) vertex.Point = Float4x4.TransformPoint(vertex.Point, otherToTarget);
         foreach (GeometryData.Loop loop in copy.Loops)
             foreach (string name in new[] { Normal, Tangent })
@@ -952,7 +605,7 @@ public static class Operators
         if (otherSlots.Count == 0) slotOf[0] = 0;
         foreach (GeometryData.Face face in copy.Faces)
         {
-            int slot = face.TryGetAttribute(SubMesh, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue n && n.Data.Length > 0 ? n.Data[0] : 0;
+            int slot = SlotOf(face);
             face.SetAttribute(SubMesh, new GeometryData.IntAttributeValue(slot >= 0 && slot < slotOf.Length ? slotOf[slot] : 0));
         }
 
@@ -1045,7 +698,6 @@ public static class Operators
         bool targetHadBones = targetBones.Count > 0;
 
         int[] boneOf = new int[otherBones.Count];
-        Float4x4 back = otherToTarget.Invert();
         var added = new List<int>();
         for (int i = 0; i < otherBones.Count; i++)
         {
@@ -1054,7 +706,7 @@ public static class Operators
             if (found < 0)
             {
                 found = targetBones.Count;
-                targetBones.Add(new PMeshBone { Name = bone.Name, Position = bone.Position, Rotation = bone.Rotation, Scale = bone.Scale, BindPose = bone.BindPose * back });
+                targetBones.Add(new PMeshBone { Name = bone.Name, Position = bone.Position, Rotation = bone.Rotation, Scale = bone.Scale, BindPose = bone.BindPose });
                 added.Add(i);
             }
             boneOf[i] = found;
@@ -1063,11 +715,7 @@ public static class Operators
         {
             PMeshBone from = otherBones[i], to = targetBones[boneOf[i]];
             to.Parent = from.Parent >= 0 && from.Parent < boneOf.Length ? boneOf[from.Parent] : -1;
-            if (to.Parent >= 0) continue;
-            Float3 x = otherToTarget.c0.XYZ, y = otherToTarget.c1.XYZ, z = otherToTarget.c2.XYZ;
-            to.Position = Float4x4.TransformPoint(from.Position, otherToTarget);
-            to.Rotation = Quaternion.FromMatrix(new Float3x3(Float3.Normalize(x), Float3.Normalize(y), Float3.Normalize(z))) * from.Rotation;
-            to.Scale = from.Scale * new Float3(Float3.Length(x), Float3.Length(y), Float3.Length(z));
+            to.Transform(otherToTarget);
         }
 
         if (targetBones.Count > 0)
@@ -1161,21 +809,21 @@ public static class Operators
             if (!face.TryGetAttribute(SubMesh, out _) && neighbour != null && neighbour.TryGetAttribute(SubMesh, out GeometryData.AttributeValue? slot))
                 face.SetAttribute(SubMesh, slot!);
 
-            if (mesh.HasLoopAttribute(UV) && AllCorners(face, UV, IsZero))
+            if (mesh.HasLoopAttribute(UV) && face.Corners().All(l => IsZeroAt(l, UV)))
             {
                 Float3 normal = face.Normal();
-                ForEachCorner(face, loop =>
+                foreach (GeometryData.Loop loop in face.Corners())
                 {
                     if (OldCornerAt(loop.Vert, neighbour, facesBefore) is { } old && old.TryGetAttribute(UV, out GeometryData.AttributeValue? uv)) loop.SetAttribute(UV, uv!);
                     else
                     {
-                        Float2 flat = Projected(loop.Vert.Point, normal);
+                        Float2 flat = GeometryUVs.Projected(loop.Vert.Point, normal);
                         loop.SetAttribute(UV, new GeometryData.FloatAttributeValue(flat.X, flat.Y));
                     }
-                });
+                }
             }
-            if (mesh.HasLoopAttribute(Color) && AllCorners(face, Color, IsZero))
-                ForEachCorner(face, loop => loop.SetAttribute(Color, new GeometryData.FloatAttributeValue(1f, 1f, 1f, 1f)));
+            if (mesh.HasLoopAttribute(Color) && face.Corners().All(l => IsZeroAt(l, Color)))
+                foreach (GeometryData.Loop loop in face.Corners()) loop.SetAttribute(Color, new GeometryData.FloatAttributeValue(1f, 1f, 1f, 1f));
         }
         CarryFromOldCorners(mesh, made, pointsBefore, facesBefore);
 
@@ -1210,18 +858,18 @@ public static class Operators
         if (names.Count == 0) return;
 
         foreach (GeometryData.Face face in made)
-            ForEachCorner(face, loop =>
+            foreach (GeometryData.Loop loop in face.Corners())
             {
                 bool needsSkin = skinned && IsZeroAt(loop, Weights);
-                if (!needsSkin && !names.Exists(n => n != Indices && n != Weights && IsZeroAt(loop, n))) return;
-                if (SourceCorner(loop.Vert, pointsBefore, facesBefore) is not { } source) return;
+                if (!needsSkin && !names.Exists(n => n != Indices && n != Weights && IsZeroAt(loop, n))) continue;
+                if (SourceCorner(loop.Vert, pointsBefore, facesBefore) is not { } source) continue;
                 foreach (string name in names)
                 {
                     bool skin = name == Indices || name == Weights;
                     if (skin ? !needsSkin : !IsZeroAt(loop, name)) continue;
                     if (source.TryGetAttribute(name, out GeometryData.AttributeValue? value)) loop.SetAttribute(name, GeometryData.AttributeValue.Copy(value!));
                 }
-            });
+            }
     }
 
     private static bool IsZeroAt(GeometryData.Loop loop, string name)
@@ -1260,75 +908,25 @@ public static class Operators
 
     private static GeometryData.Loop? OldCornerAt(GeometryData.Vertex vertex, GeometryData.Face? preferred, IReadOnlySet<GeometryData.Face> old)
     {
-        if (preferred != null && CornerOf(preferred, vertex) is { } corner) return corner;
+        if (preferred != null && preferred.GetLoop(vertex) is { } corner) return corner;
         foreach (GeometryData.Face face in vertex.NeighborFaces())
-            if (old.Contains(face) && CornerOf(face, vertex) is { } found) return found;
+            if (old.Contains(face) && face.GetLoop(vertex) is { } found) return found;
         return null;
     }
 
-    private static GeometryData.Loop? CornerOf(GeometryData.Face face, GeometryData.Vertex vertex)
-    {
-        GeometryData.Loop loop = face.Loop!;
-        do
-        {
-            if (loop.Vert == vertex) return loop;
-            loop = loop.Next!;
-        } while (loop != face.Loop);
-        return null;
-    }
-
-    private static Float2 Projected(Float3 point, Float3 normal)
-    {
-        Float3 size = new(MathF.Abs(normal.X), MathF.Abs(normal.Y), MathF.Abs(normal.Z));
-        return size.X >= size.Y && size.X >= size.Z ? new Float2(point.Z, point.Y) : size.Y >= size.Z ? new Float2(point.X, point.Z) : new Float2(point.X, point.Y);
-    }
+    /// <summary>The material slot of a face, 0 when it has none.</summary>
+    public static int SlotOf(GeometryData.Face face)
+        => face.TryGetAttribute(Prowl.Runtime.Resources.MeshGeometry.SubMesh, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue n && n.Data.Length > 0 ? n.Data[0] : 0;
 
     private static bool IsZero(GeometryData.AttributeValue? value)
         => value is not GeometryData.FloatAttributeValue f || Array.TrueForAll(f.Data, x => x == 0f);
 
-    private static bool AllCorners(GeometryData.Face face, string name, Func<GeometryData.AttributeValue?, bool> test)
+    private static void SelectFace(GeometryData.Face face, ElementSelection after)
     {
-        GeometryData.Loop loop = face.Loop!;
-        do
-        {
-            if (!test(loop.TryGetAttribute(name, out GeometryData.AttributeValue? value) ? value : null)) return false;
-            loop = loop.Next!;
-        } while (loop != face.Loop);
-        return true;
-    }
-
-    private static void ForEachCorner(GeometryData.Face face, Action<GeometryData.Loop> act)
-    {
-        GeometryData.Loop loop = face.Loop!;
-        do
-        {
-            act(loop);
-            loop = loop.Next!;
-        } while (loop != face.Loop);
-    }
-
-    /// <summary>The edges in groups joined at their points.</summary>
-    private static List<List<GeometryData.Edge>> Groups(IReadOnlyCollection<GeometryData.Edge> edges)
-    {
-        var remaining = new HashSet<GeometryData.Edge>(edges);
-        var groups = new List<List<GeometryData.Edge>>();
-        while (remaining.Count > 0)
-        {
-            var group = new List<GeometryData.Edge>();
-            var stack = new Stack<GeometryData.Edge>();
-            foreach (GeometryData.Edge first in remaining) { stack.Push(first); break; }
-            remaining.Remove(stack.Peek());
-            while (stack.Count > 0)
-            {
-                GeometryData.Edge edge = stack.Pop();
-                group.Add(edge);
-                foreach (GeometryData.Vertex end in new[] { edge.Vert1, edge.Vert2 })
-                    foreach (GeometryData.Edge next in end.NeighborEdges())
-                        if (remaining.Remove(next)) stack.Push(next);
-            }
-            groups.Add(group);
-        }
-        return groups;
+        after.Clear();
+        after.Faces.Add(face);
+        after.Vertices.UnionWith(face.NeighborVertices());
+        foreach (GeometryData.Edge edge in face.NeighborEdges()) after.Edges.Add(edge);
     }
 
     private static void SelectFacesOnNewPoints(GeometryData mesh, HashSet<GeometryData.Vertex> oldPoints, ElementSelection after)

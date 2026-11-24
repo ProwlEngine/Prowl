@@ -193,6 +193,28 @@ public class ModelWorldTests : EditorTestHarness
     }
 
     [Fact]
+    public void ApplyingTheTransformKeepsTheMeshAndChildrenWhereTheyAre()
+    {
+        Guid guid = WriteModel(out _);
+        ModelEditingMode.Open(guid);
+        GameObject body = ModelEditingMode.World!.FindObject("Body")!;
+        GameObject lid = ModelEditingMode.World!.FindObject("Lid")!;
+        ModelObject model = body.GetComponent<ModelObject>()!;
+        body.Transform.SetLocalTransform(new Float3(1f, 2f, 3f), Quaternion.AxisAngle(Float3.UnitY, 0.5f), new Float3(2f, 1f, 1f));
+        Float3[] before = [.. model.Mesh.Vertices.Select(v => body.Transform.TransformPoint(v.Point))];
+        Float3 lidBefore = lid.Transform.Position;
+
+        ModelEditingMode.ApplyTransform([body], ModelEditingMode.TransformParts.All);
+
+        Assert.Equal(Float3.One, body.Transform.LocalScale);
+        Assert.Equal(Float3.Zero, body.Transform.LocalPosition);
+        for (int i = 0; i < before.Length; i++)
+            Assert.True(Float3.Distance(before[i], model.Mesh.Vertices[i].Point) < 1e-4f);
+        Assert.True(Float3.Distance(lidBefore, lid.Transform.Position) < 1e-4f);
+        ModelEditingMode.Exit();
+    }
+
+    [Fact]
     public void JoiningMergesObjectsIntoTheActiveOne()
     {
         Guid guid = WriteModel(out _);

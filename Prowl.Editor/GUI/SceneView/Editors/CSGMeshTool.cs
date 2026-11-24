@@ -273,6 +273,8 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active)
             return Float4x4.TransformPoint(active, Target!.Transform.WorldToLocalMatrix);
+        if (SceneTools.Pivot == PivotMode.Cursor)
+            return Float4x4.TransformPoint(SceneTools.Cursor, Target!.Transform.WorldToLocalMatrix);
         if (SceneTools.Pivot == PivotMode.Center && _vertices.Count > 0)
         {
             Float3 sum = Float3.Zero;
@@ -413,17 +415,31 @@ public sealed class CSGMeshTool : SceneTool
         return (mesh, surfaces);
     }
 
-    /// <summary>Takes the face's corners, direction and look, ready for an extrude.</summary>
-    private void PrepareExtrude(int face)
+    public void SnapSelectedToGrid() => SnapSelection();
+
+    /// <summary>Moves the brush's pivot to the middle of the selected points, its shape staying where it is.</summary>
+    public void PivotToSelection()
     {
-        _actionRing.Clear();
-        foreach (int i in _mesh!.PolygonPoints(face)) _actionRing.Add(_mesh.Points[i]);
-        _actionCorner = _mesh.PolygonNormal(face);
-        int plane = PlaneOf(face);
-        _actionSurface = plane >= 0 ? Target!.Surfaces[plane] : SurfaceData.Default;
+        if (!Active || _vertices.Count == 0) return;
+        Float3 sum = Float3.Zero;
+        foreach (int i in _vertices) sum += _mesh!.Points[i];
+        MovePivot(sum / _vertices.Count);
     }
 
-    public void SnapSelectedToGrid() => SnapSelection();
+    /// <summary>Moves the brush's pivot to the 3D cursor, its shape staying where it is.</summary>
+    public void PivotToCursor()
+    {
+        if (Active) MovePivot(Float4x4.TransformPoint(SceneTools.Cursor, Target!.Transform.WorldToLocalMatrix));
+    }
+
+    private void MovePivot(Float3 local)
+    {
+        CSGBrush brush = Target!;
+        CSGSelection.Record("Move CSG Pivot", [brush.GameObject, .. brush.GameObject.Children]);
+        CSGSelection.MovePivot(brush, local);
+        Reload();
+        MarkDirty();
+    }
 
     public void DeleteSelectedFaces() => DeleteFaces();
 
@@ -452,7 +468,6 @@ public sealed class CSGMeshTool : SceneTool
     private bool _dragging;
 
     // A gizmo drag that began with Shift on a whole face, extruding it rather than moving it
-    private bool _gizmoExtrude;
     private Float3 _gizmoStart;
     private Float3 _dragRaw, _dragApplied;
     private Float3 _dragAnchor, _dragAnchorStart, _dragStartHit;
@@ -505,6 +520,7 @@ public sealed class CSGMeshTool : SceneTool
 
     private Action _action;
     private Float2 _dragOrigin;
+    private readonly SlowPointer _pointer = new();
 
     // An action started from the menu follows the mouse with no button held, and the next click commits it. It runs
     // modal, holding the viewport it started in until it ends
@@ -986,7 +1002,7 @@ public sealed class CSGMeshTool : SceneTool
             foreach (GeometryData.Face face in _target.FacesOf([polygon]))
                 if (face.NeighborEdges().Contains(edge)) side = face;
 
-        List<GeometryData.Edge> edges = handles.Ctrl ? Selecting.Ring(edge) : Selecting.Loop(edge, side);
+        List<GeometryData.Edge> edges = handles.Ctrl ? GeometryOperators.EdgeRingAcross(edge) : GeometryOperators.EdgeLoopOrOutline(edge, side);
         ElementSelection hidden = HiddenElements();
         ElementSelection current = SelectedElements();
         EditSelection(selection =>
@@ -1293,7 +1309,7 @@ public sealed class CSGMeshTool : SceneTool
     {
         HandleContext handles = ctx.Handles;
         Float3 normal = ctx.Camera.GameObject.Transform.Forward;
-        Ray ray = handles.MouseRay;
+        Ray ray = handles.RayThrough(_pointer.Position);
 
         float denom = Float3.Dot(ray.Direction, normal);
         if (MathF.Abs(denom) < 1e-6f) return;
@@ -1349,6 +1365,7 @@ public sealed class CSGMeshTool : SceneTool
         }
         _actionView = Context.View;
         _dragOrigin = handles.MousePosition;
+        _pointer.Reset(_dragOrigin);
         _dragStarted = false;
         _passedThreshold = false;
         _clicked = -1;
@@ -1472,6 +1489,7 @@ public sealed class CSGMeshTool : SceneTool
             Individual = SceneTools.Pivot == PivotMode.Individual,
         };
         if (SceneTools.Pivot == PivotMode.Active && ActiveCentre() is { } active) _session.Pivot = active;
+        if (SceneTools.Pivot == PivotMode.Cursor) _session.Pivot = SceneTools.Cursor;
         _sessionBrush = Target;
         _sessionStart = Target!.ControlMesh.Clone();
         _sessionSurfaces = (SurfaceData[])Target.Surfaces.Clone();
@@ -1660,7 +1678,7 @@ public sealed class CSGMeshTool : SceneTool
 
         // Cursor travel in world units at the brush's distance, counted from the drag threshold. A menu action has no
         // press to tell apart from a click, so it counts from where the menu was used
-        float pixels = Float2.Distance(handles.MousePosition, _dragOrigin);
+        float pixels = Float2.Distance(_pointer.Follow(handles), _dragOrigin);
         _passedThreshold |= _fromMenu || pixels >= DragThreshold;
         bool moved = _passedThreshold;
         float amount = MathF.Max(0f, pixels - (_fromMenu ? 0f : DragThreshold)) * WorldPerPixel(ctx);
@@ -1811,7 +1829,7 @@ public sealed class CSGMeshTool : SceneTool
             case Action.EdgeSlide:
             {
                 float length = Float2.Dot(_slideDirection, _slideDirection);
-                float factor = length > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - _dragOrigin, _slideDirection) / length, -1f, 1f) : 0f;
+                float factor = length > 1e-6f ? Math.Clamp(Float2.Dot(_pointer.Position - _dragOrigin, _slideDirection) / length, -1f, 1f) : 0f;
                 List<(int A, int B)> slid = [.. _actionEdges];
                 PreviewOperator("Slide CSG Edges", factor, 1, 1, MathF.Abs(factor) <= 1e-4f, (f, _) => (target, selected) =>
                 {
@@ -2072,6 +2090,7 @@ public sealed class CSGMeshTool : SceneTool
         Float4x4 toWorld = _actionBrush!.Transform.LocalToWorldMatrix;
         if (!_loopPicked) _loopEdge = NearestStartEdge(handles, toWorld);
 
+        _pointer.Follow(handles);
         float slide = 0f;
         if (_loopPicked && _loopEdge is { } picked
             && handles.WorldToScreen(Float4x4.TransformPoint(_startMesh!.Points[picked.A], toWorld)) is { } a
@@ -2079,7 +2098,7 @@ public sealed class CSGMeshTool : SceneTool
         {
             Float2 along = b - a;
             float length = Float2.Dot(along, along);
-            slide = length > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - _dragOrigin, along) / length * 2f, -1f, 1f) : 0f;
+            slide = length > 1e-6f ? Math.Clamp(Float2.Dot(_pointer.Position - _dragOrigin, along) / length * 2f, -1f, 1f) : 0f;
         }
 
         if (_loopEdge is { } edge)
@@ -2111,6 +2130,7 @@ public sealed class CSGMeshTool : SceneTool
             if (_loopEdge == null) return;
             _loopPicked = true;
             _dragOrigin = handles.MousePosition;
+            _pointer.Reset(_dragOrigin);
             return;
         }
         TakeActionResult();
@@ -2287,7 +2307,7 @@ public sealed class CSGMeshTool : SceneTool
         if (handles.WorldToScreen(centre) is not { } from || handles.WorldToScreen(tip) is not { } to) return 1f;
         Float2 along = to - from;
         if (Float2.LengthSquared(along) < 16f) return 1f;
-        return Float2.Dot(handles.MousePosition - _dragOrigin, along) < 0f ? -1f : 1f;
+        return Float2.Dot(_pointer.Position - _dragOrigin, along) < 0f ? -1f : 1f;
     }
 
     private void PreviewChamferSelection(float amount)
@@ -2485,9 +2505,6 @@ public sealed class CSGMeshTool : SceneTool
         foreach (int i in _vertices) centre += _mesh!.Points[i];
         centre = Float4x4.TransformPoint(centre / _vertices.Count, toWorld);
 
-        // While extruding the points stay put, so the handle is carried along by the drag instead
-        if (_gizmoExtrude && _dragging) centre += _dragRaw;
-
         Float3 before = centre;
         Quaternion axes = SceneTools.Orientation switch
         {
@@ -2500,16 +2517,6 @@ public sealed class CSGMeshTool : SceneTool
         {
             _dragRaw = _dragApplied = Float3.Zero;
             _gizmoStart = before;
-
-            // Shift on a whole face pulls it out as a brush of its own
-            _gizmoExtrude = handles.Shift && _faces.Count == 1 && _vertices.Count == _mesh!.PolygonPoints(_faces[0]).Count;
-            if (_gizmoExtrude) PrepareExtrude(_faces[0]);
-        }
-
-        if (_dragging && !hot && _gizmoExtrude)
-        {
-            _gizmoExtrude = false;
-            CommitExtrude(GizmoExtrudeAmount(toWorld));
         }
         if (_dragging && !hot) CommitSession("Edit CSG Brush");
 
@@ -2519,11 +2526,12 @@ public sealed class CSGMeshTool : SceneTool
         Float3 step = Float3.Zero;
         if (moved)
         {
-            _dragRaw += centre - before;
+            // Shift slows the drag for fine moves
+            _dragRaw += (centre - before) * (handles.Shift ? 0.1f : 1f);
             Float3 snapped = axes * CSGSnap.Value(handles, Quaternion.Inverse(axes) * _dragRaw);
 
             // Snapping to a brush carries the gizmo's starting centre onto the target, along only the axes being dragged
-            if (SnapToBrushes && !_gizmoExtrude && FindSnap(handles, handles.MousePosition) is { } target)
+            if (SnapToBrushes && FindSnap(handles, handles.MousePosition) is { } target)
             {
                 Float3 raw = Quaternion.Inverse(axes) * _dragRaw, onto = Quaternion.Inverse(axes) * (target - _gizmoStart);
                 float still = 1e-6f + Float3.Length(raw) * 1e-4f;
@@ -2536,26 +2544,12 @@ public sealed class CSGMeshTool : SceneTool
             _dragApplied = snapped;
         }
 
-        if (_gizmoExtrude)
-        {
-            if (hot) PreviewExtrude(ctx, MathF.Max(0f, GizmoExtrudeAmount(toWorld)));
-            return;
-        }
-
         if (hot) DrawDistance(ctx, centre, _dragApplied);
         if (!moved || Float3.LengthSquared(step) < 1e-12f) return;
         if ((_session ?? StartSession()) is not { } session) return;
 
         Float3 total = _dragApplied;
         PreviewSession(() => session.Translate(total));
-    }
-
-    /// <summary>How far the gizmo has been dragged along the face being extruded, in the brush's own units.</summary>
-    private float GizmoExtrudeAmount(Float4x4 toWorld)
-    {
-        Float3 normal = Float4x4.TransformNormal(_actionCorner, toWorld);
-        float scale = Float3.Length(normal);
-        return scale < 1e-6f ? 0f : Float3.Dot(_dragApplied, normal / scale) / scale;
     }
 
     /// <summary>Scales the selected face about its centre and rotates a selected edge about itself.</summary>

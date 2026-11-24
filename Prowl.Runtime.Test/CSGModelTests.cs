@@ -178,6 +178,52 @@ public class CSGModelTests : RuntimeTestBase
     }
 
     [Fact]
+    public void ScalingABrushRebuildsTheMesh()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
+        Update(_scene);
+
+        brush.Transform.LocalScale = new Float3(2f, 1f, 1f);
+        Update(_scene);
+
+        Assert.Equal(16f, VolumeOf(_model.GeneratedMesh!), 1);
+    }
+
+    [Fact]
+    public void RotatingABrushRebuildsTheMesh()
+    {
+        CreateModel();
+        AddBrush(Float3.One * 4f, Float3.Zero);
+        CSGBrush cutter = AddBrush(new Float3(8f, 2f, 2f), new Float3(0, 2, 0), Operation.Subtractive);
+        Update(_scene);
+        float before = VolumeOf(_model.GeneratedMesh!);
+
+        // Standing the cutter up turns it from a groove along the top into a hole through the middle
+        cutter.Transform.Rotation = Quaternion.AxisAngle(Float3.UnitZ, MathF.PI * 0.5f);
+        Update(_scene);
+
+        Assert.Equal(64f - 8f, before, 1);
+        Assert.Equal(64f - 16f, VolumeOf(_model.GeneratedMesh!), 1);
+    }
+
+    [Fact]
+    public void RotatingABrushTurnsItTheWayItWasTurned()
+    {
+        CreateModel();
+        CSGBrush bar = AddBrush(new Float3(8f, 1f, 1f), Float3.Zero);
+
+        // A positive turn about Z lifts the bar's +X end
+        bar.Transform.Rotation = Quaternion.AxisAngle(Float3.UnitZ, MathF.PI / 6f);
+        Update(_scene);
+
+        Assert.True(_model.Raycast(new Ray(new Float3(3f, 10f, 0f), -Float3.UnitY), out _, out _, out Float3 right));
+        Assert.True(_model.Raycast(new Ray(new Float3(-3f, 10f, 0f), -Float3.UnitY), out _, out _, out Float3 left));
+        Assert.Equal(3f * MathF.Tan(MathF.PI / 6f) + 0.5f / MathF.Cos(MathF.PI / 6f), right.Y, 2);
+        Assert.True(left.Y < 0f, $"left end at {left.Y}");
+    }
+
+    [Fact]
     public void ChangingAnOperationRebuildsTheMesh()
     {
         CreateModel();

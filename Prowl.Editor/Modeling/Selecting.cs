@@ -172,52 +172,6 @@ public static class Selecting
         Normalize(selection, SelectMode.Vertex);
     }
 
-    /// <summary>
-    /// The edge loop through an edge. Where an edge loop stops at once, at a corner with three edges or beside an n
-    /// gon, it is the outline of the face on the cursor's side instead, which is what a loop means on a brush.
-    /// </summary>
-    public static List<GeometryData.Edge> Loop(GeometryData.Edge edge, GeometryData.Face? side)
-    {
-        List<GeometryData.Edge> loop = GeometryOperators.EdgeLoop(edge);
-        if (loop.Count > 1) return loop;
-
-        GeometryData.Face? face = side;
-        if (face == null)
-            foreach (GeometryData.Face neighbour in edge.NeighborFaces()) { face = neighbour; break; }
-        return face?.NeighborEdges() ?? [edge];
-    }
-
-    /// <summary>
-    /// The edge ring through an edge. Where an edge ring stops at once, beside a face that is not four sided, it
-    /// walks the faces round taking the edge most parallel to the last, as the upright edges of a prism.
-    /// </summary>
-    public static List<GeometryData.Edge> Ring(GeometryData.Edge edge)
-    {
-        List<GeometryData.Edge> ring = GeometryOperators.EdgeRing(edge);
-        if (ring.Count > 1) return ring;
-
-        ring = [edge];
-        var seen = new HashSet<GeometryData.Edge> { edge };
-        foreach (GeometryData.Face start in edge.NeighborFaces())
-        {
-            GeometryData.Edge current = edge;
-            GeometryData.Face? face = start;
-            while (face != null)
-            {
-                GeometryData.Edge? next = Parallel(face, current);
-                if (next == null || !seen.Add(next)) break;
-                ring.Add(next);
-
-                GeometryData.Face? across = null;
-                foreach (GeometryData.Face other in next.NeighborFaces())
-                    if (other != face) { across = other; break; }
-                current = next;
-                face = across;
-            }
-        }
-        return ring;
-    }
-
     /// <summary>Adds the elements like the selected ones: faces facing the same way, edges as long, points with as many edges.</summary>
     public static void Similar(GeometryData mesh, ElementSelection selection, SelectMode mode)
     {
@@ -310,22 +264,6 @@ public static class Selecting
             selection.Edges.ExceptWith(hidden.Edges);
             selection.Faces.ExceptWith(hidden.Faces);
         }
-    }
-
-    private static GeometryData.Edge? Parallel(GeometryData.Face face, GeometryData.Edge from)
-    {
-        Float3 direction = Float3.NormalizeSafe(from.Vert2.Point - from.Vert1.Point, Float3.UnitY);
-        GeometryData.Edge? best = null;
-        float bestDot = 0.9f;
-        foreach (GeometryData.Edge edge in face.NeighborEdges())
-        {
-            if (edge == from || edge.ContainsVertex(from.Vert1) || edge.ContainsVertex(from.Vert2)) continue;
-            float dot = MathF.Abs(Float3.Dot(direction, Float3.NormalizeSafe(edge.Vert2.Point - edge.Vert1.Point, Float3.UnitY)));
-            if (dot <= bestDot) continue;
-            bestDot = dot;
-            best = edge;
-        }
-        return best;
     }
 
     private static float Length(GeometryData.Edge edge) => Float3.Distance(edge.Vert1.Point, edge.Vert2.Point);

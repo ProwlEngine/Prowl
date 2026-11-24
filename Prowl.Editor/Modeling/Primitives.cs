@@ -41,8 +41,8 @@ public static class Primitives
         };
         // Some generators repeat the points along a seam, which would leave the surface open there
         GeometryOperators.MergeByDistance(mesh, null, 1e-5f);
-        if (kind is PrimitiveKind.Cylinder or PrimitiveKind.Sphere or PrimitiveKind.Icosphere or PrimitiveKind.Cone or PrimitiveKind.Torus) UVs.Cylinder(mesh, mesh.Faces);
-        else UVs.Cube(mesh, mesh.Faces);
+        if (kind is PrimitiveKind.Cylinder or PrimitiveKind.Sphere or PrimitiveKind.Icosphere or PrimitiveKind.Cone or PrimitiveKind.Torus) GeometryUVs.Cylinder(mesh, mesh.Faces);
+        else GeometryUVs.Cube(mesh, mesh.Faces);
         return mesh;
     }
 }

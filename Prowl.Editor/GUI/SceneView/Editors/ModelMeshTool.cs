@@ -17,6 +17,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
+using Prowl.Unwrapper;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
@@ -75,7 +76,8 @@ public sealed class ModelMeshTool : SceneTool
     // An operator whose amount follows the mouse: the meshes and selections it started from, what it runs, and its count
     private AmountOperator? _operator;
     private readonly Dictionary<ModelObject, (GeometrySnapshot Mesh, ModelEditPart Selection)> _start = new();
-    private Float2 _operatorFrom, _operatorVirtual, _operatorLast;
+    private Float2 _operatorFrom;
+    private readonly SlowPointer _operatorPointer = new();
     private Float3 _operatorPivot, _operatorNormal;
     private int _operatorCount;
     private (float Amount, int Count)? _operatorKey;
@@ -117,8 +119,19 @@ public sealed class ModelMeshTool : SceneTool
 
         public OperatorDrag Drag { get; init; }
 
-        /// <summary>An on and off setting shown when adjusting the step after, by locale key, and how the operator runs with it on.</summary>
-        public (string Label, Action<GeometryData, ElementSelection, float, int> Run)? Flag { get; init; }
+        /// <summary>Further settings, by locale key and the value they start at, shown when adjusting the step after.</summary>
+        public LastField[] Extras { get; init; } = [];
+
+        /// <summary>How the operator runs given its extra settings, in place of <see cref="Run"/>.</summary>
+        public Action<GeometryData, ElementSelection, float, int, float[]>? RunWithExtras { get; init; }
+
+        public void Invoke(GeometryData mesh, ElementSelection selection, float amount, int count, float[] extras)
+        {
+            if (RunWithExtras != null) RunWithExtras(mesh, selection, amount, count, extras);
+            else Run(mesh, selection, amount, count);
+        }
+
+        public float[] ExtraDefaults => [.. Extras.Select(e => e.Value)];
     }
 
     public SelectMode Mode { get; private set; } = SelectMode.Vertex;
@@ -354,7 +367,7 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Slide")) Slide(ctx);
         else if (handles.IsPressed("MeshEdit/Crease")) Crease(ctx);
         else if (handles.IsPressed("MeshEdit/Duplicate")) Duplicate(ctx);
-        else if (handles.IsPressed("MeshEdit/Unwrap")) Edit("Unwrap", (mesh, s) => UVs.Unwrap(mesh, UVFaces(mesh, s)));
+        else if (handles.IsPressed("MeshEdit/Unwrap")) Edit("Unwrap", (mesh, s) => GeometryUnwrap.Unwrap(mesh, UVFaces(mesh, s)));
         else if (handles.IsPressed("MeshEdit/Connect")) Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge);
         else if (handles.IsPressed("MeshEdit/Triangulate")) Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face);
         else if (handles.IsPressed("MeshEdit/Flatten")) Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s));
@@ -367,11 +380,22 @@ public sealed class ModelMeshTool : SceneTool
         else if (handles.IsPressed("MeshEdit/Separate")) SeparateSelected();
         else if (handles.IsPressed("MeshEdit/Extrude")) Extrude(ctx);
         else if (handles.IsPressed("MeshEdit/Bevel"))
-            StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32));
+            BevelEdges(ctx);
+        else if (handles.IsPressed("MeshEdit/BevelPoints"))
+            BevelPoints(ctx);
+        else if (handles.IsPressed("MeshEdit/ExtrudeMenu"))
+            ExtrudeMenu(ctx);
+        else if (handles.IsPressed("MeshEdit/ShrinkFatten")) ShrinkFatten(ctx);
+        else if (handles.IsPressed("MeshEdit/ToSphere")) ToSphere(ctx);
+        else if (handles.IsPressed("MeshEdit/Split")) Split();
         else if (handles.IsPressed("MeshEdit/LimitedDissolve")) LimitedDissolve(ctx);
         else if (handles.IsPressed("MeshEdit/TrisToQuads")) TrisToQuads(ctx);
         else if (handles.IsPressed("MeshEdit/MergeByDistance")) MergeByDistance(ctx);
         else if (handles.IsPressed("MeshEdit/Smooth")) SmoothPoints(ctx);
+        else if (handles.IsPressed("MeshEdit/PickLinked")) PickLinked(ctx, remove: false);
+        else if (handles.IsPressed("MeshEdit/UnpickLinked")) PickLinked(ctx, remove: true);
+        else if (handles.IsPressed("MeshEdit/SnapMenu")) SnapMenu();
+        else if (handles.IsPressed("MeshEdit/EdgeMenu")) EdgeMenu(ctx);
     }
 
     public void SetMode(SelectMode mode)
@@ -443,7 +467,7 @@ public sealed class ModelMeshTool : SceneTool
             if (selection.Faces.Count == 0) continue;
 
             Undo.RecordObject(model, Name);
-            GeometryData part = Operators.Separate(model.Mesh, [.. selection.Faces]);
+            GeometryData part = GeometryOperators.Separate(model.Mesh, [.. selection.Faces]);
             selection.Clear();
             model.RefreshPreview();
 
@@ -476,11 +500,7 @@ public sealed class ModelMeshTool : SceneTool
         switch (Mode)
         {
             case SelectMode.Face:
-                StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s), SelectMode.Face)
-                {
-                    Drag = OperatorDrag.AlongNormal,
-                    Flag = ("model.field_average_normal", (GeometryData mesh, ElementSelection s, float d, int _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s, ExtrudeMode.AverageNormal)),
-                });
+                ExtrudeFaces(ctx, ExtrudeMode.AverageNormal);
                 break;
             case SelectMode.Edge:
                 Edit("Extrude Model Edges", (mesh, s) => Operators.ExtrudeEdges(mesh, [.. s.Edges], s), SelectMode.Edge);
@@ -565,16 +585,12 @@ public sealed class ModelMeshTool : SceneTool
             Operators.MergeByDistance(mesh, s.Vertices.Count > 0 ? [.. s.Vertices] : null, d, s), SelectMode.Vertex));
 
     private void SmoothPoints(SceneToolContext ctx)
-        => StartOperator(ctx, new AmountOperator("Smooth Model Points", false, p => p * 0.005f, "0.##", (mesh, s, t, repeats) =>
-        {
-            for (int i = 0; i < repeats; i++) Operators.Smooth(mesh, [.. s.Vertices], Math.Clamp(t, 0f, 1f), s);
-        }, SelectMode.Vertex, 1, 50));
+        => StartOperator(ctx, new AmountOperator("Smooth Model Points", false, p => p * 0.005f, "0.##",
+            (mesh, s, t, repeats) => Operators.Smooth(mesh, [.. s.Vertices], t, s, repeats), SelectMode.Vertex, 1, 50));
 
     private void RelaxPoints(SceneToolContext ctx)
-        => StartOperator(ctx, new AmountOperator("Relax Model Points", false, p => p * 0.005f, "0.##", (mesh, s, t, repeats) =>
-        {
-            for (int i = 0; i < repeats; i++) Operators.Relax(mesh, [.. s.Vertices], Math.Clamp(t, 0f, 1f), s);
-        }, SelectMode.Vertex, 1, 50));
+        => StartOperator(ctx, new AmountOperator("Relax Model Points", false, p => p * 0.005f, "0.##",
+            (mesh, s, t, repeats) => Operators.Relax(mesh, [.. s.Vertices], t, s, repeats), SelectMode.Vertex, 1, 50));
 
     private void SubdivideSmooth(SceneToolContext ctx)
         => StartOperator(ctx, new AmountOperator("Subdivide Smooth", false, _ => 0f, "0", (mesh, s, _, levels) => Operators.SubdivideSmooth(mesh, levels, s), null, 1, 4));
@@ -645,6 +661,13 @@ public sealed class ModelMeshTool : SceneTool
     public override bool ReplacesSceneContextMenu => Editing;
 
     // F is Fill in edit mode, so the camera does not frame the object on it
+    public override Float3? SurfaceUnder(SceneToolContext ctx, Ray ray)
+    {
+        if (!ModelEditingMode.IsEditing || ModelEditingMode.World is not { } world) return null;
+        List<ModelObject> shown = [.. world.Objects.Select(go => go.GetComponent<ModelObject>()).Where(m => m.IsValid() && !m.Hidden)];
+        return SurfaceHit(shown)(ray, float.PositiveInfinity) is { } distance ? ray.Origin + ray.Direction * distance : null;
+    }
+
     public override bool TakesShortcut(string shortcut) => Editing && shortcut == "Scene/Focus";
 
     private static string Chord(string shortcut) => ShortcutManager.Find(shortcut) is { } definition ? ShortcutManager.GetDisplayString(definition.Binding) : "";
@@ -760,12 +783,15 @@ public sealed class ModelMeshTool : SceneTool
     {
         menu.Item(Loc.Get("model.menu.extrude"), () => Extrude(ctx), shortcut: Chord("MeshEdit/Extrude"));
         menu.Item(Loc.Get("model.menu.fill"), Fill, shortcut: Chord("MeshEdit/Fill"));
+        menu.Item(Loc.Get("csg.bevel"), () => BevelPoints(ctx), shortcut: Chord("MeshEdit/BevelPoints"));
         menu.Item(Loc.Get("model.menu.rip"), () => Rip(ctx), shortcut: Chord("MeshEdit/Rip"));
         menu.Item(Loc.Get("model.menu.slide"), () => Slide(ctx), shortcut: Chord("MeshEdit/Slide"));
         menu.Item(Loc.Get("csg.merge_centre"), () => Edit("Merge Model Points", MergeAtCentre, SelectMode.Vertex), shortcut: Chord("MeshEdit/Merge"));
         menu.Item(Loc.Get("csg.merge_by_distance"), () => MergeByDistance(ctx), shortcut: Chord("MeshEdit/MergeByDistance"));
         menu.Item(Loc.Get("csg.connect"), () => Edit("Connect Model Points", (mesh, s) => Operators.Connect(mesh, [.. s.Vertices], ctx.Camera.GameObject.Transform.Forward, s), SelectMode.Edge), shortcut: Chord("MeshEdit/Connect"));
         menu.Item(Loc.Get("csg.smooth"), () => SmoothPoints(ctx), shortcut: Chord("MeshEdit/Smooth"));
+        menu.Item(Loc.Get("model.menu.shrink_fatten"), () => ShrinkFatten(ctx), shortcut: Chord("MeshEdit/ShrinkFatten"));
+        menu.Item(Loc.Get("model.menu.to_sphere"), () => ToSphere(ctx), shortcut: Chord("MeshEdit/ToSphere"));
         menu.Item(Loc.Get("csg.relax"), () => RelaxPoints(ctx));
         menu.Item(Loc.Get("csg.flatten"), () => Edit("Flatten Model Points", (mesh, s) => Operators.Flatten(mesh, s)), shortcut: Chord("MeshEdit/Flatten"));
         menu.Item(Loc.Get("model.menu.shrinkwrap"), Shrinkwrap);
@@ -780,15 +806,15 @@ public sealed class ModelMeshTool : SceneTool
         menu.Item(Loc.Get("model.menu.fill"), Fill, shortcut: Chord("MeshEdit/Fill"));
         menu.Item(Loc.Get("model.menu.bridge_edges"), () => Edit("Bridge Model Edges", Operators.BridgeEdges), shortcut: Chord("MeshEdit/Bridge"));
         menu.Item(Loc.Get("model.menu.grid_fill"), GridFill);
-        menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)), shortcut: Chord("MeshEdit/Bevel"));
+        menu.Item(Loc.Get("csg.bevel"), () => BevelEdges(ctx), shortcut: Chord("MeshEdit/Bevel"));
         menu.Item(Loc.Get("model.menu.slide"), () => Slide(ctx), shortcut: Chord("MeshEdit/Slide"));
         menu.Item(Loc.Get("model.menu.crease"), () => Crease(ctx), shortcut: Chord("MeshEdit/Crease"));
         menu.Item(Loc.Get("model.menu.rip"), () => Rip(ctx), shortcut: Chord("MeshEdit/Rip"));
         menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
         menu.Item(Loc.Get("model.menu.subdivide_smooth"), () => SubdivideSmooth(ctx));
         menu.Separator();
-        menu.Item(Loc.Get("uv.mark_seam"), () => Edit("Mark Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, true)));
-        menu.Item(Loc.Get("uv.clear_seam"), () => Edit("Clear Seam", (mesh, s) => UVs.SetSeams(mesh, s.Edges, false)));
+        menu.Item(Loc.Get("uv.mark_seam"), () => Edit("Mark Seam", (mesh, s) => GeometryUVs.SetSeams(mesh, s.Edges, true)));
+        menu.Item(Loc.Get("uv.clear_seam"), () => Edit("Clear Seam", (mesh, s) => GeometryUVs.SetSeams(mesh, s.Edges, false)));
         menu.Separator();
         menu.Item(Loc.Get("csg.dissolve"), () => Edit("Dissolve Model Elements", (mesh, s) => Operators.Dissolve(mesh, s, Mode, s), SelectMode.Face), shortcut: Chord("MeshEdit/Dissolve"));
         menu.Item(Loc.Get("model.menu.delete_edges"), () => Edit("Delete Model Elements", Delete), danger: true);
@@ -798,7 +824,10 @@ public sealed class ModelMeshTool : SceneTool
     {
         menu.Item(Loc.Get("model.menu.extrude"), () => Extrude(ctx), shortcut: Chord("MeshEdit/Extrude"));
         menu.Item(Loc.Get("csg.inset"), () => Inset(ctx), shortcut: Chord("MeshEdit/Inset"));
-        menu.Item(Loc.Get("csg.bevel"), () => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", Bevel, SelectMode.Face, 1, 32)), shortcut: Chord("MeshEdit/Bevel"));
+        menu.Item(Loc.Get("model.menu.split"), Split, shortcut: Chord("MeshEdit/Split"));
+        menu.Item(Loc.Get("model.menu.shrink_fatten"), () => ShrinkFatten(ctx), shortcut: Chord("MeshEdit/ShrinkFatten"));
+        menu.Item(Loc.Get("csg.bevel"), () => BevelEdges(ctx), shortcut: Chord("MeshEdit/Bevel"));
+        menu.Submenu(Loc.Get("model.menu.extrude_as"), m => ExtrudeItems(ctx, m));
         menu.Item(Loc.Get("csg.subdivide"), () => Subdivide(ctx));
         menu.Item(Loc.Get("model.menu.subdivide_smooth"), () => SubdivideSmooth(ctx));
         menu.Item(Loc.Get("csg.triangulate"), () => Edit("Triangulate Model Faces", (mesh, s) => Operators.TriangulateFaces(mesh, [.. s.Faces], s), SelectMode.Face), shortcut: Chord("MeshEdit/Triangulate"));
@@ -824,7 +853,7 @@ public sealed class ModelMeshTool : SceneTool
                 }
             });
         menu.Separator();
-        menu.Item(Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => UVs.Unwrap(mesh, UVFaces(mesh, s))), shortcut: Chord("MeshEdit/Unwrap"));
+        menu.Item(Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => GeometryUnwrap.Unwrap(mesh, UVFaces(mesh, s))), shortcut: Chord("MeshEdit/Unwrap"));
         menu.Submenu(Loc.Get("model.menu.map_uvs"), m => MapUVItems(ctx, m));
         menu.Separator();
         menu.Item(Loc.Get("csg.dissolve"), () => Edit("Dissolve Model Elements", (mesh, s) => Operators.Dissolve(mesh, s, Mode, s), SelectMode.Face), shortcut: Chord("MeshEdit/Dissolve"));
@@ -833,30 +862,30 @@ public sealed class ModelMeshTool : SceneTool
 
     private void MapUVItems(SceneToolContext ctx, OrigamiUI.ContextBuilder menu)
     {
-        menu.Item(Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => UVs.Unwrap(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.unwrap"), () => Edit("Unwrap", (mesh, s) => GeometryUnwrap.Unwrap(mesh, UVFaces(mesh, s))));
         menu.Separator();
         menu.Item(Loc.Get("uv.project_view"), () => EditMeshes("Project From View", (model, mesh, s) =>
         {
             Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
-            UVs.FromView(mesh, UVFaces(mesh, s), p => ctx.Handles.WorldToScreen(Float4x4.TransformPoint(p, toWorld)) is { } at ? new Float2(at.X, -at.Y) : Float2.Zero);
+            GeometryUVs.FromView(mesh, UVFaces(mesh, s), p => ctx.Handles.WorldToScreen(Float4x4.TransformPoint(p, toWorld)) is { } at ? new Float2(at.X, -at.Y) : Float2.Zero);
         }));
         menu.Item(Loc.Get("uv.project_angle"), () => RunRemembered("Project By Angle", [new(Loc.Get("model.field_degrees"), 66f), new(Loc.Get("uv.margin"), 1f / 256f)],
-            v => Edit("Project By Angle", (mesh, s) => UVs.ByAngle(mesh, UVFaces(mesh, s), v[0], MathF.Max(0f, v[1])))));
+            v => Edit("Project By Angle", (mesh, s) => GeometryUnwrap.ByAngle(mesh, UVFaces(mesh, s), v[0], MathF.Max(0f, v[1])))));
         menu.Item(Loc.Get("uv.follow_quad"), () => Edit("Follow Quad", (mesh, s) =>
         {
             List<GeometryData.Face> faces = UVFaces(mesh, s);
-            if (faces.Where(f => f.VertCount == 4).OrderBy(f => f.Index).FirstOrDefault() is { } active) UVs.FollowQuad(mesh, active, faces);
+            if (faces.Where(f => f.VertCount == 4).OrderBy(f => f.Index).FirstOrDefault() is { } active) GeometryUVs.FollowQuad(mesh, active, faces);
         }));
-        menu.Item(Loc.Get("uv.project_cube"), () => Edit("Cube Projection", (mesh, s) => UVs.Cube(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.project_cylinder"), () => Edit("Cylinder Projection", (mesh, s) => UVs.Cylinder(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.project_sphere"), () => Edit("Sphere Projection", (mesh, s) => UVs.Sphere(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => UVs.Reset(mesh, UVFaces(mesh, s))));
-        menu.Item(Loc.Get("uv.clear"), () => Edit("Clear UVs", (mesh, _) => UVs.Clear(mesh)));
+        menu.Item(Loc.Get("uv.project_cube"), () => Edit("Cube Projection", (mesh, s) => GeometryUVs.Cube(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.project_cylinder"), () => Edit("Cylinder Projection", (mesh, s) => GeometryUVs.Cylinder(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.project_sphere"), () => Edit("Sphere Projection", (mesh, s) => GeometryUVs.Sphere(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.reset"), () => Edit("Reset UVs", (mesh, s) => GeometryUVs.Reset(mesh, UVFaces(mesh, s))));
+        menu.Item(Loc.Get("uv.clear"), () => Edit("Clear UVs", (mesh, _) => GeometryUVs.Clear(mesh)));
         menu.Separator();
         menu.Item(Loc.Get("uv.seams_from_sharp"), () => RunRemembered("Seams From Sharp Edges", [new(Loc.Get("model.field_degrees"), 60f)],
-            v => Edit("Seams From Sharp Edges", (mesh, _) => UVs.SeamsFromSharp(mesh, v[0]))));
-        menu.Item(Loc.Get("uv.seams_from_materials"), () => Edit("Seams From Materials", (mesh, _) => UVs.SeamsFromMaterials(mesh)));
-        menu.Item(Loc.Get("uv.seams_from_islands"), () => Edit("Seams From Islands", (mesh, _) => UVs.SeamsFromIslands(mesh)));
+            v => Edit("Seams From Sharp Edges", (mesh, _) => GeometryUVs.SeamsFromSharp(mesh, v[0]))));
+        menu.Item(Loc.Get("uv.seams_from_materials"), () => Edit("Seams From Materials", (mesh, _) => GeometryUVs.SeamsFromMaterials(mesh, Operators.SlotOf)));
+        menu.Item(Loc.Get("uv.seams_from_islands"), () => Edit("Seams From Islands", (mesh, _) => GeometryUVs.SeamsFromIslands(mesh)));
     }
 
     private void SelectItems(OrigamiUI.ContextBuilder menu)
@@ -882,7 +911,7 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited)
         {
             ElementSelection selection = _selection[model];
-            List<GeometryData.Edge> edges = [.. selection.Edges.SelectMany(e => ring ? Selecting.Ring(e) : Selecting.Loop(e, null))];
+            List<GeometryData.Edge> edges = [.. selection.Edges.SelectMany(e => ring ? GeometryOperators.EdgeRingAcross(e) : GeometryOperators.EdgeLoopOrOutline(e, null))];
             selection.Edges.UnionWith(edges);
             foreach (GeometryData.Edge edge in edges) selection.Vertices.UnionWith([edge.Vert1, edge.Vert2]);
             Selecting.ToMode(selection, SelectMode.Edge, Mode);
@@ -903,7 +932,7 @@ public sealed class ModelMeshTool : SceneTool
         ElementSelection selection = _selection[at.Model];
         if (Mode == SelectMode.Face)
         {
-            var across = new HashSet<GeometryData.Edge>(Selecting.Ring(edge));
+            var across = new HashSet<GeometryData.Edge>(GeometryOperators.EdgeRingAcross(edge));
             foreach (GeometryData.Face face in across.SelectMany(e => e.NeighborFaces()).Distinct())
                 if (face.NeighborEdges().Count(across.Contains) >= 2)
                 {
@@ -912,7 +941,7 @@ public sealed class ModelMeshTool : SceneTool
                 }
         }
         else
-            foreach (GeometryData.Edge e in ring ? Selecting.Ring(edge) : Selecting.Loop(edge, null))
+            foreach (GeometryData.Edge e in ring ? GeometryOperators.EdgeRingAcross(edge) : GeometryOperators.EdgeLoopOrOutline(edge, null))
             {
                 selection.Edges.Add(e);
                 selection.Vertices.UnionWith([e.Vert1, e.Vert2]);
@@ -930,7 +959,18 @@ public sealed class ModelMeshTool : SceneTool
         List<GameObject> selected = [.. Selection.GetSelected<GameObject>()];
         if (selected.Count > 1 && Selection.ActiveObject is GameObject active)
             menu.Item(Loc.Get("model.join"), () => ModelEditingMode.Join(selected, active), shortcut: Chord("ModelEdit/Join"));
-        if (selected.Count > 0) menu.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selected));
+        if (selected.Count > 0)
+        {
+            menu.Item(Loc.Get("model.origin_to_geometry"), () => ModelEditingMode.OriginToGeometry(selected));
+            menu.Item(Loc.Get("model.origin_to_cursor"), () =>
+            {
+                foreach (GameObject go in selected)
+                    if (go.GetComponent<ModelObject>() is { } model && model.IsValid())
+                        ModelEditingMode.MoveOrigin(model, go.Transform.InverseTransformPoint(SceneTools.Cursor), "Origin To Cursor");
+            });
+            menu.Submenu(Loc.Get("model.menu.apply"), m => ApplyItems(m, selected));
+            menu.Submenu(Loc.Get("model.menu.clear"), m => ClearItems(m, selected));
+        }
         List<ModelObject> models = [.. selected.Select(go => go.GetComponent<ModelObject>()).Where(m => m.IsValid())];
         if (models.Count > 0)
         {
@@ -956,6 +996,11 @@ public sealed class ModelMeshTool : SceneTool
 
         if (handles.IsPressed("ModelEdit/Join") && Selection.ActiveObject is GameObject active) ModelEditingMode.Join(selected, active);
         else if (handles.IsPressed("ModelEdit/Add")) AddMenu();
+        else if (handles.IsPressed("ModelEdit/Apply") && selected.Count > 0) ApplyMenu(selected);
+        else if (handles.IsPressed("MeshEdit/SnapMenu")) SnapMenu();
+        else if (handles.IsPressed("ModelEdit/ClearLocation")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Location);
+        else if (handles.IsPressed("ModelEdit/ClearRotation")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Rotation);
+        else if (handles.IsPressed("ModelEdit/ClearScale")) ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Scale);
         else if (handles.IsPressed("MeshEdit/SelectAll")) Selection.ReplaceSelection(WorldObjects());
         else if (handles.IsPressed("MeshEdit/SelectNone")) Selection.Clear();
         else if (handles.IsPressed("MeshEdit/Invert")) Selection.ReplaceSelection(WorldObjects().Where(go => !Selection.IsSelected(go)).ToList());
@@ -978,6 +1023,33 @@ public sealed class ModelMeshTool : SceneTool
             menu.Title(Loc.Get("model.menu.add"));
             ModelEditingMode.BuildCreateMenu(menu);
         });
+    }
+
+    private static void ApplyMenu(List<GameObject> selected)
+    {
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.apply"));
+            ApplyItems(menu, selected);
+        });
+    }
+
+    private static void ApplyItems(OrigamiUI.ContextBuilder menu, List<GameObject> selected)
+    {
+        void Item(string label, ModelEditingMode.TransformParts parts) => menu.Item(Loc.Get(label), () => ModelEditingMode.ApplyTransform(selected, parts));
+        Item("model.menu.apply_location", ModelEditingMode.TransformParts.Location);
+        Item("model.menu.apply_rotation", ModelEditingMode.TransformParts.Rotation);
+        Item("model.menu.apply_scale", ModelEditingMode.TransformParts.Scale);
+        Item("model.menu.apply_all", ModelEditingMode.TransformParts.All);
+        Item("model.menu.apply_rotation_scale", ModelEditingMode.TransformParts.Rotation | ModelEditingMode.TransformParts.Scale);
+    }
+
+    private static void ClearItems(OrigamiUI.ContextBuilder menu, List<GameObject> selected)
+    {
+        menu.Item(Loc.Get("model.menu.clear_location"), () => ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Location), shortcut: Chord("ModelEdit/ClearLocation"));
+        menu.Item(Loc.Get("model.menu.clear_rotation"), () => ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Rotation), shortcut: Chord("ModelEdit/ClearRotation"));
+        menu.Item(Loc.Get("model.menu.clear_scale"), () => ModelEditingMode.ClearTransform(selected, ModelEditingMode.TransformParts.Scale), shortcut: Chord("ModelEdit/ClearScale"));
     }
 
     private static void HideObjects(IEnumerable<GameObject> objects)
@@ -1021,6 +1093,7 @@ public sealed class ModelMeshTool : SceneTool
         List<GameObject> moving = HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]);
         if (moving.Count == 0) return;
         _objectSession = new ObjectTransformSession(moving);
+        if (SceneTools.Pivot == PivotMode.Cursor) _objectSession.Pivot = SceneTools.Cursor;
         Quaternion local = Selection.ActiveObject is GameObject active ? active.Transform.Rotation : Quaternion.Identity;
         _objectModal = new TransformModal(kind, _objectSession, local, null);
         _objectUndo = Undo.HoldRecords([.. moving], kind switch
@@ -1072,7 +1145,7 @@ public sealed class ModelMeshTool : SceneTool
         Undo.RecordObjects([.. models], "Apply Modifiers");
         foreach (ModelObject model in models)
         {
-            model.Mesh = ModelModifier.Run(model.Mesh, model.Modifiers, false, [.. model.Bones.Select(b => b.Name)]);
+            model.Mesh = ModelModifier.Run(model.Mesh, model.Modifiers, model.ModifierContext());
             model.Mesh.MarkChanged();
             model.Modifiers.RemoveAll(m => m.Enabled);
             model.RefreshPreview();
@@ -1218,14 +1291,13 @@ public sealed class ModelMeshTool : SceneTool
         var fields = new List<LastField>();
         if (hasAmount) fields.Add(new(Loc.Get("model.amount"), amount));
         if (hasCount) fields.Add(new(Loc.Get("model.count"), count, FieldKind.Whole));
-        if (op.Flag is { } flag) fields.Add(new(Loc.Get(flag.Label), 0f, FieldKind.Toggle));
+        int first = fields.Count;
+        foreach (LastField extra in op.Extras) fields.Add(extra with { Label = Loc.Get(extra.Label) });
         RunRemembered(op.Name, [.. fields], v =>
         {
-            int i = 0;
-            float runAmount = hasAmount ? v[i++] : amount;
-            int runCount = hasCount ? Math.Clamp((int)v[i++], 1, op.MaxCount) : count;
-            if (op.Flag is { } flagged && v[i] != 0f) Edit(op.Name, (mesh, s) => flagged.Run(mesh, s, runAmount, runCount), op.Selects);
-            else Edit(op.Name, (mesh, s) => op.Run(mesh, s, runAmount, runCount), op.Selects);
+            float runAmount = hasAmount ? v[0] : amount;
+            int runCount = hasCount ? Math.Clamp((int)v[first - 1], 1, op.MaxCount) : count;
+            Edit(op.Name, (mesh, s) => op.Invoke(mesh, s, runAmount, runCount, v[first..]), op.Selects);
         });
     }
 
@@ -1293,7 +1365,7 @@ public sealed class ModelMeshTool : SceneTool
             foreach (ModelObject model in _edited)
                 foreach (GeometryData.Face face in _selection[model].Faces)
                 {
-                    int slot = SlotOf(face);
+                    int slot = Operators.SlotOf(face);
                     if (found == null) found = slot;
                     else if (found != slot) return -1;
                 }
@@ -1310,28 +1382,19 @@ public sealed class ModelMeshTool : SceneTool
             foreach (GeometryData.Face face in s.Faces) face.SetAttribute(MeshGeometry.SubMesh, new GeometryData.IntAttributeValue(slot));
         });
 
-    private static int SlotOf(GeometryData.Face face)
-        => face.TryGetAttribute(MeshGeometry.SubMesh, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue n && n.Data.Length > 0 ? n.Data[0] : 0;
-
     /// <summary>Moves the origin of each edited object with something selected to the middle of its selected points.</summary>
     private void OriginToSelection()
     {
         foreach (ModelObject model in _edited)
         {
             ElementSelection selection = _selection[model];
-            if (selection.Vertices.Count == 0) continue;
-            Float3 centre = Float3.Zero;
-            foreach (GeometryData.Vertex vertex in selection.Vertices) centre += vertex.Point;
-            ModelEditingMode.MoveOrigin(model, centre / selection.Vertices.Count, "Origin To Selection");
+            if (selection.Vertices.Count > 0) ModelEditingMode.MoveOrigin(model, GeometryData.Centroid(selection.Vertices), "Origin To Selection");
         }
     }
 
     private static void MergeAtCentre(GeometryData mesh, ElementSelection selection)
     {
-        if (selection.Vertices.Count < 2) return;
-        Float3 centre = Float3.Zero;
-        foreach (GeometryData.Vertex vertex in selection.Vertices) centre += vertex.Point;
-        Operators.Merge(mesh, [.. selection.Vertices], centre / selection.Vertices.Count, selection);
+        if (selection.Vertices.Count >= 2) Operators.Merge(mesh, [.. selection.Vertices], GeometryData.Centroid(selection.Vertices), selection);
     }
 
     private static void Bridge(GeometryData mesh, ElementSelection selection)
@@ -1341,10 +1404,186 @@ public sealed class ModelMeshTool : SceneTool
         Operators.Bridge(mesh, ends[0], ends[1], 1, selection);
     }
 
-    private static void Bevel(GeometryData mesh, ElementSelection selection, float width, int segments)
+    private void BevelEdges(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Bevel Model Edges", true, d => d, "0.###", (_, _, _, _) => { }, SelectMode.Face, 1, 32)
+        {
+            Extras = [new("model.field_profile", 0.5f)],
+            RunWithExtras = (mesh, s, width, segments, extras) =>
+            {
+                if (s.Edges.Count > 0) Operators.Bevel(mesh, [.. s.Edges], width, segments, s, extras[0]);
+                else Operators.BevelPoints(mesh, [.. s.Vertices], width, s);
+            },
+        });
+
+    /// <summary>L: everything joined to the surface under the mouse is selected, or with Shift no longer selected.</summary>
+    private void PickLinked(SceneToolContext ctx, bool remove)
     {
-        if (selection.Edges.Count > 0) Operators.Bevel(mesh, [.. selection.Edges], width, segments, selection);
-        else Operators.BevelPoints(mesh, [.. selection.Vertices], width, selection);
+        Ray ray = ctx.Handles.MouseRay;
+        ModelObject? best = null;
+        GeometryData.Face? under = null;
+        float nearest = float.MaxValue;
+        foreach (ModelObject model in _edited)
+        {
+            ElementSelection hidden = _hidden[model];
+            if (Tree(model.Mesh).Raycast(model.Transform.LocalToWorldMatrix, ray, out GeometryData.Face? face, out float distance, hidden.Faces.Count > 0 ? hidden.Faces.Contains : null)
+                && distance < nearest)
+            {
+                nearest = distance;
+                best = model;
+                under = face;
+            }
+        }
+        if (best.IsNotValid() || under == null) return;
+
+        var linked = new ElementSelection();
+        linked.Vertices.UnionWith(under.NeighborVertices());
+        Selecting.Linked(linked, SelectMode.Vertex);
+        Selecting.ToMode(linked, SelectMode.Vertex, Mode);
+        Command((mesh, s) =>
+        {
+            if (!ReferenceEquals(mesh, best!.Mesh)) return;
+            if (remove)
+            {
+                s.Vertices.ExceptWith(linked.Vertices);
+                s.Edges.ExceptWith(linked.Edges);
+                s.Faces.ExceptWith(linked.Faces);
+            }
+            else
+            {
+                s.Vertices.UnionWith(linked.Vertices);
+                s.Edges.UnionWith(linked.Edges);
+                s.Faces.UnionWith(linked.Faces);
+            }
+        });
+    }
+
+    /// <summary>Shift S: puts the selection on the grid, or whole objects onto the active one.</summary>
+    private void SnapMenu()
+    {
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.snap_menu"));
+            if (Editing)
+            {
+                menu.Item(Loc.Get("model.menu.selection_to_grid"), () => MovePoints("Snap Points To Grid", p => Round(p, SceneTools.MoveSnap)));
+                menu.Item(Loc.Get("model.menu.selection_to_cursor"), () => MovePoints("Snap Points To Cursor", _ => SceneTools.Cursor));
+                Float3 middle = SelectedCentre().Centre;
+                menu.Item(Loc.Get("model.menu.selection_to_cursor_offset"), () => MovePoints("Snap Points To Cursor", p => p + SceneTools.Cursor - middle));
+                menu.Separator();
+                if (SelectedCentre().Count > 0) menu.Item(Loc.Get("model.menu.cursor_to_selected"), () => SceneTools.Cursor = SelectedCentre().Centre);
+                CursorItems(menu);
+                return;
+            }
+            List<GameObject> selected = HierarchyPanel.ExcludeNestedSelections([.. Selection.GetSelected<GameObject>()]);
+            menu.Item(Loc.Get("model.menu.selection_to_grid"), () =>
+            {
+                Undo.RecordObjects([.. selected], "Snap Objects To Grid");
+                foreach (GameObject go in selected) go.Transform.Position = Round(go.Transform.Position, SceneTools.MoveSnap);
+            });
+            if (Selection.ActiveObject is GameObject active && selected.Count > 1)
+                menu.Item(Loc.Get("model.menu.selection_to_active"), () =>
+                {
+                    Undo.RecordObjects([.. selected], "Snap Objects To Active");
+                    foreach (GameObject go in selected) go.Transform.Position = active.Transform.Position;
+                });
+            if (selected.Count > 0)
+            {
+                Float3 middle = Float3.Zero;
+                foreach (GameObject go in selected) middle += go.Transform.Position;
+                middle /= selected.Count;
+                menu.Item(Loc.Get("model.menu.selection_to_cursor"), () =>
+                {
+                    Undo.RecordObjects([.. selected], "Snap Objects To Cursor");
+                    foreach (GameObject go in selected) go.Transform.Position = SceneTools.Cursor;
+                });
+                menu.Item(Loc.Get("model.menu.selection_to_cursor_offset"), () =>
+                {
+                    Undo.RecordObjects([.. selected], "Snap Objects To Cursor");
+                    foreach (GameObject go in selected) go.Transform.Position += SceneTools.Cursor - middle;
+                });
+                menu.Separator();
+                menu.Item(Loc.Get("model.menu.cursor_to_selected"), () => SceneTools.Cursor = middle);
+                if (Selection.ActiveObject is GameObject focus)
+                    menu.Item(Loc.Get("model.menu.cursor_to_active"), () => SceneTools.Cursor = focus.Transform.Position);
+            }
+            CursorItems(menu);
+        });
+    }
+
+    private static void CursorItems(OrigamiUI.ContextBuilder menu)
+    {
+        menu.Item(Loc.Get("model.menu.cursor_to_origin"), () => SceneTools.Cursor = Float3.Zero);
+        menu.Item(Loc.Get("model.menu.cursor_to_grid"), () => SceneTools.Cursor = Round(SceneTools.Cursor, SceneTools.MoveSnap));
+    }
+
+    // Moves every selected point to where the function puts it in the world, as one step
+    private void MovePoints(string name, Func<Float3, Float3> to) => EditMeshes(name, (model, mesh, s) =>
+    {
+        Float4x4 toWorld = model.Transform.LocalToWorldMatrix, toLocal = toWorld.Invert();
+        foreach (GeometryData.Vertex vertex in s.Vertices)
+            vertex.Point = Float4x4.TransformPoint(to(Float4x4.TransformPoint(vertex.Point, toWorld)), toLocal);
+    });
+
+    /// <summary>Ctrl E: the edge menu, whatever the select mode.</summary>
+    private void EdgeMenu(SceneToolContext ctx)
+    {
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.edge_menu"));
+            EdgeItems(ctx, menu);
+        });
+    }
+
+    private void ShrinkFatten(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Shrink Fatten Model Points", true, d => -d, "0.###", (mesh, s, d, _) => GeometryOperators.ShrinkFatten(mesh, s.Vertices, d), null)
+            { Drag = OperatorDrag.TowardPivot });
+
+    private void ToSphere(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("To Sphere", false, p => Math.Clamp(p * 0.005f, 0f, 1f), "0.##", (mesh, s, t, _) => GeometryOperators.ToSphere(mesh, s.Vertices, t), null));
+
+    /// <summary>Y: the selected faces no longer share points with the rest, and stay selected.</summary>
+    private void Split() => Edit("Split Model Faces", (mesh, s) =>
+    {
+        List<GeometryData.Face> split = GeometryOperators.SplitFaces(mesh, s.Faces);
+        s.Clear();
+        foreach (GeometryData.Face face in split)
+        {
+            s.Faces.Add(face);
+            s.Vertices.UnionWith(face.NeighborVertices());
+            s.Edges.UnionWith(face.NeighborEdges());
+        }
+    });
+
+    private void BevelPoints(SceneToolContext ctx)
+        => StartOperator(ctx, new AmountOperator("Bevel Model Points", true, d => d, "0.###", (mesh, s, d, _) => Operators.BevelPoints(mesh, [.. s.Vertices], d, s), SelectMode.Face));
+
+    private void ExtrudeFaces(SceneToolContext ctx, ExtrudeMode mode)
+        => StartOperator(ctx, new AmountOperator("Extrude Model Faces", true, d => d, "0.###", (mesh, s, d, _) => Operators.ExtrudeRegion(mesh, [.. s.Faces], d, s, mode), SelectMode.Face)
+            { Drag = OperatorDrag.AlongNormal });
+
+    /// <summary>Alt E: with faces, how they extrude. Otherwise the plain extrude.</summary>
+    private void ExtrudeMenu(SceneToolContext ctx)
+    {
+        if (Mode != SelectMode.Face)
+        {
+            Extrude(ctx);
+            return;
+        }
+        Float2 at = (Float2)Input.MousePosition;
+        OrigamiUI.Origami.ContextMenu(at.X, at.Y, menu =>
+        {
+            menu.Title(Loc.Get("model.menu.extrude_as"));
+            ExtrudeItems(ctx, menu);
+        });
+    }
+
+    private void ExtrudeItems(SceneToolContext ctx, OrigamiUI.ContextBuilder menu)
+    {
+        menu.Item(Loc.Get("model.menu.extrude_region"), () => ExtrudeFaces(ctx, ExtrudeMode.AverageNormal), shortcut: Chord("MeshEdit/Extrude"));
+        menu.Item(Loc.Get("model.menu.extrude_along_normals"), () => ExtrudeFaces(ctx, ExtrudeMode.AlongNormals));
+        menu.Item(Loc.Get("model.menu.extrude_individual"), () => ExtrudeFaces(ctx, ExtrudeMode.PerFace));
     }
 
     private static void Delete(GeometryData mesh, ElementSelection selection)
@@ -1425,7 +1664,8 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited)
             _start[model] = (model.Mesh.Capture(), Indices(model));
         _operator = op;
-        _operatorFrom = _operatorVirtual = _operatorLast = ctx.Handles.MousePosition;
+        _operatorFrom = ctx.Handles.MousePosition;
+        _operatorPointer.Reset(_operatorFrom);
         _operatorCount = op.StartCount;
         _operatorKey = null;
         _operatorGood = (0f, op.StartCount);
@@ -1447,8 +1687,7 @@ public sealed class ModelMeshTool : SceneTool
         if (wheel != 0f && op.MaxCount > 1) _operatorCount = Math.Clamp(_operatorCount + (wheel > 0f ? 1 : -1), 1, op.MaxCount);
 
         // Shift slows the mouse, a typed number stands in for it
-        _operatorVirtual += (handles.MousePosition - _operatorLast) * (handles.Shift ? 0.1f : 1f);
-        _operatorLast = handles.MousePosition;
+        _operatorPointer.Follow(handles);
         TypeNumber(handles, ref _operatorTyped);
         if (handles.GetKeyDown(KeyCode.Minus) || handles.GetKeyDown(KeyCode.KeypadSubtract))
             _operatorTyped = _operatorTyped.StartsWith('-') ? _operatorTyped[1..] : "-" + _operatorTyped;
@@ -1457,7 +1696,7 @@ public sealed class ModelMeshTool : SceneTool
         if (float.TryParse(_operatorTyped, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float typed)) amount = typed;
         else
         {
-            amount = op.Along is { } along ? Along(_operatorVirtual - _operatorFrom, along) : op.Amount(op.Distance ? DragDistance(ctx, op.Drag) : Float2.Distance(_operatorVirtual, _operatorFrom));
+            amount = op.Along is { } along ? Along(_operatorPointer.Position - _operatorFrom, along) : op.Amount(op.Distance ? DragDistance(ctx, op.Drag) : Float2.Distance(_operatorPointer.Position, _operatorFrom));
             if (op.Distance && SceneTools.GridSnap != handles.Ctrl && SceneTools.MoveSnap > 0f) amount = MathF.Round(amount / SceneTools.MoveSnap) * SceneTools.MoveSnap;
         }
 
@@ -1500,7 +1739,7 @@ public sealed class ModelMeshTool : SceneTool
             ElementSelection running = FromIndices(model.Mesh, selection);
             try
             {
-                op.Run(model.Mesh, running, amount, count);
+                op.Invoke(model.Mesh, running, amount, count, op.ExtraDefaults);
             }
             catch (InvalidOperationException)
             {
@@ -1520,24 +1759,24 @@ public sealed class ModelMeshTool : SceneTool
     {
         HandleContext handles = ctx.Handles;
         float worldPerPixel = WorldPerPixel(ctx);
-        if (handles.WorldToScreen(_operatorPivot) is not { } centre) return Float2.Distance(_operatorVirtual, _operatorFrom) * worldPerPixel;
+        if (handles.WorldToScreen(_operatorPivot) is not { } centre) return Float2.Distance(_operatorPointer.Position, _operatorFrom) * worldPerPixel;
         switch (drag)
         {
             case OperatorDrag.AlongNormal:
                 if (handles.WorldToScreen(_operatorPivot + _operatorNormal) is { } tip && Float2.Distance(tip, centre) is float perUnit && perUnit > 1f)
-                    return Float2.Dot(_operatorVirtual - _operatorFrom, (tip - centre) / perUnit) / perUnit;
-                return -(_operatorVirtual.Y - _operatorFrom.Y) * worldPerPixel;
+                    return Float2.Dot(_operatorPointer.Position - _operatorFrom, (tip - centre) / perUnit) / perUnit;
+                return -(_operatorPointer.Position.Y - _operatorFrom.Y) * worldPerPixel;
             case OperatorDrag.TowardPivot:
-                return (Float2.Distance(_operatorFrom, centre) - Float2.Distance(_operatorVirtual, centre)) * worldPerPixel;
+                return (Float2.Distance(_operatorFrom, centre) - Float2.Distance(_operatorPointer.Position, centre)) * worldPerPixel;
             default:
-                return MathF.Abs(Float2.Distance(_operatorVirtual, centre) - Float2.Distance(_operatorFrom, centre)) * worldPerPixel;
+                return MathF.Abs(Float2.Distance(_operatorPointer.Position, centre) - Float2.Distance(_operatorFrom, centre)) * worldPerPixel;
         }
     }
 
-    // The middle of the selected points and the average normal of the selected faces, in the world
-    private (Float3 Pivot, Float3 Normal) SelectionPivotAndNormal()
+    // The middle of the selected points of every edited object in the world, and how many there are
+    private (Float3 Centre, int Count) SelectedCentre()
     {
-        Float3 sum = Float3.Zero, normal = Float3.Zero;
+        Float3 sum = Float3.Zero;
         int count = 0;
         foreach (ModelObject model in _edited)
         {
@@ -1547,9 +1786,17 @@ public sealed class ModelMeshTool : SceneTool
                 sum += Float4x4.TransformPoint(vertex.Point, toWorld);
                 count++;
             }
-            foreach (GeometryData.Face face in _selection[model].Faces) normal += Float4x4.TransformNormal(face.Normal(), toWorld);
         }
-        return (count > 0 ? sum / count : Float3.Zero, Float3.LengthSquared(normal) > 1e-12f ? Float3.Normalize(normal) : Float3.UnitY);
+        return (count > 0 ? sum / count : Float3.Zero, count);
+    }
+
+    // The middle of the selected points and the average normal of the selected faces, in the world
+    private (Float3 Pivot, Float3 Normal) SelectionPivotAndNormal()
+    {
+        Float3 normal = Float3.Zero;
+        foreach (ModelObject model in _edited)
+            foreach (GeometryData.Face face in _selection[model].Faces) normal += Float4x4.TransformNormal(face.Normal(), model.Transform.LocalToWorldMatrix);
+        return (SelectedCentre().Centre, Float3.LengthSquared(normal) > 1e-12f ? Float3.Normalize(normal) : Float3.UnitY);
     }
 
     private void EndOperator()
@@ -1562,18 +1809,7 @@ public sealed class ModelMeshTool : SceneTool
     /// <summary>World units one pixel spans at the selection, so amounts scale with the view.</summary>
     private float WorldPerPixel(SceneToolContext ctx)
     {
-        Float3 centre = Float3.Zero;
-        int count = 0;
-        foreach (ModelObject model in _edited)
-        {
-            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
-            foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
-            {
-                centre += Float4x4.TransformPoint(vertex.Point, toWorld);
-                count++;
-            }
-        }
-        if (count > 0) centre /= count;
+        Float3 centre = SelectedCentre().Centre;
         if (ctx.Handles.WorldToScreen(centre) is not { } a || ctx.Handles.WorldToScreen(centre + ctx.Camera.GameObject.Transform.Right) is not { } b) return 0.01f;
         float pixels = Float2.Distance(a, b);
         return pixels > 1e-3f ? 1f / pixels : 0.01f;
@@ -1618,6 +1854,7 @@ public sealed class ModelMeshTool : SceneTool
                 parts.Add((new EditTarget(model.Mesh, model.Transform.LocalToWorldMatrix) { MirrorClip = ClipOf(model) }, _selection[model]));
         if (parts.Count == 0) return null;
         _session = new TransformSession(parts, Proportional ? ProportionalRadius : 0f) { Individual = SceneTools.Pivot == PivotMode.Individual };
+        if (SceneTools.Pivot == PivotMode.Cursor) _session.Pivot = SceneTools.Cursor;
         _sessionMove = null;
         return _session;
     }
@@ -1658,7 +1895,7 @@ public sealed class ModelMeshTool : SceneTool
         if (AutoShrinkwrap && OtherModels() is { Count: > 0 } surfaces)
             foreach (ModelObject model in _edited)
                 if (_selection[model].Vertices.Count > 0)
-                    Operators.Shrinkwrap(model.Mesh, [.. _selection[model].Vertices], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), 0.002f, 1f);
+                    GeometryOperators.Shrinkwrap(model.Mesh, [.. _selection[model].Vertices], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), 0.002f, 1f);
         foreach (ModelObject model in _edited)
         {
             (Dictionary<GeometryData.Vertex, Float3> points, HashSet<GeometryData.Face> faces) = before[model];
@@ -1786,8 +2023,7 @@ public sealed class ModelMeshTool : SceneTool
     /// <summary>Which way on screen the edges slide at +1, found by trying a slide on a copy.</summary>
     private Float2 SlideDirection(SceneToolContext ctx, ModelObject model)
     {
-        var copy = new GeometryData();
-        copy.Restore(model.Mesh.Capture());
+        GeometryData copy = model.Mesh.Clone();
         ModelEditPart part = Indices(model);
         ElementSelection selection = FromIndices(copy, part);
         if (selection.Edges.Count == 0) return Float2.Zero;
@@ -1856,8 +2092,7 @@ public sealed class ModelMeshTool : SceneTool
     {
         Float3? CutPoint(float slide)
         {
-            var copy = new GeometryData();
-            copy.Restore(at.Model.Mesh.Capture());
+            GeometryData copy = at.Model.Mesh.Clone();
             if (at.A >= copy.Vertices.Count || at.B >= copy.Vertices.Count || copy.FindEdge(copy.Vertices[at.A], copy.Vertices[at.B]) is not { } edge) return null;
             List<GeometryData.Edge> made = GeometryOperators.LoopCut(copy, edge, cuts, slide);
             return made.Count > 0 ? made[0].Vert1.Point : null;
@@ -1939,10 +2174,7 @@ public sealed class ModelMeshTool : SceneTool
                 if (_hidden[model].Edges.Contains(edge) || edge.IsHidden) continue;
                 Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
                 if (handles.WorldToScreen(a) is not { } from || handles.WorldToScreen(b) is not { } to) continue;
-                Float2 along = to - from;
-                float lengthSq = Float2.Dot(along, along);
-                float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(handles.MousePosition - from, along) / lengthSq, 0f, 1f) : 0f;
-                float distance = Float2.Distance(handles.MousePosition, from + along * t);
+                float distance = Polygon2D.DistanceToSegment(handles.MousePosition, from, to, out float t);
                 if (distance >= bestDistance || !throughSurface && !Seen(ctx, a + (b - a) * t)) continue;
                 bestDistance = distance;
                 best = (model, edge.Vert1.Index, edge.Vert2.Index);
@@ -2032,7 +2264,7 @@ public sealed class ModelMeshTool : SceneTool
         RunRemembered("Shrinkwrap", [new(Loc.Get("model.field_offset"), 0.002f), new(Loc.Get("model.field_reach"), 1f)], v => EditMeshes("Shrinkwrap", (model, mesh, s) =>
         {
             IEnumerable<GeometryData.Vertex> points = s.Vertices.Count > 0 ? s.Vertices : mesh.Vertices.Where(v => !_hidden[model].Vertices.Contains(v));
-            Operators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), v[0], MathF.Max(0f, v[1]));
+            GeometryOperators.Shrinkwrap(mesh, [.. points], model.Transform.LocalToWorldMatrix, SurfaceHit(surfaces), v[0], MathF.Max(0f, v[1]));
         }));
     }
 
@@ -2279,15 +2511,8 @@ public sealed class ModelMeshTool : SceneTool
     // The middle of the selected points, or of the drawn object
     private Float3 Focus()
     {
-        Float3 sum = Float3.Zero;
-        int count = 0;
-        foreach (ModelObject model in _edited)
-            foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
-            {
-                sum += Float4x4.TransformPoint(vertex.Point, model.Transform.LocalToWorldMatrix);
-                count++;
-            }
-        if (count > 0) return sum / count;
+        (Float3 centre, int count) = SelectedCentre();
+        if (count > 0) return centre;
         return _lineModel is { } target ? target.Transform.Position : Float3.Zero;
     }
 
@@ -2318,13 +2543,10 @@ public sealed class ModelMeshTool : SceneTool
             if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
             Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
             if (handles.WorldToScreen(a) is not { } pa || handles.WorldToScreen(b) is not { } pb) continue;
-            Float2 along = pb - pa;
-            float lengthSq = Float2.Dot(along, along);
-            if (lengthSq < 1e-6f) continue;
-            float t = Math.Clamp(Float2.Dot(mouse - pa, along) / lengthSq, 0f, 1f);
+            if (Float2.Distance(pa, pb) < 1e-3f) continue;
             // The middle of an edge pulls from further away than the rest of it, and wins when both are in reach
-            float toMiddle = Float2.Distance(pa + along * 0.5f, mouse) - LineMiddleRadius - LineEdgeRadius;
-            float toEdge = Float2.Distance(pa + along * t, mouse) - LineEdgeRadius;
+            float toMiddle = Float2.Distance((pa + pb) * 0.5f, mouse) - LineMiddleRadius - LineEdgeRadius;
+            float toEdge = Polygon2D.DistanceToSegment(mouse, pa, pb, out float t) - LineEdgeRadius;
             if (toMiddle < -LineEdgeRadius && toMiddle < best)
             {
                 best = toMiddle;
@@ -2468,12 +2690,9 @@ public sealed class ModelMeshTool : SceneTool
     /// <summary>The nearest point of the other model objects' surfaces under a ray.</summary>
     private bool SurfaceUnder(Ray ray, out Float3 hit)
     {
-        float nearest = float.PositiveInfinity;
-        foreach (ModelObject other in OtherModels())
-            if (Tree(other.Mesh).Raycast(other.Transform.LocalToWorldMatrix, ray, out _, out float distance) && distance < nearest)
-                nearest = distance;
-        hit = ray.Origin + ray.Direction * (float.IsPositiveInfinity(nearest) ? 0f : nearest);
-        return !float.IsPositiveInfinity(nearest);
+        float? nearest = SurfaceHit(OtherModels())(ray, float.PositiveInfinity);
+        hit = ray.Origin + ray.Direction * (nearest ?? 0f);
+        return nearest != null;
     }
 
     private GeometryData.Vertex? NearestPoint(SceneToolContext ctx, ModelObject model)
@@ -2534,10 +2753,7 @@ public sealed class ModelMeshTool : SceneTool
             if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
             Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld), b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
             if (handles.WorldToScreen(a) is not { } from || handles.WorldToScreen(b) is not { } to) continue;
-            Float2 along = to - from;
-            float lengthSq = Float2.Dot(along, along);
-            float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(mouse - from, along) / lengthSq, 0f, 1f) : 0f;
-            float distance = Float2.Distance(mouse, from + along * t);
+            float distance = Polygon2D.DistanceToSegment(mouse, from, to, out float t);
             if (distance >= best || !Seen(ctx, a + (b - a) * t)) continue;
             best = distance;
             near = edge;
@@ -2623,24 +2839,13 @@ public sealed class ModelMeshTool : SceneTool
     private void SelectionGizmo(SceneToolContext ctx)
     {
         HandleContext handles = ctx.Handles;
-        Float3 sum = Float3.Zero;
-        int count = 0;
-        foreach (ModelObject model in _edited)
-        {
-            Float4x4 toWorld = model.Transform.LocalToWorldMatrix;
-            foreach (GeometryData.Vertex vertex in _selection[model].Vertices)
-            {
-                sum += Float4x4.TransformPoint(vertex.Point, toWorld);
-                count++;
-            }
-        }
+        (Float3 centre, int count) = SelectedCentre();
         if (count == 0 || Gizmo == EditGizmo.Off)
         {
             _gizmoDragging = false;
             return;
         }
 
-        Float3 centre = sum / count;
         if (!_gizmoDragging)
             _gizmoAxes = SceneTools.Orientation switch
             {
@@ -2648,7 +2853,8 @@ public sealed class ModelMeshTool : SceneTool
                 PivotOrientation.Normal => NormalFrame() ?? LocalFrame(),
                 _ => LocalFrame(),
             };
-        // A turn or scale keeps the gizmo where the drag began, a move follows the points
+        // A turn or scale keeps the gizmo where the drag began, a move follows the points. The cursor pivot turns about the cursor
+        if (Gizmo != EditGizmo.Move && SceneTools.Pivot == PivotMode.Cursor) centre = SceneTools.Cursor;
         Float3 position = Gizmo == EditGizmo.Move || !_gizmoDragging ? centre : _gizmoStart, before = position;
         Quaternion rotation = _gizmoTurn * _gizmoAxes;
         Float3 scale = _gizmoScale;
@@ -2687,19 +2893,23 @@ public sealed class ModelMeshTool : SceneTool
 
         session.Pivot = _gizmoStart;
         Quaternion axes = _gizmoAxes;
+        // Shift slows the drag for fine changes
+        float pace = handles.Shift ? 0.1f : 1f;
         switch (Gizmo)
         {
             case EditGizmo.Rotate:
-                _gizmoTurn = rotation * Quaternion.Inverse(_gizmoAxes);
+                (Float3 axis, float degrees) = AxisAngle(rotation * Quaternion.Inverse(_gizmoTurn * _gizmoAxes));
+                _gizmoTurn = Quaternion.AxisAngle(axis, degrees * pace * MathF.PI / 180f) * _gizmoTurn;
                 Quaternion turn = _gizmoTurn;
                 PreviewSession(() => session.Rotate(turn));
                 break;
             case EditGizmo.Scale:
-                _gizmoScale = scale;
-                PreviewSession(() => session.Scale(scale, axes));
+                _gizmoScale *= Float3.One + (scale / _gizmoScale - Float3.One) * pace;
+                Float3 scaled = _gizmoScale;
+                PreviewSession(() => session.Scale(scaled, axes));
                 break;
             default:
-                _gizmoRaw += position - before;
+                _gizmoRaw += (position - before) * pace;
                 _gizmoApplied = SceneTools.GridSnap != handles.Ctrl ? Round(_gizmoRaw, SceneTools.MoveSnap) : _gizmoRaw;
                 Float3 total = _gizmoApplied;
                 PreviewSession(() => session.Translate(total));
@@ -2844,10 +3054,7 @@ public sealed class ModelMeshTool : SceneTool
         {
             (Float3 a, Float3 b) = ends(element);
             if (handles.WorldToScreen(a) is not { } from || handles.WorldToScreen(b) is not { } to) continue;
-            Float2 along = to - from;
-            float lengthSq = Float2.Dot(along, along);
-            float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(mouse - from, along) / lengthSq, 0f, 1f) : 0f;
-            float distance = Float2.Distance(mouse, from + along * t);
+            float distance = Polygon2D.DistanceToSegment(mouse, from, to, out float t);
             if (distance < PickRadius) near.Add((element, distance, a + (b - a) * t));
         }
         near.Sort((x, y) => x.Distance.CompareTo(y.Distance));
@@ -2925,18 +3132,7 @@ public sealed class ModelMeshTool : SceneTool
         return true;
     }
 
-    private static Float3 Centre(List<GeometryData.Face> faces)
-    {
-        Float3 sum = Float3.Zero;
-        int count = 0;
-        foreach (GeometryData.Face face in faces)
-            foreach (GeometryData.Vertex vertex in face.NeighborVertices())
-            {
-                sum += vertex.Point;
-                count++;
-            }
-        return count > 0 ? sum / count : sum;
-    }
+    private static Float3 Centre(List<GeometryData.Face> faces) => GeometryData.Centroid(faces.SelectMany(f => f.NeighborVertices()));
 
     private static void Mark<T>(HashSet<T> set, T item, bool remove)
     {
@@ -2963,7 +3159,7 @@ public sealed class ModelMeshTool : SceneTool
             foreach (GeometryData.Face face in selection.Faces)
             {
                 if (hidden.Faces.Contains(face)) continue;
-                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in UVs.Triangles(face))
+                foreach ((GeometryData.Loop a, GeometryData.Loop b, GeometryData.Loop c) in GeometryUVs.Triangles(face))
                     batch.Triangle(Float4x4.TransformPoint(a.Vert.Point, toWorld), Float4x4.TransformPoint(b.Vert.Point, toWorld),
                         Float4x4.TransformPoint(c.Vert.Point, toWorld), FaceFill);
             }
@@ -2971,7 +3167,7 @@ public sealed class ModelMeshTool : SceneTool
             foreach (GeometryData.Edge edge in model.Mesh.Edges)
             {
                 if (hidden.Edges.Contains(edge) || edge.IsHidden) continue;
-                bool picked = selection.Edges.Contains(edge), seam = UVs.IsSeam(edge);
+                bool picked = selection.Edges.Contains(edge), seam = GeometryUVs.IsSeam(edge);
                 batch.Line(Float4x4.TransformPoint(edge.Vert1.Point, toWorld), Float4x4.TransformPoint(edge.Vert2.Point, toWorld),
                     picked ? PickedColor : seam ? SeamColor : IdleColor, picked || seam ? 2.5f : 1f);
             }

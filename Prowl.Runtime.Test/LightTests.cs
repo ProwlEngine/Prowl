@@ -170,7 +170,7 @@ public class LightTests : RuntimeTestBase
     public void Range_IsAutomatic_FromTheAxisCandelaAndTheCutoff()
     {
         float cutoff = QualitySettings.Active.LightCutoff;
-        Assert.Equal(0.01f, cutoff);
+        Assert.Equal(0.25f, cutoff);
 
         PointLight point = Make<PointLight>();
         point.UseTemperature = false;

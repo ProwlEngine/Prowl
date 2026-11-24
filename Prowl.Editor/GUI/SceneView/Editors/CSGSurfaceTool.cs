@@ -16,6 +16,9 @@ using SColor = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
+/// <summary>What a drag in the Surface mode does to the texture of the selected surfaces.</summary>
+public enum SurfaceDrag { Move, Rotate, Scale }
+
 /// <summary>Picks surfaces to texture. Clicking a face selects it rather than its brush.</summary>
 [GlobalSceneTool(Group = "CSG")]
 public sealed class CSGSurfaceTool : SceneTool
@@ -34,7 +37,10 @@ public sealed class CSGSurfaceTool : SceneTool
     private static readonly Color32 SelectedEdge = new(255, 220, 120, 255);
 
     /// <summary>Whether surface picking is the CSG mode in force.</summary>
-    public bool Active => CSGEditMode.IsUV;
+    public bool Active => CSGEditMode.Is(CSGMode.Surface);
+
+    /// <summary>What a drag on the selected surfaces does to their texture.</summary>
+    public SurfaceDrag Drag { get; set; } = SurfaceDrag.Move;
 
     private CSGSurfaceRef _lastSmeared;
 
@@ -59,6 +65,11 @@ public sealed class CSGSurfaceTool : SceneTool
         if (model.IsNotValid()) return;
 
         CSGSurfaceSelection.Prune();
+
+        // The transform tool keys pick what a drag does
+        if (ctx.Handles.IsPressed("Scene/ToolTranslate")) Drag = SurfaceDrag.Move;
+        else if (ctx.Handles.IsPressed("Scene/ToolRotate")) Drag = SurfaceDrag.Rotate;
+        else if (ctx.Handles.IsPressed("Scene/ToolScale")) Drag = SurfaceDrag.Scale;
 
         if (ctx.Handles.KeyDown(KeyCode.Escape))
         {
@@ -158,6 +169,7 @@ public sealed class CSGSurfaceTool : SceneTool
             _pressPoint = Input.GetKey(KeyCode.V) ? NearestCorner(handles, point) ?? point : point;
             _pressNormal = normal;
             _pressScreen = handles.MousePosition;
+            _pointer.Reset(_pressScreen);
             _started = false;
             CSGSurfaceSelection.BeginTextureDrag();
         }
@@ -168,6 +180,7 @@ public sealed class CSGSurfaceTool : SceneTool
     private CSGSurfaceRef _pressed;
     private Float3 _pressPoint, _pressNormal;
     private Float2 _pressScreen;
+    private readonly SlowPointer _pointer = new();
     private float _startAngle, _startDistance;
     private Float3 _rotateFrom;
 
@@ -189,14 +202,15 @@ public sealed class CSGSurfaceTool : SceneTool
         }
 
         if (Float2.Distance(handles.MousePosition, _pressScreen) > 3f) _moved = true;
-        if (!_moved || !OnPressPlane(handles.MouseRay, out Float3 at)) return;
+        // Shift slows the drag for fine changes
+        if (!_moved || !OnPressPlane(handles.RayThrough(_pointer.Follow(handles)), out Float3 at)) return;
 
         Color32 colour = SelectedEdge;
         ctx.Draw.Dot(_pressPoint, colour, 7f, HandleCap.Circle);
 
-        switch (CSGEditMode.Current)
+        switch (Drag)
         {
-            case CSGMode.UVMove:
+            case SurfaceDrag.Move:
             {
                 // Corners first, then edges, then the grid. V snaps to corners only
                 bool cornersOnly = Input.GetKey(KeyCode.V);
@@ -210,7 +224,7 @@ public sealed class CSGSurfaceTool : SceneTool
                 break;
             }
 
-            case CSGMode.UVRotate:
+            case SurfaceDrag.Rotate:
             {
                 float radius = Float3.Distance(at, _pressPoint);
                 if (!_started)
@@ -232,7 +246,7 @@ public sealed class CSGSurfaceTool : SceneTool
                 break;
             }
 
-            case CSGMode.UVScale:
+            case SurfaceDrag.Scale:
             {
                 float distance = Float3.Distance(at, _pressPoint);
                 if (!_started)

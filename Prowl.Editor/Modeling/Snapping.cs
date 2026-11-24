@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor.Modeling;
 
@@ -41,12 +42,12 @@ public static class Snapping
         foreach ((Float3 a, Float3 b) in edges)
         {
             if (toScreen(a) is not { } from || toScreen(b) is not { } to) continue;
-            Float2 along = to - from;
-            float lengthSq = Float2.Dot(along, along);
-            float t = lengthSq > 1e-6f ? Math.Clamp(Float2.Dot(mouse - from, along) / lengthSq, 0f, 1f) : 0f;
-            if (Float2.Distance(from + along * 0.5f, mouse) < MiddleReach) t = 0.5f;
-
-            float distance = Float2.Distance(from + along * t, mouse);
+            float distance = Polygon2D.DistanceToSegment(mouse, from, to, out float t);
+            if (Float2.Distance((from + to) * 0.5f, mouse) < MiddleReach)
+            {
+                t = 0.5f;
+                distance = Float2.Distance((from + to) * 0.5f, mouse);
+            }
             if (distance >= best) continue;
             best = distance;
             point = a + (b - a) * t;

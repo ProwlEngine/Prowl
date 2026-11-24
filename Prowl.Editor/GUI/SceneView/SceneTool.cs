@@ -84,6 +84,9 @@ public abstract class SceneTool
     /// <summary>Replace the scene view's right click menu with <see cref="OnSceneContextMenu"/>, the usual items moving to a submenu.</summary>
     public virtual bool ReplacesSceneContextMenu => false;
 
+    /// <summary>Where a world ray first meets what the tool edits, for placing the 3D cursor, or null.</summary>
+    public virtual Float3? SurfaceUnder(SceneToolContext ctx, Ray ray) => null;
+
     /// <summary>Whether the tool uses a scene view shortcut's key for something else right now, so the scene view leaves it.</summary>
     public virtual bool TakesShortcut(string shortcut) => false;
 

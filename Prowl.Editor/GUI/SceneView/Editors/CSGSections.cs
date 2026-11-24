@@ -68,7 +68,7 @@ internal static class CSGSections
         if (CSGEditMode.Is(CSGMode.Select)) AddSelect(columns);
         else if (CSGEditMode.Is(CSGMode.Create)) AddGenerate(columns, SceneToolManager.Get<CSGGenerateTool>());
         else if (CSGEditMode.Is(CSGMode.Edit) && SceneToolManager.Get<CSGMeshTool>() is { Active: true } mesh) AddEdit(columns, mesh);
-        else if (CSGEditMode.IsUV) AddSurface(columns);
+        else if (CSGEditMode.Is(CSGMode.Surface)) AddSurface(columns);
         else if (SceneToolManager.Get<CSGClipTool>() is { Active: true } clip) AddClip(columns, clip);
         return columns;
     }
@@ -81,7 +81,13 @@ internal static class CSGSections
         return width;
     }
 
-    /// <summary>Lays the columns out side by side, starting a new row when the next one would pass <paramref name="width"/>.</summary>
+    /// <summary>Whether the tool's options stack down the panel instead of sitting side by side.</summary>
+    internal static bool Stacked => CSGEditMode.Is(CSGMode.Surface);
+
+    /// <summary>
+    /// Lays the columns out side by side, starting a new row when the next one would pass <paramref name="width"/>, or
+    /// one under another at that width when <see cref="Stacked"/>.
+    /// </summary>
     internal static void DrawColumns(Paper paper, Scribe.FontFile font, string id, List<Column> columns, float width)
     {
         int start = 0;
@@ -89,14 +95,14 @@ internal static class CSGSections
         {
             int end = start + 1;
             float used = columns[start].Width;
-            while (end < columns.Count && used + columns[end].Width <= width) used += columns[end++].Width;
+            while (!Stacked && end < columns.Count && used + columns[end].Width <= width) used += columns[end++].Width;
 
             using (paper.Row($"{id}_r{start}").Width(UnitValue.Auto).Height(UnitValue.Auto).Enter())
             {
                 for (int i = start; i < end; i++)
                 {
                     Column column = columns[i];
-                    using (paper.Column(column.Id).Width(column.Width).Height(UnitValue.Auto).Padding(10, 10, 6, 8).Gap(4).Enter())
+                    using (paper.Column(column.Id).Width(Stacked ? width : column.Width).Height(UnitValue.Auto).Padding(10, 10, 6, 8).Gap(4).Enter())
                     {
                         if (column.Title.Length > 0)
                         {
@@ -220,6 +226,19 @@ internal static class CSGSections
                 Chips(paper, font, "csg_gen_place",
                     (Loc.Get("csg.from_centre"), tool.FromCentre, Loc.Get("csg.from_centre_tip"), () => tool.FromCentre = !tool.FromCentre),
                     (Loc.Get("csg.square_base"), tool.SquareBase, Loc.Get("csg.square_base_tip"), () => tool.SquareBase = !tool.SquareBase));
+            Segments(paper, font, "csg_gen_import", new Tile(EditorIcons.FileImport, Loc.Get("csg.import_mesh"), Loc.Get("csg.import_mesh_tip"), () =>
+                PropertyEditors.EngineObjectPropertyEditor.OpenAssetSelector(typeof(Mesh), picked =>
+                {
+                    if (picked is not Mesh mesh) return;
+                    string? why = tool.ImportMesh(mesh) switch
+                    {
+                        CSGGenerateTool.MeshImport.NoModel => "csg.import_mesh_no_model",
+                        CSGGenerateTool.MeshImport.NotReadable => "csg.import_mesh_not_readable",
+                        CSGGenerateTool.MeshImport.NotSolid => "csg.import_mesh_failed_msg",
+                        _ => null,
+                    };
+                    if (why != null) Toasts.Warning(Loc.Get("csg.import_mesh_failed"), Loc.Get(why));
+                })));
         }, IconColumnWidth));
 
         if (HasSettings(tool.Generator))
@@ -352,22 +371,29 @@ internal static class CSGSections
     /// <summary>The selected surfaces' material, mapping and flags, for the UV tools.</summary>
     private static void AddSurface(List<Column> columns)
     {
-        if (CSGSurfaceSelection.Active is not CSGSurfaceRef active || !active.IsValid)
-        {
-            columns.Add(new Column("csg_surf", Loc.Get("csg.surfaces_title"), Loc.Get("csg.surface_pick_hint"), (paper, font) =>
-                Note(paper, font, "csg_surf_none", Loc.Get("csg.no_surfaces"))));
-            return;
-        }
+        bool picked = CSGSurfaceSelection.Active is CSGSurfaceRef { IsValid: true };
+        SurfaceData data = picked ? CSGSurfaceSelection.Active!.Value.Data : default;
 
-        SurfaceData data = active.Data;
-        string count = Loc.Get("csg.surfaces_selected", new { count = CSGSurfaceSelection.Count });
-
-        columns.Add(new Column("csg_surf_mat", $"{Loc.Get("csg.material")}  {count}", Loc.Get("csg.surface_paint_hint"), (paper, font) =>
+        // What a drag does, then the material of the picked surfaces under it
+        columns.Add(new Column("csg_surf_tools", "", null, (paper, font) =>
         {
+            if (SceneToolManager.Get<CSGSurfaceTool>() is { } tool)
+                Segments(paper, font, "csg_surf_drag_mode",
+                [
+                    new Tile(EditorIcons.ArrowsUpDownLeftRight, Loc.Get("csg.mode_uv_move"), Loc.Get("csg.mode_uv_move_tip"), () => tool.Drag = SurfaceDrag.Move, tool.Drag == SurfaceDrag.Move),
+                    new Tile(EditorIcons.RotateRight, Loc.Get("csg.mode_uv_rotate"), Loc.Get("csg.mode_uv_rotate_tip"), () => tool.Drag = SurfaceDrag.Rotate, tool.Drag == SurfaceDrag.Rotate),
+                    new Tile(EditorIcons.Expand, Loc.Get("csg.mode_uv_scale"), Loc.Get("csg.mode_uv_scale_tip"), () => tool.Drag = SurfaceDrag.Scale, tool.Drag == SurfaceDrag.Scale),
+                ], iconsOnly: true);
+            if (!picked)
+            {
+                Note(paper, font, "csg_surf_none", Loc.Get("csg.no_surfaces"));
+                return;
+            }
             PropertyGridUtils.DrawField(paper, "csg_surf_mat_v", "", typeof(Material),
                 data.Material, v => CSGSurfaceSelection.SetMaterial(v as Material), 0);
             DrawPalette(paper, font, data.Material);
         }));
+        if (!picked) return;
 
         columns.Add(new Column("csg_surf_map", Loc.Get("csg.mapping"), null, (paper, font) =>
         {

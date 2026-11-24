@@ -11,6 +11,7 @@ using Prowl.PaperUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
@@ -80,8 +81,8 @@ public sealed class CSGGenerateTool : SceneTool
     private Float3 _cornerB;
     private float _height;
 
-    // The height the last brush was placed with, which Shift reuses
-    private float _lastHeight;
+    // Where the cursor put the far corner of the base, before typed sizes, squaring and centring
+    private Float3 _drag;
 
     // The base was started with a click rather than a drag, so a second click finishes it
     private bool _clickedBase;
@@ -96,6 +97,14 @@ public sealed class CSGGenerateTool : SceneTool
     /// <summary>The base keeps equal width and depth.</summary>
     public bool SquareBase { get; set; }
 
+    // Held keys for this frame: Shift makes the shape uniform, Alt draws it from the centre
+    private bool _uniform, _centred;
+
+    // The scene view holding its camera still while Alt and the button are down over a shape
+    private HandleContext? _modalHandles;
+    private bool Square => SquareBase || _uniform;
+    private bool Centred => FromCentre || _centred;
+
     /// <summary>A shape is being drawn, so the shape keys and tool changes wait.</summary>
     public bool Busy => _stage != Stage.Idle;
 
@@ -104,10 +113,15 @@ public sealed class CSGGenerateTool : SceneTool
     /// <summary>While armed, drawing owns the button so the gizmo cannot win the press.</summary>
     public override bool SuppressTransformGizmo => Drawing;
 
-    public override void OnDeactivated() => Cancel();
+    public override void OnDeactivated()
+    {
+        Cancel();
+        ReleaseCamera();
+    }
 
     public override void OnSceneInput(SceneToolContext ctx)
     {
+        HoldCamera(ctx);
         if (!Drawing)
         {
             Cancel();
@@ -115,6 +129,8 @@ public sealed class CSGGenerateTool : SceneTool
         }
 
         HandleContext handles = ctx.Handles;
+        _uniform = handles.Shift;
+        _centred = handles.Alt;
 
         // Escape abandons the shape in progress, and disarms only once there is nothing to abandon.
         if (handles.KeyDown(KeyCode.Escape))
@@ -142,6 +158,30 @@ public sealed class CSGGenerateTool : SceneTool
         }
     }
 
+    /// <summary>
+    /// Alt with the button down orbits the camera, so the view a shape is drawn in holds it still until both are let go,
+    /// even once the shape is placed.
+    /// </summary>
+    private void HoldCamera(SceneToolContext ctx)
+    {
+        bool held = Input.IsAltPressed && Input.GetMouseButton(0);
+        if (_modalHandles != null)
+        {
+            if (!held && ReferenceEquals(ctx.Handles, _modalHandles)) ReleaseCamera();
+        }
+        else if (held && _stage != Stage.Idle && ReferenceEquals(ctx.View, _stageView))
+        {
+            ctx.Handles.Modal = true;
+            _modalHandles = ctx.Handles;
+        }
+    }
+
+    private void ReleaseCamera()
+    {
+        if (_modalHandles != null) _modalHandles.Modal = false;
+        _modalHandles = null;
+    }
+
     private void TickIdle(SceneToolContext ctx, ControlID id)
     {
         // No cursor preview while the pointer is on a panel.
@@ -157,11 +197,12 @@ public sealed class CSGGenerateTool : SceneTool
         DrawWorkGrid(ctx, _planeOrigin);
         DrawCursor(ctx, _planeOrigin, normal, Tint());
 
-        if (!ctx.Handles.IsNearest(id) || !ctx.Handles.TryBeginDrag(id)) return;
+        if (ctx.Handles.Alt || !ctx.Handles.IsNearest(id) || !ctx.Handles.TryBeginDrag(id)) return;
 
         // The plane is locked at the first press.
         _cornerA = Float3.Zero;
         _cornerB = Float3.Zero;
+        _drag = Float3.Zero;
         _height = 0f;
         _clickedBase = false;
         _onSurface = _hoverOnSurface;
@@ -220,10 +261,10 @@ public sealed class CSGGenerateTool : SceneTool
     private void TickFootprint(SceneToolContext ctx, ControlID id)
     {
         if (TryPlanePoint(ctx, out Float3 local))
-            _cornerB = new Float3(CSGSnap.Value(ctx.Handles, local.X), local.Y, CSGSnap.Value(ctx.Handles, local.Z));
+            _drag = new Float3(CSGSnap.Value(ctx.Handles, local.X), local.Y, CSGSnap.Value(ctx.Handles, local.Z));
 
-        HandleTyping(ctx.Handles);
-        ApplyPlacement();
+        ReadTyping(ctx.Handles);
+        Layout();
         DrawWorkGrid(ctx, ToWorld(_cornerB));
         DrawFootprint(ctx, Tint());
         DrawTyped(ctx);
@@ -240,22 +281,13 @@ public sealed class CSGGenerateTool : SceneTool
         if (_clickedBase && ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered && FootprintIsValid()) BeginHeight(ctx);
     }
 
-    /// <summary>The base is done. Shift places it straight away at the last height, else the height follows the cursor.</summary>
-    private void BeginHeight(SceneToolContext ctx)
-    {
-        _stage = Stage.Extrude;
-        if (!ctx.Handles.Shift || _lastHeight == 0f) return;
-
-        _height = _lastHeight;
-        Commit(ctx, OperationFor());
-    }
+    private void BeginHeight(SceneToolContext ctx) => _stage = Stage.Extrude;
 
     private void TickExtrude(SceneToolContext ctx)
     {
-        _height = CSGSnap.Value(ctx.Handles, HeightUnderCursor(ctx));
-
-        HandleTyping(ctx.Handles);
-        if (Generator != CSGGeneratorKind.Polygon) ApplyPlacement();
+        ReadTyping(ctx.Handles);
+        if (Generator != CSGGeneratorKind.Polygon) Layout();
+        _height = HeightFor(ctx);
         UpdateGhost(OperationFor());
         DrawPreview(ctx, Tint());
         DrawTyped(ctx);
@@ -264,6 +296,16 @@ public sealed class CSGGenerateTool : SceneTool
 
         // The commit click is a raw press, so check the cursor is on the scene rather than a panel.
         if (ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered) Commit(ctx, OperationFor());
+    }
+
+    /// <summary>The height under the cursor, or the typed or uniform one with the cursor only saying which way.</summary>
+    private float HeightFor(SceneToolContext ctx)
+    {
+        float height = CSGSnap.Value(ctx.Handles, HeightUnderCursor(ctx));
+        if (Typed(2, out float typed)) return Side(height) * typed;
+        if (_uniform && Generator != CSGGeneratorKind.Polygon)
+            return Side(height) * MathF.Max(MathF.Abs(_cornerB.X - _cornerA.X), MathF.Abs(_cornerB.Z - _cornerA.Z));
+        return height;
     }
 
     /// <summary>Where a new brush would start: the surface under the cursor, or the grid plane.</summary>
@@ -385,7 +427,6 @@ public sealed class CSGGenerateTool : SceneTool
         Undo.RegisterCreatedObjectUndo(created, "Create CSG Brush");
         Selection.Select(created);
         model!.SetDirty();
-        _lastHeight = _height;
         Cancel();
 
         // Straight to editing what was placed, as most brushes are adjusted right after
@@ -448,6 +489,75 @@ public sealed class CSGGenerateTool : SceneTool
         }
 
         return parts.Count > 1 ? root : root.Children[^1];
+    }
+
+    /// <summary>What came of turning a mesh into a brush.</summary>
+    public enum MeshImport { Imported, NoModel, NotReadable, NotSolid }
+
+    /// <summary>Turns a mesh into a brush at the 3D cursor, its flat triangles joined into the faces they read as.</summary>
+    public MeshImport ImportMesh(Mesh mesh)
+    {
+        CSGModel? model = CSGSelection.ActiveModel();
+        if (model.IsNotValid()) return MeshImport.NoModel;
+        if (mesh.IsNotValid()) return MeshImport.NotReadable;
+
+        CSGControlMesh? shape;
+        try { shape = ShapeOf(mesh); }
+        catch (InvalidOperationException) { return MeshImport.NotReadable; }
+        if (shape == null) return MeshImport.NotSolid;
+
+        GameObject go = CSGSelection.CreateObject(string.IsNullOrEmpty(mesh.Name) ? "Mesh" : mesh.Name, ParentFor(model!));
+        go.Transform.Position = SceneTools.Cursor;
+        shape.TransformPoints(go.Transform.WorldToLocalMatrix * Float4x4.CreateTranslation(SceneTools.Cursor));
+
+        CSGBrush brush = go.AddComponent<CSGBrush>();
+        brush.SetShape(shape, new SurfaceData[shape.Polygons.Count]);
+        for (int i = 0; i < shape.Polygons.Count; i++) brush.SetSurface(i, SurfaceData.Default);
+        brush.Operation = AutoOperation ? Operation.Additive : Operation;
+        if (!brush.IsShapeValid)
+        {
+            go.Destroy();
+            return MeshImport.NotSolid;
+        }
+
+        Undo.RegisterCreatedObjectUndo(go, "Import Mesh As CSG Brush");
+        Selection.Select(go);
+        model!.SetDirty();
+        CSGEditMode.Current = CSGMode.Edit;
+        return MeshImport.Imported;
+    }
+
+    /// <summary>
+    /// A mesh's points and faces as a brush shape: points at almost the same place are one, and flat triangles are joined
+    /// into the faces they read as, or left as triangles where joining them is not clean. Null when neither is a clean
+    /// solid of the mesh's own volume.
+    /// </summary>
+    internal static CSGControlMesh? ShapeOf(Mesh mesh)
+    {
+        GeometryData geometry = MeshGeometry.ToGeometryData(mesh);
+        float volume = geometry.Volume();
+        Float3 size = geometry.Bounds().Size;
+        float extent = MathF.Max(size.X, MathF.Max(size.Y, size.Z));
+
+        // Seams meet only to rounding, and no point is pulled onto a neighbour along an edge
+        float shortest = float.MaxValue;
+        foreach (GeometryData.Edge edge in geometry.Edges)
+        {
+            float length = Float3.Distance(edge.Vert1.Point, edge.Vert2.Point);
+            if (length > 0f) shortest = MathF.Min(shortest, length);
+        }
+        GeometryOperators.MergeByDistance(geometry, null, MathF.Min(extent * 1e-5f, shortest * 0.25f));
+
+        GeometryData joined = geometry.Clone();
+        GeometryOperators.DissolveFlat(joined, 0.5f, extent * 1e-5f);
+        return Solid(joined, volume) ?? Solid(geometry, volume);
+    }
+
+    private static CSGControlMesh? Solid(GeometryData geometry, float volume)
+    {
+        CSGControlMesh? shape = CSGControlMesh.FromMesh(geometry);
+        if (shape == null || shape.Check() != CSGMeshProblem.None) return null;
+        return MathF.Abs(shape.Volume() - volume) <= volume * 1e-3f ? shape : null;
     }
 
     private GameObject? PlacePolygon(CSGModel model, Operation operation)
@@ -522,51 +632,48 @@ public sealed class CSGGenerateTool : SceneTool
     /// Digits set an exact size while drawing: width first, Tab moves to depth and then height, Backspace corrects and
     /// Enter places the brush. A typed size overrides the cursor, which still picks the direction.
     /// </summary>
-    private void HandleTyping(HandleContext handles)
+    private void ReadTyping(HandleContext handles)
     {
-        if (handles.KeysActive)
+        if (!handles.KeysActive) return;
+
+        foreach (char c in Input.InputString)
         {
-            foreach (char c in Input.InputString)
-            {
-                if (!char.IsDigit(c) && c != '.' && c != '-') continue;
-                if (_field < 0) _field = 0;
-                _typed[_field] += c;
-            }
-
-            if (_field >= 0 && handles.KeyDown(KeyCode.Backspace) && _typed[_field].Length > 0)
-                _typed[_field] = _typed[_field][..^1];
-
-            if (handles.KeyDown(KeyCode.Tab))
-            {
-                _field = (_field + 1) % 3;
-                if (_field == 2 && _stage == Stage.Footprint && FootprintIsValid()) _stage = Stage.Extrude;
-            }
+            if (!char.IsDigit(c) && c != '.' && c != '-') continue;
+            if (_field < 0) _field = 0;
+            _typed[_field] += c;
         }
 
-        // Drawn shapes measure from the first click, which is the middle of the base when drawing from the centre
-        bool drawn = Generator != CSGGeneratorKind.Polygon;
-        Float3 from = drawn ? Float3.Zero : _cornerA;
-        float reach = drawn && FromCentre ? 0.5f : 1f;
-        if (Typed(0, out float width)) _cornerB = new Float3(from.X + Side(_cornerB.X - from.X) * width * reach, _cornerB.Y, _cornerB.Z);
-        if (Typed(1, out float depth)) _cornerB = new Float3(_cornerB.X, _cornerB.Y, from.Z + Side(_cornerB.Z - from.Z) * depth * reach);
-        if (_stage == Stage.Extrude && Typed(2, out float height)) _height = Side(_height) * height;
+        if (_field >= 0 && handles.KeyDown(KeyCode.Backspace) && _typed[_field].Length > 0)
+            _typed[_field] = _typed[_field][..^1];
+
+        if (handles.KeyDown(KeyCode.Tab))
+        {
+            _field = (_field + 1) % 3;
+            if (_field == 2 && _stage == Stage.Footprint && FootprintIsValid()) _stage = Stage.Extrude;
+        }
     }
 
     /// <summary>
-    /// Squares the base and mirrors it about the first click when asked to. The first click sits at the plane's origin,
-    /// so the far corner alone says where the base reaches.
+    /// The base from where the cursor put it, with typed sizes, squared and mirrored about the first click when asked
+    /// to. The first click sits at the plane's origin, so the far corner alone says where the base reaches.
     /// </summary>
-    private void ApplyPlacement()
+    private void Layout()
     {
-        Float3 far = _cornerB;
-        if (SquareBase)
+        float reach = Centred ? 0.5f : 1f;
+        bool typedWidth = Typed(0, out float width), typedDepth = Typed(1, out float depth);
+        float x = typedWidth ? Side(_drag.X) * width * reach : _drag.X;
+        float z = typedDepth ? Side(_drag.Z) * depth * reach : _drag.Z;
+
+        // A square keeps a typed side over the cursor's
+        if (Square)
         {
-            float side = MathF.Max(MathF.Abs(far.X), MathF.Abs(far.Z));
-            far = new Float3(Side(far.X) * side, far.Y, Side(far.Z) * side);
+            float side = typedWidth ? MathF.Abs(x) : typedDepth ? MathF.Abs(z) : MathF.Max(MathF.Abs(x), MathF.Abs(z));
+            x = Side(x) * side;
+            z = Side(z) * side;
         }
 
-        _cornerB = far;
-        _cornerA = FromCentre ? new Float3(-far.X, 0f, -far.Z) : Float3.Zero;
+        _cornerB = new Float3(x, _drag.Y, z);
+        _cornerA = Centred ? new Float3(-x, 0f, -z) : Float3.Zero;
     }
 
     private bool Typed(int field, out float value)

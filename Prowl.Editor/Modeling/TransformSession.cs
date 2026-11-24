@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Runtime;
 using Prowl.Vector;
@@ -167,25 +168,10 @@ public sealed class TransformSession : ITransformSession
     private static Dictionary<GeometryData.Vertex, Float3> IslandCentres(ElementSelection selection, Float4x4 toWorld)
     {
         var centres = new Dictionary<GeometryData.Vertex, Float3>();
-        var done = new HashSet<GeometryData.Face>();
-        foreach (GeometryData.Face start in selection.Faces)
+        foreach (List<GeometryData.Face> region in GeometryOperators.FaceRegions(selection.Faces))
         {
-            if (!done.Add(start)) continue;
-            var island = new HashSet<GeometryData.Vertex>();
-            var stack = new Stack<GeometryData.Face>();
-            stack.Push(start);
-            while (stack.Count > 0)
-            {
-                GeometryData.Face face = stack.Pop();
-                island.UnionWith(face.NeighborVertices());
-                foreach (GeometryData.Edge edge in face.NeighborEdges())
-                    foreach (GeometryData.Face next in edge.NeighborFaces())
-                        if (selection.Faces.Contains(next) && done.Add(next)) stack.Push(next);
-            }
-
-            Float3 sum = Float3.Zero;
-            foreach (GeometryData.Vertex vertex in island) sum += Float4x4.TransformPoint(vertex.Point, toWorld);
-            Float3 centre = sum / island.Count;
+            var island = new HashSet<GeometryData.Vertex>(region.SelectMany(f => f.NeighborVertices()));
+            Float3 centre = Float4x4.TransformPoint(GeometryData.Centroid(island), toWorld);
             foreach (GeometryData.Vertex vertex in island) centres[vertex] = centre;
         }
         return centres;
@@ -209,13 +195,15 @@ public sealed class ObjectTransformSession : ITransformSession
         Float3 sum = Float3.Zero;
         foreach (Float3 point in _points) sum += point;
         Median = _points.Count > 0 ? sum / _points.Count : Float3.Zero;
+        Pivot = Median;
     }
 
     public IReadOnlyList<Float3> Points => _points;
 
     public Float3 Median { get; }
 
-    public Float3 Pivot => Median;
+    /// <summary>What rotation and scale turn about, in the world. The median unless set.</summary>
+    public Float3 Pivot { get; set; }
 
     public void Translate(Float3 delta)
     {
