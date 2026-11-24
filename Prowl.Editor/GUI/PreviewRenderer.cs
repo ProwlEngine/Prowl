@@ -322,21 +322,21 @@ public class PreviewRenderer : IDisposable
         if (onClick != null) box.OnClick(0, (_, e) => onClick(new Float2((float)e.PointerPosition.X, (float)e.PointerPosition.Y)));
 
         box.OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-        {
-            float rx = (float)r.Min.X;
-            float ry = (float)r.Min.Y;
-            float rw = (float)r.Size.X;
-            float rh = (float)r.Size.Y;
+            {
+                float rx = (float)r.Min.X;
+                float ry = (float)r.Min.Y;
+                float rw = (float)r.Size.X;
+                float rh = (float)r.Size.Y;
 
-            canvas.SetBrushTexture(_rt.MainTexture);
-            canvas.SetBrushTextureTransform(
-                Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
-                Prowl.Vector.Spatial.Transform2D.CreateScale(rw, -rh));
-            canvas.RoundedRectFilled(rx, ry, rw, rh, round, round, round, round, new Color32(255, 255, 255, 255));
-            canvas.ClearBrushTexture();
+                canvas.SetBrushTexture(_rt.MainTexture);
+                canvas.SetBrushTextureTransform(
+                    Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
+                    Prowl.Vector.Spatial.Transform2D.CreateScale(rw, -rh));
+                canvas.RoundedRectFilled(rx, ry, rw, rh, round, round, round, round, new Color32(255, 255, 255, 255));
+                canvas.ClearBrushTexture();
 
-            overlay?.Invoke(canvas, r);
-        }));
+                overlay?.Invoke(canvas, r);
+            }));
     }
 
     /// <summary>
@@ -633,7 +633,7 @@ public class PreviewRenderer : IDisposable
         Float3 centroid = (a + b + c) * (1f / 3f);
         if (Float3.Dot(n, centroid - inside) > 0f)
         {
-            // n points outward, so swap to make it point inward (see the winding note below).
+            // n points outward, so swap to make it point inward.
             (b, c) = (c, b);
             n = Float3.Cross(b - a, c - a);
         }
