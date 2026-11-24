@@ -21,9 +21,9 @@ public struct SwapchainDescription
     /// </summary>
     public uint Height;
     /// <summary>
-    /// Sync presentation to vblank.
+    /// How presents are paced against the display's refresh.
     /// </summary>
-    public bool SyncToVerticalBlank;
+    public VSyncMode VSync;
     /// <summary>
     /// Color target uses sRGB.
     /// </summary>

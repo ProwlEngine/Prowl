@@ -33,7 +33,7 @@ public static class Program
 
         SwapchainDescription swapchain = new()
         {
-            SyncToVerticalBlank = false
+            VSync = VSyncMode.Mailbox
         };
 
         DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options, swapchain);

@@ -48,7 +48,7 @@ public static class Program
 
         SwapchainDescription swapchain = new()
         {
-            SyncToVerticalBlank = false
+            VSync = VSyncMode.Mailbox
         };
 
         using var window = new GraphiteWindow(windowOptions, deviceOptions, swapchain, backend);

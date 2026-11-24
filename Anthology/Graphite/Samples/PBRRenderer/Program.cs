@@ -123,7 +123,7 @@ internal sealed class DemoWindow
 
     private void OnLoad()
     {
-        _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { SyncToVerticalBlank = true }, GraphicsBackend.Vulkan);
+        _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { VSync = VSyncMode.Adaptive }, GraphicsBackend.Vulkan);
         _window.FramebufferResize += size =>
         {
             if (_demo != null)
@@ -132,7 +132,7 @@ internal sealed class DemoWindow
                 _device.ResizeMainWindow((uint)size.X, (uint)size.Y);
         };
 
-        _device.SyncToVerticalBlank = !_noVsync;
+        _device.VSync = _noVsync ? VSyncMode.Mailbox : VSyncMode.Adaptive;
         if (_shotPath != null)
         {
             _shotTexture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D((uint)_size.X, (uint)_size.Y, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.RenderTarget | TextureUsage.Sampled));
@@ -220,7 +220,7 @@ internal sealed class DemoWindow
             case Key.I: _gi = !_gi; break;
             case Key.Space: _paused = !_paused; break;
             case Key.B: _demo.Bloom.Enabled = !_demo.Bloom.Enabled; break;
-            case Key.V: _device.SyncToVerticalBlank = !_device.SyncToVerticalBlank; break;
+            case Key.V: _device.VSync = _device.VSync == VSyncMode.Adaptive ? VSyncMode.Mailbox : VSyncMode.Adaptive; break;
             case Key.T: _demo.Tonemap.Enabled = !_demo.Tonemap.Enabled; break;
             case Key.X: _demo.Taa.Enabled = !_demo.Taa.Enabled; break;
             case Key.Minus: _demo.AutoExposure.ExposureCompensation -= 0.5f; break;

@@ -28,25 +28,19 @@ internal unsafe partial class VkSwapchain : Swapchain
     private SwapchainTransform _transform;
     private readonly uint _presentQueueIndex;
     private readonly Queue _presentQueue;
-    private bool _syncToVBlank;
+    private VSyncMode _vsync;
     private readonly bool _colorSrgb;
     private readonly bool _preRotate;
-    private bool? _newSyncToVBlank;
+    private VSyncMode? _newVSync;
     private uint _currentImageIndex;
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
     public override Framebuffer Framebuffer => _framebuffer;
-    public override bool SyncToVerticalBlank
+    public override VSyncMode VSync
     {
-        get => _newSyncToVBlank ?? _syncToVBlank;
-        set
-        {
-            if (_syncToVBlank != value)
-            {
-                _newSyncToVBlank = value;
-            }
-        }
+        get => _newVSync ?? _vsync;
+        set => _newVSync = value == _vsync ? null : value;
     }
 
     public SwapchainKHR DeviceSwapchain => _deviceSwapchain;
@@ -65,7 +59,7 @@ internal unsafe partial class VkSwapchain : Swapchain
     public VkSwapchain(VkGraphicsDevice gd, in SwapchainDescription description, SurfaceKHR existingSurface)
     {
         _gd = gd;
-        _syncToVBlank = description.SyncToVerticalBlank;
+        _vsync = description.VSync;
         _colorSrgb = description.ColorSrgb;
         _preRotate = description.PreRotate;
 
@@ -152,12 +146,8 @@ internal unsafe partial class VkSwapchain : Swapchain
             _recreatePending = SurfaceChanged();
         }
 
-        if (_newSyncToVBlank != null)
-        {
-            _syncToVBlank = _newSyncToVBlank.Value;
-            _newSyncToVBlank = null;
+        if (_newVSync != null)
             _recreatePending = true;
-        }
 
         if (_recreatePending)
         {
@@ -308,6 +298,13 @@ internal unsafe partial class VkSwapchain : Swapchain
             }
         }
 
+        // Taken by whichever build comes first, so a resize that lands with a mode change builds once, and a build that can't happen keeps it pending
+        if (_newVSync is { } newVSync)
+        {
+            _vsync = newVSync;
+            _newVSync = null;
+        }
+
         _currentImageIndex = 0;
         SurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat();
         PresentModeKHR presentMode = ChoosePresentMode();
@@ -450,23 +447,15 @@ internal unsafe partial class VkSwapchain : Swapchain
         PresentModeKHR[] presentModes = new PresentModeKHR[presentModeCount];
         _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, out presentModes[0]).CheckResult();
 
-        if (_syncToVBlank)
+        PresentModeKHR[] preferred = _vsync switch
         {
-            return presentModes.Contains(PresentModeKHR.FifoRelaxedKhr)
-                ? PresentModeKHR.FifoRelaxedKhr
-                : PresentModeKHR.FifoKhr;
-        }
-
-        if (presentModes.Contains(PresentModeKHR.MailboxKhr))
-        {
-            return PresentModeKHR.MailboxKhr;
-        }
-        if (presentModes.Contains(PresentModeKHR.ImmediateKhr))
-        {
-            return PresentModeKHR.ImmediateKhr;
-        }
-
-        return PresentModeKHR.FifoKhr;
+            VSyncMode.Off => [PresentModeKHR.ImmediateKhr, PresentModeKHR.MailboxKhr],
+            VSyncMode.Mailbox => [PresentModeKHR.MailboxKhr, PresentModeKHR.ImmediateKhr],
+            VSyncMode.Adaptive => [PresentModeKHR.FifoRelaxedKhr],
+            _ => [],
+        };
+        // Every Vulkan surface offers FIFO
+        return preferred.FirstOrDefault(mode => presentModes.Contains(mode), PresentModeKHR.FifoKhr);
     }
 
     private bool GetPresentQueueIndex(out uint queueFamilyIndex)

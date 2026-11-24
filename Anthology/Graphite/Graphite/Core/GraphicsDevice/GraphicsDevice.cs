@@ -71,15 +71,15 @@ public abstract partial class GraphicsDevice : IDisposable
     public abstract GraphicsDeviceLimits Limits { get; }
 
     /// <summary>
-    /// Vsync on the main swapchain. Setter needs a main swapchain.
+    /// VSync mode of the main swapchain. Setter needs a main swapchain.
     /// </summary>
-    public virtual bool SyncToVerticalBlank
+    public virtual VSyncMode VSync
     {
-        get => MainSwapchain?.SyncToVerticalBlank ?? false;
+        get => MainSwapchain?.VSync ?? VSyncMode.Mailbox;
         set
         {
-            SyncToVerticalBlank_CheckMainSwapchain();
-            MainSwapchain.SyncToVerticalBlank = value;
+            VSync_CheckMainSwapchain();
+            MainSwapchain.VSync = value;
         }
     }
 
