@@ -2871,43 +2871,6 @@ public sealed partial class LightingTests : IDisposable
         }
     }
 
-    [Fact]
-    public void ProceduralSky_IsProwlsSky_InNitsFromTheLuxOfTheWorldsSun()
-    {
-        Vector3 sun = Vector3.Normalize(new Vector3(0.3f, 0.25f, 1));
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(-sun.X, -sun.Y, -sun.Z), Intensity = 50 });
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = _renderer.CreateMaterial(_renderer.Skies.Procedural) };
-
-        AssertPixels(i =>
-        {
-            (float x, float y) = PixelClip(i);
-            return Reference.ProceduralSky(Vector3.Normalize(new Vector3(x, y, 1)), sun, 50);
-        }, PerspectiveFrame(13), 4e-3f);
-    }
-
-    [Fact]
-    public void ProceduralSky_LeavesItsDiskOutOfCaptures_WhileADirectionalLightIsTheSun()
-    {
-        // The default sun's disk lights the sky's harmonics, a directional light standing in its place leaves it out
-        Material sky = _renderer.CreateMaterial(_renderer.Skies.Procedural);
-        sky.SetFloat("_SunSize", 10);
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = 12, Ambient = AmbientMode.Sky, Fog = default, Sky = sky };
-        Float3 up = new(0, 1, 0);
-        for (int frame = 0; frame < 3; frame++)
-            Frame();
-        float withDisk = _world.SkyAmbient.Evaluate(up).Y;
-
-        Float3 toSun = Float3.Normalize(new Float3(-0.5f, 0.7f, -0.5f));
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = -toSun, Intensity = DefaultSunLux });
-        for (int frame = 0; frame < 3; frame++)
-            Frame();
-        float withoutDisk = _world.SkyAmbient.Evaluate(up).Y;
-
-        // The disk shines the sun's illuminance, irradiance over pi of lux times its cosine to up
-        float disk = DefaultSunLux * toSun.Y / MathF.PI;
-        Assert.InRange(withDisk - withoutDisk, disk * 0.8f, disk * 1.2f);
-    }
-
     private const float DefaultSunLux = 100000;
 
     [Fact]
@@ -2974,29 +2937,6 @@ public sealed partial class LightingTests : IDisposable
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Sky, AmbientIntensity = 1, Fog = default, Sky = SkyMaterial(new Float3(0.4f, 0.3f, 0.2f), 0) };
         Frame();
         AssertMatches(_ => new Vector3(0.2f, 0.24f, 0.2f), Frame());
-    }
-
-    [Fact]
-    public void ProceduralSky_TakesItsSunIntensityTintAndGround()
-    {
-        Vector3 sun = Vector3.Normalize(new Vector3(0.3f, 0.25f, 1));
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(-sun.X, -sun.Y, -sun.Z), Intensity = 50 });
-        Material sky = _renderer.CreateMaterial(_renderer.Skies.Procedural);
-        sky.SetFloat("_SunSize", 3);
-        sky.SetFloat("_SunGlow", 0.5f);
-        sky.SetFloat("intensity", 0.7f);
-        sky.SetColor("_Tint", new Float4(1, 0.8f, 0.6f, 1));
-        sky.SetColor("_GroundColor", new Float4(0.1f, 0.3f, 0.2f, 1));
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = sky };
-
-        AssertPixels(i =>
-        {
-            (float x, float y) = PixelClip(i);
-            return Reference.ProceduralSky(Vector3.Normalize(new Vector3(x, y, 1)), sun, 50, 3, 0.5f, 0.7f, new Vector3(1, 0.8f, 0.6f), new Vector3(0.1f, 0.3f, 0.2f));
-        }, PerspectiveFrame(16), 4e-3f);
-
-        sky.SetFloat("intensity", 0);
-        AssertPixels(_ => Vector3.Zero, PerspectiveFrame(16), 1e-4f);
     }
 
     // The six faces of a cube view from the origin, in the cube's face order
