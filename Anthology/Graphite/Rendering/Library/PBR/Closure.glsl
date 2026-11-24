@@ -618,7 +618,12 @@ vec3 PBR_ShadeLights(PBR_Closure c, Graphite_LightIterator it)
     Graphite_LightFrame f = PBR_LightFrame(c);
     vec3 total = vec3(0.0);
     Graphite_LightContribution l;
-    for (uint i = 0u; i < Graphite_DirectionalCount(); i++)
+
+    // The sun apart from the loop, so its record and cascades are read at fixed places
+    uint directionals = Graphite_DirectionalCount();
+    if (directionals > 0u && Graphite_ContributeDirectional(Graphite_GetDirectional(0u), 0u, f, l))
+        total += Graphite_BRDF(c, l);
+    for (uint i = 1u; i < directionals; i++)
     {
         if (Graphite_ContributeDirectional(Graphite_GetDirectional(i), i, f, l))
             total += Graphite_BRDF(c, l);
