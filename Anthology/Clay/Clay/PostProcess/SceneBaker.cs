@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Prowl.Clay.Importer;
-using Prowl.Clay.Internal.Intermediate;
+using Prowl.Clay.Intermediate;
 using Prowl.Vector;
 
 namespace Prowl.Clay.PostProcess;
@@ -133,7 +133,7 @@ internal static class SceneBaker
 
         var metadata = new ModelMetadata
         {
-            Format = scene.Format,
+            Format = context.Format,
             FormatVersion = scene.FormatVersion,
             Generator = scene.Generator,
             Copyright = scene.Copyright,

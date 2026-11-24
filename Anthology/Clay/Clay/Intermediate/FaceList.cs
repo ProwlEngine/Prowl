@@ -3,7 +3,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>
 /// The faces of an <see cref="IntermediateMesh"/>, with every face's indices packed into one flat buffer.
@@ -12,7 +12,7 @@ namespace Prowl.Clay.Internal.Intermediate;
 /// Spans returned by <see cref="IndicesOf(int)"/> and <see cref="AllIndices"/> point into the buffer,
 /// so they stop tracking it once a face is added.
 /// </remarks>
-internal sealed class FaceList
+public sealed class FaceList
 {
     private readonly List<IntermediateFace> _faces;
     private readonly List<int> _indices;

@@ -3,13 +3,13 @@
 
 using Prowl.Vector;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>
 /// Writable mesh form used through the pipeline. Stores positions/normals/tangents/UVs as
 /// independent buffers so individual streams can be added, removed, or replaced cheaply.
 /// </summary>
-internal sealed class IntermediateMesh
+public sealed class IntermediateMesh
 {
     public string Name { get; set; } = string.Empty;
 
@@ -73,7 +73,7 @@ internal sealed class IntermediateMesh
 /// know about it. Only the handful of places that construct a face from scratch have to say what
 /// material it belongs to.
 /// </remarks>
-internal struct IntermediateFace
+public struct IntermediateFace
 {
     /// <summary>Sentinel for "no material of my own", deferring to <see cref="IntermediateMesh.MaterialIndex"/>.
     /// Distinct from -1, which is a real value meaning the face has no material at all.</summary>
@@ -101,7 +101,7 @@ internal struct IntermediateFace
 }
 
 [Flags]
-internal enum PrimitiveKind
+public enum PrimitiveKind
 {
     None = 0,
     Point = 1,
@@ -110,14 +110,14 @@ internal enum PrimitiveKind
     Polygon = 8,
 }
 
-internal sealed class IntermediateBlendShape
+public sealed class IntermediateBlendShape
 {
     public required string Name { get; init; }
     public List<IntermediateBlendShapeFrame> Frames { get; } = new();
     public float DefaultWeight { get; set; }
 }
 
-internal sealed class IntermediateBlendShapeFrame
+public sealed class IntermediateBlendShapeFrame
 {
     public float Weight { get; set; } = 100f;
     public required Float3[] DeltaPositions { get; init; }

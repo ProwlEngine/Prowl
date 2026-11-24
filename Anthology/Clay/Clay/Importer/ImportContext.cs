@@ -7,7 +7,7 @@ namespace Prowl.Clay.Importer;
 /// Shared state passed through one import call: settings, file resolver, log sink, cancellation
 /// token, and the source path or format hint.
 /// </summary>
-internal sealed class ImportContext
+public sealed class ImportContext
 {
     /// <summary>Settings provided by the caller.</summary>
     public required ModelImporterSettings Settings { get; init; }
@@ -24,6 +24,6 @@ internal sealed class ImportContext
     /// <summary>Source path, or <c>null</c> for stream-based imports.</summary>
     public string? SourcePath { get; init; }
 
-    /// <summary>Format token (gltf/glb/obj/fbx/vrm).</summary>
-    public required string Format { get; init; }
+    /// <summary>The class that imported the model.</summary>
+    public required IModelFormat Format { get; init; }
 }

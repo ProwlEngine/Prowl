@@ -4,7 +4,7 @@
 using System.Text.Json;
 
 using Prowl.Clay.Importer;
-using Prowl.Clay.Internal.Intermediate;
+using Prowl.Clay.Intermediate;
 using Prowl.Vector;
 
 namespace Prowl.Clay.Formats.Gltf;

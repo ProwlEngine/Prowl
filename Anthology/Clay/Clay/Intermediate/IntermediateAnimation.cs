@@ -3,12 +3,12 @@
 
 using Prowl.Vector;
 
-namespace Prowl.Clay.Internal.Intermediate;
+namespace Prowl.Clay.Intermediate;
 
 /// <summary>
 /// Mutable counterpart of <see cref="AnimationClip"/>.
 /// </summary>
-internal sealed class IntermediateAnimation
+public sealed class IntermediateAnimation
 {
     public string Name { get; set; } = string.Empty;
     public List<IntermediateAnimationBinding> Bindings { get; } = new();
@@ -19,7 +19,7 @@ internal sealed class IntermediateAnimation
 /// through the pipeline so the coordinate-conversion step can negate and swap components in place;
 /// they become a <see cref="AnimationCurve"/> at bake.
 /// </summary>
-internal sealed class IntermediateAnimationBinding
+public sealed class IntermediateAnimationBinding
 {
     public IntermediateNode? TargetNode { get; set; }
     public AnimatedProperty Property { get; set; }

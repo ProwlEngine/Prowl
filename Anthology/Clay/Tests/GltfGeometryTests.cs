@@ -20,7 +20,7 @@ public sealed class GltfGeometryTests
     {
         var model = ModelImporter.Load(TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb"), cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal("glb", model.Metadata.Format);
+        Assert.IsType<Formats.Gltf.GlbFormat>(model.Metadata.Format);
         Assert.Equal("2.0", model.Metadata.FormatVersion);
         Assert.Single(model.Meshes);
         Assert.Single(model.Materials);
