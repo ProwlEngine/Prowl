@@ -249,18 +249,21 @@ internal static class ModelRigBuilder
             body[f] = Combine(parent[f], poses[f].GetTransform(root.Bone));
         }
 
-        float turn = root.Turn ? NetTurn(body) : 0f;
+        Float3 axis = Flatness(body[0].rotation * Float3.UnitZ) >= Flatness(body[0].rotation * Float3.UnitX)
+            ? Float3.UnitZ
+            : Float3.UnitX;
+        float startHeading = Heading(body[0].rotation * axis);
         Float3 start = body[0].position;
         float[]? ground = root.Height ? Ground(poses, skeleton, root.Feet) : null;
 
         var frames = new Transform3D[count];
         for (int f = 0; f < count; f++)
         {
-            float t = count > 1 ? f / (float)(count - 1) : 0f;
             Float3 moved = body[f].position - start;
             float height = ground != null ? ground[f] - ground[0] : moved.Y;
             var position = new Float3(root.Travel ? moved.X : 0f, root.Height ? height : 0f, root.Travel ? moved.Z : 0f);
-            frames[f] = new Transform3D(position, Quaternion.AxisAngle(Float3.UnitY, turn * t), Float3.One);
+            float yaw = root.Turn ? Heading(body[f].rotation * axis) - startHeading : 0f;
+            frames[f] = new Transform3D(position, Quaternion.AxisAngle(Float3.UnitY, yaw), Float3.One);
 
             // The body keeps whatever the root does not take, in the root's frame.
             Transform3D kept = Delta(frames[f], body[f]);
@@ -285,30 +288,6 @@ internal static class ModelRigBuilder
             ground[f] = lowest;
         }
         return ground;
-    }
-
-    /// <summary>
-    /// The heading the body turns through across the clip, in radians, followed frame to frame so a turn
-    /// past half a circle still reads as the turn it is.
-    /// </summary>
-    private static float NetTurn(Transform3D[] body)
-    {
-        // Whichever of the bone's own axes lies flattest on the ground at the start is the one that
-        // tells its heading; a bone pointing up the spine says nothing about which way it faces.
-        Float3 axis = Flatness(body[0].rotation * Float3.UnitZ) >= Flatness(body[0].rotation * Float3.UnitX) ? Float3.UnitZ : Float3.UnitX;
-
-        float total = 0f;
-        float previous = Heading(body[0].rotation * axis);
-        for (int f = 1; f < body.Length; f++)
-        {
-            float heading = Heading(body[f].rotation * axis);
-            float step = heading - previous;
-            while (step > MathF.PI) step -= MathF.Tau;
-            while (step < -MathF.PI) step += MathF.Tau;
-            total += step;
-            previous = heading;
-        }
-        return total;
     }
 
     private static float Flatness(Float3 direction) => direction.X * direction.X + direction.Z * direction.Z;
