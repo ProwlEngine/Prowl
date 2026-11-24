@@ -34,6 +34,12 @@ public enum ExtrudeMode
     PerFace
 }
 
+/// <summary>Where an end of a drawn line sits: on a vertex of the mesh, on one of its edges, or free at a point.</summary>
+public readonly record struct LineAnchor(Float3 Point, GeometryData.Vertex? Vertex = null, GeometryData.Edge? Edge = null)
+{
+    public bool Snapped => Vertex != null || Edge != null;
+}
+
 /// <summary>
 /// Defines the inset mode for face inset operations.
 /// </summary>
@@ -1104,9 +1110,113 @@ public static class GeometryOperators
     }
 
     /// <summary>Collapses each connected group of edges to a single point at its centre. Returns how many vertices were joined.</summary>
-    public static int CollapseEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
+    /// <param name="centres">Given the point each joined group went to.</param>
+    public static int CollapseEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, List<Float3>? centres = null)
     {
-        return MoveVerticesOp.CollapseEdges(mesh, edges);
+        return MoveVerticesOp.CollapseEdges(mesh, edges, centres);
+    }
+
+    /// <summary>
+    /// Adds a run of edges through points. An end on a vertex uses it, an end on an edge splits the edge there unless
+    /// that is at one of its ends, and a free end gets a vertex of its own.
+    /// </summary>
+    /// <returns>The edges of the run.</returns>
+    public static List<GeometryData.Edge> AddLine(GeometryData mesh, IReadOnlyList<Float3> points, LineAnchor start, LineAnchor end)
+    {
+        return DrawSegmentsOp.AddLine(mesh, points, start, end);
+    }
+
+    /// <summary>
+    /// Adds a four sided face through corners, using the vertices given where there are some, turned to face against
+    /// the view direction. Throws <see cref="InvalidOperationException"/> when the corners make no face.
+    /// </summary>
+    public static GeometryData.Face AddQuad(GeometryData mesh, IReadOnlyList<Float3> corners, IReadOnlyList<GeometryData.Vertex?> existing, Float3 viewDirection)
+    {
+        return DrawSegmentsOp.AddQuad(mesh, corners, existing, viewDirection);
+    }
+
+    /// <summary>
+    /// A face through a chain or ring of edges, turned to face the way of a face already beside it. Throws
+    /// <see cref="InvalidOperationException"/> when the edges are not one chain or ring.
+    /// </summary>
+    public static GeometryData.Face FillChain(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
+    {
+        return DrawSegmentsOp.FillChain(mesh, edges);
+    }
+
+    /// <summary>Pulls edges out into strips of faces joining each to a copy in the same place, for the copies to be moved off.</summary>
+    /// <returns>The copied edges.</returns>
+    public static List<GeometryData.Edge> ExtrudeEdgesInPlace(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
+    {
+        return ExtrudeEdgesOp.ExtrudeEdgesInPlace(mesh, edges);
+    }
+
+    /// <summary>Gives each vertex a copy in the same place joined to it by an edge, for the copies to be moved off.</summary>
+    /// <returns>The copies.</returns>
+    public static List<GeometryData.Vertex> ExtrudeVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices)
+    {
+        return ExtrudeEdgesOp.ExtrudeVertices(mesh, vertices);
+    }
+
+    /// <summary>
+    /// Pulls the surface apart along edges as <see cref="SplitEdges"/> does and gives back one side's vertices: the
+    /// copies, or with <paramref name="distance"/> the side whose faces are nearer by it.
+    /// </summary>
+    public static List<GeometryData.Vertex> Rip(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, Func<Float3, float>? distance = null)
+    {
+        return CutOp.Rip(mesh, edges, distance);
+    }
+
+    /// <summary>
+    /// Moves vertices onto the nearest surface along their own normals, either way, within reach, then out by the
+    /// offset. <paramref name="hit"/> gives how far along a world ray the nearest surface is, within a distance, or null.
+    /// </summary>
+    /// <returns>How many vertices moved.</returns>
+    public static int Shrinkwrap(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices, Float4x4 toWorld, Func<Ray, float, float?> hit, float offset, float reach)
+    {
+        return MoveVerticesOp.Shrinkwrap(mesh, vertices, toWorld, hit, offset, reach);
+    }
+
+    /// <summary>
+    /// Moves vertices onto one plane through their middle, facing the way the given faces do on average, or the
+    /// vertices' own normals when no face is given.
+    /// </summary>
+    public static void FlattenVertices(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, IReadOnlyCollection<GeometryData.Face>? facing = null)
+    {
+        MoveVerticesOp.Flatten(mesh, vertices, facing);
+    }
+
+    /// <summary>
+    /// Removes two faces and joins their outlines with a strip of faces, cut into segments along it. Outlines whose
+    /// vertex counts do not fit get vertices added along the shorter one's longest edges first.
+    /// </summary>
+    /// <returns>The strip.</returns>
+    public static List<GeometryData.Face> BridgeFaces(GeometryData mesh, GeometryData.Face first, GeometryData.Face second, int segments = 1)
+    {
+        return TopologyOp.BridgeFaces(mesh, first, second, segments);
+    }
+
+    /// <summary>Takes faces out of a mesh into a mesh of their own, with every attribute. Vertices left with no face are dropped.</summary>
+    public static GeometryData Separate(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces)
+    {
+        return TopologyOp.Separate(mesh, faces);
+    }
+
+    /// <summary>Shades faces smooth, every edge between them soft, or flat, every edge of them sharp.</summary>
+    /// <returns>The vertices of the faces, whose corner normals are now out of date.</returns>
+    public static HashSet<GeometryData.Vertex> Shade(GeometryData mesh, IEnumerable<GeometryData.Face> faces, bool smooth)
+    {
+        return SoftenOp.Shade(mesh, faces, smooth);
+    }
+
+    /// <summary>
+    /// Gives each corner a normal in a loop attribute: the faces round its vertex joined to its face across soft edges,
+    /// averaged by area, so the surface is smooth across soft edges and creased across any other. With
+    /// <paramref name="only"/> only the corners at those vertices.
+    /// </summary>
+    public static void CornerNormals(GeometryData mesh, string attribute, ISet<GeometryData.Vertex>? only = null)
+    {
+        SoftenOp.CornerNormals(mesh, attribute, only);
     }
 
     /// <summary>

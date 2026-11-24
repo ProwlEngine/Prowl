@@ -562,4 +562,59 @@ internal static class TopologyOp
         GeometryOperators.DissolveEdges(mesh, joins);
         return mesh.Faces.Where(f => !before.Contains(f)).ToList();
     }
+
+    internal static List<Face> BridgeFaces(GeometryData mesh, Face first, Face second, int segments)
+    {
+        var a = new HashSet<Vertex>(first.NeighborVertices());
+        var b = new HashSet<Vertex>(second.NeighborVertices());
+        if (a.Overlaps(b)) throw new InvalidOperationException("Faces sharing a vertex cannot be bridged");
+        GeometryOperators.DeleteFaces(mesh, [first, second]);
+
+        // Rings join with quads only when their counts differ by an even number, at most three to one
+        while ((a.Count - b.Count) % 2 != 0 || Math.Max(a.Count, b.Count) > 3 * Math.Min(a.Count, b.Count))
+        {
+            HashSet<Vertex> shorter = a.Count <= b.Count ? a : b;
+            Edge? longest = null;
+            foreach (Edge edge in OpenEdgesOf(mesh, shorter))
+                if (longest == null || Float3.Distance(edge.Vert1.Point, edge.Vert2.Point) > Float3.Distance(longest.Vert1.Point, longest.Vert2.Point)) longest = edge;
+            if (longest == null) throw new InvalidOperationException("An outline to bridge has no edges");
+            shorter.UnionWith(GeometryOperators.SubdivideEdges(mesh, [longest], 1));
+        }
+
+        var edges = new List<Edge>(OpenEdgesOf(mesh, a));
+        edges.AddRange(OpenEdgesOf(mesh, b));
+        List<Face> made = Bridge(mesh, edges);
+        if (segments <= 1 || Rung(made, a, b) is not { } rung) return made;
+
+        // Loops cut across the strip's rungs make the segments, and the strip is every face standing on its vertices
+        var strip = new HashSet<Vertex>(a);
+        strip.UnionWith(b);
+        var before = new HashSet<Vertex>(mesh.Vertices);
+        GeometryOperators.LoopCut(mesh, rung, segments - 1);
+        foreach (Vertex vertex in mesh.Vertices)
+            if (!before.Contains(vertex)) strip.Add(vertex);
+        return [.. mesh.Faces.Where(face => face.NeighborVertices().TrueForAll(strip.Contains))];
+    }
+
+    // An edge of the strip running from one outline to the other
+    private static Edge? Rung(List<Face> strip, HashSet<Vertex> a, HashSet<Vertex> b)
+    {
+        foreach (Face face in strip)
+            foreach (Edge edge in face.NeighborEdges())
+                if (a.Contains(edge.Vert1) && b.Contains(edge.Vert2) || b.Contains(edge.Vert1) && a.Contains(edge.Vert2)) return edge;
+        return null;
+    }
+
+    // The open edges running between vertices of one outline
+    private static List<Edge> OpenEdgesOf(GeometryData mesh, HashSet<Vertex> vertices)
+        => [.. mesh.Edges.Where(e => vertices.Contains(e.Vert1) && vertices.Contains(e.Vert2) && e.NeighborFaces().Count == 1)];
+
+    internal static GeometryData Separate(GeometryData mesh, IReadOnlyCollection<Face> faces)
+    {
+        GeometryData part = GeometryOperators.Extract(mesh, [], [], faces);
+        GeometryOperators.DeleteFaces(mesh, [.. faces]);
+        foreach (Vertex vertex in mesh.Vertices.Where(v => v.NeighborFaces().Count == 0).ToList()) mesh.RemoveVertex(vertex);
+        mesh.MarkChanged();
+        return part;
+    }
 }

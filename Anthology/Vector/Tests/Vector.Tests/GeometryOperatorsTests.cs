@@ -15,6 +15,38 @@ namespace Prowl.Vector.Tests;
 public class GeometryOperatorsTests
 {
     [Fact]
+    public void Shrinkwrap_MovesVerticesOntoTheNearestSurfaceAlongTheirNormals()
+    {
+        GeometryData mesh = GeometryGenerator.Plane(new Float2(2f, 1f), default, new Int2(2, 1));
+        float? Hit(Ray ray, float reach)
+        {
+            // A floor at y = -0.5
+            if (MathF.Abs(ray.Direction.Y) < 1e-6f) return null;
+            float t = (-0.5f - ray.Origin.Y) / ray.Direction.Y;
+            return t >= 0f && t <= reach ? t : null;
+        }
+
+        int moved = GeometryOperators.Shrinkwrap(mesh, [.. mesh.Vertices], Float4x4.Identity, Hit, 0.01f, 1f);
+
+        Assert.Equal(mesh.Vertices.Count, moved);
+        Assert.All(mesh.Vertices, v => Assert.Equal(-0.49f, v.Point.Y, 4));
+    }
+
+    [Fact]
+    public void Separate_MovesFacesIntoAMeshOfTheirOwn()
+    {
+        GeometryData mesh = GeometryGenerator.Box(new Float3(1f));
+        GeometryData.Face top = mesh.Faces.First(f => f.Normal().Y > 0.99f);
+
+        GeometryData part = GeometryOperators.Separate(mesh, [top]);
+
+        Assert.Equal(5, mesh.Faces.Count);
+        Assert.Single(part.Faces);
+        Assert.Equal(4, part.Vertices.Count);
+        Assert.True(part.Faces[0].Normal().Y > 0.99f);
+        Assert.Equal(8, mesh.Vertices.Count);
+    }
+    [Fact]
     public void Clone_IsAWholeSeparateCopy()
     {
         GeometryData mesh = GeometryGenerator.Box(new Float3(2f));

@@ -292,4 +292,30 @@ internal static class CutOp
         mesh.MarkChanged();
         return targets.Count;
     }
+
+    internal static List<Vertex> Rip(GeometryData mesh, IReadOnlyCollection<Edge> edges, Func<Float3, float>? distance)
+    {
+        if (edges.Count == 0) throw new InvalidOperationException("There are no edges to rip along");
+        var originals = new HashSet<Vertex>();
+        foreach (Edge edge in edges) originals.UnionWith([edge.Vert1, edge.Vert2]);
+        var made = new HashSet<Vertex>(SplitEdges(mesh, edges));
+        mesh.MarkChanged();
+        return [.. distance != null && SideDistance(originals, distance) < SideDistance(made, distance) ? originals : made];
+    }
+
+    // How far the middle of the faces on one side of a rip is, leaving out the vertices of the side itself
+    private static float SideDistance(HashSet<Vertex> side, Func<Float3, float> distance)
+    {
+        Float3 sum = Float3.Zero;
+        int count = 0;
+        foreach (Vertex vertex in side)
+            foreach (Face face in vertex.NeighborFaces())
+                foreach (Vertex corner in face.NeighborVertices())
+                {
+                    if (side.Contains(corner)) continue;
+                    sum += corner.Point;
+                    count++;
+                }
+        return count > 0 ? distance(sum / count) : float.PositiveInfinity;
+    }
 }
