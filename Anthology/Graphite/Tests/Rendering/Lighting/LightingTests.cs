@@ -307,6 +307,8 @@ public sealed partial class LightingTests : IDisposable
     {
         (_device, _framebuffer, _renderer, _world, _errors) = (_harness.Device, _harness.Framebuffer, _harness.Renderer, _harness.World, _harness.Errors);
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default };
+        // The MAX tier is the one these tests describe: energy compensated lobes, exact Fresnel, rough diffuse and the sun as a disk
+        _world.Globals.Set(GlobalAxis.PbrTier, "MAX");
         _shader = _renderer.LoadShader(ShaderParser.Parse(Source));
         _quad = _harness.CreateQuad(normals: true);
     }
