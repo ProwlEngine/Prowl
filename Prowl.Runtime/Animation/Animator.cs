@@ -310,7 +310,7 @@ public class Animator : Component
         _autoPlayPending = false;
         if (_clips != null && Resolve(clip) is { } runtime)
         {
-            _clips.Play(runtime, clip.Loop);
+            _clips.Play(runtime, loop: clip.Loop);
             _pending = null;
         }
     }
@@ -331,7 +331,7 @@ public class Animator : Component
 
         CurrentClip = clip;
         _autoPlayPending = false;
-        _clips.CrossFade(runtime, seconds, clip.Loop);
+        _clips.CrossFade(runtime, fadeDuration: seconds, loop: clip.Loop);
     }
 
     /// <summary>Advances the animation and pushes the pose onto the hierarchy.</summary>
@@ -466,7 +466,7 @@ public class Animator : Component
         }
         if (Resolve(_pending) is not { } runtime) return;
 
-        _clips!.Play(runtime, _pending.Loop);
+        _clips!.Play(runtime, loop: _pending.Loop);
         _pending = null;
     }
 

@@ -247,7 +247,7 @@ Shader "Default/Particle"
         }
         Fragment
         {
-            #pragma variant global PBR_TIER FULL LITE
+            #pragma variant global PBR_TIER FULL LITE MAX
             #include "Graphite/PBR/Closure.glsl"
             #include "Graphite/SceneDepth.glsl"
 

@@ -19,7 +19,7 @@ public class QualitySettings : ProjectSettingsBase
     public List<QualityLevel> Levels = Runtime.QualitySettings.CreateDefaults();
     public int Active = 2;
 
-    private static readonly string[] s_tiers = ["Full", "Lite"];
+    private static readonly string[] s_tiers = ["Full", "Lite", "Max"];
 
     public override void Apply() => Runtime.QualitySettings.Set(Levels, Active);
 

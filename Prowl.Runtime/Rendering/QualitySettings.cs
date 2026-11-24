@@ -9,11 +9,16 @@ using Prowl.Graphite.Rendering;
 
 namespace Prowl.Runtime;
 
-/// <summary>The standard surfaces' shading: every lobe, or the mobile tier that lights coat and fuzz from ambient light only and drops thin film and anisotropy.</summary>
+/// <summary>
+/// The standard surfaces' shading. Full lights every lobe with Schlick's Fresnel, Lambert diffuse and the sun as a point.
+/// Lite is the mobile tier: it also lights coat and fuzz from ambient light only and drops thin film, anisotropy and
+/// specular antialiasing. Max adds energy compensation, exact Fresnel, rough diffuse and the sun lit as a disk.
+/// </summary>
 public enum PbrTier
 {
     Full,
     Lite,
+    Max,
 }
 
 /// <summary>One named set of rendering quality, which <see cref="QualitySettings"/> applies to every camera, light and scene.</summary>
@@ -60,7 +65,7 @@ public static class QualitySettings
         new() { Name = "Low", PbrTier = PbrTier.Lite, RenderScale = 0.8f, ShadowDistance = 30f, ShadowCascades = ShadowCascades.One, MaxShadowResolution = ShadowResolution._512, MaxProbeResolution = 64 },
         new() { Name = "Medium", PbrTier = PbrTier.Lite, ShadowDistance = 50f, ShadowCascades = ShadowCascades.Two, MaxShadowResolution = ShadowResolution._1024, MaxProbeResolution = 128 },
         new() { Name = "High" },
-        new() { Name = "Ultra", ShadowDistance = 150f, MaxShadowResolution = ShadowResolution._4096, MaxProbeResolution = 512 },
+        new() { Name = "Ultra", PbrTier = PbrTier.Max, ShadowDistance = 150f, MaxShadowResolution = ShadowResolution._4096, MaxProbeResolution = 512 },
     ];
 
     /// <summary>Every level, in order. Change them through <see cref="Set"/>.</summary>
@@ -114,5 +119,5 @@ public static class QualitySettings
 
     /// <summary>Sets the renderer's global shader axes from the level in use. Runs again once the renderer exists.</summary>
     internal static void ApplyGlobals()
-        => Graphics.Renderer?.Globals.Set(GlobalAxis.PbrTier, Active.PbrTier == PbrTier.Lite ? "LITE" : "FULL");
+        => Graphics.Renderer?.Globals.Set(GlobalAxis.PbrTier, Active.PbrTier switch { PbrTier.Lite => "LITE", PbrTier.Max => "MAX", _ => "FULL" });
 }
