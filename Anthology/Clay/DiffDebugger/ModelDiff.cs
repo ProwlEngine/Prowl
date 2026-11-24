@@ -49,6 +49,10 @@ internal static class ModelDiff
         Console.WriteLine("== Skin / inverse-bind translations per bone (normalized name) ==");
         DiffSkins(modelA, modelB, tagA, tagB);
 
+        Console.WriteLine();
+        Console.WriteLine("== Keyframe differences (per clip / bone / property) ==");
+        DiffKeyframes(modelA, modelB, tagA, tagB);
+
         return 0;
     }
 
@@ -113,7 +117,7 @@ internal static class ModelDiff
                 if (b.NodeIndex < 0 || b.NodeIndex >= model.Nodes.Count) continue;
                 string name = Normalize(model.Nodes[b.NodeIndex].Name);
                 byBone.TryGetValue(name, out var entry);
-                int keys = b.Curve.Times.Length;
+                int keys = b.Curve.GetTimes().Length;
                 switch (b.Property)
                 {
                     case AnimatedProperty.Position: entry = (1, entry.R, entry.S, keys, entry.Rkeys, entry.Skeys); break;
@@ -189,6 +193,142 @@ internal static class ModelDiff
                 };
                 result[name] = e;
             }
+        }
+        return result;
+    }
+
+    private const float KeyTimeEpsilon = 1e-3f;
+    private const float KeyValueEpsilon = 1e-3f;   // position / scale, per-component distance
+    private const float KeyRotEpsilonDeg = 0.1f;   // rotation, angle between quaternions
+
+    private static void DiffKeyframes(Model a, Model b, string tagA, string tagB)
+    {
+        var clipsA = BuildKeyMap(a);
+        var clipsB = BuildKeyMap(b);
+
+        int differ = 0;
+        if (a.AnimationClips.Count == 1 && b.AnimationClips.Count == 1)
+        {
+            // Each model only has one clip, so compare them.
+            if (a.AnimationClips[0].Name != b.AnimationClips[0].Name)
+                Console.WriteLine($"Both models have one animation clip, but they have different names ('{a.AnimationClips[0].Name}' and '{b.AnimationClips[0].Name}').");
+            differ += DiffKeyframes("", clipsA.Values.Single(), clipsB.Values.Single(), tagA, tagB);
+        }
+        else
+        {
+            var allClips = new HashSet<string>(clipsA.Keys, StringComparer.Ordinal);
+            allClips.UnionWith(clipsB.Keys);
+
+            foreach (var clipName in allClips.OrderBy(s => s, StringComparer.Ordinal))
+            {
+                bool hasA = clipsA.TryGetValue(clipName, out var mapA);
+                bool hasB = clipsB.TryGetValue(clipName, out var mapB);
+                if (mapA is null || mapB is null)
+                {
+                    Console.WriteLine($"  clip '{clipName}' only in {(hasA ? tagA : tagB)}");
+                    differ++;
+                    continue;
+                }
+                differ += DiffKeyframes(clipName, mapA, mapB, tagA, tagB);
+            }
+        }
+        
+
+        if (differ == 0) Console.WriteLine("  (no keyframe differences after normalization)");
+    }
+
+    private static int DiffKeyframes(string clipName,
+        Dictionary<(string Bone, AnimatedProperty Prop), AnimationCurve> mapA,
+        Dictionary<(string Bone, AnimatedProperty Prop), AnimationCurve> mapB,
+        string tagA, string tagB)
+    {
+
+        var allKeys = new HashSet<(string Bone, AnimatedProperty Prop)>(mapA.Keys);
+        allKeys.UnionWith(mapB.Keys);
+
+        int differ = 0;
+        foreach (var key in allKeys.OrderBy(k => k.Bone, StringComparer.Ordinal).ThenBy(k => k.Prop))
+        {
+            bool ka = mapA.TryGetValue(key, out var curveA);
+            bool kb = mapB.TryGetValue(key, out var curveB);
+            string label = $"  {(!string.IsNullOrEmpty(clipName) ? $"[{clipName}] " : null)}{key.Bone,-30} {key.Prop,-8}";
+
+            if (curveA is null || curveB is null)
+            {
+                var present = ka ? curveA : curveB;
+                Console.WriteLine($"{label} | only in {(ka ? tagA : tagB)} ({present!.GetTimes().Length} keys)");
+                differ++;
+                continue;
+            }
+
+            int countA = curveA.GetTimes().Length;
+            int countB = curveB.GetTimes().Length;
+            if (countA != countB)
+            {
+                Console.WriteLine($"{label} | key count {tagA}={countA} {tagB}={countB}"
+                    + $" | duration {tagA}={curveA.Duration:F3}s {tagB}={curveB.Duration:F3}s");
+                differ++;
+                continue;
+            }
+
+            // Same count: compare each keyframe's time and value.
+            int badTime = 0, badValue = 0, firstBad = -1;
+            float maxTimeDelta = 0f, maxValueDelta = 0f;
+            for (int i = 0; i < countA; i++)
+            {
+                var kfA = curveA[i];
+                var kfB = curveB[i];
+
+                float dt = MathF.Abs(kfA.Time - kfB.Time);
+                float dv = key.Prop == AnimatedProperty.Rotation
+                    ? Quaternion.Angle(new Quaternion(kfA.Value4), new Quaternion(kfB.Value4)) * Maths.Rad2Deg
+                    : Float3.Distance(kfA.Value3, kfB.Value3);
+                float valueEps = key.Prop == AnimatedProperty.Rotation ? KeyRotEpsilonDeg : KeyValueEpsilon;
+
+                bool timeBad = dt > KeyTimeEpsilon;
+                bool valueBad = dv > valueEps;
+                if (timeBad) badTime++;
+                if (valueBad) badValue++;
+                if ((timeBad || valueBad) && firstBad < 0) firstBad = i;
+                if (dt > maxTimeDelta) maxTimeDelta = dt;
+                if (dv > maxValueDelta) maxValueDelta = dv;
+            }
+
+            if (firstBad >= 0)
+            {
+                static string Fmt3(Float3 v) => $"({v.X:F3},{v.Y:F3},{v.Z:F3})";
+                static string Fmt4(Float4 v) => $"({v.X:F3},{v.Y:F3},{v.Z:F3},{v.W:F3})";
+
+                var fa = curveA[firstBad];
+                var fb = curveB[firstBad];
+                string valA = key.Prop == AnimatedProperty.Rotation ? Fmt4(fa.Value4) : Fmt3(fa.Value3);
+                string valB = key.Prop == AnimatedProperty.Rotation ? Fmt4(fb.Value4) : Fmt3(fb.Value3);
+                string unit = key.Prop == AnimatedProperty.Rotation ? "deg" : "units";
+
+                Console.WriteLine($"{label} | {countA} keys: {badTime} time / {badValue} value mismatches"
+                    + $" (max dt={maxTimeDelta:F4}s, max dv={maxValueDelta:F4}{unit})");
+                Console.WriteLine($"{new string(' ', 4)}first at key {firstBad}:"
+                    + $" {tagA}: t={fa.Time:F4} v={valA} | {tagB}: t={fb.Time:F4} v={valB}");
+                differ++;
+            }
+        }
+        return differ;
+    }
+
+    /// <summary>clip name -> (normalized bone, property) -> curve.</summary>
+    private static Dictionary<string, Dictionary<(string Bone, AnimatedProperty Prop), AnimationCurve>> BuildKeyMap(Model model)
+    {
+        var result = new Dictionary<string, Dictionary<(string, AnimatedProperty), AnimationCurve>>(StringComparer.Ordinal);
+        foreach (var clip in model.AnimationClips)
+        {
+            var perClip = new Dictionary<(string, AnimatedProperty), AnimationCurve>();
+            foreach (var b in clip.Bindings)
+            {
+                if (b.NodeIndex < 0 || b.NodeIndex >= model.Nodes.Count) continue;
+                string name = Normalize(model.Nodes[b.NodeIndex].Name);
+                perClip[(name, b.Property)] = b.Curve;
+            }
+            result[clip.Name] = perClip;
         }
         return result;
     }
