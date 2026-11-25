@@ -405,11 +405,8 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 0.5f, 1), pixels, Centre);
     }
 
-    [Theory]
-    [InlineData(null, 0f, 0.5f, 1f)]
-    [InlineData("ALBEDO", 0f, 0.5f, 1f)]
-    [InlineData("NORMALS", 0.5f, 0.5f, 0.5f)]
-    public void DebugViews_DrawSurfacesThroughTheirDebugPass_WithTheSurfaceFunction(string? mode, float r, float g, float b)
+    [Fact]
+    public void ASurfaceFunction_ChangesWhatTheSurfaceShows()
     {
         Shader shader = _renderer.LoadShader(ShaderParser.Parse("""
             Shader "Tests/DebugBlue"
@@ -428,11 +425,7 @@ public sealed class FeatureTests : IDisposable
         material.SetFloat("emission_luminance", UnitNits);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
 
-        RenderView view = View();
-        if (mode != null)
-            view.Keywords = [GlobalAxis.Debug[mode]];
-        Float4[] pixels = Frame(view);
-        AssertAll(new Float3(r, g, b), pixels, Centre);
+        AssertAll(new Float3(0, 0.5f, 1), Frame(View()), Centre);
     }
 
     [Fact]

@@ -12,7 +12,6 @@
 // through by transmission or thin walled subsurface, dither their coverage by what they let through.
 // GRAPHITE_STANDARD_GBUFFER: with the forward define, the GBuffer pass, which keeps the surface for a deferred view's
 // lighting in place of lighting it. See Graphite/GBuffer.glsl.
-// GRAPHITE_STANDARD_DEBUG: with the forward define, the Debug pass, showing the view's GRAPHITE_DEBUG value. See Graphite/Debug.glsl.
 // GRAPHITE_STANDARD_IMPOSTOR: the Impostor pass, writing the surface's material into an impostor bake's three targets.
 // Model define: GRAPHITE_STANDARD_UNLIT for no lighting, which Graphite/Standard/UnlitSurface.glsl defines, else the PBR
 // model, Graphite/PBR/Closure.glsl.
@@ -89,9 +88,6 @@
     #endif
     #if defined(GRAPHITE_STANDARD_FORWARD)
         #include "Graphite/Passes.glsl"
-    #endif
-    #ifdef GRAPHITE_STANDARD_DEBUG
-        #include "Graphite/Debug.glsl"
     #endif
     #ifdef GRAPHITE_STANDARD_IMPOSTOR
         #include "Graphite/Octahedral.glsl"

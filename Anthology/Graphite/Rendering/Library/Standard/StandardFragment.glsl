@@ -75,9 +75,6 @@ void Graphite_StandardFragment()
     Graphite_WriteMotion(graphite_MotionPrevious);
 #else
     vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(emission * Graphite_Exposure(), vRelativePos));
-#ifdef GRAPHITE_STANDARD_DEBUG
-    color = Graphite_DebugView(color, p.baseColor, vec3(0.0), 1.0, 0.0, 1.0, emission, vRelativePos, vec2(0.0));
-#endif
 #ifdef _SURFACE_TRANSPARENT
     fragColor = vec4(color, p.alpha);
 #else
@@ -150,9 +147,6 @@ void Graphite_StandardFragment()
     if (p.geometryOpacity < alpha_cutoff)
         discard;
 #endif
-#ifdef GRAPHITE_STANDARD_DEBUG
-    Graphite_DebugInputs(p.baseColor, p.baseMetalness);
-#endif
 
     Graphite_LightIterator lights = Graphite_BeginLights(vRelativePos);
     Graphite_ShadowLights(lights, vRelativePos, i.geometryNormal);
@@ -168,18 +162,10 @@ void Graphite_StandardFragment()
     PBR_Indirect indirect = PBR_GatherIndirect(c, vLightmapUV, probes, vAmbient);
     vec3 ambient = Graphite_AmbientBRDF(c, indirect);
     vec3 transmitted = vec3(0.0);
-    vec3 transmittedWhite = vec3(0.0);
-    float pathLength = 0.0;
 #ifdef PBR_TRANSMISSION
-    PBR_Transmitted behind = PBR_GatherTransmitted(c, p, probes);
-    transmitted = PBR_Transmittance(c) * behind.light;
-    transmittedWhite = PBR_Transmittance(c) * behind.throughput;
-    pathLength = behind.pathLength;
+    transmitted = PBR_Transmittance(c) * PBR_GatherTransmitted(c, p, probes).light;
 #endif
     vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(direct + ambient + transmitted + c.emission * Graphite_Exposure(), vRelativePos));
-#ifdef GRAPHITE_STANDARD_DEBUG
-    color = PBR_DebugView(color, p, c, direct, ambient, indirect, vLightmapUV, transmitted, transmittedWhite, pathLength);
-#endif
 #if defined(_SURFACE_TRANSPARENT) || defined(PBR_TRANSMISSION)
     fragColor = vec4(color * c.opacity, c.opacity);
 #ifdef PBR_TRANSMISSION

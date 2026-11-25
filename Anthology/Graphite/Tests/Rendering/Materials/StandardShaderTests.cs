@@ -47,7 +47,7 @@ public sealed class StandardShaderTests : IDisposable
 
     private static string Keyword(Material material, string axis) => material.Get(material.Shader.Axis(axis));
 
-    // Every surface at both tiers, the Debug pass at every view it shows
+    // Every surface at every tier
     public static IEnumerable<object[]> Variants()
     {
         foreach (string shader in new[] { "Lit", "Unlit" })
@@ -67,16 +67,7 @@ public sealed class StandardShaderTests : IDisposable
         Shader loaded = shader == "Lit" ? _pbr : _unlit;
         List<(ShaderPass, Keyword[])> variants = [];
         foreach (ShaderPass pass in loaded.Definition.Passes!)
-        {
-            IReadOnlyList<string> views = _compiler.GetAxes(pass).Where(a => a.Name == GlobalAxis.Debug.Name).Select(a => a.Values).FirstOrDefault() ?? [""];
-            foreach (string view in views)
-            {
-                List<Keyword> combo = [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier)];
-                if (view.Length > 0)
-                    combo.Add(new Keyword(GlobalAxis.Debug.Name, view));
-                variants.Add((pass, [.. combo]));
-            }
-        }
+            variants.Add((pass, [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier)]));
         CompileAll(variants);
     }
 
@@ -122,7 +113,7 @@ public sealed class StandardShaderTests : IDisposable
         }
         """;
 
-    private static readonly string[] s_pbrPasses = ["Forward", "GBuffer", "Transmission", "BackDepth", "Prepass", "ShadowCaster", "Voxelize", "Impostor", "Debug"];
+    private static readonly string[] s_pbrPasses = ["Forward", "GBuffer", "Transmission", "BackDepth", "Prepass", "ShadowCaster", "Voxelize", "Impostor"];
 
     [Theory]
     [InlineData("OPAQUE")]
@@ -177,14 +168,10 @@ public sealed class StandardShaderTests : IDisposable
 
         foreach (ShaderPass pass in definition.Passes!)
         {
-            bool lit = pass.Name is "Forward" or "Debug" or "Transmission";
+            bool lit = pass.Name is "Forward" or "Transmission";
             Assert.Equal(lit, pass.Source.Contains("#define GRAPHITE_CUSTOM_BRDF"));
             Assert.Equal(lit, pass.Source.Contains("float ramp"));
-
-            List<Keyword> combo = [new Keyword("_SURFACE", surface)];
-            if (pass.Name == "Debug")
-                combo.Add(new Keyword(GlobalAxis.Debug.Name, "DIFFUSE"));
-            _compiler.CompileProgram(pass, [.. combo]);
+            _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface)]);
         }
     }
 
@@ -224,7 +211,7 @@ public sealed class StandardShaderTests : IDisposable
     public void SurfaceVertex_RunsInEveryPass_AndCompiles(string model, string surface)
     {
         ShaderDefinition definition = new Shader(ShaderParser.Parse(WaveSource(model)), _compiler).Definition;
-        Assert.Equal(model == "Lit" ? s_pbrPasses : ["Forward", "GBuffer", "Prepass", "ShadowCaster", "Voxelize", "Debug"], definition.Passes!.Select(p => p.Name));
+        Assert.Equal(model == "Lit" ? s_pbrPasses : ["Forward", "GBuffer", "Prepass", "ShadowCaster", "Voxelize"], definition.Passes!.Select(p => p.Name));
 
         foreach (ShaderPass pass in definition.Passes!)
         {
@@ -356,10 +343,7 @@ public sealed class StandardShaderTests : IDisposable
 
         foreach (ShaderPass pass in definition.Passes!)
         {
-            List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE")];
-            if (pass.Name == "Debug")
-                combo.Add(new Keyword(GlobalAxis.Debug.Name, "LIGHTING"));
-            _compiler.CompileProgram(pass, [.. combo]);
+            _compiler.CompileProgram(pass, [new Keyword("_SURFACE", "OPAQUE")]);
         }
     }
 
@@ -431,11 +415,11 @@ public sealed class StandardShaderTests : IDisposable
         Assert.Equal([.. s_lobes.Append("_SURFACE").Append("PBR_TRANSMISSION").Append("PBR_PARALLAX").Order(StringComparer.Ordinal)], _pbr.MaterialAxes.Select(a => a.Name).Order(StringComparer.Ordinal));
         foreach (ShaderPass pass in _pbr.Definition.Passes!)
         {
-            bool lit = pass.Name is "Forward" or "Debug" or "Transmission";
+            bool lit = pass.Name is "Forward" or "Transmission";
             bool shadow = pass.Name == "ShadowCaster";
             foreach (string lobe in s_lobes)
                 Assert.Equal(lit || (shadow && s_shadowAxes.Contains(lobe)), _compiler.GetAxes(pass).Any(a => a.Name == lobe));
-            Assert.Equal(pass.Name == "Debug" || shadow, _compiler.GetAxes(pass).Any(a => a.Name == "PBR_TRANSMISSION"));
+            Assert.Equal(shadow, _compiler.GetAxes(pass).Any(a => a.Name == "PBR_TRANSMISSION"));
             Assert.Contains(_compiler.GetAxes(pass), a => a.Name == "PBR_PARALLAX");
         }
         Assert.Contains(_pbr.GlobalAxes, a => a.Name == "PBR_TIER" && a.Values.SequenceEqual(["FULL", "LITE", "MAX"]));
@@ -506,13 +490,12 @@ public sealed class StandardShaderTests : IDisposable
         Assert.Equal(FaceCullMode.None, plain.Draw.StateOverride!.Raster.CullMode);
     }
 
-    // Every combination of lobes, subsurface and thin walled at both tiers, the forward pass and the debug pass at its lobe views
+    // Every combination of Lit's lobe axes at every tier in the forward and transmission passes
     [Fact]
     public void EveryLobeCombination_Compiles()
     {
         ShaderPass forward = _pbr.Definition.Passes!.First(p => p.Name == "Forward");
         ShaderPass transmission = _pbr.Definition.Passes!.First(p => p.Name == "Transmission");
-        ShaderPass debug = _pbr.Definition.Passes!.First(p => p.Name == "Debug");
         List<(ShaderPass, Keyword[])> variants = [];
         foreach (string tier in new[] { "FULL", "LITE", "MAX" })
         {
@@ -523,14 +506,6 @@ public sealed class StandardShaderTests : IDisposable
                     combo.Add(new Keyword(s_lobes[i], (mask & (1 << i)) != 0 ? "true" : "false"));
                 variants.Add((forward, [.. combo]));
                 variants.Add((transmission, [.. combo]));
-                if (mask == 0 || mask == (1 << s_lobes.Length) - 1)
-                {
-                    foreach (string transmits in new[] { "false", "true" })
-                    {
-                        foreach (string view in new[] { "DIFFUSE", "SPECULAR", "FURNACE", "COAT", "FUZZ", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS" })
-                            variants.Add((debug, [.. combo, new Keyword("PBR_TRANSMISSION", transmits), new Keyword(GlobalAxis.Debug.Name, view)]));
-                    }
-                }
             }
         }
         ShaderPass backDepth = _pbr.Definition.Passes!.First(p => p.Name == "BackDepth");
@@ -556,7 +531,7 @@ public sealed class StandardShaderTests : IDisposable
         Assert.Equal("false", Keyword(material, "PBR_PARALLAX"));
     }
 
-    // Every pass with parallax on, at every surface and both tiers, with the lobes, the shadow axes and the Debug pass's views beside
+    // Every pass with parallax on, at every surface and every tier, with the lobe and shadow axes beside
     [Fact]
     public void EveryParallaxVariant_Compiles()
     {
@@ -572,13 +547,7 @@ public sealed class StandardShaderTests : IDisposable
                         List<Keyword> combo = [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier), new Keyword("PBR_PARALLAX", "true")];
                         foreach (string axis in s_lobes.Append("PBR_TRANSMISSION"))
                             combo.Add(new Keyword(axis, all ? "true" : "false"));
-                        if (pass.Name == "Debug")
-                        {
-                            foreach (string view in new[] { "ALBEDO", "NORMALS", "LIGHTING" })
-                                variants.Add((pass, [.. combo, new Keyword(GlobalAxis.Debug.Name, view)]));
-                        }
-                        else
-                            variants.Add((pass, [.. combo]));
+                        variants.Add((pass, [.. combo]));
                     }
                 }
             }

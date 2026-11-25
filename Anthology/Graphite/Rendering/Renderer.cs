@@ -437,7 +437,7 @@ public sealed class Renderer : IDisposable
 
     /// <summary>
     /// Starts compiling the variants a material draws with at background priority, so they are ready before it first
-    /// draws. Global axes take their value from the keywords, else their first value. Debug views compile on demand. Host thread.
+    /// draws. Global axes take their value from the keywords, else their first value. Host thread.
     /// </summary>
     public void Prewarm(Material material, params ReadOnlySpan<GlobalKeyword> keywords)
     {
@@ -446,8 +446,6 @@ public sealed class Renderer : IDisposable
         (Shader shader, Keyword[] combo) = Combo(material, keywords);
         foreach (ShaderPass pass in shader.Definition.Passes ?? [])
         {
-            if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Debug.Name))
-                continue;
             PassVariants variants = pass.Variants(_compiler, Device.BackendType);
             variants.Request(variants.KeyOf(combo), CompilePolicy.Async, CompilePriority.Background, out _, out _);
         }

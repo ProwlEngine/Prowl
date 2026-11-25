@@ -284,37 +284,5 @@ Shader "Graphite/Lit"
         ENDGLSL
     }
 
-    Pass
-    {
-        Name "Debug"
-        Tags { "LightMode" = "Debug" "Output" = "Premultiplied" }
-        GLSLPROGRAM
-        Shared
-        {
-            #define GRAPHITE_STANDARD_FORWARD
-            #define GRAPHITE_STANDARD_DEBUG
-            #pragma variant global PBR_TIER FULL LITE MAX
-            #pragma variant PBR_THIN_WALLED
-            #pragma variant PBR_TRANSMISSION
-            #pragma variant PBR_PARALLAX
-            #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY DIFFUSE SPECULAR SPECULAR_ALBEDO THROUGHPUT DIRECT INDIRECT FURNACE COAT FUZZ DARKENING SUBSURFACE BACK TRANSMISSION THICKNESS
-            #pragma surface_lighting
-            #include "Graphite/Standard/PBRSurface.glsl"
-        }
-        Vertex
-        {
-            #pragma surface_vertex
-            #include "Graphite/Standard/StandardVertex.glsl"
-            void main() { Graphite_StandardVertex(); }
-        }
-        Fragment
-        {
-            #pragma surface
-            #include "Graphite/Standard/StandardFragment.glsl"
-            void main() { Graphite_StandardFragment(); }
-        }
-        ENDGLSL
-    }
-
     Fallback "Graphite/Fallback"
 }

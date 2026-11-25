@@ -436,10 +436,10 @@ public sealed class BucketTests : IDisposable
         int ids = _programs.Count;
 
         // Each switch takes the new variant's ids and frees the old ones at the next sweep, and passes without the axis
-        // keep one id. The Debug pass draws through its Forward pass's id.
+        // keep one id.
         int reading = 0;
         for (int p = 0; p < _lit.Definition.Passes!.Length; p++)
-            reading += _lit.PassHasAxis(p, "_NORMALMAP") && p != _lit.PassIndex(PassType.Debug) ? 1 : 0;
+            reading += _lit.PassHasAxis(p, "_NORMALMAP") ? 1 : 0;
         for (int i = 0; i < 4; i++)
         {
             material.Set(material.Shader.Axis("_NORMALMAP"), i % 2 == 0);

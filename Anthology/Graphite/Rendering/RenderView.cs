@@ -217,7 +217,7 @@ public sealed class RenderView : IDisposable
     /// <summary>Features of this view alone, over the world's.</summary>
     public ExtensionSet<RenderFeature>? Features { get; set; }
 
-    /// <summary>Values of global axes for this view alone, over the world's, such as GlobalAxis.Debug["ALBEDO"]. Copied at SubmitFrame.</summary>
+    /// <summary>Values of global axes for this view alone, over the world's, such as GlobalAxis.PbrTier["LITE"]. Copied at SubmitFrame.</summary>
     public GlobalKeyword[]? Keywords { get; set; }
 
     /// <summary>Views draw lowest Order first, each after the views it depends on.</summary>

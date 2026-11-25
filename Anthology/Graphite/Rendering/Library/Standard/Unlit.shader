@@ -141,32 +141,5 @@ Shader "Graphite/Unlit"
         ENDGLSL
     }
 
-    Pass
-    {
-        Name "Debug"
-        Tags { "LightMode" = "Debug" }
-        GLSLPROGRAM
-        Shared
-        {
-            #define GRAPHITE_STANDARD_FORWARD
-            #define GRAPHITE_STANDARD_DEBUG
-            #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
-            #include "Graphite/Standard/UnlitSurface.glsl"
-        }
-        Vertex
-        {
-            #pragma surface_vertex
-            #include "Graphite/Standard/StandardVertex.glsl"
-            void main() { Graphite_StandardVertex(); }
-        }
-        Fragment
-        {
-            #pragma surface
-            #include "Graphite/Standard/StandardFragment.glsl"
-            void main() { Graphite_StandardFragment(); }
-        }
-        ENDGLSL
-    }
-
     Fallback "Graphite/Fallback"
 }

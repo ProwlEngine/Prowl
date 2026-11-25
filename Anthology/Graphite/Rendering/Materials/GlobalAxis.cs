@@ -15,11 +15,6 @@ public sealed class GlobalAxis
     private static readonly Dictionary<string, GlobalAxis> s_defined = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, List<(string Shader, IReadOnlyList<string> Values)>> s_declared = new(StringComparer.Ordinal);
 
-    /// <summary>The debug view a view draws, see Graphite/Debug.glsl. Shaders may declare fewer of its values.</summary>
-    public static readonly GlobalAxis Debug = Define("GRAPHITE_DEBUG", "UNLIT", "ALBEDO", "NORMALS", "ROUGHNESS", "METALLIC", "AO", "EMISSION", "LIGHTING",
-        "CASCADES", "LIGHTMAP_DENSITY", "DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "THROUGHPUT", "DIRECT", "INDIRECT", "FURNACE", "COAT", "FUZZ",
-        "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS");
-
     /// <summary>
     /// The standard surfaces' quality: FULL, LITE for mobile, or MAX for energy compensated lobes, exact Fresnel, rough
     /// diffuse and the sun lit as a disk. See Graphite/PBR/Closure.glsl.
@@ -172,7 +167,7 @@ public sealed class GlobalAxis
     public override string ToString() => Name;
 }
 
-/// <summary>A value of a global axis, from the axis's indexer, such as GlobalAxis.Debug["ALBEDO"].</summary>
+/// <summary>A value of a global axis, from the axis's indexer, such as GlobalAxis.PbrTier["LITE"].</summary>
 public readonly struct GlobalKeyword : IEquatable<GlobalKeyword>
 {
     internal GlobalKeyword(GlobalAxis axis, string value)

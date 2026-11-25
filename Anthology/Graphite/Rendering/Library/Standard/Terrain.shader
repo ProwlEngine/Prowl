@@ -253,43 +253,5 @@ Shader "Graphite/Terrain"
         ENDGLSL
     }
 
-    Pass
-    {
-        Name "Debug"
-        Tags { "LightMode" = "Debug" "Output" = "Premultiplied" }
-        GLSLPROGRAM
-        Shared
-        {
-            #define GRAPHITE_STANDARD_FORWARD
-            #define GRAPHITE_STANDARD_DEBUG
-            #define GRAPHITE_STANDARD_INPUTS Terrain_Inputs
-            #define GRAPHITE_STANDARD_FINISH Terrain_Brush
-            #pragma variant TERRAIN_HOLES
-            #pragma variant global PBR_TIER FULL LITE MAX
-            #pragma variant PBR_COAT
-            #pragma variant PBR_FUZZ
-            #pragma variant PBR_ANISOTROPY
-            #pragma variant PBR_SUBSURFACE
-            #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY DIFFUSE SPECULAR SPECULAR_ALBEDO THROUGHPUT DIRECT INDIRECT FURNACE COAT FUZZ DARKENING SUBSURFACE BACK TRANSMISSION THICKNESS
-            #pragma surface_lighting
-            #include "Graphite/Standard/PBRSurface.glsl"
-            #include "Graphite/Terrain/Terrain.glsl"
-        }
-        Vertex
-        {
-            #pragma surface_vertex
-            #include "Graphite/Terrain/TerrainVertex.glsl"
-            void main() { Terrain_Vertex(); }
-        }
-        Fragment
-        {
-            #include "Graphite/Terrain/TerrainFragment.glsl"
-            #pragma surface
-            #include "Graphite/Standard/StandardFragment.glsl"
-            void main() { Terrain_ClipHoles(); Graphite_StandardFragment(); }
-        }
-        ENDGLSL
-    }
-
     Fallback "Graphite/Fallback"
 }

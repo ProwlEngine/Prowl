@@ -16,9 +16,6 @@
     #ifdef PBR_TRANSMISSION
         #include "Graphite/PBR/Transmission.glsl"
     #endif
-    #ifdef GRAPHITE_STANDARD_DEBUG
-        #include "Graphite/PBR/Debug.glsl"
-    #endif
     #ifdef GRAPHITE_STANDARD_GBUFFER
         #include "Graphite/PBR/GBuffer.glsl"
     #endif

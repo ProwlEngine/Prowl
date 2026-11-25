@@ -31,9 +31,6 @@ public readonly record struct PassType(string Name)
     /// </summary>
     public static readonly PassType Voxelize = new("Voxelize");
 
-    /// <summary>A surface's debug view, drawn in place of its Forward pass while the view sets <see cref="GlobalAxis.Debug"/>. See Graphite/Debug.glsl.</summary>
-    public static readonly PassType Debug = new("Debug");
-
     /// <summary>A world's sky, a fullscreen triangle drawn after the opaque surfaces where nothing was drawn. See Graphite/Sky.glsl.</summary>
     public static readonly PassType Sky = new("Sky");
 

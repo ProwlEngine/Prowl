@@ -182,8 +182,6 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     // The shared entry of a draw program under global keywords, made when no draw used it yet
     private Entry Acquire(DrawProgram program, bool mirrored, IReadOnlyDictionary<string, string> keywords, CompilePriority priority)
     {
-        if (DebugProgram(ref program, keywords))
-            priority = CompilePriority.Background;
         IReadOnlyList<VariantSpace> materialAxes = program.Shader.MaterialAxes;
         IReadOnlyList<VariantSpace> globalAxes = program.Shader.GlobalAxes;
         Keyword[] combo = new Keyword[materialAxes.Count + globalAxes.Count];
@@ -231,20 +229,6 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             Release(entry.Default);
         if (entry.Declared != null)
             Release(entry.Declared);
-    }
-
-    // A Forward or Transmission pass draws through its shader's Debug pass while the view sets the debug axis
-    private static bool DebugProgram(ref DrawProgram program, IReadOnlyDictionary<string, string> keywords)
-    {
-        if (!keywords.ContainsKey(GlobalAxis.Debug.Name))
-            return false;
-        Shader shader = program.Shader;
-        int debug = shader.PassIndex(PassType.Debug);
-        ShaderPass pass = shader.Definition.Passes![program.PassIndex];
-        if (debug < 0 || !ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name) && !ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Transmission.Name))
-            return false;
-        program = program with { PassIndex = debug, Variant = shader.PassVariant(debug, program.Keywords) };
-        return true;
     }
 
     public void Dispose()
@@ -423,7 +407,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     {
         ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
         PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
-        bool forward = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name) || ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Debug.Name);
+        bool forward = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name);
         bool prepass = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name);
         bool transmission = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Transmission.Name);
         ShaderDescription compiled = description;

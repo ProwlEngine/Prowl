@@ -109,7 +109,7 @@ public sealed class ImpostorBuilderTests : IDisposable
         Assert.True(MathF.Abs(data.Radius - MathF.Sqrt(0.5f)) < 1e-4f);
     }
 
-    // Renders the world from +Z through the ALBEDO debug view into a 32 pixel square, every renderable at one level
+    // Renders the world from +Z under white ambient light into a 32 pixel square, every renderable at one level
     private Float4[] Render(RenderWorld world, int level)
     {
         Texture color = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(32, 32, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
@@ -120,7 +120,7 @@ public sealed class ImpostorBuilderTests : IDisposable
             view.Target = target;
             view.Sky = false;
             view.ForcedLod = level;
-            view.Keywords = [GlobalAxis.Debug["ALBEDO"]];
+            world.Environment = new EnvironmentDesc { AmbientColor = new Float4(1, 1, 1, 1), Fog = default };
             view.Camera = ViewCamera.Orthographic(new Double3(0, 0, 5), new Float3(0, 0, -1), new Float3(0, 1, 0), 2, 0.1f, 10, aspect: 1);
             byte[]? data = null;
             _renderer.Readback(color, result => data = result.Data);

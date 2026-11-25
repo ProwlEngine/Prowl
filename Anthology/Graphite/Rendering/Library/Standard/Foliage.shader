@@ -268,40 +268,5 @@ Shader "Graphite/Foliage"
         ENDGLSL
     }
 
-    Pass
-    {
-        Name "Debug"
-        Tags { "LightMode" = "Debug" "Output" = "Premultiplied" }
-        Cull Off
-        GLSLPROGRAM
-        Shared
-        {
-            #define GRAPHITE_STANDARD_FORWARD
-            #define GRAPHITE_STANDARD_DEBUG
-            #define GRAPHITE_CUSTOM_BRDF
-            #define GRAPHITE_STANDARD_INPUTS Foliage_Inputs
-            #pragma variant global PBR_TIER FULL LITE MAX
-            #pragma variant PBR_SUBSURFACE
-            #pragma variant PBR_THIN_WALLED
-            #pragma variant global GRAPHITE_DEBUG UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY DIFFUSE SPECULAR SPECULAR_ALBEDO THROUGHPUT DIRECT INDIRECT FURNACE COAT FUZZ DARKENING SUBSURFACE BACK TRANSMISSION THICKNESS
-            #include "Graphite/Standard/PBRSurface.glsl"
-            #include "Graphite/Wind.glsl"
-        }
-        Vertex
-        {
-            #pragma surface_vertex
-            #include "Graphite/Standard/StandardVertex.glsl"
-            void main() { Graphite_StandardVertex(); }
-        }
-        Fragment
-        {
-            #include "Graphite/Foliage/Foliage.glsl"
-            #pragma surface
-            #include "Graphite/Standard/StandardFragment.glsl"
-            void main() { Graphite_StandardFragment(); }
-        }
-        ENDGLSL
-    }
-
     Fallback "Graphite/Fallback"
 }
