@@ -241,6 +241,7 @@ public sealed class Renderer : IDisposable
 
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl", _options.Compile));
         Resources = new RendererResources(device, compiler, _options.Compile);
+        Resources.ShadingModels.Report = Report;
         Textures = Resources.Textures;
         Textures.Reporter = Report;
         _store = new RenderStore();
@@ -301,6 +302,9 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The GPU resources the frames, views and effects share.</summary>
     internal RendererResources Resources { get; }
+
+    /// <summary>The shading models deferred views light their GBuffer by, which a host may add to.</summary>
+    public ShadingModels ShadingModels => Resources.ShadingModels;
 
     /// <summary>Values and keywords every shader can read, overridden per world.</summary>
     public GlobalProperties Globals => _globals.Renderer;

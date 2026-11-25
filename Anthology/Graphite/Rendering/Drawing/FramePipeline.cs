@@ -262,6 +262,7 @@ internal sealed partial class FramePipeline : IDisposable
         _planned.Clear();
         _frameWorlds.Clear();
         _prepared.Clear();
+        PrepareFeatures(BuiltIns);
         foreach (WorldFrame world in allWorlds)
             PrepareFeatures(world.World.FeatureSnapshot);
         foreach (RenderFeature[] features in viewFeatures)

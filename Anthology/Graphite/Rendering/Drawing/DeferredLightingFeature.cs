@@ -2,8 +2,8 @@ namespace Prowl.Graphite.Rendering;
 
 /// <summary>
 /// Lights a deferred view's GBuffer onto its scene before the forward passes, which then draw only the renderables the
-/// GBuffer does not hold, one fullscreen draw for each shading model with lighting of its own. It writes the scene's
-/// colour and its material target, which screen space reflections read.
+/// GBuffer does not hold, in one fullscreen draw of the program <see cref="ShadingModels"/> writes, which lights each
+/// pixel by its shading model. It writes the scene's colour and its material target, which screen space reflections read.
 /// Group <see cref="FeatureGroup.DeferredLighting"/>.
 /// </summary>
 public sealed class DeferredLightingFeature : RenderFeature
@@ -25,8 +25,15 @@ public sealed class DeferredLightingFeature : RenderFeature
     {
         _resources = resources;
         Paths = RenderPaths.Deferred;
-        Uses(resources.DeferredLightingProgram);
-        Uses(resources.FoliageLightingProgram);
+        Uses(resources.ShadingModels.Program);
+    }
+
+    public override void PrepareFrame()
+    {
+        ShadingModels models = _resources.ShadingModels;
+        FullscreenProgram last = models.Program;
+        if (models.Update())
+            ReplaceProgram(last, models.Program);
     }
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -49,7 +56,6 @@ public sealed class DeferredLightingFeature : RenderFeature
         _properties.SetTexture(s_emission, targets[(int)GBufferTarget.Emission], point);
         _properties.SetTexture(s_motion, targets[(int)GBufferTarget.Motion], point);
         _properties.SetTexture(s_depth, gbuffer.DepthTexture!, point);
-        context.FullscreenScene(_resources.DeferredLightingProgram, _properties);
-        context.FullscreenScene(_resources.FoliageLightingProgram, _properties);
+        context.FullscreenScene(_resources.ShadingModels.Program, _properties);
     }
 }

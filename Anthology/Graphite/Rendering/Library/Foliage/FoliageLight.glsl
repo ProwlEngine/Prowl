@@ -11,3 +11,9 @@ vec3 Foliage_Light(PBR_Closure c, Graphite_LightContribution l, vec3 tint, float
     vec3 through = c.diffuseAlbedo * tint * (amount * (behind + toward) * l.attenuation);
     return front + through * l.radiance;
 }
+
+// The same from the Custom values Foliage_GBuffer keeps, for a deferred view's lighting
+vec3 Foliage_DeferredLight(PBR_Closure c, Graphite_LightContribution l, vec4 custom)
+{
+    return Foliage_Light(c, l, custom.rgb, custom.a * 2.0);
+}

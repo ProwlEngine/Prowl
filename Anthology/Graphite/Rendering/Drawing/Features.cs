@@ -411,6 +411,16 @@ public abstract class RenderFeature : RenderExtension
             _programs = [.. _programs, program];
     }
 
+    /// <summary>Takes a program the feature drew with out of what it waits for and puts another in its place.</summary>
+    internal void ReplaceProgram(FullscreenProgram last, FullscreenProgram next)
+    {
+        int index = Array.IndexOf(_programs, last);
+        if (index < 0)
+            Uses(next);
+        else
+            _programs[index] = next;
+    }
+
     /// <summary>Whether every fullscreen program the feature draws with is ready for a view of this many layers, asking for the ones that are not. Render thread.</summary>
     internal bool ProgramsReady(int layers)
     {

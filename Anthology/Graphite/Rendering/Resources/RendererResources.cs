@@ -43,10 +43,7 @@ internal sealed class RendererResources : IDisposable
         FogSkyProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("VolumetricFogSky"), "Graphite/VolumetricFogSky", lit: true, policy: policy);
         BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
         BlendAttachmentDescription kept = written with { ColorWriteMask = ColorWriteMask.None };
-        DeferredLightingProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("DeferredLighting"), "Graphite/DeferredLighting", source: false,
-            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, kept, kept, kept, written] }, lit: true, depth: true, policy: policy);
-        FoliageLightingProgram = FullscreenProgram.Create(device, compiler, "#define DEFERRED_FOLIAGE 1\n" + InternalShaders.PostFragment("DeferredLighting"), "Graphite/DeferredLighting Foliage", source: false,
-            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, kept, kept, kept, written] }, lit: true, depth: true, policy: policy);
+        ShadingModels = new ShadingModels(device, compiler, policy);
         BlendAttachmentDescription[] none = new BlendAttachmentDescription[GBufferFeature.TargetCount];
         Array.Fill(none, kept);
         GBufferDepthProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDepth"), "Graphite/GBufferDepth", source: false,
@@ -221,11 +218,8 @@ internal sealed class RendererResources : IDisposable
     /// <summary>A level of a view's depth pyramid from the one below, and the copy of a level into its packed texture. See <see cref="HiZFeature"/>.</summary>
     public FullscreenProgram HiZProgram { get; }
 
-    /// <summary>Lights a deferred view's GBuffer onto its scene, see Graphite/Internal/DeferredLighting.glsl.</summary>
-    public FullscreenProgram DeferredLightingProgram { get; }
-
-    /// <summary>The same for the pixels of the Two Sided Foliage shading model.</summary>
-    public FullscreenProgram FoliageLightingProgram { get; }
+    /// <summary>The renderer's shading models and the program that lights a deferred view's GBuffer by them.</summary>
+    public ShadingModels ShadingModels { get; }
 
     /// <summary>Copies a GBuffer's depth, motion and normals onto the scene, see Graphite/Internal/GBufferResolve.glsl.</summary>
     public FullscreenProgram GBufferResolveProgram { get; }
@@ -307,8 +301,7 @@ internal sealed class RendererResources : IDisposable
         FogIntegrateProgram.Dispose();
         FogSkyProgram.Dispose();
         HiZProgram.Dispose();
-        DeferredLightingProgram.Dispose();
-        FoliageLightingProgram.Dispose();
+        ShadingModels.Dispose();
         GBufferResolveProgram.Dispose();
         GBufferDepthProgram.Dispose();
         HiZPackProgram.Dispose();
