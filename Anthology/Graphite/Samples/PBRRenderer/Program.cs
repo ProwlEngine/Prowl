@@ -40,7 +40,6 @@ internal sealed class DemoWindow
     private bool _noBloom;
     private bool _noTonemap;
     private bool _noVsync;
-    private int _debugView = -1;
     private string? _tier;
     private int _lightCount = -1;
     private float _lightRange = -1;
@@ -61,7 +60,6 @@ internal sealed class DemoWindow
     private Texture? _shotTexture;
     private Framebuffer? _shotTarget;
 
-    private static readonly string[] DebugViews = ["DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "COAT", "FUZZ", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS", "DIRECT", "INDIRECT", "FURNACE", "NORMALS", "ROUGHNESS"];
 
     public DemoWindow(string[] args)
     {
@@ -81,8 +79,6 @@ internal sealed class DemoWindow
                 _noVsync = true;
             else if (args[i] == "--profile")
                 _timer = new PassTimer();
-            else if (args[i] == "--debug" && i + 1 < args.Length)
-                _debugView = Array.IndexOf(DebugViews, args[++i].ToUpperInvariant());
             else if (args[i] == "--tier" && i + 1 < args.Length)
                 _tier = args[++i].ToUpperInvariant();
             else if (args[i] == "--noscreentrace")
@@ -246,7 +242,10 @@ internal sealed class DemoWindow
             case Key.Number7: SelectScene(6); break;
             case Key.Number8: SelectScene(7); break;
             case Key.Number9: SelectScene(8); break;
-            case Key.F: _debugView = _debugView + 1 < DebugViews.Length ? _debugView + 1 : -1; break;
+            case Key.F:
+                _gbufferView = _gbufferView + 1 < Enum.GetValues<GBufferDebugMode>().Length ? _gbufferView + 1 : -1;
+                _deferred |= _gbufferView >= 0;
+                break;
             case Key.G: _voxelView = _voxelView + 1 < Enum.GetValues<VoxelDebugMode>().Length ? _voxelView + 1 : -1; break;
             case Key.I: _gi = !_gi; break;
             case Key.H: _giScreenTrace = !_giScreenTrace; break;
@@ -282,8 +281,6 @@ internal sealed class DemoWindow
         view.EV100 = _scene.StartEV100;
         view.Camera = _camera.Camera;
         List<GlobalKeyword> keywords = new();
-        if (_debugView >= 0)
-            keywords.Add(GlobalAxis.Debug[DebugViews[_debugView]]);
         if (_tier != null)
             keywords.Add(GlobalAxis.PbrTier[_tier]);
         view.Keywords = keywords.Count == 0 ? null : [.. keywords];
@@ -313,7 +310,7 @@ internal sealed class DemoWindow
         if (_titleTimer >= 0.5)
         {
             _timer?.Print(100);
-            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 9 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}, G voxels, I GI, H GI screen trace{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? _giScreenTrace ? " - GI" : " - GI, voxels only" : "")}";
+            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 9 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_gbufferView < 0 ? "" : $" - GBuffer {(GBufferDebugMode)_gbufferView}")}, G voxels, I GI, H GI screen trace{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? _giScreenTrace ? " - GI" : " - GI, voxels only" : "")}";
             _titleTimer = 0;
             _titleFrames = 0;
         }
