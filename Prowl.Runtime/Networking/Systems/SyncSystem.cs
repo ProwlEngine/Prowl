@@ -991,6 +991,12 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
                 if (apply && take)
                 {
                     sync.Read(component, ref block, initial);
+
+                    // The component's own state is the rest of its block, so what its reader left is its own fault.
+                    if (sync is NetworkSerializeMember && !block.IsAtEnd)
+                    {
+                        throw new InvalidOperationException($"OnDeserialize left {block.Remaining} bytes unread.");
+                    }
                 }
                 else
                 {

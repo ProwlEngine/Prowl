@@ -43,6 +43,14 @@ public class FailingStateTestComponent : Component, INetworkSerialize
     }
 }
 
+/// <summary>Game code that reads less of its state than it wrote.</summary>
+public class ShortReadStateTestComponent : Component, INetworkSerialize
+{
+    public void OnSerialize(NetWriter writer, bool initial) => writer.WriteUInt16(1);
+
+    public void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
+}
+
 /// <summary>Game code that changes the network while it is asked for its state.</summary>
 public class MeddlingStateTestComponent : Component, INetworkSerialize
 {
@@ -103,6 +111,39 @@ public partial class NetworkingTests
             Assert.Null(other.Network.Owner);
             Assert.True(other.Network.IsVisibleTo(aliceHere));
             Assert.DoesNotContain(alice.WireReceived, m => m.Id is FakePeer.Spawn or FakePeer.Despawn or FakePeer.Owner);
+            Assert.True(Networking.Networking.IsActive);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Fact]
+    public void GameCodeReadingTooLittleOfItsStateLosesOnlyThatComponentsState()
+    {
+        Scene hostScene = CreateScene();
+        using NetWriter snapshot = new();
+        NetworkTestScene.Current.WriteScene(hostScene, snapshot);
+        GameObject original = CreateGameObject("Short");
+        original.AddComponent<ShortReadStateTestComponent>();
+        original.AddComponent<NetTestComponent>().Health = 9;
+        original.Network.Networked = true;
+        using NetWriter spawn = new();
+        NetworkTestScene.Current.WriteSpawn(original, -1, NetworkOrphaned.Destroy, spawn, 1, 4);
+
+        LocalNetwork network = new();
+        using FakePeer host = FakePeer.Host(network);
+        SendJoin(host, snapshot.ToArray(), spawn.ToArray());
+        try
+        {
+            Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+            Pump(() => Networking.Networking.IsReady && Scene.Main.Objects.Any(o => o.Identifier == original.Identifier), host);
+            GameObject copy = Find(Scene.Main, original.Identifier);
+            NetTestComponent stats = copy.GetComponent<NetTestComponent>()!;
+
+            NetPeer client = host.Session.Peers.Single(p => !p.IsLocal);
+            host.SendSyncValues(client, 0, 1,
+                (copy.GetComponent<ShortReadStateTestComponent>()!.Identifier, NetworkSerializeMember.CustomSlot, 1, new byte[] { 0, 1, 0 }),
+                (stats.Identifier, NetTestComponent.HealthSlot, 1, IntValue(42)));
+            Pump(() => stats.Health == 42, host);
             Assert.True(Networking.Networking.IsActive);
         }
         finally { Networking.Networking.Shutdown(); }
