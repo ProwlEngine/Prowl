@@ -192,7 +192,7 @@ public partial class NetworkingTests
             int rpcIndex = client.WireReceived.FindLastIndex(m => m.Id == FakePeer.RpcFromHost);
             rpc = client.WireReceived[rpcIndex].Data;
             NetReader call = new(rpc);
-            call.ReadVarUInt32(); call.ReadVarUInt32(); call.ReadByte(); call.ReadVarUInt32(); call.ReadBytesWithLength();
+            call.ReadVarUInt32(); call.ReadByte(); call.ReadVarUInt32(); call.ReadBytesWithLength();
             Assert.True(call.IsAtEnd);
             // Nothing goes ahead of an unreliable call; its state follows with the next tick.
             // A reliable call's state, values and collection changes alike, goes just ahead of it.

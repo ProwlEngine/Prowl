@@ -468,11 +468,6 @@ internal sealed partial class NetworkCodeGen
                     "it skips the owner of the object a broadcast is called on");
             }
 
-            if ((flags & 2u) != 0 && !hostRpc)
-            {
-                context.Report(s_uselessFlag, location, method.Name, "HostOnly", "only the host calls it already");
-            }
-
             bool targeted = kind.Name == "TargetAttribute";
             if (targeted && (method.Parameters.Length == 0 ||
                              method.Parameters[0].Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)

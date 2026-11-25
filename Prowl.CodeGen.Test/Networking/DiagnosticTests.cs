@@ -124,16 +124,14 @@ public class DiagnosticTests
                               {
                                   [Rpc.Broadcast(RpcFlags.AnyCaller)] public void Shout() { }
                                   [Rpc.Host(RpcFlags.ExcludeOwner)] public void Ask() { }
-                                  [Rpc.Owner(RpcFlags.HostOnly)] public void Tell() { }
-                                  [Rpc.Host(RpcFlags.AnyCaller | RpcFlags.HostOnly)] public void Fine() { }
+                                  [Rpc.Host(RpcFlags.AnyCaller)] public void Fine() { }
                                   [Rpc.Broadcast(RpcFlags.ExcludeOwner | RpcFlags.Unreliable)] public void AlsoFine() { }
                               }
                               """;
         string[] warnings = [.. Scripts.Warnings(script).Where(w => w.Id == "PROWLNET014").Select(w => w.GetMessage())];
-        Assert.Equal(3, warnings.Length);
+        Assert.Equal(2, warnings.Length);
         Assert.Contains(warnings, w => w.Contains("AnyCaller") && w.Contains("'Shout'") && w.Contains("host RPC"));
         Assert.Contains(warnings, w => w.Contains("ExcludeOwner") && w.Contains("'Ask'"));
-        Assert.Contains(warnings, w => w.Contains("HostOnly") && w.Contains("'Tell'"));
         Assert.NotNull(Scripts.Compile(script));
     }
 

@@ -101,7 +101,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return false;
         }
 
-        if (!scene.IsHost && (mode != RpcMode.Host || (flags & RpcFlags.HostOnly) != 0))
+        if (!scene.IsHost && mode != RpcMode.Host)
         {
             WarnOnce(component, id, "can only be called by the host");
             return false;
@@ -182,7 +182,6 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
         using NetWriter? own = nested ? new NetWriter(envelope.Length + 8) : null;
         NetWriter message = own ?? _fromHost;
         message.Reset();
-        new RpcCallerMessage(session.LocalPeer!.Id).Write(message);
         message.WriteBytes(envelope.WrittenSpan);
         if (NetworkDiagnostics.Enabled)
         {
@@ -253,8 +252,7 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
 
         (RpcMode mode, RpcFlags flags) = (rpc.Mode, rpc.Flags);
         bool senderControls = scene.OwnerOf(component.GameObject) == sender.Id;
-        if ((flags & RpcFlags.HostOnly) != 0 || mode != RpcMode.Host ||
-            ((flags & RpcFlags.AnyCaller) == 0 && !senderControls))
+        if (mode != RpcMode.Host || ((flags & RpcFlags.AnyCaller) == 0 && !senderControls))
         {
             NetworkDiagnostics.TraceMember("RPC", "Rejected", sender, component, method, true, "Unauthorized caller",
                 arguments);
@@ -279,7 +277,6 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return;
         }
 
-        int callerId = RpcCallerMessage.Read(ref reader).CallerId;
         RpcCallMessage message = RpcCallMessage.Read(ref reader);
         ReadOnlySpan<byte> arguments = message.Arguments;
         if (!reader.IsAtEnd)
@@ -294,14 +291,9 @@ internal sealed partial class RpcSystem(NetworkSystem scene) : IDisposable
             return;
         }
 
-        if (!scene.Session!.TryGetPeer(callerId, out NetPeer? caller))
-        {
-            return;
-        }
-
         NetReader validation = new(arguments);
         rpc.ValidateArguments(component, ref validation);
-        Invoke(component, rpc, arguments, caller);
+        Invoke(component, rpc, arguments, sender);
     }
 
     /// <summary>The component and RPC a call names, when this peer has them.</summary>

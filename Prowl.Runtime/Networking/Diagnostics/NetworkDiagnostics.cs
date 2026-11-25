@@ -176,19 +176,16 @@ public static class NetworkDiagnostics
 
             if (kind is EngineMessage.RpcToHost or EngineMessage.RpcFromHost)
             {
-                string caller = kind == EngineMessage.RpcFromHost
-                    ? $"Caller ID: {RpcCallerMessage.Read(ref reader).CallerId}\n"
-                    : "";
                 RpcCallMessage message = RpcCallMessage.Read(ref reader);
                 if (!scene.Rpcs.Resolve(message, out Component? component, out RpcMember? rpc))
                 {
                     return (
-                        $"{caller}Object: {message.NetId}\nComponent: {message.Component}\nUnknown RPC #{message.Method}",
+                        $"Object: {message.NetId}\nComponent: {message.Component}\nUnknown RPC #{message.Method}",
                         $"Unknown RPC #{message.Method}");
                 }
 
                 return (
-                    $"{caller}Object: {component.GameObject.Name}\nComponent: {component.GetType().Name}\nRPC: {rpc.Signature}\nRecipient: {rpc.Mode}",
+                    $"Object: {component.GameObject.Name}\nComponent: {component.GetType().Name}\nRPC: {rpc.Signature}\nRecipient: {rpc.Mode}",
                     $"{component.GetType().Name}.{rpc.Signature}");
             }
 

@@ -342,7 +342,7 @@ public sealed class FakePeer : IDisposable
         if (id == RpcFromHost)
         {
             using NetWriter logical = new();
-            logical.WriteVarUInt32(reader.ReadVarUInt32());
+            logical.WriteVarUInt32((uint)NetPeer.HostId);
             (Guid component, uint method) = RpcNamed(reader.ReadVarUInt32(), reader.ReadByte(), reader.ReadVarUInt32());
             logical.WriteGuid(component);
             logical.WriteUInt32(method);
@@ -396,7 +396,7 @@ public sealed class FakePeer : IDisposable
         if (id == RpcToHost || id == RpcFromHost)
         {
             NetReader arguments = new(writer.WrittenSpan);
-            if (id == RpcFromHost) wire.WriteVarUInt32(arguments.ReadVarUInt32());
+            if (id == RpcFromHost) arguments.ReadVarUInt32();
             (uint netId, byte index, uint method) = RpcTarget(arguments.ReadGuid(), arguments.ReadUInt32());
             wire.WriteVarUInt32(netId);
             wire.WriteByte(index);

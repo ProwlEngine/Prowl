@@ -11,8 +11,7 @@ namespace Prowl.Runtime.Networking;
 
 /// <summary>
 ///     A call names its object by NetId, its component by its index among the object's networked components and its
-///     method by its index among the type's RPCs. To host: the call. From host:
-///     RpcCallerMessage then call.
+///     method by its index among the type's RPCs. The same both ways, since the sender is the caller.
 /// </summary>
 internal readonly ref struct RpcCallMessage(uint netId, byte component, uint method, ReadOnlySpan<byte> arguments)
 {
@@ -42,12 +41,4 @@ internal readonly ref struct RpcCallMessage(uint netId, byte component, uint met
         reader.ReadByte(),
         reader.ReadVarUInt32(),
         reader.ReadBytesWithLength());
-}
-
-internal readonly record struct RpcCallerMessage(int CallerId)
-{
-    internal void Write(NetWriter writer) => writer.WriteVarUInt32((uint)CallerId);
-
-    internal static RpcCallerMessage Read(ref NetReader reader) => new(
-        checked((int)reader.ReadVarUInt32()));
 }

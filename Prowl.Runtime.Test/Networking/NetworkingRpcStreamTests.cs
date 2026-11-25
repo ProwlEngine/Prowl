@@ -74,7 +74,6 @@ public partial class NetworkingTests
             foreach ((ushort id, byte[] data) in client.WireReceived.Where(m => m.Id == FakePeer.RpcFromHost))
             {
                 NetReader reader = new(data);
-                reader.ReadVarUInt32();
                 uint netId = reader.ReadVarUInt32();
                 byte index = reader.ReadByte();
                 uint method = reader.ReadVarUInt32();

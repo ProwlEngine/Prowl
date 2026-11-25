@@ -52,7 +52,6 @@ public partial class NetworkingTests
             component.Shout("hi");
             Pump(() => alice.Has(FakePeer.RpcFromHost), alice);
             NetReader wire = new(alice.WireReceived.Last(m => m.Id == FakePeer.RpcFromHost).Data);
-            Assert.Equal((uint)Networking.Networking.Session!.LocalPeer!.Id, wire.ReadVarUInt32());
             Assert.Equal(NetworkTestScene.Current.NetIdOf(ship), wire.ReadVarUInt32());
             Assert.Equal(1, wire.ReadByte());
             Assert.Equal(0u, wire.ReadVarUInt32());

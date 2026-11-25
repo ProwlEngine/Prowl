@@ -33,9 +33,7 @@ public static partial class Rpc
     }
 
     /// <summary>
-    ///     Runs on everyone who has the object, the host included. Only the host calls it on an
-    ///     object. A static one may be called by a client, which the host passes on, unless it takes
-    ///     <see cref="RpcFlags.HostOnly" />.
+    ///     Runs on everyone who has the object, the host included. Only the host calls it.
     /// </summary>
     public sealed class BroadcastAttribute(RpcFlags flags = RpcFlags.None) : RpcAttribute(RpcMode.Broadcast, flags);
 
