@@ -18,7 +18,7 @@ public class SceneEnvironmentTests
     [Fact]
     public void ANewScene_HasAnEmbeddedProceduralSky()
     {
-        var scene = new SceneInstance();
+        var scene = new Scene();
 
         Material? sky = scene.Environment.SkyMaterial;
         Assert.True(sky.IsValid());
@@ -69,7 +69,7 @@ public class SceneEnvironmentTests
     [Fact]
     public void ANoSkyScene_ShowsNoSky()
     {
-        var scene = new SceneInstance();
+        var scene = new Scene();
         scene.Environment.SkyMaterial = null;
         Assert.False(scene.Rendering.HasSky);
     }

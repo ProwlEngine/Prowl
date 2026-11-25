@@ -25,8 +25,6 @@ public enum DefaultShader
     Line,
     Invalid,
     Particle,
-    Terrain,
-    Grass,
     Refraction,
     DefaultUI,
     DefaultText,
@@ -42,6 +40,8 @@ public enum DefaultModel
     Sphere,
     Cylinder,
     Plane,
+    Capsule,
+    Cone,
 }
 
 /// <summary>
@@ -51,8 +51,9 @@ public enum DefaultMaterial
 {
     Standard,
     Particle,
-    Terrain,
-    Grass,
+    Line,
+    /// <summary>Lit with the grid texture, what CSG surfaces show until given a material.</summary>
+    Grid,
 }
 
 /// <summary>

@@ -707,7 +707,7 @@ public sealed class AudioSource : Component
         {
             // Checked here rather than at Play, so scene setup order cannot make this fire spuriously
             // for a source that starts before its listener exists.
-            if (IsPlaying && (!SceneInstance.HasMain || SceneInstance.Main.AudioListener.IsNotValid()))
+            if (IsPlaying && (!Scene.HasMain || Scene.Main.AudioListener.IsNotValid()))
             {
                 Debug.LogWarningOnce("Audio.NoListener",
                     "A spatial AudioSource is playing with no enabled AudioListener in the main world, so it is positioned relative to the world origin.");
@@ -1190,7 +1190,7 @@ public sealed class AudioSource : Component
         if (!AudioContext.IsInitialized)
             return null;
 
-        SceneInstance scene = SceneInstance.Active;
+        Scene scene = Scene.Active;
 
         if (scene.IsNotValid() || scene.State == SceneState.Destroying)
         {

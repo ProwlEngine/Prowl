@@ -76,33 +76,12 @@ public static class BuiltInAssets
         }
 
 
-        // Default meshes (parsed directly from embedded OBJ files)
+        // Default models are generated, and each is a prefab drawing its mesh.
         foreach (DefaultModel m in Enum.GetValues<DefaultModel>())
         {
             DefaultModel model = m;
-            string fileName = model switch
-            {
-                DefaultModel.Cube => "Cube.obj",
-                DefaultModel.Sphere => "Sphere.obj",
-                DefaultModel.Cylinder => "Cylinder.obj",
-                DefaultModel.Plane => "Plane.obj",
-                _ => null
-            };
-            if (fileName == null) continue;
-
-            // The model itself, so the ID DefaultModels.Load stamps on it actually resolves. Only its
-            // mesh was registered before, leaving every default model carrying a dangling AssetID.
-            Register($"$Default:Model/{model}", model.ToString(), typeof(PrefabAsset),
-                () => DefaultModels.Load(model));
-
-            Register($"$Default:Model/{model}/Mesh/0", model.ToString(), typeof(Mesh),
-                () =>
-                {
-                    using Stream stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
-                    // Built-in primitives always get lightmap UV2 so they're lightmappable out of the box.
-                    ModelImportResult importResult = new AssetImporting.ModelImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true, GenerateLightmapUVs = true });
-                    return importResult.Meshes.Count > 0 ? importResult.Meshes[0] : new Mesh { Name = model.ToString() };
-                });
+            Register($"$Default:Model/{model}", model.ToString(), typeof(PrefabAsset), () => DefaultModels.Load(model));
+            Register($"$Default:Model/{model}/Mesh/0", model.ToString(), typeof(Mesh), () => DefaultModels.Generate(model));
         }
 
         // Materials register the raw parse so LoadDefault routes through this cache.

@@ -19,8 +19,8 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Per-scene navigation state: the registered navmeshes, the query API over them, and (once
-/// agents register) the crowd simulation. Owned by <see cref="Resources.SceneInstance.Navigation"/> the
-/// same way physics state is owned by <see cref="Resources.SceneInstance.Physics"/>.
+/// agents register) the crowd simulation. Owned by <see cref="Resources.Scene.Navigation"/> the
+/// same way physics state is owned by <see cref="Resources.Scene.Physics"/>.
 /// <para/>
 /// Queries are thread-safe: each takes a pooled Detour query under a read lock, so gameplay
 /// code may path-find from worker threads. Tile mutations take the write lock and invalidate
@@ -44,7 +44,7 @@ public sealed class NavMeshWorld
     public static void ApplyProjectSettings(NavMeshWorldSettings settings)
     {
         DefaultSettings = settings;
-        foreach (Resources.SceneInstance world in Resources.SceneInstance.All)
+        foreach (Resources.Scene world in Resources.Scene.All)
             world.Navigation.ApplySettings(settings);
     }
 

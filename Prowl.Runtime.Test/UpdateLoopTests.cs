@@ -59,15 +59,15 @@ public sealed class MidTick : Component { public override void Update() => TickL
 public sealed class LateTick : Component { public override void Update() => TickLog.Entries.Add("late"); }
 
 /// <summary>
-/// Tests for the per-frame update loop driven through <see cref="Resources.SceneInstance.Update"/> and
-/// <see cref="Resources.SceneInstance.FixedUpdate"/>: Start/Update/LateUpdate/FixedUpdate dispatch, ordering,
+/// Tests for the per-frame update loop driven through <see cref="Resources.Scene.Update"/> and
+/// <see cref="Resources.Scene.FixedUpdate"/>: Start/Update/LateUpdate/FixedUpdate dispatch, ordering,
 /// and gating by play mode.
 /// </summary>
 public class UpdateLoopTests : RuntimeTestBase
 {
-    private (Resources.SceneInstance scene, CounterComponent comp) MakeRunningCounter()
+    private (Resources.Scene scene, CounterComponent comp) MakeRunningCounter()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         CounterComponent comp = go.AddComponent<CounterComponent>();
         scene.Add(go);
@@ -77,7 +77,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void Start_IsCalledOnce_OnFirstUpdate()
     {
-        (SceneInstance? scene, CounterComponent? comp) = MakeRunningCounter();
+        (Scene? scene, CounterComponent? comp) = MakeRunningCounter();
         Assert.Equal(0, comp.StartCount);
 
         Update(scene);
@@ -90,7 +90,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void Update_IsCalledEveryFrame()
     {
-        (SceneInstance? scene, CounterComponent? comp) = MakeRunningCounter();
+        (Scene? scene, CounterComponent? comp) = MakeRunningCounter();
 
         Update(scene, 10);
 
@@ -101,7 +101,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void Start_RunsBeforeUpdateAndLateUpdate_OnFirstFrame()
     {
-        (SceneInstance? scene, CounterComponent? comp) = MakeRunningCounter();
+        (Scene? scene, CounterComponent? comp) = MakeRunningCounter();
 
         Update(scene);
 
@@ -111,7 +111,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void LateUpdate_RunsAfterUpdate_AcrossComponents()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         CounterComponent a = go.AddComponent<CounterComponent>();
         CounterComponent b = go.AddComponent<CounterComponent>();
@@ -129,7 +129,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void FixedUpdate_IsCalledOnPhysicsStep_NotOnUpdate()
     {
-        (SceneInstance? scene, CounterComponent? comp) = MakeRunningCounter();
+        (Scene? scene, CounterComponent? comp) = MakeRunningCounter();
 
         Update(scene, 3);
         Assert.Equal(0, comp.FixedUpdateCount);
@@ -141,7 +141,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void DisabledComponent_DoesNotUpdate()
     {
-        (SceneInstance? scene, CounterComponent? comp) = MakeRunningCounter();
+        (Scene? scene, CounterComponent? comp) = MakeRunningCounter();
         comp.Enabled = false;
 
         Update(scene, 5);
@@ -153,7 +153,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void DisabledGameObject_DoesNotUpdate()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         CounterComponent comp = go.AddComponent<CounterComponent>();
         scene.Add(go);
@@ -168,7 +168,7 @@ public class UpdateLoopTests : RuntimeTestBase
     public void Update_RunsComponentsInExecutionOrder_RegardlessOfAddOrder()
     {
         TickLog.Entries.Clear();
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         go.AddComponent<LateTick>();   // added first, runs last
         go.AddComponent<EarlyTick>();
@@ -184,7 +184,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void AnEditWorld_GetsNoGameplayCallbacks_EvenWhileTheEditorPlays()
     {
-        SceneInstance scene = new(SceneMode.Edit);
+        Scene scene = new(SceneMode.Edit);
         GameObject go = CreateGameObject();
         LifecycleRecorder comp = go.AddComponent<LifecycleRecorder>();
         scene.Add(go);
@@ -200,7 +200,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void OnDisable_PairsWithOnEnable_WhenTheWorldGoesDormant()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         LifecycleRecorder comp = go.AddComponent<LifecycleRecorder>();
         scene.Add(go);
@@ -217,7 +217,7 @@ public class UpdateLoopTests : RuntimeTestBase
     {
         using EditModeScope edit = EditMode();
 
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateGameObject();
         ExecuteAlwaysCounter comp = go.AddComponent<ExecuteAlwaysCounter>();
         scene.Add(go);
@@ -230,7 +230,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void Paused_NoGameplayCallbacksRun()
     {
-        (SceneInstance scene, CounterComponent comp) = MakeRunningCounter();
+        (Scene scene, CounterComponent comp) = MakeRunningCounter();
         GameObject go = CreateGameObject();
         ExecuteAlwaysCounter always = go.AddComponent<ExecuteAlwaysCounter>();
         scene.Add(go);
@@ -248,7 +248,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void Paused_StepRunsOneFrame()
     {
-        (SceneInstance scene, CounterComponent comp) = MakeRunningCounter();
+        (Scene scene, CounterComponent comp) = MakeRunningCounter();
         scene.Paused = true;
         scene.Tick(FixedDeltaTime);
 
@@ -264,7 +264,7 @@ public class UpdateLoopTests : RuntimeTestBase
     [Fact]
     public void Unpaused_UpdatesResume()
     {
-        (SceneInstance scene, CounterComponent comp) = MakeRunningCounter();
+        (Scene scene, CounterComponent comp) = MakeRunningCounter();
         scene.Paused = true;
         scene.Tick(FixedDeltaTime);
         scene.Tick(FixedDeltaTime);

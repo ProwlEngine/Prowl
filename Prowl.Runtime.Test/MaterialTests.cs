@@ -179,9 +179,9 @@ public class MaterialTests
     [Fact]
     public void ShaderKeywordAxes_AreListedFromItsVariantPragmas()
     {
-        Shader terrain = Shader.LoadDefault(DefaultShader.Terrain);
+        Shader lit = Shader.LoadDefault(DefaultShader.Lit);
 
-        Assert.Contains(terrain.Keywords, axis => axis.Name == "TERRAIN_8_LAYERS");
+        Assert.Contains(lit.Keywords, axis => axis.Name == "PBR_COAT");
     }
 
     [Fact]

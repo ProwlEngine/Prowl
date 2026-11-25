@@ -219,7 +219,7 @@ public class NavMeshBuildTests : RuntimeTestBase
     /// <summary>Registers <paramref name="data"/> through a surface in a running scene.</summary>
     private NavMeshSurface RegisterOnSurface(NavMeshData data)
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject surfaceGo = CreateGameObject("NavMeshSurface");
         scene.Add(surfaceGo);
         NavMeshSurface surface = surfaceGo.AddComponent<NavMeshSurface>();

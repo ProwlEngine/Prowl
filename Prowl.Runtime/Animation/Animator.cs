@@ -171,7 +171,7 @@ public class Animator : Component
     public SampledEventsBuffer? Events => _graph?.Events;
 
     // The world this animator is registered with, kept so it leaves even during teardown, when it no longer reads as in one.
-    private SceneInstance? _registeredIn;
+    private Scene? _registeredIn;
 
     public override void OnEnable()
     {
@@ -420,7 +420,7 @@ public class Animator : Component
         _propertyPaused = false;
         if (_clips != null && Resolve(clip) is { } runtime)
         {
-            _clips.Play(runtime, clip.EffectiveLoop);
+            _clips.Play(runtime, loop: clip.EffectiveLoop);
             _pending = null;
         }
     }
@@ -577,7 +577,7 @@ public class Animator : Component
         _propertyClipTime = _propertyElapsedTime;
         _propertyPlaying = true;
         _propertyPaused = false;
-        _clips.CrossFade(runtime, seconds, clip.EffectiveLoop);
+        _clips.CrossFade(runtime, fadeDuration: seconds, loop: clip.EffectiveLoop);
     }
 
     /// <summary>Advances the animation and pushes the pose and property tracks onto the hierarchy.</summary>
@@ -747,7 +747,7 @@ public class Animator : Component
         }
         if (Resolve(_pending!) is not { } runtime) return;
 
-        _clips!.Play(runtime, _pending!.EffectiveLoop);
+        _clips!.Play(runtime, loop: _pending!.EffectiveLoop);
         _pending = null;
     }
 

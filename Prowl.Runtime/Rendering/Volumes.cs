@@ -322,12 +322,12 @@ public sealed class Volume : Component
     /// <summary>The profile blending reads: the instance when one was made, else the shared profile.</summary>
     public VolumeProfile? EffectiveProfile => _instance.IsValid() ? _instance : SharedProfile;
 
-    internal override void JoinWorld(SceneInstance world)
+    internal override void JoinWorld(Scene world)
     {
         if (!world.VolumeList.Contains(this)) world.VolumeList.Add(this);
     }
 
-    internal override void LeaveWorld(SceneInstance world) => world.VolumeList.Remove(this);
+    internal override void LeaveWorld(Scene world) => world.VolumeList.Remove(this);
 
     protected override void OnDispose()
     {
@@ -429,7 +429,7 @@ public sealed class VolumeStack : IDisposable
     /// Blends the volumes of <paramref name="scene"/> on the layers of <paramref name="mask"/> at
     /// <paramref name="position"/>, over <paramref name="baseProfile"/>.
     /// </summary>
-    public void Resolve(SceneInstance? scene, Float3 position, LayerMask mask, VolumeProfile? baseProfile)
+    public void Resolve(Scene? scene, Float3 position, LayerMask mask, VolumeProfile? baseProfile)
     {
         foreach (Entry entry in _order) entry.Present = false;
 

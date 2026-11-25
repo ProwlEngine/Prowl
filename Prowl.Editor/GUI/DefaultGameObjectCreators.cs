@@ -48,13 +48,19 @@ internal static class DefaultGameObjectCreators
     [MenuItem("GameObject/3D Object/Sphere", priority: 11, Icon = EditorIcons.CircleDot)]
     static void CreateSphere() => CreatePrimitive("Sphere", DefaultModel.Sphere);
 
-    [MenuItem("GameObject/3D Object/Cylinder", priority: 12, Icon = EditorIcons.Circle)]
+    [MenuItem("GameObject/3D Object/Capsule", priority: 12, Icon = EditorIcons.Capsules)]
+    static void CreateCapsule() => CreatePrimitive("Capsule", DefaultModel.Capsule);
+
+    [MenuItem("GameObject/3D Object/Cylinder", priority: 13, Icon = EditorIcons.Circle)]
     static void CreateCylinder() => CreatePrimitive("Cylinder", DefaultModel.Cylinder);
 
-    [MenuItem("GameObject/3D Object/Plane", priority: 13, Icon = EditorIcons.Square)]
+    [MenuItem("GameObject/3D Object/Cone", priority: 14, Icon = EditorIcons.CaretUp)]
+    static void CreateCone() => CreatePrimitive("Cone", DefaultModel.Cone);
+
+    [MenuItem("GameObject/3D Object/Plane", priority: 15, Icon = EditorIcons.Square)]
     static void CreatePlane() => CreatePrimitive("Plane", DefaultModel.Plane);
 
-    [MenuItem("GameObject/3D Object/Text Mesh", priority: 24, Icon = EditorIcons.Font, Separator = true)]
+    [MenuItem("GameObject/3D Object/Text Mesh", priority: 20, Icon = EditorIcons.Font, Separator = true)]
     static void CreateTextMesh()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Text Mesh", MenuContext.ActiveGameObject);
@@ -62,12 +68,20 @@ internal static class DefaultGameObjectCreators
         text.Text = "New Text";
     }
 
-    [MenuItem("GameObject/3D Object/Terrain", priority: 25, Icon = EditorIcons.Mountain)]
+    [MenuItem("GameObject/3D Object/Line", priority: 21, Icon = EditorIcons.BezierCurve)]
+    static void CreateLine()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Line", MenuContext.ActiveGameObject);
+        LineRenderer line = go.AddComponent<LineRenderer>();
+        line.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Line));
+        line.Points = [Float3.Zero, new Float3(0, 0, 1)];
+    }
+
+    [MenuItem("GameObject/3D Object/Terrain", priority: 25, Icon = EditorIcons.Mountain, Separator = true)]
     static void CreateTerrain()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Terrain", MenuContext.ActiveGameObject);
         TerrainComponent terrain = go.AddComponent<TerrainComponent>();
-        terrain.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Terrain));
         go.AddComponent<TerrainCollider>();
 
         var terrainData = new TerrainData();
@@ -81,23 +95,65 @@ internal static class DefaultGameObjectCreators
         }
     }
 
-    [MenuItem("GameObject/Light/Directional Light", priority: 30, Icon = EditorIcons.Sun)]
+    [MenuItem("GameObject/3D Object/Ocean", priority: 26, Icon = EditorIcons.Water)]
+    static void CreateOcean()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Ocean", MenuContext.ActiveGameObject);
+        go.AddComponent<Ocean>();
+    }
+
+    [MenuItem("GameObject/2D Object/Sprite", priority: 30, Icon = EditorIcons.Image)]
+    static void CreateSprite()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Sprite", MenuContext.ActiveGameObject);
+        go.AddComponent<SpriteRenderer>();
+    }
+
+    [MenuItem("GameObject/Light/Directional Light", priority: 35, Icon = EditorIcons.Sun)]
     static void CreateDirectionalLight() => CreateLight<DirectionalLight>("Directional Light", new Float3(50, 210, 0));
 
-    [MenuItem("GameObject/Light/Point Light", priority: 31, Icon = EditorIcons.Lightbulb)]
+    [MenuItem("GameObject/Light/Point Light", priority: 36, Icon = EditorIcons.Lightbulb)]
     static void CreatePointLight() => CreateLight<PointLight>("Point Light", Float3.Zero);
 
-    [MenuItem("GameObject/Light/Spot Light", priority: 32, Icon = EditorIcons.Bullseye)]
+    [MenuItem("GameObject/Light/Spot Light", priority: 37, Icon = EditorIcons.Bullseye)]
     static void CreateSpotLight() => CreateLight<SpotLight>("Spot Light", new Float3(90, 0, 0));
 
-    [MenuItem("GameObject/Light/Rect Light", priority: 33, Icon = EditorIcons.Lightbulb)]
+    [MenuItem("GameObject/Light/Rect Light", priority: 38, Icon = EditorIcons.Lightbulb)]
     static void CreateRectLight() => CreateLight<RectLight>("Rect Light", new Float3(90, 0, 0));
 
-    [MenuItem("GameObject/Light/Disk Light", priority: 34, Icon = EditorIcons.Lightbulb)]
+    [MenuItem("GameObject/Light/Disk Light", priority: 39, Icon = EditorIcons.Lightbulb)]
     static void CreateDiskLight() => CreateLight<DiskLight>("Disk Light", new Float3(90, 0, 0));
 
-    [MenuItem("GameObject/Light/Tube Light", priority: 35, Icon = EditorIcons.Lightbulb)]
+    [MenuItem("GameObject/Light/Tube Light", priority: 40, Icon = EditorIcons.Lightbulb)]
     static void CreateTubeLight() => CreateLight<TubeLight>("Tube Light", Float3.Zero);
+
+    [MenuItem("GameObject/Light/Reflection Probe", priority: 45, Icon = EditorIcons.Globe, Separator = true)]
+    static void CreateReflectionProbe()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Reflection Probe", MenuContext.ActiveGameObject);
+        go.AddComponent<ReflectionProbe>();
+    }
+
+    [MenuItem("GameObject/Light/Light Probe Group", priority: 46, Icon = EditorIcons.Braille)]
+    static void CreateLightProbeGroup()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Light Probe Group", MenuContext.ActiveGameObject);
+        go.AddComponent<LightProbeGroup>();
+    }
+
+    [MenuItem("GameObject/Volume/Global Volume", priority: 50, Icon = EditorIcons.Globe)]
+    static void CreateGlobalVolume() => CreateVolume("Global Volume", global: true);
+
+    [MenuItem("GameObject/Volume/Box Volume", priority: 51, Icon = EditorIcons.Cube)]
+    static void CreateBoxVolume() => CreateVolume("Box Volume", global: false);
+
+    static void CreateVolume(string name, bool global)
+    {
+        GameObject go = HierarchyPanel.CreateGameObject(name, MenuContext.ActiveGameObject);
+        Volume volume = go.AddComponent<Volume>();
+        volume.IsGlobal = global;
+        volume.SharedProfile = new VolumeProfile();
+    }
 
     static void CreateLight<T>(string name, Float3 euler) where T : Light, new()
     {
@@ -106,7 +162,7 @@ internal static class DefaultGameObjectCreators
         go.AddComponent<T>();
     }
 
-    [MenuItem("GameObject/Effects/Fog/Global", priority: 40, Icon = EditorIcons.Cloud)]
+    [MenuItem("GameObject/Volume/Fog/Global", priority: 55, Icon = EditorIcons.Cloud, Separator = true)]
     static void CreateGlobalFogVolume()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Global Fog Volume", MenuContext.ActiveGameObject);
@@ -114,7 +170,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Global;
     }
 
-    [MenuItem("GameObject/Effects/Fog/Box", priority: 41, Icon = EditorIcons.Cube)]
+    [MenuItem("GameObject/Volume/Fog/Box", priority: 56, Icon = EditorIcons.Cube)]
     static void CreateBoxFogVolume()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Box Fog Volume", MenuContext.ActiveGameObject);
@@ -123,7 +179,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Box;
     }
 
-    [MenuItem("GameObject/Effects/Fog/Sphere", priority: 42, Icon = EditorIcons.CircleDot)]
+    [MenuItem("GameObject/Volume/Fog/Sphere", priority: 57, Icon = EditorIcons.CircleDot)]
     static void CreateSphereFogVolume()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Sphere Fog Volume", MenuContext.ActiveGameObject);
@@ -132,7 +188,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Sphere;
     }
 
-    [MenuItem("GameObject/Effects/Fog/Cylinder", priority: 43, Icon = EditorIcons.Circle)]
+    [MenuItem("GameObject/Volume/Fog/Cylinder", priority: 58, Icon = EditorIcons.Circle)]
     static void CreateCylinderFogVolume()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Cylinder Fog Volume", MenuContext.ActiveGameObject);
@@ -141,7 +197,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Cylinder;
     }
 
-    [MenuItem("GameObject/Effects/Fog/Cone", priority: 44, Icon = EditorIcons.Bullseye)]
+    [MenuItem("GameObject/Volume/Fog/Cone", priority: 59, Icon = EditorIcons.Bullseye)]
     static void CreateConeFogVolume()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Cone Fog Volume", MenuContext.ActiveGameObject);
@@ -150,7 +206,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Cone;
     }
 
-    [MenuItem("GameObject/Effects/Particle System", priority: 55, Icon = EditorIcons.SprayCanSparkles, Separator = true)]
+    [MenuItem("GameObject/Effects/Particle System", priority: 60, Icon = EditorIcons.SprayCanSparkles)]
     static void CreateParticleSystem()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Particle System", MenuContext.ActiveGameObject);
@@ -161,21 +217,86 @@ internal static class DefaultGameObjectCreators
         ps.Initial.StartSize = new MinMaxCurve(0.2f);
     }
 
-    [MenuItem("GameObject/Audio/Audio Source", priority: 60, Icon = EditorIcons.VolumeHigh)]
+    [MenuItem("GameObject/Effects/Decal", priority: 61, Icon = EditorIcons.Stamp)]
+    static void CreateDecal()
+    {
+        // Forward up, the opposite of a downward spot light, so it lands on the ground.
+        GameObject go = HierarchyPanel.CreateGameObject("Decal", MenuContext.ActiveGameObject);
+        go.Transform.Rotation = Quaternion.FromEuler(new Float3(-90, 0, 0));
+        go.AddComponent<Decal>();
+    }
+
+    [MenuItem("GameObject/Effects/Wind Zone", priority: 62, Icon = EditorIcons.Wind)]
+    static void CreateWindZone()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Wind Zone", MenuContext.ActiveGameObject);
+        go.AddComponent<WindZone>();
+    }
+
+    [MenuItem("GameObject/Physics/Character Controller", priority: 70, Icon = EditorIcons.PersonWalking)]
+    static void CreateCharacterController()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Character", MenuContext.ActiveGameObject);
+        go.AddComponent<CharacterController>();
+    }
+
+    [MenuItem("GameObject/Physics/Trigger Volume", priority: 71, Icon = EditorIcons.BorderNone)]
+    static void CreateTriggerVolume()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Trigger Volume", MenuContext.ActiveGameObject);
+        go.AddComponent<TriggerVolume>();
+    }
+
+    [MenuItem("GameObject/Physics/Wheel", priority: 72, Icon = EditorIcons.Dharmachakra)]
+    static void CreateWheel()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("Wheel", MenuContext.ActiveGameObject);
+        go.AddComponent<WheelCollider>();
+    }
+
+    [MenuItem("GameObject/Navigation/NavMesh Surface", priority: 75, Icon = EditorIcons.Map)]
+    static void CreateNavMeshSurface()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("NavMesh Surface", MenuContext.ActiveGameObject);
+        go.AddComponent<NavMeshSurface>();
+    }
+
+    [MenuItem("GameObject/Navigation/NavMesh Link", priority: 76, Icon = EditorIcons.Link)]
+    static void CreateNavMeshLink()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("NavMesh Link", MenuContext.ActiveGameObject);
+        go.AddComponent<NavMeshLink>();
+    }
+
+    [MenuItem("GameObject/Navigation/NavMesh Modifier Volume", priority: 77, Icon = EditorIcons.Cube)]
+    static void CreateNavMeshModifierVolume()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("NavMesh Modifier Volume", MenuContext.ActiveGameObject);
+        go.AddComponent<NavMeshModifierVolume>();
+    }
+
+    [MenuItem("GameObject/Navigation/NavMesh Obstacle", priority: 78, Icon = EditorIcons.Ban)]
+    static void CreateNavMeshObstacle()
+    {
+        GameObject go = HierarchyPanel.CreateGameObject("NavMesh Obstacle", MenuContext.ActiveGameObject);
+        go.AddComponent<NavMeshObstacle>();
+    }
+
+    [MenuItem("GameObject/Audio/Audio Source", priority: 80, Icon = EditorIcons.VolumeHigh)]
     static void CreateAudioSource()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Audio Source", MenuContext.ActiveGameObject);
         go.AddComponent<AudioSource>();
     }
 
-    [MenuItem("GameObject/Audio/Audio Listener", priority: 61, Icon = EditorIcons.Headphones)]
+    [MenuItem("GameObject/Audio/Audio Listener", priority: 81, Icon = EditorIcons.Headphones)]
     static void CreateAudioListener()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Audio Listener", MenuContext.ActiveGameObject);
         go.AddComponent<AudioListener>();
     }
 
-    [MenuItem("GameObject/UI/Canvas", priority: 70, Icon = EditorIcons.BorderAll)]
+    [MenuItem("GameObject/UI/Canvas", priority: 90, Icon = EditorIcons.BorderAll)]
     static void CreateCanvas()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Canvas", MenuContext.ActiveGameObject);
@@ -183,7 +304,7 @@ internal static class DefaultGameObjectCreators
         go.AddComponent<GameCanvas>();
     }
 
-    [MenuItem("GameObject/UI/Text", priority: 71, Icon = EditorIcons.Font)]
+    [MenuItem("GameObject/UI/Text", priority: 91, Icon = EditorIcons.Font)]
     static void CreateUIText()
     {
         GameObject go = NewUIElement("Text", MenuContext.ActiveGameObject);
@@ -192,7 +313,7 @@ internal static class DefaultGameObjectCreators
         text.Text = "New Text";
     }
 
-    [MenuItem("GameObject/UI/Image", priority: 72, Icon = EditorIcons.Image)]
+    [MenuItem("GameObject/UI/Image", priority: 92, Icon = EditorIcons.Image)]
     static void CreateUIImage()
     {
         GameObject go = NewUIElement("Image", MenuContext.ActiveGameObject);
@@ -200,7 +321,7 @@ internal static class DefaultGameObjectCreators
         go.AddComponent<UIImage>();
     }
 
-    [MenuItem("GameObject/UI/Button", priority: 73, Icon = EditorIcons.MobileButton)]
+    [MenuItem("GameObject/UI/Button", priority: 93, Icon = EditorIcons.MobileButton)]
     static void CreateUIButton()
     {
         GameObject go = NewUIElement("Button", MenuContext.ActiveGameObject);
@@ -210,7 +331,7 @@ internal static class DefaultGameObjectCreators
         button.TargetGraphic = image;
     }
 
-    [MenuItem("GameObject/UI/Panel", priority: 74, Icon = EditorIcons.WindowMaximize)]
+    [MenuItem("GameObject/UI/Panel", priority: 94, Icon = EditorIcons.WindowMaximize)]
     static void CreateUIPanel()
     {
         GameObject go = NewUIElement("Panel", MenuContext.ActiveGameObject);
@@ -223,7 +344,7 @@ internal static class DefaultGameObjectCreators
         img.Color = new Color(1f, 1f, 1f, 0.4f);
     }
 
-    [MenuItem("GameObject/UI/Slider", priority: 75, Icon = EditorIcons.Sliders)]
+    [MenuItem("GameObject/UI/Slider", priority: 95, Icon = EditorIcons.Sliders)]
     static void CreateUISlider()
     {
         GameObject go = NewUIElement("Slider", MenuContext.ActiveGameObject);
@@ -250,7 +371,7 @@ internal static class DefaultGameObjectCreators
         slider.Value = 0.5f;
     }
 
-    [MenuItem("GameObject/UI/Scroll View", priority: 76, Icon = EditorIcons.RectangleList)]
+    [MenuItem("GameObject/UI/Scroll View", priority: 97, Icon = EditorIcons.RectangleList)]
     static void CreateUIScrollView()
     {
         const float bar = 12f;
@@ -294,7 +415,7 @@ internal static class DefaultGameObjectCreators
         scroll.VerticalScrollbar = vBar;
     }
 
-    [MenuItem("GameObject/UI/Toggle", priority: 78, Icon = EditorIcons.SquareCheck)]
+    [MenuItem("GameObject/UI/Toggle", priority: 99, Icon = EditorIcons.SquareCheck)]
     static void CreateUIToggle()
     {
         GameObject go = NewUIElement("Toggle", MenuContext.ActiveGameObject);
@@ -318,7 +439,7 @@ internal static class DefaultGameObjectCreators
         toggle.IsOn = true;
     }
 
-    [MenuItem("GameObject/UI/Rect Mask", priority: 77, Icon = EditorIcons.Square)]
+    [MenuItem("GameObject/UI/Rect Mask", priority: 98, Icon = EditorIcons.Square)]
     static void CreateUIRectMask()
     {
         GameObject go = NewUIElement("Rect Mask", MenuContext.ActiveGameObject);
@@ -326,7 +447,7 @@ internal static class DefaultGameObjectCreators
         go.AddComponent<RectMask>();
     }
 
-    [MenuItem("GameObject/UI/Input Field", priority: 78, Icon = EditorIcons.Keyboard)]
+    [MenuItem("GameObject/UI/Input Field", priority: 100, Icon = EditorIcons.Keyboard)]
     static void CreateUIInputField()
     {
         GameObject go = NewUIElement("Input Field", MenuContext.ActiveGameObject);
@@ -385,7 +506,7 @@ internal static class DefaultGameObjectCreators
         field.Caret = caretRt;
     }
 
-    [MenuItem("GameObject/UI/Dropdown", priority: 79, Icon = EditorIcons.ChevronDown)]
+    [MenuItem("GameObject/UI/Dropdown", priority: 101, Icon = EditorIcons.ChevronDown)]
     static void CreateUIDropdown()
     {
         GameObject go = NewUIElement("Dropdown", MenuContext.ActiveGameObject);
@@ -422,14 +543,41 @@ internal static class DefaultGameObjectCreators
         dropdown.TargetGraphic = bg;
     }
 
-    [MenuItem("GameObject/UI/Event System", priority: 90, Icon = EditorIcons.ArrowPointer, Separator = true)]
+    [MenuItem("GameObject/UI/Scrollbar", priority: 96, Icon = EditorIcons.GripLinesVertical)]
+    static void CreateUIScrollbar()
+    {
+        GameObject parent = ResolveCanvasParent(MenuContext.ActiveGameObject);
+        EnsureEventSystem(parent.Scene);
+        UIScrollbar bar = BuildScrollbar("Scrollbar", parent, UIScrollbar.ScrollbarDirection.BottomToTop);
+        bar.GameObject.RectTransform!.SizeDelta = new Float2(20f, 160f);
+        Selection.Clear();
+        Selection.AddToSelection(bar.GameObject);
+    }
+
+    [MenuItem("GameObject/UI/Layout/Horizontal Layout", priority: 105, Icon = EditorIcons.GripLinesVertical, Separator = true)]
+    static void CreateHorizontalLayout() => CreateLayout<HorizontalLayoutGroup>("Horizontal Layout", new Float2(300f, 60f));
+
+    [MenuItem("GameObject/UI/Layout/Vertical Layout", priority: 106, Icon = EditorIcons.GripLines)]
+    static void CreateVerticalLayout() => CreateLayout<VerticalLayoutGroup>("Vertical Layout", new Float2(160f, 300f));
+
+    [MenuItem("GameObject/UI/Layout/Grid Layout", priority: 107, Icon = EditorIcons.TableCells)]
+    static void CreateGridLayout() => CreateLayout<GridLayoutGroup>("Grid Layout", new Float2(300f, 300f));
+
+    static void CreateLayout<T>(string name, Float2 size) where T : LayoutGroup, new()
+    {
+        GameObject go = NewUIElement(name, MenuContext.ActiveGameObject);
+        go.RectTransform!.SizeDelta = size;
+        go.AddComponent<T>();
+    }
+
+    [MenuItem("GameObject/UI/Event System", priority: 115, Icon = EditorIcons.ArrowPointer, Separator = true)]
     static void CreateEventSystem()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Event System", MenuContext.ActiveGameObject);
         go.AddComponent<EventSystem>();
     }
 
-    [MenuItem("GameObject/Camera", priority: 100, Icon = EditorIcons.Camera, Separator = true)]
+    [MenuItem("GameObject/Camera", priority: 130, Icon = EditorIcons.Camera, Separator = true)]
     static void CreateCamera()
     {
         GameObject go = HierarchyPanel.CreateGameObject("Camera", MenuContext.ActiveGameObject);
@@ -442,6 +590,18 @@ internal static class DefaultGameObjectCreators
         MeshRenderer renderer = go.AddComponent<MeshRenderer>();
         renderer.Mesh = AssetDatabase.Get<Mesh>(BuiltInAssets.GuidForMesh(model));
         renderer.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
+
+        // Each collider's defaults match its primitive's size: radius 0.5, and 2 tall where it has a height.
+        switch (model)
+        {
+            case DefaultModel.Cube: go.AddComponent<BoxCollider>(); break;
+            case DefaultModel.Sphere: go.AddComponent<SphereCollider>(); break;
+            case DefaultModel.Capsule: go.AddComponent<CapsuleCollider>(); break;
+            case DefaultModel.Cylinder: go.AddComponent<CylinderCollider>(); break;
+            // The cone shape sits on its centre of mass, a quarter of its height above the base.
+            case DefaultModel.Cone: go.AddComponent<ConeCollider>().Center = new Float3(0, -0.5f, 0); break;
+            case DefaultModel.Plane: go.AddComponent<MeshCollider>(); break;
+        }
     }
 
     private static GameObject NewUIElement(string name, GameObject? parent)
@@ -453,7 +613,7 @@ internal static class DefaultGameObjectCreators
         return go;
     }
 
-    private static void EnsureEventSystem(SceneInstance? scene)
+    private static void EnsureEventSystem(Scene? scene)
     {
         if (scene.IsNotValid()) scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
@@ -468,7 +628,7 @@ internal static class DefaultGameObjectCreators
         GameCanvas? canvas = parent.IsValid() ? parent.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
         if (canvas.IsValid()) return parent!;
 
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsValid())
         {
             foreach (GameCanvas? c in scene.GetAll<GameCanvas>(includeDisabled: true))

@@ -441,7 +441,9 @@ public sealed class Texture2D : Texture, ISerializable
         };
 
         using Stream stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
-        return FromStream(stream, true, srgb);
+        Texture2D result = FromStream(stream, true, srgb);
+        if (texture == DefaultTexture.Grid) result.Filter = FilterMode.Point;
+        return result;
     }
 
     internal const string TextureFormatMustBeRgba8Error = "The image must be decoded to Rgba8";

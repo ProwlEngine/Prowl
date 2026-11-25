@@ -34,10 +34,13 @@ public static class TransformHandles
     /// point this frame; <paramref name="hot"/> is true while the handle is hovered or being dragged
     /// (callers should treat input as consumed and skip their own picking when hot).</summary>
     public static bool PositionHandle(HandleContext ctx, string id, ref Float3 position, out bool hot)
+        => PositionHandle(ctx, id, ref position, Quaternion.Identity, out hot);
+
+    /// <summary>As the other overload, with the handle's axes turned by <paramref name="axes"/>.</summary>
+    public static bool PositionHandle(HandleContext ctx, string id, ref Float3 position, Quaternion axes, out bool hot)
     {
-        Quaternion rot = Quaternion.Identity;
         Float3 scale = Float3.One;
-        return DoTransform(ctx, id, Gizmo.TransformGizmoMode.Translate, ref position, ref rot, ref scale, out hot);
+        return DoTransform(ctx, id, Gizmo.TransformGizmoMode.Translate, ref position, ref axes, ref scale, out hot);
     }
 
     /// A rotation handle pivoted at <paramref name="pivot"/>. Returns true if it rotated this frame; <paramref name="hot"/> is true while the handle is hovered or being dragged (callers should treat input as consumed and skip their own picking when hot).

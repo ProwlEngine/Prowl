@@ -5,17 +5,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
-using Material = Prowl.Runtime.Resources.Material;
-using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -450,52 +447,19 @@ public static class Debug
         });
     }
 
-    public static void If(bool condition, string message = "")
+    /// <summary>Throws an <see cref="AssertionFailedException"/> when <paramref name="condition"/> is false, in every build.</summary>
+    /// <param name="condition"> The condition to check. </param>
+    /// <param name="message"> An optional message to include in the excepton message. </param>
+    public static void Assert([DoesNotReturnIf(false)] bool condition, string? message = null)
     {
-        if (condition)
-            throw new Exception(message);
-    }
-
-    public static void IfNull(object value, string message = "")
-    {
-        if (value is null)
-            throw new Exception(message);
-    }
-
-    public static void IfNullOrEmpty(string value, string message = "")
-    {
-        if (string.IsNullOrEmpty(value))
-            throw new Exception(message);
-    }
-
-    internal static void ErrorGuard(Action value)
-    {
-        try
-        {
-            value();
-        }
-        catch (Exception e)
-        {
-            LogError(e.Message);
-        }
-    }
-
-    /// <summary>Logs an error when <paramref name="condition"/> is false, in every build, and carries on.</summary>
-    public static void Assert(bool condition, string? message)
-    {
-        if (!condition) LogCore(message == null ? "Assertion failed" : $"Assertion failed: {message}", LogSeverity.Error);
-    }
-
-    /// <inheritdoc cref="Assert(bool, string?)"/>
-    public static void Assert(bool condition)
-    {
-        if (!condition) LogCore("Assertion failed", LogSeverity.Error);
+        if (!condition)
+            throw new AssertionFailedException(message == null ? "Assertion failed" : $"Assertion failed: {message}");
     }
 
     #region Gizmos
 
     // Draw calls land in the scene whose code is running, so a preview never draws the game's lines.
-    private static GizmoBuilder s_gizmoBuilder => Resources.SceneInstance.Active.Gizmos;
+    private static GizmoBuilder s_gizmoBuilder => Resources.Scene.Active.Gizmos;
 
     // Built games draw no gizmos, so their draw calls return before touching a scene
     private static GizmoBatch? Gizmos => Application.IsEditor ? s_gizmoBuilder.Batch : null;
@@ -514,12 +478,12 @@ public static class Debug
     /// <summary>Clears every scene's gizmos for the next frame, handing the frame's to the renderer.</summary>
     public static void ClearGizmos()
     {
-        foreach (Resources.SceneInstance scene in Resources.SceneInstance.Live)
+        foreach (Resources.Scene scene in Resources.Scene.Live)
             scene.Gizmos.Clear();
     }
 
     /// <summary>Shows a scene's gizmos for this frame in the views of a world that draw gizmos.</summary>
-    internal static void SubmitGizmos(Resources.SceneInstance? scene, RenderWorld world)
+    internal static void SubmitGizmos(Resources.Scene? scene, RenderWorld world)
     {
         if (scene.IsNotValid() || !Application.IsEditor) return;
         scene.Gizmos.Submit(world, GizmoFeature);
@@ -704,6 +668,12 @@ public static class Debug
 }
 
 /// <summary>
+/// The exception that is thrown if <see cref="Debug.Assert"/> fails.
+/// </summary>
+/// <param name="message"> The exception message. </param>
+public class AssertionFailedException(string message) : Exception(message);
+
+/// <summary>
 /// A scene's gizmos, drawn through Graphite's gizmo feature. Draws fill one batch while the renderer shows the other,
 /// which <see cref="Clear"/> swaps at the end of a frame, so the frame's gizmos reach the renderer after they are cleared.
 /// </summary>
@@ -711,12 +681,17 @@ public class GizmoBuilder
 {
     private GizmoBatch _building = new() { Visible = false };
     private GizmoBatch _shown = new() { Visible = false };
+    private GizmoBatch _surfaceBuilding = new() { Visible = false, Hidden = HiddenStyle.Gone };
+    private GizmoBatch _surfaceShown = new() { Visible = false, Hidden = HiddenStyle.Gone };
     private RenderWorld? _world;
     private Prowl.Graphite.Rendering.Gizmos? _feature;
     private readonly Stack<Float4x4> _matrices = new();
 
     /// <summary>The batch draws this frame go into.</summary>
     public GizmoBatch Batch => _building;
+
+    /// <summary>A batch for this frame whose parts behind the scene's surfaces are not drawn at all.</summary>
+    public GizmoBatch SurfaceBatch => _surfaceBuilding;
 
     /// <summary>Whether nothing was drawn into this builder since it was last cleared.</summary>
     internal bool IsEmpty => _building.PrimitiveCount == 0;
@@ -837,9 +812,13 @@ public class GizmoBuilder
         {
             _feature?.Remove(_building);
             _feature?.Remove(_shown);
+            _feature?.Remove(_surfaceBuilding);
+            _feature?.Remove(_surfaceShown);
             _feature = feature;
             feature.Add(_building);
             feature.Add(_shown);
+            feature.Add(_surfaceBuilding);
+            feature.Add(_surfaceShown);
         }
         _world = world;
     }
@@ -853,6 +832,11 @@ public class GizmoBuilder
         _world = null;
         _building.Clear();
         _building.Visible = false;
+        (_surfaceShown, _surfaceBuilding) = (_surfaceBuilding, _surfaceShown);
+        _surfaceShown.World = _shown.World;
+        _surfaceShown.Visible = _shown.Visible;
+        _surfaceBuilding.Clear();
+        _surfaceBuilding.Visible = false;
         _matrices.Clear();
 
         (_publishedHitboxes, _hitboxes) = (_hitboxes, _publishedHitboxes);
@@ -865,6 +849,8 @@ public class GizmoBuilder
     {
         _feature?.Remove(_building);
         _feature?.Remove(_shown);
+        _feature?.Remove(_surfaceBuilding);
+        _feature?.Remove(_surfaceShown);
         _feature = null;
     }
 }

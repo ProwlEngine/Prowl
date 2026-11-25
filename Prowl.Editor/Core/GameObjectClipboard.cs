@@ -74,7 +74,7 @@ public static class GameObjectClipboard
             var root = EchoObject.ReadFromString(echoText);
             if (root == null || root.TagType != EchoType.List) return results;
 
-            SceneInstance scene = EditorSceneManager.EditedWorld;
+            Scene scene = EditorSceneManager.EditedWorld;
             if (scene.IsNotValid()) return results;
 
             // Shared context so a reference between two pasted objects resolves to the pasted one,
@@ -124,7 +124,7 @@ public static class GameObjectClipboard
     public static List<GameObject> Duplicate(IEnumerable<GameObject> gameObjects)
     {
         var results = new List<GameObject>();
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return results;
 
         List<GameObject> roots = FilterToRoots(gameObjects);

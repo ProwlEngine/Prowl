@@ -37,14 +37,14 @@ public class SceneLoadTests : RuntimeTestBase
     }
 
     // A stored scene holding one root of each name.
-    private Scene Stored(string name, params string[] roots)
+    private SceneAsset Stored(string name, params string[] roots)
     {
-        var authoring = new SceneInstance();
+        var authoring = new Scene();
         foreach (string root in roots)
             authoring.Create(root).AddComponent<Counted>();
-        var stored = new Scene { Data = authoring.ActiveSection.CaptureTree() };
+        var stored = new SceneAsset { Data = authoring.ActiveSection.CaptureTree() };
         authoring.Dispose();
-        return AssetDatabase.Get<Scene>(_backend.Add(stored, name + ".scene"))!;
+        return AssetDatabase.Get<SceneAsset>(_backend.Add(stored, name + ".scene"))!;
     }
 
     private static GameObject Only(SceneSection section) => Assert.Single(section.Roots);
@@ -59,7 +59,7 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void Load_ReplacesEverythingButPersistent_AndMakesTheLevelActive()
     {
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
         GameObject old = main.Create("Old");
         Counted oldCounted = old.AddComponent<Counted>();
         GameObject keeper = main.Create("Keeper");
@@ -83,20 +83,20 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void LoadThroughAReference_LoadsTheLevel()
     {
-        AssetRef<Scene> next = Stored("Level", "Door");
+        AssetRef<SceneAsset> next = Stored("Level", "Door");
 
         SceneLoad load = next.Load();
         load.Wait();
 
         Assert.Equal(SceneLoadPhase.Done, load.Phase);
-        Assert.Same(load.Section, SceneInstance.Main.ActiveSection);
+        Assert.Same(load.Section, Scene.Main.ActiveSection);
         Assert.Equal("Door", Only(load.Section!).Name);
     }
 
     [Fact]
     public void MadePersistentWhileALoadDisablesIt_TheObjectSurvivesEnabled()
     {
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
         GameObject keeper = main.Create("Keeper");
         KeepOnDisable keep = keeper.AddComponent<KeepOnDisable>();
 
@@ -111,8 +111,8 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void SceneBuildFind_MatchesANameOrTheEndOfAPath()
     {
-        Scene forest = Stored("Levels/Forest", "f");
-        Scene other = Stored("Old/Forest", "o");
+        SceneAsset forest = Stored("Levels/Forest", "f");
+        SceneAsset other = Stored("Old/Forest", "o");
         SceneBuild.Set([forest, other]);
         try
         {
@@ -127,7 +127,7 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void LoadAdditive_AddsASection_AndLeavesTheActiveOneAlone()
     {
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
         SceneSection before = main.ActiveSection;
 
         SceneLoad load = Stored("Extra", "Lamp").LoadAdditive();
@@ -143,10 +143,10 @@ public class SceneLoadTests : RuntimeTestBase
         SceneLoad load = Stored("Menu", "Button").Open();
         load.Wait();
 
-        SceneInstance world = load.Section!.Instance;
+        Scene world = load.Section!.Instance;
         try
         {
-            Assert.NotSame(SceneInstance.Main, world);
+            Assert.NotSame(Scene.Main, world);
             Assert.Equal(SceneState.Dormant, world.State);
             Assert.Same(load.Section, world.ActiveSection);
             Assert.Equal(0, Only(load.Section).GetComponent<Counted>()!.Enables);
@@ -157,8 +157,8 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void AMissingScene_FailsTheLoad_AndAwaitingThrows()
     {
-        Scene missing = AssetDatabase.Get<Scene>(Guid.NewGuid())!;
-        SceneInstance main = SceneInstance.Main;
+        SceneAsset missing = AssetDatabase.Get<SceneAsset>(Guid.NewGuid())!;
+        Scene main = Scene.Main;
         GameObject survivor = main.Create("Survivor");
 
         SceneLoad load = missing.Load();
@@ -173,7 +173,7 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void AFailedLoad_DoesNotHoldBackTheLoadsAfterIt()
     {
-        Scene missing = AssetDatabase.Get<Scene>(Guid.NewGuid())!;
+        SceneAsset missing = AssetDatabase.Get<SceneAsset>(Guid.NewGuid())!;
         SceneLoad failed = missing.LoadAdditive();
         SceneLoad next = Stored("Next", "n").LoadAdditive();
 
@@ -191,21 +191,21 @@ public class SceneLoadTests : RuntimeTestBase
         Assert.Equal(SceneLoadPhase.WaitingForActivation, load.Phase);
 
         load.Cancel();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Equal(SceneLoadPhase.Cancelled, load.Phase);
         Assert.ThrowsAny<OperationCanceledException>(() => load.GetAwaiter().GetResult());
-        Assert.Null(SceneInstance.Main.PendingLoad);
+        Assert.Null(Scene.Main.PendingLoad);
     }
 
     [Fact]
     public void ALoadIntoADestroyedWorld_IsCancelled()
     {
-        SceneInstance world = CreateScene(enable: true);
+        Scene world = CreateScene(enable: true);
         SceneLoad load = Stored("Level", "Door").Load(world);
         world.Dispose();
 
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         load.Wait();
 
         Assert.Equal(SceneLoadPhase.Cancelled, load.Phase);
@@ -216,12 +216,12 @@ public class SceneLoadTests : RuntimeTestBase
     {
         SceneLoad load = Stored("Level", "Door").Load(options: new LoadOptions { HoldActivation = true });
         load.Wait();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
         Assert.Equal(SceneLoadPhase.WaitingForActivation, load.Phase);
-        Assert.Same(load, SceneInstance.Main.PendingLoad);
+        Assert.Same(load, Scene.Main.PendingLoad);
 
         load.AllowActivation = true;
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Equal(SceneLoadPhase.Done, load.Phase);
     }
@@ -237,26 +237,26 @@ public class SceneLoadTests : RuntimeTestBase
 
         additiveAfter.Wait();
         second.Wait();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Equal(SceneLoadPhase.Cancelled, first.Phase);
         Assert.Equal(SceneLoadPhase.Cancelled, additiveBefore.Phase);
         Assert.Equal(SceneLoadPhase.Done, second.Phase);
         Assert.Equal(SceneLoadPhase.Done, additiveAfter.Phase);
-        Assert.Equal([SceneInstance.Main.Persistent, second.Section, additiveAfter.Section], SceneInstance.Main.Sections);
+        Assert.Equal([Scene.Main.Persistent, second.Section, additiveAfter.Section], Scene.Main.Sections);
     }
 
     [Fact]
     public void UnloadingTheActiveSection_MakesTheNextOneActive_AndCancelsItsToken()
     {
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
         SceneSection first = main.ActiveSection;
         SceneLoad extra = Stored("Extra", "Lamp").LoadAdditive();
         extra.Wait();
         CancellationToken token = first.UnloadToken;
 
         first.Unload();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.False(first.IsLoaded);
         Assert.True(token.IsCancellationRequested);
@@ -266,7 +266,7 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void TheLastSection_CannotBeUnloaded_CountingQueuedUnloads()
     {
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
         SceneLoad extra = Stored("Extra", "Lamp").LoadAdditive();
         extra.Wait();
 
@@ -279,7 +279,7 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void ObjectsMadeIntoAnUnloadingSection_GoWithIt()
     {
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
         GameObject spawner = main.Create("Spawner");
         spawner.AddComponent<SpawnsOnDisable>();
 
@@ -297,24 +297,24 @@ public class SceneLoadTests : RuntimeTestBase
     [Fact]
     public void ALoadFromAnActivation_RunsAtTheNextSafePoint()
     {
-        Scene next = Stored("Next", "n");
+        SceneAsset next = Stored("Next", "n");
         SceneLoad? queued = null;
         void Handler(SceneLoadedArgs args) { if (queued == null) queued = next.Load(); }
-        SceneInstance.Loaded += Handler;
+        Scene.Loaded += Handler;
         SceneLoad first;
         try
         {
             first = Stored("First", "f").Load();
             first.Wait();
         }
-        finally { SceneInstance.Loaded -= Handler; }
+        finally { Scene.Loaded -= Handler; }
 
         Assert.Equal(SceneLoadPhase.Done, first.Phase);
         Assert.NotEqual(SceneLoadPhase.Done, queued!.Phase);
 
         queued.Wait();
         Assert.Equal(SceneLoadPhase.Done, queued.Phase);
-        Assert.Equal("n", Assert.Single(SceneInstance.Main.ActiveSection.Roots).Name);
+        Assert.Equal("n", Assert.Single(Scene.Main.ActiveSection.Roots).Name);
     }
 
     [Fact]
@@ -322,17 +322,17 @@ public class SceneLoadTests : RuntimeTestBase
     {
         SceneLoad? first = null;
         void Handler(SceneLoadedArgs args) => first!.Wait();
-        SceneInstance.Loaded += Handler;
+        Scene.Loaded += Handler;
         try
         {
             first = Stored("First", "f").Load();
             first.Wait();
         }
-        finally { SceneInstance.Loaded -= Handler; }
+        finally { Scene.Loaded -= Handler; }
 
         Assert.Equal(SceneLoadPhase.Done, first.Phase);
         Assert.Null(first.Error);
-        Assert.Equal("f", Assert.Single(SceneInstance.Main.ActiveSection.Roots).Name);
+        Assert.Equal("f", Assert.Single(Scene.Main.ActiveSection.Roots).Name);
     }
 
     [Fact]
@@ -340,38 +340,38 @@ public class SceneLoadTests : RuntimeTestBase
     {
         SceneLoad? first = null;
         void Handler(SceneLoadedArgs args) => first!.Cancel();
-        SceneInstance.Loaded += Handler;
+        Scene.Loaded += Handler;
         try
         {
             first = Stored("First", "f").Load();
             first.Wait();
         }
-        finally { SceneInstance.Loaded -= Handler; }
+        finally { Scene.Loaded -= Handler; }
 
         Assert.Equal(SceneLoadPhase.Done, first.Phase);
         Assert.Same(first.Section, first.GetAwaiter().GetResult());
-        Assert.Equal("f", Assert.Single(SceneInstance.Main.ActiveSection.Roots).Name);
+        Assert.Equal("f", Assert.Single(Scene.Main.ActiveSection.Roots).Name);
     }
 
     [Fact]
     public void Loaded_FiresInsideTheWorld_WithTheSection()
     {
         SceneLoadedArgs? seen = null;
-        SceneInstance? active = null;
-        void Handler(SceneLoadedArgs args) { seen = args; active = SceneInstance.Active; }
-        SceneInstance.Loaded += Handler;
+        Scene? active = null;
+        void Handler(SceneLoadedArgs args) { seen = args; active = Scene.Active; }
+        Scene.Loaded += Handler;
         try { Stored("Level", "Door").Load().Wait(); }
-        finally { SceneInstance.Loaded -= Handler; }
+        finally { Scene.Loaded -= Handler; }
 
-        Assert.Same(SceneInstance.Main.ActiveSection, seen!.Value.Section);
+        Assert.Same(Scene.Main.ActiveSection, seen!.Value.Section);
         Assert.False(seen.Value.Additive);
-        Assert.Same(SceneInstance.Main, active);
+        Assert.Same(Scene.Main, active);
     }
 
     // A stored scene with five probes around a point, tetrahedralized as a bake stores them.
-    private Scene StoredWithProbes(string name, Float3 at)
+    private SceneAsset StoredWithProbes(string name, Float3 at)
     {
-        var authoring = new SceneInstance();
+        var authoring = new Scene();
         authoring.Create(name + "Root");
         Float3[] positions = [at, at + Float3.UnitX, at + Float3.UnitY, at + Float3.UnitZ, at + new Float3(1f, 1f, 1f)];
         ProbeTetrahedralizer.Result tet = ProbeTetrahedralizer.Build(positions);
@@ -380,9 +380,9 @@ public class SceneLoadTests : RuntimeTestBase
         lighting.ProbeSH = new SphericalHarmonicsL2[positions.Length];
         lighting.ProbeTetrahedra = tet.Tetrahedra;
         lighting.ProbeTetNeighbours = tet.Neighbours;
-        var stored = new Scene { Data = authoring.ActiveSection.CaptureTree() };
+        var stored = new SceneAsset { Data = authoring.ActiveSection.CaptureTree() };
         authoring.Dispose();
-        return AssetDatabase.Get<Scene>(_backend.Add(stored, name + ".scene"))!;
+        return AssetDatabase.Get<SceneAsset>(_backend.Add(stored, name + ".scene"))!;
     }
 
     [Fact]
@@ -390,7 +390,7 @@ public class SceneLoadTests : RuntimeTestBase
     {
         SceneLoad load = StoredWithProbes("Lit", Float3.Zero).Load();
         load.Wait();
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
 
         Assert.Null(main.ProbeRebuild);
         Assert.Same(load.Section!.Lighting.ProbeTetrahedra, main.Probes!.Tetrahedra);
@@ -403,16 +403,16 @@ public class SceneLoadTests : RuntimeTestBase
         first.Wait();
         SceneLoad second = StoredWithProbes("B", new Float3(10f, 0f, 0f)).LoadAdditive();
         second.Wait();
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
 
         main.ProbeRebuild!.Wait();
-        SceneInstance.ProbeSet merged = main.Probes!;
+        Scene.ProbeSet merged = main.Probes!;
         Assert.Equal(10, merged.Positions.Length);
         Assert.Equal(new Float3(10f, 0f, 0f), merged.Positions[5]);
         Assert.NotEmpty(merged.Tetrahedra);
 
         first.Section!.Unload();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Null(main.ProbeRebuild);
         Assert.Same(second.Section!.Lighting.ProbeTetrahedra, main.Probes!.Tetrahedra);
@@ -425,14 +425,14 @@ public class SceneLoadTests : RuntimeTestBase
         StoredWithProbes("B", new Float3(10f, 0f, 0f)).LoadAdditive().Wait();
         SceneLoad empty = Stored("Empty", "e").LoadAdditive();
         empty.Wait();
-        SceneInstance main = SceneInstance.Main;
+        Scene main = Scene.Main;
         main.ProbeRebuild!.Wait();
-        SceneInstance.ProbeSet merged = main.Probes!;
+        Scene.ProbeSet merged = main.Probes!;
         int version = main.BakedLightingVersion;
 
         main.ActiveSection = empty.Section!;
         empty.Section!.Unload();
-        SceneInstance.ProcessPendingLoad();
+        Scene.ProcessPendingLoad();
 
         Assert.Null(main.ProbeRebuild);
         Assert.Same(merged, main.Probes);
@@ -443,11 +443,11 @@ public class SceneLoadTests : RuntimeTestBase
     public void Load_DropsTheOldProbesAtOnce()
     {
         StoredWithProbes("Lit", Float3.Zero).Load().Wait();
-        Assert.NotNull(SceneInstance.Main.Probes);
+        Assert.NotNull(Scene.Main.Probes);
 
         Stored("Dark", "d").Load().Wait();
 
-        Assert.Null(SceneInstance.Main.Probes);
-        Assert.Null(SceneInstance.Main.ProbeVolume);
+        Assert.Null(Scene.Main.Probes);
+        Assert.Null(Scene.Main.ProbeVolume);
     }
 }

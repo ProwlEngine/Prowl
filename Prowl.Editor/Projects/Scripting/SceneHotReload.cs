@@ -12,20 +12,20 @@ namespace Prowl.Editor.Projects.Scripting;
 /// <summary>
 /// Migrates the live worlds onto recompiled user types with the <see cref="ReloadEngine"/>: the engine, the editor
 /// and the scene are all in scope, so the walk migrates the whole graph in place (component fields, identity, and
-/// delegates to user methods all carry over), then <see cref="SceneInstance.OnHotReload"/> re-derives per-frame membership
+/// delegates to user methods all carry over), then <see cref="Scene.OnHotReload"/> re-derives per-frame membership
 /// from the new types. Both assemblies stay loaded, no unload required.
 /// </summary>
 public static class SceneHotReload
 {
     /// <summary>Migrate a world across a single user-assembly swap.</summary>
-    public static void Migrate(SceneInstance scene, Assembly previousAssembly, Assembly currentAssembly)
+    public static void Migrate(Scene scene, Assembly previousAssembly, Assembly currentAssembly)
         => Migrate([scene], new[] { (previousAssembly, currentAssembly) });
 
     /// <summary>
     /// Migrate every world across every previous to current swap in <paramref name="assemblyPairs"/>, as the roots of one
     /// walk, so previews and a dormant edit world never keep old types.
     /// </summary>
-    public static void Migrate(IReadOnlyCollection<SceneInstance> worlds, IReadOnlyCollection<(Assembly Previous, Assembly Current)> assemblyPairs)
+    public static void Migrate(IReadOnlyCollection<Scene> worlds, IReadOnlyCollection<(Assembly Previous, Assembly Current)> assemblyPairs)
     {
         if (assemblyPairs.Count == 0) return;
         var scripts = assemblyPairs.Select(p => p.Current.GetName().Name).ToHashSet();
@@ -74,7 +74,7 @@ public static class SceneHotReload
         Summarize(report);
 
         // Re-derive per-frame membership, registries and lookups from the new types.
-        foreach (SceneInstance world in worlds)
+        foreach (Scene world in worlds)
             if (!world.IsDisposed) world.OnHotReload();
     }
 

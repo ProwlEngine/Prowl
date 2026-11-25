@@ -34,12 +34,20 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     /// <summary>Raw read of a built in material, called by <see cref="BuiltInAssets"/> on its first use.</summary>
     internal static Material ParseDefault(DefaultMaterial material)
     {
+        if (material == Prowl.Runtime.Resources.DefaultMaterial.Line)
+            return new Material(Shader.GetDefault(DefaultShader.Line)) { Name = "Line" };
+
+        if (material == Prowl.Runtime.Resources.DefaultMaterial.Grid)
+        {
+            var grid = new Material(Shader.GetDefault(DefaultShader.Lit)) { Name = "Grid" };
+            grid.SetTexture("base_color_map", Texture2D.GetDefault(DefaultTexture.Grid));
+            return grid;
+        }
+
         string fileName = material switch
         {
             Prowl.Runtime.Resources.DefaultMaterial.Standard => "Standard.mat",
             Prowl.Runtime.Resources.DefaultMaterial.Particle => "Particle.mat",
-            Prowl.Runtime.Resources.DefaultMaterial.Terrain => "Standard Terrain.mat",
-            Prowl.Runtime.Resources.DefaultMaterial.Grass => "Grass.mat",
             _ => throw new ArgumentException($"Unknown default material: {material}")
         };
 

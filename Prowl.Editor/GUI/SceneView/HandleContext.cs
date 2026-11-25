@@ -76,6 +76,9 @@ public sealed class HandleContext
     public Float2 MouseLocal { get; private set; }
 
     public Ray MouseRay { get; private set; }
+
+    /// <summary>The camera ray through a point in absolute Paper space.</summary>
+    public Ray RayThrough(Float2 screen) => _camera.ScreenPointToRay(screen - (MousePosition - MouseLocal), ViewportSize);
     public bool ViewportHovered { get; private set; }
 
     public bool PrimaryDown { get; private set; }
@@ -102,6 +105,41 @@ public sealed class HandleContext
 
     /// <summary>Key-held that yields to text editing. See <see cref="GetKeyDown"/>.</summary>
     public bool GetKey(KeyCode key) => !KeyboardCaptured && Input.GetKey(key);
+
+    /// <summary>Whether the pointer was over the view's panel last frame, overlays and toolbars included. Set by the view.</summary>
+    public bool PanelHovered { get; internal set; }
+
+    /// <summary>Tool keys belong to this view: the pointer is over it, nothing is typing and the camera is not flying.</summary>
+    public bool KeysActive => PanelHovered && !KeyboardCaptured && !Input.GetMouseButton(1) && !Input.GetMouseButton(2);
+
+    /// <summary>
+    /// A tool's modal operation owns the viewport: the camera does not move, the right click menu does not open and no
+    /// other shortcuts fire. The tool sets it when the operation starts and clears it when it ends.
+    /// </summary>
+    public bool Modal { get; set; }
+
+    /// <summary>A tool acted on a key this frame, so the viewport's own shortcuts stand down.</summary>
+    public bool KeysUsed { get; private set; }
+
+    /// <summary>A shortcut for this view, marked as used when it fires.</summary>
+    public bool IsPressed(string shortcut)
+    {
+        if (!KeysActive || !ShortcutManager.IsPressed(shortcut)) return false;
+        KeysUsed = true;
+        return true;
+    }
+
+    /// <summary>Whether a shortcut's key is held down over this view, for hold to use bindings.</summary>
+    public bool IsHeld(string shortcut)
+        => KeysActive && ShortcutManager.GetBinding(shortcut) is { IsBound: true } binding && Input.GetKey(binding.Key);
+
+    /// <summary>A raw key for this view, marked as used when it fires.</summary>
+    public bool KeyDown(KeyCode key)
+    {
+        if (!KeysActive || !Input.GetKeyDown(key)) return false;
+        KeysUsed = true;
+        return true;
+    }
 
     /// <summary>
     /// Cursor shape requested by handles this frame, or <see cref="PaperCursor.Inherit"/> when none
@@ -161,7 +199,12 @@ public sealed class HandleContext
         Alt = Input.IsAltPressed;
         Blocked = Input.IsAltPressed || Input.GetMouseButton(1) || Input.GetMouseButton(2);
         KeyboardCaptured = EditorApplication.Instance?.PaperInstance?.WantsCaptureKeyboard == true;
+        KeysUsed = false;
         Cursor = PaperCursor.Inherit;
+
+        // Registrations resolve a frame late, so a cursor that just moved onto UI over the viewport would still hold
+        // last frame's winner and let a press reach the handle behind it
+        if (!ViewportHovered && !Hot.IsValid) _nearest = ControlID.None;
 
         // A drag whose owner never saw the release (viewport lost focus mid-drag) would otherwise
         // hold Hot forever.
@@ -208,6 +251,7 @@ public sealed class HandleContext
     /// </summary>
     public void AddControl(ControlID id, float screenDistance, float depth = float.MaxValue)
     {
+        if (!AcceptsRegistrations) return;
         if (!id.IsValid || !float.IsFinite(screenDistance) || screenDistance >= float.MaxValue) return;
 
         if (_pendingNearest.IsValid)
@@ -230,8 +274,50 @@ public sealed class HandleContext
     public void AddControl(ControlID id, Float3 world, float grabRadiusPixels)
         => AddControl(id, DistanceToPoint(world, grabRadiusPixels), DepthOf(world));
 
+    /// <summary>
+    /// Register a line handle grabbed anywhere along a world segment. <paramref name="endGapPixels"/> leaves that much
+    /// of each end to point handles sitting there, and a segment too short for the gaps is grabbed at its middle.
+    /// </summary>
+    public void AddControl(ControlID id, Float3 a, Float3 b, float grabRadiusPixels, float endGapPixels = 0f)
+    {
+        Float2? sa = WorldToScreen(a), sb = WorldToScreen(b);
+        if (sa is null || sb is null)
+        {
+            const float near = 1e-3f;
+            float da = DepthOf(a), db = DepthOf(b);
+            if (da < near && db < near) return;
+            if (da < near) a += (b - a) * ((near - da) / (db - da));
+            else b += (a - b) * ((near - db) / (da - db));
+            sa = WorldToScreen(a);
+            sb = WorldToScreen(b);
+            if (sa is null || sb is null) return;
+        }
+
+        Float2 ab = sb.Value - sa.Value;
+        float length = Float2.Length(ab);
+        float t = 0.5f;
+        if (length > 2f * endGapPixels && length > 1e-4f)
+        {
+            float gap = endGapPixels / length;
+            t = Maths.Clamp(Float2.Dot(MousePosition - sa.Value, ab) / (length * length), gap, 1f - gap);
+        }
+
+        AddControl(id, DistanceToScreenPoint(sa.Value + ab * t, grabRadiusPixels), DepthOf(a + (b - a) * t));
+    }
+
     /// <summary>Register a fallback that wins only when no other control registered at all.</summary>
-    public void AddDefaultControl(ControlID id) => _pendingDefault = id;
+    public void AddDefaultControl(ControlID id)
+    {
+        if (!AcceptsRegistrations) return;
+        _pendingDefault = id;
+    }
+
+    /// <summary>
+    /// Whether anything in the scene may become hovered or pressed now. UI drawn over the viewport, such as a tool's
+    /// panel or the view cube, takes the cursor, so nothing behind it lights up or can be clicked through it. A drag
+    /// already under way keeps going when the cursor passes over UI.
+    /// </summary>
+    private bool AcceptsRegistrations => ViewportHovered || Hot.IsValid;
 
     public ControlID Nearest => _nearest;
     public ControlID Hot { get; private set; }
@@ -322,4 +408,24 @@ public sealed class HandleContext
         float d = Float2.Length(MousePosition - screen);
         return d > grabRadiusPixels ? float.MaxValue : d;
     }
+}
+
+/// <summary>A pointer that follows the mouse, a tenth as far while Shift is held, for fine drags.</summary>
+public sealed class SlowPointer
+{
+    private Float2 _last;
+
+    public Float2 Position { get; private set; }
+
+    public void Reset(Float2 at) => Position = _last = at;
+
+    /// <summary>Moves on by how far the mouse moved since the last call.</summary>
+    public Float2 Follow(Float2 mouse, bool slow)
+    {
+        Position += (mouse - _last) * (slow ? 0.1f : 1f);
+        _last = mouse;
+        return Position;
+    }
+
+    public Float2 Follow(HandleContext handles) => Follow(handles.MousePosition, handles.Shift);
 }

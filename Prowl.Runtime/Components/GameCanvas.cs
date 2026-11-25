@@ -241,12 +241,12 @@ public class GameCanvas : Component, IRenderSync
 
     public override void OnEnable() => MarkDirty(UIDirtyFlags.All);
 
-    internal override void JoinWorld(SceneInstance world)
+    internal override void JoinWorld(Scene world)
     {
         if (!world.Canvases.Contains(this)) world.Canvases.Add(this);
     }
 
-    internal override void LeaveWorld(SceneInstance world) => world.Canvases.Remove(this);
+    internal override void LeaveWorld(Scene world) => world.Canvases.Remove(this);
 
     bool IRenderSync.Sync(RenderWorld world)
     {
@@ -320,7 +320,7 @@ public class GameCanvas : Component, IRenderSync
         _isDirty = false;
         GeometryVersion++;
 
-        SceneInstance? layoutWorld = GameObject.Scene;
+        Scene? layoutWorld = GameObject.Scene;
         LayoutUtility.InvalidateCache(layoutWorld);
         Tree.Clear();
 

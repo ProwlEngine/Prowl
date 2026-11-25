@@ -170,7 +170,7 @@ public class LightTests : RuntimeTestBase
     public void Range_IsAutomatic_FromTheAxisCandelaAndTheCutoff()
     {
         float cutoff = QualitySettings.Active.LightCutoff;
-        Assert.Equal(0.01f, cutoff);
+        Assert.Equal(0.25f, cutoff);
 
         PointLight point = Make<PointLight>();
         point.UseTemperature = false;
@@ -288,13 +288,13 @@ public class LightTests : RuntimeTestBase
     {
         PointLight light = Make<PointLight>();
         light.ShadowResolution = ShadowResolution._2048;
-        light.ShadowFilter = ShadowFilter.ContactHardening;
+        light.ShadowFilter = ShadowFilter.Hard;
         light.ShadowStrength = 0.5f;
         light.LayerMask = LayerMask.FromMask(0b101);
         LightDesc desc = light.Describe();
         Assert.True(desc.Shadow.Enabled);
         Assert.Equal(2048u, desc.Shadow.Resolution);
-        Assert.Equal(Graphite.Rendering.ShadowFilter.ContactHardening, desc.Shadow.Filter);
+        Assert.Equal(Graphite.Rendering.ShadowFilter.Hard, desc.Shadow.Filter);
         Assert.Equal(0.5f, desc.Shadow.Strength);
         Assert.Equal(0b101u, desc.LayerMask);
     }

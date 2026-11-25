@@ -33,12 +33,10 @@ public class TerrainSceneEditor : SceneTool
     private bool _isPainting;
     private TerrainData? _strokeData;
     private bool _useTransformTool;
+    private bool _strokeChanged;
 
-    // Temporary full snapshot taken at stroke start used to extract the changed region at stroke end
-    private short[]? _preStrokeHeights;
-    private float[]? _preStrokeSplats;
-    private byte[]? _preStrokeHoles;
-    private List<byte[]>? _preStrokeDetails;
+    // The package's edits when the stroke began, page references only
+    private TerrainSnapshot? _beforeStroke;
 
     public int Priority => 0;
 
@@ -63,12 +61,26 @@ public class TerrainSceneEditor : SceneTool
     {
         if (!_isPainting) return;
         _isPainting = false;
-        if (_terrain.IsValid() && _strokeData.IsValid()) RegisterStrokeUndo(_terrain, _strokeData);
+        if (_terrain.IsValid() && _strokeData.IsValid() && _beforeStroke != null && _strokeChanged)
+            Register(StrokeName(), _terrain, _strokeData, _beforeStroke);
         _strokeData = null;
-        _preStrokeHeights = null;
-        _preStrokeSplats = null;
-        _preStrokeHoles = null;
-        _preStrokeDetails = null;
+        _beforeStroke = null;
+        _strokeChanged = false;
+    }
+
+    private static string StrokeName() => TerrainEditor.ActiveTab switch
+    {
+        TerrainTab.Paint => "Terrain Paint",
+        TerrainTab.Holes => "Terrain Holes",
+        TerrainTab.Details => "Terrain Detail",
+        _ => "Terrain Height",
+    };
+
+    // Records an edit already made, from the capture taken before it to the package as it stands
+    private static void Register(string name, TerrainComponent terrain, TerrainData data, TerrainSnapshot before)
+    {
+        TerrainSnapshot after = data.Capture();
+        TerrainDataUndo.Register(name, terrain, data, d => d.Restore(before), d => d.Restore(after));
     }
 
     public override bool OverridesToolStrip => true;
@@ -76,13 +88,12 @@ public class TerrainSceneEditor : SceneTool
     public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
         if (_terrain.IsNotValid()) return;
-        // Transform tool button (always available)
-        EditorGUI.ToolStripButton(paper, $"{id}_xform", EditorIcons.ArrowsUpDownLeftRight_I, "Move", _useTransformTool,
-            () => _useTransformTool = true);
-
-        EditorGUI.Divider(paper, $"{id}_sep", 4f);
+        using (EditorGUI.ToolStripGroup(paper, $"{id}_xform_grp"))
+            EditorGUI.ToolStripButton(paper, $"{id}_xform", EditorIcons.ArrowsUpDownLeftRight_I, "Move", _useTransformTool,
+                () => _useTransformTool = true);
 
         // Terrain-specific tools based on active tab
+        using IDisposable tools = EditorGUI.ToolStripGroup(paper, $"{id}_tools_grp");
         if (TerrainEditor.ActiveTab == TerrainTab.Height)
         {
             DrawHeightToolButtons(paper, id);
@@ -164,7 +175,7 @@ public class TerrainSceneEditor : SceneTool
 
         _terrain.BrushPosition = terrainUV;
         _terrain.BrushRadius = brushSize / terrainData.Size;
-        _terrain.BrushFalloff = isTreeTab ? 1f : TerrainEditor.BrushFalloff;
+        _terrain.BrushFalloff = isTreeTab ? 0.01f : 0.3f;
         _terrain.BrushVisible = true;
 
         // The brush covers the whole terrain surface rather than a point, so it registers as a body:
@@ -192,27 +203,18 @@ public class TerrainSceneEditor : SceneTool
             // Trees: click to place/erase (not continuous drag)
             if (leftPressed)
             {
-                var preTreeList = new List<TreeInstance>(terrainData.Trees);
-
+                TerrainSnapshot before = terrainData.Capture();
                 if (shiftHeld)
                 {
-                    int removed = TerrainEditor.RemoveTrees(terrainData, terrainUV, terrainData.Size);
-                    if (removed > 0)
+                    if (TerrainEditor.RemoveTrees(terrainData, terrainUV) > 0)
                     {
-                        var postTreeList = new List<TreeInstance>(terrainData.Trees);
-                        TerrainDataUndo.Register("Remove Trees", _terrain, terrainData,
-                            d => d.Trees = new List<TreeInstance>(preTreeList),
-                            d => d.Trees = new List<TreeInstance>(postTreeList));
+                        Register("Remove Trees", _terrain, terrainData, before);
                         TerrainEditor.ActiveInstance?.MarkDirty();
                     }
                 }
-                else
+                else if (TerrainEditor.PlaceTrees(terrainData, terrainUV) > 0)
                 {
-                    TerrainEditor.PlaceTrees(terrainData, terrainUV, terrainData.Size);
-                    var postTreeList = new List<TreeInstance>(terrainData.Trees);
-                    TerrainDataUndo.Register("Place Trees", _terrain, terrainData,
-                        d => d.Trees = new List<TreeInstance>(preTreeList),
-                        d => d.Trees = new List<TreeInstance>(postTreeList));
+                    Register("Place Trees", _terrain, terrainData, before);
                     TerrainEditor.ActiveInstance?.MarkDirty();
                 }
             }
@@ -224,267 +226,18 @@ public class TerrainSceneEditor : SceneTool
             {
                 _isPainting = true;
                 _strokeData = terrainData;
-                SnapshotPreStroke(terrainData);
+                _beforeStroke = terrainData.Capture();
             }
 
-            if (_isPainting && leftDown)
+            if (_isPainting && leftDown && TerrainEditor.ApplyBrush(terrainData, terrainUV, Time.DeltaTime, shiftHeld))
             {
-                TerrainEditor.ApplyBrush(terrainData, terrainUV, Time.DeltaTime,
-                    out bool hChanged, out bool sChanged, out bool gChanged, out bool hoChanged);
-
-                if (hChanged || sChanged || gChanged || hoChanged)
-                {
-                    if (hChanged || gChanged) _terrain.InvalidateDetailCache();
-                    TerrainEditor.ActiveInstance?.MarkDirty();
-                }
+                _strokeChanged = true;
+                TerrainEditor.ActiveInstance?.MarkDirty();
             }
 
             if (_isPainting && (leftReleased || !leftDown))
                 EndStroke();
         }
-    }
-
-    private void SnapshotPreStroke(TerrainData data)
-    {
-        // Lightweight: only snapshot the array that the active tab modifies
-        _preStrokeHeights = null;
-        _preStrokeSplats = null;
-        _preStrokeHoles = null;
-        _preStrokeDetails = null;
-
-        if (TerrainEditor.ActiveTab == TerrainTab.Height && data.Heights != null)
-            _preStrokeHeights = (short[])data.Heights.Clone();
-        else if (TerrainEditor.ActiveTab == TerrainTab.Paint && data.Splats != null)
-            _preStrokeSplats = (float[])data.Splats.Clone();
-        else if (TerrainEditor.ActiveTab == TerrainTab.Holes && data.Holes != null)
-            _preStrokeHoles = (byte[])data.Holes.Clone();
-        else if (TerrainEditor.ActiveTab == TerrainTab.Holes)
-        {
-            // Holes not yet allocated - snapshot an all-solid array so undo restores to no holes
-            _preStrokeHoles = new byte[data.SplatmapResolution * data.SplatmapResolution];
-            Array.Fill(_preStrokeHoles, (byte)255);
-        }
-        else if (TerrainEditor.ActiveTab == TerrainTab.Details)
-        {
-            int idx = TerrainEditor.ActiveDetailIndex;
-            if (idx >= 0 && idx < data.DetailLayers.Count && data.DetailLayers[idx] != null)
-                _preStrokeDetails = [(byte[])data.DetailLayers[idx].Clone()];
-        }
-    }
-
-    private void RegisterStrokeUndo(TerrainComponent terrain, TerrainData data)
-    {
-        if (_preStrokeHeights != null && data.Heights != null)
-        {
-            // Find changed region
-            int res = data.HeightmapResolution;
-            FindChangedRect(_preStrokeHeights, data.Heights, res, res,
-                out int minX, out int minZ, out int maxX, out int maxZ);
-
-            if (minX <= maxX)
-            {
-                short[] preRect = CopyRect(_preStrokeHeights, res, minX, minZ, maxX, maxZ);
-                short[] postRect = CopyRect(data.Heights, res, minX, minZ, maxX, maxZ);
-                int cx = minX, cz = minZ, cxe = maxX, cze = maxZ, cres = res;
-                TerrainDataUndo.Register("Terrain Height", terrain, data,
-                    d => { PasteRect(d.Heights!, cres, cx, cz, cxe, cze, preRect); d.SetHeightmapDirty(); },
-                    d => { PasteRect(d.Heights!, cres, cx, cz, cxe, cze, postRect); d.SetHeightmapDirty(); });
-            }
-            _preStrokeHeights = null;
-        }
-        else if (_preStrokeSplats != null && data.Splats != null)
-        {
-            int res = data.SplatmapResolution;
-            int stride = data.LayerCount;
-            FindChangedRect(_preStrokeSplats, data.Splats, res, res * stride,
-                out int minX, out int minZ, out int maxX, out int maxZ);
-
-            if (minX <= maxX)
-            {
-                float[] preRect = CopyRectStride(_preStrokeSplats, res, stride, minX, minZ, maxX, maxZ);
-                float[] postRect = CopyRectStride(data.Splats, res, stride, minX, minZ, maxX, maxZ);
-                int cx = minX, cz = minZ, cxe = maxX, cze = maxZ, cres = res;
-
-                // Skipped once a layer or resolution change has altered the pixel layout
-                void Paste(TerrainData d, float[] rect)
-                {
-                    if (d.LayerCount != stride || d.SplatmapResolution != cres) return;
-                    PasteRectStride(d.Splats, cres, stride, cx, cz, cxe, cze, rect);
-                    d.SetSplatmapDirty();
-                }
-
-                TerrainDataUndo.Register("Terrain Paint", terrain, data, d => Paste(d, preRect), d => Paste(d, postRect));
-            }
-            _preStrokeSplats = null;
-        }
-        else if (_preStrokeHoles != null && data.Holes != null)
-        {
-            // Simple full-array undo for holes (byte array is small)
-            byte[] pre = _preStrokeHoles;
-            byte[] post = (byte[])data.Holes.Clone();
-            TerrainDataUndo.Register("Terrain Holes", terrain, data,
-                d => { d.Holes = (byte[])pre.Clone(); d.SetHolesDirty(); },
-                d => { d.Holes = (byte[])post.Clone(); d.SetHolesDirty(); });
-            _preStrokeHoles = null;
-        }
-        else if (_preStrokeDetails != null)
-        {
-            int idx = TerrainEditor.ActiveDetailIndex;
-            if (idx >= 0 && idx < data.DetailLayers.Count && _preStrokeDetails.Count > 0)
-            {
-                byte[] preArr = _preStrokeDetails[0];
-                byte[] postArr = data.DetailLayers[idx];
-                int res = data.DetailResolution;
-                FindChangedRect(preArr, postArr, res, res,
-                    out int minX, out int minZ, out int maxX, out int maxZ);
-
-                if (minX <= maxX)
-                {
-                    byte[] preRect = CopyRect(preArr, res, minX, minZ, maxX, maxZ);
-                    byte[] postRect = CopyRect(postArr, res, minX, minZ, maxX, maxZ);
-                    int cx = minX, cz = minZ, cxe = maxX, cze = maxZ, cres = res, cidx = idx;
-                    TerrainDataUndo.Register("Terrain Detail", terrain, data,
-                        d => { PasteRect(d.DetailLayers[cidx], cres, cx, cz, cxe, cze, preRect); d.SetDetailsDirty(); },
-                        d => { PasteRect(d.DetailLayers[cidx], cres, cx, cz, cxe, cze, postRect); d.SetDetailsDirty(); });
-                }
-            }
-            _preStrokeDetails = null;
-        }
-    }
-
-    // byte[] overloads for detail-density undo
-    private static void FindChangedRect(byte[] a, byte[] b, int res, int rowStride,
-        out int minX, out int minZ, out int maxX, out int maxZ)
-    {
-        minX = int.MaxValue; minZ = int.MaxValue;
-        maxX = int.MinValue; maxZ = int.MinValue;
-        for (int z = 0; z < res; z++)
-            for (int x = 0; x < res; x++)
-            {
-                int idx = z * res + x;
-                if (idx < a.Length && idx < b.Length && a[idx] != b[idx])
-                {
-                    minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
-                    minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
-                }
-            }
-    }
-
-    private static byte[] CopyRect(byte[] src, int res, int minX, int minZ, int maxX, int maxZ)
-    {
-        int w = maxX - minX + 1, h = maxZ - minZ + 1;
-        byte[] rect = new byte[w * h];
-        for (int z = 0; z < h; z++)
-            Array.Copy(src, (minZ + z) * res + minX, rect, z * w, w);
-        return rect;
-    }
-
-    private static void PasteRect(byte[] dst, int res, int minX, int minZ, int maxX, int maxZ, byte[] rect)
-    {
-        int w = maxX - minX + 1, h = maxZ - minZ + 1;
-        for (int z = 0; z < h; z++)
-            Array.Copy(rect, z * w, dst, (minZ + z) * res + minX, w);
-    }
-
-    // short[] overloads for 16-bit heightmap undo
-    private static void FindChangedRect(short[] a, short[] b, int res, int rowStride,
-        out int minX, out int minZ, out int maxX, out int maxZ)
-    {
-        minX = int.MaxValue; minZ = int.MaxValue;
-        maxX = int.MinValue; maxZ = int.MinValue;
-        for (int z = 0; z < res; z++)
-            for (int x = 0; x < res; x++)
-            {
-                int idx = z * res + x;
-                if (idx < a.Length && idx < b.Length && a[idx] != b[idx])
-                {
-                    minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
-                    minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
-                }
-            }
-    }
-
-    private static short[] CopyRect(short[] src, int res, int minX, int minZ, int maxX, int maxZ)
-    {
-        int w = maxX - minX + 1, h = maxZ - minZ + 1;
-        short[] rect = new short[w * h];
-        for (int z = 0; z < h; z++)
-            Array.Copy(src, (minZ + z) * res + minX, rect, z * w, w);
-        return rect;
-    }
-
-    private static void PasteRect(short[] dst, int res, int minX, int minZ, int maxX, int maxZ, short[] rect)
-    {
-        int w = maxX - minX + 1, h = maxZ - minZ + 1;
-        for (int z = 0; z < h; z++)
-            Array.Copy(rect, z * w, dst, (minZ + z) * res + minX, w);
-    }
-
-    // Find the bounding rect of changed values between two arrays (single-stride)
-    private static void FindChangedRect(float[] a, float[] b, int res, int rowStride,
-        out int minX, out int minZ, out int maxX, out int maxZ)
-    {
-        minX = int.MaxValue; minZ = int.MaxValue;
-        maxX = int.MinValue; maxZ = int.MinValue;
-        int elementsPerPixel = rowStride / res; // 1 for heightmap, 4 for splatmap
-
-        for (int z = 0; z < res; z++)
-        {
-            for (int x = 0; x < res; x++)
-            {
-                int baseIdx = (z * res + x) * elementsPerPixel;
-                bool changed = false;
-                for (int c = 0; c < elementsPerPixel; c++)
-                {
-                    int idx = baseIdx + c;
-                    if (idx < a.Length && idx < b.Length && a[idx] != b[idx])
-                    { changed = true; break; }
-                }
-                if (changed)
-                {
-                    minX = Math.Min(minX, x);
-                    maxX = Math.Max(maxX, x);
-                    minZ = Math.Min(minZ, z);
-                    maxZ = Math.Max(maxZ, z);
-                }
-            }
-        }
-    }
-
-    private static float[] CopyRect(float[] src, int res, int minX, int minZ, int maxX, int maxZ)
-    {
-        int w = maxX - minX + 1;
-        int h = maxZ - minZ + 1;
-        float[] rect = new float[w * h];
-        for (int z = 0; z < h; z++)
-            Array.Copy(src, (minZ + z) * res + minX, rect, z * w, w);
-        return rect;
-    }
-
-    private static void PasteRect(float[] dst, int res, int minX, int minZ, int maxX, int maxZ, float[] rect)
-    {
-        int w = maxX - minX + 1;
-        int h = maxZ - minZ + 1;
-        for (int z = 0; z < h; z++)
-            Array.Copy(rect, z * w, dst, (minZ + z) * res + minX, w);
-    }
-
-    private static float[] CopyRectStride(float[] src, int res, int stride, int minX, int minZ, int maxX, int maxZ)
-    {
-        int w = maxX - minX + 1;
-        int h = maxZ - minZ + 1;
-        float[] rect = new float[w * h * stride];
-        for (int z = 0; z < h; z++)
-            Array.Copy(src, ((minZ + z) * res + minX) * stride, rect, z * w * stride, w * stride);
-        return rect;
-    }
-
-    private static void PasteRectStride(float[] dst, int res, int stride, int minX, int minZ, int maxX, int maxZ, float[] rect)
-    {
-        int w = maxX - minX + 1;
-        int h = maxZ - minZ + 1;
-        for (int z = 0; z < h; z++)
-            Array.Copy(rect, z * w * stride, dst, ((minZ + z) * res + minX) * stride, w * stride);
     }
 
     public override void OnDrawOverlay(SceneToolContext ctx, Quill.Canvas canvas)
@@ -538,7 +291,7 @@ internal sealed class TerrainDataUndo : IUndoOperation
         if (_assetId != Guid.Empty)
             return AssetDatabase.TryGetExisting(_assetId, out Asset asset) && asset is TerrainData { IsLoaded: true } loaded ? loaded : null;
 
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return null;
         TerrainComponent? terrain = scene.FindObject<TerrainComponent>(_terrainId);
         return terrain.IsValid() ? terrain.Data : null;

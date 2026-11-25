@@ -34,7 +34,7 @@ public class UndoHistoryPanel : DockPanel
         if (font == null) return;
 
         string which = Application.IsPlaying ? Loc.Get("undo_history.play")
-            : PrefabEditingMode.IsEditing ? Loc.Get("undo_history.prefab")
+            : IsolatedWorld.Current is { } session ? session.HistoryTitle
             : Loc.Get("undo_history.edit");
 
         using (paper.Column("uh_root").Width(width).Height(height).Clip().Enter())

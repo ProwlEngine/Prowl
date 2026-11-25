@@ -193,28 +193,29 @@ public class LightEditor : CustomEditor
         switch (light)
         {
             case DirectionalLight sun:
-                ShapeSlider(paper, $"{id}_sun", "Sun size", "Angular radius of the sun disk in degrees, about 0.27 for the real sun. Softens highlights and contact shadows.",
-                    "angularRadius", sun.AngularRadius, 0f, 5f, v => Edit(sun, () => sun.AngularRadius = v));
+                ShapeField(paper, $"{id}_sun", "Sun size", "Angular radius of the sun disk in degrees, about 0.27 for the real sun. Softens highlights and contact shadows.",
+                    "angularRadius", sun.AngularRadius, 0f, 90f, "deg", v => Edit(sun, () => sun.AngularRadius = v));
                 break;
             case PunctualLight punctual:
-                ShapeSlider(paper, $"{id}_rad", "Radius", radiusHelp, "sourceRadius", punctual.SourceRadius, 0f, 0.5f, v => Edit(punctual, () => punctual.SourceRadius = v));
+                ShapeField(paper, $"{id}_rad", "Radius", radiusHelp, "sourceRadius", punctual.SourceRadius, 0f, float.MaxValue, "m", v => Edit(punctual, () => punctual.SourceRadius = v));
                 break;
             case RectLight rect:
-                ShapeSlider(paper, $"{id}_w", "Width", keep, "width", rect.Width, 0.05f, 5f, v => KeepLumens(rect, () => rect.Width = v));
-                ShapeSlider(paper, $"{id}_h", "Height", keep, "height", rect.Height, 0.05f, 5f, v => KeepLumens(rect, () => rect.Height = v));
+                ShapeField(paper, $"{id}_w", "Width", keep, "width", rect.Width, 0.05f, float.MaxValue, "m", v => KeepLumens(rect, () => rect.Width = v));
+                ShapeField(paper, $"{id}_h", "Height", keep, "height", rect.Height, 0.05f, float.MaxValue, "m", v => KeepLumens(rect, () => rect.Height = v));
                 break;
             case DiskLight disk:
-                ShapeSlider(paper, $"{id}_w", "Diameter", keep, "diameter", disk.Diameter, 0.05f, 5f, v => KeepLumens(disk, () => disk.Diameter = v));
+                ShapeField(paper, $"{id}_w", "Diameter", keep, "diameter", disk.Diameter, 0.05f, float.MaxValue, "m", v => KeepLumens(disk, () => disk.Diameter = v));
                 break;
             case TubeLight tube:
-                ShapeSlider(paper, $"{id}_len", "Length", keep, "length", tube.Length, 0.05f, 5f, v => KeepLumens(tube, () => tube.Length = v));
-                ShapeSlider(paper, $"{id}_rad", "Radius", keep, "radius", tube.Radius, 0.001f, 0.2f, v => KeepLumens(tube, () => tube.Radius = v));
+                ShapeField(paper, $"{id}_len", "Length", keep, "length", tube.Length, 0.05f, float.MaxValue, "m", v => KeepLumens(tube, () => tube.Length = v));
+                ShapeField(paper, $"{id}_rad", "Radius", keep, "radius", tube.Radius, 0.001f, float.MaxValue, "m", v => KeepLumens(tube, () => tube.Radius = v));
                 break;
         }
     }
 
-    private static void ShapeSlider(Paper paper, string id, string label, string help, string field, float value, float min, float max, Action<float> set)
-        => Row(paper, id, label, help, () => Origami.Slider(paper, $"{id}_v", value, set, min, max).Format("0.###").ValueWidth(64).Show(), field);
+    private static void ShapeField(Paper paper, string id, string label, string help, string field, float value, float min, float max, string suffix, Action<float> set)
+        => Row(paper, id, label, help, () => Origami.NumericField<float>(paper, $"{id}_v", value, v => set(Math.Clamp(v, min, max)))
+            .Format("0.###").Suffix(suffix).Show(), field);
 
     private static void ReachRow(Paper paper, string id, LocalLight light)
     {

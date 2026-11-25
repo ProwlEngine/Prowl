@@ -271,14 +271,14 @@ public class GameViewPanel : DockPanel
     /// The worlds the game view draws and feeds input, lowest render order first: Main, and in play every running
     /// world play code presented over it.
     /// </summary>
-    internal static List<SceneInstance> HostedWorlds()
+    internal static List<Scene> HostedWorlds()
     {
-        List<SceneInstance> worlds = [];
-        if (!SceneInstance.HasMain) return worlds;
-        SceneInstance main = SceneInstance.Main;
+        List<Scene> worlds = [];
+        if (!Scene.HasMain) return worlds;
+        Scene main = Scene.Main;
         worlds.Add(main);
         if (!Application.IsPlaying) return worlds;
-        foreach (SceneInstance world in SceneInstance.All)
+        foreach (Scene world in Scene.All)
             if (world.Present && world.State == SceneState.Running && !ReferenceEquals(world, main))
                 worlds.Add(world);
         return [.. worlds.OrderBy(world => world.RenderOrder)];
@@ -288,7 +288,7 @@ public class GameViewPanel : DockPanel
     {
         using (paper.Box("gv_game").Clip().Enter())
         {
-            SceneInstance scene = SceneInstance.Main;
+            Scene scene = Scene.Main;
             if (scene.IsNotValid())
             {
                 paper.Box("gv_no_scene")
@@ -334,8 +334,8 @@ public class GameViewPanel : DockPanel
 
             EnsureRT(rtW, rtH);
 
-            List<SceneInstance> hosted = HostedWorlds();
-            foreach (SceneInstance world in hosted)
+            List<Scene> hosted = HostedWorlds();
+            foreach (Scene world in hosted)
             {
                 List<Camera> cameras = world.GatherActiveCameras();
                 cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
@@ -392,7 +392,7 @@ public class GameViewPanel : DockPanel
                 // Camera.PixelWidth/Height), so picking works from the editor like a standalone build.
                 GameViewInputHandler.Viewport = new GameViewInputHandler.GameViewport(origin, size, new Int2(rtW, rtH));
 
-                foreach (SceneInstance world in hosted)
+                foreach (Scene world in hosted)
                     world.Input.Viewport = new RuntimeEventSystem.HostViewport
                     {
                         ReferenceSize = new Float2(rtW, rtH),
@@ -403,7 +403,7 @@ public class GameViewPanel : DockPanel
             else
             {
                 GameViewInputHandler.Viewport = null;
-                foreach (SceneInstance world in hosted)
+                foreach (Scene world in hosted)
                     world.Input.Viewport = null;
             }
 
@@ -425,7 +425,7 @@ public class GameViewPanel : DockPanel
                     using (FrameStats.UI.Scope())
                     {
                         _gamePaper!.BeginFrame(Time.UnscaledDeltaTime, -1f);
-                        foreach (SceneInstance world in hosted)
+                        foreach (Scene world in hosted)
                             world.OnGui(_gamePaper);
                         _gamePaper.EndFrame();
                     }

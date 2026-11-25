@@ -22,7 +22,7 @@ public class UITests : RuntimeTestBase
         public void OnPointerDown(PointerEventData e) => Presses++;
     }
 
-    private GameObject CreateUIObject(string name, SceneInstance scene, GameObject? parent = null)
+    private GameObject CreateUIObject(string name, Scene scene, GameObject? parent = null)
     {
         GameObject go = CreateGameObject(name);
         go.EnsureRectTransform();
@@ -35,7 +35,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void ButtonClick_DoesNotBubbleToEnclosingClickable()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject outer = CreateUIObject("Outer", scene);
         ClickCounter counter = outer.AddComponent<ClickCounter>();
         GameObject item = CreateUIObject("Item", scene, outer);
@@ -69,7 +69,7 @@ public class UITests : RuntimeTestBase
         system.UpdateButton(e, MouseButton.Left, false, true, false, releaseOn, null, moved, Float2.Zero, Float2.Zero, Float2.One, 0.2f);
     }
 
-    private (GameObject buttonGo, GameObject labelGo, Func<int> clicks) CreateButtonWithLabel(SceneInstance scene, GameObject? parent)
+    private (GameObject buttonGo, GameObject labelGo, Func<int> clicks) CreateButtonWithLabel(Scene scene, GameObject? parent)
     {
         GameObject buttonGo = CreateUIObject("Button", scene, parent);
         buttonGo.AddComponent<UIImage>();
@@ -84,7 +84,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Click_SurvivesSmallMoveWhenNothingDrags()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         (GameObject? buttonGo, GameObject _, Func<int>? clicks) = CreateButtonWithLabel(scene, null);
 
         PressMoveRelease(buttonGo, buttonGo);
@@ -95,7 +95,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Click_FiresWhenPressedOnLabelAndReleasedOnButton()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         (GameObject? buttonGo, GameObject? labelGo, Func<int>? clicks) = CreateButtonWithLabel(scene, null);
 
         PressMoveRelease(labelGo, buttonGo);
@@ -106,7 +106,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void LayoutIntrinsicSize_IgnoresSizeDeltaOnStretchedAxes()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject fixedGo = CreateUIObject("Fixed", scene);
         fixedGo.RectTransform!.SizeDelta = new Float2(50f, 30f);
 
@@ -124,7 +124,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void TextPreferredSize_FollowsTextAndWrapsAtWidth()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateUIObject("Text", scene);
         TextComponent text = go.AddComponent<TextComponent>();
         text.Text = "Some words that wrap";
@@ -149,7 +149,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void MaskCull_KeepsChildrenOfAnElementOutsideTheMask()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         scene.Input.ScreenSize = new Float2(1000f, 1000f);
         GameObject canvasGo = CreateGameObject("Canvas");
         scene.Add(canvasGo);
@@ -175,8 +175,8 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Canvases_AreListedByTheSceneTheyAreEnabledIn()
     {
-        SceneInstance first = CreateScene(enable: true);
-        SceneInstance second = CreateScene(enable: true);
+        Scene first = CreateScene(enable: true);
+        Scene second = CreateScene(enable: true);
         GameObject canvasGo = CreateGameObject("Canvas");
         first.Add(canvasGo);
         GameCanvas canvas = canvasGo.AddComponent<GameCanvas>();
@@ -202,7 +202,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Raycast_FollowsRotatedMask()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         scene.Input.ScreenSize = new Float2(1000f, 1000f);
         GameObject canvasGo = CreateGameObject("Canvas");
         scene.Add(canvasGo);
@@ -228,7 +228,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void HorizontalGroup_RespectsChildControlWidthAndAlignment()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject row = CreateUIObject("Row", scene);
         HorizontalLayoutGroup group = row.AddComponent<HorizontalLayoutGroup>();
         group.ChildControlWidth = false;
@@ -261,7 +261,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void ColorChange_RebakesWithoutRelayout()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         scene.Input.ScreenSize = new Float2(1000f, 1000f);
         GameObject canvasGo = CreateGameObject("Canvas");
         scene.Add(canvasGo);
@@ -286,13 +286,13 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void SelectableTint_AdvancesWhileGameIsPaused()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateUIObject("Button", scene);
         UIImage image = go.AddComponent<UIImage>();
         UIButton button = go.AddComponent<UIButton>();
         button.HighlightedColor = new Color(0.5f, 0.6f, 0.7f, 1f);
 
-        SceneInstance.Main.Clock.Hold();
+        Scene.Main.Clock.Hold();
         Time.AdvanceFrame(0.05f);
         button.OnPointerEnter(new PointerEventData());
         for (int i = 0; i < 4; i++) button.Update();
@@ -304,7 +304,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Click_IsCancelledWhenAnAncestorDrags()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject scroll = CreateUIObject("Scroll", scene);
         scroll.AddComponent<DragCatcher>();
         (GameObject? buttonGo, GameObject _, Func<int>? clicks) = CreateButtonWithLabel(scene, scroll);
@@ -317,7 +317,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Slider_SetValueWithoutNotify_ChangesValueSilently()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         UISlider slider = CreateUIObject("Slider", scene).AddComponent<UISlider>();
         int changes = 0;
         slider.OnValueChanged += _ => changes++;
@@ -333,7 +333,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Dropdown_SetValueWithoutNotify_ChangesValueSilently()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         UIDropdown dropdown = CreateUIObject("Dropdown", scene).AddComponent<UIDropdown>();
         dropdown.SetOptions(["A", "B", "C"]);
         int changes = 0;
@@ -348,7 +348,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Toggle_Click_FlipsAndNotifies_AndDrivesTheCheckmark()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         GameObject go = CreateUIObject("Toggle", scene);
         UIToggle toggle = go.AddComponent<UIToggle>();
         UIImage check = CreateUIObject("Checkmark", scene, go).AddComponent<UIImage>();
@@ -370,7 +370,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void Toggle_NotInteractable_IgnoresClicks()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         UIToggle toggle = CreateUIObject("Toggle", scene).AddComponent<UIToggle>();
         toggle.Interactable = false;
 
@@ -382,7 +382,7 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void WorldPointer_ClicksAWorldSpaceButtonAlongItsRay()
     {
-        SceneInstance scene = CreateScene(enable: true);
+        Scene scene = CreateScene(enable: true);
         scene.Input.ScreenSize = new Float2(1000f, 1000f);
         GameObject canvasGo = CreateGameObject("Canvas");
         canvasGo.Transform.Position = new Float3(0f, 0f, 2f);
@@ -428,9 +428,9 @@ public class UITests : RuntimeTestBase
     [Fact]
     public void PointerArbitration_TheTopWorldWithUiUnderThePointerBlocksTheOnesBelow()
     {
-        SceneInstance game = CreateScene(enable: true);
-        SceneInstance menu = CreateScene(enable: true);
-        foreach (SceneInstance world in new[] { game, menu })
+        Scene game = CreateScene(enable: true);
+        Scene menu = CreateScene(enable: true);
+        foreach (Scene world in new[] { game, menu })
         {
             world.Input.Viewport = new EventSystem.HostViewport { ReferenceSize = new Float2(1000f, 1000f), PointerPosition = new Float2(500f, 500f), ReceivesInput = true };
             world.Create("Events").AddComponent<EventSystem>();

@@ -242,6 +242,7 @@ internal static class ClayBackedImporter
                     ? nodeGOs[clayskin.RootNodeIndex].Transform
                     : (boneTransforms.Length > 0 ? boneTransforms[0] : null);
                 smr.SetBones(boneTransforms, rootBoneTransform);
+                DefaultWeights(smr, clayModel.Meshes[n.MeshIndex]);
             }
             else if (mesh.HasBlendShapes)
             {
@@ -250,6 +251,7 @@ internal static class ClayBackedImporter
                 SkinnedMeshRenderer smr = go.AddComponent<SkinnedMeshRenderer>();
                 smr.SharedMesh = mesh;
                 smr.Materials = matRefs;
+                DefaultWeights(smr, clayModel.Meshes[n.MeshIndex]);
             }
             else
             {
@@ -525,6 +527,13 @@ internal static class ClayBackedImporter
             _ => SurfaceType.Opaque,
         };
         return new SurfaceSettings(type, SurfaceBlend.Alpha, src.DoubleSided ? SurfaceCull.Off : SurfaceCull.Back);
+    }
+
+    // The weights a file gives its blend shapes before anything animates them
+    private static void DefaultWeights(SkinnedMeshRenderer renderer, Prowl.Clay.Mesh source)
+    {
+        for (int i = 0; i < source.BlendShapes.Length; i++)
+            if (source.BlendShapes[i].DefaultWeight != 0f) renderer.SetBlendShapeWeight(i, source.BlendShapes[i].DefaultWeight);
     }
 
     private static PMaterial BuildMaterial(ClayMaterial src, Texture2D?[] textureCache)

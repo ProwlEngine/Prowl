@@ -22,7 +22,7 @@ namespace Prowl.Editor.GUI;
 /// </summary>
 public class PreviewRenderer : IDisposable
 {
-    private SceneInstance _scene;
+    private Scene _scene;
     private GameObject _cameraGo;
     private Camera _camera;
     private ulong _renderedFrame = ulong.MaxValue;
@@ -70,7 +70,7 @@ public class PreviewRenderer : IDisposable
         Width = width;
         Height = height;
 
-        _scene = new SceneInstance(SceneMode.Preview);
+        _scene = new Scene(SceneMode.Preview);
         _scene.Name = "Preview";
 
         // Camera

@@ -19,6 +19,9 @@ using Prowl.Runtime.Terrain;
 using Prowl.Vector;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
+using TerrainBrush = Prowl.Graphite.Rendering.TerrainBrush;
+using TerrainEdited = Prowl.Graphite.Rendering.TerrainEdited;
+using TerrainLayers = Prowl.Graphite.Rendering.TerrainLayers;
 using SColor = System.Drawing.Color;
 namespace Prowl.Editor.Inspector;
 
@@ -32,7 +35,6 @@ public sealed class TerrainBrushSettings
     public HeightTool ActiveHeightTool { get; set; } = HeightTool.Raise;
     public float BrushSize { get; set; } = 5f;
     public float BrushStrength { get; set; } = 0.5f;
-    public float BrushFalloff { get; set; } = 0.5f;
     public float FlattenHeight { get; set; } = 0.5f;
     public float TreeBrushSize { get; set; } = 10f;
     public int TreesPerStroke { get; set; } = 3;
@@ -48,7 +50,6 @@ public class TerrainEditor : CustomEditor
     public static HeightTool ActiveHeightTool { get => Brush.ActiveHeightTool; set => Brush.ActiveHeightTool = value; }
     public static float BrushSize { get => Brush.BrushSize; set => Brush.BrushSize = value; }
     public static float BrushStrength { get => Brush.BrushStrength; set => Brush.BrushStrength = value; }
-    public static float BrushFalloff { get => Brush.BrushFalloff; set => Brush.BrushFalloff = value; }
     public static float FlattenHeight { get => Brush.FlattenHeight; set => Brush.FlattenHeight = value; }
     public static float TreeBrushSize { get => Brush.TreeBrushSize; set => Brush.TreeBrushSize = value; }
     public static int TreesPerStroke { get => Brush.TreesPerStroke; set => Brush.TreesPerStroke = value; }
@@ -56,7 +57,6 @@ public class TerrainEditor : CustomEditor
     public static int PaintLayer = 0;
     public static int ActiveDetailIndex = 0;
     public static int ActiveTreePrototype = 0;
-    public static bool TreeEraseMode = false;
 
     // Instance state
     private TerrainComponent? _terrain;
@@ -225,6 +225,7 @@ public class TerrainEditor : CustomEditor
         if (ActiveHeightTool == HeightTool.Flatten)
             EditorGUI.Row(paper, $"{id}_flath", "Target Height", () =>
                 Origami.Slider(paper, $"{id}_flath_v", FlattenHeight, v => FlattenHeight = v, 0f, 1f).Format("F2").Show());
+        HintPill(paper, $"{id}_hint", font, "Target height is a share of the terrain's height");
 
         DrawBrushBlock(paper, $"{id}_brush", font);
     }
@@ -243,7 +244,7 @@ public class TerrainEditor : CustomEditor
             {
                 data.AddLayer(new TerrainLayer());
                 MarkDataDirty();
-            }, enabled: data.LayerCount < TerrainData.kMaxLayers);
+            }, enabled: data.LayerCount < TerrainLayers.MaxLayers);
             MiniButton(paper, $"{id}_rem", EditorIcons.Trash_I, () =>
             {
                 data.RemoveLayer(PaintLayer);
@@ -293,7 +294,7 @@ public class TerrainEditor : CustomEditor
         }
 
         paper.Box($"{id}_cap").Width(UnitValue.StretchOne).Height(16).Margin(0, m.PaddingLarge, 4, 6).IsNotInteractable()
-            .Text($"{data.LayerCount} / {TerrainData.kMaxLayers} layers", font)
+            .Text($"{data.LayerCount} / {TerrainLayers.MaxLayers} layers", font)
             .TextColor(EditorTheme.InkDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
 
         // Selected layer settings.
@@ -310,8 +311,12 @@ public class TerrainEditor : CustomEditor
                     v => { sl.Tiling = MathF.Max(0.01f, v); MarkDataDirty(); }).Min(0.01f).Show());
             EditorGUI.Row(paper, $"{id}_rgh", "Roughness", () =>
                 Origami.Slider(paper, $"{id}_rgh_v", sl.Roughness, v => { sl.Roughness = v; MarkDataDirty(); }, 0f, 1f).Format("F2").Show());
-            EditorGUI.Row(paper, $"{id}_met", "Metallic", () =>
-                Origami.Slider(paper, $"{id}_met_v", sl.Metallic, v => { sl.Metallic = v; MarkDataDirty(); }, 0f, 1f).Format("F2").Show());
+            EditorGUI.Row(paper, $"{id}_hb", "Height Blend", () =>
+                Origami.Slider(paper, $"{id}_hb_v", sl.HeightBlend, v => { sl.HeightBlend = v; MarkDataDirty(); }, 0f, 1f).Format("F2").Show());
+            EditorGUI.Row(paper, $"{id}_mv", "Macro Variation", () =>
+                Origami.Slider(paper, $"{id}_mv_v", sl.MacroVariation, v => { sl.MacroVariation = v; MarkDataDirty(); }, 0f, 1f).Format("F2").Show());
+            EditorGUI.SettingsToggle(paper, $"{id}_hex", "Hex Tiling", sl.HexTiling,
+                v => { sl.HexTiling = v; MarkDataDirty(); }, separator: false);
         }
 
         DrawBrushBlock(paper, $"{id}_brush", font);
@@ -381,9 +386,13 @@ public class TerrainEditor : CustomEditor
             {
                 PropertyGridUtils.DrawField(paper, $"{id}_tex", "Texture", typeof(Texture2D), dp.Texture,
                     v => { dp.Texture = v as Texture2D; MarkDetailsDirty(); }, 0);
-                PropertyGridUtils.DrawField(paper, $"{id}_gmat", "Grass Material", typeof(Material), dp.GrassMaterial,
-                    v => { dp.GrassMaterial = v as Material; MarkDetailsDirty(); }, 0);
             }
+
+            EditorGUI.Row(paper, $"{id}_dens", "Density", () =>
+                Origami.Slider(paper, $"{id}_dens_v", dp.Density, v => { dp.Density = v; MarkDetailsDirty(); }, 0f, 50f).Format("F1").Show());
+            if (dp.RenderMode == DetailRenderMode.Grass)
+                EditorGUI.Row(paper, $"{id}_range", "Range", () =>
+                    Origami.Slider(paper, $"{id}_range_v", dp.Range, v => { dp.Range = v; MarkDetailsDirty(); }, 5f, 400f).Format("F0").Show());
 
             EditorGUI.Row(paper, $"{id}_minw", "Min Width", () =>
                 Origami.Slider(paper, $"{id}_minw_v", dp.MinWidth, v => { dp.MinWidth = v; MarkDetailsDirty(); }, 0.1f, 5f).Format("F2").Show());
@@ -393,16 +402,28 @@ public class TerrainEditor : CustomEditor
                 Origami.Slider(paper, $"{id}_minh_v", dp.MinHeight, v => { dp.MinHeight = v; MarkDetailsDirty(); }, 0.1f, 5f).Format("F2").Show());
             EditorGUI.Row(paper, $"{id}_maxh", "Max Height", () =>
                 Origami.Slider(paper, $"{id}_maxh_v", dp.MaxHeight, v => { dp.MaxHeight = v; MarkDetailsDirty(); }, 0.1f, 5f).Format("F2").Show());
-            EditorGUI.Row(paper, $"{id}_noise", "Noise Spread", () =>
-                Origami.Slider(paper, $"{id}_noise_v", dp.NoiseSpread, v => { dp.NoiseSpread = v; MarkDetailsDirty(); }, 0.01f, 1f).Format("F2").Show());
-            EditorGUI.Row(paper, $"{id}_bend", "Bend Factor", () =>
-                Origami.Slider(paper, $"{id}_bend_v", dp.BendFactor, v => { dp.BendFactor = v; MarkDetailsDirty(); }, 0f, 1f).Format("F2").Show());
-            EditorGUI.SettingsToggle(paper, $"{id}_atn", "Align To Normal", dp.AlignToNormal,
-                v => { dp.AlignToNormal = v; MarkDetailsDirty(); }, separator: false);
-            PropertyGridUtils.DrawField(paper, $"{id}_hc", "Healthy Color", typeof(Prowl.Vector.Color), dp.HealthyColor,
-                v => { dp.HealthyColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);
-            PropertyGridUtils.DrawField(paper, $"{id}_dc", "Dry Color", typeof(Prowl.Vector.Color), dp.DryColor,
-                v => { dp.DryColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);
+            EditorGUI.Row(paper, $"{id}_noise", "Noise Size", () =>
+                Origami.Slider(paper, $"{id}_noise_v", dp.NoiseSize, v => { dp.NoiseSize = v; MarkDetailsDirty(); }, 0.5f, 50f).Format("F1").Show());
+            if (dp.RenderMode == DetailRenderMode.Grass)
+            {
+                EditorGUI.Row(paper, $"{id}_stiff", "Stiffness", () =>
+                    Origami.Slider(paper, $"{id}_stiff_v", dp.Stiffness, v => { dp.Stiffness = v; MarkDetailsDirty(); }, 0f, 1f).Format("F2").Show());
+                EditorGUI.Row(paper, $"{id}_gt", "Ground Tint", () =>
+                    Origami.Slider(paper, $"{id}_gt_v", dp.GroundTint, v => { dp.GroundTint = v; MarkDetailsDirty(); }, 0f, 1f).Format("F2").Show());
+                PropertyGridUtils.DrawField(paper, $"{id}_rc", "Root Color", typeof(Prowl.Vector.Color), dp.RootColor,
+                    v => { dp.RootColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);
+                PropertyGridUtils.DrawField(paper, $"{id}_tc", "Tip Color", typeof(Prowl.Vector.Color), dp.TipColor,
+                    v => { dp.TipColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);
+            }
+            else
+            {
+                EditorGUI.SettingsToggle(paper, $"{id}_atn", "Align To Normal", dp.AlignToNormal,
+                    v => { dp.AlignToNormal = v; MarkDetailsDirty(); }, separator: false);
+                PropertyGridUtils.DrawField(paper, $"{id}_hc", "Healthy Color", typeof(Prowl.Vector.Color), dp.HealthyColor,
+                    v => { dp.HealthyColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);
+                PropertyGridUtils.DrawField(paper, $"{id}_dc", "Dry Color", typeof(Prowl.Vector.Color), dp.DryColor,
+                    v => { dp.DryColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);
+            }
         }
 
         DrawBrushBlock(paper, $"{id}_brush", font);
@@ -419,15 +440,15 @@ public class TerrainEditor : CustomEditor
                 if (ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Count)
                 {
                     var preProtos = new List<TreePrototype>(data.TreePrototypes);
-                    var preTrees = new List<TreeInstance>(data.Trees);
+                    TerrainSnapshot before = data.Capture();
                     data.RemoveTreePrototype(ActiveTreePrototype);
                     var postProtos = new List<TreePrototype>(data.TreePrototypes);
-                    var postTrees = new List<TreeInstance>(data.Trees);
+                    TerrainSnapshot after = data.Capture();
 
                     if (_terrain.IsValid())
                         TerrainDataUndo.Register("Remove Tree Prototype", _terrain, data,
-                            d => { d.TreePrototypes = new List<TreePrototype>(preProtos); d.Trees = new List<TreeInstance>(preTrees); },
-                            d => { d.TreePrototypes = new List<TreePrototype>(postProtos); d.Trees = new List<TreeInstance>(postTrees); });
+                            d => { d.TreePrototypes.Clear(); d.TreePrototypes.AddRange(preProtos); d.Restore(before); },
+                            d => { d.TreePrototypes.Clear(); d.TreePrototypes.AddRange(postProtos); d.Restore(after); });
 
                     ActiveTreePrototype = Math.Clamp(ActiveTreePrototype, 0, Math.Max(0, data.TreePrototypes.Count - 1));
                     MarkDataDirty();
@@ -453,8 +474,6 @@ public class TerrainEditor : CustomEditor
             PropertyGridUtils.DrawField(paper, $"{id}_mesh", "Mesh", typeof(Mesh), proto.Mesh,
                 v => { proto.Mesh = v as Mesh; MarkDataDirty(); }, 0);
             DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", proto.Mesh, proto.Materials);
-            EditorGUI.Row(paper, $"{id}_bend", "Bend Factor", () =>
-                Origami.Slider(paper, $"{id}_bend_v", proto.BendFactor, v => { proto.BendFactor = v; MarkDataDirty(); }, 0f, 2f).Format("F2").Show());
         }
 
         EditorGUI.SectionHeader(paper, $"{id}_pbh", "Placement Brush");
@@ -468,90 +487,38 @@ public class TerrainEditor : CustomEditor
 
     private void DrawSettings(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainComponent terrain, TerrainData data)
     {
-        EditorGUI.SectionHeader(paper, $"{id}_mh", "Materials", first: true);
+        EditorGUI.SectionHeader(paper, $"{id}_mh", "Material", first: true);
         PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(Material), terrain.Material,
             v => { Undo.RecordObject(terrain, "Material"); terrain.Material = v as Material; }, 0);
-        PropertyGridUtils.DrawField(paper, $"{id}_detailmat", "Detail Material", typeof(Material), terrain.DetailMaterial,
-            v => { Undo.RecordObject(terrain, "Detail Material"); terrain.DetailMaterial = v as Material; terrain.InvalidateDetailCache(); }, 0);
 
         EditorGUI.SectionHeader(paper, $"{id}_dh", "Dimensions");
         EditorGUI.Row(paper, $"{id}_size", "Terrain Size", () =>
             Origami.NumericField<float>(paper, $"{id}_size_v", data.Size, v => { data.Size = MathF.Max(1f, v); MarkDataDirty(); }).Min(1f).Show());
         EditorGUI.Row(paper, $"{id}_height", "Terrain Height", () =>
             Origami.NumericField<float>(paper, $"{id}_height_v", data.Height, v => { data.Height = MathF.Max(0.1f, v); MarkDataDirty(); }).Min(0.1f).Show());
-        EditorGUI.Row(paper, $"{id}_interp", "Interpolation", () =>
-            Origami.EnumDropdown(paper, $"{id}_interp_v", data.Interpolation,
-                v => { data.Interpolation = v; MarkDataDirty(); terrain.InvalidateDetailCache(); }).Show());
 
-        EditorGUI.SectionHeader(paper, $"{id}_rh", "Resolutions");
         string[] hmOptions = ["33", "65", "129", "257", "513", "1025", "2049", "4097"];
         int hmCurrent = Array.IndexOf(hmOptions, data.HeightmapResolution.ToString());
-        if (hmCurrent < 0) hmCurrent = 4; // default 513
+        if (hmCurrent < 0) hmCurrent = 4;
         EditorGUI.Row(paper, $"{id}_hmres", "Heightmap", () =>
             Origami.Dropdown(paper, $"{id}_hmres_v", hmCurrent, v =>
             {
                 int newRes = int.Parse(hmOptions[v]);
                 if (newRes != data.HeightmapResolution)
-                    Origami.Confirm("Reset Heightmap?",
-                        $"Changing heightmap resolution to {newRes} will reset all height data.",
+                    Origami.Confirm("Resample Terrain?",
+                        $"Changing the heightmap to {newRes} samples resamples the heights, paint, holes and details, and clears undo for them.",
                         () => { data.ResizeHeightmap(newRes); MarkDataDirty(); });
             }, hmOptions).Show());
 
-        string[] smOptions = ["32", "64", "128", "256", "512", "1024"];
-        int smCurrent = Array.IndexOf(smOptions, data.SplatmapResolution.ToString());
-        if (smCurrent < 0) smCurrent = 4; // default 512
-        EditorGUI.Row(paper, $"{id}_smres", "Splatmap", () =>
-            Origami.Dropdown(paper, $"{id}_smres_v", smCurrent, v =>
-            {
-                int newRes = int.Parse(smOptions[v]);
-                if (newRes != data.SplatmapResolution)
-                    Origami.Confirm("Reset Splatmap?",
-                        $"Changing splatmap resolution to {newRes} will reset all splat data.",
-                        () => { data.ResizeSplatmap(newRes); MarkDataDirty(); });
-            }, smOptions).Show());
-
-        string[] dmOptions = ["64", "128", "256", "512", "1024", "2048"];
-        int dmCurrent = Array.IndexOf(dmOptions, data.DetailResolution.ToString());
-        if (dmCurrent < 0) dmCurrent = 4; // default 1024
-        EditorGUI.Row(paper, $"{id}_dmres", "Detail Map", () =>
-            Origami.Dropdown(paper, $"{id}_dmres_v", dmCurrent, v =>
-            {
-                int newRes = int.Parse(dmOptions[v]);
-                if (newRes != data.DetailResolution)
-                {
-                    // Resampled rather than reset, so painted detail survives the change
-                    data.ResizeDetailMaps(newRes);
-                    MarkDataDirty();
-                    terrain.InvalidateDetailCache();
-                }
-            }, dmOptions).Show());
-
-        string[] meshOptions = ["16", "32", "64", "128"];
-        int meshCurrent = Array.IndexOf(meshOptions, terrain.MeshResolution.ToString());
-        if (meshCurrent < 0) meshCurrent = 0;
-        EditorGUI.Row(paper, $"{id}_meshres", "Mesh", () =>
-            Origami.Dropdown(paper, $"{id}_meshres_v", meshCurrent,
-                v => { Undo.RecordObject(terrain, "Mesh Resolution"); terrain.MeshResolution = int.Parse(meshOptions[v]); }, meshOptions).Show());
-
         EditorGUI.SectionHeader(paper, $"{id}_lh", "Level of Detail");
-        EditorGUI.Row(paper, $"{id}_lod", "Max LOD Levels", () =>
-            Origami.NumericField<int>(paper, $"{id}_lod_v", terrain.MaxLODLevel,
-                v => { Undo.RecordObject(terrain, "Max LOD Levels"); terrain.MaxLODLevel = Math.Clamp(v, 1, 8); }).Min(1).Max(8).Show());
         EditorGUI.Row(paper, $"{id}_lodq", "LOD Quality", () =>
             Origami.Slider(paper, $"{id}_lodq_v", terrain.LODQuality,
-                v => { Undo.RecordObject(terrain, "LOD Quality"); terrain.LODQuality = MathF.Max(0.1f, v); }, 0.1f, 5f).Format("F1").Show());
+                v => { Undo.RecordObject(terrain, "LOD Quality"); terrain.LODQuality = MathF.Max(1.5f, v); }, 1.5f, 6f).Format("F1").Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_vh", "Vegetation");
-        EditorGUI.Row(paper, $"{id}_detaildist", "Detail Distance", () =>
+        EditorGUI.Row(paper, $"{id}_detaildist", "Mesh Detail Distance", () =>
             Origami.Slider(paper, $"{id}_detaildist_v", terrain.DetailDistance,
                 v => { Undo.RecordObject(terrain, "Detail Distance"); terrain.DetailDistance = MathF.Max(1f, v); }, 10f, 1000f).Format("F0").Show());
-        EditorGUI.Row(paper, $"{id}_detaildensity", "Detail Density", () =>
-            Origami.Slider(paper, $"{id}_detaildensity_v", terrain.DetailDensity,
-                v => { Undo.RecordObject(terrain, "Detail Density"); terrain.DetailDensity = MathF.Max(0.05f, v); }, 0.25f, 8f).Format("F2").Show());
-        EditorGUI.Row(paper, $"{id}_detailcascades", "Detail Cascades", () =>
-            Origami.IntSlider(paper, $"{id}_detailcascades_v", terrain.DetailCascades,
-                v => { Undo.RecordObject(terrain, "Detail Cascades"); terrain.DetailCascades = Math.Clamp(v, 1, TerrainDetailRenderer.kMaxCascades); },
-                1, TerrainDetailRenderer.kMaxCascades).Show());
         EditorGUI.Row(paper, $"{id}_treedist", "Tree View Distance", () =>
             Origami.Slider(paper, $"{id}_treedist_v", terrain.TreeDistance,
                 v => { Undo.RecordObject(terrain, "Tree View Distance"); terrain.TreeDistance = MathF.Max(1f, v); }, 50f, 2000f).Format("F0").Show());
@@ -575,8 +542,6 @@ public class TerrainEditor : CustomEditor
                 Origami.Slider(paper, $"{id}_size_v", BrushSize, v => BrushSize = v, 1f, 500f).Format("F0").Show());
             EditorGUI.Row(paper, $"{id}_str", "Strength", () =>
                 Origami.Slider(paper, $"{id}_str_v", BrushStrength, v => BrushStrength = v, 0f, 1f).Format("F2").Show());
-            EditorGUI.Row(paper, $"{id}_fall", "Falloff", () =>
-                Origami.Slider(paper, $"{id}_fall_v", BrushFalloff, v => BrushFalloff = v, 0f, 1f).Format("F2").Show());
         }
     }
 
@@ -770,137 +735,28 @@ public class TerrainEditor : CustomEditor
     #region Brush Application
 
     /// <summary>
-    /// Apply a brush stroke at the given terrain UV position.
-    /// Called from TerrainSceneEditor during mouse drag.
+    /// Applies the active tab's brush at a point across the terrain, for one frame of a held stroke. Shift lowers,
+    /// fills holes or thins details. Returns whether anything changed.
     /// </summary>
-    public static void ApplyBrush(TerrainData data, Float2 terrainUV, float deltaTime,
-        out bool heightChanged, out bool splatChanged, out bool detailChanged, out bool holesChanged)
+    public static bool ApplyBrush(TerrainData data, Float2 terrainUV, float deltaTime, bool shift)
     {
-        heightChanged = false;
-        splatChanged = false;
-        detailChanged = false;
-        holesChanged = false;
-
-        if (ActiveTab == TerrainTab.Height)
-            ApplyHeightBrush(data, terrainUV, deltaTime, ref heightChanged);
-        else if (ActiveTab == TerrainTab.Paint)
-            ApplySplatBrush(data, terrainUV, deltaTime, ref splatChanged);
-        else if (ActiveTab == TerrainTab.Holes)
-            ApplyHolesBrush(data, terrainUV, ref holesChanged);
-        else if (ActiveTab == TerrainTab.Details)
-            ApplyDetailBrush(data, terrainUV, deltaTime, ref detailChanged);
-    }
-
-    private static void ApplyHeightBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
-    {
-        int res = data.HeightmapResolution;
-        float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)MathF.Round(uv.X * (res - 1));
-        int cz = (int)MathF.Round(uv.Y * (res - 1));
-        int r = (int)MathF.Ceiling(radiusPixels);
-
-        for (int z = cz - r; z <= cz + r; z++)
+        Float2 at = terrainUV * data.Size;
+        float rate = BrushStrength * deltaTime;
+        TerrainEdited edited = ActiveTab switch
         {
-            for (int x = cx - r; x <= cx + r; x++)
+            TerrainTab.Height => ActiveHeightTool switch
             {
-                if (x < 0 || x >= res || z < 0 || z >= res) continue;
-
-                float dx = x - cx;
-                float dz = z - cz;
-                float dist = MathF.Sqrt(dx * dx + dz * dz);
-                if (dist > radiusPixels) continue;
-
-                float t = dist / radiusPixels;
-                float falloffStart = 1f - BrushFalloff;
-                float falloff = 1f - SmoothStep(falloffStart, 1f, t);
-
-                float h = data.GetHeight(x, z);
-                float delta = BrushStrength * falloff * dt * 1.5f;
-
-                switch (ActiveHeightTool)
-                {
-                    case HeightTool.Raise:
-                        h += delta;
-                        break;
-                    case HeightTool.Lower:
-                        h -= delta;
-                        break;
-                    case HeightTool.Flatten:
-                        h += (FlattenHeight - h) * delta;
-                        break;
-                    case HeightTool.Smooth:
-                        float avg = SampleAverage(data, x, z, res);
-                        h += (avg - h) * delta;
-                        break;
-                }
-
-                data.SetHeight(x, z, h);
-                changed = true;
-            }
-        }
-    }
-
-    private static float SampleAverage(TerrainData data, int cx, int cz, int res)
-    {
-        float sum = 0;
-        int count = 0;
-        for (int dz = -1; dz <= 1; dz++)
-        {
-            for (int dx = -1; dx <= 1; dx++)
-            {
-                int x = cx + dx, z = cz + dz;
-                if (x >= 0 && x < res && z >= 0 && z < res)
-                {
-                    sum += data.GetHeight(x, z);
-                    count++;
-                }
-            }
-        }
-        return count > 0 ? sum / count : 0;
-    }
-
-    private static void ApplySplatBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
-    {
-        int res = data.SplatmapResolution;
-        float radiusPixels = BrushSize / data.Size * res;
-        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
-        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
-        int r = (int)MathF.Ceiling(radiusPixels);
-
-        for (int z = cz - r; z <= cz + r; z++)
-        {
-            for (int x = cx - r; x <= cx + r; x++)
-            {
-                if (x < 0 || x >= res || z < 0 || z >= res) continue;
-
-                float dx = x - cx;
-                float dz = z - cz;
-                float dist = MathF.Sqrt(dx * dx + dz * dz);
-                if (dist > radiusPixels) continue;
-
-                float t = dist / radiusPixels;
-                float falloffStart = 1f - BrushFalloff;
-                float falloff = 1f - SmoothStep(falloffStart, 1f, t);
-                float delta = BrushStrength * falloff * dt * 5f; // 5x multiplier for responsive painting
-
-                // Increase target channel, then normalize all layers
-                int lc = data.LayerCount;
-                float[] weights = new float[lc];
-                for (int c = 0; c < lc; c++)
-                    weights[c] = data.GetSplat(x, z, c);
-
-                weights[PaintLayer] += delta;
-
-                // Normalize
-                float sum = 0;
-                for (int c = 0; c < lc; c++) sum += weights[c];
-                if (sum > 0)
-                    for (int c = 0; c < lc; c++)
-                        data.SetSplat(x, z, c, weights[c] / sum);
-
-                changed = true;
-            }
-        }
+                HeightTool.Raise or HeightTool.Lower => data.Edit(TerrainBrush.Raise, at, BrushSize,
+                    rate * 1.5f * data.Height * (ActiveHeightTool == HeightTool.Lower ^ shift ? -1f : 1f)),
+                HeightTool.Flatten => data.Edit(TerrainBrush.Flatten, at, BrushSize, MathF.Min(rate * 1.5f, 1f), FlattenHeight * data.Height),
+                _ => data.Edit(TerrainBrush.Smooth, at, BrushSize, MathF.Min(rate * 1.5f, 1f)),
+            },
+            TerrainTab.Paint => data.Edit(TerrainBrush.Paint, at, BrushSize, MathF.Min(rate * 5f, 1f), layer: PaintLayer),
+            TerrainTab.Holes => data.Edit(TerrainBrush.Hole, at, BrushSize, shift ? -1f : 1f),
+            TerrainTab.Details => data.Edit(TerrainBrush.Detail, at, BrushSize, Math.Clamp(rate * 3f, 0f, 1f) * (shift ? -1f : 1f), layer: ActiveDetailIndex),
+            _ => new TerrainEdited(default, default, []),
+        };
+        return edited.Pages.Count > 0;
     }
 
     #endregion
@@ -921,138 +777,44 @@ public class TerrainEditor : CustomEditor
         }
     }
 
-    private static void ApplyHolesBrush(TerrainData data, Float2 uv, ref bool changed)
-    {
-        bool shiftHeld = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
-        byte value = shiftHeld ? (byte)255 : (byte)0; // Shift = fill, normal = dig hole
-
-        int res = data.SplatmapResolution;
-        float radiusPixels = BrushSize / data.Size * res;
-        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
-        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
-        int r = (int)MathF.Ceiling(radiusPixels);
-
-        for (int z = cz - r; z <= cz + r; z++)
-        {
-            for (int x = cx - r; x <= cx + r; x++)
-            {
-                if (x < 0 || x >= res || z < 0 || z >= res) continue;
-
-                float dx = x - cx;
-                float dz = z - cz;
-                float dist = MathF.Sqrt(dx * dx + dz * dz);
-                if (dist > radiusPixels) continue;
-
-                data.SetHole(x, z, value);
-                changed = true;
-            }
-        }
-    }
-
-    private static void ApplyDetailBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
-    {
-        if (ActiveDetailIndex < 0 || ActiveDetailIndex >= data.DetailLayers.Count) return;
-
-        bool shiftHeld = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
-        float sign = shiftHeld ? -1f : 1f;
-
-        int res = data.DetailResolution;
-        float radiusPixels = BrushSize / data.Size * res;
-        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
-        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
-        int r = (int)MathF.Ceiling(radiusPixels);
-
-        for (int z = cz - r; z <= cz + r; z++)
-        {
-            for (int x = cx - r; x <= cx + r; x++)
-            {
-                if (x < 0 || x >= res || z < 0 || z >= res) continue;
-
-                float dx = x - cx;
-                float dz = z - cz;
-                float dist = MathF.Sqrt(dx * dx + dz * dz);
-                if (dist > radiusPixels) continue;
-
-                float t = dist / radiusPixels;
-                float falloffStart = 1f - BrushFalloff;
-                float falloff = 1f - SmoothStep(falloffStart, 1f, t);
-                float delta = BrushStrength * falloff * dt * 3f * sign;
-
-                float d = data.GetDetailDensity(ActiveDetailIndex, x, z);
-                d += delta;
-                data.SetDetailDensity(ActiveDetailIndex, x, z, d);
-                changed = true;
-            }
-        }
-    }
-
-    /// <summary>Place trees at the given terrain UV within the brush radius.</summary>
-    public static void PlaceTrees(TerrainData data, Float2 uv, float terrainSize)
+    /// <summary>Places trees of the active prototype at random within the tree brush around a point across the terrain, returning how many.</summary>
+    public static int PlaceTrees(TerrainData data, Float2 uv)
     {
         if (data.TreePrototypes.Count == 0 || ActiveTreePrototype >= data.TreePrototypes.Count)
-            return;
+            return 0;
 
         var rng = new Random((int)(uv.X * 10000) ^ (int)(uv.Y * 10000) ^ Environment.TickCount);
-        float brushRadiusUV = TreeBrushSize / terrainSize;
-
+        float brushRadiusUV = TreeBrushSize / data.Size;
+        List<TreeInstance> placed = [];
         for (int i = 0; i < TreesPerStroke; i++)
         {
             float angle = (float)(rng.NextDouble() * Math.PI * 2);
             float radius = (float)(rng.NextDouble() * brushRadiusUV);
             Float2 pos = uv + new Float2(MathF.Cos(angle) * radius, MathF.Sin(angle) * radius);
-
             if (pos.X < 0 || pos.X > 1 || pos.Y < 0 || pos.Y > 1) continue;
 
-            // TODO: Add MinScale/MaxScale fields to TreePrototype for per-type control
             float scale = 0.8f + (float)rng.NextDouble() * 0.4f;
-            float rotation = (float)(rng.NextDouble() * Math.PI * 2);
-
-            data.Trees.Add(new TreeInstance
+            placed.Add(new TreeInstance
             {
                 Position = pos,
                 PrototypeIndex = ActiveTreePrototype,
-                Rotation = rotation,
+                Rotation = (float)(rng.NextDouble() * Math.PI * 2),
                 WidthScale = scale,
                 HeightScale = scale,
-                Tint = Prowl.Vector.Color.White,
             });
         }
+        if (placed.Count > 0)
+            data.AddTrees(placed);
+        return placed.Count;
     }
 
-    /// <summary>Remove trees within radius of the given terrain UV.</summary>
-    public static int RemoveTrees(TerrainData data, Float2 uv, float terrainSize)
-    {
-        float brushRadiusUV = TreeBrushSize / terrainSize;
-        float radiusSq = brushRadiusUV * brushRadiusUV;
-        int removed = 0;
-
-        for (int i = data.Trees.Count - 1; i >= 0; i--)
-        {
-            Float2 diff = data.Trees[i].Position - uv;
-            if (Float2.Dot(diff, diff) < radiusSq)
-            {
-                data.Trees.RemoveAt(i);
-                removed++;
-            }
-        }
-
-        return removed;
-    }
-
-    private static float SmoothStep(float edge0, float edge1, float x)
-    {
-        float t = MathF.Max(0, MathF.Min(1, (x - edge0) / (edge1 - edge0)));
-        return t * t * (3f - 2f * t);
-    }
+    /// <summary>Removes the trees within the tree brush around a point across the terrain, returning how many.</summary>
+    public static int RemoveTrees(TerrainData data, Float2 uv) => data.RemoveTrees(uv, TreeBrushSize / data.Size);
 
     /// <summary>Mark the terrain data as dirty (called from TerrainSceneEditor after brush strokes).</summary>
     public void MarkDirty() => MarkDataDirty();
 
-    private void MarkDetailsDirty()
-    {
-        MarkDataDirty();
-        if (_terrain.IsValid()) _terrain.InvalidateDetailCache();
-    }
+    private void MarkDetailsDirty() => MarkDataDirty();
 
     // Static accessor for the scene editor to find the active TerrainEditor instance
     internal static TerrainEditor? ActiveInstance { get; set; }
@@ -1084,30 +846,6 @@ public class TerrainEditor : CustomEditor
             catch (Exception ex)
             {
                 Debug.LogWarning($"Failed to save TerrainData '{terrainData.Name}': {ex.Message}");
-            }
-        }
-    }
-
-    /// <summary>Invalidate terrain caches after undo/redo so changes are visible.</summary>
-    [OnUndoRedo]
-    static void OnUndoRedo()
-    {
-        if (EditorSceneManager.EditedWorld.IsNotValid()) return;
-
-        foreach (GameObject go in EditorSceneManager.EditedWorld.Objects.Where(o => o.EnabledInHierarchy))
-        {
-            TerrainComponent? terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
-            if (terrain.IsNotValid()) continue;
-
-            terrain.InvalidateDetailCache();
-
-            // Re-mark GPU textures as dirty so they regenerate
-            TerrainData? data = terrain.Data;
-            if (data.IsValid())
-            {
-                data.SetHeightmapDirty();
-                data.SetSplatmapDirty();
-                data.SetDetailsDirty();
             }
         }
     }

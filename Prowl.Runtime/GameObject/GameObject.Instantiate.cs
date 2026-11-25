@@ -164,12 +164,12 @@ public partial class GameObject
     [ThreadStatic]
     internal static bool PreservingIdentifiers;
 
-    /// <summary>Spawn a prefab into <see cref="Resources.SceneInstance.Active"/>, the scene whose code is running.</summary>
-    public static GameObject? Instantiate(PrefabAsset prefab) => Instantiate(prefab, Resources.SceneInstance.Active);
+    /// <summary>Spawn a prefab into <see cref="Resources.Scene.Active"/>, the scene whose code is running.</summary>
+    public static GameObject? Instantiate(PrefabAsset prefab) => Instantiate(prefab, Resources.Scene.Active);
 
-    /// <summary>Spawn a prefab into <see cref="Resources.SceneInstance.Active"/> at a world position and rotation.</summary>
+    /// <summary>Spawn a prefab into <see cref="Resources.Scene.Active"/> at a world position and rotation.</summary>
     public static GameObject? Instantiate(PrefabAsset prefab, Float3 position, Quaternion rotation)
-        => Instantiate(prefab, Resources.SceneInstance.Active, position, rotation);
+        => Instantiate(prefab, Resources.Scene.Active, position, rotation);
 
     /// <summary>
     /// Spawn a prefab as a child of <paramref name="parent"/>, in that parent's scene.
@@ -180,13 +180,13 @@ public partial class GameObject
     /// than as an offset from the parent. Off by default, so the prefab lands where the parent is.</param>
     public static GameObject? Instantiate(PrefabAsset prefab, GameObject? parent, bool worldPositionStays = false)
     {
-        if (parent.IsNotValid()) return Instantiate(prefab, Resources.SceneInstance.Active);
+        if (parent.IsNotValid()) return Instantiate(prefab, Resources.Scene.Active);
         GameObject? instance = InstantiateDetached(prefab);
         return instance.IsNotValid() ? null : AddUnder(instance!, parent!, worldPositionStays);
     }
 
     /// <summary>Spawn a prefab into a specific scene.</summary>
-    public static GameObject? Instantiate(PrefabAsset prefab, SceneInstance? scene)
+    public static GameObject? Instantiate(PrefabAsset prefab, Scene? scene)
     {
         GameObject? instance = InstantiateDetached(prefab);
         if (instance.IsNotValid()) return null; // InstantiateDetached already reported why
@@ -195,7 +195,7 @@ public partial class GameObject
     }
 
     /// <summary>Spawn a prefab into a specific scene at a world position and rotation.</summary>
-    public static GameObject? Instantiate(PrefabAsset prefab, SceneInstance? scene, Float3 position, Quaternion rotation)
+    public static GameObject? Instantiate(PrefabAsset prefab, Scene? scene, Float3 position, Quaternion rotation)
     {
         GameObject? instance = InstantiateDetached(prefab);
         if (instance.IsNotValid()) return null;
@@ -225,8 +225,8 @@ public partial class GameObject
         clone.Transform.Position = position;
         clone.Transform.Rotation = rotation;
 
-        SceneInstance? scene = original.Scene;
-        return scene.IsValid() ? AddToScene(clone, scene, original.Section) : AddToScene(clone, Resources.SceneInstance.Active);
+        Scene? scene = original.Scene;
+        return scene.IsValid() ? AddToScene(clone, scene, original.Section) : AddToScene(clone, Resources.Scene.Active);
     }
 
     /// <inheritdoc cref="Instantiate(PrefabAsset, GameObject?, bool)"/>
@@ -238,7 +238,7 @@ public partial class GameObject
     }
 
     /// <summary>Copy an existing GameObject into a specific world, into the original's section when it is the original's world.</summary>
-    public static GameObject? Instantiate(GameObject original, SceneInstance? scene)
+    public static GameObject? Instantiate(GameObject original, Scene? scene)
     {
         GameObject? clone = Clone(original);
         if (clone.IsNotValid()) return null;
@@ -276,14 +276,14 @@ public partial class GameObject
         return instance;
     }
 
-    private static GameObject? AddToScene(GameObject instance, SceneInstance? scene, SceneSection? section = null)
+    private static GameObject? AddToScene(GameObject instance, Scene? scene, SceneSection? section = null)
     {
         if (!CanSpawnInto(instance, scene)) return null;
         scene!.Add(instance, section != null && section.IsLoaded ? section : null);
         return instance;
     }
 
-    private static bool CanSpawnInto(GameObject instance, SceneInstance? scene)
+    private static bool CanSpawnInto(GameObject instance, Scene? scene)
     {
         if (scene.IsNotValid() || scene!.State == SceneState.Destroying)
         {

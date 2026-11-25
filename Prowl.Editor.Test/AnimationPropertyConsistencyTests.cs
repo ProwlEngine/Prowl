@@ -119,7 +119,7 @@ public class AnimationPropertyConsistencyTests
     {
         EditorRegistries.Initialize();
 
-        using var scene = new SceneInstance(SceneMode.Game);
+        using var scene = new Scene(SceneMode.Game);
         var go = new GameObject("Actor");
         DummyComponent comp = go.AddComponent<DummyComponent>();
         Animator animator = go.AddComponent<Animator>();
@@ -170,7 +170,7 @@ public class AnimationPropertyConsistencyTests
     [Fact]
     public void RestartingActiveAdditiveClip_PreservesOriginalBaseline()
     {
-        using var scene = new SceneInstance(SceneMode.Game);
+        using var scene = new Scene(SceneMode.Game);
         var go = new GameObject("Actor");
         go.Transform.LocalPosition = new Float3(10f, 0f, 0f);
         Animator animator = go.AddComponent<Animator>();
@@ -229,7 +229,7 @@ public class AnimationPropertyConsistencyTests
     public void SelectingGameObjectWithoutAnimatorInParentHierarchy_EntersCreateModeAndCreatesAnimatorWithClip()
     {
         EditorRegistries.Initialize();
-        using var scene = new SceneInstance(SceneMode.Edit);
+        using var scene = new Scene(SceneMode.Edit);
 
         var riggedRoot = new GameObject("RiggedRoot");
         Animator existingAnimator = riggedRoot.AddComponent<Animator>();
@@ -290,7 +290,7 @@ public class AnimationPropertyConsistencyTests
 
         try
         {
-            using var playScene = new SceneInstance(SceneMode.Game);
+            using var playScene = new Scene(SceneMode.Game);
             var go = new GameObject("PlayActor");
             go.Transform.LocalPosition = new Float3(1f, 2f, 3f);
             Animator animator = go.AddComponent<Animator>();
@@ -331,7 +331,7 @@ public class AnimationPropertyConsistencyTests
     public void AnimationEventSetupHelpers_DiscoverComponentMethodsValidateSignaturesAndSelectEvents()
     {
         EditorRegistries.Initialize();
-        using var scene = new SceneInstance(SceneMode.Edit);
+        using var scene = new Scene(SceneMode.Edit);
 
         var root = new GameObject("Character");
         Animator animator = root.AddComponent<Animator>();
@@ -416,7 +416,7 @@ public class AnimationPropertyConsistencyTests
     public void BuildAddPropertyHierarchyNodes_SeparatesParentPropertiesFromChildNamedGameObjectOrTransform()
     {
         EditorRegistries.Initialize();
-        using var scene = new SceneInstance(SceneMode.Edit);
+        using var scene = new Scene(SceneMode.Edit);
 
         var root = new GameObject("Player");
         Animator animator = root.AddComponent<Animator>();
@@ -463,7 +463,7 @@ public class AnimationPropertyConsistencyTests
     public void CurvesView_ShowsAllGroupSubCurvesWhenGroupSelectedEvenIfCollapsed_AndSingleCurveWhenChannelSelected()
     {
         EditorRegistries.Initialize();
-        using var scene = new SceneInstance(SceneMode.Edit);
+        using var scene = new Scene(SceneMode.Edit);
 
         var root = new GameObject("Cube");
         Animator animator = root.AddComponent<Animator>();

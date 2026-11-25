@@ -108,7 +108,7 @@ EditorRegistries.SaveSettings();
 
 ```csharp
 // prowl eval: bake the first nav mesh surface in the scene
-var surface = SceneInstance.Main.GetAll<NavMeshSurface>(includeDisabled: true)[0]!;
+var surface = Scene.Main.GetAll<NavMeshSurface>(includeDisabled: true)[0]!;
 return Prowl.Editor.Navigation.NavMeshBakeService.Instance.Start(surface);
 ```
 

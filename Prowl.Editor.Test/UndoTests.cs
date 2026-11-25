@@ -38,11 +38,11 @@ public class UndoTests : EditorTestHarness
 {
     public UndoTests() => Undo.Clear(); // static history persists across tests
 
-    private static GameObject? FindGO(Guid id) => SceneInstance.Main.FindObject<GameObject>(id);
+    private static GameObject? FindGO(Guid id) => Scene.Main.FindObject<GameObject>(id);
 
-    private (SceneInstance scene, GameObject go, UndoComp comp) MakeScene()
+    private (Scene scene, GameObject go, UndoComp comp) MakeScene()
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         var go = new GameObject("GO");
         UndoComp comp = go.AddComponent<UndoComp>();
         scene.Add(go);
@@ -50,7 +50,7 @@ public class UndoTests : EditorTestHarness
         return (scene, go, comp);
     }
 
-    private static void DestroyGO(SceneInstance s, GameObject go)
+    private static void DestroyGO(Scene s, GameObject go)
     {
         foreach (GameObject? c in go.GetChildrenDeep().ToList())
             s.Remove(c);
@@ -81,7 +81,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PropertyChange_Undo_NotifiesTheRestoredObject()
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         var go = new GameObject("GO");
         AppliedComp comp = go.AddComponent<AppliedComp>();
         scene.Add(go);
@@ -106,7 +106,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PropertyChange_MultipleFieldsSameFrame_OneStep()
     {
-        (SceneInstance _, GameObject _, UndoComp? comp) = MakeScene();
+        (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 1; comp.Label = "a";
         Undo.RecordObject(comp, "Edit");
         comp.Value = 2; comp.Label = "b";
@@ -125,7 +125,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RegisterCreatedObject_Undo_Destroys_Redo_Recreates()
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         BindEditWorld(scene);
         Undo.Clear();
 
@@ -151,7 +151,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RegisterDestroyObject_Undo_BringsBackARuntimeMaterialNothingElseHeld()
     {
-        (SceneInstance? scene, GameObject? go, UndoComp _) = MakeScene();
+        (Scene? scene, GameObject? go, UndoComp _) = MakeScene();
         GiveRuntimeMaterial(go);
         Guid goId = go.Identifier;
 
@@ -178,7 +178,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RegisterDestroyObject_Undo_MissingScriptKeepsItsLinkToTheRestOfTheScene()
     {
-        var source = new SceneInstance(SceneMode.Edit);
+        var source = new Scene(SceneMode.Edit);
         var target = new GameObject("Target");
         var holder = new GameObject("Holder");
         UndoLinkComp link = holder.AddComponent<UndoLinkComp>();
@@ -188,7 +188,7 @@ public class UndoTests : EditorTestHarness
         source.Add(holder);
         string whileMissing = source.ActiveSection.CaptureTree().WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
 
-        SceneInstance scene = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)), SceneMode.Edit);
+        Scene scene = Scene.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(whileMissing)), SceneMode.Edit);
         BindEditWorld(scene);
         GameObject loadedHolder = scene.Objects.Single(g => g.Name == "Holder");
 
@@ -196,8 +196,8 @@ public class UndoTests : EditorTestHarness
         Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
 
-        string saved = SceneInstance.Main.ActiveSection.CaptureTree().WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
-        SceneInstance restored = SceneInstance.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(saved)), SceneMode.Edit);
+        string saved = Scene.Main.ActiveSection.CaptureTree().WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
+        Scene restored = Scene.Instantiate(SceneContent.Read(Echo.EchoObject.ReadFromString(saved)), SceneMode.Edit);
         UndoLinkComp restoredLink = restored.Objects.Single(g => g.Name == "Holder").GetComponent<UndoLinkComp>()!;
 
         Assert.Equal(5, restoredLink.Value);
@@ -207,7 +207,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RegisterDestroyObject_Undo_RestoresChildren()
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         BindEditWorld(scene);
         Undo.Clear();
 
@@ -236,7 +236,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PropertyUndo_SurvivesDestroyAndRecreate()
     {
-        (SceneInstance? scene, GameObject? go, UndoComp? comp) = MakeScene();
+        (Scene? scene, GameObject? go, UndoComp? comp) = MakeScene();
         comp.Value = 10;
         Undo.RecordObject(comp, "Edit");
         comp.Value = 20;
@@ -283,7 +283,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void Clear_EmptiesHistory()
     {
-        (SceneInstance _, GameObject _, UndoComp? comp) = MakeScene();
+        (Scene _, GameObject _, UndoComp? comp) = MakeScene();
         comp.Value = 0; Undo.RecordObject(comp, "Edit"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Assert.True(Undo.CanUndo);
 
@@ -318,7 +318,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PropertyUndo_OnDestroyedTarget_IsSafeNoOp()
     {
-        (SceneInstance? scene, GameObject? go, UndoComp? comp) = MakeScene();
+        (Scene? scene, GameObject? go, UndoComp? comp) = MakeScene();
         comp.Value = 0;
         Undo.RecordObject(comp, "Edit");
         comp.Value = 1;
@@ -414,16 +414,16 @@ public class UndoTests : EditorTestHarness
     [RequireComponent(typeof(UndoNeeded))]
     public sealed class UndoNeeds : Component { }
 
-    private static SceneInstance OpenScene()
+    private static Scene OpenScene()
     {
-        var scene = new SceneInstance(SceneMode.Edit);
+        var scene = new Scene(SceneMode.Edit);
         BindEditWorld(scene);
         Undo.ClearAll();
         EditorSceneManager.ActiveScene.Dirty = false;
         return scene;
     }
 
-    private static GameObject Add(SceneInstance scene, string name, GameObject? parent = null)
+    private static GameObject Add(Scene scene, string name, GameObject? parent = null)
     {
         var go = new GameObject(name);
         if (parent.IsValid()) go.SetParent(parent, worldPositionStays: false);
@@ -431,12 +431,12 @@ public class UndoTests : EditorTestHarness
         return go;
     }
 
-    private static T Live<T>(Guid id) where T : EngineObject => SceneInstance.Main.FindObject<T>(id)!;
+    private static T Live<T>(Guid id) where T : EngineObject => Scene.Main.FindObject<T>(id)!;
 
     [Fact]
     public void DestroyedTogether_ReferenceEachOthersLiveInstancesOnUndo()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject door = Add(scene, "Door");
         GameObject sw = Add(scene, "Switch");
         UndoRefComp doorRef = door.AddComponent<UndoRefComp>();
@@ -463,7 +463,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void DestroyedChild_ComesBackAtItsSiblingIndexWithItsLocalTransform()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject parent = Add(scene, "Parent");
         parent.Transform.LocalRotation = Quaternion.FromEuler(0, 90, 0);
         Add(scene, "First", parent);
@@ -485,7 +485,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void CameraPreviewAlignWithView_IsOneUndoStep()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject cam = Add(scene, "Camera");
         cam.Transform.SetPositionAndRotation(new Float3(1, 2, 3), Quaternion.Identity);
         Quaternion turned = Quaternion.FromEuler(10, 45, 0);
@@ -509,7 +509,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void DestroyedRoot_ComesBackAtItsRootIndex()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         Add(scene, "A");
         GameObject b = Add(scene, "B");
         Add(scene, "C");
@@ -526,7 +526,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void DestroyedComponent_ComesBackAtItsIndexWithOneOnEnable()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
         go.AddComponent<UndoComp>();
         UndoEnableComp comp = go.AddComponent<UndoEnableComp>();
@@ -545,7 +545,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void CreateEmptyParent_UndoAndRedo_LeaveOneChild()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject oldParent = Add(scene, "Old");
         GameObject child = Add(scene, "Child", oldParent);
         Guid childId = child.Identifier;
@@ -571,7 +571,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void CreatedParent_WithAComponentReferencingTheMovedChild_RedoesWithTheLiveChild()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject child = Add(scene, "Child");
         Guid childId = child.Identifier;
 
@@ -594,7 +594,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void ReparentThenDestroy_UndoesToTheOriginalParent()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject a = Add(scene, "A");
         GameObject b = Add(scene, "B");
         GameObject x = Add(scene, "X", a);
@@ -611,7 +611,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void ComponentDisable_UndoFiresOnEnable()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
         UndoEnableComp comp = go.AddComponent<UndoEnableComp>();
         comp.Enables = 0;
@@ -629,7 +629,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void ComponentToggle_UndoFiresOnDisable()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
         UndoEnableComp comp = go.AddComponent<UndoEnableComp>();
         comp.Enabled = false;
@@ -647,7 +647,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void ReferenceField_UndoPointsAtTheSameLiveObject()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject a = Add(scene, "A");
         GameObject b = Add(scene, "B");
         UndoRefComp holder = Add(scene, "Holder").AddComponent<UndoRefComp>();
@@ -665,7 +665,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RuntimeMaterialField_UndoIsTheSameMaterial()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         MeshRenderer renderer = Add(scene, "R").AddComponent<MeshRenderer>();
         var first = new Material { Name = "First" };
         renderer.Material = first;
@@ -681,7 +681,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void OnlyChangedFieldsRestore_AnUnchangedSiblingSurvives()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         comp.Value = 1;
         comp.Label = "a";
@@ -699,7 +699,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void UnchangedRecord_RecordsNothing_EvenWithNaN()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoRefComp comp = Add(scene, "GO").AddComponent<UndoRefComp>();
         comp.Number = float.NaN;
 
@@ -712,7 +712,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void DestroyedTarget_UndoRebindsEveryHolderToTheLiveInstance()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject target = Add(scene, "Target");
         UndoComp targetComp = target.AddComponent<UndoComp>();
         UndoRefComp holder = Add(scene, "Holder").AddComponent<UndoRefComp>();
@@ -742,7 +742,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void TwoRecordsOnOneObjectInOneGroup_MergeIntoOne()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         comp.Value = 0;
 
@@ -762,7 +762,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void DragStyleRecordsOverFrames_AreOneStep()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
 
         for (int frame = 1; frame <= 3; frame++)
@@ -781,7 +781,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void EditAfterUndo_KeepsRedoUntilItsGroupCloses_AndBlocksRedoMeanwhile()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         Undo.RecordObject(comp, "A"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
@@ -800,7 +800,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void OneFrameEditAfterUndo_ClearsRedoWhenItIsPushed()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         Undo.RecordObject(comp, "A"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
@@ -816,7 +816,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RevertAllInCurrentGroup_RestoresPopsAndKeepsRedo()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         Undo.RecordObject(comp, "A"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
@@ -833,7 +833,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void AddComponent_UndoRemovesRequiredComponentsToo_RedoBringsBackValuesSetAfter()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
 
         Undo.AddComponent<UndoNeeds>(go);
@@ -857,7 +857,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void CreatedThenDestroyedInOneGroup_RecordsNothing()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "Temp");
         Undo.RegisterCreatedObjectUndo(go, "Create");
         Undo.RecordObject(go, "Rename");
@@ -871,7 +871,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void AddComponentThenDestroyInOneGroup_RecordsNothing()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
         UndoComp comp = Undo.AddComponent<UndoComp>(go);
         Undo.DestroyObjectImmediate(comp);
@@ -883,7 +883,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void HierarchyRecord_UndoRemovesChildrenAddedAfterIt()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject root = Add(scene, "Root");
         GameObject kept = Add(scene, "Kept", root);
         Guid rootId = root.Identifier, keptId = kept.Identifier;
@@ -903,7 +903,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void Steps_MarkTheirOwners_OnPushAndUndo()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
 
         Undo.RecordObject(comp, "Edit");
@@ -919,7 +919,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void DontSaveObjects_MarkNothing()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "Hidden");
         go.HideFlags = HideFlags.DontSave;
 
@@ -934,7 +934,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PostprocessModifications_FiltersKeys()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         Undo.postprocessModifications = mods => [.. mods.Where(m => m.PropertyPath != nameof(UndoComp.Label))];
         try
@@ -959,7 +959,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PerformUndoTo_AndRedoTo_ApplyEveryStepBetween()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         int changes = 0;
         Undo.historyChanged += Count;
@@ -989,7 +989,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void ComponentQueuedForDestroy_IsRebound()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
         UndoComp comp = go.AddComponent<UndoComp>();
         UndoRefComp holder = Add(scene, "Holder").AddComponent<UndoRefComp>();
@@ -1006,7 +1006,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RecreatedUnderDisabledParent_GetsNoOnEnable()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject parent = Add(scene, "Parent");
         GameObject child = Add(scene, "Child", parent);
         UndoEnableComp comp = child.AddComponent<UndoEnableComp>();
@@ -1037,7 +1037,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void InspectorDrawWithNoEdit_RecordsNothing()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
 
         Frame(edits: () => Undo.InspectorBaseline(comp));
@@ -1050,7 +1050,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void InspectorEdit_RecordsAndMarksDirty_WithoutWhatTheGameChangedAfter()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
 
         Frame(edits: () =>
@@ -1071,7 +1071,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void InspectorCommitAFrameAfterTheFieldStoppedDrawing_StillRecords()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
 
         Frame(edits: () => Undo.InspectorBaseline(comp));
@@ -1085,7 +1085,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void Drag_IsOneStep_AndARenameBeforeItIsAnother()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
 
         Frame(edits: () => { Undo.RecordObject(go, "Rename"); go.Name = "Renamed"; });
@@ -1105,7 +1105,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void UndoDuringADrag_RevertsTheDrag_AndRedoDoesNothing()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
         Frame(edits: () => { Undo.RecordObject(go, "Rename"); go.Name = "Renamed"; });
         Frame();
@@ -1126,7 +1126,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void UndoWhileTheMouseIsHeldAndNothingRecorded_IsIgnored()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         Frame(mouseDown: true);
         Assert.True(Undo.IgnoresUndoInput);
         Frame();
@@ -1136,7 +1136,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void ContextClearedWhileSetAside_PopsBackEmpty()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         Undo.RecordObject(comp, "Edit"); comp.Value = 1; Undo.FlushUndoRecordObjects();
 
@@ -1150,7 +1150,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void PushContext_FlushesAnEditMadeThatFrame()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         Undo.RecordObject(comp, "Edit");
         comp.Value = 1;
@@ -1239,7 +1239,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void RuntimeAssetDisposedSinceTheRecord_IsLeftAlone()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         MeshRenderer renderer = Add(scene, "R").AddComponent<MeshRenderer>();
         var first = new Material { Name = "First" };
         renderer.Material = first;
@@ -1257,7 +1257,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void EmbeddedProfileEdit_RecordsAndMarksTheHoldersScene()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         Runtime.Rendering.Volume volume = Add(scene, "V").AddComponent<Runtime.Rendering.Volume>();
         var profile = new Runtime.Rendering.VolumeProfile { Name = "Embedded" };
         volume.SharedProfile = profile;
@@ -1276,7 +1276,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void JumpToAStepThatIsGone_DoesNothing()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         Undo.RecordObject(comp, "Edit"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
 
@@ -1310,7 +1310,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void NestedGridEdit_IsRecordedOnItsHolderComponent()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject target = Add(scene, "Target");
         UndoRefComp holder = Add(scene, "Holder").AddComponent<UndoRefComp>();
 
@@ -1490,7 +1490,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void UndoOfAnEditInTheOpenGroup_DropsTheStaleRedoUnderIt()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
         Undo.RecordObject(comp, "A"); comp.Value = 1; Undo.FlushUndoRecordObjects(); Undo.IncrementCurrentGroup();
         Undo.PerformUndo();
@@ -1510,7 +1510,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void HierarchyRecordWithNoChange_IsNotAStep()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject root = Add(scene, "Root");
         Add(scene, "Child", root);
 
@@ -1524,7 +1524,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void CurrentGroupName_NamesItsStep()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
 
         Undo.SetCurrentGroupName("Do The Thing");
@@ -1538,7 +1538,7 @@ public class UndoTests : EditorTestHarness
     [Fact]
     public void ToolScopeOverManyFrames_IsOneStepFromFirstToLastState()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         GameObject go = Add(scene, "GO");
         var scope = new ToolUndoScope("Tool", [go]);
         for (int frame = 1; frame <= 3; frame++)
@@ -1555,9 +1555,32 @@ public class UndoTests : EditorTestHarness
     }
 
     [Fact]
+    public void HeldRecord_TakesInRecordsOfItsTargetInLaterFrames()
+    {
+        Scene scene = OpenScene();
+        UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
+        object held = Undo.HoldRecords([comp], "Tool");
+        for (int frame = 1; frame <= 3; frame++)
+        {
+            int value = frame;
+            Frame(edits: () =>
+            {
+                Undo.RecordObject(comp, "Tool");
+                comp.Value = value;
+            });
+        }
+        Undo.ReleaseRecords(held, revert: false);
+        Frame();
+
+        Assert.Single(Undo.UndoSteps);
+        Undo.PerformUndo();
+        Assert.Equal(0, comp.Value);
+    }
+
+    [Fact]
     public void WatchedObject_RecordsOnlyRealChanges_AndIsNoInteraction()
     {
-        SceneInstance scene = OpenScene();
+        Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
 
         Frame(mouseDown: true, edits: () => Undo.WatchObject(comp, "Watch"));

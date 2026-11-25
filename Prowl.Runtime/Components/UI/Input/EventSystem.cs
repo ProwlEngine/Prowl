@@ -77,7 +77,7 @@ public sealed class EventSystem : Component
     /// <summary>The nearest world space canvas element under <paramref name="ray"/>, and how far along the ray it is.</summary>
     public static bool RaycastWorld(Ray ray, out GameObject? hit, out float distance)
     {
-        bool found = UIRaycaster.TryPickRay(SceneInstance.Active, ray, out UIRaycaster.Hit result, out distance);
+        bool found = UIRaycaster.TryPickRay(Scene.Active, ray, out UIRaycaster.Hit result, out distance);
         hit = found ? result.GameObject : null;
         return found;
     }
@@ -115,9 +115,9 @@ public sealed class EventSystem : Component
     public static EventSystem? Of(GameObject? go) => go.IsValid() && go.Scene.IsValid() ? go.Scene.Input.EventSystem : null;
 
     // The first enabled event system in a world drives it, any extras stay inert.
-    internal override void JoinWorld(SceneInstance world) => world.Input.Join(this);
+    internal override void JoinWorld(Scene world) => world.Input.Join(this);
 
-    internal override void LeaveWorld(SceneInstance world)
+    internal override void LeaveWorld(Scene world)
     {
         world.Input.Leave(this);
         ClearState();
@@ -125,7 +125,7 @@ public sealed class EventSystem : Component
 
     public override void Update()
     {
-        SceneInstance? world = GameObject.Scene;
+        Scene? world = GameObject.Scene;
         if (world.IsNotValid() || !ReferenceEquals(world.Input.EventSystem, this)) return;
         Tick(world, Time.UnscaledTotalTime);
     }
@@ -307,7 +307,7 @@ public sealed class EventSystem : Component
 
     // Hit tests the screen space canvases. A host viewport's reference size is pushed as the canvas screen size for the
     // pick, so each canvas lays out against the size the renderer used, like a 1920x1080 target in a letterboxed panel.
-    private static bool Pick(SceneInstance world, Float2 pos, Float2 size, out UIRaycaster.Hit hit)
+    private static bool Pick(Scene world, Float2 pos, Float2 size, out UIRaycaster.Hit hit)
     {
         SceneInput input = world.Input;
         Float2? previous = input.ScreenSize;
@@ -317,14 +317,14 @@ public sealed class EventSystem : Component
     }
 
     /// <summary>True when screen space UI in <paramref name="world"/> is under the pointer this frame.</summary>
-    internal bool HitsPointer(SceneInstance world)
+    internal bool HitsPointer(Scene world)
     {
         if (WorldPointer != null) return false;
         ReadPointer(world.Input, out Float2 size, out Float2 pos, out bool receives);
         return receives && Pick(world, pos, size, out _);
     }
 
-    private void Tick(SceneInstance world, float currentTime)
+    private void Tick(Scene world, float currentTime)
     {
         if (WorldPointer is { } ray)
         {
@@ -409,7 +409,7 @@ public sealed class EventSystem : Component
     /// The frame for a <see cref="WorldPointer"/>: the ray is hit tested against world space canvases and its press
     /// acts as the left button. The pointer's position is its place on the hit canvas, in design pixels.
     /// </summary>
-    private void TickRay(SceneInstance? scene, RayPointer ray, float currentTime)
+    private void TickRay(Scene? scene, RayPointer ray, float currentTime)
     {
         bool hadHit = UIRaycaster.TryPickRay(scene, ray.Ray, out UIRaycaster.Hit hit, out float distance);
         WorldPointerDistance = hadHit ? distance : null;
@@ -588,12 +588,12 @@ public sealed class SceneInput
     /// Hands the pointer to the topmost of <paramref name="presented"/>, sorted lowest render order first, with UI under
     /// it. Every world below that one is blocked for the frame.
     /// </summary>
-    internal static void Arbitrate(List<SceneInstance> presented)
+    internal static void Arbitrate(List<Scene> presented)
     {
         bool taken = false;
         for (int i = presented.Count - 1; i >= 0; i--)
         {
-            SceneInstance world = presented[i];
+            Scene world = presented[i];
             world.Input.PointerBlocked = taken;
             if (taken || i == 0) continue;
             EventSystem? events = world.Input.EventSystem;

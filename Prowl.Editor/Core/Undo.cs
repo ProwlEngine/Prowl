@@ -16,7 +16,7 @@ namespace Prowl.Editor.Core;
 /// <summary>What a record changes, for dirty marks and for dropping steps.</summary>
 public readonly struct UndoOwner : IEquatable<UndoOwner>
 {
-    internal enum OwnerKind { None, Scene, Prefab, Asset, AssetFile, Settings }
+    internal enum OwnerKind { None, Scene, Session, Asset, AssetFile, Settings }
 
     internal OwnerKind Kind { get; }
     internal Guid AssetId { get; }
@@ -38,7 +38,8 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
     public static UndoOwner OfScene(OpenScene? scene) => scene == null ? None : new(OwnerKind.Scene, scene: scene);
 
     /// <summary>The prefab being edited, which keeps its own dirty flag.</summary>
-    internal static UndoOwner OfPrefabSession => new(OwnerKind.Prefab);
+    /// <summary>The isolated session open over the edit world, such as a prefab being edited.</summary>
+    internal static UndoOwner OfSession => new(OwnerKind.Session);
 
     /// <summary>A file written straight to disk. Keys a step for dropping and marks nothing.</summary>
     public static UndoOwner OfAssetFile(Guid asset) => new(OwnerKind.AssetFile, asset);
@@ -58,7 +59,7 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
     private static UndoOwner OfObjectIn(GameObject go)
     {
         if (IsDontSave(go)) return None;
-        if (PrefabEditingMode.World.IsValid() && ReferenceEquals(go.Scene, PrefabEditingMode.World)) return OfPrefabSession;
+        if (IsolatedWorld.World is { } isolated && ReferenceEquals(go.Scene, isolated)) return OfSession;
         return OfScene(EditorSceneManager.SceneOf(go));
     }
 
@@ -67,7 +68,7 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
     internal string DisplayName => Kind switch
     {
         OwnerKind.Scene => Scene!.Name,
-        OwnerKind.Prefab => PrefabEditingMode.EditingPrefabPath is { } path ? System.IO.Path.GetFileNameWithoutExtension(path) : "Prefab",
+        OwnerKind.Session => IsolatedWorld.Current?.Name ?? "Session",
         OwnerKind.Asset or OwnerKind.AssetFile => AssetDatabase.Get(AssetId) is Asset a ? a.Name : AssetId.ToString(),
         OwnerKind.Settings => SettingsType?.Name ?? "Settings",
         _ => "",
@@ -315,13 +316,13 @@ public static class Undo
         _pending.Add(new PendingObject(target, key, owner, Capture.Of(target)) { Group = group, Name = name });
     }
 
-    // A pending capture of the same target in the same group with no structural change to it since.
+    // A pending capture of the same target, in the same group or held open, with no structural change to it since.
     private static PendingObject? FindMergeablePending(TargetKey key, int group)
     {
         for (int i = _pending.Count - 1; i >= 0; i--)
         {
             Entry e = _pending[i];
-            if (e.Group != group) continue;
+            if (e.Group != group && e is not PendingObject { Held: true }) continue;
             if (e is PendingObject po && po.Key.Same(key)) return po;
             if (key.ObjectId != Guid.Empty && e.Touches(key.ObjectId)) return null;
         }
@@ -965,7 +966,7 @@ public static class Undo
         switch (owner.Kind)
         {
             case UndoOwner.OwnerKind.Scene: EditorSceneManager.MarkDirty(owner.Scene); break;
-            case UndoOwner.OwnerKind.Prefab when PrefabEditingMode.IsEditing: PrefabEditingMode.IsDirty = true; break;
+            case UndoOwner.OwnerKind.Session when IsolatedWorld.Current is { } session: session.IsDirty = true; break;
             case UndoOwner.OwnerKind.Asset: EditorUtility.MarkAssetDirty(owner.AssetId); break;
             case UndoOwner.OwnerKind.Settings when owner.SettingsType != null: EditorRegistries.SaveSettings(owner.SettingsType); break;
         }
@@ -1027,7 +1028,7 @@ public static class Undo
     /// <summary>A level loaded by play code ends the play history, as opening a scene ends the edit history.</summary>
     internal static void OnSectionLoaded(SceneLoadedArgs args)
     {
-        if (Application.IsPlaying && !args.Additive && ReferenceEquals(args.Section.Instance, SceneInstance.Main)) Clear();
+        if (Application.IsPlaying && !args.Additive && ReferenceEquals(args.Section.Instance, Scene.Main)) Clear();
     }
 
     /// <summary>Keeps dirty assets and assets the history records loaded, so a save or an undo never reloads them from disk.</summary>
@@ -1235,7 +1236,7 @@ public static class Undo
 
     private static GameObject? FindGO(Guid identifier)
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         return scene.IsValid() ? scene.FindObject<GameObject>(identifier) : null;
     }
 
@@ -1320,7 +1321,7 @@ public static class Undo
 
         public bool IsAsset => _kind == KeyKind.Asset;
 
-        public object? Resolve(SceneInstance? scene)
+        public object? Resolve(Scene? scene)
         {
             switch (_kind)
             {
@@ -1796,7 +1797,7 @@ public static class Undo
     }
 
     // An object by identifier in an open scene's section when one is named, otherwise anywhere in the world.
-    private static EngineObject? FindIn(SceneInstance? world, OpenScene? scene, Guid id)
+    private static EngineObject? FindIn(Scene? world, OpenScene? scene, Guid id)
     {
         if (scene != null) return scene.Section is { IsLoaded: true } section ? section.Instance.FindObject(section, id) : null;
         return world.IsValid() ? world.FindObject<EngineObject>(id) : null;
@@ -2113,7 +2114,7 @@ public static class Undo
     private sealed class Restore : IExternalReferenceResolver
     {
         public readonly bool IsUndo;
-        public readonly SceneInstance? Scene = EditorSceneManager.EditedWorld;
+        public readonly Scene? Scene = EditorSceneManager.EditedWorld;
         public readonly List<object> Touched = [];
 
         /// <summary>The open scene of the record applying, so a lookup prefers its section over a duplicate in another.</summary>
@@ -2314,7 +2315,7 @@ public static class Undo
     // destruction gives the same object back to everything that held it.
     internal static class ReferenceRebinder
     {
-        public static void Rebind(SceneInstance scene, HashSet<Guid> recreated)
+        public static void Rebind(Scene scene, HashSet<Guid> recreated)
         {
             var live = new Dictionary<Guid, EngineObject>();
             foreach (GameObject go in scene.Objects)

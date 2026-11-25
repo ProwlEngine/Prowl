@@ -101,8 +101,54 @@ public static class TagLayerManager
     /// <returns>A new array containing all layer names.</returns>
     public static IReadOnlyList<string> GetLayers() => layers;
 
+    private static List<SortingLayerInfo> s_sortingLayers = DefaultSortingLayers();
+
+    /// <summary>Sorting layers back to front. Default is always one of them.</summary>
+    public static IReadOnlyList<SortingLayerInfo> SortingLayers => s_sortingLayers;
+
+    /// <summary>Moves each time the sorting layers change, so parked renderers sort again.</summary>
+    public static int SortingLayersVersion { get; private set; }
+
+    /// <summary>Replaces the sorting layers, keeping their order. Default is added at the front when missing.</summary>
+    public static void SetSortingLayers(IEnumerable<SortingLayerInfo> layers)
+    {
+        List<SortingLayerInfo> copy = [];
+        foreach (SortingLayerInfo layer in layers)
+            if (!copy.Exists(l => l.Id == layer.Id))
+                copy.Add(new SortingLayerInfo { Id = layer.Id, Name = layer.Name });
+        if (!copy.Exists(l => l.Id == SortingLayer.DefaultId))
+            copy.Insert(0, new SortingLayerInfo { Id = SortingLayer.DefaultId, Name = "Default" });
+        s_sortingLayers = copy;
+        SortingLayersVersion++;
+    }
+
+    /// <summary>The name of a sorting layer, or Default's when the id is not one.</summary>
+    public static string GetSortingLayerName(int id)
+    {
+        int index = SortingLayerIndex(id);
+        return s_sortingLayers[index < 0 ? SortingLayerIndex(SortingLayer.DefaultId) : index].Name;
+    }
+
+    /// <summary>
+    /// The transparent sort order of a sorting layer and an order in it: the layer's place relative to Default, then the
+    /// order clamped to a short. Default at order 0 is 0, where every renderer without a sorting layer sorts.
+    /// </summary>
+    public static int SortingOrderOf(int layerId, int order)
+    {
+        int index = SortingLayerIndex(layerId);
+        int rank = index < 0 ? 0 : index - SortingLayerIndex(SortingLayer.DefaultId);
+        return rank * 65536 + Math.Clamp(order, short.MinValue, short.MaxValue);
+    }
+
+    private static int SortingLayerIndex(int id) => s_sortingLayers.FindIndex(l => l.Id == id);
+
+    private static List<SortingLayerInfo> DefaultSortingLayers() => [new SortingLayerInfo { Id = SortingLayer.DefaultId, Name = "Default" }];
+
     public static void ResetDefault()
     {
+        s_sortingLayers = DefaultSortingLayers();
+        SortingLayersVersion++;
+
         tags =
         [
             "Untagged",
@@ -129,4 +175,32 @@ public static class TagLayerManager
             "", "", ""
         ];
     }
+}
+
+/// <summary>A sorting layer as the project lists it. The id stays the same through renames and moves.</summary>
+public sealed class SortingLayerInfo
+{
+    public int Id;
+    public string Name = "";
+}
+
+/// <summary>A renderer's sorting layer, kept by id so renaming or moving the layer keeps the renderer on it.</summary>
+public struct SortingLayer : IEquatable<SortingLayer>
+{
+    public const int DefaultId = 0;
+
+    public int Id;
+
+    public SortingLayer(int id) => Id = id;
+
+    public static SortingLayer Default => new(DefaultId);
+
+    public readonly string Name => TagLayerManager.GetSortingLayerName(Id);
+
+    public readonly bool Equals(SortingLayer other) => Id == other.Id;
+    public override readonly bool Equals(object? obj) => obj is SortingLayer other && Equals(other);
+    public override readonly int GetHashCode() => Id;
+    public static bool operator ==(SortingLayer a, SortingLayer b) => a.Id == b.Id;
+    public static bool operator !=(SortingLayer a, SortingLayer b) => a.Id != b.Id;
+    public override readonly string ToString() => Name;
 }

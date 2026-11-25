@@ -179,6 +179,9 @@ public static class ShortcutManager
         return Input.IsCtrlPressed;
     }
 
+    /// <summary>The shortcut registered under an id, or null.</summary>
+    public static ShortcutDefinition? Find(string id) => _shortcuts.TryGetValue(id, out ShortcutDefinition? def) ? def : null;
+
     /// <summary>Get the effective binding for a shortcut.</summary>
     public static ShortcutBinding? GetBinding(string id)
         => _shortcuts.TryGetValue(id, out ShortcutDefinition? def) ? def.Binding : null;
@@ -345,6 +348,15 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolScale", "Scale Tool", KeyCode.R);
         ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
         ShortcutManager.Register("Scene/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
+        ShortcutManager.Register("Scene/Rename", "Rename Selected", KeyCode.F2);
+        ShortcutManager.Register("Scene/FrameSelected", "Frame Selected", KeyCode.KeypadDecimal);
+        ShortcutManager.Register("Scene/ViewFront", "Front View", KeyCode.Keypad1);
+        ShortcutManager.Register("Scene/ViewBack", "Back View", KeyCode.Keypad1, ctrl: true);
+        ShortcutManager.Register("Scene/ViewRight", "Right View", KeyCode.Keypad3);
+        ShortcutManager.Register("Scene/ViewLeft", "Left View", KeyCode.Keypad3, ctrl: true);
+        ShortcutManager.Register("Scene/ViewTop", "Top View", KeyCode.Keypad7);
+        ShortcutManager.Register("Scene/ViewBottom", "Bottom View", KeyCode.Keypad7, ctrl: true);
+        ShortcutManager.Register("Scene/TogglePerspective", "Toggle Perspective", KeyCode.Keypad5);
 
         // Game View
         ShortcutManager.Register("Game/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
@@ -376,5 +388,109 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("GraphEditor/FrameSelection", "Frame Selection", KeyCode.F);
         ShortcutManager.Register("GraphEditor/Recenter", "Recenter View", KeyCode.Space);
         ShortcutManager.Register("GraphEditor/GroupSelection", "Group Selected", KeyCode.G, ctrl: true);
+
+        ShortcutManager.Register("CSG/ModeSelect", "Select Tool", KeyCode.Number1, alt: true);
+        ShortcutManager.Register("CSG/ModeCreate", "Create Tool", KeyCode.Number2, alt: true);
+        ShortcutManager.Register("CSG/ModeEdit", "Edit Tool", KeyCode.Number3, alt: true);
+        ShortcutManager.Register("CSG/ModeSurface", "Surface Tool", KeyCode.Number4, alt: true);
+        ShortcutManager.Register("CSG/SetAdditive", "Set Additive", KeyCode.Equal);
+        ShortcutManager.Register("CSG/SetSubtractive", "Set Subtractive", KeyCode.Minus);
+        ShortcutManager.Register("CSG/SetIntersecting", "Set Intersecting", KeyCode.BackSlash);
+        ShortcutManager.Register("CSG/SetPassThrough", "Set Pass Through", KeyCode.Slash);
+        ShortcutManager.Register("CSG/SnapToGrid", "Snap Selection To Grid", KeyCode.End, ctrl: true);
+        ShortcutManager.Register("MeshEdit/VertexMode", "Vertex Mode", KeyCode.Number1);
+        ShortcutManager.Register("MeshEdit/EdgeMode", "Edge Mode", KeyCode.Number2);
+        ShortcutManager.Register("MeshEdit/FaceMode", "Face Mode", KeyCode.Number3);
+        ShortcutManager.Register("MeshEdit/SelectAll", "Select All Elements", KeyCode.A);
+        ShortcutManager.Register("MeshEdit/SelectNone", "Select No Elements", KeyCode.A, alt: true);
+        ShortcutManager.Register("MeshEdit/Invert", "Invert Element Selection", KeyCode.I, ctrl: true);
+        ShortcutManager.Register("MeshEdit/More", "Select More", KeyCode.Equal, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Less", "Select Less", KeyCode.Minus, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Linked", "Select Linked", KeyCode.L, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Similar", "Select Similar", KeyCode.G, shift: true);
+        ShortcutManager.Register("MeshEdit/XRay", "X Ray", KeyCode.Z, alt: true);
+        ShortcutManager.Register("MeshEdit/Hide", "Hide Elements", KeyCode.H);
+        ShortcutManager.Register("MeshEdit/HideUnselected", "Hide Unselected Elements", KeyCode.H, shift: true);
+        ShortcutManager.Register("MeshEdit/Reveal", "Reveal Elements", KeyCode.H, alt: true);
+        ShortcutManager.Register("MeshEdit/Frame", "Frame Selected Elements", KeyCode.Home);
+        ShortcutManager.Register("MeshEdit/Fill", "Fill", KeyCode.F);
+        ShortcutManager.Register("MeshEdit/Grab", "Grab", KeyCode.G);
+        ShortcutManager.Register("MeshEdit/Extrude", "Extrude Region", KeyCode.E);
+        ShortcutManager.Register("MeshEdit/Bevel", "Bevel", KeyCode.B, ctrl: true);
+        ShortcutManager.Register("MeshEdit/BevelPoints", "Bevel Points", KeyCode.B, ctrl: true, shift: true);
+        ShortcutManager.Register("MeshEdit/ExtrudeMenu", "Extrude Menu", KeyCode.E, alt: true);
+        ShortcutManager.Register("MeshEdit/ShrinkFatten", "Shrink Fatten", KeyCode.S, alt: true);
+        ShortcutManager.Register("MeshEdit/ToSphere", "To Sphere", KeyCode.S, shift: true, alt: true);
+        ShortcutManager.Register("MeshEdit/Split", "Split", KeyCode.Y);
+        ShortcutManager.Register("MeshEdit/LoopCut", "Loop Cut", KeyCode.R, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Knife", "Knife", KeyCode.K);
+        ShortcutManager.Register("MeshEdit/SnapToBrushes", "Snap To Brushes", KeyCode.Tab, shift: true);
+        ShortcutManager.Register("MeshEdit/Proportional", "Proportional Editing", KeyCode.O);
+        ShortcutManager.Register("ModelEdit/Toggle", "Model Edit Mode", KeyCode.Tab);
+        ShortcutManager.Register("ModelEdit/Join", "Join Model Objects", KeyCode.J, ctrl: true);
+        ShortcutManager.Register("ModelEdit/Add", "Add Model Object", KeyCode.A, shift: true);
+        ShortcutManager.Register("ModelEdit/Apply", "Apply Transform", KeyCode.A, ctrl: true);
+        ShortcutManager.Register("ModelEdit/ClearLocation", "Clear Location", KeyCode.G, alt: true);
+        ShortcutManager.Register("ModelEdit/ClearRotation", "Clear Rotation", KeyCode.R, alt: true);
+        ShortcutManager.Register("ModelEdit/ClearScale", "Clear Scale", KeyCode.S, alt: true);
+        ShortcutManager.Register("MeshEdit/Inset", "Inset Faces", KeyCode.I);
+        ShortcutManager.Register("MeshEdit/Triangulate", "Triangulate Faces", KeyCode.T, ctrl: true);
+        ShortcutManager.Register("MeshEdit/TrisToQuads", "Triangles To Quads", KeyCode.J, alt: true);
+        ShortcutManager.Register("MeshEdit/Bridge", "Bridge Faces", KeyCode.Unknown);
+        ShortcutManager.Register("MeshEdit/EdgeMenu", "Edge Menu", KeyCode.E, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Symmetrize", "Symmetrize", KeyCode.M, ctrl: true, shift: true);
+        ShortcutManager.Register("MeshEdit/MergeByDistance", "Merge By Distance", KeyCode.M, shift: true);
+        ShortcutManager.Register("MeshEdit/Separate", "Separate", KeyCode.P);
+        ShortcutManager.Register("MeshEdit/Smooth", "Smooth", KeyCode.Unknown);
+        ShortcutManager.Register("MeshEdit/SnapMenu", "Snap Menu", KeyCode.S, shift: true);
+        ShortcutManager.Register("MeshEdit/Dissolve", "Dissolve", KeyCode.X, ctrl: true);
+        ShortcutManager.Register("MeshEdit/LimitedDissolve", "Limited Dissolve", KeyCode.X, ctrl: true, shift: true);
+        ShortcutManager.Register("MeshEdit/DeleteMenu", "Delete", KeyCode.X);
+        ShortcutManager.Register("MeshEdit/Rip", "Rip", KeyCode.V);
+        ShortcutManager.Register("MeshEdit/Slide", "Slide", KeyCode.V, shift: true);
+        ShortcutManager.Register("MeshEdit/Crease", "Crease", KeyCode.E, shift: true);
+        ShortcutManager.Register("MeshEdit/Duplicate", "Duplicate", KeyCode.D, shift: true);
+        ShortcutManager.Register("MeshEdit/Unwrap", "Unwrap", KeyCode.U);
+        ShortcutManager.Register("MeshEdit/DrawLine", "Draw Lines", KeyCode.L, alt: true);
+        ShortcutManager.Register("MeshEdit/DrawQuads", "Draw Quads", KeyCode.Q, alt: true);
+        ShortcutManager.Register("MeshEdit/PickLinked", "Select Linked Under Mouse", KeyCode.L);
+        ShortcutManager.Register("MeshEdit/UnpickLinked", "Deselect Linked Under Mouse", KeyCode.L, shift: true);
+        ShortcutManager.Register("MeshEdit/DeleteFace", "Delete Face", KeyCode.Delete, ctrl: true);
+        ShortcutManager.Register("MeshEdit/Merge", "Merge", KeyCode.M);
+        ShortcutManager.Register("MeshEdit/Connect", "Connect Points", KeyCode.J);
+        ShortcutManager.Register("MeshEdit/Flatten", "Flatten", KeyCode.F, shift: true);
+        ShortcutManager.Register("MeshEdit/Rotate", "Rotate", KeyCode.R);
+        ShortcutManager.Register("MeshEdit/Scale", "Scale", KeyCode.S);
+        ShortcutManager.Register("CSG/FlipX", "Flip On X", KeyCode.X, ctrl: true, alt: true);
+        ShortcutManager.Register("CSG/FlipY", "Flip On Y", KeyCode.Y, ctrl: true, alt: true);
+        ShortcutManager.Register("CSG/FlipZ", "Flip On Z", KeyCode.Z, ctrl: true, alt: true);
+        ShortcutManager.Register("CSG/RotateLeft", "Rotate Anticlockwise", KeyCode.Comma, ctrl: true);
+        ShortcutManager.Register("CSG/RotateRight", "Rotate Clockwise", KeyCode.Period, ctrl: true);
+        ShortcutManager.Register("CSG/Hide", "Hide Selected", KeyCode.H);
+        ShortcutManager.Register("CSG/HideUnselected", "Hide Unselected", KeyCode.H, ctrl: true);
+        ShortcutManager.Register("CSG/ToggleVisibility", "Toggle Visibility", KeyCode.H, shift: true);
+        ShortcutManager.Register("CSG/UnhideAll", "Unhide All", KeyCode.U);
+        ShortcutManager.Register("CSG/HalveGrid", "Halve Grid", KeyCode.LeftBracket);
+        ShortcutManager.Register("CSG/DoubleGrid", "Double Grid", KeyCode.RightBracket);
+        ShortcutManager.Register("CSG/NudgeLeft", "Nudge Left", KeyCode.Left, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeRight", "Nudge Right", KeyCode.Right, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeBack", "Nudge Back", KeyCode.Down, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeForward", "Nudge Forward", KeyCode.Up, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeDown", "Nudge Down", KeyCode.PageDown, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/NudgeUp", "Nudge Up", KeyCode.PageUp, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/Smear", "Paint Surface Look (hold)", KeyCode.G);
+        ShortcutManager.Register("CSG/ClipSwapSide", "Swap Kept Side", KeyCode.Tab);
+        ShortcutManager.Register("CSG/Confirm", "Confirm Cut or Shape", KeyCode.Enter);
+        ShortcutManager.Register("CSG/RepeatClone", "Repeat Last Clone", KeyCode.D, ctrl: true, shift: true);
+        ShortcutManager.Register("CSG/GroupSelection", "Group Selection", KeyCode.G, ctrl: true);
+        ShortcutManager.Register("CSG/Earlier", "Move Earlier in CSG Order", KeyCode.LeftBracket, ctrl: true);
+        ShortcutManager.Register("CSG/Later", "Move Later in CSG Order", KeyCode.RightBracket, ctrl: true);
+        ShortcutManager.Register("CSG/ShapeBox", "Draw Box", KeyCode.B);
+        ShortcutManager.Register("CSG/ShapeCylinder", "Draw Cylinder", KeyCode.C);
+        ShortcutManager.Register("CSG/ShapeSphere", "Draw Sphere", KeyCode.K);
+        ShortcutManager.Register("CSG/ShapeLinearStairs", "Draw Stairs", KeyCode.L);
+        ShortcutManager.Register("CSG/ShapeSpiralStairs", "Draw Spiral Stairs", KeyCode.P);
+        ShortcutManager.Register("CSG/ShapeRoom", "Draw Room", KeyCode.O);
+        ShortcutManager.Register("CSG/ShapePolygon", "Draw Polygon", KeyCode.N);
     }
 }

@@ -22,7 +22,7 @@ using IStateMachineState = Prowl.Motion.IStateMachineState;
 using MotionGraphInstance = Prowl.Motion.AnimationGraphInstance;
 using ParameterValue = Prowl.Motion.ParameterValue;
 using PoseNodeInstance = Prowl.Motion.PoseNodeInstance;
-using SceneInstance = Prowl.Runtime.Resources.SceneInstance;
+using Scene = Prowl.Runtime.Resources.Scene;
 
 namespace Prowl.Editor.Inspector;
 
@@ -904,7 +904,7 @@ internal sealed class AnimationGraphProbe : IGraphProbe
             return;
         }
 
-        SceneInstance? scene = EditorSceneManager.EditedWorld;
+        Scene? scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return;
 
         foreach (Animator animator in scene.Animation.Animators)

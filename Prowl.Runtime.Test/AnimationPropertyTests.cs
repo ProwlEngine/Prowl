@@ -26,7 +26,7 @@ public class AnimationPropertyTests : RuntimeTestBase
     [Fact]
     public void ExternalObjectBindingSlot_AnimatesSceneObjectOutsideAnimatorHierarchy()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject director = CreateGameObject("CutsceneDirector");
         GameObject externalCam = CreateGameObject("MainCamera");
         GameObject camChild = CreateGameObject("Lens");
@@ -65,7 +65,7 @@ public class AnimationPropertyTests : RuntimeTestBase
     [Fact]
     public void IsTrackTargetValid_DetectsRenamedOrMissingChildPaths()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Character");
         GameObject hand = CreateGameObject("Hand");
         hand.SetParent(root, false);
@@ -84,7 +84,7 @@ public class AnimationPropertyTests : RuntimeTestBase
     [Fact]
     public void AdditiveAndRestoreStateAndRangedEvents_WorkEndToEnd()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Actor");
         root.Transform.LocalPosition = new Float3(10f, 0f, 0f);
         TestReceiver comp = root.AddComponent<TestReceiver>();
@@ -130,7 +130,7 @@ public class AnimationPropertyTests : RuntimeTestBase
     [Fact]
     public void RestartingActiveAdditiveClip_PreservesOriginalBaseline()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject root = CreateGameObject("Actor");
         root.Transform.LocalPosition = new Float3(10f, 0f, 0f);
         scene.Add(root);

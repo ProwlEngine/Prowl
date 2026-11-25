@@ -22,11 +22,11 @@ public class SceneAnalyzerTests : EditorTestHarness
     }
 
     [Theory]
-    [InlineData("bool N(Scene level) => GameObject.Scene == level;")]
-    [InlineData("bool N(Scene level, SceneInstance world) => level != world;")]
-    [InlineData("bool N(Scene level, SceneInstance world) => ReferenceEquals(world, level);")]
-    [InlineData("bool N(Scene level, SceneInstance world) => world.Equals(level);")]
-    [InlineData("bool N(Scene level, SceneInstance world) => object.Equals(level, world);")]
+    [InlineData("bool N(SceneAsset level) => GameObject.Scene == level;")]
+    [InlineData("bool N(SceneAsset level, Scene world) => level != world;")]
+    [InlineData("bool N(SceneAsset level, Scene world) => ReferenceEquals(world, level);")]
+    [InlineData("bool N(SceneAsset level, Scene world) => world.Equals(level);")]
+    [InlineData("bool N(SceneAsset level, Scene world) => object.Equals(level, world);")]
     public void RefusesComparingAWorldWithAnAsset(string members)
     {
         ScriptCompiler.CompileResult result = Compile(members);
@@ -35,10 +35,10 @@ public class SceneAnalyzerTests : EditorTestHarness
     }
 
     [Theory]
-    [InlineData("public Scene? NextLevel;")]
-    [InlineData("[Prowl.Echo.SerializeField] private Scene? _next;")]
-    [InlineData("public Scene[] Levels = [];")]
-    [InlineData("public System.Collections.Generic.List<Scene> Levels = [];")]
+    [InlineData("public SceneAsset? NextLevel;")]
+    [InlineData("[Prowl.Echo.SerializeField] private SceneAsset? _next;")]
+    [InlineData("public SceneAsset[] Levels = [];")]
+    [InlineData("public System.Collections.Generic.List<SceneAsset> Levels = [];")]
     public void WarnsOnAComponentFieldHoldingASceneAsset(string members)
     {
         ScriptCompiler.CompileResult result = Compile(members);
@@ -47,12 +47,12 @@ public class SceneAnalyzerTests : EditorTestHarness
     }
 
     [Theory]
-    [InlineData("bool N(Scene level) => GameObject.Scene.IsValid() && GameObject.Scene.Source == level;")]
-    [InlineData("bool N(SceneInstance a, SceneInstance b) => a == b;")]
-    [InlineData("public AssetRef<Scene> NextLevel;")]
-    [InlineData("public System.Collections.Generic.List<AssetRef<Scene>> Levels = [];")]
-    [InlineData("private Scene? _cached;")]
-    [InlineData("[System.NonSerialized] public Scene? Loaded;")]
+    [InlineData("bool N(SceneAsset level) => GameObject.Scene.IsValid() && GameObject.Scene.Source == level;")]
+    [InlineData("bool N(Scene a, Scene b) => a == b;")]
+    [InlineData("public AssetRef<SceneAsset> NextLevel;")]
+    [InlineData("public System.Collections.Generic.List<AssetRef<SceneAsset>> Levels = [];")]
+    [InlineData("private SceneAsset? _cached;")]
+    [InlineData("[System.NonSerialized] public SceneAsset? Loaded;")]
     public void LeavesTheRightFormsAlone(string members)
     {
         ScriptCompiler.CompileResult result = Compile(members);

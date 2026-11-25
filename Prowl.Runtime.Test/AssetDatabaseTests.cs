@@ -37,6 +37,18 @@ public sealed class CrateHolder : Component
     }
 }
 
+public sealed class CrateBox
+{
+    public Crate? Crate;
+}
+
+/// <summary>A component holding crates in collections long enough for a walk to pause inside.</summary>
+public sealed class CrateList : Component
+{
+    public List<Crate> Crates = [];
+    public HashSet<CrateBox> Set = [];
+}
+
 /// <summary>
 /// The asset database's promises: one object per GUID that loading, unloading and refilling all act on, references
 /// written as stubs, and everything something reaches staying loaded while what nothing reaches goes.
@@ -178,18 +190,16 @@ public class AssetDatabaseTests : RuntimeTestBase
     }
 
     [Fact]
-    public void TerrainVersions_KeepMovingForward_AcrossARefill()
+    public void TerrainVersion_KeepsMovingForward_AcrossARefill()
     {
         Guid id = _backend.Add(new TerrainData(), "Ground.terrain");
         TerrainData terrain = AssetDatabase.Load<TerrainData>(id)!;
-        terrain.SetHeightmapDirty();
-        terrain.SetDetailsDirty();
-        int heights = terrain.HeightsVersion, details = terrain.DetailsVersion;
+        terrain.Edit(Prowl.Graphite.Rendering.TerrainBrush.Raise, new Prowl.Vector.Float2(8, 8), 4f, 1f);
+        int version = terrain.Version;
 
         AssetDatabase.Refill(terrain, ReloadReason.Revert);
 
-        Assert.True(terrain.HeightsVersion > heights);
-        Assert.True(terrain.DetailsVersion > details);
+        Assert.True(terrain.Version > version);
     }
 
     [Fact]
@@ -269,7 +279,7 @@ public class AssetDatabaseTests : RuntimeTestBase
     [Fact]
     public void TheWalk_NeverRunsAnIteratorItFinds()
     {
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject();
         scene.Add(go);
         IteratorHolder.Ran = false;
@@ -545,7 +555,7 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void AnObjectRemovedFromASavedScene_NoLongerKeepsWhatItUsed()
     {
         Crate crate = AssetDatabase.Load<Crate>(AddCrate(1))!;
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject();
         scene.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
@@ -594,7 +604,7 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void AnAssetAComponentHolds_StaysLoaded_EvenWhileDisabled()
     {
         Crate crate = AssetDatabase.Load<Crate>(AddCrate(1))!;
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         GameObject go = CreateGameObject();
         scene.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
@@ -677,11 +687,97 @@ public class AssetDatabaseTests : RuntimeTestBase
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SlicedWalk_PausedInsideOneCollection_StillReachesItsLastItem(bool changeWhilePaused)
+    {
+        Crate filler = AssetDatabase.Load<Crate>(AddCrate(1))!;
+        Crate last = AssetDatabase.Load<Crate>(AddCrate(2))!;
+        Scene scene = CreateScene();
+        GameObject holder = CreateGameObject();
+        scene.Add(holder);
+        CrateList list = holder.AddComponent<CrateList>();
+        for (int i = 0; i < 5000; i++) list.Crates.Add(filler);
+        list.Crates.Add(last);
+        foreach (Crate crate in list.Crates) list.Set.Add(new CrateBox { Crate = crate });
+
+        TimeSpan grace = AssetDatabase.GracePeriod, interval = AssetDatabase.WalkInterval, budget = AssetDatabase.WalkBudget;
+        AssetDatabase.GracePeriod = TimeSpan.Zero;
+        AssetDatabase.WalkInterval = TimeSpan.Zero;
+        AssetDatabase.WalkBudget = TimeSpan.Zero;
+        try
+        {
+            int longestWalk = 0;
+            for (int walk = 0; walk < 6; walk++)
+            {
+                AssetDatabase.EndFrame();
+                int frames = 1;
+                for (; frames < 10000 && AssetDatabase.IsWalking; frames++)
+                {
+                    if (changeWhilePaused && frames % 3 == 0)
+                    {
+                        list.Crates.Insert(0, filler);
+                        list.Set.Add(new CrateBox { Crate = filler });
+                    }
+                    AssetDatabase.EndFrame();
+                }
+                longestWalk = Math.Max(longestWalk, frames);
+            }
+
+            Assert.True(longestWalk > 10);
+            Assert.True(filler.IsLoaded);
+            Assert.True(last.IsLoaded);
+        }
+        finally
+        {
+            AssetDatabase.GracePeriod = grace;
+            AssetDatabase.WalkInterval = interval;
+            AssetDatabase.WalkBudget = budget;
+        }
+    }
+
+    [Fact]
+    public void ManyUnreachedAssets_AreFreedAFewEachFrame_UntilNoneAreLeft()
+    {
+        var crates = new List<Crate>();
+        for (int i = 0; i < 40; i++) crates.Add(AssetDatabase.Load<Crate>(AddCrate(i))!);
+        Crate kept = AssetDatabase.Load<Crate>(AddCrate(100))!;
+        object owner = new();
+        AssetDatabase.Hold(kept, owner);
+
+        TimeSpan grace = AssetDatabase.GracePeriod, interval = AssetDatabase.WalkInterval, budget = AssetDatabase.WalkBudget;
+        AssetDatabase.GracePeriod = TimeSpan.Zero;
+        AssetDatabase.WalkBudget = TimeSpan.Zero;
+        try
+        {
+            AssetDatabase.Walk();
+            AssetDatabase.WalkInterval = TimeSpan.Zero;
+            AssetDatabase.EndFrame();
+            AssetDatabase.WalkInterval = TimeSpan.FromHours(1);
+            Assert.Equal(39, crates.Count(c => c.IsLoaded));
+
+            AssetDatabase.EndFrame();
+            Assert.Equal(38, crates.Count(c => c.IsLoaded));
+
+            for (int i = 0; i < 40; i++) AssetDatabase.EndFrame();
+            Assert.DoesNotContain(crates, c => c.IsLoaded);
+            Assert.True(kept.IsLoaded);
+        }
+        finally
+        {
+            AssetDatabase.Release(kept, owner);
+            AssetDatabase.GracePeriod = grace;
+            AssetDatabase.WalkInterval = interval;
+            AssetDatabase.WalkBudget = budget;
+        }
+    }
+
     [Fact]
     public void SlicedWalk_SpreadOverManyFrames_StillReachesEverything()
     {
         Crate crate = AssetDatabase.Load<Crate>(AddCrate(1))!;
-        SceneInstance scene = CreateScene();
+        Scene scene = CreateScene();
         for (int i = 0; i < 2000; i++)
             scene.Add(CreateGameObject());
         GameObject holder = CreateGameObject();
@@ -798,25 +894,25 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void LoadingAStoredScene_LoadsWhatItUses_BeforeAnythingEnables()
     {
         Crate crate = AssetDatabase.Get<Crate>(AddCrate(5))!;
-        var authored = new SceneInstance();
+        var authored = new Scene();
         var go = new GameObject("Holder");
         authored.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
-        var stored = new Scene { Data = authored.ActiveSection.CaptureTree() };
+        var stored = new SceneAsset { Data = authored.ActiveSection.CaptureTree() };
         authored.Dispose();
         Guid sceneId = _backend.Add(stored, "Level.scene");
 
-        AssetDatabase.Get<Scene>(sceneId)!.Load().Wait();
-        SceneInstance.ProcessPendingLoad();
+        AssetDatabase.Get<SceneAsset>(sceneId)!.Load().Wait();
+        Scene.ProcessPendingLoad();
         try
         {
-            CrateHolder holder = SceneInstance.Main.Objects.Single().GetComponent<CrateHolder>()!;
+            CrateHolder holder = Scene.Main.Objects.Single().GetComponent<CrateHolder>()!;
             Assert.Same(crate, holder.SeenOnEnable);
             Assert.True(holder.WasLoadedOnEnable);
         }
         finally
         {
-            SceneInstance.Shutdown();
+            Scene.Shutdown();
         }
     }
 
@@ -844,13 +940,13 @@ public class AssetDatabaseTests : RuntimeTestBase
     public void AStoredScene_HeldOnItsOwn_DoesNotKeepWhatItUses()
     {
         Crate crate = AssetDatabase.Get<Crate>(AddCrate(3))!;
-        var authored = new SceneInstance();
+        var authored = new Scene();
         var go = new GameObject("Holder");
         authored.Add(go);
         go.AddComponent<CrateHolder>().Crate = crate;
-        var stored = new Scene { Data = authored.ActiveSection.CaptureTree() };
+        var stored = new SceneAsset { Data = authored.ActiveSection.CaptureTree() };
         authored.Dispose();
-        Scene level = AssetDatabase.Load<Scene>(_backend.Add(stored, "Level.scene"))!;
+        SceneAsset level = AssetDatabase.Load<SceneAsset>(_backend.Add(stored, "Level.scene"))!;
         crate.Load();
         object owner = new();
         AssetDatabase.Hold(level, owner);

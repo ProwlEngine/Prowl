@@ -128,10 +128,14 @@ public class LightProbeGroupSceneEditor : SceneTool
         if (_group.IsNotValid()) return;
         Scribe.FontFile font = Theming.EditorTheme.DefaultFont!;
 
-        EditorGUI.ToolStripButton(paper, $"{id}_add", EditorIcons.Plus_I, "Add Probe", false, AddProbe);
-        EditorGUI.ToolStripButton(paper, $"{id}_dup", EditorIcons.Clone_I, "Duplicate", false, () => { if (_selection.Count > 0) DuplicateSelected(); });
-        EditorGUI.ToolStripButton(paper, $"{id}_del", EditorIcons.Trash_I, "Delete", false, () => { if (_selection.Count > 0) DeleteSelected(); });
-        EditorGUI.Divider(paper, $"{id}_sep", 4f);
+        using (EditorGUI.ToolStripGroup(paper, $"{id}_edit_grp"))
+        {
+            EditorGUI.ToolStripButton(paper, $"{id}_add", EditorIcons.Plus_I, "Add Probe", false, AddProbe);
+            EditorGUI.ToolStripButton(paper, $"{id}_dup", EditorIcons.Clone_I, "Duplicate", false, () => { if (_selection.Count > 0) DuplicateSelected(); });
+            EditorGUI.ToolStripButton(paper, $"{id}_del", EditorIcons.Trash_I, "Delete", false, () => { if (_selection.Count > 0) DeleteSelected(); });
+        }
+
+        using IDisposable select = EditorGUI.ToolStripGroup(paper, $"{id}_select_grp");
         EditorGUI.ToolStripButton(paper, $"{id}_all", EditorIcons.CheckDouble_I, "Select All", false, SelectAll);
         EditorGUI.ToolStripButton(paper, $"{id}_none", EditorIcons.Xmark_I, "Select None", false, () => _selection.Clear());
 

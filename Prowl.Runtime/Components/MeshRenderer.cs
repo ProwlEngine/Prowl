@@ -88,7 +88,30 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
         set { receiveShadows = value; Wake(); }
     }
 
-    Mesh? IRenderSync.SyncedMesh => mesh;
+    Mesh? IRenderSync.SyncedMesh => DrawnMesh;
+
+    [System.NonSerialized, NotHeld] private Mesh? _drawOverride;
+    [System.NonSerialized, NotHeld] private IReadOnlyList<Material>? _drawOverrideMaterials;
+    [System.NonSerialized, NotHeld] private bool _drawNothing;
+
+    /// <summary>
+    /// Editor only: draws another mesh in place of <see cref="Mesh"/> without changing what is saved, copied or baked.
+    /// Null draws the real one, unless <paramref name="drawNothing"/> leaves the renderer drawing nothing at all.
+    /// </summary>
+    internal void SetDrawOverride(Mesh? drawn, IReadOnlyList<Material>? materials, bool drawNothing = false)
+    {
+        if (ReferenceEquals(_drawOverride, drawn) && ReferenceEquals(_drawOverrideMaterials, materials) && _drawNothing == drawNothing) return;
+        _drawOverride = drawn;
+        _drawOverrideMaterials = materials;
+        _drawNothing = drawNothing;
+        Wake();
+    }
+
+    internal Mesh? DrawOverride => _drawOverride;
+
+    internal bool DrawsNothing => _drawNothing;
+
+    private Mesh? DrawnMesh => _drawNothing ? null : _drawOverride.IsValid() ? _drawOverride : mesh;
 
     // Syncs it again next frame, for a setting that changed
     private void Wake() => SceneRendering.Wake(this, GameObject);
@@ -106,7 +129,8 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
 
     bool IRenderSync.Sync(RenderWorld world)
     {
-        Mesh? mesh = Mesh;
+        Mesh? mesh = DrawnMesh;
+        IReadOnlyList<Material> materials = _drawOverride.IsValid() && _drawOverrideMaterials != null ? _drawOverrideMaterials : Materials;
         if (mesh.IsNotValid() || !mesh.IsLoaded)
         {
             if (mesh.IsValid() && mesh.State == AssetState.Unloaded) _ = mesh.LoadAsync();
@@ -120,7 +144,7 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
         _renderable.Sync(world, new RenderableState.Desc
         {
             Mesh = mesh.GpuIfLoaded,
-            Materials = RenderableState.MaterialsFor(Materials, mesh.SubMeshCount, ref _gpuMaterials),
+            Materials = RenderableState.MaterialsFor(materials, mesh.SubMeshCount, ref _gpuMaterials),
             Transform = (Double4x4)matrix,
             TransformVersion = Transform.WorldVersion,
             Flags = RenderableState.FlagsFor(GameObject, false, ReceiveShadows) | ShadowCasting.ToFlags(),
@@ -128,7 +152,7 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
             ObjectId = (uint)InstanceID,
             Lightmap = lightmap,
         });
-        return RenderableState.MaterialsReady(Materials) && !(lightmap.Lightmapped && lightmap.Texture == null);
+        return RenderableState.MaterialsReady(materials) && !(lightmap.Lightmapped && lightmap.Texture == null);
     }
 
     void IRenderSync.Detach(RenderWorld world) => _renderable.Detach(world);

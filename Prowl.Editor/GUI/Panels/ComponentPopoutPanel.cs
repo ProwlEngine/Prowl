@@ -133,7 +133,7 @@ public class ComponentPopoutPanel : DockPanel
 
     internal (GameObject? go, Component? comp) FindComponent()
     {
-        SceneInstance scene = EditorSceneManager.EditedWorld;
+        Scene scene = EditorSceneManager.EditedWorld;
         if (scene.IsNotValid()) return (null, null);
         SceneSection? section = null;
         if (_scene != null)

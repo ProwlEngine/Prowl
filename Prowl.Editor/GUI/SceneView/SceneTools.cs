@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Vector;
+
 using Gizmo = Prowl.OrigamiUI.Gizmo;
 
 namespace Prowl.Editor.GUI.SceneView;
@@ -20,10 +22,14 @@ public enum TransformTool
 /// <summary>Where a multi-object manipulation pivots.</summary>
 public enum PivotMode
 {
-    /// <summary>Pivot on the centre of the whole selection.</summary>
+    /// <summary>Rotate and scale the selection about the centre of its origins.</summary>
     Center,
-    /// <summary>Pivot on the active object's own origin.</summary>
-    Pivot,
+    /// <summary>Rotate and scale the selection about the active object's origin.</summary>
+    Active,
+    /// <summary>Rotate and scale each object about its own origin.</summary>
+    Individual,
+    /// <summary>Rotate and scale the selection about the 3D cursor.</summary>
+    Cursor,
 }
 
 /// <summary>Which frame handle axes align to.</summary>
@@ -33,6 +39,8 @@ public enum PivotOrientation
     Global,
     /// <summary>Axes align to the active object's rotation.</summary>
     Local,
+    /// <summary>Axes align to the selection's normal where a tool has one, such as mesh editing, and as Local elsewhere.</summary>
+    Normal,
 }
 
 /// <summary>
@@ -64,6 +72,9 @@ public static class SceneTools
         get => _pivot;
         set => Set(ref _pivot, value);
     }
+
+    /// <summary>The 3D cursor: a point in the world that new model objects appear at, that snaps can move things to, and the Cursor pivot turns about.</summary>
+    public static Float3 Cursor { get; set; }
 
     public static PivotOrientation Orientation
     {

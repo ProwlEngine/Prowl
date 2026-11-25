@@ -37,7 +37,7 @@ public sealed class HelloProwlGame : Game
 {
     public override void Initialize()
     {
-        SceneInstance scene = SceneInstance.Main;
+        Scene scene = Scene.Main;
 
         // A light, angled down like an afternoon sun.
         var sun = new GameObject("Sun");
