@@ -137,7 +137,7 @@ internal sealed class WorldVoxels(TableHost tables)
     public Int3 CacheScrolled;
 
     /// <summary>One in this many cache slots updates a frame, so each entry every this many frames.</summary>
-    public uint CacheStride = 8;
+    public uint CacheStride = 16;
 
     /// <summary>Counts the cache's updates, picking the slots and seeding their rays.</summary>
     public uint CacheFrame;

@@ -55,10 +55,23 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
         };
     }
 
-    /// <summary>The sun's shadow over the voxel box, drawn every frame the world has one, cleared when the sun casts none.</summary>
+    /// <summary>
+    /// The sun's shadow over the voxel box, drawn again as often as the box is, at once when the sun or the box's shape
+    /// changes, and cleared when the sun casts none.
+    /// </summary>
     public CameraFrame? VoxelShadowCamera;
     public RenderTexture? VoxelShadow { get; private set; }
     public readonly List<ShadowDraw> VoxelShadowDraws = new();
+
+    /// <summary>Whether the shadow's pass runs this frame. Off, the map keeps what it last drew.</summary>
+    public bool VoxelShadowRedraw;
+
+    /// <summary>The map's clip space and the point it was drawn around, kept for the frames it is read undrawn.</summary>
+    public Float4x4 VoxelShadowShape;
+    public Double3 VoxelShadowCenter;
+
+    /// <summary>Frames since the map was drawn, -1 while it holds nothing to keep.</summary>
+    public int VoxelShadowAge = -1;
 
     public void EnsureVoxelShadow(GraphicsDevice device, RenderStore store, int size, PixelFormat format)
     {
@@ -70,6 +83,7 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
         {
             Name = $"{World.Name} voxel sun shadow",
         };
+        VoxelShadowAge = -1;
     }
 
     public void ReleaseVoxelView(RenderStore store)

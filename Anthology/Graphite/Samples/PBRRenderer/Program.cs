@@ -50,6 +50,7 @@ internal sealed class DemoWindow
     private bool _giScreenTrace = true;
     private bool _giOcclusion = true;
     private int _giSpatialPasses = -1;
+    private int _voxelFrames = -1;
     private EffectResolution? _giResolution;
     private int _forcedLod = -1;
     private readonly System.Diagnostics.Stopwatch _shotClock = new();
@@ -85,6 +86,8 @@ internal sealed class DemoWindow
                 _giScreenTrace = false;
             else if (args[i] == "--gi-noocclusion")
                 _giOcclusion = false;
+            else if (args[i] == "--voxel-frames" && i + 1 < args.Length)
+                _voxelFrames = int.Parse(args[++i]);
             else if (args[i] == "--gi-spatial" && i + 1 < args.Length)
                 _giSpatialPasses = int.Parse(args[++i]);
             else if (args[i] == "--gi-res" && i + 1 < args.Length)
@@ -279,7 +282,7 @@ internal sealed class DemoWindow
             _demo.Gi.SpatialPasses = _giSpatialPasses;
         if (_giResolution is { } giResolution)
             _demo.Gi.Resolution = giResolution;
-        _scene.World.SetVoxelVolume(_voxelView < 0 && !_gi ? null : new VoxelVolumeDesc { Center = _camera.Position });
+        _scene.World.SetVoxelVolume(_voxelView < 0 && !_gi ? null : new VoxelVolumeDesc { Center = _camera.Position, UpdateFrames = _voxelFrames > 0 ? _voxelFrames : 8 });
 
         _demo.Renderer.SubmitFrame(new FrameDesc
         {

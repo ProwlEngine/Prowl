@@ -97,11 +97,13 @@ internal sealed partial class FramePipeline
     internal const int VoxelShadowResolution = 2048;
 
     // The sun's shadow over the whole box, an orthographic map around its half diagonal snapped to texels so it holds
-    // still as the box moves, and the record the hit lighting reads
+    // still as the box moves, and the record the hit lighting reads. The map is drawn again once in the frames the box
+    // takes to be drawn again, and read where it was drawn meanwhile.
     private void PrepareVoxelLighting(WorldFrame world, WorldVoxels voxels)
     {
         world.EnsureVoxelShadow(_device, _store, VoxelShadowResolution, ShadowFormat);
         world.VoxelShadowDraws.Clear();
+        world.VoxelShadowRedraw = true;
         EnvironmentDesc environment = world.World.Lighting.Environment;
         float exposure = voxels.Header.EmissionExposure;
         WorldReflections reflections = world.World.Reflections;
@@ -123,13 +125,27 @@ internal sealed partial class FramePipeline
             Float4x4 projection = ShadowMath.Orthographic(radius, reach);
             Float4x4 shape = projection * rotation;
 
-            if (sun.Shadow.Enabled)
+            bool kept = world.VoxelShadowAge >= 0 && world.VoxelShadowShape == shape && world.VoxelShadowAge + 1 < (voxels.Desc?.UpdateFrames ?? 1);
+            if (!sun.Shadow.Enabled)
+            {
+                world.VoxelShadowAge = -1;
+            }
+            else if (kept)
+            {
+                world.VoxelShadowAge++;
+                world.VoxelShadowRedraw = false;
+                center = world.VoxelShadowCenter;
+            }
+            else
             {
                 CameraFrame camera = world.VoxelShadowCamera ??= ShadowCamera();
                 ViewLayer layer = new() { View = rotation, Projection = projection, Position = center };
                 DrawShadowView(camera, world, VoxelShadowResolution, layer, new CullFrustum(shape, center, nearPlane: false), -reach, radius, CasterFilter.All,
                     LodView.Texels(layer, VoxelShadowResolution, world.World.LodSnapshot, world.World.LodSnapshot.VoxelOffset));
                 world.VoxelShadowDraws.Add(new ShadowDraw(camera, new ShadowTile(0, 0, VoxelShadowResolution), Clear: true));
+                world.VoxelShadowShape = shape;
+                world.VoxelShadowCenter = center;
+                world.VoxelShadowAge = 0;
             }
 
             Double3 corner = voxels.Center - new Double3(voxels.Extent.X, voxels.Extent.Y, voxels.Extent.Z) * 0.5 - center;
@@ -139,6 +155,10 @@ internal sealed partial class FramePipeline
             record.SunDirection = new Float4(-sun.Direction.X, -sun.Direction.Y, -sun.Direction.Z, sun.Shadow.Enabled ? 1 : 0);
             Float3 color = sun.Color * (sun.Intensity * exposure);
             record.SunColor = new Float4(color.X, color.Y, color.Z, 1);
+        }
+        else
+        {
+            world.VoxelShadowAge = -1;
         }
         voxels.Lighting.Write<VoxelLightingRecord>(_uploader, [record]);
     }
@@ -193,7 +213,7 @@ internal sealed class VoxelPass(InternalCompute clear, InternalCompute pyramid, 
             }
         });
 
-        if (world.VoxelShadow is { } shadow)
+        if (world.VoxelShadow is { } shadow && world.VoxelShadowRedraw)
         {
             graph.AddPass("Graphite.VoxelSunShadow", builder =>
             {
