@@ -17,19 +17,12 @@ ShadingModel "Subsurface"
 
     Base "Lit"
     Define "PBR_SUBSURFACE_INPUTS"
-    Define "PBR_LIGHT_WRAPS true"
+    LightWraps
 
     Pack
     {
         GLSLPROGRAM
         vec4 Model_Pack(PBR_Params p) { return vec4(p.subsurfaceColor, p.subsurfaceWeight); }
-        ENDGLSL
-    }
-
-    Unpack
-    {
-        GLSLPROGRAM
-        void Model_Unpack(vec4 custom, inout PBR_Params p) { graphite_DeferredWraps = true; }
         ENDGLSL
     }
 

@@ -15,7 +15,7 @@
 bool graphite_DeferredShadows = true;
 uint graphite_DeferredLayers = 0xFFFFFFFFu;
 
-// Whether the lights behind the pixel light it too, which a model's Model_Unpack sets for lighting that wraps
+// Whether the lights behind the pixel light it too, set for the pixels of a model marked LightWraps
 bool graphite_DeferredWraps = false;
 
 // The shading model and Custom values of the pixel being lit

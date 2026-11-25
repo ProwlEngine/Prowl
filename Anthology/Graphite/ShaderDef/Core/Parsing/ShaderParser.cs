@@ -158,7 +158,7 @@ public static class ShaderParser
 
     /// <summary>
     /// Parses a ShadingModel document: its name, then in any order Properties, Base "Model", Define "NAME" lines,
-    /// ForwardOnly, and the Pack, Unpack and Lighting blocks, each one program.
+    /// ForwardOnly, LightWraps, and the Pack, Unpack and Lighting blocks, each one program.
     /// </summary>
     public static ShadingModelDefinition ParseShadingModel(string source)
     {
@@ -172,7 +172,7 @@ public static class ShaderParser
         ShaderProperty[] properties = [];
         string? baseModel = null;
         List<string> defines = new();
-        bool forwardOnly = false;
+        bool forwardOnly = false, lightWraps = false;
         string pack = "", unpack = "", lighting = "";
         while (true)
         {
@@ -193,6 +193,11 @@ public static class ShaderParser
                 t.Next();
                 forwardOnly = true;
             }
+            else if (!lightWraps && ParserUtility.PeekKeyword(ref t, "LightWraps"))
+            {
+                t.Next();
+                lightWraps = true;
+            }
             else if (pack.Length == 0 && ParserUtility.PeekKeyword(ref t, "Pack"))
                 pack = ParseSubProgram(ref t);
             else if (unpack.Length == 0 && ParserUtility.PeekKeyword(ref t, "Unpack"))
@@ -209,7 +214,7 @@ public static class ShaderParser
             throw Exceptions.TrailingContent(ParserUtility.Text(ref t, trailing), trailing);
         if (string.IsNullOrWhiteSpace(baseModel))
             throw new ParseException($"ShadingModel {name} names no Base model", t.Line, t.Column);
-        return new ShadingModelDefinition(name, baseModel, properties, [.. defines], forwardOnly, pack, unpack, lighting);
+        return new ShadingModelDefinition(name, baseModel, properties, [.. defines], forwardOnly, pack, unpack, lighting) { LightWraps = lightWraps };
     }
 
 

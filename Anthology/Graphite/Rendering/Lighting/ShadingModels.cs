@@ -45,6 +45,9 @@ public sealed class ShadingModel
 
     /// <summary>Whether its pixels take no light and show their emission alone.</summary>
     public bool Unlit { get; }
+
+    /// <summary>Whether the lights behind its pixels light them too.</summary>
+    public bool LightWraps => Definition?.LightWraps ?? false;
 }
 
 /// <summary>
@@ -318,12 +321,14 @@ public sealed class ShadingModels : IDisposable
         text.Append("#include \"Graphite/Internal/DeferredLightingHead.glsl\"\n");
 
         StringBuilder unpack = new(), light = new(), ambient = new();
-        StringBuilder unlit = new("false");
+        StringBuilder unlit = new("false"), wraps = new("false");
         models = _models.FindAll(model => !_broken.Contains(model)).ToArray();
         foreach (ShadingModel model in models)
         {
             if (model.Unlit)
                 unlit.Append($" || model == {model.Id}u");
+            if (model.LightWraps)
+                wraps.Append($" || model == {model.Id}u");
             string code = model.Unpack + "\n" + model.Lighting;
             if (string.IsNullOrWhiteSpace(code))
                 continue;
@@ -337,7 +342,7 @@ public sealed class ShadingModels : IDisposable
             if (s_ambient.IsMatch(model.Lighting))
                 ambient.Append($"    if (graphite_DeferredModel == {model.Id}u)\n        return {prefix}Ambient(c, i, graphite_DeferredCustom);\n");
         }
-        text.Append("void graphite_DeferredUnpack(uint model, vec4 custom, inout PBR_Params p)\n{\n").Append(unpack).Append("}\n");
+        text.Append("void graphite_DeferredUnpack(uint model, vec4 custom, inout PBR_Params p)\n{\n").Append($"    graphite_DeferredWraps = {wraps};\n").Append(unpack).Append("}\n");
         text.Append("vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)\n{\n").Append(light).Append("    return PBR_EvaluateLight(c, l);\n}\n");
         text.Append("vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i)\n{\n").Append(ambient).Append("    return PBR_EvaluateAmbient(c, i);\n}\n");
         text.Append($"bool graphite_DeferredUnlit(uint model) {{ return {unlit}; }}\n");

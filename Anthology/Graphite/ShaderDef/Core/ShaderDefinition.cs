@@ -19,7 +19,11 @@ public sealed record ShaderSurface(string Model, string Code, int Line, string L
 /// GBuffer. Properties join the base model's. Defines are set in every pass. Pack is code for the pass that keeps the
 /// surface, Unpack and Lighting code for the pass that lights it. ForwardOnly models are never kept, only lit as they draw.
 /// </summary>
-public sealed record ShadingModelDefinition(string Name, string Base, ShaderProperty[] Properties, string[] Defines, bool ForwardOnly, string Pack, string Unpack, string Lighting);
+public sealed record ShadingModelDefinition(string Name, string Base, ShaderProperty[] Properties, string[] Defines, bool ForwardOnly, string Pack, string Unpack, string Lighting)
+{
+    /// <summary>Whether the lights behind a surface light it too, as for lighting that wraps past the terminator.</summary>
+    public bool LightWraps { get; init; }
+}
 
 
 /// <summary>

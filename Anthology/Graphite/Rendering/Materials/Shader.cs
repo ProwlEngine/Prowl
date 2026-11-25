@@ -735,6 +735,8 @@ public sealed class Shader
         System.Text.StringBuilder defines = new();
         foreach (string define in shading.Defines)
             defines.Append($"#define {define}\n");
+        if (shading.LightWraps)
+            defines.Append("#define PBR_LIGHT_WRAPS true\n");
         bool packs = s_modelPack.IsMatch(shading.Pack);
         string paramsDefine = (s_modelParams.IsMatch(shading.Pack) ? "#define GRAPHITE_STANDARD_MODEL_PARAMS\n" : "")
             + (s_modelSurface.IsMatch(shading.Pack) ? "#define GRAPHITE_STANDARD_MODEL_SURFACE\n" : "");

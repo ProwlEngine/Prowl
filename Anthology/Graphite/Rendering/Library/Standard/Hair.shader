@@ -11,7 +11,7 @@ ShadingModel "Hair"
     }
 
     Base "Lit"
-    Define "PBR_LIGHT_WRAPS true"
+    LightWraps
 
     Pack
     {
@@ -27,13 +27,6 @@ ShadingModel "Hair"
         }
 
         vec4 Model_Pack(PBR_Params p) { return p.custom; }
-        ENDGLSL
-    }
-
-    Unpack
-    {
-        GLSLPROGRAM
-        void Model_Unpack(vec4 custom, inout PBR_Params p) { graphite_DeferredWraps = true; }
         ENDGLSL
     }
 
