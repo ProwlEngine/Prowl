@@ -8,7 +8,7 @@ namespace Prowl.Runtime.Networking;
 /// <summary>Serializable project defaults. Explicit transports and session options can override these per session.</summary>
 public sealed class NetworkConfiguration
 {
-    /// <summary>The game's version. Sessions mix in a hash of every networked member, so builds that differ there can't join either.</summary>
+    /// <summary>The game's version. A peer with another version is turned away when it joins.</summary>
     public uint AppVersion;
 
     /// <summary>Packs the messages for a peer within a frame into as few packets as fit.</summary>

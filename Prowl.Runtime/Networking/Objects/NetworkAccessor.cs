@@ -343,7 +343,10 @@ public sealed class NetworkAccessor
     /// </summary>
     public void RemoveOwnership() => Networking.System?.SetOwner(_object, null);
 
-    /// <summary>Host: true if <paramref name="peer" /> has this object. Outside a session, always true.</summary>
+    /// <summary>
+    ///     Host: true if <paramref name="peer" /> has this object. Outside a session, always true. A client knows only
+    ///     about itself: true for its own peer, false for any other.
+    /// </summary>
     public bool IsVisibleTo(NetPeer peer) => Networking.System?.IsVisibleTo(_object, peer) ?? true;
 
     /// <summary>Host: asks the interest again who receives this object, sending or removing it where that changed.</summary>

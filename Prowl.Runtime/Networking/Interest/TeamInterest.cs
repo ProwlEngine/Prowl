@@ -12,7 +12,8 @@ namespace Prowl.Runtime.Networking;
 /// <summary>
 ///     A networked object with a <see cref="NetworkTeam" /> reaches the clients that own an object of the same team.
 ///     One with no team, or one that is <see cref="NetworkTeam.ForceShown" />, reaches every client, and one whose team
-///     is empty reaches none.
+///     is empty reaches none. A client with no player, or a player with no team, is sent the team's objects as it
+///     joins but not on later rebuilds, which go only to owners of the team's objects.
 /// </summary>
 public sealed class TeamInterest : NetworkInterest
 {
