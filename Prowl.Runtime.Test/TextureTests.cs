@@ -112,6 +112,80 @@ public class TextureTests
     public void CompressedTexture_RefusesToFilterItsOwnMips()
         => Assert.Throws<System.InvalidOperationException>(() => new Texture2D(8, 8, TextureFormat.BC1).GenerateMipmaps());
 
+    private static byte[] Filled(int width, int height, System.Func<int, int, byte[]> pixel)
+    {
+        byte[] pixels = new byte[width * height * 4];
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                pixel(x, y).CopyTo(pixels, ((y * width) + x) * 4);
+        return pixels;
+    }
+
+    [Fact]
+    public void Resize_KeepsASolidColorAndItsAlpha()
+    {
+        byte[] solid = Filled(300, 300, (_, _) => [200, 100, 50, 128]);
+
+        byte[] small = TextureProcessing.Resize(solid, 300, 300, 128, 128, srgb: true);
+
+        Assert.Equal(128 * 128 * 4, small.Length);
+        for (int i = 0; i < small.Length; i += 4)
+        {
+            Assert.InRange(small[i], 199, 201);
+            Assert.InRange(small[i + 1], 99, 101);
+            Assert.InRange(small[i + 2], 49, 51);
+            Assert.Equal(128, small[i + 3]);
+        }
+    }
+
+    [Fact]
+    public void Resize_TransparentPixelsDoNotDarkenTheEdge()
+    {
+        byte[] disc = Filled(8, 8, (x, y) => x is >= 2 and < 6 && y is >= 2 and < 6 ? [255, 255, 255, 255] : [0, 0, 0, 0]);
+
+        byte[] small = TextureProcessing.Resize(disc, 8, 8, 2, 2, srgb: true);
+
+        Assert.InRange(small[3], 60, 68);
+        Assert.InRange(small[0], 253, 255);
+    }
+
+    [Fact]
+    public void Resize_ShrinksAnOddSizedFrameSymmetrically()
+    {
+        byte[] frame = Filled(33, 33, (x, y) => x is 0 or 32 || y is 0 or 32 ? [255, 0, 0, 255] : [0, 0, 0, 0]);
+
+        byte[] small = TextureProcessing.Resize(frame, 33, 33, 16, 16, srgb: true);
+
+        int left = ((8 * 16) + 0) * 4, right = ((8 * 16) + 15) * 4;
+        Assert.InRange(small[left + 3], 1, 255);
+        Assert.InRange(small[right + 3], small[left + 3] - 1, small[left + 3] + 1);
+    }
+
+    [Fact]
+    public void Resize_AveragesEveryPixelWhenOnlyOneAxisShrinks()
+    {
+        byte[] stripes = Filled(1024, 8, (x, _) => x % 2 == 0 ? [255, 255, 255, 255] : [0, 0, 0, 255]);
+
+        byte[] small = TextureProcessing.Resize(stripes, 1024, 8, 16, 8, srgb: false);
+
+        for (int i = 0; i < small.Length; i += 4)
+            Assert.InRange(small[i], 127, 128);
+    }
+
+    [Fact]
+    public void Resize_WeighsPartiallyCoveredPixelsByTheirCoverage()
+    {
+        byte[] row = Filled(3, 2, (x, _) => x == 0 ? [255, 255, 255, 255] : [0, 0, 0, 255]);
+
+        byte[] one = TextureProcessing.Resize(row, 3, 2, 1, 1, srgb: false);
+
+        Assert.InRange(one[0], 84, 86);
+    }
+
+    [Fact]
+    public void Resize_RefusesAnEmptyTarget()
+        => Assert.Throws<System.ArgumentOutOfRangeException>(() => TextureProcessing.Resize(new byte[16], 2, 2, 0, 1, srgb: false));
+
     [Fact]
     public void NormalMapMips_StayUnitLength()
     {

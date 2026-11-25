@@ -584,7 +584,7 @@ public static class TextureSpriteMeta
         EditorAssetBackend.Instance?.Reimport(textureGuid);
     }
 
-    private static string AbsolutePath(Guid textureGuid)
+    internal static string AbsolutePath(Guid textureGuid)
     {
         string rel = EditorAssetBackend.Instance?.GuidToPath(textureGuid) ?? "";
         return Path.Combine(Project.Current.AssetsPath, rel);

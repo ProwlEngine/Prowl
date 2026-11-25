@@ -912,6 +912,42 @@ public class BuildSystemProjectTests : EditorTestHarness
         TryDeleteDir(Path.Combine(Path.GetTempPath(), "ProwlTargetOut"));
     }
 
+    private string PlayerCsprojFor(PlatformTarget target)
+    {
+        BuildSettings build = SettingsFor(target);
+        string dir = Path.Combine(Path.GetTempPath(), "ProwlIconCsproj", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            new DesktopBuildPipeline().GeneratePlayerCsproj(Project, build, Profile(), dir, []);
+            return File.ReadAllText(Path.Combine(dir, $"{Project.Name}.Player.csproj"));
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    [Fact]
+    public void WindowsPlayerProject_SetsTheExeIconAndEmbedsTheWindowIcon()
+    {
+        string csproj = PlayerCsprojFor(BuiltInTargets.WindowsX64);
+
+        Assert.Contains("<ApplicationIcon>icon.ico</ApplicationIcon>", csproj);
+        Assert.Contains("<EmbeddedResource Include=\"prowl-icon.rgba\">", csproj);
+        Assert.Contains("<LogicalName>Game.prowl-icon.rgba</LogicalName>", csproj);
+    }
+
+    // A Mac app takes its icon from the bundle, and GLFW ignores a window icon there.
+    [Fact]
+    public void MacPlayerProject_HasNeitherAnExeIconNorAWindowIcon()
+    {
+        string csproj = PlayerCsprojFor(BuiltInTargets.MacOSArm64);
+
+        Assert.DoesNotContain("ApplicationIcon", csproj);
+        Assert.DoesNotContain("prowl-icon.rgba", csproj);
+    }
+
     // Build and Run has to know it cannot start a binary this machine does not run.
     [Fact]
     public void CanRunOnHost_IsTrueOnlyForTheHostsOwnPlatform()
