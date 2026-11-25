@@ -11,12 +11,16 @@
 #define GRAPHITE_SURFACE_LAYERS graphite_DeferredLayers
 
 #define PBR_LIGHT_WRAPS graphite_DeferredWraps
+#define GRAPHITE_LIGHT_FRONT_WHEN graphite_DeferredFront
 
 bool graphite_DeferredShadows = true;
 uint graphite_DeferredLayers = 0xFFFFFFFFu;
 
 // Whether the lights behind the pixel light it too, set for the pixels of a model marked LightWraps
 bool graphite_DeferredWraps = false;
+
+// Whether the pixel takes nothing from a directional light behind it, as the models lit by the PBR model's own light do
+bool graphite_DeferredFront = false;
 
 // The shading model and Custom values of the pixel being lit
 uint graphite_DeferredModel = 0u;
