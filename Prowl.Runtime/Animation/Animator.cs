@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 using Prowl.Motion;
 using Prowl.Runtime.AnimationNodes;
@@ -70,6 +69,14 @@ public class Animator : Component
 
     /// <summary>The clip playing now, or the one being faded to.</summary>
     public AnimationClip? CurrentClip { get; private set; }
+
+    /// <summary>The normalized (0-1) playback time of the currently playing clip (<see cref="CurrentClip"/>), or
+    /// <c>0</c> if <see cref="IsGraph"/> is <see langword="true"/> or nothing is playing.</summary>
+    public float NormalizedTime => _clips?.NormalizedTime ?? 0;
+
+    /// <summary>The playback time (in seconds) of the currently playing clip (<see cref="CurrentClip"/>), or
+    /// <c>0</c> if <see cref="IsGraph"/> is <see langword="true"/> or nothing is playing.</summary>
+    public float CurrentTime => _clips?.CurrentTime ?? 0;
 
     public bool IsBound => _animator != null;
 
@@ -298,7 +305,9 @@ public class Animator : Component
     }
 
     /// <summary>Plays a clip from the start, cancelling any cross fade.</summary>
-    public void Play(AnimationClip clip)
+    /// <param name="clip">The clip to play.</param>
+    /// <param name="normalizedStartTime">The time (normalized to 0-1) in <paramref name="clip"/> to start playing.</param>
+    public void Play(AnimationClip clip, float normalizedStartTime = 0)
     {
         AssertOwner();
         ArgumentNullException.ThrowIfNull(clip);
@@ -310,20 +319,25 @@ public class Animator : Component
         _autoPlayPending = false;
         if (_clips != null && Resolve(clip) is { } runtime)
         {
-            _clips.Play(runtime, loop: clip.Loop);
+            _clips.Play(runtime, normalizedStartTime, clip.Loop);
             _pending = null;
         }
     }
 
-    public void Play(string clipName)
+    public void Play(string clipName, float normalizedStartTime = 0)
     {
         foreach (AnimationClip clip in Clips)
-            if (clip.IsValid() && clip.Name == clipName) { Play(clip); return; }
+            if (clip.IsValid() && clip.Name == clipName) { Play(clip, normalizedStartTime); return; }
         Debug.LogWarning($"[Animator] '{GameObject.Name}' has no clip named '{clipName}'.");
     }
 
-    /// <summary>Blends to a clip over <paramref name="seconds"/>, from whatever is playing now.</summary>
-    public void CrossFade(AnimationClip clip, float seconds)
+    /// <summary>
+    /// Blends to a clip over <paramref name="fadeDuration"/>, from whatever is playing now.
+    /// </summary>
+    /// <param name="clip">The clip to play.</param>
+    /// <param name="normalizedStartTime">The time (normalized to 0-1) in <paramref name="clip"/> to start playing.</param>
+    /// <param name="fadeDuration">The duration of the cross fade, in seconds.</param>
+    public void CrossFade(AnimationClip clip, float normalizedStartTime = 0, float fadeDuration = 0)
     {
         AssertOwner();
         ArgumentNullException.ThrowIfNull(clip);
@@ -331,7 +345,7 @@ public class Animator : Component
 
         CurrentClip = clip;
         _autoPlayPending = false;
-        _clips.CrossFade(runtime, fadeDuration: seconds, loop: clip.Loop);
+        _clips.CrossFade(runtime, normalizedStartTime, fadeDuration, clip.Loop);
     }
 
     /// <summary>Advances the animation and pushes the pose onto the hierarchy.</summary>

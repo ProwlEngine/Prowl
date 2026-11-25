@@ -30,6 +30,7 @@ using Silk.NET.Maths;
 using Gradient = Prowl.Vector.Gradient;
 using MouseButton = Prowl.Runtime.MouseButton;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
+using VSyncMode = Prowl.Runtime.VSyncMode;
 
 namespace Prowl.Samples;
 
@@ -246,7 +247,7 @@ public abstract class StationGame : Game
         };
 
         Time.LockedDeltaTime = 1f / 60f;
-        Application.VSync = false;
+        Application.VSync = VSyncMode.Mailbox;
         Application.TargetFrameRate = 0;
 
         // With --profile each station also writes where its frames went: the main thread, waiting on the render thread,

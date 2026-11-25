@@ -249,12 +249,9 @@ public static class CliServer
 
     private static bool IsProcessAlive(int pid)
     {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return !process.HasExited;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) { return false; }
+        if (!Process.TryGetProcessById(pid, out Process? process))
+            return false;
+        return !process.HasExited;
     }
 
     private static async Task AcceptLoopAsync(Server server)

@@ -172,22 +172,31 @@ public static class Window
                     InternalWindow.WindowBorder = WindowBorder.Hidden;
                     if (InternalWindow.Monitor is { } monitor)
                     {
-                        InternalWindow.Position = monitor.Bounds.Origin;
-                        InternalWindow.Size = monitor.Bounds.Size;
+                        // Silk's GLFW monitor bounds are the work area, taskbar excluded, so the corner and size come from the monitor itself
+                        InternalWindow.Position = GetMonitorOrigin(monitor);
+                        InternalWindow.Size = monitor.VideoMode.Resolution ?? monitor.Bounds.Size;
                     }
                     break;
 
                 default:
                     InternalWindow.WindowState = WindowState.Normal;
                     InternalWindow.WindowBorder = WindowBorder.Resizable;
-                    if (s_windowedSize.X > 0 && s_windowedSize.Y > 0)
-                    {
-                        InternalWindow.Size = s_windowedSize;
-                        InternalWindow.Position = s_windowedPosition;
-                    }
+                    InternalWindow.Size = s_windowedSize;
+                    InternalWindow.Position = s_windowedPosition;
                     break;
             }
         }
+    }
+
+    // Silk's IMonitor hides its GLFW handle, but its Index is the monitor's slot in GLFW's monitor list
+    private static unsafe Vector2D<int> GetMonitorOrigin(IMonitor monitor)
+    {
+        Silk.NET.GLFW.Glfw glfw = Silk.NET.GLFW.GlfwProvider.GLFW.Value;
+        Silk.NET.GLFW.Monitor** monitors = glfw.GetMonitors(out int count);
+        if (monitor.Index < 0 || monitor.Index >= count) return monitor.Bounds.Origin;
+
+        glfw.GetMonitorPos(monitors[monitor.Index], out int x, out int y);
+        return new Vector2D<int>(x, y);
     }
 
     public static bool IsVisible
@@ -209,15 +218,15 @@ public static class Window
         get { return isFocused; }
     }
 
-    public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool vsync = false)
+    public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal)
     {
         WindowOptions options = WindowOptions.Default;
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
         options.WindowState = startState;
         s_mode = startState == WindowState.Fullscreen ? WindowMode.Fullscreen : WindowMode.Windowed;
-        options.VSync = vsync;
-        Application.VSync = vsync;
+        s_windowedPosition = options.Position;
+        s_windowedSize = options.Size;
         // Update and Render are driven by MainLoop, and frames present through Graphite's swapchain.
         options.ShouldSwapAutomatically = false;
         options.API = new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(1, 3));

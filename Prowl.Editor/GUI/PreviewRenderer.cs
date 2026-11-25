@@ -105,8 +105,7 @@ public class PreviewRenderer : IDisposable
         ClearSubject();
         if (mesh.IsNotValid()) return;
 
-        _subjectGo = new GameObject("PreviewSubject");
-        _subjectGo.HideFlags = HideFlags.HideAndDontSave;
+        _subjectGo = new GameObject("PreviewSubject") { HideFlags = HideFlags.HideAndDontSave };
         MeshRenderer renderer = _subjectGo.AddComponent<MeshRenderer>();
         renderer.Mesh = mesh;
         renderer.Material = material.IsValid() ? material : new Material(Shader.LoadDefault(DefaultShader.Lit));
@@ -183,12 +182,14 @@ public class PreviewRenderer : IDisposable
         _subjectGo.Name = "PreviewSubject";
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
 
-        // Non-visual prefabs (script-only hierarchies with no MeshRenderers) fall back to a
-        // unit-sized default inside the helper, rendering as an empty preview.
+        // Bind rig first so that _avatar, _pose and _binding are available.
+        BindRig(_subjectGo);
+
+        // Non-visual prefabs (script-only hierarchies with no MeshRenderers) use the skeleton if possible,
+        // but if not fall back to a unit-sized default inside the helper, rendering as an empty preview.
         NormalizeSubjectToUnitCube(_subjectGo);
 
         _scene.Add(_subjectGo);
-        BindRig(_subjectGo);
         FitToSubject(AABB.FromCenterAndSize(Float3.Zero, Float3.One));
     }
 
@@ -345,7 +346,7 @@ public class PreviewRenderer : IDisposable
     /// saved non-identity transform (e.g. prefabs) the reset ensures the bounds we measure
     /// are in the same frame we then apply the normalization into.
     /// </summary>
-    private static void NormalizeSubjectToUnitCube(GameObject subject)
+    private void NormalizeSubjectToUnitCube(GameObject subject)
     {
         // Reset the root so computed world-space bounds are relative to a clean frame.
         // Translating/scaling the root afterwards then produces the expected centering.
@@ -365,7 +366,20 @@ public class PreviewRenderer : IDisposable
         else if (skinnedRenderer.IsValid() && skinnedRenderer.SharedMesh.IsValid() && subject.Children.Count == 0)
             bounds = skinnedRenderer.SharedMesh.bounds;
         else
+        {
+            // Walk the hierarchy and get the min/max of all mesh renderers.
             bounds = ComputeHierarchyBounds(subject);
+            if (bounds == default)
+            {
+                // No mesh renderers were found. Create a mesh renderer for the avatar skeleton, if one exists.
+                AddPreviewMeshes(subject);
+                bounds = ComputeHierarchyBounds(subject);
+
+                // Fallback
+                if (bounds == default)
+                    bounds = AABB.FromCenterAndSize(Float3.Zero, Float3.One);
+            }
+        }
 
         float maxExtent = MathF.Max(MathF.Max(bounds.Size.X, bounds.Size.Y), bounds.Size.Z);
         if (maxExtent <= 0.001f) return; // no visuals leave at identity
@@ -429,14 +443,14 @@ public class PreviewRenderer : IDisposable
     /// </summary>
     private static AABB ComputeHierarchyBounds(GameObject root)
     {
-        Float3 min = new Float3(float.MaxValue);
-        Float3 max = new Float3(float.MinValue);
+        var min = new Float3(float.MaxValue);
+        var max = new Float3(float.MinValue);
         bool found = false;
 
         CollectBoundsRecursive(root, ref min, ref max, ref found);
 
         if (!found)
-            return AABB.FromCenterAndSize(Float3.Zero, Float3.One);
+            return default;
 
         return new AABB(min, max);
     }
@@ -485,4 +499,158 @@ public class PreviewRenderer : IDisposable
         // Disposes every GameObject still in the scene (camera + light), not just disables it.
         _scene.Dispose();
     }
+
+
+    #region Skeleton preview
+
+    /// <summary>
+    /// Gives every descendant of <paramref name="root"/> a visible joint and bone stick, so a mesh-less
+    /// clip (e.g. BVH) can be previewed. The root itself is skipped: it is the animator's own object
+    /// and not a bone.
+    /// </summary>
+    public static void AddPreviewMeshes(GameObject root)
+    {
+        // Gather every descendant, plus the lengths of the bone-to-bone offsets for sizing.
+        var bones = new List<GameObject>();
+        var lengths = new List<float>();
+        var stack = new Stack<GameObject>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            GameObject current = stack.Pop();
+            bool isRoot = current == root;
+            foreach (GameObject child in current.Children)
+            {
+                bones.Add(child);
+                stack.Push(child);
+
+                // A top-level bone's offset is where the skeleton sits in the world, not a bone length.
+                if (!isRoot)
+                {
+                    Float3 p = child.Transform.LocalPosition;
+                    float len = MathF.Sqrt(Float3.Dot(p, p));
+                    if (len > 1e-6f) lengths.Add(len);
+                }
+            }
+        }
+        if (bones.Count == 0) return;
+
+        // BVH units are arbitrary, so size the joints from the median bone length.
+        lengths.Sort();
+        float median = lengths.Count > 0 ? lengths[lengths.Count / 2] : 1f;
+
+        // One material shared by every bone.
+        var material = new Material(Shader.LoadDefault(DefaultShader.Lit));
+
+        foreach (GameObject bone in bones)
+        {
+            // Child offsets are in this bone's local space, so they are the stick tails.
+            var tails = new List<Float3>();
+            foreach (GameObject child in bone.Children)
+                tails.Add(child.Transform.LocalPosition);
+
+            if (tails.Count == 0)
+            {
+                // Leaf: no child to point at, so continue in the direction the bone was reached from.
+                // That direction is in the parent's space, which equals this bone's local space only
+                // while its rotation is identity (true for BVH nodes).
+                Float3 p = bone.Transform.LocalPosition;
+                float len = MathF.Sqrt(Float3.Dot(p, p));
+                tails.Add(len > 1e-6f ? p * (median * 0.5f / len) : Float3.UnitY * (median * 0.5f));
+            }
+
+            MeshRenderer renderer = bone.AddComponent<MeshRenderer>();
+            renderer.Mesh = CreateBone([.. tails], jointRadius: median * 0.12f);
+            renderer.Material = material;
+        }
+    }
+
+    /// <summary>Builds the visual for a joint and it's children, in bone-local space.</summary>
+    private static Mesh CreateBone(Float3[] tails, float jointRadius, float widthRatio = 0.12f)
+    {
+        List<Float3> vertices = [], normals = [];
+        List<Float4> tangents = [];
+        List<Float2> uvs = [];
+        List<uint> indices = [];
+
+        // Joint sphere.
+        Mesh sphere = Mesh.CreateSphere(jointRadius, 6, 8);
+        uint offset = (uint)vertices.Count;
+        vertices.AddRange(sphere.Vertices);
+        normals.AddRange(sphere.Normals);
+        tangents.AddRange(sphere.Tangents);
+        uvs.AddRange(sphere.UV);
+        foreach (uint i in sphere.Indices)
+            indices.Add(i + offset);
+
+        foreach (Float3 tail in tails)
+            AddStick(tail, widthRatio, vertices, normals, tangents, uvs, indices);
+
+        Mesh mesh = new()
+        {
+            Vertices = [.. vertices],
+            Normals = [.. normals],
+            Tangents = [.. tangents],
+            UV = [.. uvs],
+            Indices = [.. indices],
+        };
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    /// <summary>Builds the visual for the "stick" part of a bone's ball and stick.</summary>
+    private static void AddStick(Float3 tail, float widthRatio,
+        List<Float3> vertices, List<Float3> normals, List<Float4> tangents, List<Float2> uvs, List<uint> indices)
+    {
+        float length = MathF.Sqrt(Float3.Dot(tail, tail));
+        if (length < 1e-6f) return;
+        Float3 dir = tail * (1f / length);
+
+        // Two axes perpendicular to the bone direction.
+        Float3 helper = MathF.Abs(dir.Y) < 0.99f ? Float3.UnitY : Float3.UnitX;
+        Float3 side = Float3.Cross(helper, dir);
+        side *= 1f / MathF.Sqrt(Float3.Dot(side, side));
+        Float3 up = Float3.Cross(dir, side);
+
+        float w = length * widthRatio;
+        Float3 head = Float3.Zero;
+        Float3 mid = dir * (length * 0.15f);   // widest point, near the head like Blender's bones
+        Float3[] ring = [mid + side * w, mid + up * w, mid - side * w, mid - up * w];
+
+        for (int i = 0; i < 4; i++)
+        {
+            Float3 r0 = ring[i], r1 = ring[(i + 1) % 4];
+            AddTri(head, r0, r1, mid, vertices, normals, tangents, uvs, indices);
+            AddTri(tail, r1, r0, mid, vertices, normals, tangents, uvs, indices);
+        }
+    }
+
+    /// <summary>Builds a flat-shaded triangle. 'inside' is any point inside the (convex) shape, used to orient the winding.</summary>
+    private static void AddTri(Float3 a, Float3 b, Float3 c, Float3 inside,
+        List<Float3> vertices, List<Float3> normals, List<Float4> tangents, List<Float2> uvs, List<uint> indices)
+    {
+        Float3 n = Float3.Cross(b - a, c - a);
+        Float3 centroid = (a + b + c) * (1f / 3f);
+        if (Float3.Dot(n, centroid - inside) > 0f)
+        {
+            // n points outward, so swap to make it point inward.
+            (b, c) = (c, b);
+            n = Float3.Cross(b - a, c - a);
+        }
+        Float3 outward = n * (-1f / MathF.Sqrt(Float3.Dot(n, n)));
+        Float3 edge = b - a;
+        edge *= 1f / MathF.Sqrt(Float3.Dot(edge, edge));
+
+        uint start = (uint)vertices.Count;
+        foreach (Float3 p in new[] { a, b, c })
+        {
+            vertices.Add(p);
+            normals.Add(outward);
+            tangents.Add(new Float4(edge.X, edge.Y, edge.Z, 1f));
+            uvs.Add(Float2.Zero);
+        }
+        indices.Add(start); indices.Add(start + 1); indices.Add(start + 2);
+    }
+
+    #endregion
 }

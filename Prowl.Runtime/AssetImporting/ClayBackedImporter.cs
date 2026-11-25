@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 using Prowl.Clay;
 using Prowl.Clay.Importer;
@@ -14,7 +13,6 @@ using Prowl.Vector;
 using ClayMesh = Prowl.Clay.Mesh;
 using ClayMaterial = Prowl.Clay.Material;
 using ClayAnim = Prowl.Clay.AnimationClip;
-using ClayBinding = Prowl.Clay.AnimationBinding;
 using ClayTexture = Prowl.Clay.Texture;
 using ClaySettings = Prowl.Clay.Importer.ModelImporterSettings;
 using PMesh = Prowl.Runtime.Resources.Mesh;
@@ -36,23 +34,14 @@ internal static class ClayBackedImporter
     public static ModelImportResult Import(FileInfo assetPath, ModelImporterSettings settings)
     {
         string ext = assetPath.Extension.ToLowerInvariant();
-        Model clayModel = Clay.Importer.ModelImporter.Load(assetPath.FullName, MapSettings(settings, ext));
+        Model clayModel = Clay.Importer.ModelImporter.Load(assetPath.FullName, settings: MapSettings(settings, ext));
         return Bake(clayModel, Path.GetFileNameWithoutExtension(assetPath.Name), settings);
     }
 
     public static ModelImportResult Import(Stream stream, string virtualPath, ModelImporterSettings settings)
     {
         string ext = Path.GetExtension(virtualPath).ToLowerInvariant();
-        string format = ext switch
-        {
-            ".gltf" => "gltf",
-            ".glb" => "glb",
-            ".vrm" => "vrm",
-            ".obj" => "obj",
-            ".fbx" => "fbx",
-            _ => throw new NotSupportedException($"Unsupported model format: {ext}"),
-        };
-        Model clayModel = Clay.Importer.ModelImporter.Load(stream, format, MapSettings(settings, ext));
+        Model clayModel = Clay.Importer.ModelImporter.Load(stream, formatHint: virtualPath, settings: MapSettings(settings, ext));
         return Bake(clayModel, Path.GetFileNameWithoutExtension(virtualPath), settings);
     }
 
