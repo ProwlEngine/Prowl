@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 using Prowl.Vector;
 
@@ -23,6 +24,27 @@ public sealed record ShadingModelDefinition(string Name, string Base, ShaderProp
 {
     /// <summary>Whether the lights behind a surface light it too, as for lighting that wraps past the terminator.</summary>
     public bool LightWraps { get; init; }
+
+    /// <summary>Whether the Pack block defines vec4 Model_Pack, the values the model keeps for its lighting.</summary>
+    public bool DefinesPack => DefinesFunction(Pack, "vec4", "Model_Pack");
+
+    /// <summary>Whether the Pack block defines void Model_Surface, run before a shader's Surface function.</summary>
+    public bool DefinesSurface => DefinesFunction(Pack, "void", "Model_Surface");
+
+    /// <summary>Whether the Pack block defines void Model_Params, run after a shader's Surface function.</summary>
+    public bool DefinesParams => DefinesFunction(Pack, "void", "Model_Params");
+
+    public bool DefinesUnpack => DefinesFunction(Unpack, "void", "Model_Unpack");
+
+    public bool DefinesLight => DefinesFunction(Lighting, "vec3", "Model_Light");
+
+    public bool DefinesAmbient => DefinesFunction(Lighting, "vec3", "Model_Ambient");
+
+    private static readonly Regex s_comments = new(@"//[^\n]*|/\*.*?\*/", RegexOptions.Singleline);
+
+    /// <summary>Whether GLSL code defines or declares a function of a return type and name, outside its comments.</summary>
+    public static bool DefinesFunction(string code, string returns, string name)
+        => code.Length > 0 && Regex.IsMatch(s_comments.Replace(code, " "), $@"\b{returns}\s+{name}\s*\(");
 }
 
 

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Text.RegularExpressions;
 
 using Prowl.Graphite.ShaderDef;
 
@@ -127,8 +126,6 @@ internal static class ShadingModelLibrary
 public sealed class ShadingModels : IDisposable
 {
     private static readonly string[] s_shipped = ["ClearCoat", "Cloth", "Subsurface", "Hair", "Eye"];
-    private static readonly Regex s_light = new(@"\bvec3\s+Model_Light\s*\("), s_ambient = new(@"\bvec3\s+Model_Ambient\s*\("),
-        s_unpack = new(@"\bvoid\s+Model_Unpack\s*\(");
 
     private readonly GraphicsDevice _device;
     private readonly IShaderCompiler? _compiler;
@@ -335,11 +332,11 @@ public sealed class ShadingModels : IDisposable
             string prefix = $"graphite_Model{model.Id}_";
             text.Append($"#define Model_Unpack {prefix}Unpack\n#define Model_Light {prefix}Light\n#define Model_Ambient {prefix}Ambient\n");
             text.Append(code).Append("\n#undef Model_Unpack\n#undef Model_Light\n#undef Model_Ambient\n");
-            if (s_unpack.IsMatch(model.Unpack))
+            if (ShadingModelDefinition.DefinesFunction(model.Unpack, "void", "Model_Unpack"))
                 unpack.Append($"    if (model == {model.Id}u)\n        {prefix}Unpack(custom, p);\n");
-            if (s_light.IsMatch(model.Lighting))
+            if (ShadingModelDefinition.DefinesFunction(model.Lighting, "vec3", "Model_Light"))
                 light.Append($"    if (graphite_DeferredModel == {model.Id}u)\n        return {prefix}Light(c, l, graphite_DeferredCustom);\n");
-            if (s_ambient.IsMatch(model.Lighting))
+            if (ShadingModelDefinition.DefinesFunction(model.Lighting, "vec3", "Model_Ambient"))
                 ambient.Append($"    if (graphite_DeferredModel == {model.Id}u)\n        return {prefix}Ambient(c, i, graphite_DeferredCustom);\n");
         }
         text.Append("void graphite_DeferredUnpack(uint model, vec4 custom, inout PBR_Params p)\n{\n").Append($"    graphite_DeferredWraps = {wraps};\n").Append(unpack).Append("}\n");

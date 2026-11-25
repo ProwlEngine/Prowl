@@ -610,8 +610,6 @@ public sealed class Shader
 
     private static readonly System.Text.RegularExpressions.Regex s_surfaceMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
     private static readonly System.Text.RegularExpressions.Regex s_vertexMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_vertex[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
-    private static readonly System.Text.RegularExpressions.Regex s_brdfDefinition = new(@"\bvec3\s+Graphite_BRDF\s*\(");
-    private static readonly System.Text.RegularExpressions.Regex s_ambientDefinition = new(@"\bvec3\s+Graphite_AmbientBRDF\s*\(");
     private static readonly System.Text.RegularExpressions.Regex s_lightingMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_lighting[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
@@ -637,8 +635,8 @@ public sealed class Shader
 
         string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
         string lighting = surface.Lighting;
-        string lightingDefines = (s_brdfDefinition.IsMatch(lighting) ? "#define GRAPHITE_CUSTOM_BRDF\n" : "")
-            + (s_ambientDefinition.IsMatch(lighting) ? "#define GRAPHITE_CUSTOM_AMBIENT_BRDF\n" : "");
+        string lightingDefines = (ShadingModelDefinition.DefinesFunction(lighting, "vec3", "Graphite_BRDF") ? "#define GRAPHITE_CUSTOM_BRDF\n" : "")
+            + (ShadingModelDefinition.DefinesFunction(lighting, "vec3", "Graphite_AmbientBRDF") ? "#define GRAPHITE_CUSTOM_AMBIENT_BRDF\n" : "");
         if (lighting.Length > 0 && lightingDefines.Length == 0)
             throw new ShaderLoadException($"{name}:{surface.Line}: the Lighting block defines neither Graphite_BRDF nor Graphite_AmbientBRDF.");
         string vertex = surface.Vertex.Length > 0 ? "#define GRAPHITE_SURFACE_VERTEX_FUNCTION\n" + surface.Vertex : "";
@@ -698,11 +696,6 @@ public sealed class Shader
     }
 
     private static readonly System.Text.RegularExpressions.Regex s_sharedBlock = new(@"\bShared\s*\{");
-    private static readonly System.Text.RegularExpressions.Regex s_modelPack = new(@"\bvec4\s+Model_Pack\s*\(");
-    private static readonly System.Text.RegularExpressions.Regex s_modelSurface = new(@"\bvoid\s+Model_Surface\s*\(");
-    private static readonly System.Text.RegularExpressions.Regex s_modelParams = new(@"\bvoid\s+Model_Params\s*\(");
-    private static readonly System.Text.RegularExpressions.Regex s_modelLight = new(@"\bvec3\s+Model_Light\s*\(");
-    private static readonly System.Text.RegularExpressions.Regex s_modelAmbient = new(@"\bvec3\s+Model_Ambient\s*\(");
 
     // The shader a surface model's passes and properties come from: the library shader of its name, or for a
     // ShadingModel document the model it is based on with the document applied
@@ -737,10 +730,10 @@ public sealed class Shader
             defines.Append($"#define {define}\n");
         if (shading.LightWraps)
             defines.Append("#define PBR_LIGHT_WRAPS true\n");
-        bool packs = s_modelPack.IsMatch(shading.Pack);
-        string paramsDefine = (s_modelParams.IsMatch(shading.Pack) ? "#define GRAPHITE_STANDARD_MODEL_PARAMS\n" : "")
-            + (s_modelSurface.IsMatch(shading.Pack) ? "#define GRAPHITE_STANDARD_MODEL_SURFACE\n" : "");
-        bool light = s_modelLight.IsMatch(shading.Lighting), ambient = s_modelAmbient.IsMatch(shading.Lighting);
+        bool packs = shading.DefinesPack;
+        string paramsDefine = (shading.DefinesParams ? "#define GRAPHITE_STANDARD_MODEL_PARAMS\n" : "")
+            + (shading.DefinesSurface ? "#define GRAPHITE_STANDARD_MODEL_SURFACE\n" : "");
+        bool light = shading.DefinesLight, ambient = shading.DefinesAmbient;
 
         List<ShaderPass> passes = new();
         foreach (ShaderPass pass in model.Passes ?? [])
