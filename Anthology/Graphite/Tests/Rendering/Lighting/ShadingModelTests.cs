@@ -325,4 +325,15 @@ public sealed class ShadingModelTests : IDisposable
         Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel("ShadingModel \"OnAModel\"\n{\n    Base \"ClearCoat\"\n}\n"));
         Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel("ShadingModel \"OnNothing\"\n{\n    Base \"NoSuchModel\"\n}\n"));
     }
+
+    [Fact]
+    public void ADocumentWithABlockThatDefinesNoHook_IsRefusedAtLoad()
+    {
+        static string With(string block, string code) => $"ShadingModel \"NoHook\"\n{{\n    Base \"Lit\"\n    {block}\n    {{\n        GLSLPROGRAM\n        {code}\n        ENDGLSL\n    }}\n}}\n";
+        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel(With("Lighting", "vec3 Model_Lit(PBR_Closure c, Graphite_LightContribution l, vec4 custom) { return vec3(0.0); }")));
+        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel(With("Lighting", "// vec3 Model_Light(PBR_Closure c, Graphite_LightContribution l, vec4 custom)")));
+        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel(With("Unpack", "void Unpack(vec4 custom, inout PBR_Params p) { }")));
+        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel(With("Pack", "vec4 Pack(PBR_Params p) { return vec4(0.0); }")));
+        Assert.Null(_harness.Renderer.ShadingModels.Find("NoHook"));
+    }
 }

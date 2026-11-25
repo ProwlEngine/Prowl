@@ -166,8 +166,9 @@ public sealed class ShadingModels : IDisposable
     /// Takes a ShadingModel document: the renderer's shaders may then build on it with Surface "Name", and the lighting
     /// program is written anew with it. A document of a name already loaded, or of one of the library's documents,
     /// replaces it and keeps its id. Shaders loaded before keep the passes they were given. Its Base names a surface
-    /// model shader, Graphite/Standard/{Base}.shader, not another ShadingModel. Returns the model, null for a forward
-    /// only one. Host thread.
+    /// model shader, Graphite/Standard/{Base}.shader, not another ShadingModel. A block defining none of its hooks is
+    /// refused here. Its GLSL compiles later with the lighting program, whose errors are reported. Returns the model,
+    /// null for a forward only one. Host thread.
     /// </summary>
     public ShadingModel? Load(ShadingModelDefinition definition)
     {
@@ -175,6 +176,8 @@ public sealed class ShadingModels : IDisposable
         string name = definition.Name;
         if (name is "Lit" or "Unlit" or "Foliage" or "Terrain")
             throw new ArgumentException($"{name} is a surface model the renderer ships, a ShadingModel takes another name.");
+        if (Unused(definition) is { } unused)
+            throw new ArgumentException($"The ShadingModel {name} {unused}.");
         InternalShaders.Register();
         string? source = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{definition.Base}.shader");
         lock (_lock)
@@ -195,6 +198,20 @@ public sealed class ShadingModels : IDisposable
             _version++;
             return model;
         }
+    }
+
+    // What a document holds that nothing would ever run, which is a misspelt hook more often than not
+    private static string? Unused(ShadingModelDefinition definition)
+    {
+        if (!string.IsNullOrWhiteSpace(definition.Pack) && !definition.DefinesPack && !definition.DefinesSurface && !definition.DefinesParams)
+            return "has a Pack block that defines none of Model_Pack, Model_Surface and Model_Params";
+        if (!string.IsNullOrWhiteSpace(definition.Unpack) && !definition.DefinesUnpack)
+            return "has an Unpack block that does not define void Model_Unpack(vec4 custom, inout PBR_Params p)";
+        if (!string.IsNullOrWhiteSpace(definition.Lighting) && !definition.DefinesLight && !definition.DefinesAmbient)
+            return "has a Lighting block that defines neither Model_Light nor Model_Ambient";
+        if (definition.ForwardOnly && !string.IsNullOrWhiteSpace(definition.Unpack))
+            return "is ForwardOnly, so its Unpack block never runs";
+        return null;
     }
 
     /// <summary>The document a Surface block of one of the renderer's shaders builds on by name, null when it names none. Any thread.</summary>
