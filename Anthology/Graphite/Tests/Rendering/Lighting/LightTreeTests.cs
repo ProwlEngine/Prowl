@@ -107,6 +107,22 @@ public class LightTreeTests
         Assert.True(3 * tree.Depth <= LightTreeBuilder.ShaderStack, $"depth {tree.Depth} needs more than {LightTreeBuilder.ShaderStack} stack entries");
     }
 
+    // A rebuild into the same builder must reuse its arrays; up to the parallel threshold the whole build runs on this
+    // thread, so the thread's count is exact
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RebuildingUpToTheParallelThreshold_AllocatesNothing(bool morton)
+    {
+        Vector4[] lights = RandomLights(LightTreeBuilder.ParallelThreshold, 3, 60f);
+        var tree = new LightTreeBuilder();
+        tree.Build(lights, 4, morton);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        tree.Build(lights, 4, morton);
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
     [Fact]
     public void CoincidentLights_StillBuild()
     {

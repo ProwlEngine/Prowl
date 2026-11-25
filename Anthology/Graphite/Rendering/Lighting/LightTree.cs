@@ -81,7 +81,8 @@ internal struct LightTreeNode
 /// Builds the four wide light trees of H-Forward shading: a binary tree collapsed four wide, with the lights reordered
 /// so every leaf is a contiguous run. Static lights use a binned volume heuristic search over every axis, built once.
 /// Moving lights are rebuilt every frame, so they sort by Morton code once and then find each split by binary search,
-/// which needs no walk over the lights at all. Scratch storage is kept, so a rebuild allocates nothing.
+/// which needs no walk over the lights at all. Scratch storage is kept, so a rebuild up to the parallel threshold
+/// allocates nothing.
 /// </summary>
 internal sealed class LightTreeBuilder
 {
@@ -91,8 +92,10 @@ internal sealed class LightTreeBuilder
     /// <summary>Entries in the shader's traversal stack. Four wide, so each level defers at most three siblings.</summary>
     public const int ShaderStack = 48;
 
+    /// <summary>Lights in a node above which its two children may be built in parallel.</summary>
+    public const int ParallelThreshold = 2_048;
+
     private const int Bins = 16;
-    private const int ParallelThreshold = 2_048;
     private const int WideNodeThreshold = 131_072;
     private const int BfsThreshold = 131_072;
     private const int MaxBinaryDepth = 30;
@@ -214,6 +217,10 @@ internal sealed class LightTreeBuilder
             SortByMorton(count, rootCentroids);
             _nodes[0].Bounds = BuildMorton(0, 0, count, 0);
         }
+        else if (count < BfsThreshold)
+        {
+            SubdivideRecursive(0, 0, rootCentroids);
+        }
         else
         {
             BuildHierarchy(rootCentroids);
@@ -246,12 +253,6 @@ internal sealed class LightTreeBuilder
     // Recursive fan out leaves every ancestor parked in a wait, and the pool only recovers by injecting threads slowly.
     private void BuildHierarchy(in LightBounds rootCentroids)
     {
-        if (_nodes[0].Count < BfsThreshold)
-        {
-            SubdivideRecursive(0, 0, rootCentroids);
-            return;
-        }
-
         var current = new List<(int Node, LightBounds Centroids)> { (0, rootCentroids) };
         var next = new List<(int Node, LightBounds Centroids)>();
         int workers = Environment.ProcessorCount;
@@ -303,11 +304,7 @@ internal sealed class LightTreeBuilder
 
         if (count > ParallelThreshold)
         {
-            LightBounds leftCopy = split.LeftCentroids;
-            LightBounds rightCopy = split.RightCentroids;
-            Parallel.Invoke(
-                () => SubdivideRecursive(left, depth + 1, leftCopy),
-                () => SubdivideRecursive(left + 1, depth + 1, rightCopy));
+            SubdivideInParallel(left, depth + 1, split.LeftCentroids, split.RightCentroids);
         }
         else
         {
@@ -315,6 +312,12 @@ internal sealed class LightTreeBuilder
             SubdivideRecursive(left + 1, depth + 1, split.RightCentroids);
         }
     }
+
+    // Kept apart from SubdivideRecursive so only its parallel branch allocates the lambdas' closure
+    private void SubdivideInParallel(int left, int depth, LightBounds leftCentroids, LightBounds rightCentroids) =>
+        Parallel.Invoke(
+            () => SubdivideRecursive(left, depth, leftCentroids),
+            () => SubdivideRecursive(left + 1, depth, rightCentroids));
 
     private bool TrySplit(int nodeIndex, in LightBounds centroidBounds, int depth, bool wide, out int left, out Split split)
     {
@@ -410,6 +413,12 @@ internal sealed class LightTreeBuilder
     private void Bin(int first, int count, int axis, float min, float scale, bool wide,
         Span<LightBounds> binBounds, Span<int> binCounts, Span<LightBounds> binCentroids)
     {
+        if (wide)
+        {
+            BinWide(first, count, axis, min, scale, binBounds, binCounts, binCentroids);
+            return;
+        }
+
         for (int b = 0; b < Bins; b++)
         {
             binBounds[b] = LightBounds.Empty;
@@ -417,30 +426,24 @@ internal sealed class LightTreeBuilder
             binCounts[b] = 0;
         }
 
-        if (!wide)
+        for (int i = first; i < first + count; i++)
         {
-            for (int i = first; i < first + count; i++)
-            {
-                int prim = _indices[i];
-                Vector3 centroid = _centroids[prim];
-                int bin = BinOf(centroid, axis, min, scale);
-                binBounds[bin].Add(_primBounds[prim]);
-                binCentroids[bin].Add(centroid);
-                binCounts[bin]++;
-            }
-            return;
+            int prim = _indices[i];
+            Vector3 centroid = _centroids[prim];
+            int bin = BinOf(centroid, axis, min, scale);
+            binBounds[bin].Add(_primBounds[prim]);
+            binCentroids[bin].Add(centroid);
+            binCounts[bin]++;
         }
+    }
 
+    // Kept apart from Bin so only the wide case allocates the lambdas' closure
+    private void BinWide(int first, int count, int axis, float min, float scale,
+        Span<LightBounds> binBounds, Span<int> binCounts, Span<LightBounds> binCentroids)
+    {
         int workers = Environment.ProcessorCount;
         int chunk = (count + workers - 1) / workers;
-        var bounds = new LightBounds[Bins];
-        var centroids = new LightBounds[Bins];
-        int[] counts = new int[Bins];
-        for (int b = 0; b < Bins; b++)
-        {
-            bounds[b] = LightBounds.Empty;
-            centroids[b] = LightBounds.Empty;
-        }
+        (LightBounds[] bounds, LightBounds[] centroids, int[] counts) = NewBins();
 
         object gate = new();
         Parallel.For(0, workers, NewBins, (w, _, local) =>
@@ -670,13 +673,11 @@ internal sealed class LightTreeBuilder
         int leftCount = split - first + 1;
         int left = Interlocked.Add(ref _nodeCount, 2) - 2;
 
-        LightBounds leftBounds = default;
-        LightBounds rightBounds = default;
+        LightBounds leftBounds;
+        LightBounds rightBounds;
         if (count > ParallelThreshold && depth < _parallelDepth)
         {
-            Parallel.Invoke(
-                () => leftBounds = BuildMorton(left, first, leftCount, depth + 1),
-                () => rightBounds = BuildMorton(left + 1, split + 1, count - leftCount, depth + 1));
+            (leftBounds, rightBounds) = BuildMortonInParallel(left, first, leftCount, split + 1, count - leftCount, depth + 1);
         }
         else
         {
@@ -688,6 +689,19 @@ internal sealed class LightTreeBuilder
         bounds.Add(rightBounds);
         _nodes[nodeIndex] = new BinaryNode { Bounds = bounds, LeftFirst = left, Count = 0 };
         return bounds;
+    }
+
+    // Kept apart from BuildMorton so only its parallel branch allocates the lambdas' closure: lambdas that capture a
+    // method's parameters make it allocate their closure on every call, leaves included
+    private (LightBounds Left, LightBounds Right) BuildMortonInParallel(int left, int first, int leftCount,
+        int rightFirst, int rightCount, int depth)
+    {
+        LightBounds leftBounds = default;
+        LightBounds rightBounds = default;
+        Parallel.Invoke(
+            () => leftBounds = BuildMorton(left, first, leftCount, depth),
+            () => rightBounds = BuildMorton(left + 1, rightFirst, rightCount, depth));
+        return (leftBounds, rightBounds);
     }
 
     private int FindMortonSplit(int first, int last)
