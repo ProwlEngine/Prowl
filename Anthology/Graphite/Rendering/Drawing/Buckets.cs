@@ -1003,7 +1003,7 @@ internal sealed class BucketSet
     /// has several chunks. Empty commands are left out. Prepass commands are sorted near to far by their nearest visible
     /// instance.
     /// </summary>
-    public void Build(int pass, in CullFrustum frustum, DrawList list, ProvidedItems? provided = null)
+    public void Build(int pass, in CullFrustum frustum, DrawList list, ProvidedItems? provided = null, EarlyDepth? lit = null)
     {
         list.Clear();
         Order(pass);
@@ -1037,6 +1037,8 @@ internal sealed class BucketSet
         for (int b = 0; b < _touched.Count; b++)
         {
             Bucket bucket = _touched[b];
+            if (LeftToGBuffer(pass, bucket.Program, lit))
+                continue;
             int first = list.InstanceCount;
             float nearest = float.MaxValue;
             for (int i = 0; i < bucket.FoundCount; i++)
@@ -1074,9 +1076,14 @@ internal sealed class BucketSet
                 Emit(list, _touched[b], program, first, count);
         }
         if (_gpuView is { } view)
-            AppendGpu(pass, list, view);
+            AppendGpu(pass, list, view, lit);
         foreach (ItemDraw item in provided?.Opaque ?? [])
         {
+            if (LeftToGBuffer(pass, item.Program, lit))
+            {
+                item.FirstCommand = -1;
+                continue;
+            }
             item.FirstCommand = list.CommandCount;
             EmitProvided(list, item);
         }
@@ -1086,9 +1093,18 @@ internal sealed class BucketSet
 
     private bool Fades(int pass) => pass < 2 || _passes[pass] == PassType.GBuffer;
 
+    // In a view that lights its GBuffer, lit being its early depth, a surface the GBuffer holds leaves the forward
+    // pass, and the prepass too unless the view draws it there first
+    private bool LeftToGBuffer(int pass, ushort program, EarlyDepth? lit)
+    {
+        if (lit is not { } early || pass > 1 || _programs[program].Shader.PassIndex(PassType.GBuffer) < 0)
+            return false;
+        return pass == 1 || !_programs.EarlyDepthDraws(program, early);
+    }
+
     // A command for every bucket of the pass with no instances, then a fade command for each that can fade when the view
     // fades, which the GPU cull fills
-    private void AppendGpu(int pass, DrawList list, in GpuCullView view)
+    private void AppendGpu(int pass, DrawList list, in GpuCullView view, EarlyDepth? lit)
     {
         Order(pass);
         GpuSegment segment = list.StartGpu();
@@ -1109,6 +1125,8 @@ internal sealed class BucketSet
         int words = 0;
         foreach (Bucket bucket in _ordered[pass])
         {
+            if (LeftToGBuffer(pass, bucket.Program, lit))
+                continue;
             segment.Map[bucket.GpuId] = (uint)(list.CommandCount - segment.FirstCommand);
             Emit(list, bucket, bucket.Program, words, 0);
             words += bucket.Count;
@@ -1117,7 +1135,7 @@ internal sealed class BucketSet
         {
             foreach (Bucket bucket in _ordered[pass])
             {
-                if (FadeProgram(bucket) < 0)
+                if (FadeProgram(bucket) < 0 || LeftToGBuffer(pass, bucket.Program, lit))
                     continue;
                 segment.Map[bucket.GpuId] |= 1u << 31;
                 segment.Map[_gpuIds + bucket.GpuId] = (uint)(list.CommandCount - segment.FirstCommand);

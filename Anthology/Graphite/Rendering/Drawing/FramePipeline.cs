@@ -917,10 +917,6 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
-    // A deferred view lights the surfaces its GBuffer holds from it, so their forward draws go, and their prepass draws
-    // unless the view asks for them first
-    private bool HasGBufferPass(ushort program) => DrawPrograms[program].Shader.PassIndex(PassType.GBuffer) >= 0;
-
     // GBuffer draws whose surfaces the prepass already drew test depth equal, so only the visible pixel is kept
     private void DepthEqualAfterEarlyDepth(DrawList gbuffer, EarlyDepth mode)
     {
@@ -978,14 +974,9 @@ internal sealed partial class FramePipeline : IDisposable
             world.Buckets.Cull(frustum, view.CullingMask, lod, hidden: RenderableFlagsExtensions.HiddenIn(view.Kind));
             CullProviders(camera, view, world, frustum);
             DrawItemSink sink = camera.Sink;
-            world.Buckets.Build(0, frustum, camera.Prepass, sink.For(camera.Prepass));
-            world.Buckets.Build(1, frustum, camera.Forward, sink.For(camera.Forward));
-            if (view.Path == RenderPath.Deferred && FeatureSelection.LightsDeferred(camera.Selected))
-            {
-                EarlyDepth early = view.EarlyDepth;
-                camera.Prepass.Calls.RemoveAll(call => HasGBufferPass(call.Program) && !DrawPrograms.EarlyDepthDraws(call.Program, early));
-                camera.Forward.Calls.RemoveAll(call => HasGBufferPass(call.Program));
-            }
+            EarlyDepth? lit = view.Path == RenderPath.Deferred && FeatureSelection.LightsDeferred(camera.Selected) ? view.EarlyDepth : null;
+            world.Buckets.Build(0, frustum, camera.Prepass, sink.For(camera.Prepass), lit);
+            world.Buckets.Build(1, frustum, camera.Forward, sink.For(camera.Forward), lit);
             if (drawsPrepass)
                 DepthEqualAfterPrepass(camera.Forward);
             foreach ((PassType type, DrawList list) in camera.PassLists)
