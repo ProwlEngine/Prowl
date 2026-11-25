@@ -39,7 +39,7 @@ public static class DeviceCreateUtilities
                 throw new Exception($"Unsupported graphics backend: {backend}");
         }
 
-        device.SyncToVerticalBlank = swapchain.SyncToVerticalBlank;
+        device.VSync = swapchain.VSync;
         window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
 
         return device;

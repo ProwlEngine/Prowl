@@ -71,8 +71,8 @@ internal sealed class ViewerWindow : IDisposable
 
     private void OnLoad()
     {
-        _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { SyncToVerticalBlank = true }, GraphicsBackend.Vulkan);
-        _device.SyncToVerticalBlank = true;
+        _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { VSync = VSyncMode.Adaptive }, GraphicsBackend.Vulkan);
+        _device.VSync = VSyncMode.Adaptive;
         _window.FramebufferResize += size =>
         {
             if (_scene != null)

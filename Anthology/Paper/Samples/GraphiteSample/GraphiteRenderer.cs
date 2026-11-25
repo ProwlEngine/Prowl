@@ -66,7 +66,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     public GraphiteRenderer(GraphicsDevice gl)
     {
         _gl = gl;
-        _gl.SyncToVerticalBlank = false;
+        _gl.VSync = VSyncMode.Mailbox;
 
         _scenePass = new ScenePass(this);
         _presentPass = new PresentPass(this);

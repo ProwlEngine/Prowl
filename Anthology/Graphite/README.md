@@ -76,7 +76,7 @@ SwapchainDescription swapchainDescription = new()
     Width = (uint)window.FramebufferSize.X,
     Height = (uint)window.FramebufferSize.Y,
     DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-    SyncToVerticalBlank = false
+    VSync = VSyncMode.Mailbox
 };
 
 GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescription, vulkanOptions);

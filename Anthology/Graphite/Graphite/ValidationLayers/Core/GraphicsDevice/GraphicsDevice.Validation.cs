@@ -50,7 +50,7 @@ public abstract partial class GraphicsDevice
             "It is most likely hung on a draw or dispatch, or the device was lost. Check the driver's logs. GraphicsDeviceOptions.GpuHangSeconds sets this limit.");
     }
 
-    private void SyncToVerticalBlank_CheckMainSwapchain()
+    private void VSync_CheckMainSwapchain()
     {
         if (!ValidationEnabled)
             return;
