@@ -692,7 +692,7 @@ internal sealed partial class NetworkSystem
 
     internal void OnSpawn(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost || ReferenceEquals(ReplicatedWorld, null))
+        if (IsHost || !sender.IsHost || ReferenceEquals(ReplicatedWorld, null))
         {
             return;
         }
@@ -946,12 +946,17 @@ internal sealed partial class NetworkSystem
 
     internal void OnDespawn(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost)
+        if (IsHost || !sender.IsHost)
         {
             return;
         }
 
         DespawnMessage message = DespawnMessage.Read(ref reader);
+        if (!reader.IsAtEnd || delivery != Delivery.Reliable)
+        {
+            throw new InvalidDataException("Invalid despawn message.");
+        }
+
         if (Entries.Remove(message.Identifier, out NetworkObject? entry) && entry.GameObject.IsValid())
         {
             entry.NotifyDespawn(message.Reason);
@@ -1073,7 +1078,7 @@ internal sealed partial class NetworkSystem
 
     internal void OnOwner(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
-        if (IsHost)
+        if (IsHost || !sender.IsHost)
         {
             return;
         }
@@ -1082,6 +1087,11 @@ internal sealed partial class NetworkSystem
         Guid id = message.Identifier;
         int owner = message.OwnerId;
         uint generation = message.Generation;
+        if (!reader.IsAtEnd || delivery != Delivery.Reliable)
+        {
+            throw new InvalidDataException("Invalid owner message.");
+        }
+
         if (Entries.TryGetValue(id, out NetworkObject? entry))
         {
             Float3 velocity = entry.TransferVelocity ?? entry.SampledVelocity();
