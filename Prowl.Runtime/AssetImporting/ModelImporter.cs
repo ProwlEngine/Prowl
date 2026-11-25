@@ -166,6 +166,12 @@ public struct ModelClipSettings
     public List<ClipEvent>? Events;
 
     /// <summary>
+    /// Component method invocation events authored on this clip, timed in seconds of the take (before trimming)
+    /// so changing trim bounds leaves events anchored to the moment they mark. Re-applied on every reimport.
+    /// </summary>
+    public List<SceneAnimationEvent>? PropertyEvents;
+
+    /// <summary>
     /// Whether the body's rise and fall moves the character, or null for the default, which is off: a
     /// jump usually wants its height in the pose, over a controller that stays on the ground.
     /// </summary>

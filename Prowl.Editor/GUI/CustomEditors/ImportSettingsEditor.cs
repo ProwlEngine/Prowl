@@ -46,6 +46,12 @@ public abstract class ImportSettingsEditor : AssetImporterEditor
     /// <summary> Drops the cached settings for an asset whose <c>.meta</c> was written elsewhere, so the inspector reads it again. </summary>
     public static void Forget(Guid guid) => s_settings.Remove(guid);
 
+    /// <summary> Applies an external <c>.meta</c> settings patch onto the cached settings if currently loaded. </summary>
+    internal static void PatchIfLoaded(Guid guid, Action<EchoObject> patch)
+    {
+        if (s_settings.TryGetValue(guid, out EchoObject settings)) patch(settings);
+    }
+
     /// <summary>An asset's pending import settings, read from disk if nothing has edited them yet. Null when the asset is unknown.</summary>
     internal static EchoObject? Pending(Guid guid)
     {

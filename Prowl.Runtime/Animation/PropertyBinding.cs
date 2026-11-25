@@ -5,11 +5,19 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq.Expressions;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Graphite.Rendering;
+using Prowl.Graphite.ShaderDef;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;
+
+using Material = Prowl.Runtime.Resources.Material;
+using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -25,6 +33,18 @@ public readonly struct AnimatablePropertyDescriptor
     public string[] SubChannels { get; init; }
 }
 
+/// <summary>Describes a callable component method discovered on a <see cref="GameObject"/> for <see cref="SceneAnimationEvent"/> authoring.</summary>
+public readonly struct AnimatableEventMethodDescriptor
+{
+    public string ComponentType { get; init; }
+    public string MethodName { get; init; }
+    public string DisplayName { get; init; }
+    public ProwlActionArgType ArgType { get; init; }
+    public string ParameterName { get; init; }
+    public Type? ParameterType { get; init; }
+    public bool IsUserScript { get; init; }
+}
+
 /// <summary>
 /// Binds an <see cref="AnimationClip"/>'s property tracks to a live <see cref="GameObject"/> hierarchy
 /// and evaluates or records properties at any time.
@@ -38,17 +58,25 @@ public sealed class SceneClipBinding
     private readonly GameObject _root;
     private readonly AnimationClip _clip;
     private readonly List<BoundPropertyGroup> _curveGroups = [];
+    private readonly List<BoundMaterialPropertyGroup> _materialGroups = [];
     private readonly List<BoundObjectTrack> _objectTracks = [];
     private readonly List<BoundStringTrack> _stringTracks = [];
+    private BoundEvent[] _boundEvents = [];
     private readonly HashSet<int> _activeRangedEvents = [];
 
     private static readonly ConcurrentDictionary<(Type Type, string Name, ProwlActionArgType ArgType), (MethodInfo? Method, int ParamCount)> s_eventMethodCache = new();
+    private static readonly ConcurrentDictionary<MethodInfo, Action<Component, EngineObject?>> s_objectEventCallers = new();
     private static readonly ConcurrentDictionary<(Type Type, string Path), MemberAccessChain> s_accessChainCache = new();
+    private static readonly ConcurrentDictionary<(Type Type, string Path), (Func<object, float>? Get, Action<object, float>? Set)> s_scalarAccessorCache = new();
+    private static readonly ConcurrentDictionary<(Type Type, string Path), (Func<object, Float4>? Get, Action<object, Float4>? Set)> s_vec4AccessorCache = new();
+    private static readonly ConcurrentDictionary<(Type Type, string Path), (Func<object, EngineObject?>? Get, Action<object, EngineObject?>? Set)> s_objectAccessorCache = new();
+    private static readonly ConcurrentDictionary<(Type Type, string Path), (Func<object, string?>? Get, Action<object, string>? Set)> s_stringAccessorCache = new();
 
     public GameObject Root => _root;
     public AnimationClip Clip => _clip;
 
     public int BoundCurveGroupCount => _curveGroups.Count;
+    public int BoundMaterialGroupCount => _materialGroups.Count;
     public int BoundObjectTrackCount => _objectTracks.Count;
     public int BoundStringTrackCount => _stringTracks.Count;
     public bool HasActiveRangedEvents => _activeRangedEvents.Count > 0;
@@ -71,6 +99,9 @@ public sealed class SceneClipBinding
         for (int i = 0; i < _curveGroups.Count; i++)
             _curveGroups[i].Apply(time, 1f, hasSolo);
 
+        for (int i = 0; i < _materialGroups.Count; i++)
+            _materialGroups[i].Apply(time, 1f, hasSolo);
+
         for (int i = 0; i < _objectTracks.Count; i++)
             _objectTracks[i].Apply(time, hasSolo);
 
@@ -92,6 +123,9 @@ public sealed class SceneClipBinding
         for (int i = 0; i < _curveGroups.Count; i++)
             _curveGroups[i].Apply(time, w, hasSolo);
 
+        for (int i = 0; i < _materialGroups.Count; i++)
+            _materialGroups[i].Apply(time, w, hasSolo);
+
         if (w >= 0.5f)
         {
             for (int i = 0; i < _objectTracks.Count; i++)
@@ -108,6 +142,8 @@ public sealed class SceneClipBinding
         if (_root.IsNotValid()) return;
         for (int i = 0; i < _curveGroups.Count; i++)
             _curveGroups[i].CaptureBaseline();
+        for (int i = 0; i < _materialGroups.Count; i++)
+            _materialGroups[i].CaptureBaseline();
         for (int i = 0; i < _objectTracks.Count; i++)
             _objectTracks[i].CaptureBaseline();
         for (int i = 0; i < _stringTracks.Count; i++)
@@ -120,6 +156,8 @@ public sealed class SceneClipBinding
         if (_root.IsNotValid()) return;
         for (int i = 0; i < _curveGroups.Count; i++)
             _curveGroups[i].RestoreBaseline();
+        for (int i = 0; i < _materialGroups.Count; i++)
+            _materialGroups[i].RestoreBaseline();
         for (int i = 0; i < _objectTracks.Count; i++)
             _objectTracks[i].RestoreBaseline();
         for (int i = 0; i < _stringTracks.Count; i++)
@@ -142,7 +180,7 @@ public sealed class SceneClipBinding
             if (!ev.IsRange)
             {
                 if (ShouldFire(ev.Time, previousTime, currentTime, duration, forward, looped))
-                    InvokeEvent(_root, ev);
+                    InvokeBoundEnter(i, ev);
             }
             else
             {
@@ -176,7 +214,7 @@ public sealed class SceneClipBinding
             {
                 SceneAnimationEvent ev = _clip.PropertyEvents[idx];
                 if (ev.IsRange && !string.IsNullOrEmpty(ev.ExitFunctionName))
-                    InvokeNamedEventMethod(_root, ev.RelativePath, ev.ExitFunctionName, ev.ArgType, GetEventArg(ev));
+                    InvokeBoundExit(idx, ev);
             }
         }
     }
@@ -195,7 +233,7 @@ public sealed class SceneClipBinding
         {
             // Wrapped across loop boundary while inside the range: finish previous cycle and re-enter if still inside
             if (!string.IsNullOrEmpty(ev.ExitFunctionName))
-                InvokeNamedEventMethod(_root, ev.RelativePath, ev.ExitFunctionName, ev.ArgType, GetEventArg(ev));
+                InvokeBoundExit(index, ev);
             _activeRangedEvents.Remove(index);
             wasActive = false;
         }
@@ -207,22 +245,22 @@ public sealed class SceneClipBinding
                 // Entered the range and stayed inside it at the end of this step
                 _activeRangedEvents.Add(index);
                 if (!string.IsNullOrEmpty(ev.FunctionName))
-                    InvokeEvent(_root, ev);
+                    InvokeBoundEnter(index, ev);
                 if (!string.IsNullOrEmpty(ev.StayFunctionName))
                 {
                     float progress = Math.Clamp((curr - start) / span, 0f, 1f);
-                    InvokeNamedEventMethod(_root, ev.RelativePath, ev.StayFunctionName, ProwlActionArgType.Float, progress);
+                    InvokeBoundStay(index, ev, progress);
                 }
             }
             else if (crossedWholeRange)
             {
                 // A single frame step jumped completely across [start, end]: fire Enter, Stay(1), and Exit in sequence
                 if (!string.IsNullOrEmpty(ev.FunctionName))
-                    InvokeEvent(_root, ev);
+                    InvokeBoundEnter(index, ev);
                 if (!string.IsNullOrEmpty(ev.StayFunctionName))
-                    InvokeNamedEventMethod(_root, ev.RelativePath, ev.StayFunctionName, ProwlActionArgType.Float, forward ? 1f : 0f);
+                    InvokeBoundStay(index, ev, forward ? 1f : 0f);
                 if (!string.IsNullOrEmpty(ev.ExitFunctionName))
-                    InvokeNamedEventMethod(_root, ev.RelativePath, ev.ExitFunctionName, ev.ArgType, GetEventArg(ev));
+                    InvokeBoundExit(index, ev);
             }
         }
         else
@@ -233,7 +271,7 @@ public sealed class SceneClipBinding
                 if (!string.IsNullOrEmpty(ev.StayFunctionName))
                 {
                     float progress = Math.Clamp((curr - start) / span, 0f, 1f);
-                    InvokeNamedEventMethod(_root, ev.RelativePath, ev.StayFunctionName, ProwlActionArgType.Float, progress);
+                    InvokeBoundStay(index, ev, progress);
                 }
             }
             else
@@ -241,9 +279,30 @@ public sealed class SceneClipBinding
                 // Left the range this step: fire Exit
                 _activeRangedEvents.Remove(index);
                 if (!string.IsNullOrEmpty(ev.ExitFunctionName))
-                    InvokeNamedEventMethod(_root, ev.RelativePath, ev.ExitFunctionName, ev.ArgType, GetEventArg(ev));
+                    InvokeBoundExit(index, ev);
             }
         }
+    }
+
+    private void InvokeBoundEnter(int index, SceneAnimationEvent ev)
+    {
+        if ((uint)index < (uint)_boundEvents.Length && _boundEvents[index].TryInvokeEnter(ev))
+            return;
+        InvokeEvent(_root, ev);
+    }
+
+    private void InvokeBoundStay(int index, SceneAnimationEvent ev, float progress)
+    {
+        if ((uint)index < (uint)_boundEvents.Length && _boundEvents[index].TryInvokeStay(progress))
+            return;
+        InvokeNamedEventMethod(_root, ev.RelativePath, ev.StayFunctionName, ProwlActionArgType.Float, progress);
+    }
+
+    private void InvokeBoundExit(int index, SceneAnimationEvent ev)
+    {
+        if ((uint)index < (uint)_boundEvents.Length && _boundEvents[index].TryInvokeExit(ev))
+            return;
+        InvokeNamedEventMethod(_root, ev.RelativePath, ev.ExitFunctionName, ev.ArgType, GetEventArg(ev));
     }
 
     private static bool RangeCrossed(float start, float end, float prev, float curr, float duration, bool forward, bool looped)
@@ -358,18 +417,175 @@ public sealed class SceneClipBinding
         return (parameterlessFallback, 0);
     }
 
+    private static readonly HashSet<string> s_excludedLifecycleMethods = new(StringComparer.Ordinal)
+    {
+        "Awake", "Start", "Update", "FixedUpdate", "LateUpdate",
+        "OnEnable", "OnDisable", "OnDestroy", "OnValidate", "Reset",
+        "OnDrawGizmos", "OnDrawGizmosSelected",
+        "OnCollisionEnter", "OnCollisionStay", "OnCollisionExit",
+        "OnTriggerEnter", "OnTriggerStay", "OnTriggerExit",
+        "AssertOwner", "Rebind", "RecompileGraph",
+    };
+
+    /// <summary>
+    /// Discovers all public instance <c>void</c> methods taking 0 or 1 supported argument on components attached to <paramref name="go"/>,
+    /// sorted with user script methods first followed by built-in engine components.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Editor animation event picker reflects over attached component methods.")]
+    public static List<AnimatableEventMethodDescriptor> GetCallableEventMethods(GameObject go)
+    {
+        var userMethods = new List<AnimatableEventMethodDescriptor>();
+        var builtinMethods = new List<AnimatableEventMethodDescriptor>();
+        if (go.IsNotValid()) return userMethods;
+
+        for (int i = 0; i < go._components.Count; i++)
+        {
+            Component comp = go._components[i];
+            if (comp.IsNotValid() || comp.HideFlags.HasFlag(HideFlags.Hide)) continue;
+
+            Type compType = comp.GetType();
+            string compName = compType.Name;
+            bool isUserScript = compType.Assembly != typeof(Component).Assembly;
+            List<AnimatableEventMethodDescriptor> bucket = isUserScript ? userMethods : builtinMethods;
+
+            foreach (MethodInfo m in compType.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (m.IsSpecialName || m.IsGenericMethodDefinition || m.ContainsGenericParameters) continue;
+                if (m.ReturnType != typeof(void)) continue;
+                if (s_excludedLifecycleMethods.Contains(m.Name)) continue;
+                if (m.GetCustomAttribute<ObsoleteAttribute>() != null) continue;
+
+                Type? origin = m.GetBaseDefinition().DeclaringType;
+                if (origin != null && (origin.IsAssignableFrom(typeof(Component)) || origin == typeof(Component)))
+                    continue;
+
+                ParameterInfo[] ps = m.GetParameters();
+                if (ps.Length == 0)
+                {
+                    bucket.Add(new AnimatableEventMethodDescriptor
+                    {
+                        ComponentType = compName,
+                        MethodName = m.Name,
+                        DisplayName = $"{compName} / {m.Name} ()",
+                        ArgType = ProwlActionArgType.None,
+                        ParameterName = string.Empty,
+                        ParameterType = null,
+                        IsUserScript = isUserScript,
+                    });
+                }
+                else if (ps.Length == 1 && ProwlActionArg.TryFromType(ps[0].ParameterType, out ProwlActionArgType at))
+                {
+                    Type paramType = ps[0].ParameterType;
+                    string typeLabel = at == ProwlActionArgType.Object ? paramType.Name : ProwlActionArg.Label(at);
+                    string paramName = ps[0].Name ?? "value";
+                    bucket.Add(new AnimatableEventMethodDescriptor
+                    {
+                        ComponentType = compName,
+                        MethodName = m.Name,
+                        DisplayName = $"{compName} / {m.Name} ({typeLabel} {paramName})",
+                        ArgType = at,
+                        ParameterName = paramName,
+                        ParameterType = paramType,
+                        IsUserScript = isUserScript,
+                    });
+                }
+            }
+        }
+
+        userMethods.AddRange(builtinMethods);
+        return userMethods;
+    }
+
+    /// <summary>
+    /// Checks whether <paramref name="functionName"/> resolves to a callable method on <paramref name="root"/> (at <paramref name="relativePath"/>),
+    /// returning its human-readable signature and expected parameter type for the Editor UI.
+    /// </summary>
+    public static bool TryValidateEventMethod(GameObject root, string relativePath, string functionName, ProwlActionArgType argType,
+        out string resolvedSignature, out string parameterName, out Type? parameterType)
+    {
+        resolvedSignature = string.Empty;
+        parameterName = "Value";
+        parameterType = null;
+
+        if (root.IsNotValid() || string.IsNullOrEmpty(functionName)) return false;
+        GameObject? targetGo = ResolveGameObject(root, relativePath);
+        if (targetGo.IsNotValid()) return false;
+
+        for (int i = 0; i < targetGo!._components.Count; i++)
+        {
+            Component comp = targetGo._components[i];
+            if (comp.IsNotValid()) continue;
+
+            (MethodInfo? method, int paramCount) = GetCachedEventMethod(comp.GetType(), functionName, argType);
+            if (method == null) continue;
+
+            if (paramCount == 1)
+            {
+                ParameterInfo p = method.GetParameters()[0];
+                parameterType = p.ParameterType;
+                parameterName = !string.IsNullOrEmpty(p.Name) ? p.Name : "Value";
+                resolvedSignature = $"{comp.GetType().Name}.{method.Name}({p.ParameterType.Name})";
+            }
+            else
+            {
+                resolvedSignature = $"{comp.GetType().Name}.{method.Name}()";
+            }
+            return true;
+        }
+        return false;
+    }
+
     // ================================================================
     //  Target & Member Resolution
     // ================================================================
 
-    /// <summary>Resolves a relative hierarchy path from <paramref name="root"/> to a child <see cref="GameObject"/>.</summary>
+    /// <summary>
+    /// Resolves a relative hierarchy path from <paramref name="root"/> to a target <see cref="GameObject"/>.
+    /// Paths starting with <c>'@'</c> (e.g. <c>"@MainCamera"</c> or <c>"@Boss/RightHand"</c>) resolve against
+    /// the <see cref="Animator.ObjectBindings"/> slot table on <paramref name="root"/>.
+    /// </summary>
     public static GameObject? ResolveGameObject(GameObject root, string relativePath)
     {
         if (root.IsNotValid()) return null;
         if (string.IsNullOrEmpty(relativePath)) return root;
 
+        if (relativePath[0] == '@')
+        {
+            int slashIdx = relativePath.IndexOf('/');
+            string slotName = slashIdx > 0 ? relativePath[1..slashIdx] : relativePath[1..];
+            string subPath = slashIdx > 0 ? relativePath[(slashIdx + 1)..] : string.Empty;
+
+            Animator? animator = root.GetComponent<Animator>();
+            if (animator.IsNotValid()) return null;
+
+            GameObject? boundGo = animator!.GetObjectBinding(slotName);
+            if (boundGo.IsNotValid()) return null;
+            if (string.IsNullOrEmpty(subPath)) return boundGo;
+
+            Transform? subFound = boundGo!.Transform.Find(subPath);
+            return subFound != null && subFound.GameObject.IsValid() ? subFound.GameObject : null;
+        }
+
         Transform? found = root.Transform.Find(relativePath);
         return found != null && found.GameObject.IsValid() ? found.GameObject : null;
+    }
+
+    /// <summary>
+    /// Returns true if the target <see cref="GameObject"/>, <paramref name="componentType"/>, and <paramref name="propertyPath"/>
+    /// all currently resolve on <paramref name="root"/> (used by the Editor to detect broken/missing track bindings).
+    /// </summary>
+    public static bool IsTrackTargetValid(GameObject root, string relativePath, string componentType, string propertyPath)
+    {
+        if (root.IsNotValid()) return false;
+        GameObject? go = ResolveGameObject(root, relativePath);
+        if (go.IsNotValid()) return false;
+        object? target = ResolveTargetObject(go!, componentType);
+        if (target == null) return false;
+        if (string.IsNullOrEmpty(propertyPath)) return true;
+        if (TryParseMaterialUniformPath(target, propertyPath, out _, out _, out _, out _))
+            return true;
+        return TryResolveAccessChain(target, propertyPath, out _);
     }
 
     /// <summary>Resolves the target object (<see cref="GameObject"/>, <see cref="Transform"/>, or <see cref="Component"/>) on <paramref name="go"/>.</summary>
@@ -428,6 +644,11 @@ public sealed class SceneClipBinding
             value = go.Enabled ? 1f : 0f;
             return true;
         }
+        if (TryParseMaterialUniformPath(target, propertyPath, out Material? mat, out string uniformName, out MaterialPropertyType propType, out SubChannelKind sub) && mat.IsValid())
+        {
+            value = ReadMaterialUniformChannel(mat!, uniformName, propType, sub);
+            return true;
+        }
 
         if (!TryResolveAccessChain(target, propertyPath, out MemberAccessChain chain))
             return false;
@@ -481,6 +702,13 @@ public sealed class SceneClipBinding
         if (go.IsNotValid()) return false;
         object? target = ResolveTargetObject(go!, componentType);
         if (target == null) return false;
+
+        if (TryParseMaterialUniformPath(target, propertyPath, out Material? mat, out string uniformName, out MaterialPropertyType propType, out SubChannelKind matSub) && mat.IsValid())
+        {
+            WriteMaterialUniformChannel(mat!, uniformName, propType, matSub, value);
+            NotifyTargetChanged(target);
+            return true;
+        }
 
         if (!TryResolveAccessChain(target, propertyPath, out MemberAccessChain chain))
             return false;
@@ -594,6 +822,46 @@ public sealed class SceneClipBinding
             });
 
             CollectAnimatableMembers(compType, compName, "", list, depth: 0);
+
+            // Expose shader uniform properties on Material renderers (Unity-style Material.<Uniform> animation)
+            if (comp is IMaterialRenderer matRenderer && matRenderer.MaterialSlotCount > 0)
+            {
+                Material? mat = matRenderer.GetMaterial(0);
+                if (mat.IsValid() && mat!.Shader.IsValid())
+                {
+                    Shader shader = mat.Shader!;
+                    if (shader.State is not (AssetState.Missing or AssetState.Failed))
+                        shader.Load();
+                    if (shader.IsLoaded)
+                    {
+                        foreach (MaterialProperty mp in shader.Properties)
+                        {
+                            string matPath = $"Material.{mp.Name}";
+                            switch (mp.Type)
+                            {
+                                case MaterialPropertyType.Float:
+                                    list.Add(new AnimatablePropertyDescriptor { ComponentType = compName, PropertyPath = matPath, DisplayName = $"{compName}.{matPath}", ValueType = typeof(float), SubChannels = [] });
+                                    break;
+                                case MaterialPropertyType.Int:
+                                    list.Add(new AnimatablePropertyDescriptor { ComponentType = compName, PropertyPath = matPath, DisplayName = $"{compName}.{matPath}", ValueType = typeof(int), SubChannels = [] });
+                                    break;
+                                case MaterialPropertyType.Color:
+                                    list.Add(new AnimatablePropertyDescriptor { ComponentType = compName, PropertyPath = matPath, DisplayName = $"{compName}.{matPath}", ValueType = typeof(Color), SubChannels = ["R", "G", "B", "A"] });
+                                    break;
+                                case MaterialPropertyType.Float2:
+                                    list.Add(new AnimatablePropertyDescriptor { ComponentType = compName, PropertyPath = matPath, DisplayName = $"{compName}.{matPath}", ValueType = typeof(Float2), SubChannels = ["X", "Y"] });
+                                    break;
+                                case MaterialPropertyType.Float3:
+                                    list.Add(new AnimatablePropertyDescriptor { ComponentType = compName, PropertyPath = matPath, DisplayName = $"{compName}.{matPath}", ValueType = typeof(Float3), SubChannels = ["X", "Y", "Z"] });
+                                    break;
+                                case MaterialPropertyType.Float4:
+                                    list.Add(new AnimatablePropertyDescriptor { ComponentType = compName, PropertyPath = matPath, DisplayName = $"{compName}.{matPath}", ValueType = typeof(Float4), SubChannels = ["X", "Y", "Z", "W"] });
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         return list;
@@ -763,6 +1031,7 @@ public sealed class SceneClipBinding
     {
         // Group curve tracks by (Target Object, Base Member Chain) so vector/color sub-channels update together.
         var groupMap = new Dictionary<(object Target, string BasePath), BoundPropertyGroup>();
+        var matGroupMap = new Dictionary<(IMaterialRenderer Renderer, string UniformName), BoundMaterialPropertyGroup>();
 
         for (int i = 0; i < _clip.CurveTracks.Count; i++)
         {
@@ -774,6 +1043,20 @@ public sealed class SceneClipBinding
 
             object? target = ResolveTargetObject(go!, track.ComponentType);
             if (target == null) continue;
+
+            if (target is IMaterialRenderer matRenderer &&
+                TryParseMaterialUniformPath(target, track.PropertyPath, out _, out string uniformName, out MaterialPropertyType propType, out SubChannelKind matSub))
+            {
+                var matKey = (matRenderer, uniformName);
+                if (!matGroupMap.TryGetValue(matKey, out BoundMaterialPropertyGroup? matGroup))
+                {
+                    matGroup = new BoundMaterialPropertyGroup(matRenderer, uniformName, propType);
+                    matGroupMap[matKey] = matGroup;
+                    _materialGroups.Add(matGroup);
+                }
+                matGroup.AddChannel(matSub, track);
+                continue;
+            }
 
             if (!TryResolveAccessChain(target, track.PropertyPath, out MemberAccessChain chain))
                 continue;
@@ -822,6 +1105,13 @@ public sealed class SceneClipBinding
 
             if (chain.LeafType == typeof(string))
                 _stringTracks.Add(new BoundStringTrack(target, chain, track));
+        }
+
+        if (_clip.PropertyEvents.Count > 0)
+        {
+            _boundEvents = new BoundEvent[_clip.PropertyEvents.Count];
+            for (int i = 0; i < _clip.PropertyEvents.Count; i++)
+                _boundEvents[i] = BoundEvent.Create(_root, _clip.PropertyEvents[i]);
         }
     }
 
@@ -889,7 +1179,7 @@ public sealed class SceneClipBinding
             return current;
         }
 
-        public void SetLeafValue(object rootTarget, object? newLeafValue)
+        public void SetLeafValue(object rootTarget, object? newLeafValue, ref object?[]? scratchParents)
         {
             if (Steps.Length == 1)
             {
@@ -897,22 +1187,354 @@ public sealed class SceneClipBinding
                 return;
             }
 
-            // To support nested value types (structs), we box-walk down, mutate, and write back up the chain.
-            var parents = new object?[Steps.Length];
-            parents[0] = rootTarget;
+            // To support nested value types (structs), walk down using a reusable scratch buffer, mutate, and write back up.
+            if (scratchParents == null || scratchParents.Length < Steps.Length)
+                scratchParents = new object?[Steps.Length];
+            scratchParents[0] = rootTarget;
             for (int i = 0; i < Steps.Length - 1; i++)
             {
-                parents[i + 1] = Steps[i].Get(parents[i]!);
-                if (parents[i + 1] == null) return;
+                scratchParents[i + 1] = Steps[i].Get(scratchParents[i]!);
+                if (scratchParents[i + 1] == null) return;
             }
 
-            Steps[^1].Set(parents[^1]!, newLeafValue);
+            Steps[^1].Set(scratchParents[^1]!, newLeafValue);
 
             for (int i = Steps.Length - 2; i >= 0; i--)
             {
                 if (Steps[i].MemberType.IsValueType)
-                    Steps[i].Set(parents[i]!, parents[i + 1]);
+                    Steps[i].Set(scratchParents[i]!, scratchParents[i + 1]);
             }
+        }
+
+        public void SetLeafValue(object rootTarget, object? newLeafValue)
+        {
+            object?[]? tmp = null;
+            SetLeafValue(rootTarget, newLeafValue, ref tmp);
+        }
+    }
+
+    // ================================================================
+    //  Compiled Zero-Allocation 1-Step Member & Event Delegates
+    // ================================================================
+
+    private static Float4 Float2ToVec4(Float2 v) => new(v.X, v.Y, 0f, 0f);
+    private static Float2 Vec4ToFloat2(Float4 v) => new(v.X, v.Y);
+    private static Float4 Float3ToVec4(Float3 v) => new(v.X, v.Y, v.Z, 0f);
+    private static Float3 Vec4ToFloat3(Float4 v) => new(v.X, v.Y, v.Z);
+    private static Float4 ColorToVec4(Color c) => new(c.R, c.G, c.B, c.A);
+    private static Color Vec4ToColor(Float4 v) => new(v.X, v.Y, v.Z, v.W);
+    private static float RoundToIntFloat(float v) => MathF.Round(v);
+
+    private static (Func<object, float>? Get, Action<object, float>? Set) GetOrCompileScalarAccessor(Type targetType, MemberAccessChain chain)
+    {
+        if (targetType.IsValueType || chain.Steps.Length != 1) return (null, null);
+        Type leaf = chain.LeafType;
+        if (leaf != typeof(float) && leaf != typeof(double) && leaf != typeof(int) && leaf != typeof(bool))
+            return (null, null);
+
+        return s_scalarAccessorCache.GetOrAdd((targetType, chain.BasePath), key =>
+        {
+            MemberStep step = chain.Steps[0];
+            if (step.Property != null && (!step.Property.CanRead || !step.Property.CanWrite))
+                return (null, null);
+
+            ParameterExpression objParam = Expression.Parameter(typeof(object), "o");
+            UnaryExpression inst = Expression.Convert(objParam, key.Type);
+            MemberExpression member = step.Field != null ? Expression.Field(inst, step.Field) : Expression.Property(inst, step.Property!);
+
+            Expression readFloat = leaf switch
+            {
+                Type t when t == typeof(float) => member,
+                Type t when t == typeof(double) => Expression.Convert(member, typeof(float)),
+                Type t when t == typeof(int) => Expression.Convert(member, typeof(float)),
+                _ => Expression.Condition(member, Expression.Constant(1f), Expression.Constant(0f)),
+            };
+            Func<object, float> getter = Expression.Lambda<Func<object, float>>(readFloat, objParam).Compile();
+
+            ParameterExpression valParam = Expression.Parameter(typeof(float), "v");
+            MethodInfo roundMethod = ((Func<float, float>)RoundToIntFloat).Method;
+            Expression writeVal = leaf switch
+            {
+                Type t when t == typeof(float) => valParam,
+                Type t when t == typeof(double) => Expression.Convert(valParam, typeof(double)),
+                Type t when t == typeof(int) => Expression.Convert(Expression.Call(roundMethod, valParam), typeof(int)),
+                _ => Expression.GreaterThanOrEqual(valParam, Expression.Constant(0.5f)),
+            };
+            Action<object, float> setter = Expression.Lambda<Action<object, float>>(Expression.Assign(member, writeVal), objParam, valParam).Compile();
+            return (getter, setter);
+        });
+    }
+
+    private static (Func<object, Float4>? Get, Action<object, Float4>? Set) GetOrCompileVec4Accessor(Type targetType, MemberAccessChain chain)
+    {
+        if (targetType.IsValueType || chain.Steps.Length != 1) return (null, null);
+        Type leaf = chain.LeafType;
+        if (leaf != typeof(Float2) && leaf != typeof(Float3) && leaf != typeof(Float4) && leaf != typeof(Color))
+            return (null, null);
+
+        return s_vec4AccessorCache.GetOrAdd((targetType, chain.BasePath), key =>
+        {
+            MemberStep step = chain.Steps[0];
+            if (step.Property != null && (!step.Property.CanRead || !step.Property.CanWrite))
+                return (null, null);
+
+            ParameterExpression objParam = Expression.Parameter(typeof(object), "o");
+            UnaryExpression inst = Expression.Convert(objParam, key.Type);
+            MemberExpression member = step.Field != null ? Expression.Field(inst, step.Field) : Expression.Property(inst, step.Property!);
+
+            Expression toFloat4 = leaf switch
+            {
+                Type t when t == typeof(Float4) => member,
+                Type t when t == typeof(Float2) => Expression.Call(((Func<Float2, Float4>)Float2ToVec4).Method, member),
+                Type t when t == typeof(Float3) => Expression.Call(((Func<Float3, Float4>)Float3ToVec4).Method, member),
+                _ => Expression.Call(((Func<Color, Float4>)ColorToVec4).Method, member),
+            };
+            Func<object, Float4> getter = Expression.Lambda<Func<object, Float4>>(toFloat4, objParam).Compile();
+
+            ParameterExpression valParam = Expression.Parameter(typeof(Float4), "v");
+            Expression fromFloat4 = leaf switch
+            {
+                Type t when t == typeof(Float4) => valParam,
+                Type t when t == typeof(Float2) => Expression.Call(((Func<Float4, Float2>)Vec4ToFloat2).Method, valParam),
+                Type t when t == typeof(Float3) => Expression.Call(((Func<Float4, Float3>)Vec4ToFloat3).Method, valParam),
+                _ => Expression.Call(((Func<Float4, Color>)Vec4ToColor).Method, valParam),
+            };
+            Action<object, Float4> setter = Expression.Lambda<Action<object, Float4>>(Expression.Assign(member, fromFloat4), objParam, valParam).Compile();
+            return (getter, setter);
+        });
+    }
+
+    private static (Func<object, EngineObject?>? Get, Action<object, EngineObject?>? Set) GetOrCompileObjectAccessor(Type targetType, MemberAccessChain chain)
+    {
+        if (targetType.IsValueType || chain.Steps.Length != 1 || !typeof(EngineObject).IsAssignableFrom(chain.LeafType))
+            return (null, null);
+
+        return s_objectAccessorCache.GetOrAdd((targetType, chain.BasePath), key =>
+        {
+            MemberStep step = chain.Steps[0];
+            if (step.Property != null && (!step.Property.CanRead || !step.Property.CanWrite))
+                return (null, null);
+
+            ParameterExpression objParam = Expression.Parameter(typeof(object), "o");
+            UnaryExpression inst = Expression.Convert(objParam, key.Type);
+            MemberExpression member = step.Field != null ? Expression.Field(inst, step.Field) : Expression.Property(inst, step.Property!);
+
+            Func<object, EngineObject?> getter = Expression.Lambda<Func<object, EngineObject?>>(
+                Expression.Convert(member, typeof(EngineObject)), objParam).Compile();
+
+            ParameterExpression valParam = Expression.Parameter(typeof(EngineObject), "v");
+            Action<object, EngineObject?> setter = Expression.Lambda<Action<object, EngineObject?>>(
+                Expression.Assign(member, Expression.Convert(valParam, chain.LeafType)), objParam, valParam).Compile();
+            return (getter, setter);
+        });
+    }
+
+    private static (Func<object, string?>? Get, Action<object, string>? Set) GetOrCompileStringAccessor(Type targetType, MemberAccessChain chain)
+    {
+        if (targetType.IsValueType || chain.Steps.Length != 1 || chain.LeafType != typeof(string))
+            return (null, null);
+
+        return s_stringAccessorCache.GetOrAdd((targetType, chain.BasePath), key =>
+        {
+            MemberStep step = chain.Steps[0];
+            if (step.Property != null && (!step.Property.CanRead || !step.Property.CanWrite))
+                return (null, null);
+
+            ParameterExpression objParam = Expression.Parameter(typeof(object), "o");
+            UnaryExpression inst = Expression.Convert(objParam, key.Type);
+            MemberExpression member = step.Field != null ? Expression.Field(inst, step.Field) : Expression.Property(inst, step.Property!);
+
+            Func<object, string?> getter = Expression.Lambda<Func<object, string?>>(member, objParam).Compile();
+
+            ParameterExpression valParam = Expression.Parameter(typeof(string), "v");
+            Action<object, string> setter = Expression.Lambda<Action<object, string>>(
+                Expression.Assign(member, valParam), objParam, valParam).Compile();
+            return (getter, setter);
+        });
+    }
+
+    private readonly struct BoundEventCall
+    {
+        public readonly Component Component;
+        public readonly string MethodName;
+        public readonly Action? VoidCall;
+        public readonly Action<float>? FloatCall;
+        public readonly Action<int>? IntCall;
+        public readonly Action<bool>? BoolCall;
+        public readonly Action<string>? StringCall;
+        public readonly Action<Component, EngineObject?>? ObjectCall;
+
+        public BoundEventCall(
+            Component component,
+            string methodName,
+            Action? voidCall = null,
+            Action<float>? floatCall = null,
+            Action<int>? intCall = null,
+            Action<bool>? boolCall = null,
+            Action<string>? stringCall = null,
+            Action<Component, EngineObject?>? objectCall = null)
+        {
+            Component = component;
+            MethodName = methodName;
+            VoidCall = voidCall;
+            FloatCall = floatCall;
+            IntCall = intCall;
+            BoolCall = boolCall;
+            StringCall = stringCall;
+            ObjectCall = objectCall;
+        }
+
+        public void InvokeWithEventArg(SceneAnimationEvent ev)
+        {
+            if (Component.IsNotValid() || !Component.EnabledInHierarchy) return;
+            try
+            {
+                if (VoidCall != null) VoidCall();
+                else if (FloatCall != null) FloatCall(ev.FloatParam);
+                else if (IntCall != null) IntCall(ev.IntParam);
+                else if (BoolCall != null) BoolCall(ev.BoolParam);
+                else if (StringCall != null) StringCall(ev.StringParam);
+                else if (ObjectCall != null) ObjectCall(Component, ev.ObjectParam);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException($"[Animator] Animation event '{MethodName}' on '{Component.GameObject.Name}/{Component.GetType().Name}' threw", ex);
+            }
+        }
+
+        public void InvokeFloat(float value)
+        {
+            if (Component.IsNotValid() || !Component.EnabledInHierarchy) return;
+            try
+            {
+                if (FloatCall != null) FloatCall(value);
+                else VoidCall?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException($"[Animator] Animation event '{MethodName}' on '{Component.GameObject.Name}/{Component.GetType().Name}' threw", ex);
+            }
+        }
+    }
+
+    private readonly struct BoundEvent
+    {
+        private readonly GameObject? _targetGo;
+        private readonly int _boundComponentCount;
+        private readonly BoundEventCall[]? _enterCalls;
+        private readonly BoundEventCall[]? _stayCalls;
+        private readonly BoundEventCall[]? _exitCalls;
+
+        private BoundEvent(GameObject? targetGo, int boundComponentCount, BoundEventCall[]? enter, BoundEventCall[]? stay, BoundEventCall[]? exit)
+        {
+            _targetGo = targetGo;
+            _boundComponentCount = boundComponentCount;
+            _enterCalls = enter;
+            _stayCalls = stay;
+            _exitCalls = exit;
+        }
+
+        public static BoundEvent Create(GameObject root, SceneAnimationEvent ev)
+        {
+            GameObject? targetGo = ResolveGameObject(root, ev.RelativePath);
+            if (targetGo.IsNotValid()) return default;
+
+            int compCount = targetGo!._components.Count;
+            BoundEventCall[]? enter = !string.IsNullOrEmpty(ev.FunctionName) ? BuildCalls(targetGo, ev.FunctionName, ev.ArgType) : null;
+            BoundEventCall[]? stay = ev.IsRange && !string.IsNullOrEmpty(ev.StayFunctionName) ? BuildCalls(targetGo, ev.StayFunctionName, ProwlActionArgType.Float) : null;
+            BoundEventCall[]? exit = ev.IsRange && !string.IsNullOrEmpty(ev.ExitFunctionName) ? BuildCalls(targetGo, ev.ExitFunctionName, ev.ArgType) : null;
+            return new BoundEvent(targetGo, compCount, enter, stay, exit);
+        }
+
+        private static BoundEventCall[]? BuildCalls(GameObject targetGo, string methodName, ProwlActionArgType argType)
+        {
+            List<BoundEventCall>? list = null;
+            for (int i = 0; i < targetGo._components.Count; i++)
+            {
+                Component comp = targetGo._components[i];
+                if (comp.IsNotValid()) continue;
+
+                (MethodInfo? method, int paramCount) = GetCachedEventMethod(comp.GetType(), methodName, argType);
+                if (method == null) continue;
+
+                BoundEventCall call;
+                if (paramCount == 0)
+                {
+                    call = new BoundEventCall(comp, methodName, voidCall: method.CreateDelegate<Action>(comp));
+                }
+                else
+                {
+                    switch (argType)
+                    {
+                        case ProwlActionArgType.Float:
+                            call = new BoundEventCall(comp, methodName, floatCall: method.CreateDelegate<Action<float>>(comp));
+                            break;
+                        case ProwlActionArgType.Int:
+                            call = new BoundEventCall(comp, methodName, intCall: method.CreateDelegate<Action<int>>(comp));
+                            break;
+                        case ProwlActionArgType.Bool:
+                            call = new BoundEventCall(comp, methodName, boolCall: method.CreateDelegate<Action<bool>>(comp));
+                            break;
+                        case ProwlActionArgType.String:
+                            call = new BoundEventCall(comp, methodName, stringCall: method.CreateDelegate<Action<string>>(comp));
+                            break;
+                        case ProwlActionArgType.Object:
+                        {
+                            Action<Component, EngineObject?> objCaller = s_objectEventCallers.GetOrAdd(method, static m =>
+                            {
+                                Type compType = m.DeclaringType!;
+                                Type paramType = m.GetParameters()[0].ParameterType;
+                                ParameterExpression cParam = Expression.Parameter(typeof(Component), "c");
+                                ParameterExpression oParam = Expression.Parameter(typeof(EngineObject), "o");
+                                TypeBinaryExpression typeOk = Expression.TypeIs(oParam, paramType);
+                                Expression convertedArg = Expression.Condition(
+                                    typeOk,
+                                    Expression.Convert(oParam, paramType),
+                                    Expression.Constant(null, paramType));
+                                MethodCallExpression invoke = Expression.Call(Expression.Convert(cParam, compType), m, convertedArg);
+                                return Expression.Lambda<Action<Component, EngineObject?>>(invoke, cParam, oParam).Compile();
+                            });
+                            call = new BoundEventCall(comp, methodName, objectCall: objCaller);
+                            break;
+                        }
+                        default:
+                            continue;
+                    }
+                }
+
+                list ??= [];
+                list.Add(call);
+            }
+            return list?.ToArray();
+        }
+
+        private bool IsTargetUnchanged => _targetGo.IsValid() && _targetGo!._components.Count == _boundComponentCount;
+
+        public bool TryInvokeEnter(SceneAnimationEvent ev)
+        {
+            if (!IsTargetUnchanged) return false;
+            if (_enterCalls != null)
+                for (int i = 0; i < _enterCalls.Length; i++)
+                    _enterCalls[i].InvokeWithEventArg(ev);
+            return true;
+        }
+
+        public bool TryInvokeStay(float progress)
+        {
+            if (!IsTargetUnchanged) return false;
+            if (_stayCalls != null)
+                for (int i = 0; i < _stayCalls.Length; i++)
+                    _stayCalls[i].InvokeFloat(progress);
+            return true;
+        }
+
+        public bool TryInvokeExit(SceneAnimationEvent ev)
+        {
+            if (!IsTargetUnchanged) return false;
+            if (_exitCalls != null)
+                for (int i = 0; i < _exitCalls.Length; i++)
+                    _exitCalls[i].InvokeWithEventArg(ev);
+            return true;
         }
     }
 
@@ -1290,6 +1912,56 @@ public sealed class SceneClipBinding
         }
     }
 
+    private struct TargetDirtyNotifier
+    {
+        private readonly RectTransform? _rectTransform;
+        private readonly UIBehaviour? _uiBehaviour;
+        private readonly Rendering.IRenderSync? _renderSync;
+        private readonly Component? _renderComp;
+        private GameCanvas? _cachedCanvas;
+
+        public TargetDirtyNotifier(object target)
+        {
+            if (target is RectTransform rt)
+            {
+                _rectTransform = rt;
+            }
+            else if (target is UIBehaviour ui)
+            {
+                _uiBehaviour = ui;
+            }
+            else if (target is Rendering.IRenderSync rs && target is Component c)
+            {
+                _renderSync = rs;
+                _renderComp = c;
+            }
+        }
+
+        public void Notify()
+        {
+            if (!ReferenceEquals(_rectTransform, null))
+            {
+                if (_rectTransform.IsValid())
+                    _rectTransform.MarkLayoutDirty();
+            }
+            else if (!ReferenceEquals(_uiBehaviour, null))
+            {
+                if (_uiBehaviour.IsValid() && _uiBehaviour.GameObject.IsValid())
+                {
+                    if (_cachedCanvas.IsNotValid())
+                        _cachedCanvas = _uiBehaviour.GameObject.GetComponentInParent<GameCanvas>();
+                    if (_cachedCanvas.IsValid())
+                        _cachedCanvas!.MarkDirty(UIDirtyFlags.Vertices);
+                }
+            }
+            else if (_renderSync != null && !ReferenceEquals(_renderComp, null))
+            {
+                if (_renderComp.IsValid() && _renderComp.GameObject.IsValid() && _renderComp.GameObject.Scene.IsValid())
+                    _renderComp.GameObject.Scene!.Rendering.Refresh(_renderSync);
+            }
+        }
+    }
+
     // ================================================================
     //  Bound Track Runners
     // ================================================================
@@ -1299,7 +1971,16 @@ public sealed class SceneClipBinding
         private readonly object _target;
         private readonly MemberAccessChain _chain;
         private readonly List<(SubChannelKind Sub, SceneCurveTrack Track)> _channels = [];
+        private readonly Func<object, float>? _scalarGet;
+        private readonly Action<object, float>? _scalarSet;
+        private readonly Func<object, Float4>? _vec4Get;
+        private readonly Action<object, Float4>? _vec4Set;
+        private TargetDirtyNotifier _notifier;
+        private object?[]? _scratchParents;
+
         private object? _baselineValue;
+        private float _baselineScalar;
+        private Float4 _baselineVec4;
         private Float3 _baselineFloat3;
         private Quaternion _baselineQuat = Quaternion.Identity;
 
@@ -1319,6 +2000,7 @@ public sealed class SceneClipBinding
         {
             _target = target;
             _chain = chain;
+            _notifier = new TargetDirtyNotifier(target);
 
             if (target is Transform)
             {
@@ -1330,6 +2012,14 @@ public sealed class SceneClipBinding
                     "LocalRotation" => FastTransformKind.LocalRotation,
                     _ => FastTransformKind.None,
                 };
+            }
+
+            if (_fastTransform == FastTransformKind.None)
+            {
+                Type targetType = target.GetType();
+                (_scalarGet, _scalarSet) = GetOrCompileScalarAccessor(targetType, chain);
+                if (_scalarGet == null)
+                    (_vec4Get, _vec4Set) = GetOrCompileVec4Accessor(targetType, chain);
             }
 
             CaptureBaseline();
@@ -1349,6 +2039,8 @@ public sealed class SceneClipBinding
                     case FastTransformKind.LocalRotation: _baselineQuat = tf.LocalRotation; return;
                 }
             }
+            if (_scalarGet != null) { _baselineScalar = _scalarGet(_target); return; }
+            if (_vec4Get != null) { _baselineVec4 = _vec4Get(_target); return; }
             _baselineValue = _chain.GetLeafValue(_target);
         }
 
@@ -1366,8 +2058,10 @@ public sealed class SceneClipBinding
                     case FastTransformKind.LocalRotation: tf.LocalRotation = _baselineQuat; return;
                 }
             }
-            _chain.SetLeafValue(_target, _baselineValue);
-            NotifyTargetChanged(_target);
+            if (_scalarSet != null) { _scalarSet(_target, _baselineScalar); _notifier.Notify(); return; }
+            if (_vec4Set != null) { _vec4Set(_target, _baselineVec4); _notifier.Notify(); return; }
+            _chain.SetLeafValue(_target, _baselineValue, ref _scratchParents);
+            _notifier.Notify();
         }
 
         public void AddChannel(SubChannelKind sub, SceneCurveTrack track)
@@ -1411,6 +2105,57 @@ public sealed class SceneClipBinding
                 }
             }
 
+            // Fast Path 1: Compiled scalar field/property (float, double, int, bool — 0 boxing)
+            if (_scalarGet != null && _scalarSet != null)
+            {
+                SceneCurveTrack track = _channels[0].Track;
+                float sampled = track.Curve.Evaluate(time);
+                if (track.BlendMode == SceneTrackBlendMode.Additive)
+                {
+                    sampled = _baselineScalar + sampled * weight;
+                }
+                else if (weight < 0.9999f && (_chain.LeafType == typeof(float) || _chain.LeafType == typeof(double)))
+                {
+                    float cur = _scalarGet(_target);
+                    sampled = cur + (sampled - cur) * weight;
+                }
+                _scalarSet(_target, sampled);
+                _notifier.Notify();
+                return;
+            }
+
+            // Fast Path 2: Compiled vector/color field/property (Float2, Float3, Float4, Color — 0 boxing)
+            if (_vec4Get != null && _vec4Set != null)
+            {
+                Float4 v = _vec4Get(_target);
+                for (int i = 0; i < _channels.Count; i++)
+                {
+                    (SubChannelKind sub, SceneCurveTrack track) = _channels[i];
+                    if (!IsTrackActive(track, hasSolo)) continue;
+                    float s = track.Curve.Evaluate(time);
+                    bool add = track.BlendMode == SceneTrackBlendMode.Additive;
+                    switch (sub)
+                    {
+                        case SubChannelKind.Y or SubChannelKind.G:
+                            v.Y = add ? _baselineVec4.Y + s * weight : (weight >= 0.9999f ? s : v.Y + (s - v.Y) * weight);
+                            break;
+                        case SubChannelKind.Z or SubChannelKind.B:
+                            v.Z = add ? _baselineVec4.Z + s * weight : (weight >= 0.9999f ? s : v.Z + (s - v.Z) * weight);
+                            break;
+                        case SubChannelKind.W or SubChannelKind.A:
+                            v.W = add ? _baselineVec4.W + s * weight : (weight >= 0.9999f ? s : v.W + (s - v.W) * weight);
+                            break;
+                        default:
+                            v.X = add ? _baselineVec4.X + s * weight : (weight >= 0.9999f ? s : v.X + (s - v.X) * weight);
+                            break;
+                    }
+                }
+                _vec4Set(_target, v);
+                _notifier.Notify();
+                return;
+            }
+
+            // Fallback: Nested value-type structs, enums, Color32, Double2/3/4, Int2/3/4, custom Quaternion fields
             object? val = _chain.GetLeafValue(_target);
             Type leafType = _chain.LeafType;
 
@@ -1434,8 +2179,8 @@ public sealed class SceneClipBinding
 
             if (val != null)
             {
-                _chain.SetLeafValue(_target, val);
-                NotifyTargetChanged(_target);
+                _chain.SetLeafValue(_target, val, ref _scratchParents);
+                _notifier.Notify();
             }
         }
 
@@ -1552,6 +2297,11 @@ public sealed class SceneClipBinding
         private readonly object _target;
         private readonly MemberAccessChain _chain;
         private readonly SceneObjectTrack _track;
+        private readonly Func<object, EngineObject?>? _fastGet;
+        private readonly Action<object, EngineObject?>? _fastSet;
+        private TargetDirtyNotifier _notifier;
+        private object?[]? _scratchParents;
+        private EngineObject? _baselineObj;
         private object? _baselineValue;
 
         public BoundObjectTrack(object target, MemberAccessChain chain, SceneObjectTrack track)
@@ -1559,20 +2309,24 @@ public sealed class SceneClipBinding
             _target = target;
             _chain = chain;
             _track = track;
+            _notifier = new TargetDirtyNotifier(target);
+            (_fastGet, _fastSet) = GetOrCompileObjectAccessor(target.GetType(), chain);
             CaptureBaseline();
         }
 
         public void CaptureBaseline()
         {
             if (_target is EngineObject eo && eo.IsNotValid()) return;
+            if (_fastGet != null) { _baselineObj = _fastGet(_target); return; }
             _baselineValue = _chain.GetLeafValue(_target);
         }
 
         public void RestoreBaseline()
         {
             if (_target is EngineObject eo && eo.IsNotValid()) return;
-            _chain.SetLeafValue(_target, _baselineValue);
-            NotifyTargetChanged(_target);
+            if (_fastSet != null) { _fastSet(_target, _baselineObj); _notifier.Notify(); return; }
+            _chain.SetLeafValue(_target, _baselineValue, ref _scratchParents);
+            _notifier.Notify();
         }
 
         public void Apply(float time, bool hasSolo = false)
@@ -1580,11 +2334,15 @@ public sealed class SceneClipBinding
             if (_track.Muted || (hasSolo && !_track.Solo)) return;
             if (_target is EngineObject eo && eo.IsNotValid()) return;
             EngineObject? sampled = _track.Evaluate(time);
-            if (sampled.IsValid() && !_chain.LeafType.IsInstanceOfType(sampled))
+            EngineObject? resolved = sampled.IsValid() ? sampled : null;
+            if (!ReferenceEquals(resolved, null) && !_chain.LeafType.IsInstanceOfType(resolved))
                 return;
 
-            _chain.SetLeafValue(_target, sampled.IsValid() ? sampled : null);
-            NotifyTargetChanged(_target);
+            if (_fastSet != null)
+                _fastSet(_target, resolved);
+            else
+                _chain.SetLeafValue(_target, resolved, ref _scratchParents);
+            _notifier.Notify();
         }
     }
 
@@ -1593,6 +2351,11 @@ public sealed class SceneClipBinding
         private readonly object _target;
         private readonly MemberAccessChain _chain;
         private readonly SceneStringTrack _track;
+        private readonly Func<object, string?>? _fastGet;
+        private readonly Action<object, string>? _fastSet;
+        private TargetDirtyNotifier _notifier;
+        private object?[]? _scratchParents;
+        private string? _baselineString;
         private object? _baselineValue;
 
         public BoundStringTrack(object target, MemberAccessChain chain, SceneStringTrack track)
@@ -1600,20 +2363,24 @@ public sealed class SceneClipBinding
             _target = target;
             _chain = chain;
             _track = track;
+            _notifier = new TargetDirtyNotifier(target);
+            (_fastGet, _fastSet) = GetOrCompileStringAccessor(target.GetType(), chain);
             CaptureBaseline();
         }
 
         public void CaptureBaseline()
         {
             if (_target is EngineObject eo && eo.IsNotValid()) return;
+            if (_fastGet != null) { _baselineString = _fastGet(_target); return; }
             _baselineValue = _chain.GetLeafValue(_target);
         }
 
         public void RestoreBaseline()
         {
             if (_target is EngineObject eo && eo.IsNotValid()) return;
-            _chain.SetLeafValue(_target, _baselineValue);
-            NotifyTargetChanged(_target);
+            if (_fastSet != null) { _fastSet(_target, _baselineString ?? string.Empty); _notifier.Notify(); return; }
+            _chain.SetLeafValue(_target, _baselineValue, ref _scratchParents);
+            _notifier.Notify();
         }
 
         public void Apply(float time, bool hasSolo = false)
@@ -1621,8 +2388,296 @@ public sealed class SceneClipBinding
             if (_track.Muted || (hasSolo && !_track.Solo)) return;
             if (_target is EngineObject eo && eo.IsNotValid()) return;
             string sampled = _track.Evaluate(time);
-            _chain.SetLeafValue(_target, sampled);
-            NotifyTargetChanged(_target);
+            if (_fastSet != null)
+                _fastSet(_target, sampled);
+            else
+                _chain.SetLeafValue(_target, sampled, ref _scratchParents);
+            _notifier.Notify();
+        }
+    }
+
+    // ================================================================
+    //  Material Shader Uniform Tracks (Material.<Uniform>[.<Channel>])
+    // ================================================================
+
+    private static bool TryParseMaterialUniformPath(object target, string propertyPath, out Material? material, out string uniformName, out MaterialPropertyType propType, out SubChannelKind sub)
+    {
+        material = null;
+        uniformName = string.Empty;
+        propType = MaterialPropertyType.Float;
+        sub = SubChannelKind.None;
+
+        if (target is not IMaterialRenderer renderer || !propertyPath.StartsWith("Material.", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (renderer.MaterialSlotCount <= 0) return false;
+
+        material = renderer.GetMaterial(0);
+        if (material.IsNotValid()) return false;
+
+        string rest = propertyPath["Material.".Length..];
+        if (string.IsNullOrEmpty(rest)) return false;
+
+        int dot = rest.LastIndexOf('.');
+        if (dot > 0 && TryParseSubChannel(rest[(dot + 1)..], out SubChannelKind parsedSub))
+        {
+            uniformName = rest[..dot];
+            sub = parsedSub;
+        }
+        else
+        {
+            uniformName = rest;
+        }
+
+        Shader? shader = material!.Shader;
+        if (shader.IsValid())
+        {
+            if (shader!.State is not (AssetState.Missing or AssetState.Failed))
+                shader.Load();
+            if (shader.IsLoaded && shader.FindProperty(uniformName) is { } mp)
+            {
+                propType = mp.Type;
+                return propType is MaterialPropertyType.Float or MaterialPropertyType.Int or MaterialPropertyType.Color
+                    or MaterialPropertyType.Float2 or MaterialPropertyType.Float3 or MaterialPropertyType.Float4;
+            }
+        }
+
+        // Allow unbound/custom shader uniform names by inferring type from sub-channel
+        propType = sub switch
+        {
+            SubChannelKind.R or SubChannelKind.G or SubChannelKind.B or SubChannelKind.A => MaterialPropertyType.Color,
+            SubChannelKind.X or SubChannelKind.Y or SubChannelKind.Z or SubChannelKind.W => MaterialPropertyType.Float4,
+            _ => MaterialPropertyType.Float,
+        };
+        return true;
+    }
+
+    private static float ReadMaterialUniformChannel(Material mat, string uniformName, MaterialPropertyType propType, SubChannelKind sub)
+    {
+        switch (propType)
+        {
+            case MaterialPropertyType.Float: return mat.GetFloat(uniformName);
+            case MaterialPropertyType.Int: return mat.GetInt(uniformName);
+            case MaterialPropertyType.Color:
+            {
+                Color c = mat.GetColor(uniformName);
+                return sub switch
+                {
+                    SubChannelKind.G or SubChannelKind.Y => c.G,
+                    SubChannelKind.B or SubChannelKind.Z => c.B,
+                    SubChannelKind.A or SubChannelKind.W => c.A,
+                    _ => c.R,
+                };
+            }
+            case MaterialPropertyType.Float2:
+            case MaterialPropertyType.Float3:
+            case MaterialPropertyType.Float4:
+            {
+                Float4 v = mat.GetVector(uniformName);
+                return sub switch
+                {
+                    SubChannelKind.Y or SubChannelKind.G => v.Y,
+                    SubChannelKind.Z or SubChannelKind.B => v.Z,
+                    SubChannelKind.W or SubChannelKind.A => v.W,
+                    _ => v.X,
+                };
+            }
+            default: return 0f;
+        }
+    }
+
+    private static void WriteMaterialUniformChannel(Material mat, string uniformName, MaterialPropertyType propType, SubChannelKind sub, float val)
+    {
+        switch (propType)
+        {
+            case MaterialPropertyType.Float:
+                mat.SetFloat(uniformName, val);
+                break;
+            case MaterialPropertyType.Int:
+                mat.SetInt(uniformName, (int)MathF.Round(val));
+                break;
+            case MaterialPropertyType.Color:
+            {
+                Color c = mat.GetColor(uniformName);
+                switch (sub)
+                {
+                    case SubChannelKind.G or SubChannelKind.Y: c.G = val; break;
+                    case SubChannelKind.B or SubChannelKind.Z: c.B = val; break;
+                    case SubChannelKind.A or SubChannelKind.W: c.A = val; break;
+                    default: c.R = val; break;
+                }
+                mat.SetColor(uniformName, c);
+                break;
+            }
+            default:
+            {
+                Float4 v = mat.GetVector(uniformName);
+                switch (sub)
+                {
+                    case SubChannelKind.Y or SubChannelKind.G: v.Y = val; break;
+                    case SubChannelKind.Z or SubChannelKind.B: v.Z = val; break;
+                    case SubChannelKind.W or SubChannelKind.A: v.W = val; break;
+                    default: v.X = val; break;
+                }
+                if (propType == MaterialPropertyType.Float2) mat.SetVector(uniformName, new Float2(v.X, v.Y));
+                else if (propType == MaterialPropertyType.Float3) mat.SetVector(uniformName, new Float3(v.X, v.Y, v.Z));
+                else mat.SetVector(uniformName, v);
+                break;
+            }
+        }
+    }
+
+    private sealed class BoundMaterialPropertyGroup
+    {
+        private readonly IMaterialRenderer _renderer;
+        private readonly string _uniformName;
+        private readonly MaterialPropertyType _propType;
+        private readonly List<(SubChannelKind Sub, SceneCurveTrack Track)> _channels = [];
+        private TargetDirtyNotifier _notifier;
+        private float _baseFloat;
+        private int _baseInt;
+        private Color _baseColor = Color.White;
+        private Float4 _baseVec = Float4.Zero;
+
+        public BoundMaterialPropertyGroup(IMaterialRenderer renderer, string uniformName, MaterialPropertyType propType)
+        {
+            _renderer = renderer;
+            _uniformName = uniformName;
+            _propType = propType;
+            _notifier = new TargetDirtyNotifier(renderer);
+            CaptureBaseline();
+        }
+
+        public void AddChannel(SubChannelKind sub, SceneCurveTrack track)
+        {
+            for (int i = 0; i < _channels.Count; i++)
+            {
+                if (_channels[i].Sub == sub) { _channels[i] = (sub, track); return; }
+            }
+            _channels.Add((sub, track));
+        }
+
+        private Material? GetMaterial()
+        {
+            if (_renderer is EngineObject eo && eo.IsNotValid()) return null;
+            if (_renderer.MaterialSlotCount <= 0) return null;
+            Material? m = _renderer.GetMaterial(0);
+            return m.IsValid() ? m : null;
+        }
+
+        // Whether the material itself set this uniform before animation, so restoring can revert to the
+        // shader default / parent value instead of leaving a permanent override on the shared material asset.
+        private bool _hadOverride;
+
+        public void CaptureBaseline()
+        {
+            Material? mat = GetMaterial();
+            if (mat.IsNotValid()) return;
+            _hadOverride = mat!._overrides.Contains(_uniformName);
+            switch (_propType)
+            {
+                case MaterialPropertyType.Float: _baseFloat = mat!.GetFloat(_uniformName); break;
+                case MaterialPropertyType.Int: _baseInt = mat!.GetInt(_uniformName); break;
+                case MaterialPropertyType.Color: _baseColor = mat!.GetColor(_uniformName); break;
+                default: _baseVec = mat!.GetVector(_uniformName); break;
+            }
+        }
+
+        public void RestoreBaseline()
+        {
+            Material? mat = GetMaterial();
+            if (mat.IsNotValid()) return;
+            if (!_hadOverride)
+            {
+                mat!.RevertProperty(_uniformName);
+                _notifier.Notify();
+                return;
+            }
+            switch (_propType)
+            {
+                case MaterialPropertyType.Float: mat!.SetFloat(_uniformName, _baseFloat); break;
+                case MaterialPropertyType.Int: mat!.SetInt(_uniformName, _baseInt); break;
+                case MaterialPropertyType.Color: mat!.SetColor(_uniformName, _baseColor); break;
+                case MaterialPropertyType.Float2: mat!.SetVector(_uniformName, new Float2(_baseVec.X, _baseVec.Y)); break;
+                case MaterialPropertyType.Float3: mat!.SetVector(_uniformName, new Float3(_baseVec.X, _baseVec.Y, _baseVec.Z)); break;
+                default: mat!.SetVector(_uniformName, _baseVec); break;
+            }
+            _notifier.Notify();
+        }
+
+        public void Apply(float time, float weight, bool hasSolo)
+        {
+            Material? mat = GetMaterial();
+            if (mat.IsNotValid()) return;
+
+            bool anyActive = false;
+            for (int i = 0; i < _channels.Count; i++)
+                if (!_channels[i].Track.Muted && (!hasSolo || _channels[i].Track.Solo)) { anyActive = true; break; }
+            if (!anyActive) return;
+
+            switch (_propType)
+            {
+                case MaterialPropertyType.Float:
+                {
+                    SceneCurveTrack t = _channels[0].Track;
+                    float s = t.Curve.Evaluate(time);
+                    float cur = mat!.GetFloat(_uniformName);
+                    float val = t.BlendMode == SceneTrackBlendMode.Additive ? _baseFloat + s * weight : (weight >= 0.9999f ? s : cur + (s - cur) * weight);
+                    mat.SetFloat(_uniformName, val);
+                    break;
+                }
+                case MaterialPropertyType.Int:
+                {
+                    SceneCurveTrack t = _channels[0].Track;
+                    float s = t.Curve.Evaluate(time);
+                    int val = t.BlendMode == SceneTrackBlendMode.Additive ? _baseInt + (int)MathF.Round(s * weight) : (int)MathF.Round(s);
+                    mat!.SetInt(_uniformName, val);
+                    break;
+                }
+                case MaterialPropertyType.Color:
+                {
+                    Color c = mat!.GetColor(_uniformName);
+                    for (int i = 0; i < _channels.Count; i++)
+                    {
+                        (SubChannelKind sub, SceneCurveTrack t) = _channels[i];
+                        if (t.Muted || (hasSolo && !t.Solo)) continue;
+                        float s = t.Curve.Evaluate(time);
+                        bool add = t.BlendMode == SceneTrackBlendMode.Additive;
+                        switch (sub)
+                        {
+                            case SubChannelKind.G or SubChannelKind.Y: c.G = add ? _baseColor.G + s * weight : (weight >= 0.9999f ? s : c.G + (s - c.G) * weight); break;
+                            case SubChannelKind.B or SubChannelKind.Z: c.B = add ? _baseColor.B + s * weight : (weight >= 0.9999f ? s : c.B + (s - c.B) * weight); break;
+                            case SubChannelKind.A or SubChannelKind.W: c.A = add ? _baseColor.A + s * weight : (weight >= 0.9999f ? s : c.A + (s - c.A) * weight); break;
+                            default: c.R = add ? _baseColor.R + s * weight : (weight >= 0.9999f ? s : c.R + (s - c.R) * weight); break;
+                        }
+                    }
+                    mat.SetColor(_uniformName, c);
+                    break;
+                }
+                default:
+                {
+                    Float4 v = mat!.GetVector(_uniformName);
+                    for (int i = 0; i < _channels.Count; i++)
+                    {
+                        (SubChannelKind sub, SceneCurveTrack t) = _channels[i];
+                        if (t.Muted || (hasSolo && !t.Solo)) continue;
+                        float s = t.Curve.Evaluate(time);
+                        bool add = t.BlendMode == SceneTrackBlendMode.Additive;
+                        switch (sub)
+                        {
+                            case SubChannelKind.Y or SubChannelKind.G: v.Y = add ? _baseVec.Y + s * weight : (weight >= 0.9999f ? s : v.Y + (s - v.Y) * weight); break;
+                            case SubChannelKind.Z or SubChannelKind.B: v.Z = add ? _baseVec.Z + s * weight : (weight >= 0.9999f ? s : v.Z + (s - v.Z) * weight); break;
+                            case SubChannelKind.W or SubChannelKind.A: v.W = add ? _baseVec.W + s * weight : (weight >= 0.9999f ? s : v.W + (s - v.W) * weight); break;
+                            default: v.X = add ? _baseVec.X + s * weight : (weight >= 0.9999f ? s : v.X + (s - v.X) * weight); break;
+                        }
+                    }
+                    if (_propType == MaterialPropertyType.Float2) mat.SetVector(_uniformName, new Float2(v.X, v.Y));
+                    else if (_propType == MaterialPropertyType.Float3) mat.SetVector(_uniformName, new Float3(v.X, v.Y, v.Z));
+                    else mat.SetVector(_uniformName, v);
+                    break;
+                }
+            }
+
+            _notifier.Notify();
         }
     }
 }

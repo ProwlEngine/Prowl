@@ -725,9 +725,10 @@ public class InspectorPanel : DockPanel
             AssetImporterEditor? subEditor = parentEntry != null ? EditorRegistries.GetAssetEditor(asset.GetType()) : null;
             if (subEditor != null)
             {
-                Origami.BeginReadOnly();
+                bool readOnly = !Core.Undo.CanSave(asset);
+                if (readOnly) Origami.BeginReadOnly();
                 try { subEditor.OnGUI(paper, "insp_sub_editor", parentEntry!, asset); }
-                finally { Origami.EndReadOnly(); }
+                finally { if (readOnly) Origami.EndReadOnly(); }
             }
             else
             {

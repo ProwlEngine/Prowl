@@ -739,6 +739,8 @@ internal static class ClayBackedImporter
         clip.WrapMode = clip.Loop ? SceneClipWrapMode.Loop : SceneClipWrapMode.Once;
         clip.SourceName = sourceName;
         clip.TakeStart = start;
+        if (overrides.PropertyEvents is { Count: > 0 } propOnTake)
+            clip.PropertyEvents.AddRange(ModelRigBuilder.PlacePropertyEvents(propOnTake, start, end));
         return clip;
     }
 
@@ -759,6 +761,8 @@ internal static class ClayBackedImporter
         clip.WrapMode = clip.Loop ? SceneClipWrapMode.Loop : SceneClipWrapMode.Once;
         clip.SourceName = sourceName;
         clip.TakeStart = start;
+        if (overrides.PropertyEvents is { Count: > 0 } propOnTake)
+            clip.PropertyEvents.AddRange(ModelRigBuilder.PlacePropertyEvents(propOnTake, start, end));
         return clip;
     }
 }

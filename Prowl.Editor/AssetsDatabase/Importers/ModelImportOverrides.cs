@@ -32,6 +32,7 @@ public static class ModelImportKeys
     public const string ClipRootTurn = "rootTurn";
     public const string ClipRootHeight = "rootHeight";
     public const string ClipEvents = "events";
+    public const string ClipPropertyEvents = "propertyEvents";
 }
 
 /// <summary>
@@ -84,6 +85,7 @@ public static class ModelImportOverrides
                 RootTurn = value.TryGet(ModelImportKeys.ClipRootTurn, out EchoObject rr) ? rr.BoolValue : null,
                 RootHeight = value.TryGet(ModelImportKeys.ClipRootHeight, out EchoObject rh) ? rh.BoolValue : null,
                 Events = ReadEvents(value) is { Count: > 0 } events ? events : null,
+                PropertyEvents = ReadPropertyEvents(value) is { Count: > 0 } propEvents ? propEvents : null,
             };
         }
         return result;
@@ -143,6 +145,94 @@ public static class ModelImportOverrides
             list.ListAdd(entry);
         }
         ClipBlock(settings, clipName)[ModelImportKeys.ClipEvents] = list;
+    }
+
+    /// <summary>Reads component method events (<see cref="SceneAnimationEvent"/>) timed in seconds of the take.</summary>
+    public static List<SceneAnimationEvent> ReadPropertyEvents(EchoObject? clipBlock)
+    {
+        var events = new List<SceneAnimationEvent>();
+        if (clipBlock == null || !clipBlock.TryGet(ModelImportKeys.ClipPropertyEvents, out EchoObject list) || list.TagType != EchoType.List)
+            return events;
+
+        foreach (EchoObject entry in list.List)
+        {
+            float time = entry.TryGet("time", out EchoObject t) ? t.FloatValue : 0f;
+            float endTime = entry.TryGet("endTime", out EchoObject et) ? et.FloatValue : time;
+            ProwlActionArgType argType = entry.TryGet("argType", out EchoObject at) && Enum.TryParse(at.StringValue, out ProwlActionArgType parsedArg)
+                ? parsedArg
+                : ProwlActionArgType.None;
+
+            EngineObject? objParam = null;
+            if (entry.TryGet("objectGuid", out EchoObject og) && Guid.TryParse(og.StringValue, out Guid guid) && guid != Guid.Empty)
+                objParam = AssetDatabase.Get(guid);
+
+            events.Add(new SceneAnimationEvent
+            {
+                Time = time,
+                EndTime = MathF.Max(time, endTime),
+                RelativePath = entry.TryGet("path", out EchoObject p) ? p.StringValue ?? string.Empty : string.Empty,
+                FunctionName = entry.TryGet("func", out EchoObject fn) ? fn.StringValue ?? string.Empty : string.Empty,
+                StayFunctionName = entry.TryGet("stayFunc", out EchoObject sf) ? sf.StringValue ?? string.Empty : string.Empty,
+                ExitFunctionName = entry.TryGet("exitFunc", out EchoObject ef) ? ef.StringValue ?? string.Empty : string.Empty,
+                ArgType = argType,
+                FloatParam = entry.TryGet("float", out EchoObject fp) ? fp.FloatValue : 0f,
+                IntParam = entry.TryGet("int", out EchoObject ip) ? ip.IntValue : 0,
+                BoolParam = entry.TryGet("bool", out EchoObject bp) && bp.BoolValue,
+                StringParam = entry.TryGet("string", out EchoObject sp) ? sp.StringValue ?? string.Empty : string.Empty,
+                ObjectParam = objParam,
+            });
+        }
+        return events;
+    }
+
+    public static void WritePropertyEvents(EchoObject settings, string clipName, IReadOnlyList<SceneAnimationEvent> events)
+    {
+        EchoObject block = ClipBlock(settings, clipName);
+        if (events.Count == 0)
+        {
+            block.Remove(ModelImportKeys.ClipPropertyEvents);
+            return;
+        }
+
+        EchoObject list = EchoObject.NewList();
+        foreach (SceneAnimationEvent e in events)
+        {
+            EchoObject entry = EchoObject.NewCompound();
+            entry["time"] = new EchoObject(e.Time);
+            if (e.IsRange)
+                entry["endTime"] = new EchoObject(e.EndTime);
+            if (!string.IsNullOrEmpty(e.RelativePath))
+                entry["path"] = new EchoObject(e.RelativePath);
+            entry["func"] = new EchoObject(e.FunctionName);
+            if (!string.IsNullOrEmpty(e.StayFunctionName))
+                entry["stayFunc"] = new EchoObject(e.StayFunctionName);
+            if (!string.IsNullOrEmpty(e.ExitFunctionName))
+                entry["exitFunc"] = new EchoObject(e.ExitFunctionName);
+            entry["argType"] = new EchoObject(e.ArgType.ToString());
+
+            switch (e.ArgType)
+            {
+                case ProwlActionArgType.Float:
+                    entry["float"] = new EchoObject(e.FloatParam);
+                    break;
+                case ProwlActionArgType.Int:
+                    entry["int"] = new EchoObject(e.IntParam);
+                    break;
+                case ProwlActionArgType.Bool:
+                    entry["bool"] = new EchoObject(e.BoolParam);
+                    break;
+                case ProwlActionArgType.String:
+                    entry["string"] = new EchoObject(e.StringParam);
+                    break;
+                case ProwlActionArgType.Object:
+                    if (e.ObjectParam is Asset assetParam && assetParam.IsValid() && assetParam.AssetID != Guid.Empty)
+                        entry["objectGuid"] = new EchoObject(assetParam.AssetID.ToString());
+                    break;
+            }
+
+            list.ListAdd(entry);
+        }
+        block[ModelImportKeys.ClipPropertyEvents] = list;
     }
 
     public static EchoObject? ReadClipBlock(EchoObject settings, string clipName)

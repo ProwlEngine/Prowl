@@ -322,6 +322,39 @@ internal static class ModelRigBuilder
     }
 
     /// <summary>
+    /// Moves component method events (<see cref="SceneAnimationEvent"/>) timed on the take onto a trimmed clip slice:
+    /// shifted by <paramref name="start"/>, clamped to <paramref name="end"/> for ranged windows, and dropped when outside the slice.
+    /// </summary>
+    public static List<SceneAnimationEvent> PlacePropertyEvents(IReadOnlyList<SceneAnimationEvent> onTake, float start, float end)
+    {
+        var placed = new List<SceneAnimationEvent>(onTake.Count);
+        foreach (SceneAnimationEvent e in onTake)
+        {
+            if (e.IsRange)
+            {
+                float from = Math.Max(e.Time, start);
+                float to = Math.Min(e.EndTime, end);
+                if (from > end || to < start || to <= from + 1e-5f) continue;
+
+                SceneAnimationEvent copy = e.Clone();
+                copy.Time = MathF.Max(0f, from - start);
+                copy.EndTime = MathF.Max(copy.Time + 1e-4f, to - start);
+                placed.Add(copy);
+            }
+            else
+            {
+                if (e.Time < start - 1e-5f || e.Time > end + 1e-5f) continue;
+
+                SceneAnimationEvent copy = e.Clone();
+                copy.Time = Math.Clamp(e.Time - start, 0f, MathF.Max(0f, end - start));
+                copy.EndTime = copy.Time;
+                placed.Add(copy);
+            }
+        }
+        return placed;
+    }
+
+    /// <summary>
     /// The bone a clip moves the character by when nothing says otherwise: the highest one in the
     /// hierarchy whose position the clip moves, which is the hips on most rigs. A file that keys every
     /// bone keys the ones that stand still too, so a track that never moves counts only when none do.

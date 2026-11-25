@@ -389,6 +389,17 @@ public sealed class AnimationClip : Asset, ISerializable
     /// <summary>Whether animated properties keep their final evaluated state or revert to their pre-animated baseline when playback stops or finishes.</summary>
     public SceneClipCompletionMode CompletionMode = SceneClipCompletionMode.KeepState;
 
+    /// <summary>
+    /// Effective wrap mode reconciling both <see cref="WrapMode"/> and <see cref="Loop"/>
+    /// so code that sets either property observes consistent playback behavior.
+    /// </summary>
+    public SceneClipWrapMode EffectiveWrapMode
+        => !Loop && WrapMode == SceneClipWrapMode.Loop ? SceneClipWrapMode.Once : WrapMode;
+
+    /// <summary>True when <see cref="EffectiveWrapMode"/> repeats continuously (<see cref="SceneClipWrapMode.Loop"/> or <see cref="SceneClipWrapMode.PingPong"/>).</summary>
+    public bool EffectiveLoop
+        => EffectiveWrapMode is SceneClipWrapMode.Loop or SceneClipWrapMode.PingPong;
+
     /// <summary>True when at least one track on this clip has its Solo flag enabled.</summary>
     public bool HasSoloTrack
     {
@@ -698,7 +709,7 @@ public sealed class AnimationClip : Asset, ISerializable
         return track;
     }
 
-    /// <summary>Adds or updates a keyframe on the curve track matching the target and property path.</summary>
+    /// <summary>Adds or updates a keyframe on the curve track matching the target and property path, preserving custom tangents on existing keys.</summary>
     public SceneCurveTrack SetCurveKey(string relativePath, string componentType, string propertyPath, float time, float value, float tolerance = 0.0005f)
     {
         SceneCurveTrack track = GetOrCreateCurveTrack(relativePath, componentType, propertyPath);
@@ -713,10 +724,42 @@ public sealed class AnimationClip : Asset, ISerializable
                 return track;
             }
         }
-        curve.AddKey(new Keyframe(time, value));
-        curve.SmoothTangents(CurveTangentMode.Auto);
+
+        int inserted = curve.AddKey(new Keyframe(time, value));
+        AutoSmoothSingleKey(curve, inserted);
         Invalidate();
         return track;
+    }
+
+    /// <summary>Computes a smooth Catmull-Rom/secant tangent for a single keyframe index without overwriting tangents on neighboring keys.</summary>
+    public static void AutoSmoothSingleKey(AnimationCurve curve, int index)
+    {
+        if (index < 0 || index >= curve.Count || curve.Count < 2) return;
+        Keyframe cur = curve[index];
+        if (cur.Interpolation == CurveInterpolation.Step) return;
+
+        float slope;
+        if (index > 0 && index < curve.Count - 1)
+        {
+            Keyframe prev = curve[index - 1];
+            Keyframe next = curve[index + 1];
+            float dt = next.Time - prev.Time;
+            slope = dt > 1e-6f ? (next.Value - prev.Value) / dt : 0f;
+        }
+        else if (index > 0)
+        {
+            Keyframe prev = curve[index - 1];
+            float dt = cur.Time - prev.Time;
+            slope = dt > 1e-6f ? (cur.Value - prev.Value) / dt : 0f;
+        }
+        else
+        {
+            Keyframe next = curve[index + 1];
+            float dt = next.Time - cur.Time;
+            slope = dt > 1e-6f ? (next.Value - cur.Value) / dt : 0f;
+        }
+
+        curve.MoveKey(index, new Keyframe(cur.Time, cur.Value, slope, slope, cur.Interpolation));
     }
 
     /// <summary>Finds an existing object reference track for the given target and property path, or null.</summary>
@@ -820,13 +863,13 @@ public sealed class AnimationClip : Asset, ISerializable
         return true;
     }
 
-    /// <summary>Maps an elapsed playback time to the clip's local evaluation time according to <see cref="WrapMode"/>.</summary>
+    /// <summary>Maps an elapsed playback time to the clip's local evaluation time according to <see cref="EffectiveWrapMode"/>.</summary>
     public float WrapTime(float time)
     {
         float duration = Duration;
         if (duration <= 1e-6f) return 0f;
 
-        switch (WrapMode)
+        switch (EffectiveWrapMode)
         {
             case SceneClipWrapMode.Once:
             case SceneClipWrapMode.ClampForever:
@@ -1032,6 +1075,90 @@ public sealed class AnimationClip : Asset, ISerializable
         return string.Join('/', stack);
     }
 
+    /// <summary>
+    /// Simplifies every curve track in this clip by removing redundant interior keyframes whose removal keeps the
+    /// curve within <paramref name="tolerance"/> of its original value. Ideal for cleaning up dense curves after
+    /// <see cref="UnpackMotionToCurveTracks"/>. Returns the total number of keyframes removed.
+    /// </summary>
+    public int ReduceKeyframes(float tolerance = 0.005f)
+    {
+        EnsureLoaded();
+        tolerance = MathF.Max(1e-6f, tolerance);
+        int removedTotal = 0;
+
+        for (int i = 0; i < CurveTracks.Count; i++)
+        {
+            AnimationCurve curve = CurveTracks[i].Curve;
+            if (curve.Count <= 2) continue;
+
+            // Step (constant) curves encode discrete changes (toggles, enums); linear simplification would corrupt them.
+            bool hasStep = false;
+            for (int k = 0; k < curve.Count; k++)
+                if (curve[k].Interpolation == CurveInterpolation.Step) { hasStep = true; break; }
+            if (hasStep) continue;
+
+            // Snapshot original curve samples to measure error accurately
+            var original = new Keyframe[curve.Count];
+            for (int k = 0; k < original.Length; k++)
+                original[k] = curve[k];
+
+            bool[] keep = new bool[original.Length];
+            keep[0] = true;
+            keep[^1] = true;
+            ReduceSegmentRdp(original, 0, original.Length - 1, tolerance, keep);
+
+            int keptCount = 0;
+            for (int k = 0; k < keep.Length; k++)
+                if (keep[k]) keptCount++;
+
+            if (keptCount < original.Length)
+            {
+                curve.Clear();
+                for (int k = 0; k < original.Length; k++)
+                    if (keep[k]) curve.AddKey(original[k]);
+                curve.SmoothTangents(CurveTangentMode.Auto);
+                removedTotal += original.Length - keptCount;
+            }
+        }
+
+        if (removedTotal > 0)
+            Invalidate();
+
+        return removedTotal;
+    }
+
+    private static void ReduceSegmentRdp(Keyframe[] keys, int start, int end, float tolerance, bool[] keep)
+    {
+        if (end <= start + 1) return;
+
+        float t0 = keys[start].Time;
+        float v0 = keys[start].Value;
+        float t1 = keys[end].Time;
+        float v1 = keys[end].Value;
+        float span = MathF.Max(1e-6f, t1 - t0);
+
+        int maxIdx = -1;
+        float maxErr = 0f;
+        for (int i = start + 1; i < end; i++)
+        {
+            float alpha = (keys[i].Time - t0) / span;
+            float interp = v0 + (v1 - v0) * alpha;
+            float err = MathF.Abs(keys[i].Value - interp);
+            if (err > maxErr)
+            {
+                maxErr = err;
+                maxIdx = i;
+            }
+        }
+
+        if (maxIdx > start && maxErr > tolerance)
+        {
+            keep[maxIdx] = true;
+            ReduceSegmentRdp(keys, start, maxIdx, tolerance, keep);
+            ReduceSegmentRdp(keys, maxIdx, end, tolerance, keep);
+        }
+    }
+
     /// <summary>Creates a standalone copy of this <see cref="AnimationClip"/>, optionally unpacking skeletal motion into editable curves.</summary>
     public AnimationClip Duplicate(GameObject? targetRoot = null, bool unpackMotion = false)
     {
@@ -1084,7 +1211,8 @@ public sealed class AnimationClip : Asset, ISerializable
         _syntheticMotion = null;
     }
 
-    protected internal override long EstimateBytes() => (_payload?.Length ?? 0) * 3L + CurveTracks.Count * 128L;
+    protected internal override long EstimateBytes()
+        => (_payload?.Length ?? 0) * 3L + (CurveTracks.Count + ObjectTracks.Count + StringTracks.Count + PropertyEvents.Count) * 128L;
 
     public void Serialize(ref EchoObject value, SerializationContext ctx)
     {

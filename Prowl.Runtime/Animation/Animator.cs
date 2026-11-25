@@ -17,6 +17,45 @@ using MotionSkeleton = Prowl.Motion.Skeleton;
 
 namespace Prowl.Runtime;
 
+/// <summary>When and with which clock an <see cref="Animator"/> advances its playback.</summary>
+public enum AnimatorUpdateMode
+{
+    /// <summary>Advances every frame using scaled <see cref="Time.DeltaTime"/>.</summary>
+    Normal = 0,
+    /// <summary>Advances in FixedUpdate before physics using <see cref="Time.FixedDeltaTime"/> (ideal for moving platforms and kinematic bodies).</summary>
+    AnimatePhysics = 1,
+    /// <summary>Advances every frame using <see cref="Time.UnscaledDeltaTime"/> (keeps animating when <see cref="Time.TimeScale"/> is 0, ideal for pause/UI).</summary>
+    UnscaledTime = 2,
+}
+
+/// <summary>Controls whether an <see cref="Animator"/> continues evaluating when its renderers are culled or disabled.</summary>
+public enum AnimatorCullingMode
+{
+    /// <summary>Always evaluates animation every tick regardless of visibility.</summary>
+    AlwaysAnimate = 0,
+    /// <summary>Skips evaluation when no attached renderer is enabled.</summary>
+    CullCompletely = 1,
+}
+
+/// <summary>
+/// Maps a named slot (referenced in <see cref="AnimationClip"/> tracks via <c>"@SlotName"</c> or <c>"@SlotName/ChildPath"</c>)
+/// to a specific <see cref="GameObject"/> in the scene (Timeline / Sequencer style).
+/// </summary>
+[Serializable]
+public sealed class AnimatorObjectBinding
+{
+    public string SlotName = string.Empty;
+    public GameObject? Target;
+
+    public AnimatorObjectBinding() { }
+
+    public AnimatorObjectBinding(string slotName, GameObject? target)
+    {
+        SlotName = slotName ?? string.Empty;
+        Target = target;
+    }
+}
+
 /// <summary>Plays clips with cross fades, or an animation graph, on a rig. Runs between Update and LateUpdate.</summary>
 [AddComponentMenu("Animation/Animator")]
 [ComponentIcon("")] // Film
@@ -31,9 +70,21 @@ public class Animator : Component
     /// <summary>Clips this animator can play by name, and the first of which it plays on enable.</summary>
     public List<AnimationClip> Clips = [];
 
+    /// <summary>
+    /// Optional scene object bindings allowing tracks with <c>"@SlotName"</c> paths to drive external
+    /// <see cref="GameObject"/>s outside this Animator's child hierarchy.
+    /// </summary>
+    public List<AnimatorObjectBinding> ObjectBindings = [];
+
     public bool PlayAutomatically = true;
 
     public float Speed = 1f;
+
+    /// <summary>Which update loop and clock drives this animator (<see cref="AnimatorUpdateMode.Normal"/>, <see cref="AnimatorUpdateMode.AnimatePhysics"/>, or <see cref="AnimatorUpdateMode.UnscaledTime"/>).</summary>
+    public AnimatorUpdateMode UpdateMode = AnimatorUpdateMode.Normal;
+
+    /// <summary>Whether evaluation runs unconditionally or skips when renderers are inactive.</summary>
+    public AnimatorCullingMode CullingMode = AnimatorCullingMode.AlwaysAnimate;
 
     /// <summary>Move the GameObject by the root motion the animation describes.</summary>
     public bool ApplyRootMotion;
@@ -74,6 +125,9 @@ public class Animator : Component
 
     [NonSerialized] private readonly Dictionary<AnimationClip, CachedPropertyBinding> _propertyBindings = new(ReferenceEqualityComparer.Instance);
     [NonSerialized] private readonly Dictionary<int, int> _graphNodeLastLoopCount = [];
+    [NonSerialized] private readonly HashSet<int> _activeGraphClipNodes = [];
+    [NonSerialized] private Motion.AnimationGraph? _cachedGraphParentsFor;
+    [NonSerialized] private Dictionary<int, int>? _cachedGraphParents;
     [NonSerialized] private float _propertyElapsedTime;
     [NonSerialized] private float _propertyClipTime;
     [NonSerialized] private bool _propertyPlaying;
@@ -149,6 +203,9 @@ public class Animator : Component
         _fallbackSkeleton = null;
         _propertyBindings.Clear();
         _graphNodeLastLoopCount.Clear();
+        _activeGraphClipNodes.Clear();
+        _cachedGraphParentsFor = null;
+        _cachedGraphParents = null;
         _ragdoll?.Release();
         _ragdoll = null;
     }
@@ -340,14 +397,20 @@ public class Animator : Component
         if (_graph != null)
             Debug.LogWarningOnce($"Animator.PlayWithGraph.{GameObject.Name}",
                 $"[Animator] '{GameObject.Name}' runs a graph, so Play only takes effect if the graph is removed.");
+        bool restartingSameActiveClip = ReferenceEquals(CurrentClip, clip) && _propertyPlaying;
         if (CurrentClip.IsValid() && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
         {
             prevBinding.Binding.ResetActiveEvents(fireExitCallbacks: true);
-            if (!ReferenceEquals(CurrentClip, clip) && CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
+            if ((!ReferenceEquals(CurrentClip, clip) || restartingSameActiveClip) && CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
                 prevBinding.Binding.RestoreBaseline();
         }
         if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? nextBinding))
-            nextBinding.Binding.CaptureBaseline();
+        {
+            // When restarting the same active KeepState clip mid-playback, preserve its initial baseline rather than
+            // capturing mid-animation values (which would corrupt Additive tracks).
+            if (!restartingSameActiveClip || clip.CompletionMode == SceneClipCompletionMode.RestoreState)
+                nextBinding.Binding.CaptureBaseline();
+        }
         CurrentClip = clip;
         _pending = clip;
         _autoPlayPending = false;
@@ -357,7 +420,7 @@ public class Animator : Component
         _propertyPaused = false;
         if (_clips != null && Resolve(clip) is { } runtime)
         {
-            _clips.Play(runtime, clip.Loop);
+            _clips.Play(runtime, clip.EffectiveLoop);
             _pending = null;
         }
     }
@@ -408,6 +471,38 @@ public class Animator : Component
         ArgumentNullException.ThrowIfNull(clip);
         if (!Clips.Contains(clip))
             Clips.Add(clip);
+    }
+
+    /// <summary>Binds a named external object slot (referenced by <c>"@SlotName"</c> tracks) to a scene <see cref="GameObject"/>.</summary>
+    public void SetObjectBinding(string slotName, GameObject? target)
+    {
+        AssertOwner();
+        if (string.IsNullOrWhiteSpace(slotName)) return;
+        string clean = slotName.Trim().TrimStart('@');
+        for (int i = 0; i < ObjectBindings.Count; i++)
+        {
+            if (ObjectBindings[i].SlotName.Equals(clean, StringComparison.OrdinalIgnoreCase))
+            {
+                ObjectBindings[i].Target = target;
+                _propertyBindings.Clear();
+                return;
+            }
+        }
+        ObjectBindings.Add(new AnimatorObjectBinding(clean, target));
+        _propertyBindings.Clear();
+    }
+
+    /// <summary>Returns the scene <see cref="GameObject"/> bound to <paramref name="slotName"/>, or null if unbound.</summary>
+    public GameObject? GetObjectBinding(string slotName)
+    {
+        if (string.IsNullOrWhiteSpace(slotName)) return null;
+        string clean = slotName.Trim().TrimStart('@');
+        for (int i = 0; i < ObjectBindings.Count; i++)
+        {
+            if (ObjectBindings[i].SlotName.Equals(clean, StringComparison.OrdinalIgnoreCase))
+                return ObjectBindings[i].Target.IsValid() ? ObjectBindings[i].Target : null;
+        }
+        return null;
     }
 
     /// <summary>Samples a specific <see cref="AnimationClip"/> at <paramref name="timeSeconds"/> (both skeletal pose and property tracks) onto the hierarchy immediately.</summary>
@@ -463,14 +558,18 @@ public class Animator : Component
         ArgumentNullException.ThrowIfNull(clip);
         if (_clips == null || Resolve(clip) is not { } runtime) { Play(clip); return; }
 
-        if (CurrentClip.IsValid() && !ReferenceEquals(CurrentClip, clip) && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
+        bool restartingSameActiveClip = ReferenceEquals(CurrentClip, clip) && _propertyPlaying;
+        if (CurrentClip.IsValid() && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
         {
             prevBinding.Binding.ResetActiveEvents(fireExitCallbacks: true);
-            if (CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
+            if ((!ReferenceEquals(CurrentClip, clip) || restartingSameActiveClip) && CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
                 prevBinding.Binding.RestoreBaseline();
         }
         if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? nextBinding))
-            nextBinding.Binding.CaptureBaseline();
+        {
+            if (!restartingSameActiveClip || clip.CompletionMode == SceneClipCompletionMode.RestoreState)
+                nextBinding.Binding.CaptureBaseline();
+        }
 
         CurrentClip = clip;
         _autoPlayPending = false;
@@ -478,7 +577,7 @@ public class Animator : Component
         _propertyClipTime = _propertyElapsedTime;
         _propertyPlaying = true;
         _propertyPaused = false;
-        _clips.CrossFade(runtime, seconds, clip.Loop);
+        _clips.CrossFade(runtime, seconds, clip.EffectiveLoop);
     }
 
     /// <summary>Advances the animation and pushes the pose and property tracks onto the hierarchy.</summary>
@@ -648,7 +747,7 @@ public class Animator : Component
         }
         if (Resolve(_pending!) is not { } runtime) return;
 
-        _clips!.Play(runtime, _pending!.Loop);
+        _clips!.Play(runtime, _pending!.EffectiveLoop);
         _pending = null;
     }
 
@@ -656,8 +755,15 @@ public class Animator : Component
 
     private SceneClipBinding GetOrCreatePropertyBinding(AnimationClip clip)
     {
-        if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? cached) && cached.Version == clip.Version)
-            return cached.Binding;
+        if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? cached))
+        {
+            if (cached.Version == clip.Version)
+                return cached.Binding;
+
+            cached.Binding.ResetActiveEvents(fireExitCallbacks: false);
+            if (_propertyPlaying || _graph != null)
+                cached.Binding.RestoreBaseline();
+        }
 
         var binding = new SceneClipBinding(GameObject, clip);
         _propertyBindings[clip] = new CachedPropertyBinding { Binding = binding, Version = clip.Version };
@@ -690,9 +796,7 @@ public class Animator : Component
         bool looped = false;
         bool finishedOnce = false;
 
-        SceneClipWrapMode wrap = clip.WrapMode;
-        if (!clip.Loop && wrap == SceneClipWrapMode.Loop)
-            wrap = SceneClipWrapMode.Once;
+        SceneClipWrapMode wrap = clip.EffectiveWrapMode;
 
         switch (wrap)
         {
@@ -764,24 +868,28 @@ public class Animator : Component
         if (!asset!.TryGetCompiledClips(instance.Graph, out IReadOnlyList<(int NodeIndex, AnimationClip Clip)> clips) || clips.Count == 0)
             return;
 
+        Dictionary<int, int>? parentNodes = GetOrBuildGraphParentMap(asset, instance.Graph);
+
         for (int i = 0; i < clips.Count; i++)
         {
             (int nodeIndex, AnimationClip clip) = clips[i];
             if (clip.IsNotValid() || !clip.HasPropertyTracks) continue;
             if (instance.TryGetNodeInstance(nodeIndex) is not PoseNodeInstance poseNode || !poseNode.IsInitialized)
             {
-                if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? inactive) && inactive.Binding.HasActiveRangedEvents)
-                    inactive.Binding.ResetActiveEvents(fireExitCallbacks: true);
+                DeactivateGraphClipNode(nodeIndex, clip);
                 continue;
             }
 
-            float weight = ComputeGraphNodeWeight(instance, nodeIndex);
+            float weight = ComputeGraphNodeWeight(instance, parentNodes, nodeIndex);
             if (weight <= 1e-5f)
             {
-                if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? zeroWeight) && zeroWeight.Binding.HasActiveRangedEvents)
-                    zeroWeight.Binding.ResetActiveEvents(fireExitCallbacks: true);
+                DeactivateGraphClipNode(nodeIndex, clip);
                 continue;
             }
+
+            SceneClipBinding propBinding = GetOrCreatePropertyBinding(clip);
+            if (_activeGraphClipNodes.Add(nodeIndex))
+                propBinding.CaptureBaseline();
 
             float duration = clip.Duration;
             float currTime = poseNode.NormalizedTime * duration;
@@ -792,7 +900,6 @@ public class Animator : Component
             bool looped = poseNode.LoopCount != prevLoops || (forward ? currTime < prevTime - 1e-5f : currTime > prevTime + 1e-5f);
             _graphNodeLastLoopCount[nodeIndex] = poseNode.LoopCount;
 
-            SceneClipBinding propBinding = GetOrCreatePropertyBinding(clip);
             propBinding.SampleWeighted(currTime, weight);
 
             if (weight >= 0.5f)
@@ -807,21 +914,72 @@ public class Animator : Component
         }
     }
 
-    private static float ComputeGraphNodeWeight(AnimationGraphInstance instance, int targetNodeIndex)
+    private void DeactivateGraphClipNode(int nodeIndex, AnimationClip clip)
     {
-        // Check if any active IBlendWeights parent node weights this node
-        Motion.AnimationGraph graph = instance.Graph;
-        for (int i = 0; i < graph.NodeCount; i++)
+        bool wasActive = _activeGraphClipNodes.Remove(nodeIndex);
+        if (!_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? cached)) return;
+        if (cached.Binding.HasActiveRangedEvents)
+            cached.Binding.ResetActiveEvents(fireExitCallbacks: true);
+        if (wasActive && clip.CompletionMode == SceneClipCompletionMode.RestoreState)
+            cached.Binding.RestoreBaseline();
+    }
+
+    private Dictionary<int, int>? GetOrBuildGraphParentMap(AnimationGraph asset, Motion.AnimationGraph running)
+    {
+        if (ReferenceEquals(_cachedGraphParentsFor, running) && _cachedGraphParents != null)
+            return _cachedGraphParents;
+
+        if (!asset.TryGetCompiledMaps(running, out IReadOnlyDictionary<string, int>? nodes, out _))
+            return null;
+
+        var map = new Dictionary<int, int>();
+        for (int i = 0; i < asset.Nodes.Count; i++)
         {
-            if (i == targetNodeIndex) continue;
-            GraphNodeInstance? candidate = instance.TryGetNodeInstance(i);
-            if (candidate is IBlendWeights blend && candidate.IsInitialized)
+            GraphNodeRecord rec = asset.Nodes[i];
+            if (!nodes.TryGetValue(rec.Id, out int parentIdx) || parentIdx < 0) continue;
+
+            for (int j = 0; j < rec.Inputs.Count; j++)
             {
-                float w = blend.WeightOf(targetNodeIndex);
-                if (w > 0f) return w;
+                string childId = rec.Inputs[j].Node;
+                if (childId.Length > 0 && nodes.TryGetValue(childId, out int childIdx) && childIdx >= 0 && childIdx != parentIdx && !map.ContainsKey(childIdx))
+                    map[childIdx] = parentIdx;
+            }
+
+            for (int j = 0; j < rec.States.Count; j++)
+            {
+                GraphStateRecord state = rec.States[j];
+                if (state.IsAny || state.UsesAsset) continue;
+                GraphNodeRecord? outRec = asset.OwnedNode(state.Id, AnimationNodeIds.StateOutput);
+                if (outRec != null && nodes.TryGetValue(outRec.Id, out int outIdx) && outIdx >= 0 && outIdx != parentIdx && !map.ContainsKey(outIdx))
+                    map[outIdx] = parentIdx;
             }
         }
-        return 1f;
+
+        _cachedGraphParentsFor = running;
+        _cachedGraphParents = map;
+        return map;
+    }
+
+    private static float ComputeGraphNodeWeight(AnimationGraphInstance instance, IReadOnlyDictionary<int, int>? parentNodes, int targetNodeIndex)
+    {
+        float weight = 1f;
+        int cur = targetNodeIndex;
+        int hops = 0;
+        while (parentNodes != null && parentNodes.TryGetValue(cur, out int parent) && parent >= 0 && hops++ < 64)
+        {
+            GraphNodeInstance? parentInst = instance.TryGetNodeInstance(parent);
+            if (parentInst == null || !parentInst.IsInitialized)
+                return 0f;
+
+            if (parentInst is IBlendWeights blend)
+            {
+                weight *= blend.WeightOf(cur);
+                if (weight <= 1e-5f)
+                    return 0f;
+            }
+            cur = parent;
+        }
+        return weight;
     }
 
     // An edit is picked up once it stops changing, since rebinding restarts every state machine.
