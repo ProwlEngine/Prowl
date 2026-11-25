@@ -227,7 +227,13 @@ internal sealed class DrawPrograms
     private List<ushort> _held = new(), _releasing = new();
     private readonly Dictionary<ushort, int> _prepassed = new();
 
-    public DrawPrograms() => Freed += _ => _prepassed.Clear();
+    private readonly Dictionary<ushort, (bool Draws, bool Cutout)> _earlyDepth = new();
+
+    public DrawPrograms() => Freed += _ =>
+    {
+        _prepassed.Clear();
+        _earlyDepth.Clear();
+    };
 
     public DrawProgram this[ushort id] => _programs[id];
 
@@ -361,13 +367,35 @@ internal sealed class DrawPrograms
         return true;
     }
 
-    /// <summary>Whether a deferred view's prepass draws the surface of a program of a shader with a GBuffer pass.</summary>
+    /// <summary>
+    /// Whether a deferred view's prepass draws the surface of a program of a shader with a GBuffer pass. False for a
+    /// surface whose GBuffer pass keeps its own depth state: not writing depth, or already testing equal.
+    /// </summary>
     public bool EarlyDepthDraws(ushort id, EarlyDepth mode)
     {
-        DrawProgram program = _programs[id];
-        if (mode == EarlyDepth.None || program.Shader.PassIndex(PassType.Prepass) < 0)
+        if (mode == EarlyDepth.None)
             return false;
-        return mode == EarlyDepth.All || Array.Exists(program.Keywords, static keyword => keyword.Name == "_SURFACE" && keyword.Value == "CUTOUT");
+        if (!_earlyDepth.TryGetValue(id, out (bool Draws, bool Cutout) found))
+        {
+            found = EarlyDepthOf(id);
+            _earlyDepth[id] = found;
+        }
+        return found.Draws && (mode == EarlyDepth.All || found.Cutout);
+    }
+
+    private (bool Draws, bool Cutout) EarlyDepthOf(ushort id)
+    {
+        DrawProgram program = _programs[id];
+        Shader shader = program.Shader;
+        int gbuffer = shader.PassIndex(PassType.GBuffer);
+        if (gbuffer < 0 || shader.PassIndex(PassType.Prepass) < 0)
+            return (false, false);
+        PassState state = shader.Definition.Passes![gbuffer].State;
+        if (program.StateOverride is { } over)
+            state = over.Apply(state);
+        DepthStencilStateDescription depth = state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
+        bool draws = depth.DepthWriteEnabled && depth.DepthComparison != ComparisonKind.Equal;
+        return (draws, Array.Exists(program.Keywords, static keyword => keyword.Name == "_SURFACE" && keyword.Value == "CUTOUT"));
     }
 
     private int Prepassed(ushort id)

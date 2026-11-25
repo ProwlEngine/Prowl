@@ -529,6 +529,9 @@ public sealed class Shader
     private readonly (string Axis, string[] Values)?[] _readsWhen;
     private readonly HashSet<string>[] _passAxes;
 
+    /// <summary>The ShadingModel document its GBuffer pass names, null for a shader of the renderer's own models or without the pass.</summary>
+    internal string? ShadingModel { get; }
+
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
     public Shader? Fallback { get; set; }
 
@@ -536,7 +539,7 @@ public sealed class Shader
     public Shader(ShaderDefinition definition, IShaderCompiler? compiler)
     {
         definition = definition.Copy();
-        ExpandSurface(definition);
+        ShadingModel = ExpandSurface(definition);
         Definition = definition;
         Name = definition.Name ?? "";
         Schema = new MaterialSchema(definition.Properties ?? []);
@@ -618,13 +621,13 @@ public sealed class Shader
     /// properties come before the shader's own, which replace any of the same name. A shader naming no Fallback takes the
     /// model's.
     /// </summary>
-    private static void ExpandSurface(ShaderDefinition definition)
+    private static string? ExpandSurface(ShaderDefinition definition)
     {
         if (definition.Surface is not { } surface)
-            return;
+            return null;
         string name = definition.Name ?? "";
         string path = $"{ShaderLibrary.Prefix}Standard/{surface.Model}.shader";
-        ShaderDefinition model = SurfaceModel(surface.Model, name, surface.Line, 0);
+        ShaderDefinition model = SurfaceModel(surface.Model, name, surface.Line);
 
         string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
         string lighting = surface.Lighting;
@@ -684,23 +687,29 @@ public sealed class Shader
         }
         definition.Properties = [.. properties];
         definition.Surface = null;
+        bool kept = Array.Exists(standard, pass => ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.GBuffer.Name));
+        return kept && ShadingModelLibrary.IdOf(surface.Model) > ShadingModelLibrary.Foliage ? surface.Model : null;
     }
 
     private static readonly System.Text.RegularExpressions.Regex s_sharedBlock = new(@"\bShared\s*\{");
     private static readonly System.Text.RegularExpressions.Regex s_modelPack = new(@"\bvec4\s+Model_Pack\s*\(");
+    private static readonly System.Text.RegularExpressions.Regex s_modelSurface = new(@"\bvoid\s+Model_Surface\s*\(");
     private static readonly System.Text.RegularExpressions.Regex s_modelParams = new(@"\bvoid\s+Model_Params\s*\(");
     private static readonly System.Text.RegularExpressions.Regex s_modelLight = new(@"\bvec3\s+Model_Light\s*\(");
     private static readonly System.Text.RegularExpressions.Regex s_modelAmbient = new(@"\bvec3\s+Model_Ambient\s*\(");
 
     // The shader a surface model's passes and properties come from: the library shader of its name, or for a
     // ShadingModel document the model it is based on with the document applied
-    private static ShaderDefinition SurfaceModel(string model, string name, int line, int depth)
+    private static ShaderDefinition SurfaceModel(string model, string name, int line)
     {
-        if (depth > 8)
-            throw new ShaderLoadException($"{name}:{line}: the surface model \"{model}\" is based on itself.");
         InternalShaders.Register();
         if (ShadingModelLibrary.Find(model) is { } shading)
-            return ApplyShadingModel(SurfaceModel(shading.Base, name, line, depth + 1), shading);
+            return ApplyShadingModel(LibraryModel(shading.Base, name, line), shading);
+        return LibraryModel(model, name, line);
+    }
+
+    private static ShaderDefinition LibraryModel(string model, string name, int line)
+    {
         string path = $"{ShaderLibrary.Prefix}Standard/{model}.shader";
         string source = ShaderLibrary.Get(path)
             ?? throw new ShaderLoadException($"{name}:{line}: there is no surface model \"{model}\", a model is a shader at {path} or a ShadingModel the renderer loaded.");
@@ -711,8 +720,8 @@ public sealed class Shader
     /// Makes a surface model of a ShadingModel document from the model it is based on: its properties join, its defines
     /// open every pass, and the GBuffer pass names the model's id and keeps what its Pack block gives, or goes when the
     /// model is forward only. A Lighting block lights the passes marked "#pragma surface_lighting", reading the same
-    /// values, so a shader built on the model has no Lighting block of its own. A Model_Params function in the Pack
-    /// block changes the inputs in both.
+    /// values, so a shader built on the model has no Lighting block of its own. A Model_Surface or Model_Params
+    /// function in the Pack block makes or changes inputs in both, before and after the shader's Surface function.
     /// </summary>
     private static ShaderDefinition ApplyShadingModel(ShaderDefinition model, ShadingModelDefinition shading)
     {
@@ -721,7 +730,8 @@ public sealed class Shader
         foreach (string define in shading.Defines)
             defines.Append($"#define {define}\n");
         bool packs = s_modelPack.IsMatch(shading.Pack);
-        string paramsDefine = s_modelParams.IsMatch(shading.Pack) ? "#define GRAPHITE_STANDARD_MODEL_PARAMS\n" : "";
+        string paramsDefine = (s_modelParams.IsMatch(shading.Pack) ? "#define GRAPHITE_STANDARD_MODEL_PARAMS\n" : "")
+            + (s_modelSurface.IsMatch(shading.Pack) ? "#define GRAPHITE_STANDARD_MODEL_SURFACE\n" : "");
         bool light = s_modelLight.IsMatch(shading.Lighting), ambient = s_modelAmbient.IsMatch(shading.Lighting);
 
         List<ShaderPass> passes = new();
@@ -734,8 +744,9 @@ public sealed class Shader
             string code = "";
             if (gbuffer)
             {
-                code = "#undef GRAPHITE_STANDARD_GBUFFER_MODEL\n#define GRAPHITE_STANDARD_GBUFFER_MODEL graphite_ModelGBuffer\n" + paramsDefine + shading.Pack
-                    + $"\nvoid graphite_ModelGBuffer(inout Graphite_GBuffer g, PBR_Params p)\n{{\n    g.model = {id}u;\n    g.custom = {(packs ? "Model_Pack(p)" : "vec4(0.0)")};\n}}\n";
+                code = "#undef GRAPHITE_STANDARD_GBUFFER_MODEL\n#define GRAPHITE_STANDARD_GBUFFER_MODEL graphite_ModelGBuffer\n"
+                    + (packs ? "#define GRAPHITE_STANDARD_MODEL_CUSTOM\n" : "") + paramsDefine + shading.Pack + "\nvec4 graphite_ModelCustom = vec4(0.0);\n"
+                    + $"void graphite_ModelGBuffer(inout Graphite_GBuffer g, PBR_Params p)\n{{\n    g.model = {id}u;\n    g.custom = graphite_ModelCustom;\n}}\n";
             }
             else if ((light || ambient || paramsDefine.Length > 0) && s_lightingMarker.IsMatch(pass.Source))
             {

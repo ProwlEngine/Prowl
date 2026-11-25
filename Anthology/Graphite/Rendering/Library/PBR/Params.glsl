@@ -52,6 +52,8 @@ struct PBR_Params
     vec3  geometryCoatTangent;
 
     float occlusion;            // ambient_occlusion, baked on indirect light only
+
+    vec4  custom;               // four values of the surface model's own, 0 to 1, which a ShadingModel's Model_Pack may keep
 };
 
 // The spec's defaults, the frame given
@@ -92,6 +94,7 @@ PBR_Params PBR_DefaultParams(vec3 normal, vec3 tangent)
     p.emissionColor = vec3(1.0);
     p.geometryOpacity = 1.0;
     p.geometryThinWalled = false;
+    p.custom = vec4(0.0);
     p.geometryNormal = normal;
     p.geometryTangent = tangent;
     p.geometryCoatNormal = normal;

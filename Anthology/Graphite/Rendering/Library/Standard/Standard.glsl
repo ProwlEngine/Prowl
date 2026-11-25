@@ -24,8 +24,11 @@
 // GRAPHITE_STANDARD_GBUFFER_MODEL: a model's function, void (inout Graphite_GBuffer g, PBR_Params p), run last in the
 // GBuffer pass to name its shading model and fill the Custom values its lighting reads, as Graphite/Standard/Foliage.shader
 // does. A ShadingModel document's passes get one written from its Pack block.
-// GRAPHITE_STANDARD_MODEL_CUSTOM: the pass lights through a ShadingModel document's Lighting block, which reads the
-// values its vec4 Model_Pack(PBR_Params p) gives as graphite_ModelCustom.
+// GRAPHITE_STANDARD_MODEL_CUSTOM: a ShadingModel document's Pack block defines vec4 Model_Pack(PBR_Params p), whose
+// values the pass takes as graphite_ModelCustom before Model_Params runs, for its Lighting block or the GBuffer.
+// GRAPHITE_STANDARD_MODEL_SURFACE: a ShadingModel document's Pack block defines void Model_Surface(inout PBR_Params p,
+// Graphite_SurfaceData i), run in the lit passes before the shader's own Surface function, for inputs the model makes
+// from the point being shaded, such as p.custom.
 // GRAPHITE_STANDARD_MODEL_PARAMS: a ShadingModel document's Pack block defines void Model_Params(inout PBR_Params p),
 // run on the inputs before the surface is lit or kept, the same in every view.
 // GRAPHITE_STANDARD_FINISH: a model's function, void (inout PBR_Params p, Graphite_SurfaceData i), run after the Surface

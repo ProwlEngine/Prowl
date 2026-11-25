@@ -979,8 +979,7 @@ internal sealed partial class FramePipeline : IDisposable
             DrawItemSink sink = camera.Sink;
             world.Buckets.Build(0, frustum, camera.Prepass, sink.For(camera.Prepass));
             world.Buckets.Build(1, frustum, camera.Forward, sink.For(camera.Forward));
-            if (view.Path == RenderPath.Deferred && camera.Selected.Exists(static feature => feature is DeferredLightingFeature)
-                && camera.Selected.Exists(static feature => feature is GBufferResolveFeature))
+            if (view.Path == RenderPath.Deferred && FeatureSelection.LightsDeferred(camera.Selected))
             {
                 EarlyDepth early = view.EarlyDepth;
                 camera.Prepass.Calls.RemoveAll(call => HasGBufferPass(call.Program) && !DrawPrograms.EarlyDepthDraws(call.Program, early));

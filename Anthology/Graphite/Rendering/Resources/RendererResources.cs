@@ -20,7 +20,7 @@ internal sealed class RendererResources : IDisposable
     private readonly Texture _smaaArea, _smaaSearch;
     private readonly PixelFormat[]?[] _sceneTargets = new PixelFormat[18][];
 
-    public RendererResources(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy = CompilePolicy.Sync)
+    public RendererResources(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy = CompilePolicy.Sync, Action<RendererError>? report = null)
     {
         _device = device;
         ResourceFactory factory = device.ResourceFactory;
@@ -43,7 +43,7 @@ internal sealed class RendererResources : IDisposable
         FogSkyProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("VolumetricFogSky"), "Graphite/VolumetricFogSky", lit: true, policy: policy);
         BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
         BlendAttachmentDescription kept = written with { ColorWriteMask = ColorWriteMask.None };
-        ShadingModels = new ShadingModels(device, compiler, policy);
+        ShadingModels = new ShadingModels(device, compiler, policy, report);
         BlendAttachmentDescription[] none = new BlendAttachmentDescription[GBufferFeature.TargetCount];
         Array.Fill(none, kept);
         GBufferDepthProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDepth"), "Graphite/GBufferDepth", source: false,
@@ -76,6 +76,7 @@ internal sealed class RendererResources : IDisposable
             PixelFormat.R8_G8_B8_A8_UNorm_SRgb, SceneFormats[3], PixelFormat.R8_G8_B8_A8_UNorm, PixelFormat.R8_G8_B8_A8_UNorm,
             OpaqueHdrFormat, OpaqueHdrFormat, SceneFormats[1],
         ];
+        SupportsGBuffer = device.Limits.MaxColorAttachments >= GBufferFeature.TargetCount;
         SceneDepthFormat = ViewGraph.SceneDepth(format => device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.DepthStencil | TextureUsage.Sampled));
 
         Noise = LoadData(device, "Noise.bin", 256, 256, mipmapped: true);
@@ -138,6 +139,9 @@ internal sealed class RendererResources : IDisposable
 
     /// <summary>The formats of a GBuffer's targets, in the order of <see cref="GBufferTarget"/>.</summary>
     public PixelFormat[] GBufferFormats { get; }
+
+    /// <summary>Whether the device draws to as many targets as a GBuffer has. Deferred views draw forward where it does not.</summary>
+    public bool SupportsGBuffer { get; }
 
     /// <summary>The HDR colour format of views that keep no alpha, half the size of the scene's where the device draws to it.</summary>
     public PixelFormat OpaqueHdrFormat { get; }

@@ -94,7 +94,7 @@ public struct ViewCamera
 /// temporal history, exposure and shadow cascades, until it is disposed. Made by <see cref="Renderer.CreateView"/>,
 /// host thread.
 /// </summary>
-/// <summary>How a view lights its opaque surfaces.</summary>
+/// <summary>How a view lights its opaque surfaces. A host's views are deferred by default, the renderer's own captures forward.</summary>
 public enum RenderPath : byte
 {
     /// <summary>Every surface is lit as it is drawn.</summary>
@@ -135,8 +135,8 @@ public enum RenderPaths : byte
 
 public sealed class RenderView : IDisposable
 {
-    /// <summary>How the view lights its opaque surfaces.</summary>
-    public RenderPath Path { get; set; }
+    /// <summary>How the view lights its opaque surfaces, deferred unless set.</summary>
+    public RenderPath Path { get; set; } = RenderPath.Deferred;
 
     /// <summary>Which GBuffer surfaces a deferred view's prepass draws first.</summary>
     public EarlyDepth EarlyDepth { get; set; }

@@ -13,8 +13,9 @@ namespace Prowl.Graphite.Rendering;
 /// </summary>
 public sealed class ShadingModel
 {
-    internal ShadingModel(string name, uint id, string unpack, string lighting, bool unlit)
+    internal ShadingModel(string name, uint id, string unpack, string lighting, bool unlit, ShadingModelDefinition? definition = null)
     {
+        Definition = definition;
         Name = name;
         Id = id;
         Unpack = unpack;
@@ -23,6 +24,9 @@ public sealed class ShadingModel
     }
 
     public string Name { get; }
+
+    /// <summary>The document it was loaded from, null for the ones the renderer writes itself.</summary>
+    internal ShadingModelDefinition? Definition { get; }
 
     /// <summary>What its GBuffer pass writes as the shading model, 1 to 15.</summary>
     public uint Id { get; }
@@ -59,13 +63,22 @@ internal static class ShadingModelLibrary
     private static readonly Dictionary<string, ShadingModelDefinition> s_definitions = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, uint> s_ids = new(StringComparer.Ordinal) { ["Lit"] = Lit, ["Unlit"] = Unlit, ["Foliage"] = Foliage };
 
-    /// <summary>Adds a document, or replaces the one of its name, which keeps its id.</summary>
+    /// <summary>
+    /// Adds a document, or replaces the one of its name, which keeps its id. Its Base names a surface model shader,
+    /// Graphite/Standard/{Base}.shader, not another ShadingModel.
+    /// </summary>
     public static void Register(ShadingModelDefinition definition)
     {
+        InternalShaders.Register();
+        string? source = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{definition.Base}.shader");
         lock (s_lock)
         {
             if (definition.Name is "Lit" or "Unlit" or "Foliage" or "Terrain")
                 throw new ArgumentException($"{definition.Name} is a surface model the renderer ships, a ShadingModel takes another name.");
+            if (s_definitions.ContainsKey(definition.Base) || (source != null && ShaderParser.IsShadingModel(source)))
+                throw new ArgumentException($"The ShadingModel {definition.Name} is based on the ShadingModel {definition.Base}, its Base is a surface model shader such as Lit.");
+            if (source == null)
+                throw new ArgumentException($"The ShadingModel {definition.Name} is based on {definition.Base}, and there is no surface model shader of that name.");
             if (!definition.ForwardOnly && !s_ids.ContainsKey(definition.Name))
             {
                 if (s_ids.Count >= MaxId)
@@ -104,13 +117,15 @@ internal static class ShadingModelLibrary
 /// The shading models of a renderer, and the one lighting program its deferred views draw, written from them: each
 /// pixel is lit as its own model says. It holds every model from the start, so nothing compiles as surfaces come into
 /// view. Only loading or replacing a model writes it anew, compiled as the renderer's <see cref="CompilePolicy"/> says,
-/// and views keep the last one until it is ready.
+/// and views keep the last one until it is ready. A program that fails to compile is reported and leaves out the models
+/// new to it, whose pixels are lit as Lit until a document that compiles replaces them. The models' code shares one
+/// program, so a function a Lighting or Unpack block defines beside its hooks needs a name no other model uses.
 /// </summary>
 public sealed class ShadingModels : IDisposable
 {
     private const int RetireFrames = 8;
 
-    private static readonly string[] s_shipped = ["ClearCoat", "Cloth", "Subsurface"];
+    private static readonly string[] s_shipped = ["ClearCoat", "Cloth", "Subsurface", "Hair", "Eye"];
     private static readonly Regex s_light = new(@"\bvec3\s+Model_Light\s*\("), s_ambient = new(@"\bvec3\s+Model_Ambient\s*\("),
         s_unpack = new(@"\bvoid\s+Model_Unpack\s*\(");
 
@@ -121,12 +136,17 @@ public sealed class ShadingModels : IDisposable
     private readonly object _lock = new();
     private readonly List<ShadingModel> _models = new();
     private readonly List<(FullscreenProgram Program, int Frames)> _retired = new();
+    private readonly HashSet<ShadingModel> _broken = new();
+    private readonly Action<RendererError>? _report;
     private FullscreenProgram? _pending;
+    private ShadingModel[] _lit, _pendingModels = [];
+    private string _source, _pendingSource = "";
     private int _version, _built;
 
-    internal ShadingModels(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy)
+    internal ShadingModels(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy, Action<RendererError>? report = null)
     {
         _device = device;
+        _report = report;
         _compiler = compiler;
         _policy = policy;
         BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
@@ -142,11 +162,9 @@ public sealed class ShadingModels : IDisposable
             if (ShadingModelLibrary.Find(name) is { } shipped)
                 Add(shipped);
         }
-        Program = Create(Source());
+        _source = Source(out _lit);
+        Program = Create(_source, _report);
     }
-
-    /// <summary>Told of a lighting program that fails to compile, which leaves the last one in use.</summary>
-    internal Action<RendererError>? Report { get; set; }
 
     /// <summary>The lighting program in use. Render thread.</summary>
     internal FullscreenProgram Program { get; private set; }
@@ -184,12 +202,30 @@ public sealed class ShadingModels : IDisposable
         }
     }
 
+    /// <summary>
+    /// Takes the document of a name as the process knows it, which another renderer may have loaded, when a shader
+    /// built on it loads. Any thread.
+    /// </summary>
+    internal void Ensure(string name)
+    {
+        if (ShadingModelLibrary.Find(name) is not { ForwardOnly: false } definition)
+            return;
+        lock (_lock)
+        {
+            if (_models.Exists(model => model.Definition == definition))
+                return;
+            Add(definition);
+            _version++;
+        }
+    }
+
     private ShadingModel? Add(ShadingModelDefinition definition)
     {
         _models.RemoveAll(model => model.Name == definition.Name);
+        _broken.RemoveWhere(model => model.Name == definition.Name);
         if (definition.ForwardOnly)
             return null;
-        ShadingModel model = new(definition.Name, ShadingModelLibrary.IdOf(definition.Name), definition.Unpack, definition.Lighting, false);
+        ShadingModel model = new(definition.Name, ShadingModelLibrary.IdOf(definition.Name), definition.Unpack, definition.Lighting, false, definition);
         _models.Add(model);
         return model;
     }
@@ -212,48 +248,88 @@ public sealed class ShadingModels : IDisposable
         }
 
         string? source = null;
+        ShadingModel[] models = [];
         lock (_lock)
         {
             if (_built != _version)
             {
                 _built = _version;
-                source = Source();
+                source = Source(out models);
             }
         }
         if (source != null)
         {
             _pending?.Dispose();
             _pending = null;
-            try
+            if (source != _source)
             {
-                _pending = Create(source);
-            }
-            catch (Exception e)
-            {
-                Report?.Invoke(new RendererError("shader.compile", $"Graphite/DeferredLighting: {e.Message}", RendererErrorSeverity.Error, this) { Key = $"shadingmodels.{_built}" });
+                (_pendingSource, _pendingModels) = (source, models);
+                try
+                {
+                    _pending = Create(source, null);
+                }
+                catch (Exception e)
+                {
+                    Fail(e.Message);
+                }
             }
         }
-        if (_pending == null || !_pending.Ready(1))
+        if (_pending == null)
+            return false;
+
+        // Every form the program in use draws with, so no view loses its lighting to the swap
+        bool mono = Program.Built(1), layered = Program.Built(2);
+        bool ready = (layered && !mono) || _pending.Ready(1);
+        if (layered)
+            ready &= _pending.Ready(2);
+        if (_pending.Failed)
+        {
+            Fail(_pending.Error ?? "");
+            _pending.Dispose();
+            _pending = null;
+            return false;
+        }
+        if (!ready)
             return false;
         _retired.Add((Program, RetireFrames));
         Program = _pending;
+        (_source, _lit) = (_pendingSource, _pendingModels);
         _pending = null;
         return true;
     }
 
-    private FullscreenProgram Create(string source)
-        => FullscreenProgram.Create(_device, _compiler, source, "Graphite/DeferredLighting", source: false, blend: _blend, lit: true, depth: true, policy: _policy, report: Report);
+    // The models new to the program that failed are left out of the next one
+    private void Fail(string message)
+    {
+        List<string> names = new();
+        lock (_lock)
+        {
+            foreach (ShadingModel model in _pendingModels)
+            {
+                if (Array.IndexOf(_lit, model) < 0 && _broken.Add(model))
+                    names.Add(model.Name);
+            }
+            if (names.Count > 0)
+                _version++;
+        }
+        string left = names.Count > 0 ? $", so these are lit as Lit until replaced: {string.Join(", ", names)}" : "";
+        _report?.Invoke(new RendererError("shader.compile", $"Graphite/DeferredLighting: {message}{left}", RendererErrorSeverity.Error, this) { Key = $"shadingmodels.{_built}" });
+    }
+
+    private FullscreenProgram Create(string source, Action<RendererError>? report)
+        => FullscreenProgram.Create(_device, _compiler, source, "Graphite/DeferredLighting", source: false, blend: _blend, lit: true, depth: true, policy: _policy, report: report);
 
     // The head, each model's code under names of its own, the functions that pick by the pixel's model, then the pass
     // itself. No model adds to the closure, so a pixel pays for its own model's lighting alone.
-    private string Source()
+    private string Source(out ShadingModel[] models)
     {
         StringBuilder text = new();
         text.Append("#include \"Graphite/Internal/DeferredLightingHead.glsl\"\n");
 
         StringBuilder unpack = new(), light = new(), ambient = new();
         StringBuilder unlit = new("false");
-        foreach (ShadingModel model in _models)
+        models = _models.FindAll(model => !_broken.Contains(model)).ToArray();
+        foreach (ShadingModel model in models)
         {
             if (model.Unlit)
                 unlit.Append($" || model == {model.Id}u");

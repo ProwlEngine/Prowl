@@ -97,6 +97,9 @@ void Graphite_StandardFragment()
     Graphite_SurfaceData i = graphite_StandardInputs();
     float mapVariance;
     PBR_Params p = PBR_MaterialParams(i, vHasTangents > 0.5, mapVariance);
+#ifdef GRAPHITE_STANDARD_MODEL_SURFACE
+    Model_Surface(p, i);
+#endif
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Surface(p, i);
 #endif
@@ -108,12 +111,15 @@ void Graphite_StandardFragment()
         discard;
 #endif
 
+#ifdef GRAPHITE_STANDARD_MODEL_CUSTOM
+    graphite_ModelCustom = Model_Pack(p);
+#endif
 #ifdef GRAPHITE_STANDARD_MODEL_PARAMS
     Model_Params(p);
 #endif
 
     Graphite_GBuffer g = PBR_ToGBuffer(p, GRAPHITE_MODEL_LIT, mapVariance);
-    g.lightLayers = Graphite_Object().layerMask & 7u;
+    g.lightLayers = Graphite_Object().layerMask;
     g.receivesShadows = Graphite_ReceivesShadows();
     g.baked = Graphite_IndirectDiffuse(vLightmapUV, vAmbient);
     g.emission = p.emissionColor * p.emissionLuminance * Graphite_Exposure();
@@ -136,6 +142,9 @@ void Graphite_StandardFragment()
     Graphite_SurfaceData i = graphite_StandardInputs();
     float mapVariance;
     PBR_Params p = PBR_MaterialParams(i, vHasTangents > 0.5, mapVariance);
+#ifdef GRAPHITE_STANDARD_MODEL_SURFACE
+    Model_Surface(p, i);
+#endif
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Surface(p, i);
 #endif

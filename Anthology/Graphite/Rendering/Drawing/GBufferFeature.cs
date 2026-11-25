@@ -55,6 +55,8 @@ public sealed class GBufferFeature : RenderFeature
         Uses(resources.GBufferDepthProgram);
     }
 
+    public override bool IsActive(in FeatureView view) => _resources.SupportsGBuffer;
+
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.DrawsRenderables();
@@ -155,6 +157,7 @@ public sealed class GBufferDecalsFeature : RenderFeature
     {
         State state = builder.GetViewState<State>();
         state.GBuffer = GBufferRead.Declare(builder, decals: false);
+        builder.ReadViews();
         builder.DrawsRenderables();
         PixelFormat[] formats = _resources.GBufferFormats;
         GraphTextureDesc desc = new()
@@ -200,6 +203,7 @@ public sealed class GBufferResolveFeature : RenderFeature
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.GetViewState<State>().GBuffer = GBufferRead.Declare(builder);
+        builder.ReadViews();
         builder.DrawToScene();
     }
 

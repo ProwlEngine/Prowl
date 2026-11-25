@@ -28,7 +28,7 @@ void main()
         vec3 relative = Graphite_RelativeFromDepth(view, gl_FragCoord.xy * view.screen.zw, Graphite_GBufferDepthAt(pixel));
         vec3 normal = Graphite_OctDecode(packed);
         vec3 shaded = normal;
-        graphite_DecalLayers = g.lightLayers | 0xFFFFFFF8u;
+        graphite_DecalLayers = g.lightLayers;
         Graphite_ApplyDecals(relative, normal, base.rgb, shaded, surface.r, base.a, surface.b);
         packed = Graphite_OctEncode(normalize(shaded));
     }

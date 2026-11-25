@@ -46,7 +46,7 @@ internal sealed class DemoWindow
     private bool _lightSpread;
     private int _voxelView = -1;
     private int _gbufferView = -1;
-    private bool _deferred;
+    private bool _deferred = true;
     private bool _decal;
     private bool _gi;
     private bool _giScreenTrace = true;
@@ -95,6 +95,8 @@ internal sealed class DemoWindow
                 _gi = true;
             else if (args[i] == "--deferred")
                 _deferred = true;
+            else if (args[i] == "--forward")
+                _deferred = false;
             else if (args[i] == "--decal")
                 _decal = true;
             else if (args[i] == "--gbuffer" && i + 1 < args.Length)

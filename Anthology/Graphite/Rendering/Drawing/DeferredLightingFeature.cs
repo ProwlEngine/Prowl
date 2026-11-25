@@ -35,6 +35,7 @@ public sealed class DeferredLightingFeature : RenderFeature
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.GetViewState<State>().GBuffer = GBufferRead.Declare(builder);
+        builder.ReadViews();
         builder.DrawsRenderables();
         builder.DrawToScene();
     }

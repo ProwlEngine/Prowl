@@ -94,7 +94,7 @@ public sealed class BuiltInSkies(Renderer renderer)
 /// </summary>
 public sealed class BuiltInStandard(Renderer renderer)
 {
-    private Shader? _lit, _unlit, _impostor, _clearCoat, _cloth, _subsurface, _thinSubsurface, _anisotropic;
+    private Shader? _lit, _unlit, _impostor, _clearCoat, _cloth, _subsurface, _thinSubsurface, _anisotropic, _hair, _eye;
 
     public Shader Lit => _lit ??= Load("Lit");
     public Shader Unlit => _unlit ??= Load("Unlit");
@@ -110,6 +110,12 @@ public sealed class BuiltInStandard(Renderer renderer)
 
     /// <summary>Lit as a thin walled sheet light passes through, lit as it is drawn in every view.</summary>
     public Shader ThinSubsurface => _thinSubsurface ??= Model("ThinSubsurface");
+
+    /// <summary>Hair strands and cards, lit along the strand.</summary>
+    public Shader Hair => _hair ??= Model("Hair");
+
+    /// <summary>An eyeball: a cornea's highlight over an iris with a normal of its own.</summary>
+    public Shader Eye => _eye ??= Model("Eye");
 
     /// <summary>Lit with its highlight stretched along the tangent, lit as it is drawn in every view.</summary>
     public Shader Anisotropic => _anisotropic ??= Model("Anisotropic");
@@ -257,8 +263,9 @@ public sealed class Renderer : IDisposable
             CompileFallback(CompilePolicy.Async);
 
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl", _options.Compile));
-        Resources = new RendererResources(device, compiler, _options.Compile);
-        Resources.ShadingModels.Report = Report;
+        Resources = new RendererResources(device, compiler, _options.Compile, Report);
+        if (!Resources.SupportsGBuffer)
+            Report(new RendererError("device.gbuffer", $"A GBuffer has {GBufferFeature.TargetCount} targets and '{device.DeviceName}' draws to {device.Limits.MaxColorAttachments}, so deferred views draw forward.", RendererErrorSeverity.Warning));
         Textures = Resources.Textures;
         Textures.Reporter = Report;
         _store = new RenderStore();
@@ -418,6 +425,8 @@ public sealed class Renderer : IDisposable
     public Shader LoadShader(ShaderDefinition definition)
     {
         Shader shader = new(definition, _compiler);
+        if (shader.ShadingModel is { } model)
+            ShadingModels.Ensure(model);
         if (string.IsNullOrEmpty(shader.Definition.Fallback) || shader.Definition.Fallback == FallbackShaderName)
             shader.Fallback = _fallbackShader;
         return shader;

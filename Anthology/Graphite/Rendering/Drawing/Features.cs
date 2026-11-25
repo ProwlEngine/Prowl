@@ -491,6 +491,14 @@ public sealed class FullscreenProgram : IDisposable
     private readonly Action<RendererError>? _report;
     private bool _failed;
 
+    /// <summary>Whether a form failed to compile or build, which <see cref="Error"/> tells of.</summary>
+    internal bool Failed => _failed;
+
+    internal string? Error { get; private set; }
+
+    /// <summary>Whether the form for a view of this many layers is built.</summary>
+    internal bool Built(int layers) => _built[layers > 1 ? 1 : 0] != null;
+
     private FullscreenProgram(GraphicsDevice device, PassVariants variants, int[] keys, BlendStateDescription blend, string name, bool source, bool lit, bool procedural, bool depth, CompilePolicy policy, CompilePriority priority, Action<RendererError>? report)
     {
         _device = device;
@@ -550,6 +558,7 @@ public sealed class FullscreenProgram : IDisposable
         if (state == VariantState.Failed || error != null)
         {
             _failed = true;
+            Error = error?.Message;
             _report?.Invoke(new RendererError("shader.compile", $"{_name}: {error?.Message}", RendererErrorSeverity.Error, this) { Key = $"fullscreen.{_name}" });
         }
         return _built[form] != null;
@@ -986,6 +995,9 @@ public sealed class FeatureBuilder
         }
         return new VoxelInputs(voxels, cache, shadow.DepthTexture!, sky, View.Frame.ShadowSampler);
     }
+
+    /// <summary>Declares the view's layers, which every fullscreen draw binds, for a feature that neither reads the scene nor writes a colour.</summary>
+    internal void ReadViews() => ReadPostViews();
 
     // The views the fullscreen programs of a new colour read
     private void ReadPostViews() => _graph.Read(FrameGraph.Import(View.Camera.ViewBlocks.Buffer), BufferAccess.AllReads);
@@ -1743,6 +1755,9 @@ internal static class FeatureSelection
             }
         }
 
+        if (info.Path == RenderPath.Deferred && !LightsDeferred(result))
+            result.RemoveAll(static feature => feature.Paths == RenderPaths.Deferred);
+
         // Stable by slot then order, so ties keep built in before world before view
         for (int i = 1; i < result.Count; i++)
         {
@@ -1755,6 +1770,23 @@ internal static class FeatureSelection
             }
             result[j + 1] = feature;
         }
+    }
+
+    /// <summary>
+    /// Whether a view's features draw a GBuffer, resolve it and light it. A deferred view missing one of the three, as
+    /// while its lighting program compiles, drops every feature of the deferred path alone and draws forward.
+    /// </summary>
+    public static bool LightsDeferred(List<RenderFeature> features)
+        => Has(features, FeatureGroup.GBuffer) && Has(features, FeatureGroup.GBufferResolve) && Has(features, FeatureGroup.DeferredLighting);
+
+    private static bool Has(List<RenderFeature> features, FeatureGroup group)
+    {
+        foreach (RenderFeature feature in features)
+        {
+            if (feature.Group == group)
+                return true;
+        }
+        return false;
     }
 
     public static int Compare(RenderFeature a, RenderFeature b)

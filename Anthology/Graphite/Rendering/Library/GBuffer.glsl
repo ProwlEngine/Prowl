@@ -30,7 +30,7 @@ struct Graphite_GBuffer
     float specular;
     float occlusion;
     uint  model;            // 0 to 15
-    uint  lightLayers;      // the first 3 bits of the surface's layer mask
+    uint  lightLayers;      // the surface's layer mask, of which the GBuffer keeps the first 3 bits and reads the rest as set
     bool  receivesShadows;
     vec4  custom;
     vec3  baked;
@@ -47,7 +47,7 @@ Graphite_GBuffer Graphite_NewGBuffer(uint model)
     g.specular = 0.5;
     g.occlusion = 1.0;
     g.model = model;
-    g.lightLayers = 7u;
+    g.lightLayers = 0xFFFFFFFFu;
     g.receivesShadows = true;
     g.custom = vec4(0.0);
     g.baked = vec3(0.0);
@@ -64,7 +64,7 @@ void Graphite_UnpackModel(float packed, inout Graphite_GBuffer g)
 {
     uint bits = uint(packed * 255.0 + 0.5);
     g.model = bits & 15u;
-    g.lightLayers = (bits >> 4) & 7u;
+    g.lightLayers = ((bits >> 4) & 7u) | 0xFFFFFFF8u;
     g.receivesShadows = (bits & 128u) != 0u;
 }
 
