@@ -48,6 +48,7 @@ internal sealed class DemoWindow
     private int _voxelView = -1;
     private int _gbufferView = -1;
     private bool _deferred;
+    private bool _decal;
     private bool _gi;
     private bool _giScreenTrace = true;
     private bool _giOcclusion = true;
@@ -98,6 +99,8 @@ internal sealed class DemoWindow
                 _gi = true;
             else if (args[i] == "--deferred")
                 _deferred = true;
+            else if (args[i] == "--decal")
+                _decal = true;
             else if (args[i] == "--gbuffer" && i + 1 < args.Length)
             {
                 _deferred = true;
@@ -166,6 +169,8 @@ internal sealed class DemoWindow
         _demo.Bloom.Enabled = !_noBloom;
         _demo.Tonemap.Enabled = !_noTonemap;
         SelectScene(Math.Clamp(_startScene, 0, 8));
+        if (_decal)
+            _scene.World.AddDecal(new DecalDesc { Transform = Double4x4.CreateTranslation(new Double3(0, 0, 0)) * Double4x4.CreateScale(6, 6, 6) * Double4x4.RotateX(Math.PI / 2), Color = new Float4(1f, 0.25f, 0.1f, 0.8f) });
         _paused = _freeze;
         _scene.View.ForcedLod = _forcedLod;
         if (_hour is { } hour && _scene is ShadowsScene shadows)
