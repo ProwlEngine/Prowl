@@ -108,6 +108,20 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
+    [Fact]
+    public void CustomStateWithoutItsWholeFlagIsMalformed()
+    {
+        GameObject go = CreateGameObject("Grid");
+        PackedGridTestComponent grid = go.AddComponent<PackedGridTestComponent>();
+        SyncMember member = NetworkMembers.Of(grid).Sync(NetworkSerializeMember.CustomSlot)!;
+        Assert.Throws<EndOfStreamException>(() =>
+        {
+            NetReader reader = new(Array.Empty<byte>());
+            member.Validate(grid, ref reader);
+        });
+        go.Dispose();
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

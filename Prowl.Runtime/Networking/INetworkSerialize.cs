@@ -58,10 +58,13 @@ public sealed class NetworkSerializeMember(SyncFlags flags) : SyncMember(CustomS
     internal override void Read(Component component, ref NetReader reader, bool initial) =>
         ((INetworkSerialize)component).OnDeserialize(ref reader, reader.ReadBool());
 
-    // The component's own format: only it can read it, so the bytes are taken as they are. Its slot is the last
-    // one, so what is left of its component's block is all its.
-    internal override void Validate(Component component, ref NetReader reader, bool initial = false) =>
+    // Past the whole flag is the component's own format: only it can read it, so the bytes are taken as they are.
+    // Its slot is the last one, so what is left of its component's block is all its.
+    internal override void Validate(Component component, ref NetReader reader, bool initial = false)
+    {
+        reader.ReadBool();
         reader.ReadBytes(reader.Remaining);
+    }
 
     internal override string FormatValue(Component component) => "Written by OnSerialize";
 }
