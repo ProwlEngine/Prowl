@@ -173,11 +173,11 @@ internal sealed class MaterialsScene : DemoScene
         aluminium.SetColor("specular_color", C(0.92f, 0.94f, 1f));
         Sphere(1, 2, aluminium);
 
-        Material brushed = Pbr(new Float3(0.75f, 0.75f, 0.77f), 1f, 0.35f);
+        Material brushed = Pbr(new Float3(0.75f, 0.75f, 0.77f), 1f, 0.35f, model: Demo.Renderer.Standard.Anisotropic);
         brushed.SetFloat("specular_roughness_anisotropy", 0.85f);
         Sphere(1, 3, brushed);
 
-        Material brushedLight = Pbr(new Float3(0.75f, 0.75f, 0.77f), 1f, 0.35f);
+        Material brushedLight = Pbr(new Float3(0.75f, 0.75f, 0.77f), 1f, 0.35f, model: Demo.Renderer.Standard.Anisotropic);
         brushedLight.SetFloat("specular_roughness_anisotropy", 0.4f);
         Sphere(1, 4, brushedLight);
 
@@ -212,46 +212,45 @@ internal sealed class MaterialsScene : DemoScene
     // Car paint, lacquer over rough metal, an amber coat, darkening off and on, a rough coat
     private void CoatRow()
     {
-        Material carPaint = Pbr(new Float3(0.6f, 0.02f, 0.03f), 0.6f, 0.45f);
+        Material carPaint = Pbr(new Float3(0.6f, 0.02f, 0.03f), 0.6f, 0.45f, model: Demo.Renderer.Standard.ClearCoat);
         carPaint.SetFloat("coat_weight", 1f);
         Sphere(3, 0, carPaint);
 
-        Material lacquer = Pbr(new Float3(0.55f, 0.55f, 0.58f), 1f, 0.6f);
+        Material lacquer = Pbr(new Float3(0.55f, 0.55f, 0.58f), 1f, 0.6f, model: Demo.Renderer.Standard.ClearCoat);
         lacquer.SetFloat("coat_weight", 1f);
         Sphere(3, 1, lacquer);
 
-        Material amber = Pbr(new Float3(0.8f, 0.8f, 0.8f), 0f, 0.5f);
+        Material amber = Pbr(new Float3(0.8f, 0.8f, 0.8f), 0f, 0.5f, model: Demo.Renderer.Standard.ClearCoat);
         amber.SetFloat("coat_weight", 1f);
         amber.SetColor("coat_color", C(1f, 0.6f, 0.2f));
         Sphere(3, 2, amber);
 
-        Material bright = Pbr(new Float3(0.1f, 0.3f, 0.7f), 0f, 0.5f);
+        Material bright = Pbr(new Float3(0.1f, 0.3f, 0.7f), 0f, 0.5f, model: Demo.Renderer.Standard.ClearCoat);
         bright.SetFloat("coat_weight", 1f);
         bright.SetFloat("coat_darkening", 0f);
         Sphere(3, 3, bright);
 
-        Material dark = Pbr(new Float3(0.1f, 0.3f, 0.7f), 0f, 0.5f);
+        Material dark = Pbr(new Float3(0.1f, 0.3f, 0.7f), 0f, 0.5f, model: Demo.Renderer.Standard.ClearCoat);
         dark.SetFloat("coat_weight", 1f);
         dark.SetFloat("coat_darkening", 1f);
         Sphere(3, 4, dark);
 
-        Material satin = Pbr(new Float3(0.15f, 0.5f, 0.2f), 0f, 0.3f);
+        Material satin = Pbr(new Float3(0.15f, 0.5f, 0.2f), 0f, 0.3f, model: Demo.Renderer.Standard.ClearCoat);
         satin.SetFloat("coat_weight", 1f);
         satin.SetFloat("coat_roughness", 0.35f);
-        satin.SetFloat("coat_roughness_anisotropy", 0.7f);
         Sphere(3, 5, satin);
     }
 
     // Velvet and peach fuzz
     private void FuzzRow()
     {
-        Material velvet = Pbr(new Float3(0.25f, 0.02f, 0.08f), 0f, 0.8f);
+        Material velvet = Pbr(new Float3(0.25f, 0.02f, 0.08f), 0f, 0.8f, model: Demo.Renderer.Standard.Cloth);
         velvet.SetFloat("fuzz_weight", 1f);
         velvet.SetColor("fuzz_color", C(0.9f, 0.35f, 0.5f));
         velvet.SetFloat("fuzz_roughness", 0.5f);
         Sphere(4, 0, velvet);
 
-        Material peach = Pbr(new Float3(0.9f, 0.55f, 0.35f), 0f, 0.6f);
+        Material peach = Pbr(new Float3(0.9f, 0.55f, 0.35f), 0f, 0.6f, model: Demo.Renderer.Standard.Cloth);
         peach.SetFloat("fuzz_weight", 0.8f);
         peach.SetColor("fuzz_color", C(1f, 0.9f, 0.8f));
         peach.SetFloat("fuzz_roughness", 0.3f);
@@ -299,20 +298,20 @@ internal sealed class MaterialsScene : DemoScene
     // Wax and skin through the subsurface fallback, a backlit thin walled leaf, emission in nits, half and quarter opacity
     private void SubsurfaceRow()
     {
-        Material wax = Pbr(new Float3(0.9f, 0.85f, 0.7f), 0f, 0.4f);
+        Material wax = Pbr(new Float3(0.9f, 0.85f, 0.7f), 0f, 0.4f, model: Demo.Renderer.Standard.Subsurface);
         wax.SetFloat("subsurface_weight", 1f);
         wax.SetColor("subsurface_color", C(0.95f, 0.85f, 0.6f));
         wax.SetFloat("subsurface_radius", 0.5f);
         Sphere(6, 0, wax);
 
-        Material skin = Pbr(new Float3(0.8f, 0.55f, 0.45f), 0f, 0.5f);
+        Material skin = Pbr(new Float3(0.8f, 0.55f, 0.45f), 0f, 0.5f, model: Demo.Renderer.Standard.Subsurface);
         skin.SetFloat("subsurface_weight", 1f);
         skin.SetColor("subsurface_color", C(0.85f, 0.45f, 0.35f));
         skin.SetFloat("subsurface_radius", 1f);
         skin.SetColor("subsurface_radius_scale", C(1f, 0.35f, 0.2f));
         Sphere(6, 1, skin);
 
-        Material leaf = Pbr(new Float3(0.2f, 0.45f, 0.1f), 0f, 0.5f);
+        Material leaf = Pbr(new Float3(0.2f, 0.45f, 0.1f), 0f, 0.5f, model: Demo.Renderer.Standard.ThinSubsurface);
         leaf.SetInt("geometry_thin_walled", 1);
         leaf.SetFloat("subsurface_weight", 0.7f);
         leaf.SetColor("subsurface_color", C(0.35f, 0.75f, 0.15f));

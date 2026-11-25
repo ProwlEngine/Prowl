@@ -181,7 +181,13 @@ internal sealed class PbrModel : IDisposable
     // The glTF metal rough model and its KHR material extensions on the PBR inputs, lengths in the model's own units
     private Material CreateMaterial(Demo demo, ClayMaterial src, float emissionNits)
     {
-        Material m = demo.Renderer.CreateMaterial(demo.Renderer.Standard.Lit);
+        // A material takes the one surface model its strongest extension names
+        BuiltInStandard standard = demo.Renderer.Standard;
+        bool coated = src.Clearcoat is { Factor: > 0f };
+        bool fuzzy = !coated && src.Sheen is { } cloth && Peak(cloth.ColorFactor) is > 0f;
+        bool brushed = !coated && !fuzzy && src.Anisotropy is { Strength: > 0f };
+        bool scatters = !coated && !fuzzy && !brushed && src.DiffuseTransmission is { Factor: > 0f };
+        Material m = demo.Renderer.CreateMaterial(coated ? standard.ClearCoat : fuzzy ? standard.Cloth : brushed ? standard.Anisotropic : scatters ? (src.DoubleSided ? standard.ThinSubsurface : standard.Subsurface) : standard.Lit);
         m.Name = src.Name;
 
         m.SetColor("base_color", Rgb(src.BaseColor));
@@ -214,7 +220,7 @@ internal sealed class PbrModel : IDisposable
             Map(m, "specular_color_map", specular.ColorTexture, srgb: true);
         }
 
-        if (src.Clearcoat is { Factor: > 0f } coat)
+        if (coated && src.Clearcoat is { } coat)
         {
             m.SetFloat("coat_weight", coat.Factor);
             m.SetFloat("coat_roughness", coat.Roughness);
@@ -225,7 +231,7 @@ internal sealed class PbrModel : IDisposable
             m.SetFloat("coat_normal_scale", coat.NormalScale);
         }
 
-        if (src.Sheen is { } sheen && Peak(sheen.ColorFactor) is float peak and > 0f)
+        if (fuzzy && src.Sheen is { } sheen && Peak(sheen.ColorFactor) is float peak and > 0f)
         {
             // glTF dims the base by the sheen colour's peak and the fuzz by its weight, so the peak moves into the weight
             m.SetFloat("fuzz_weight", peak);
@@ -235,7 +241,7 @@ internal sealed class PbrModel : IDisposable
             Map(m, "fuzz_roughness_map", sheen.RoughnessTexture, channel: 3);
         }
 
-        if (src.Anisotropy is { Strength: > 0f } anisotropy)
+        if (brushed && src.Anisotropy is { } anisotropy)
         {
             m.SetFloat("specular_roughness_anisotropy", anisotropy.Strength);
             m.SetFloat("tangent_rotation", anisotropy.Rotation);
@@ -271,7 +277,7 @@ internal sealed class PbrModel : IDisposable
             }
         }
 
-        if (src.DiffuseTransmission is { Factor: > 0f } diffuse)
+        if (scatters && src.DiffuseTransmission is { } diffuse)
         {
             m.SetFloat("subsurface_weight", diffuse.Factor);
             m.SetColor("subsurface_color", Rgb(diffuse.ColorFactor));
