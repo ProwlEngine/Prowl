@@ -57,11 +57,26 @@ public sealed class GBufferViewTests : IDisposable
     [InlineData(GBufferDebugMode.Occlusion, 1f, 1f, 1f)]
     public void AMode_ShowsThatPartOfTheGBuffer_AndBlackWhereItHoldsNothing(GBufferDebugMode mode, float r, float g, float b)
     {
+        // The view shows colours encoded and other values as stored, and the float target reads its image decoded
+        if (mode != GBufferDebugMode.BaseColor)
+            (r, g, b) = (Decoded(r), Decoded(g), Decoded(b));
         _debug.Mode = mode;
         Float4[] pixels = _harness.Frame(View(RenderPath.Deferred));
         Float4 centre = pixels[Size / 2 * Size + Size / 2], corner = pixels[0];
         Assert.True(MathF.Abs(centre.X - r) < 0.02f && MathF.Abs(centre.Y - g) < 0.02f && MathF.Abs(centre.Z - b) < 0.02f, $"{mode}: {centre}");
         Assert.True(corner.X + corner.Y + corner.Z < 0.01f, $"{mode} off the surface: {corner}");
+    }
+
+    private static float Decoded(float v) => v <= 0.04045f ? v / 12.92f : MathF.Pow((v + 0.055f) / 1.055f, 2.4f);
+
+    [Fact]
+    public void TheImage_IsTheSame_WithATonemapperBeforeItAndWithout()
+    {
+        _debug.Mode = GBufferDebugMode.Roughness;
+        Float4 plain = _harness.Frame(View(RenderPath.Deferred))[Size / 2 * Size + Size / 2];
+        _harness.World.Features.Add(new Tonemapper(_harness.Renderer));
+        Float4 mapped = _harness.Frame(View(RenderPath.Deferred))[Size / 2 * Size + Size / 2];
+        Assert.True(MathF.Abs(plain.X - mapped.X) < 0.01f, $"without {plain}, with {mapped}");
     }
 
     [Fact]

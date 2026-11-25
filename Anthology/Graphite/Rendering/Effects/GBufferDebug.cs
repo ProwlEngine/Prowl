@@ -21,6 +21,7 @@ public enum GBufferDebugMode
 
 /// <summary>
 /// Shows one part of a deferred view's GBuffer in place of the view's image, black where no surface was drawn into it.
+/// Its image is display encoded: colours are encoded and other values shown as they are stored, so 0.5 is mid grey.
 /// Runs on deferred views only.
 /// </summary>
 public sealed class GBufferDebug : PostEffect
@@ -51,6 +52,7 @@ public sealed class GBufferDebug : PostEffect
     {
         builder.GetViewState<State>().GBuffer = GBufferRead.Declare(builder);
         builder.ReadScene();
+        builder.EncodesForDisplay();
         builder.WriteColor();
     }
 
