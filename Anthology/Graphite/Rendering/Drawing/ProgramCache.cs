@@ -395,7 +395,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     // Colour takes the pass's blend. An opaque forward pass writes the G-buffer targets its fragment stage stores, so they
     // match the surface that won the depth test; ones it does not store keep their clear, and transparent, blended and
     // other passes leave them. Transmissive passes write motion and the reactive mask over them, which nothing else
-    // writes. The prepass writes no colour, only the motion and normals its GRAPHITE_PREPASS variant stores. Views with
+    // writes. The prepass writes no colour. Views with
     // fewer targets ignore the extra states.
     internal static BlendStateDescription SceneBlend(PassState state, bool forward, bool prepass, Func<uint, bool> stores, bool transmission = false)
     {
@@ -461,6 +461,13 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             BlendAttachmentDescription target = BlendAttachmentDescription.OverrideBlend;
             description.BlendState = BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [target, target, target] };
             description.DepthStencilState = DepthStencilStateDescription.DepthOnlyGreaterEqual;
+        }
+        // A GBuffer pass writes every target as it is
+        if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.GBuffer.Name))
+        {
+            BlendAttachmentDescription[] targets = new BlendAttachmentDescription[GBufferFeature.TargetCount];
+            Array.Fill(targets, BlendAttachmentDescription.OverrideBlend);
+            description.BlendState = BlendStateDescription.SingleOverrideBlend with { AttachmentStates = targets };
         }
         // Voxelize writes the voxel buffer alone, every triangle from both sides and whatever is in front of it
         if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Voxelize.Name))

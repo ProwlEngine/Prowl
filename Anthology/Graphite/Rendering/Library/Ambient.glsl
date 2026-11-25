@@ -1,5 +1,5 @@
-// Ambient and baked light: the environment's ambient light, the sky's harmonics, light probes, lightmaps and the view's
-// screen lighting, all pre-exposed unless they say otherwise.
+// Ambient and baked light: the environment's ambient light, the sky's harmonics, light probes, lightmaps and a deferred
+// view's screen lighting, all pre-exposed unless they say otherwise.
 #pragma once
 
 #include "Graphite/Core.glsl"
@@ -63,8 +63,9 @@ vec3 Graphite_SkyAmbient(vec3 worldNormal)
     return Graphite_ShadeSH9(graphite_SkyAmbient, worldNormal) * graphite_World.skyScale.x;
 }
 
-// The view's screen lighting, written by its ScreenLightingFeature after the prepass: visibility, and indirect irradiance
-// with its confidence. Views without one read full visibility and no irradiance.
+// A deferred view's screen lighting, written by its ScreenLightingFeature before its lighting pass, which reads it:
+// visibility, and indirect irradiance with its confidence. Views without one read full visibility and no irradiance.
+// Surfaces lit as they are drawn do not read it.
 layout(set = 1, binding = 31) uniform texture2DArray Graphite_ScreenVisibility;
 layout(set = 1, binding = 32) uniform texture2DArray Graphite_ScreenIrradiance;
 layout(set = 1, binding = 33) uniform sampler Graphite_ScreenSampler;
@@ -115,43 +116,8 @@ void Graphite_ScreenLighting(out vec4 indirect, out float visibility)
 
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
 // The diffuse light that is not realtime: the object's lightmap, ambient while it loads, else its light probes, else the
-// ambient light, occluded by the view's screen lighting and blended toward the irradiance it found, pre-exposed.
-// lightmapUV comes from Graphite_LightmapUV in the vertex stage.
-vec3 graphite_BakedDiffuse(vec3 worldNormal, vec2 lightmapUV);
-
-// With the view's screen lighting already read by Graphite_ScreenLighting
-vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV, vec4 screen, float visibility)
-{
-    return mix(graphite_BakedDiffuse(worldNormal, lightmapUV) * visibility, screen.rgb, screen.a);
-}
-
+// ambient light, pre-exposed. lightmapUV comes from Graphite_LightmapUV in the vertex stage.
 vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV)
-{
-    vec4 screen;
-    float visibility;
-    Graphite_ScreenLighting(screen, visibility);
-    return Graphite_IndirectDiffuse(worldNormal, lightmapUV, screen, visibility);
-}
-
-// The same with the light of an object without a lightmap found per vertex by Graphite_ObjectAmbient
-vec3 Graphite_IndirectDiffuse(vec2 lightmapUV, vec3 objectAmbient, vec4 screen, float visibility)
-{
-    Graphite_ObjectData object = Graphite_Object();
-    vec3 baked = objectAmbient;
-    if (object.lightmapTexture < GRAPHITE_LIGHTMAP_LOADING)
-        baked = Graphite_DecodeLightmap(GRAPHITE_SAMPLE_2D(object.lightmapTexture, object.lightmapSampler & 0xFFFFu, lightmapUV), object.lightmapSampler >> 16, object.lightmapScale) * Graphite_Exposure();
-    return mix(baked * visibility, screen.rgb, screen.a);
-}
-
-vec3 Graphite_IndirectDiffuse(vec2 lightmapUV, vec3 objectAmbient)
-{
-    vec4 screen;
-    float visibility;
-    Graphite_ScreenLighting(screen, visibility);
-    return Graphite_IndirectDiffuse(lightmapUV, objectAmbient, screen, visibility);
-}
-
-vec3 graphite_BakedDiffuse(vec3 worldNormal, vec2 lightmapUV)
 {
     Graphite_ObjectData object = Graphite_Object();
     if (object.lightmapTexture == GRAPHITE_LIGHTMAP_LOADING)
@@ -161,5 +127,15 @@ vec3 graphite_BakedDiffuse(vec3 worldNormal, vec2 lightmapUV)
     if (object.probeIndex != 0xFFFFFFFFu && graphite_World.counts.z != 0u)
         return Graphite_ShadeSH9(graphite_ObjectProbes[object.probeIndex], worldNormal) * Graphite_Exposure();
     return Graphite_AmbientLight(worldNormal) * graphite_World.ambientMode.z;
+}
+
+// The same with the light of an object without a lightmap found per vertex by Graphite_ObjectAmbient
+vec3 Graphite_IndirectDiffuse(vec2 lightmapUV, vec3 objectAmbient)
+{
+    Graphite_ObjectData object = Graphite_Object();
+    vec3 baked = objectAmbient;
+    if (object.lightmapTexture < GRAPHITE_LIGHTMAP_LOADING)
+        baked = Graphite_DecodeLightmap(GRAPHITE_SAMPLE_2D(object.lightmapTexture, object.lightmapSampler & 0xFFFFu, lightmapUV), object.lightmapSampler >> 16, object.lightmapScale) * Graphite_Exposure();
+    return baked;
 }
 #endif

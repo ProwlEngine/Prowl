@@ -301,6 +301,8 @@ internal sealed class DrawPrograms
         id = 0;
         if (pass == PassType.BackDepth && !draw.Volume)
             return false;
+        if (pass == PassType.GBuffer && (draw.Transmissive || draw.Transparent))
+            return false;
         if (pass == PassType.Forward && draw.Transmissive && draw.Shader.PassIndex(PassType.Transmission) >= 0)
             pass = PassType.Transmission;
         int passIndex = draw.Shader.PassIndex(pass);
@@ -342,6 +344,32 @@ internal sealed class DrawPrograms
         return true;
     }
 
+    /// <summary>
+    /// Whether a deferred view's prepass draws a GBuffer program's surface first under an <see cref="EarlyDepth"/>, and
+    /// then the program that draws it testing depth equal and writing none, held like <see cref="Hold"/>.
+    /// </summary>
+    public bool HoldEarlyDepth(ushort id, EarlyDepth mode, out ushort equal)
+    {
+        equal = id;
+        if (!EarlyDepthDraws(id, mode))
+            return false;
+        DrawProgram program = _programs[id];
+        if (!Intern(program with { StateOverride = s_depthEqual.Apply(program.StateOverride ?? new PassState()) }, out equal))
+            return false;
+        Acquire(equal);
+        _held.Add(equal);
+        return true;
+    }
+
+    /// <summary>Whether a deferred view's prepass draws the surface of a program of a shader with a GBuffer pass.</summary>
+    public bool EarlyDepthDraws(ushort id, EarlyDepth mode)
+    {
+        DrawProgram program = _programs[id];
+        if (mode == EarlyDepth.None || program.Shader.PassIndex(PassType.Prepass) < 0)
+            return false;
+        return mode == EarlyDepth.All || Array.Exists(program.Keywords, static keyword => keyword.Name == "_SURFACE" && keyword.Value == "CUTOUT");
+    }
+
     private int Prepassed(ushort id)
     {
         DrawProgram program = _programs[id];
@@ -359,8 +387,8 @@ internal sealed class DrawPrograms
     }
 
     /// <summary>
-    /// The program a cross fading draw of a prepass or forward program draws with: the prepass with its dither variant,
-    /// the forward pass testing depth equal to what the prepass left, so only the level owning a pixel shades it.
+    /// The program a cross fading draw of a program draws with: the prepass and the GBuffer pass with their dither
+    /// variant, the forward pass testing depth equal to what the prepass left, so only the level owning a pixel shades it.
     /// </summary>
     public bool TryFading(ushort id, bool prepass, out ushort fading)
     {
@@ -955,8 +983,8 @@ internal sealed class BucketSet
         _prepass.Clear();
 
         // The visible objects' buckets of this pass, in the pass's order, each with its objects in index order. The
-        // prepass and forward pass draw both levels of a cross fading object, the others its incoming level alone
-        bool fades = pass < 2;
+        // prepass, forward and GBuffer passes draw both levels of a cross fading object, the others its incoming level alone
+        bool fades = Fades(pass);
         _buildStamp++;
         _touched.Clear();
         foreach (int index in _visibleList)
@@ -1028,6 +1056,8 @@ internal sealed class BucketSet
             AppendTransparent(frustum, list, pass, provided?.Sorted);
     }
 
+    private bool Fades(int pass) => pass < 2 || _passes[pass] == PassType.GBuffer;
+
     // A command for every bucket of the pass with no instances, then a fade command for each that can fade when the view
     // fades, which the GPU cull fills
     private void AppendGpu(int pass, DrawList list, in GpuCullView view)
@@ -1036,7 +1066,7 @@ internal sealed class BucketSet
         GpuSegment segment = list.StartGpu();
         segment.Pass = pass;
         segment.FirstCommand = list.CommandCount;
-        segment.Fades = pass < 2 && view.Lod.FadeSeconds > 0 && view.Lod.State != null;
+        segment.Fades = Fades(pass) && view.Lod.FadeSeconds > 0 && view.Lod.State != null;
         segment.View = view;
         // A fading list's map has a second half, the fade command of each bucket that has one
         segment.MapLength = segment.Fades ? _gpuIds * 2 : _gpuIds;
@@ -1271,7 +1301,7 @@ internal sealed class BucketSet
         if (bucket.FadeResolved)
             return bucket.FadeProgram;
         bucket.FadeResolved = true;
-        if (_programs.TryFading(bucket.Program, bucket.Pass == 0, out ushort fading))
+        if (_programs.TryFading(bucket.Program, bucket.Pass == 0 || _passes[bucket.Pass] == PassType.GBuffer, out ushort fading))
         {
             bucket.FadeProgram = fading;
             _programs.Acquire(fading);

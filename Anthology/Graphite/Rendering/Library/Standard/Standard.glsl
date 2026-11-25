@@ -10,6 +10,8 @@
 // GRAPHITE_STANDARD_BACK_DEPTH: with the depth define, the back depth pass, writing the distance along the view ray.
 // GRAPHITE_STANDARD_SHADOW: with the depth define, the shadow caster. Transparent casters, and PBR ones letting light
 // through by transmission or thin walled subsurface, dither their coverage by what they let through.
+// GRAPHITE_STANDARD_GBUFFER: with the forward define, the GBuffer pass, which keeps the surface for a deferred view's
+// lighting in place of lighting it. See Graphite/GBuffer.glsl.
 // GRAPHITE_STANDARD_DEBUG: with the forward define, the Debug pass, showing the view's GRAPHITE_DEBUG value. See Graphite/Debug.glsl.
 // GRAPHITE_STANDARD_IMPOSTOR: the Impostor pass, writing the surface's material into an impostor bake's three targets.
 // Model define: GRAPHITE_STANDARD_UNLIT for no lighting, which Graphite/Standard/UnlitSurface.glsl defines, else the PBR
@@ -20,6 +22,8 @@
 // pass before the vertex is transformed, so shadows and depth match. It animates with v.time for motion vectors to follow.
 // GRAPHITE_STANDARD_INPUTS: a model's function, void (inout Graphite_SurfaceData i), that replaces the frame the
 // varyings gave in passes reading it, as Graphite/Standard/Terrain.shader does with its per pixel normals.
+// GRAPHITE_STANDARD_GBUFFER_MODEL: a model's function, void (inout Graphite_GBuffer g), run last in the GBuffer pass to
+// name its shading model and fill the Custom values its lighting reads, as Graphite/Standard/Foliage.shader does.
 // GRAPHITE_STANDARD_FINISH: a model's function, void (inout PBR_Params p, Graphite_SurfaceData i), run after the Surface
 // function in the lit passes, as Graphite/Standard/Terrain.shader does to draw the editor's brush.
 //
@@ -42,12 +46,8 @@
     #define GRAPHITE_STANDARD_LIT
 #endif
 
-// The prepass writes motion, and with NORMALS the surface's normal, while features before the opaque pass read them
-#if defined(GRAPHITE_PREPASS_MOTION) || defined(GRAPHITE_PREPASS_NORMALS)
-    #define GRAPHITE_STANDARD_PREPASS_MOTION
-#endif
-#if defined(GRAPHITE_PREPASS_NORMALS) && !defined(GRAPHITE_STANDARD_UNLIT)
-    #define GRAPHITE_STANDARD_PREPASS_NORMALS
+#ifdef GRAPHITE_STANDARD_GBUFFER
+    #define GRAPHITE_GBUFFER_PASS
 #endif
 
 #if defined(GRAPHITE_STANDARD_SHADOW) && (defined(_SURFACE_TRANSPARENT) || (!defined(GRAPHITE_STANDARD_UNLIT) && (defined(PBR_TRANSMISSION) || (defined(PBR_SUBSURFACE) && defined(PBR_THIN_WALLED)))))
@@ -55,14 +55,14 @@
 #endif
 
 // Passes whose fragments read the vertex colour and relative position: forward, back depth, voxelize, dithered shadow
-// casters, the depth passes of cutout surfaces and a prepass writing normals
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || defined(GRAPHITE_STANDARD_IMPOSTOR)
+// casters and the depth passes of cutout surfaces
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_BACK_DEPTH) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_IMPOSTOR)
     #define GRAPHITE_STANDARD_VERTEX_DATA
 #endif
 
-// Passes whose fragments read the tangent frame: lit ones, a prepass writing normals, and under PBR parallax the depth
+// Passes whose fragments read the tangent frame: lit ones, and under PBR parallax the depth
 // passes reading the material
-#if defined(GRAPHITE_STANDARD_LIT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || defined(GRAPHITE_STANDARD_IMPOSTOR) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
+#if defined(GRAPHITE_STANDARD_LIT) || defined(GRAPHITE_STANDARD_IMPOSTOR) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
     #define GRAPHITE_STANDARD_FRAME
 #endif
 
@@ -82,7 +82,7 @@
         #define GRAPHITE_VOXEL_WRITER
         #include "Graphite/VoxelData.glsl"
     #endif
-    #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_PREPASS_MOTION)
+    #if defined(GRAPHITE_STANDARD_FORWARD)
         #include "Graphite/Passes.glsl"
     #endif
     #ifdef GRAPHITE_STANDARD_DEBUG
@@ -94,7 +94,7 @@
 #endif
 
 // vUV and vUV1 are the mesh's two UV sets as they are, vLightmapUV the lightmap UV placed
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || defined(GRAPHITE_STANDARD_IMPOSTOR)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_IMPOSTOR)
 GRAPHITE_STANDARD_VARYING vec2 vUV;
 GRAPHITE_STANDARD_VARYING vec2 vUV1;
 #endif

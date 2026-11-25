@@ -10,6 +10,9 @@
 #ifdef GRAPHITE_STANDARD_FORWARD
 #include "Graphite/Fog.glsl"
 #endif
+#ifdef GRAPHITE_STANDARD_GBUFFER
+#include "Graphite/GBuffer.glsl"
+#endif
 
 #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_ALPHA)
 uniform vec4 base_color;

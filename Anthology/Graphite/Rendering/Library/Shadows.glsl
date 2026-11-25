@@ -31,11 +31,14 @@ layout(set = 1, binding = 30, std430) readonly buffer Graphite_Cascades { Graphi
 #define GRAPHITE_CASCADES 4u
 #define GRAPHITE_SHADOW_HARD 0.0
 
-// Whether the surface takes shadows, its renderable's ReceiveShadows flag
+// Whether the surface takes shadows, its renderable's ReceiveShadows flag. A program without an object may define
+// GRAPHITE_RECEIVES_SHADOWS as the expression that says so.
 bool Graphite_ReceivesShadows()
 {
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
     return (Graphite_Object().flags & 4u) != 0u;
+#elif defined(GRAPHITE_RECEIVES_SHADOWS)
+    return GRAPHITE_RECEIVES_SHADOWS;
 #else
     return true;
 #endif

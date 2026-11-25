@@ -31,6 +31,9 @@ public static class RendererOutputs
     /// <summary>The view's cleared scene: colour, depth and G-buffer in one texture.</summary>
     public const string Scene = "Graphite.Scene";
 
+    /// <summary>A deferred view's GBuffer, its targets in the order of <see cref="GBufferTarget"/>, with its own depth.</summary>
+    public const string GBuffer = "Graphite.GBuffer";
+
     /// <summary>A texture of the view's cascade depth, once its cascades are drawn.</summary>
     public const string Cascades = "Graphite.Cascades";
 

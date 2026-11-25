@@ -16,6 +16,7 @@ public enum RenderSlot : byte
     Culling,
     Shadows,
     Prepass,
+    GBuffer,
     AfterPrepass,
     Opaque,
     Sky,
@@ -81,6 +82,7 @@ public readonly struct FeatureView
     {
         World = desc.World;
         Kind = desc.Kind;
+        Path = desc.Path;
         RenderView = desc.Owner;
         LayerCount = desc.LayerCount;
         Width = width;
@@ -108,6 +110,9 @@ public readonly struct FeatureView
 
     public RenderWorld World { get; }
     public ViewKind Kind { get; }
+
+    /// <summary>How the view lights its opaque surfaces.</summary>
+    public RenderPath Path { get; }
 
     /// <summary>The host's view, null on the renderer's own capture and shadow views.</summary>
     public RenderView? RenderView { get; }
@@ -210,7 +215,8 @@ public sealed class FeatureGroup(string name)
     public static readonly FeatureGroup SceneClear = new("SceneClear"), Cascades = new("Cascades"), Prepass = new("Prepass"),
         Opaque = new("Opaque"), Sky = new("Sky"), SceneColor = new("SceneColor"), SceneDepth = new("SceneDepth"),
         BackDepth = new("BackDepth"), Transparent = new("Transparent"), Present = new("Present"), VolumetricFog = new("VolumetricFog"),
-        VolumetricFogSky = new("VolumetricFogSky"), HiZ = new("HiZ"), HiZAfterOpaques = new("HiZAfterOpaques");
+        VolumetricFogSky = new("VolumetricFogSky"), HiZ = new("HiZ"), HiZAfterOpaques = new("HiZAfterOpaques"), GBuffer = new("GBuffer"),
+        GBufferResolve = new("GBufferResolve"), DeferredLighting = new("DeferredLighting");
 
     /// <summary>The stock effects' groups, of which a view runs one each.</summary>
     public static readonly FeatureGroup ScreenLighting = new("ScreenLighting"), Tonemap = new("Tonemap"), AntiAliasing = new("AntiAliasing");
@@ -338,6 +344,9 @@ public abstract class RenderFeature : RenderExtension
 
     public ViewKinds RunsOn { get; }
 
+    /// <summary>The paths the feature works in, both by default. A view on another path leaves it out, see <see cref="RenderView.SkippedFeatures"/>.</summary>
+    public RenderPaths Paths { get; protected init; } = RenderPaths.All;
+
     /// <summary>The scene targets past colour and depth the feature reads, so its views have them.</summary>
     public SceneTargets SceneReads { get; }
 
@@ -421,17 +430,20 @@ public abstract class RenderFeature : RenderExtension
 }
 
 /// <summary>
-/// A producer of the view's screen lighting, in AfterPrepass after the depth prepass: the visibility, and optionally the
-/// indirect irradiance with its confidence, that every renderable drawn after reads through Graphite_IndirectDiffuse and
-/// Graphite_IndirectSpecular. Direct light is never touched. A view runs one, as they share the ScreenLighting group.
-/// The forward pass has not drawn yet, so producers read the normals and motion the prepass writes when asked through
-/// sceneReads, or rebuild them from depth.
+/// A producer of a deferred view's screen lighting, in AfterPrepass after its GBuffer: the visibility, and optionally
+/// the indirect irradiance with its confidence, that the view's lighting pass reads through Graphite_ScreenLighting.
+/// Direct light is never touched. A view runs one, as they share the ScreenLighting group. Producers read the scene's
+/// depth, and its normals and motion when asked through sceneReads: the GBuffer's, and the prepass's for the surfaces
+/// drawn forward.
 /// </summary>
 public abstract class ScreenLightingFeature : RenderFeature
 {
-    /// <param name="sceneReads">Targets it reads, which the prepass writes for it, see <see cref="GlobalAxis.Prepass"/>.</param>
+    /// <param name="sceneReads">Targets it reads, which the view's GBuffer fills for it.</param>
     protected ScreenLightingFeature(int order = 0, ViewKinds runsOn = ViewKinds.Cameras, SceneTargets sceneReads = SceneTargets.None)
-        : base(RenderSlot.AfterPrepass, order, FeatureGroup.ScreenLighting, runsOn, sceneReads) { }
+        : base(RenderSlot.AfterPrepass, order, FeatureGroup.ScreenLighting, runsOn, sceneReads)
+    {
+        Paths = RenderPaths.Deferred;
+    }
 
     /// <summary>The part of the view's render resolution the screen lighting takes, 1/16 to 1.</summary>
     public abstract float Scale { get; }
@@ -1677,7 +1689,10 @@ internal static class FeatureSelection
             new VolumetricFogFeature(resources),
             new VolumetricFogSkyFeature(resources),
             new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
+            new GBufferFeature(resources),
+            new GBufferResolveFeature(resources),
             new HiZFeature(resources, afterOpaques: false),
+            new DeferredLightingFeature(resources),
             new DrawPassFeature(PassType.Forward, RenderSlot.Opaque, group: FeatureGroup.Opaque, runsOn: ViewKinds.All),
             new DrawPassFeature(PassType.Sky, RenderSlot.Sky, group: FeatureGroup.Sky, runsOn: ViewKinds.All),
             new HiZFeature(resources, afterOpaques: true),
@@ -1737,9 +1752,10 @@ internal static class FeatureSelection
     private static void Add(List<RenderFeature> result, RenderFeature[] features, in FeatureView info)
     {
         ViewKinds kind = (ViewKinds)(1 << (int)info.Kind);
+        RenderPaths path = (RenderPaths)(1 << (int)info.Path);
         foreach (RenderFeature feature in features)
         {
-            if (!feature.EnabledSnapshot || (feature.RunsOn & kind) == 0 || result.Contains(feature))
+            if (!feature.EnabledSnapshot || (feature.RunsOn & kind) == 0 || (feature.Paths & path) == 0 || result.Contains(feature))
                 continue;
             if (feature.IsActive(info) && feature.ProgramsReady(info.LayerCount))
                 result.Add(feature);

@@ -418,11 +418,14 @@ bool Graphite_NextBin(inout Graphite_BinWalk w, out uint index)
 }
 #endif
 
-// The layer mask of the surface being shaded, all layers outside the fragment stage
+// The layer mask of the surface being shaded, all layers outside the fragment stage. A program without an object may
+// define GRAPHITE_SURFACE_LAYERS as the expression giving it.
 uint Graphite_SurfaceLayers()
 {
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
     return Graphite_Object().layerMask;
+#elif defined(GRAPHITE_SURFACE_LAYERS)
+    return GRAPHITE_SURFACE_LAYERS;
 #else
     return 0xFFFFFFFFu;
 #endif

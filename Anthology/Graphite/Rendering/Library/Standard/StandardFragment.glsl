@@ -6,7 +6,7 @@
 
 #ifdef GRAPHITE_FRAGMENT
 
-#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS) || defined(GRAPHITE_STANDARD_IMPOSTOR)
+#if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_IMPOSTOR)
 // The inputs from the varyings, the frame flipped on back faces, the UVs moved by PBR parallax. Depth passes keep the
 // frame at its defaults unless parallax needs it.
 Graphite_SurfaceData graphite_StandardInputs()
@@ -45,12 +45,17 @@ Graphite_SurfaceData graphite_StandardInputs()
 
 #ifdef GRAPHITE_STANDARD_FORWARD
 
+#ifndef GRAPHITE_STANDARD_GBUFFER
 layout(location = 0) out vec4 fragColor;
+#endif
 
 #ifdef GRAPHITE_STANDARD_UNLIT
 
 void Graphite_StandardFragment()
 {
+#if defined(GRAPHITE_STANDARD_GBUFFER) && defined(GRAPHITE_LOD_FADE)
+    Graphite_LodFadeDiscard();
+#endif
     Graphite_SurfaceData i = graphite_StandardInputs();
     Unlit_Params p = Unlit_MaterialParams(i);
 #ifdef GRAPHITE_SURFACE_FUNCTION
@@ -62,6 +67,13 @@ void Graphite_StandardFragment()
 #endif
 
     vec3 emission = p.baseColor * p.emissionLuminance;
+#ifdef GRAPHITE_STANDARD_GBUFFER
+    Graphite_GBuffer g = Graphite_NewGBuffer(GRAPHITE_MODEL_UNLIT);
+    g.baseColor = p.baseColor;
+    g.emission = emission * Graphite_Exposure();
+    Graphite_WriteGBuffer(g);
+    Graphite_WriteMotion(graphite_MotionPrevious);
+#else
     vec3 color = Graphite_SaturateHalf(Graphite_ApplyFog(emission * Graphite_Exposure(), vRelativePos));
 #ifdef GRAPHITE_STANDARD_DEBUG
     color = Graphite_DebugView(color, p.baseColor, vec3(0.0), 1.0, 0.0, 1.0, emission, vRelativePos, vec2(0.0));
@@ -72,6 +84,44 @@ void Graphite_StandardFragment()
     Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), vec3(0.0), 1.0);
     fragColor = vec4(color, 1.0);
 #endif
+#endif
+}
+
+#elif defined(GRAPHITE_STANDARD_GBUFFER)
+
+// The GBuffer pass: material inputs, the Surface function and decals as the forward pass has them, kept for the
+// lighting pass with the surface's baked light and emission. A cross fading level keeps its half of the dither, as the
+// prepass does for the surfaces lit as they are drawn.
+void Graphite_StandardFragment()
+{
+#ifdef GRAPHITE_LOD_FADE
+    Graphite_LodFadeDiscard();
+#endif
+    Graphite_SurfaceData i = graphite_StandardInputs();
+    float mapVariance;
+    PBR_Params p = PBR_MaterialParams(i, vHasTangents > 0.5, mapVariance);
+#ifdef GRAPHITE_SURFACE_FUNCTION
+    Surface(p, i);
+#endif
+#ifdef GRAPHITE_STANDARD_FINISH
+    GRAPHITE_STANDARD_FINISH(p, i);
+#endif
+    Graphite_ApplyDecals(vRelativePos, i.geometryNormal, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
+#ifdef _SURFACE_CUTOUT
+    if (p.geometryOpacity < alpha_cutoff)
+        discard;
+#endif
+
+    Graphite_GBuffer g = PBR_ToGBuffer(p, GRAPHITE_MODEL_DEFAULT_LIT, mapVariance);
+    g.lightLayers = Graphite_Object().layerMask & 7u;
+    g.receivesShadows = Graphite_ReceivesShadows();
+    g.baked = Graphite_IndirectDiffuse(vLightmapUV, vAmbient);
+    g.emission = p.emissionColor * p.emissionLuminance * Graphite_Exposure();
+#ifdef GRAPHITE_STANDARD_GBUFFER_MODEL
+    GRAPHITE_STANDARD_GBUFFER_MODEL(g);
+#endif
+    Graphite_WriteGBuffer(g);
+    Graphite_WriteMotion(graphite_MotionPrevious);
 }
 
 #else
@@ -257,13 +307,13 @@ float graphite_ShadowCosine()
 #endif
 
 // Prepass and shadow caster: depth, cut out where the alpha test fails. Dithered casters then let their transmittance
-// through. The prepass also writes motion and normals while its GRAPHITE_PREPASS variant asks.
+// through.
 void Graphite_StandardFragment()
 {
 #ifdef GRAPHITE_LOD_FADE
     Graphite_LodFadeDiscard();
 #endif
-#if defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(GRAPHITE_STANDARD_PREPASS_NORMALS)
+#if defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)
     Graphite_SurfaceData i = graphite_StandardInputs();
 #ifdef GRAPHITE_STANDARD_UNLIT
     Unlit_Params p = Unlit_MaterialParams(i);
@@ -283,11 +333,7 @@ void Graphite_StandardFragment()
     float cosine = graphite_ShadowCosine();
 #endif
     float mapVariance;
-#ifdef GRAPHITE_STANDARD_PREPASS_NORMALS
-    PBR_Params p = PBR_MaterialParams(i, vHasTangents > 0.5, mapVariance);
-#else
     PBR_Params p = PBR_MaterialParams(i, false, mapVariance);
-#endif
 #ifdef GRAPHITE_SURFACE_FUNCTION
     Surface(p, i);
 #endif
@@ -304,15 +350,7 @@ void Graphite_StandardFragment()
     if (graphite_ShadowDiscards(PBR_ShadowTransmittance(p, coverage, cosine)))
         discard;
 #endif
-#ifdef GRAPHITE_STANDARD_PREPASS_NORMALS
-    graphite_GBufferNormal = Graphite_OctEncode(normalize(p.geometryNormal));
 #endif
-#endif
-#endif
-#if defined(GRAPHITE_PREPASS_NORMALS) && defined(GRAPHITE_STANDARD_UNLIT)
-    Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), vec3(0.0), 1.0);
-#elif defined(GRAPHITE_STANDARD_PREPASS_MOTION)
-    Graphite_WriteMotion(graphite_MotionPrevious);
 #endif
 }
 

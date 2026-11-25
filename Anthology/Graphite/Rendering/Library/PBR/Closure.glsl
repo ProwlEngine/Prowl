@@ -679,18 +679,9 @@ Graphite_ProbeSet PBR_FindProbes(PBR_Closure c)
     return Graphite_FindProbes(c.position);
 }
 
-// The surroundings' light on the closure, diffuse from Graphite_IndirectDiffuse with screen occlusion applied. With
-// objectAmbient the front's diffuse light without a lightmap is the one found per vertex.
-PBR_Indirect graphite_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSet probes, bool perVertex, vec3 objectAmbient)
+// What the probes reflect into the closure's lobes, added to an indirect whose diffuse light is already found
+PBR_Indirect graphite_FinishIndirect(PBR_Indirect i, PBR_Closure c, Graphite_ProbeSet probes, vec4 screen, float visibility)
 {
-    PBR_Indirect i;
-    vec4 screen;
-    float visibility;
-    Graphite_ScreenLighting(screen, visibility);
-    i.irradiance = (perVertex ? Graphite_IndirectDiffuse(lightmapUV, objectAmbient, screen, visibility) : Graphite_IndirectDiffuse(c.normal, lightmapUV, screen, visibility)) * c.occlusion;
-#ifdef PBR_SHEET
-    i.irradianceBack = Graphite_IndirectDiffuse(-c.normal, lightmapUV, screen, visibility) * c.occlusion;
-#endif
     i.specular = vec3(0.0);
 #ifdef PBR_COAT
     i.coat = vec3(0.0);
@@ -707,6 +698,19 @@ PBR_Indirect graphite_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_Pr
     return i;
 }
 
+#ifndef GRAPHITE_NO_OBJECT
+// The surroundings' light on the closure, diffuse from Graphite_IndirectDiffuse. With
+// objectAmbient the front's diffuse light without a lightmap is the one found per vertex.
+PBR_Indirect graphite_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSet probes, bool perVertex, vec3 objectAmbient)
+{
+    PBR_Indirect i;
+    i.irradiance = (perVertex ? Graphite_IndirectDiffuse(lightmapUV, objectAmbient) : Graphite_IndirectDiffuse(c.normal, lightmapUV)) * c.occlusion;
+#ifdef PBR_SHEET
+    i.irradianceBack = Graphite_IndirectDiffuse(-c.normal, lightmapUV) * c.occlusion;
+#endif
+    return graphite_FinishIndirect(i, c, probes, vec4(0.0), 1.0);
+}
+
 PBR_Indirect PBR_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSet probes)
 {
     return graphite_GatherIndirect(c, lightmapUV, probes, false, vec3(0.0));
@@ -715,6 +719,22 @@ PBR_Indirect PBR_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSe
 PBR_Indirect PBR_GatherIndirect(PBR_Closure c, vec2 lightmapUV, Graphite_ProbeSet probes, vec3 objectAmbient)
 {
     return graphite_GatherIndirect(c, lightmapUV, probes, true, objectAmbient);
+}
+#endif
+
+// The same from baked diffuse light found earlier, as a deferred view's GBuffer keeps it, with the view's screen
+// lighting: its occlusion dims the baked light, which blends toward the irradiance it found
+PBR_Indirect PBR_GatherIndirectBaked(PBR_Closure c, vec3 baked, Graphite_ProbeSet probes)
+{
+    PBR_Indirect i;
+    vec4 screen;
+    float visibility;
+    Graphite_ScreenLighting(screen, visibility);
+    i.irradiance = mix(baked * visibility, screen.rgb, screen.a) * c.occlusion;
+#ifdef PBR_SHEET
+    i.irradianceBack = i.irradiance;
+#endif
+    return graphite_FinishIndirect(i, c, probes, screen, visibility);
 }
 
 // The top specular lobe the G-buffer holds for screen space reflections, the one reflecting most: its normal, its

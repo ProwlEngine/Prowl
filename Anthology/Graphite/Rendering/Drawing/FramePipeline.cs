@@ -398,7 +398,7 @@ internal sealed partial class FramePipeline : IDisposable
         (CascadeSlot[] _, string _) = CascadesOf(camera, view, camera.World);
         CameraShape shape = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, camera.Cubes.Length);
         camera.ShapeKey = shape;
-        camera.ResolveKeywords(shape.PrepassValue);
+        camera.ResolveKeywords();
         ResolveScreenLighting(camera, shape, width, height);
         camera.ListSelectedPasses();
         Prepare(camera, view, world, time, width, height);
@@ -915,6 +915,21 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
+    // A deferred view lights the surfaces its GBuffer holds from it, so their forward draws go, and their prepass draws
+    // unless the view asks for them first
+    private bool HasGBufferPass(ushort program) => DrawPrograms[program].Shader.PassIndex(PassType.GBuffer) >= 0;
+
+    // GBuffer draws whose surfaces the prepass already drew test depth equal, so only the visible pixel is kept
+    private void DepthEqualAfterEarlyDepth(DrawList gbuffer, EarlyDepth mode)
+    {
+        List<DrawCall> calls = gbuffer.Calls;
+        for (int i = 0; i < calls.Count; i++)
+        {
+            if (DrawPrograms.HoldEarlyDepth(calls[i].Program, mode, out ushort equal))
+                calls[i] = calls[i] with { Program = equal };
+        }
+    }
+
     // Opaque forward draws whose surfaces the prepass already drew test depth equal, so only the visible pixel shades
     private void DepthEqualAfterPrepass(DrawList forward)
     {
@@ -963,10 +978,21 @@ internal sealed partial class FramePipeline : IDisposable
             DrawItemSink sink = camera.Sink;
             world.Buckets.Build(0, frustum, camera.Prepass, sink.For(camera.Prepass));
             world.Buckets.Build(1, frustum, camera.Forward, sink.For(camera.Forward));
+            if (view.Path == RenderPath.Deferred && camera.Selected.Exists(static feature => feature is DeferredLightingFeature)
+                && camera.Selected.Exists(static feature => feature is GBufferResolveFeature))
+            {
+                EarlyDepth early = view.EarlyDepth;
+                camera.Prepass.Calls.RemoveAll(call => HasGBufferPass(call.Program) && !DrawPrograms.EarlyDepthDraws(call.Program, early));
+                camera.Forward.Calls.RemoveAll(call => HasGBufferPass(call.Program));
+            }
             if (drawsPrepass)
                 DepthEqualAfterPrepass(camera.Forward);
             foreach ((PassType type, DrawList list) in camera.PassLists)
+            {
                 world.Buckets.Build(world.Buckets.Pass(type), frustum, list, sink.For(list));
+                if (type == PassType.GBuffer && drawsPrepass)
+                    DepthEqualAfterEarlyDepth(list, view.EarlyDepth);
+            }
             world.Buckets.BuildTransparent(frustum, camera.Transparent, sink.For(camera.Transparent)?.Sorted);
 
             foreach (SpatialIndex set in world.World.SpatialSets)

@@ -135,6 +135,37 @@ Shader "Graphite/Terrain"
 
     Pass
     {
+        Name "GBuffer"
+        Tags { "LightMode" = "GBuffer" }
+        GLSLPROGRAM
+        Shared
+        {
+            #define GRAPHITE_STANDARD_FORWARD
+            #define GRAPHITE_STANDARD_GBUFFER
+            #define GRAPHITE_STANDARD_INPUTS Terrain_Inputs
+            #define GRAPHITE_STANDARD_FINISH Terrain_Brush
+            #pragma variant TERRAIN_HOLES
+            #include "Graphite/Standard/PBRSurface.glsl"
+            #include "Graphite/Terrain/Terrain.glsl"
+        }
+        Vertex
+        {
+            #pragma surface_vertex
+            #include "Graphite/Terrain/TerrainVertex.glsl"
+            void main() { Terrain_Vertex(); }
+        }
+        Fragment
+        {
+            #include "Graphite/Terrain/TerrainFragment.glsl"
+            #pragma surface
+            #include "Graphite/Standard/StandardFragment.glsl"
+            void main() { Terrain_ClipHoles(); Graphite_StandardFragment(); }
+        }
+        ENDGLSL
+    }
+
+    Pass
+    {
         Name "Prepass"
         Tags { "LightMode" = "Prepass" }
         GLSLPROGRAM
@@ -143,7 +174,6 @@ Shader "Graphite/Terrain"
             #define GRAPHITE_STANDARD_DEPTH
             #define GRAPHITE_STANDARD_INPUTS Terrain_Inputs
             #pragma variant TERRAIN_HOLES
-            #pragma variant global GRAPHITE_PREPASS DEPTH MOTION NORMALS
             #include "Graphite/Standard/PBRSurface.glsl"
             #include "Graphite/Terrain/Terrain.glsl"
         }

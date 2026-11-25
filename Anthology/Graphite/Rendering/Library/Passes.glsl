@@ -1,19 +1,23 @@
 // Outputs of the built in pass types. The forward opaque pass writes the thin G-buffer next to its colour: screen
 // motion, the world normal, octahedral in a signed two channel target, and the top layer's specular reflectance and
-// perceptual roughness. The standard prepass writes motion, and the normal before decals, while the view's
-// GRAPHITE_PREPASS asks, so features before the opaque pass read them. Transmissive passes write motion and the
+// perceptual roughness. The prepass writes depth alone. Transmissive passes write motion and the
 // reactive mask, how much of the pixel is what they refract from behind, which temporal effects trust history less
-// for. A view has only the targets its features read, so writes to the others go nowhere.
+// for. A view has only the targets its features read, so writes to the others go nowhere. A GBuffer pass, which defines
+// GRAPHITE_GBUFFER_PASS, writes the targets of Graphite/GBuffer.glsl instead, and of these only motion.
 #pragma once
 
 #include "Graphite/Core.glsl"
 #include "Graphite/Octahedral.glsl"
 
 #ifdef GRAPHITE_FRAGMENT
+#ifdef GRAPHITE_GBUFFER_PASS
+layout(location = 6) out vec2 graphite_GBufferMotion;
+#else
 layout(location = 1) out vec2 graphite_GBufferMotion;
 layout(location = 2) out float graphite_Reactive;
 layout(location = 3) out vec2 graphite_GBufferNormal;
 layout(location = 4) out vec4 graphite_GBufferMaterial;
+#endif
 layout(location = 24) in vec4 graphite_MotionPrevious;
 #endif
 
@@ -35,6 +39,7 @@ void Graphite_WriteMotion(vec4 previousClip)
     graphite_GBufferMotion = (current - previous) * vec2(0.5, -0.5);
 }
 
+#ifndef GRAPHITE_GBUFFER_PASS
 // reactive is how much of the pixel shows what the surface refracts from behind it, 0 to 1
 void Graphite_WriteReactive(float reactive) { graphite_Reactive = clamp(reactive, 0.0, 1.0); }
 
@@ -46,4 +51,5 @@ void Graphite_WriteGBuffer(vec3 worldNormal, vec3 reflectance, float roughness)
     graphite_GBufferMaterial = vec4(reflectance, roughness);
     Graphite_WriteMotion(graphite_MotionPrevious);
 }
+#endif
 #endif

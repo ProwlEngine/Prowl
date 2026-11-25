@@ -39,13 +39,39 @@ Shader "Graphite/Unlit"
 
     Pass
     {
+        Name "GBuffer"
+        Tags { "LightMode" = "GBuffer" }
+        GLSLPROGRAM
+        Shared
+        {
+            #define GRAPHITE_STANDARD_FORWARD
+            #define GRAPHITE_STANDARD_GBUFFER
+            #pragma variant global GRAPHITE_LOD_FADE
+            #include "Graphite/Standard/UnlitSurface.glsl"
+        }
+        Vertex
+        {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
+            void main() { Graphite_StandardVertex(); }
+        }
+        Fragment
+        {
+            #pragma surface
+            #include "Graphite/Standard/StandardFragment.glsl"
+            void main() { Graphite_StandardFragment(); }
+        }
+        ENDGLSL
+    }
+
+    Pass
+    {
         Name "Prepass"
         Tags { "LightMode" = "Prepass" }
         GLSLPROGRAM
         Shared
         {
             #define GRAPHITE_STANDARD_DEPTH
-            #pragma variant global GRAPHITE_PREPASS DEPTH MOTION NORMALS
             #pragma variant global GRAPHITE_LOD_FADE
             #include "Graphite/Standard/UnlitSurface.glsl"
         }

@@ -41,6 +41,18 @@ internal sealed class RendererResources : IDisposable
         FogBlendProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogBlend.glsl", policy, lit: true);
         FogIntegrateProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogIntegrate.glsl", policy, lit: true);
         FogSkyProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("VolumetricFogSky"), "Graphite/VolumetricFogSky", lit: true, policy: policy);
+        BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
+        BlendAttachmentDescription kept = written with { ColorWriteMask = ColorWriteMask.None };
+        DeferredLightingProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("DeferredLighting"), "Graphite/DeferredLighting", source: false,
+            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, kept, kept, kept, written] }, lit: true, depth: true, policy: policy);
+        FoliageLightingProgram = FullscreenProgram.Create(device, compiler, "#define DEFERRED_FOLIAGE 1\n" + InternalShaders.PostFragment("DeferredLighting"), "Graphite/DeferredLighting Foliage", source: false,
+            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, kept, kept, kept, written] }, lit: true, depth: true, policy: policy);
+        BlendAttachmentDescription[] none = new BlendAttachmentDescription[GBufferFeature.TargetCount];
+        Array.Fill(none, kept);
+        GBufferDepthProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDepth"), "Graphite/GBufferDepth", source: false,
+            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = none }, depth: true, policy: policy);
+        GBufferResolveProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferResolve"), "Graphite/GBufferResolve", source: false,
+            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [kept, written, kept, written, kept] }, depth: true, policy: policy);
         HiZProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, policy: policy);
         HiZPackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, variant: "#define HIZ_PACK 1\n", policy: policy);
 
@@ -60,6 +72,11 @@ internal sealed class RendererResources : IDisposable
             ? PixelFormat.R11_G11_B10_Float : SceneFormats[0];
         OpaqueDisplayFormat = device.GetPixelFormatSupport(PixelFormat.R10_G10_B10_A2_UNorm, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled)
             ? PixelFormat.R10_G10_B10_A2_UNorm : OpaqueHdrFormat;
+        GBufferFormats =
+        [
+            PixelFormat.R8_G8_B8_A8_UNorm_SRgb, SceneFormats[3], PixelFormat.R8_G8_B8_A8_UNorm, PixelFormat.R8_G8_B8_A8_UNorm,
+            OpaqueHdrFormat, OpaqueHdrFormat, SceneFormats[1],
+        ];
         SceneDepthFormat = ViewGraph.SceneDepth(format => device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.DepthStencil | TextureUsage.Sampled));
 
         Noise = LoadData(device, "Noise.bin", 256, 256, mipmapped: true);
@@ -119,6 +136,9 @@ internal sealed class RendererResources : IDisposable
     /// <summary>The formats of a scene's targets the device draws and samples: colour, motion, reactive, normals and material.</summary>
     public PixelFormat[] SceneFormats { get; }
     public PixelFormat SceneDepthFormat { get; }
+
+    /// <summary>The formats of a GBuffer's targets, in the order of <see cref="GBufferTarget"/>.</summary>
+    public PixelFormat[] GBufferFormats { get; }
 
     /// <summary>The HDR colour format of views that keep no alpha, half the size of the scene's where the device draws to it.</summary>
     public PixelFormat OpaqueHdrFormat { get; }
@@ -200,6 +220,18 @@ internal sealed class RendererResources : IDisposable
 
     /// <summary>A level of a view's depth pyramid from the one below, and the copy of a level into its packed texture. See <see cref="HiZFeature"/>.</summary>
     public FullscreenProgram HiZProgram { get; }
+
+    /// <summary>Lights a deferred view's GBuffer onto its scene, see Graphite/Internal/DeferredLighting.glsl.</summary>
+    public FullscreenProgram DeferredLightingProgram { get; }
+
+    /// <summary>The same for the pixels of the Two Sided Foliage shading model.</summary>
+    public FullscreenProgram FoliageLightingProgram { get; }
+
+    /// <summary>Copies a GBuffer's depth, motion and normals onto the scene, see Graphite/Internal/GBufferResolve.glsl.</summary>
+    public FullscreenProgram GBufferResolveProgram { get; }
+
+    /// <summary>Copies the scene's depth into a GBuffer, see Graphite/Internal/GBufferDepth.glsl.</summary>
+    public FullscreenProgram GBufferDepthProgram { get; }
     public FullscreenProgram HiZPackProgram { get; }
 
     private static GraphicsProgram Fullscreen(GraphicsDevice device, PassVariants variants)
@@ -275,6 +307,10 @@ internal sealed class RendererResources : IDisposable
         FogIntegrateProgram.Dispose();
         FogSkyProgram.Dispose();
         HiZProgram.Dispose();
+        DeferredLightingProgram.Dispose();
+        FoliageLightingProgram.Dispose();
+        GBufferResolveProgram.Dispose();
+        GBufferDepthProgram.Dispose();
         HiZPackProgram.Dispose();
         Textures.Dispose();
         Noise.Dispose();

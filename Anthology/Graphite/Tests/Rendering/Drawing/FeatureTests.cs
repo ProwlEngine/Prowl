@@ -728,8 +728,9 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
-    public void Normals_ReachFeaturesRightAfterThePrepass()
+    public void Normals_ReachFeaturesBeforeLighting_InADeferredView()
     {
+        _harness.ViewOf(1).Path = RenderPath.Deferred;
         ShowingAfterPrepass(SceneTargets.Normals, "Graphite_OctDecode(t.rg) * 0.5 + 0.5");
         _world.Add(new RenderableDesc { Mesh = FacingQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [_renderer.CreateMaterial(_renderer.Standard.Lit)]);
 
@@ -1200,6 +1201,7 @@ public sealed class FeatureTests : IDisposable
     [Fact]
     public void TheScene_HasOnlyTheTargetsItsFeaturesRead()
     {
+        _harness.ViewOf(1).Path = RenderPath.Deferred;
         AddQuad(new Float3(1, 1, 1));
         int Targets() => ViewGraph.SceneTargetCount(_renderer.Frame.Camera(_harness.ViewOf(1))!.ShapeKey.Targets);
         Frame(View());

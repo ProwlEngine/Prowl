@@ -335,22 +335,19 @@ internal sealed class CameraFrame : IDisposable
     public KeywordSet KeywordSet = KeywordSet.Empty;
     private IReadOnlyDictionary<string, string>? _worldKeywords;
     private Keyword[] _viewKeywords = [];
-    private string? _prepassValue;
 
     /// <summary>
-    /// Brings <see cref="Keywords"/> up to date with the world's snapshot, the view's keywords and the value of
-    /// <see cref="GlobalAxis.Prepass"/> its features need, null for depth alone. Render thread.
+    /// Brings <see cref="Keywords"/> up to date with the world's snapshot and the view's keywords. Render thread.
     /// </summary>
-    public void ResolveKeywords(string? prepass)
+    public void ResolveKeywords()
     {
         IReadOnlyDictionary<string, string> world = World.World.Globals.KeywordSnapshot;
         Keyword[] view = Desc.Keywords ?? [];
-        if (ReferenceEquals(world, _worldKeywords) && view.AsSpan().SequenceEqual(_viewKeywords) && prepass == _prepassValue)
+        if (ReferenceEquals(world, _worldKeywords) && view.AsSpan().SequenceEqual(_viewKeywords))
             return;
         _worldKeywords = world;
         _viewKeywords = view;
-        _prepassValue = prepass;
-        if (view.Length == 0 && prepass == null)
+        if (view.Length == 0)
         {
             Keywords = world;
             KeywordSet = World.World.Globals.KeywordSet;
@@ -359,8 +356,6 @@ internal sealed class CameraFrame : IDisposable
         Dictionary<string, string> merged = new(world, StringComparer.Ordinal);
         foreach (Keyword keyword in view)
             merged[keyword.Name] = keyword.Value;
-        if (prepass != null)
-            merged[GlobalAxis.Prepass.Name] = prepass;
         Keywords = merged;
         KeywordSet = KeywordSet.Intern(merged);
     }

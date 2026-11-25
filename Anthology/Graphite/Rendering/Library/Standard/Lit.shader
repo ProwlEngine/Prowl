@@ -130,6 +130,34 @@ Shader "Graphite/Lit"
 
     Pass
     {
+        Name "GBuffer"
+        Tags { "LightMode" = "GBuffer" }
+        GLSLPROGRAM
+        Shared
+        {
+            #define GRAPHITE_STANDARD_FORWARD
+            #define GRAPHITE_STANDARD_GBUFFER
+            #pragma variant global GRAPHITE_LOD_FADE
+            #pragma variant PBR_PARALLAX
+            #include "Graphite/Standard/PBRSurface.glsl"
+        }
+        Vertex
+        {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
+            void main() { Graphite_StandardVertex(); }
+        }
+        Fragment
+        {
+            #pragma surface
+            #include "Graphite/Standard/StandardFragment.glsl"
+            void main() { Graphite_StandardFragment(); }
+        }
+        ENDGLSL
+    }
+
+    Pass
+    {
         Name "Transmission"
         Tags { "LightMode" = "Transmission" "Output" = "Premultiplied" "SceneColor" = "Read" "SceneDepth" = "Read" "BackDepth" = "Read" "ReadsWhen" = "PBR_TIER FULL MAX" }
         GLSLPROGRAM
@@ -197,7 +225,6 @@ Shader "Graphite/Lit"
         Shared
         {
             #define GRAPHITE_STANDARD_DEPTH
-            #pragma variant global GRAPHITE_PREPASS DEPTH MOTION NORMALS
             #pragma variant global GRAPHITE_LOD_FADE
             #pragma variant PBR_PARALLAX
             #include "Graphite/Standard/PBRSurface.glsl"

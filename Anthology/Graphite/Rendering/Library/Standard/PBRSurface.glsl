@@ -17,6 +17,9 @@
     #ifdef GRAPHITE_STANDARD_DEBUG
         #include "Graphite/PBR/Debug.glsl"
     #endif
+    #ifdef GRAPHITE_STANDARD_GBUFFER
+        #include "Graphite/PBR/GBuffer.glsl"
+    #endif
 #endif
 #ifdef GRAPHITE_STANDARD_SHADOW_DITHER
     #include "Graphite/PBR/Shadow.glsl"

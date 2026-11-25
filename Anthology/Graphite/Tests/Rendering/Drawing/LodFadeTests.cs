@@ -65,10 +65,13 @@ public sealed class LodFadeTests : IDisposable
 
     private static bool Green(Float4 p) => p.Y > 0.9f && p.X < 0.1f;
 
-    [Fact]
-    public void MidFade_EachPixelShowsOneLevel_HalfOfThemEach()
+    [Theory]
+    [InlineData(RenderPath.Forward)]
+    [InlineData(RenderPath.Deferred)]
+    public void MidFade_EachPixelShowsOneLevel_HalfOfThemEach(RenderPath path)
     {
         RenderView view = _harness.View();
+        view.Path = path;
         Assert.All(Covered(FrameAt(0, view)), p => Assert.True(Red(p)));
         _harness.World.SetLodBias(_handle, 0.2f);
         FrameAt(0, view);

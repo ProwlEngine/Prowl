@@ -77,7 +77,7 @@ internal sealed partial class FramePipeline
         camera.LastFrame = _frame;
         camera.Desc = view;
         camera.World = world;
-        camera.ResolveKeywords(null);
+        camera.ResolveKeywords();
         camera.Info = new FeatureView(view, size, size);
         camera.ResetPassLists();
         if (voxelize)

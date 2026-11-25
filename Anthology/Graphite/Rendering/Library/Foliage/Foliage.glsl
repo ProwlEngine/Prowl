@@ -18,17 +18,22 @@ void Foliage_Inputs(inout Graphite_SurfaceData i)
 
 #if defined(GRAPHITE_STANDARD_LIT)
 
-// Light from behind passes through, tinted by the diffuse albedo, wrapped around the far side and brightest looking
-// toward the light
+#include "Graphite/Foliage/FoliageLight.glsl"
+
 vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)
 {
-    vec3 front = PBR_EvaluateLight(c, l);
-    float behind = max(dot(-c.normal, l.diffuseL), 0.0) * 0.6 + 0.4 * max(-dot(c.geomNormal, l.diffuseL), 0.0);
-    float toward = pow(max(dot(-c.view, l.diffuseL), 0.0), 4.0);
-    vec3 through = c.diffuseAlbedo * translucency_color.rgb * (translucency * (behind + toward) * l.attenuation);
-    return front + through * l.radiance;
+    return Foliage_Light(c, l, translucency_color.rgb, translucency);
 }
 
+#endif
+
+#ifdef GRAPHITE_STANDARD_GBUFFER
+// Custom holds the translucency colour, and the translucency over its range of 2
+void Foliage_GBuffer(inout Graphite_GBuffer g)
+{
+    g.model = GRAPHITE_MODEL_TWO_SIDED_FOLIAGE;
+    g.custom = vec4(translucency_color.rgb, translucency * 0.5);
+}
 #endif
 
 #endif

@@ -577,6 +577,7 @@ public sealed class ScreenSpaceReflections : PostEffect
 
     public ScreenSpaceReflections(Renderer renderer) : base(renderer, RenderSlot.AfterOpaques, sceneReads: SceneTargets.Motion | SceneTargets.Normals | SceneTargets.Material)
     {
+        Paths = RenderPaths.Deferred;
         _rayCast = Program("Ssr", "#define SSR_RAYCAST 1\n", source: false);
         _blur = Program("Ssr", "#define SSR_BLUR 1\n", source: false);
         _resolve = Program("Ssr", "#define SSR_RESOLVE 1\n", source: false);

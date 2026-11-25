@@ -49,6 +49,12 @@ public readonly record struct PassType(string Name)
     /// </summary>
     public static readonly PassType BackDepth = new("BackDepth");
 
+    /// <summary>
+    /// An opaque surface kept for a deferred view's lighting: its material, baked light, emission and motion written
+    /// into the view's GBuffer. See Graphite/GBuffer.glsl.
+    /// </summary>
+    public static readonly PassType GBuffer = new("GBuffer");
+
     public override string ToString() => Name;
 }
 

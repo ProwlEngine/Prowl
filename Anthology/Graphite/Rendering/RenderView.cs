@@ -94,8 +94,53 @@ public struct ViewCamera
 /// temporal history, exposure and shadow cascades, until it is disposed. Made by <see cref="Renderer.CreateView"/>,
 /// host thread.
 /// </summary>
+/// <summary>How a view lights its opaque surfaces.</summary>
+public enum RenderPath : byte
+{
+    /// <summary>Every surface is lit as it is drawn.</summary>
+    Forward,
+
+    /// <summary>
+    /// Opaque surfaces whose shader has a GBuffer pass are drawn into the view's GBuffer and lit from it, see
+    /// <see cref="GBufferFeature"/> and <see cref="DeferredLightingFeature"/>. The others are lit as they are drawn.
+    /// Screen space lighting and reflections work in this path only.
+    /// </summary>
+    Deferred,
+}
+
+/// <summary>
+/// Which of a deferred view's GBuffer surfaces its depth prepass draws first, so the GBuffer pass shades only the pixels
+/// they own. Surfaces lit as they are drawn are always in the prepass.
+/// </summary>
+public enum EarlyDepth : byte
+{
+    /// <summary>Every surface that has a Prepass pass.</summary>
+    All,
+
+    /// <summary>The alpha cut surfaces alone, whose hidden layers would each run the GBuffer pass to be cut out.</summary>
+    AlphaCut,
+
+    /// <summary>None: the GBuffer pass draws them alone.</summary>
+    None,
+}
+
+/// <summary>The paths a feature works in.</summary>
+[Flags]
+public enum RenderPaths : byte
+{
+    Forward = 1 << RenderPath.Forward,
+    Deferred = 1 << RenderPath.Deferred,
+    All = Forward | Deferred,
+}
+
 public sealed class RenderView : IDisposable
 {
+    /// <summary>How the view lights its opaque surfaces.</summary>
+    public RenderPath Path { get; set; }
+
+    /// <summary>Which GBuffer surfaces a deferred view's prepass draws first.</summary>
+    public EarlyDepth EarlyDepth { get; set; }
+
     private readonly Renderer _renderer;
     private bool _cut;
 
@@ -184,6 +229,28 @@ public sealed class RenderView : IDisposable
     public bool IsDisposed { get; private set; }
 
     /// <summary>
+    /// The enabled features of the view and its world that do not work in the view's <see cref="Path"/> and so are
+    /// left out of it, for a tool to tell its user. Host thread.
+    /// </summary>
+    public List<RenderFeature> SkippedFeatures()
+    {
+        List<RenderFeature> skipped = new();
+        RenderPaths path = (RenderPaths)(1 << (int)Path);
+        ViewKinds kind = (ViewKinds)(1 << (int)Kind);
+        foreach (RenderFeature feature in World.Features)
+        {
+            if (feature.Enabled && (feature.RunsOn & kind) != 0 && (feature.Paths & path) == 0)
+                skipped.Add(feature);
+        }
+        foreach (RenderFeature feature in Features ?? [])
+        {
+            if (feature.Enabled && (feature.RunsOn & kind) != 0 && (feature.Paths & path) == 0 && !skipped.Contains(feature))
+                skipped.Add(feature);
+        }
+        return skipped;
+    }
+
+    /// <summary>
     /// Marks the camera as jumped, like a teleport or a scene switch: the next frame has no previous one, so motion is
     /// none and every feature's history starts over.
     /// </summary>
@@ -227,6 +294,8 @@ public sealed class RenderView : IDisposable
             LodBias = LodBias,
             ForcedLod = ForcedLod,
             LodTransition = LodTransition,
+            Path = Path,
+            EarlyDepth = EarlyDepth,
             ClearColor = ClearColor,
             Sky = Sky,
             Near = camera.Near,
@@ -267,6 +336,8 @@ internal struct ViewDesc
     public float LodBias;
     public int ForcedLod;
     public LodTransition? LodTransition;
+    public RenderPath Path;
+    public EarlyDepth EarlyDepth;
     public Float4 ClearColor;
     public bool Sky;
     public float Near;

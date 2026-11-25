@@ -119,6 +119,39 @@ Shader "Graphite/Foliage"
 
     Pass
     {
+        Name "GBuffer"
+        Tags { "LightMode" = "GBuffer" }
+        Cull Off
+        GLSLPROGRAM
+        Shared
+        {
+            #define GRAPHITE_STANDARD_FORWARD
+            #define GRAPHITE_STANDARD_GBUFFER
+            #define GRAPHITE_CUSTOM_BRDF
+            #define GRAPHITE_STANDARD_INPUTS Foliage_Inputs
+            #define GRAPHITE_STANDARD_GBUFFER_MODEL Foliage_GBuffer
+            #pragma variant global GRAPHITE_LOD_FADE
+            #include "Graphite/Standard/PBRSurface.glsl"
+            #include "Graphite/Wind.glsl"
+        }
+        Vertex
+        {
+            #pragma surface_vertex
+            #include "Graphite/Standard/StandardVertex.glsl"
+            void main() { Graphite_StandardVertex(); }
+        }
+        Fragment
+        {
+            #include "Graphite/Foliage/Foliage.glsl"
+            #pragma surface
+            #include "Graphite/Standard/StandardFragment.glsl"
+            void main() { Graphite_StandardFragment(); }
+        }
+        ENDGLSL
+    }
+
+    Pass
+    {
         Name "Prepass"
         Tags { "LightMode" = "Prepass" }
         Cull Off
@@ -127,7 +160,6 @@ Shader "Graphite/Foliage"
         {
             #define GRAPHITE_STANDARD_DEPTH
             #define GRAPHITE_STANDARD_INPUTS Foliage_Inputs
-            #pragma variant global GRAPHITE_PREPASS DEPTH MOTION NORMALS
             #pragma variant global GRAPHITE_LOD_FADE
             #include "Graphite/Standard/PBRSurface.glsl"
             #include "Graphite/Wind.glsl"
