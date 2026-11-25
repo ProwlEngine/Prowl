@@ -9,12 +9,13 @@ layout(location = 1) out vec4 outMaterial;
 void main()
 {
     ivec2 pixel = ivec2(gl_FragCoord.xy);
-    uint model = Graphite_GBufferModelAt(pixel);
-    if (model == GRAPHITE_MODEL_NONE)
+    vec4 surface = Graphite_GBufferSurfaceAt(pixel);
+    if (Graphite_GBufferModelOf(surface) == GRAPHITE_MODEL_NONE)
         discard;
 
     float depth = Graphite_GBufferDepthAt(pixel);
-    Graphite_GBuffer g = Graphite_ReadGBuffer(pixel);
+    Graphite_GBuffer g = Graphite_ReadGBuffer(pixel, surface);
+    uint model = g.model;
     graphite_DeferredModel = model;
     graphite_DeferredCustom = g.custom;
     Graphite_ViewData view = Graphite_View();

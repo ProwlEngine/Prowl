@@ -99,19 +99,22 @@ uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferEmission;
 uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferMotion;
 uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferDepth;
 
-// The pixel's shading model alone, GRAPHITE_MODEL_NONE where the GBuffer holds no surface
-uint Graphite_GBufferModelAt(ivec2 pixel) { return uint(Graphite_Fetch(Graphite_GBufferSurface, pixel, 0).a * 255.0 + 0.5) & 15u; }
+// The pixel's Surface target, read before the rest to know whether the GBuffer holds a surface there
+vec4 Graphite_GBufferSurfaceAt(ivec2 pixel) { return Graphite_Fetch(Graphite_GBufferSurface, pixel, 0); }
+
+// The shading model a Surface value names, GRAPHITE_MODEL_NONE where the GBuffer holds no surface
+uint Graphite_GBufferModelOf(vec4 surface) { return uint(surface.a * 255.0 + 0.5) & 15u; }
 
 // The scene's depth, reversed Z. Where the GBuffer holds no surface it is what the prepass drew there, or 0.
 float Graphite_GBufferDepthAt(ivec2 pixel) { return Graphite_Fetch(Graphite_GBufferDepth, pixel, 0).r; }
 
 vec2 Graphite_GBufferMotionAt(ivec2 pixel) { return Graphite_Fetch(Graphite_GBufferMotion, pixel, 0).rg; }
 
-Graphite_GBuffer Graphite_ReadGBuffer(ivec2 pixel)
+// The pixel's GBuffer, given the Surface value already read there
+Graphite_GBuffer Graphite_ReadGBuffer(ivec2 pixel, vec4 surface)
 {
     Graphite_GBuffer g;
     vec4 base = Graphite_Fetch(Graphite_GBufferBase, pixel, 0);
-    vec4 surface = Graphite_Fetch(Graphite_GBufferSurface, pixel, 0);
     g.baseColor = base.rgb;
     g.metalness = base.a;
     g.normal = Graphite_OctDecode(Graphite_Fetch(Graphite_GBufferNormal, pixel, 0).rg);

@@ -19,12 +19,13 @@ void main()
 {
     ivec2 pixel = ivec2(gl_FragCoord.xy);
     float depth = Graphite_GBufferDepthAt(pixel);
-    if (Graphite_GBufferModelAt(pixel) == GRAPHITE_MODEL_NONE)
+    vec4 surface = Graphite_GBufferSurfaceAt(pixel);
+    if (Graphite_GBufferModelOf(surface) == GRAPHITE_MODEL_NONE)
     {
         outColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
     }
-    Graphite_GBuffer g = Graphite_ReadGBuffer(pixel);
+    Graphite_GBuffer g = Graphite_ReadGBuffer(pixel, surface);
     vec3 color;
     if (_Mode == 0)
         color = Encode(g.baseColor);
