@@ -5,6 +5,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Prowl.OrigamiUI;
+using Float4 = Prowl.Vector.Float4;
+
+using VColor = Prowl.Vector.Color;
 
 namespace Prowl.Editor.Theming;
 
@@ -41,8 +44,8 @@ public class ColorRamp
     /// <summary>Index of the primary stop (0-based).</summary>
     [JsonIgnore] public int PrimaryIndex { get; set; }
 
-    /// <summary>RGB offsets from primary for each stop. Set by Init().</summary>
-    [JsonIgnore] public (int R, int G, int B)[] Offsets { get; set; } = [];
+    /// <summary>Lightness shift, saturation ratio and hue shift from the primary for each stop. Set by Init().</summary>
+    [JsonIgnore] public (float DL, float SRatio, float DH)[] Offsets { get; set; } = [];
 
     /// <summary>Get the resolved color for a stop index.</summary>
     public Color GetStop(int index)
@@ -55,11 +58,12 @@ public class ColorRamp
 
         Color p = ParseHex(Primary);
         if (index >= Offsets.Length) return p;
-        (int R, int G, int B) o = Offsets[index];
-        return Color.FromArgb(255,
-            Math.Clamp(p.R + o.R, 0, 255),
-            Math.Clamp(p.G + o.G, 0, 255),
-            Math.Clamp(p.B + o.B, 0, 255));
+        (float dl, float sRatio, float dh) = Offsets[index];
+        Float4 hsl = VColor.RGBToHSL(p);
+        float hue = (hsl.X + dh) % 360f;
+        if (hue < 0f) hue += 360f;
+        VColor rgb = VColor.HSLToRGB(new VColor(hue, Math.Clamp(hsl.Y * sRatio, 0f, 1f), Math.Clamp(hsl.Z + dl, 0f, 1f), 1f));
+        return Color.FromArgb(255, (int)MathF.Round(rgb.R * 255f), (int)MathF.Round(rgb.G * 255f), (int)MathF.Round(rgb.B * 255f));
     }
 
     /// <summary>Initialize offsets from default colors. Call once at startup.</summary>
@@ -68,9 +72,13 @@ public class ColorRamp
         StopCount = stopCount;
         PrimaryIndex = primaryIndex;
         Color pc = defaults[primaryIndex];
-        Offsets = new (int, int, int)[stopCount];
+        Float4 ph = VColor.RGBToHSL(pc);
+        Offsets = new (float, float, float)[stopCount];
         for (int i = 0; i < stopCount; i++)
-            Offsets[i] = (defaults[i].R - pc.R, defaults[i].G - pc.G, defaults[i].B - pc.B);
+        {
+            Float4 h = VColor.RGBToHSL(defaults[i]);
+            Offsets[i] = (h.Z - ph.Z, ph.Y > 0.01f ? Math.Min(h.Y / ph.Y, 8f) : 1f, h.X - ph.X);
+        }
 
         // Initialize overrides array from defaults if not set
         if (Overrides == null || Overrides.Length != stopCount)
