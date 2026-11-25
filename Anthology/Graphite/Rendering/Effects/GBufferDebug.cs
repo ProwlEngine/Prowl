@@ -25,13 +25,11 @@ public enum GBufferDebugMode
 /// </summary>
 public sealed class GBufferDebug : PostEffect
 {
-    private static readonly PropertyID s_base = "Graphite_GBufferBase", s_normal = "Graphite_GBufferNormal", s_surface = "Graphite_GBufferSurface",
-        s_custom = "Graphite_GBufferCustom", s_baked = "Graphite_GBufferBaked", s_emission = "Graphite_GBufferEmission",
-        s_motion = "Graphite_GBufferMotion", s_depth = "Graphite_GBufferDepth", s_mode = "_Mode";
+    private static readonly PropertyID s_mode = "_Mode";
 
     private sealed class State
     {
-        public TextureHandle GBuffer;
+        public GBufferRead GBuffer;
     }
 
     private readonly FullscreenProgram _program;
@@ -51,22 +49,13 @@ public sealed class GBufferDebug : PostEffect
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        builder.GetViewState<State>().GBuffer = builder.Read(RendererOutputs.GBuffer);
+        builder.GetViewState<State>().GBuffer = GBufferRead.Declare(builder);
         builder.WriteColor();
     }
 
     public override void Render(FeatureContext context)
     {
-        RenderTexture gbuffer = context.Get(context.GetViewState<State>().GBuffer);
-        Texture[] targets = gbuffer.ColorTextures;
-        _properties.SetTexture(s_base, targets[(int)GBufferTarget.Base], PointClamp);
-        _properties.SetTexture(s_normal, targets[(int)GBufferTarget.Normal], PointClamp);
-        _properties.SetTexture(s_surface, targets[(int)GBufferTarget.Surface], PointClamp);
-        _properties.SetTexture(s_custom, targets[(int)GBufferTarget.Custom], PointClamp);
-        _properties.SetTexture(s_baked, targets[(int)GBufferTarget.Baked], PointClamp);
-        _properties.SetTexture(s_emission, targets[(int)GBufferTarget.Emission], PointClamp);
-        _properties.SetTexture(s_motion, targets[(int)GBufferTarget.Motion], PointClamp);
-        _properties.SetTexture(s_depth, gbuffer.DepthTexture!, PointClamp);
+        context.GetViewState<State>().GBuffer.Bind(context, _properties, PointClamp);
         _properties.SetInt(s_mode, (int)_mode);
         context.Fullscreen(_program, _properties);
     }

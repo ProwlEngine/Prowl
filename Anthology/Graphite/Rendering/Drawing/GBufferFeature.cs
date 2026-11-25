@@ -88,17 +88,103 @@ public sealed class GBufferFeature : RenderFeature
 }
 
 /// <summary>
+/// A feature's read of the view's GBuffer: its targets as Graphite/GBuffer.glsl names them, the Base, Normal and Surface
+/// ones from <see cref="RendererOutputs.GBufferDecals"/> while the world has decals.
+/// </summary>
+internal struct GBufferRead
+{
+    private static readonly PropertyID s_base = "Graphite_GBufferBase", s_normal = "Graphite_GBufferNormal", s_surface = "Graphite_GBufferSurface",
+        s_custom = "Graphite_GBufferCustom", s_baked = "Graphite_GBufferBaked", s_emission = "Graphite_GBufferEmission",
+        s_motion = "Graphite_GBufferMotion", s_depth = "Graphite_GBufferDepth";
+
+    private TextureHandle _gbuffer;
+    private TextureHandle? _decals;
+
+    /// <summary>Declares the read in Setup. With decals false it reads the GBuffer as its pass left it.</summary>
+    public static GBufferRead Declare(FeatureBuilder builder, bool decals = true) => new()
+    {
+        _gbuffer = builder.Read(RendererOutputs.GBuffer),
+        _decals = decals && builder.Has(RendererOutputs.GBufferDecals) ? builder.Read(RendererOutputs.GBufferDecals) : null,
+    };
+
+    /// <summary>The GBuffer itself, for its depth and size.</summary>
+    public readonly RenderTexture Texture(FeatureContext context) => context.Get(_gbuffer);
+
+    public readonly void Bind(FeatureContext context, PropertySet properties, Sampler point)
+    {
+        RenderTexture gbuffer = context.Get(_gbuffer);
+        Texture[] targets = gbuffer.ColorTextures;
+        Texture[]? decaled = _decals is { } decals ? context.Get(decals).ColorTextures : null;
+        properties.SetTexture(s_base, decaled?[0] ?? targets[(int)GBufferTarget.Base], point);
+        properties.SetTexture(s_normal, decaled?[1] ?? targets[(int)GBufferTarget.Normal], point);
+        properties.SetTexture(s_surface, decaled?[2] ?? targets[(int)GBufferTarget.Surface], point);
+        properties.SetTexture(s_custom, targets[(int)GBufferTarget.Custom], point);
+        properties.SetTexture(s_baked, targets[(int)GBufferTarget.Baked], point);
+        properties.SetTexture(s_emission, targets[(int)GBufferTarget.Emission], point);
+        properties.SetTexture(s_motion, targets[(int)GBufferTarget.Motion], point);
+        properties.SetTexture(s_depth, gbuffer.DepthTexture!, point);
+    }
+}
+
+/// <summary>
+/// Lays the world's decals over a deferred view's GBuffer once its pass has drawn, into the targets it publishes as
+/// <see cref="RendererOutputs.GBufferDecals"/>. Adds its pass while the world has a decal. Group
+/// <see cref="FeatureGroup.GBufferDecals"/>.
+/// </summary>
+public sealed class GBufferDecalsFeature : RenderFeature
+{
+    private sealed class State
+    {
+        public GBufferRead GBuffer;
+        public TextureHandle Target;
+    }
+
+    private readonly RendererResources _resources;
+    private readonly PropertySet _properties = new();
+
+    internal GBufferDecalsFeature(RendererResources resources) : base(RenderSlot.GBuffer, 50, FeatureGroup.GBufferDecals)
+    {
+        _resources = resources;
+        Paths = RenderPaths.Deferred;
+        Uses(resources.GBufferDecalsProgram);
+    }
+
+    public override bool IsActive(in FeatureView view) => view.World.Lighting.LiveDecals > 0;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        State state = builder.GetViewState<State>();
+        state.GBuffer = GBufferRead.Declare(builder, decals: false);
+        builder.DrawsRenderables();
+        PixelFormat[] formats = _resources.GBufferFormats;
+        GraphTextureDesc desc = new()
+        {
+            Width = (int)view.Width,
+            Height = (int)view.Height,
+            ColorFormats = [formats[(int)GBufferTarget.Base], formats[(int)GBufferTarget.Normal], formats[(int)GBufferTarget.Surface]],
+            ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0,
+        };
+        state.Target = builder.Temporary("Decaled", desc);
+        builder.Publish(RendererOutputs.GBufferDecals, state.Target);
+    }
+
+    public override void Render(FeatureContext context)
+    {
+        State state = context.GetViewState<State>();
+        state.GBuffer.Bind(context, _properties, _resources.PointClamp);
+        context.Fullscreen(_resources.GBufferDecalsProgram, context.Get(state.Target), _properties);
+    }
+}
+
+/// <summary>
 /// Copies a deferred view's GBuffer depth, motion and normals onto its scene, where the prepass drew nothing nearer, for
 /// the features before lighting that read the scene. Group <see cref="FeatureGroup.GBufferResolve"/>.
 /// </summary>
 public sealed class GBufferResolveFeature : RenderFeature
 {
-    private static readonly PropertyID s_normal = "Graphite_GBufferNormal", s_surface = "Graphite_GBufferSurface", s_motion = "Graphite_GBufferMotion",
-        s_depth = "Graphite_GBufferDepth";
-
     private sealed class State
     {
-        public TextureHandle GBuffer;
+        public GBufferRead GBuffer;
     }
 
     private readonly RendererResources _resources;
@@ -113,17 +199,13 @@ public sealed class GBufferResolveFeature : RenderFeature
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        builder.GetViewState<State>().GBuffer = builder.Read(RendererOutputs.GBuffer);
+        builder.GetViewState<State>().GBuffer = GBufferRead.Declare(builder);
         builder.DrawToScene();
     }
 
     public override void Render(FeatureContext context)
     {
-        RenderTexture gbuffer = context.Get(context.GetViewState<State>().GBuffer);
-        _properties.SetTexture(s_normal, gbuffer.ColorTextures[(int)GBufferTarget.Normal], _resources.PointClamp);
-        _properties.SetTexture(s_surface, gbuffer.ColorTextures[(int)GBufferTarget.Surface], _resources.PointClamp);
-        _properties.SetTexture(s_motion, gbuffer.ColorTextures[(int)GBufferTarget.Motion], _resources.PointClamp);
-        _properties.SetTexture(s_depth, gbuffer.DepthTexture!, _resources.PointClamp);
+        context.GetViewState<State>().GBuffer.Bind(context, _properties, _resources.PointClamp);
         context.FullscreenScene(_resources.GBufferResolveProgram, _properties);
     }
 }

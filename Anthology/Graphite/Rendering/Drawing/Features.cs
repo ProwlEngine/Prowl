@@ -216,7 +216,7 @@ public sealed class FeatureGroup(string name)
         Opaque = new("Opaque"), Sky = new("Sky"), SceneColor = new("SceneColor"), SceneDepth = new("SceneDepth"),
         BackDepth = new("BackDepth"), Transparent = new("Transparent"), Present = new("Present"), VolumetricFog = new("VolumetricFog"),
         VolumetricFogSky = new("VolumetricFogSky"), HiZ = new("HiZ"), HiZAfterOpaques = new("HiZAfterOpaques"), GBuffer = new("GBuffer"),
-        GBufferResolve = new("GBufferResolve"), DeferredLighting = new("DeferredLighting");
+        GBufferDecals = new("GBufferDecals"), GBufferResolve = new("GBufferResolve"), DeferredLighting = new("DeferredLighting");
 
     /// <summary>The stock effects' groups, of which a view runs one each.</summary>
     public static readonly FeatureGroup ScreenLighting = new("ScreenLighting"), Tonemap = new("Tonemap"), AntiAliasing = new("AntiAliasing");
@@ -949,6 +949,9 @@ public sealed class FeatureBuilder
         }
         return targets.Count > 0 ? targets[0].Handle : FrameGraph.Import(first.Texture!.Texture!);
     }
+
+    /// <summary>Whether an earlier feature of the view published a texture under a name.</summary>
+    public bool Has(string name) => View.Published.ContainsKey(name);
 
     /// <summary>Hands a texture to later features of the view by name.</summary>
     public void Publish(string name, TextureHandle texture) => View.Published[name] = texture;
@@ -1700,6 +1703,7 @@ internal static class FeatureSelection
             new VolumetricFogSkyFeature(resources),
             new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
             new GBufferFeature(resources),
+            new GBufferDecalsFeature(resources),
             new GBufferResolveFeature(resources),
             new HiZFeature(resources, afterOpaques: false),
             new DeferredLightingFeature(resources),

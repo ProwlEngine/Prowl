@@ -10,7 +10,9 @@
 
 #ifdef GRAPHITE_STANDARD_LIT
     #include "Graphite/PBR/Closure.glsl"
-    #include "Graphite/Decals.glsl"
+    #ifndef GRAPHITE_STANDARD_GBUFFER
+        #include "Graphite/Decals.glsl"
+    #endif
     #ifdef PBR_TRANSMISSION
         #include "Graphite/PBR/Transmission.glsl"
     #endif

@@ -34,6 +34,12 @@ public static class RendererOutputs
     /// <summary>A deferred view's GBuffer, its targets in the order of <see cref="GBufferTarget"/>, with its own depth.</summary>
     public const string GBuffer = "Graphite.GBuffer";
 
+    /// <summary>
+    /// The GBuffer's Base, Normal and Surface targets with the world's decals applied, which readers take in place of
+    /// the GBuffer's own while the world has decals.
+    /// </summary>
+    public const string GBufferDecals = "Graphite.GBuffer.Decals";
+
     /// <summary>A texture of the view's cascade depth, once its cascades are drawn.</summary>
     public const string Cascades = "Graphite.Cascades";
 

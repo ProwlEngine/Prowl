@@ -1,5 +1,6 @@
 // Box projected decals, applied in the forward pass before lighting so their base colour, normal, specular roughness,
-// metalness and occlusion reach both the lighting and the thin G-buffer. A mask texture holds occlusion, specular
+// metalness and occlusion reach both the lighting and the thin G-buffer. A deferred view applies them to its GBuffer
+// in a pass of its own, Graphite/Internal/GBufferDecals.glsl, where the extra channels below do not reach. A mask texture holds occlusion, specular
 // roughness and metalness in R, G and B. Decals live in H-Forward trees like lights: a point query finds the
 // ones whose box holds the surface, and up to eight are applied, lowest priority first. A custom surface shader adds its
 // own channels by defining GRAPHITE_DECAL_EXTRA and a Graphite_ApplyDecalExtra function, called after each decal with its

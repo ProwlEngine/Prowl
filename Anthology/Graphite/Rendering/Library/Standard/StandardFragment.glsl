@@ -89,8 +89,8 @@ void Graphite_StandardFragment()
 
 #elif defined(GRAPHITE_STANDARD_GBUFFER)
 
-// The GBuffer pass: material inputs, the Surface function and decals as the forward pass has them, kept for the
-// lighting pass with the surface's baked light and emission. A cross fading level keeps its half of the dither, as the
+// The GBuffer pass: material inputs and the Surface function as the forward pass has them, kept for the lighting pass
+// with the surface's baked light and emission. Decals are laid over the GBuffer after it, see Graphite/Internal/GBufferDecals.glsl. A cross fading level keeps its half of the dither, as the
 // prepass does for the surfaces lit as they are drawn.
 void Graphite_StandardFragment()
 {
@@ -106,7 +106,6 @@ void Graphite_StandardFragment()
 #ifdef GRAPHITE_STANDARD_FINISH
     GRAPHITE_STANDARD_FINISH(p, i);
 #endif
-    Graphite_ApplyDecals(vRelativePos, i.geometryNormal, p.baseColor, p.geometryNormal, p.specularRoughness, p.baseMetalness, p.occlusion);
 #ifdef _SURFACE_CUTOUT
     if (p.geometryOpacity < alpha_cutoff)
         discard;

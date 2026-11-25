@@ -48,6 +48,8 @@ internal sealed class RendererResources : IDisposable
         Array.Fill(none, kept);
         GBufferDepthProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDepth"), "Graphite/GBufferDepth", source: false,
             blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = none }, depth: true, policy: policy);
+        GBufferDecalsProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDecals"), "Graphite/GBufferDecals", source: false,
+            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written] }, lit: true, variant: "#define GRAPHITE_DECALS 1\n", policy: policy);
         GBufferResolveProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferResolve"), "Graphite/GBufferResolve", source: false,
             blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [kept, written, kept, written, kept] }, depth: true, policy: policy);
         HiZProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, policy: policy);
@@ -224,6 +226,9 @@ internal sealed class RendererResources : IDisposable
     /// <summary>Copies a GBuffer's depth, motion and normals onto the scene, see Graphite/Internal/GBufferResolve.glsl.</summary>
     public FullscreenProgram GBufferResolveProgram { get; }
 
+    /// <summary>Applies the world's decals to a GBuffer, see Graphite/Internal/GBufferDecals.glsl.</summary>
+    public FullscreenProgram GBufferDecalsProgram { get; }
+
     /// <summary>Copies the scene's depth into a GBuffer, see Graphite/Internal/GBufferDepth.glsl.</summary>
     public FullscreenProgram GBufferDepthProgram { get; }
     public FullscreenProgram HiZPackProgram { get; }
@@ -304,6 +309,7 @@ internal sealed class RendererResources : IDisposable
         ShadingModels.Dispose();
         GBufferResolveProgram.Dispose();
         GBufferDepthProgram.Dispose();
+        GBufferDecalsProgram.Dispose();
         HiZPackProgram.Dispose();
         Textures.Dispose();
         Noise.Dispose();

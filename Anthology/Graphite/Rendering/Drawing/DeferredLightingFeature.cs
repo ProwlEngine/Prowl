@@ -8,13 +8,9 @@ namespace Prowl.Graphite.Rendering;
 /// </summary>
 public sealed class DeferredLightingFeature : RenderFeature
 {
-    private static readonly PropertyID s_base = "Graphite_GBufferBase", s_normal = "Graphite_GBufferNormal", s_surface = "Graphite_GBufferSurface",
-        s_custom = "Graphite_GBufferCustom", s_baked = "Graphite_GBufferBaked", s_emission = "Graphite_GBufferEmission",
-        s_motion = "Graphite_GBufferMotion", s_depth = "Graphite_GBufferDepth";
-
     private sealed class State
     {
-        public TextureHandle GBuffer;
+        public GBufferRead GBuffer;
     }
 
     private readonly RendererResources _resources;
@@ -38,24 +34,14 @@ public sealed class DeferredLightingFeature : RenderFeature
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
-        builder.GetViewState<State>().GBuffer = builder.Read(RendererOutputs.GBuffer);
+        builder.GetViewState<State>().GBuffer = GBufferRead.Declare(builder);
         builder.DrawsRenderables();
         builder.DrawToScene();
     }
 
     public override void Render(FeatureContext context)
     {
-        RenderTexture gbuffer = context.Get(context.GetViewState<State>().GBuffer);
-        Texture[] targets = gbuffer.ColorTextures;
-        Sampler point = _resources.PointClamp;
-        _properties.SetTexture(s_base, targets[(int)GBufferTarget.Base], point);
-        _properties.SetTexture(s_normal, targets[(int)GBufferTarget.Normal], point);
-        _properties.SetTexture(s_surface, targets[(int)GBufferTarget.Surface], point);
-        _properties.SetTexture(s_custom, targets[(int)GBufferTarget.Custom], point);
-        _properties.SetTexture(s_baked, targets[(int)GBufferTarget.Baked], point);
-        _properties.SetTexture(s_emission, targets[(int)GBufferTarget.Emission], point);
-        _properties.SetTexture(s_motion, targets[(int)GBufferTarget.Motion], point);
-        _properties.SetTexture(s_depth, gbuffer.DepthTexture!, point);
+        context.GetViewState<State>().GBuffer.Bind(context, _properties, _resources.PointClamp);
         context.FullscreenScene(_resources.ShadingModels.Program, _properties);
     }
 }
