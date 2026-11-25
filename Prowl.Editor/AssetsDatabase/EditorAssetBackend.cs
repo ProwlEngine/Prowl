@@ -69,32 +69,6 @@ public class EditorAssetBackend : AssetBackend
     //  Initialization
     // ================================================================
 
-    /// <summary>
-    /// True for a backend opened with <see cref="InitializeReadOnly"/>, which serves what is already imported and
-    /// never writes to the project.
-    /// </summary>
-    public bool IsReadOnly { get; private set; }
-
-    /// <summary>
-    /// Serves the project's assets from the import cache another process (the editor that has the project open)
-    /// keeps up to date, without scanning, importing, watching or saving anything, so two processes can share
-    /// one project. Used by multiplayer play instances. An asset that isn't imported yet just isn't found.
-    /// </summary>
-    public void InitializeReadOnly()
-    {
-        IsReadOnly = true;
-        Instance = this;
-        AssetDatabase.Backend = this;
-        AssetLoader.SetMainThread();
-        EditorRegistries.Initialize();
-
-        LoadCachedIndex();
-        RebuildSubAssetIndex();
-        RebuildShaderMenuPaths();
-        RefreshResourcesMap();
-        Runtime.Debug.Log($"Asset database opened read-only: {_guidToEntry.Count} assets.");
-    }
-
     /// <summary> Initialize the asset database: set up the instance, register event hooks, load the metadata cache, scan and import assets, start file watchers, and build the shader menu catalog. Idempotent. </summary>
     public void Initialize()
     {
@@ -331,9 +305,6 @@ public class EditorAssetBackend : AssetBackend
     /// <summary>Stale or missing caches are imported first, which only the main thread may do.</summary>
     protected internal override bool NeedsMainThread(Guid assetId)
     {
-        // Read-only serves the cache as it is; the editor that owns the project keeps it current.
-        if (IsReadOnly) return false;
-
         AssetEntry? entry = OwningEntry(assetId);
         if (entry == null || string.IsNullOrEmpty(entry.Path)) return false;
         if (entry.NeedsReimport || !File.Exists(GetCachePath(assetId))) return true;
@@ -345,7 +316,7 @@ public class EditorAssetBackend : AssetBackend
     protected internal override void PrepareOnMainThread(Guid assetId)
     {
         AssetEntry? entry = OwningEntry(assetId);
-        if (entry == null || IsReadOnly) return;
+        if (entry == null) return;
 
         Runtime.Debug.Log($"Cache stale for '{entry.Path}'. Reimporting.");
         entry.NeedsReimport = true;

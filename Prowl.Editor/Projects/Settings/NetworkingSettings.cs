@@ -38,7 +38,7 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         {
             EditorGUI.SettingsTextField(paper, "netsettings_local", "Local Host Address", Configuration.LocalAddress,
                 v => { Configuration.LocalAddress = v; Changed(); });
-            Origami.Label(paper, "netsettings_local_note", "Local runs within one process. Separate editor client instances require KCP.").Show();
+            Origami.Label(paper, "netsettings_local_note", "Local runs within one process.").Show();
         }
         else if (Configuration.Transport == NetworkTransport.Kcp)
         {
