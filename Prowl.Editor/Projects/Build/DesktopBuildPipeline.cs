@@ -304,6 +304,9 @@ public class DesktopBuildPipeline : BuildPipeline
                 $"Build output directory '{request.OutputDirectory}' is not a usable place to build into. " +
                 "Choose a folder outside the project's Assets, and not the project root itself.");
 
+        if (TryGetGeneralSettings() is { } general && GameIcon.Problem(general.Icon) is { } iconProblem)
+            throw new InvalidOperationException(iconProblem);
+
         return Task.CompletedTask;
     }
 
@@ -320,7 +323,7 @@ public class DesktopBuildPipeline : BuildPipeline
         string architecture = ArchitectureOf(target.RuntimeIdentifiers[0]);
 
         var wrong = PluginScanner.ScanAll(_project)
-            .Where(p => p.IsNative && p.AppliesToBuild(target.AssemblyPlatform ?? BuildPlatforms.Windows))
+            .Where(p => p.IsNative && p.AppliesToBuild(PlatformOf(target)))
             .Where(p => !p.Cpu.Equals("AnyCPU", StringComparison.OrdinalIgnoreCase)
                      && !p.Cpu.Equals(architecture, StringComparison.OrdinalIgnoreCase))
             .Select(p => $"{p.FileName} ({p.Cpu})")
@@ -333,7 +336,12 @@ public class DesktopBuildPipeline : BuildPipeline
                 "Set each plugin's CPU to match, or to AnyCPU.");
     }
 
-    private static bool TargetsHostOS(PlatformTarget target) => (target.AssemblyPlatform ?? BuildPlatforms.Windows) switch
+    private static string PlatformOf(PlatformTarget target) => target.AssemblyPlatform ?? BuildPlatforms.Windows;
+
+    // GLFW ignores a window icon on macOS, which takes the bundle's icon instead.
+    private static bool HasWindowIcon(string platform) => platform != BuildPlatforms.MacOS;
+
+    private static bool TargetsHostOS(PlatformTarget target) => PlatformOf(target) switch
     {
         BuildPlatforms.Linux => OperatingSystem.IsLinux(),
         BuildPlatforms.MacOS => OperatingSystem.IsMacOS(),
@@ -360,7 +368,7 @@ public class DesktopBuildPipeline : BuildPipeline
         BuildRequest request = context.Request;
         var profile = (DesktopBuildProfile)request.Profile!;
 
-        string targetPlatform = profile.Target.AssemblyPlatform ?? BuildPlatforms.Windows;
+        string targetPlatform = PlatformOf(profile.Target);
 
         string outputDirectory = CreateBuildDirectory(request);
         context.Log($"Building into {outputDirectory}");
@@ -559,10 +567,35 @@ public class DesktopBuildPipeline : BuildPipeline
         List<string>? embedded = context.TryGetOutput<EmbeddedAssetPaths>(out EmbeddedAssetPaths? e) ? e?.Paths : null;
 
         GeneratePlayerSource(plan.BuildTempDir);
+        GenerateIconFiles(context, plan);
         GeneratePlayerCsproj(_project, _settings, plan.Profile, plan.BuildTempDir, plan.Assemblies, embedded);
 
         context.Log("Generated player source and project.");
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Writes the icon files the generated project and the bundle pick up from the build folder: the window icon
+    /// and, on Windows, the exe icon, or on macOS the app icon alone.
+    /// </summary>
+    private static void GenerateIconFiles(IBuildContext context, DesktopPlan plan)
+    {
+        GameIcon.Source source = GameIcon.Load(TryGetGeneralSettings()?.Icon ?? default);
+
+        if (plan.TargetPlatform == BuildPlatforms.MacOS)
+        {
+            File.WriteAllBytes(Path.Combine(plan.BuildTempDir, GameIcon.MacFile), GameIcon.ToIcns(GameIcon.MacImages(source)));
+            return;
+        }
+
+        List<GameIcon.IconImage> windows = GameIcon.WindowsImages(source);
+        File.WriteAllBytes(Path.Combine(plan.BuildTempDir, GameIcon.WindowResourceFile), GameIcon.ToWindowResource(windows));
+
+        if (plan.TargetPlatform != BuildPlatforms.Windows) return;
+
+        File.WriteAllBytes(Path.Combine(plan.BuildTempDir, GameIcon.ExeFile), GameIcon.ToIco(windows));
+        if (!OperatingSystem.IsWindows())
+            context.Log("The exe will have no icon: the .NET SDK only writes an exe icon when it builds on Windows. The window icon still works.", BuildSeverity.Warning);
     }
 
     private async Task PublishPlayer(IBuildContext context, CancellationToken ct)
@@ -725,11 +758,11 @@ public class DesktopBuildPipeline : BuildPipeline
         CopyEngineNatives(plan.OutputDirectory, plan.Profile.Target, ct);
 
         // macOS ships as a real .app bundle, not a bare folder of files.
-        if (plan.Profile.Target.AssemblyPlatform == BuildPlatforms.MacOS)
+        if (plan.TargetPlatform == BuildPlatforms.MacOS)
         {
             context.Log("Bundling macOS .app...");
             GeneralSettings? general = TryGetGeneralSettings();
-            BundleMacApp(plan.OutputDirectory, context.Request.ProjectName,
+            BundleMacApp(plan.OutputDirectory, Path.Combine(plan.BuildTempDir, GameIcon.MacFile), context.Request.ProjectName,
                 ProductNameFor(context.Request.ProjectName), general?.CompanyName ?? "", general?.Version ?? "0.0.0");
         }
 
@@ -853,7 +886,7 @@ public class DesktopBuildPipeline : BuildPipeline
     /// reimplementing this pipeline. It also gets ordering and escaping for free, so a path containing
     /// an ampersand no longer produces an invalid project file.
     /// </remarks>
-    private void GeneratePlayerCsproj(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile,
+    internal void GeneratePlayerCsproj(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile,
         string outputDir, List<ScriptCompiler.BuildAssembly> gameAssemblies, List<string>? embeddedAssetPaths = null)
     {
         string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
@@ -871,6 +904,12 @@ public class DesktopBuildPipeline : BuildPipeline
             // Keeps the engine's XML docs out of the player, only symbols ship beside its assemblies.
             ["AllowedReferenceRelatedFileExtensions"] = ".pdb",
         };
+
+        string platform = PlatformOf(desktopProfile.Target);
+        if (platform == BuildPlatforms.Windows)
+            properties["ApplicationIcon"] = GameIcon.ExeFile;
+
+        EmbeddedResourceRef[] windowIcon = HasWindowIcon(platform) ? [new(GameIcon.WindowResourceFile, GameIcon.WindowResourceName)] : [];
 
         if (desktopProfile.SelfContained)
             properties["SelfContained"] = "true";
@@ -917,7 +956,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
             // Only the generated entry program: user scripts are separate, precompiled assemblies.
             Compile = ["Program.cs"],
-            EmbeddedResources = BuildEmbeddedResources(outputDir, embeddedAssetPaths),
+            EmbeddedResources = [.. BuildEmbeddedResources(outputDir, embeddedAssetPaths), .. windowIcon],
         };
 
         // User NuGet packages and project references come from the project's Directory.Build.props. This
@@ -997,7 +1036,7 @@ public class DesktopBuildPipeline : BuildPipeline
     public override string GetExecutablePath(string outputPath, BuildSettings settings)
     {
         DesktopBuildProfile profile = settings.GetProfile<DesktopBuildProfile>(GetType());
-        string platform = profile.Target.AssemblyPlatform ?? BuildPlatforms.Windows;
+        string platform = PlatformOf(profile.Target);
         string name = Project.Current!.Name;
 
         if (platform == BuildPlatforms.MacOS)
@@ -1008,8 +1047,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
     public override bool CanRunOnHost(BuildSettings settings)
     {
-        string platform = settings.GetProfile<DesktopBuildProfile>(GetType()).Target.AssemblyPlatform
-            ?? BuildPlatforms.Windows;
+        string platform = PlatformOf(settings.GetProfile<DesktopBuildProfile>(GetType()).Target);
 
         return platform switch
         {
@@ -1214,7 +1252,7 @@ public class DesktopBuildPipeline : BuildPipeline
     /// minimal Contents/Info.plist. Does NOT code-sign or notarize - Gatekeeper will still show an
     /// "unidentified developer" warning until the user right-clicks Open (or runs `xattr -cr`).
     /// </summary>
-    private static void BundleMacApp(string outputDir, string executableName, string productName, string companyName, string version)
+    private static void BundleMacApp(string outputDir, string iconPath, string executableName, string productName, string companyName, string version)
     {
         // Snapshot BEFORE creating the bundle folder so it never sweeps up itself.
         List<string> existingEntries = [.. Directory.GetFileSystemEntries(outputDir)];
@@ -1260,6 +1298,7 @@ public class DesktopBuildPipeline : BuildPipeline
                 <key>CFBundleName</key><string>{name}</string>
                 <key>CFBundleDisplayName</key><string>{name}</string>
                 <key>CFBundleExecutable</key><string>{exe}</string>
+                <key>CFBundleIconFile</key><string>{GameIcon.MacFile}</string>
                 <key>CFBundleIdentifier</key><string>{bundleId}</string>
                 <key>CFBundlePackageType</key><string>APPL</string>
                 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -1270,6 +1309,10 @@ public class DesktopBuildPipeline : BuildPipeline
             </plist>
             """;
         File.WriteAllText(Path.Combine(appDir, "Contents", "Info.plist"), plist);
+
+        string resourcesDir = Path.Combine(appDir, "Contents", "Resources");
+        Directory.CreateDirectory(resourcesDir);
+        File.Copy(iconPath, Path.Combine(resourcesDir, GameIcon.MacFile), overwrite: true);
     }
 
     /// <summary>The bundle directory name. Shared with <see cref="GetExecutablePath"/>, which has to agree.</summary>
