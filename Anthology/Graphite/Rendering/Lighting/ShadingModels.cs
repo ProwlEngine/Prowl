@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 
 using Prowl.Graphite.ShaderDef;
 
@@ -8,16 +9,16 @@ namespace Prowl.Graphite.Rendering;
 
 /// <summary>
 /// How a deferred view lights the pixels of one kind of surface. A GBuffer pass names it by <see cref="Id"/>, written
-/// through Graphite/GBuffer.glsl, and the view's lighting pass shades those pixels with its light function.
+/// through Graphite/GBuffer.glsl, and the view's lighting pass lights those pixels as the model says.
 /// </summary>
 public sealed class ShadingModel
 {
-    internal ShadingModel(string name, uint id, string? lighting, string? function, bool unlit)
+    internal ShadingModel(string name, uint id, string unpack, string lighting, bool unlit)
     {
         Name = name;
         Id = id;
+        Unpack = unpack;
         Lighting = lighting;
-        Function = function;
         Unlit = unlit;
     }
 
@@ -26,32 +27,92 @@ public sealed class ShadingModel
     /// <summary>What its GBuffer pass writes as the shading model, 1 to 15.</summary>
     public uint Id { get; }
 
-    /// <summary>GLSL defining <see cref="Function"/>, null for a model lit as Default Lit is.</summary>
-    public string? Lighting { get; }
+    /// <summary>
+    /// GLSL defining void Model_Unpack(vec4 custom, inout PBR_Params p), run before the pixel's closure is prepared
+    /// with the four values its GBuffer pass kept, or empty.
+    /// </summary>
+    public string Unpack { get; }
 
     /// <summary>
-    /// The model's light function, vec3 (PBR_Closure c, Graphite_LightContribution l, vec4 custom), custom the four
-    /// values its GBuffer pass kept. It is what Graphite_BRDF is to a forward pass.
+    /// GLSL defining vec3 Model_Light(PBR_Closure c, Graphite_LightContribution l, vec4 custom), vec3
+    /// Model_Ambient(PBR_Closure c, PBR_Indirect i, vec4 custom) or both, in place of the PBR model's, or empty.
     /// </summary>
-    public string? Function { get; }
+    public string Lighting { get; }
 
     /// <summary>Whether its pixels take no light and show their emission alone.</summary>
     public bool Unlit { get; }
 }
 
 /// <summary>
-/// The shading models of a renderer, and the one lighting program its deferred views draw, written from them: each
-/// pixel is lit by the light function of its own model. Registering, replacing or removing a model writes the program
-/// anew, compiled as the renderer's <see cref="CompilePolicy"/> says, and views keep the last one until it is ready.
+/// The ShadingModel documents every renderer of the process knows by name, which Surface blocks build on, and the id
+/// each has in a GBuffer. A model is a library file Graphite/Standard/{Name}.shader holding a ShadingModel document, or
+/// one a host loaded through <see cref="Renderer.LoadShadingModel"/>.
 /// </summary>
-public sealed class ShadingModels : IDisposable
+internal static class ShadingModelLibrary
 {
-    public const uint DefaultLit = 1, Unlit = 2, TwoSidedFoliage = 3;
+    public const uint Lit = 1, Unlit = 2, Foliage = 3;
 
     /// <summary>The highest id the GBuffer holds.</summary>
     public const uint MaxId = 15;
 
+    private static readonly object s_lock = new();
+    private static readonly Dictionary<string, ShadingModelDefinition> s_definitions = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, uint> s_ids = new(StringComparer.Ordinal) { ["Lit"] = Lit, ["Unlit"] = Unlit, ["Foliage"] = Foliage };
+
+    /// <summary>Adds a document, or replaces the one of its name, which keeps its id.</summary>
+    public static void Register(ShadingModelDefinition definition)
+    {
+        lock (s_lock)
+        {
+            if (definition.Name is "Lit" or "Unlit" or "Foliage" or "Terrain")
+                throw new ArgumentException($"{definition.Name} is a surface model the renderer ships, a ShadingModel takes another name.");
+            if (!definition.ForwardOnly && !s_ids.ContainsKey(definition.Name))
+            {
+                if (s_ids.Count >= MaxId)
+                    throw new InvalidOperationException($"Every one of the {MaxId} shading model ids is taken.");
+                s_ids[definition.Name] = (uint)s_ids.Count + 1;
+            }
+            s_definitions[definition.Name] = definition;
+        }
+    }
+
+    /// <summary>The document of a name: one registered, else the library file of that name when it holds one.</summary>
+    public static ShadingModelDefinition? Find(string name)
+    {
+        lock (s_lock)
+        {
+            if (s_definitions.TryGetValue(name, out ShadingModelDefinition? found))
+                return found;
+        }
+        InternalShaders.Register();
+        if (ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader") is not { } source || !ShaderParser.IsShadingModel(source))
+            return null;
+        ShadingModelDefinition definition = ShaderParser.ParseShadingModel(source);
+        Register(definition);
+        return definition;
+    }
+
+    /// <summary>The GBuffer id of a model, 0 for one that is forward only or unknown.</summary>
+    public static uint IdOf(string name)
+    {
+        lock (s_lock)
+            return s_ids.GetValueOrDefault(name);
+    }
+}
+
+/// <summary>
+/// The shading models of a renderer, and the one lighting program its deferred views draw, written from them: each
+/// pixel is lit as its own model says. It holds every model from the start, so nothing compiles as surfaces come into
+/// view. Only loading or replacing a model writes it anew, compiled as the renderer's <see cref="CompilePolicy"/> says,
+/// and views keep the last one until it is ready.
+/// </summary>
+public sealed class ShadingModels : IDisposable
+{
     private const int RetireFrames = 8;
+
+    private static readonly string[] s_shipped = ["ClearCoat", "Cloth", "Subsurface"];
+    private static readonly Regex s_light = new(@"\bvec3\s+Model_Light\s*\("), s_ambient = new(@"\bvec3\s+Model_Ambient\s*\("),
+        s_unpack = new(@"\bvoid\s+Model_Unpack\s*\(");
 
     private readonly GraphicsDevice _device;
     private readonly IShaderCompiler? _compiler;
@@ -72,9 +133,15 @@ public sealed class ShadingModels : IDisposable
         BlendAttachmentDescription kept = written with { ColorWriteMask = ColorWriteMask.None };
         _blend = BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, kept, kept, kept, written] };
 
-        _models.Add(new ShadingModel("DefaultLit", DefaultLit, null, null, false));
-        _models.Add(new ShadingModel("Unlit", Unlit, null, null, true));
-        _models.Add(new ShadingModel("TwoSidedFoliage", TwoSidedFoliage, "#include \"Graphite/Foliage/FoliageLight.glsl\"\n", "Foliage_DeferredLight", false));
+        _models.Add(new ShadingModel("Lit", ShadingModelLibrary.Lit, "", "", false));
+        _models.Add(new ShadingModel("Unlit", ShadingModelLibrary.Unlit, "", "", true));
+        _models.Add(new ShadingModel("Foliage", ShadingModelLibrary.Foliage, "",
+            "#include \"Graphite/Foliage/FoliageLight.glsl\"\nvec3 Model_Light(PBR_Closure c, Graphite_LightContribution l, vec4 custom) { return Foliage_DeferredLight(c, l, custom); }\n", false));
+        foreach (string name in s_shipped)
+        {
+            if (ShadingModelLibrary.Find(name) is { } shipped)
+                Add(shipped);
+        }
         Program = Create(Source());
     }
 
@@ -84,7 +151,7 @@ public sealed class ShadingModels : IDisposable
     /// <summary>The lighting program in use. Render thread.</summary>
     internal FullscreenProgram Program { get; private set; }
 
-    /// <summary>The models as of this call. Host thread.</summary>
+    /// <summary>The models with an id as of this call. Host thread.</summary>
     public ShadingModel[] All
     {
         get
@@ -101,51 +168,30 @@ public sealed class ShadingModels : IDisposable
     }
 
     /// <summary>
-    /// Adds a model, or replaces the one of the same name keeping its id, and has the lighting program written anew.
-    /// lighting is GLSL defining function, see <see cref="ShadingModel.Function"/>. It may use everything
-    /// Graphite/PBR/Closure.glsl gives. Host thread.
+    /// Takes a ShadingModel document: shaders may then build on it with Surface "Name", and the lighting program is
+    /// written anew with it. A document of a name already loaded replaces it and keeps its id. Shaders loaded before
+    /// keep the passes they were given. Returns the model, null for a forward only one. Host thread.
     /// </summary>
-    public ShadingModel Register(string name, string lighting, string function)
+    public ShadingModel? Load(ShadingModelDefinition definition)
     {
-        ArgumentException.ThrowIfNullOrEmpty(name);
-        ArgumentException.ThrowIfNullOrEmpty(lighting);
-        ArgumentException.ThrowIfNullOrEmpty(function);
+        ArgumentNullException.ThrowIfNull(definition);
+        ShadingModelLibrary.Register(definition);
         lock (_lock)
         {
-            int existing = _models.FindIndex(model => model.Name == name);
-            uint id = existing >= 0 ? _models[existing].Id : FreeId();
-            ShadingModel model = new(name, id, lighting, function, false);
-            if (existing >= 0)
-                _models[existing] = model;
-            else
-                _models.Add(model);
+            ShadingModel? model = Add(definition);
             _version++;
             return model;
         }
     }
 
-    /// <summary>Removes a model a host registered. Its pixels are then lit as Default Lit. Host thread.</summary>
-    public bool Remove(string name)
+    private ShadingModel? Add(ShadingModelDefinition definition)
     {
-        lock (_lock)
-        {
-            int index = _models.FindIndex(model => model.Name == name && model.Id > TwoSidedFoliage);
-            if (index < 0)
-                return false;
-            _models.RemoveAt(index);
-            _version++;
-            return true;
-        }
-    }
-
-    private uint FreeId()
-    {
-        for (uint id = TwoSidedFoliage + 1; id <= MaxId; id++)
-        {
-            if (!_models.Exists(model => model.Id == id))
-                return id;
-        }
-        throw new InvalidOperationException($"Every one of the {MaxId} shading model ids is taken.");
+        _models.RemoveAll(model => model.Name == definition.Name);
+        if (definition.ForwardOnly)
+            return null;
+        ShadingModel model = new(definition.Name, ShadingModelLibrary.IdOf(definition.Name), definition.Unpack, definition.Lighting, false);
+        _models.Add(model);
+        return model;
     }
 
     /// <summary>
@@ -198,23 +244,35 @@ public sealed class ShadingModels : IDisposable
     private FullscreenProgram Create(string source)
         => FullscreenProgram.Create(_device, _compiler, source, "Graphite/DeferredLighting", source: false, blend: _blend, lit: true, depth: true, policy: _policy, report: Report);
 
-    // The head, each model's light function, the two functions that pick by the pixel's model, then the pass itself
+    // The head, each model's code under names of its own, the functions that pick by the pixel's model, then the pass
+    // itself. No model adds to the closure, so a pixel pays for its own model's lighting alone.
     private string Source()
     {
         StringBuilder text = new();
-        StringBuilder light = new();
-        StringBuilder unlit = new("false");
         text.Append("#include \"Graphite/Internal/DeferredLightingHead.glsl\"\n");
+
+        StringBuilder unpack = new(), light = new(), ambient = new();
+        StringBuilder unlit = new("false");
         foreach (ShadingModel model in _models)
         {
             if (model.Unlit)
                 unlit.Append($" || model == {model.Id}u");
-            if (model.Lighting == null || model.Function == null)
+            string code = model.Unpack + "\n" + model.Lighting;
+            if (string.IsNullOrWhiteSpace(code))
                 continue;
-            text.Append(model.Lighting).Append('\n');
-            light.Append($"    if (graphite_DeferredModel == {model.Id}u)\n        return {model.Function}(c, l, graphite_DeferredCustom);\n");
+            string prefix = $"graphite_Model{model.Id}_";
+            text.Append($"#define Model_Unpack {prefix}Unpack\n#define Model_Light {prefix}Light\n#define Model_Ambient {prefix}Ambient\n");
+            text.Append(code).Append("\n#undef Model_Unpack\n#undef Model_Light\n#undef Model_Ambient\n");
+            if (s_unpack.IsMatch(model.Unpack))
+                unpack.Append($"    if (model == {model.Id}u)\n        {prefix}Unpack(custom, p);\n");
+            if (s_light.IsMatch(model.Lighting))
+                light.Append($"    if (graphite_DeferredModel == {model.Id}u)\n        return {prefix}Light(c, l, graphite_DeferredCustom);\n");
+            if (s_ambient.IsMatch(model.Lighting))
+                ambient.Append($"    if (graphite_DeferredModel == {model.Id}u)\n        return {prefix}Ambient(c, i, graphite_DeferredCustom);\n");
         }
+        text.Append("void graphite_DeferredUnpack(uint model, vec4 custom, inout PBR_Params p)\n{\n").Append(unpack).Append("}\n");
         text.Append("vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)\n{\n").Append(light).Append("    return PBR_EvaluateLight(c, l);\n}\n");
+        text.Append("vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i)\n{\n").Append(ambient).Append("    return PBR_EvaluateAmbient(c, i);\n}\n");
         text.Append($"bool graphite_DeferredUnlit(uint model) {{ return {unlit}; }}\n");
         text.Append("#include \"Graphite/Internal/DeferredLighting.glsl\"\n");
         return text.ToString();

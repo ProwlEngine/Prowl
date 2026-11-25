@@ -29,9 +29,9 @@ vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)
 
 #ifdef GRAPHITE_STANDARD_GBUFFER
 // Custom holds the translucency colour, and the translucency over its range of 2
-void Foliage_GBuffer(inout Graphite_GBuffer g)
+void Foliage_GBuffer(inout Graphite_GBuffer g, PBR_Params p)
 {
-    g.model = GRAPHITE_MODEL_TWO_SIDED_FOLIAGE;
+    g.model = GRAPHITE_MODEL_FOLIAGE;
     g.custom = vec4(translucency_color.rgb, translucency * 0.5);
 }
 #endif

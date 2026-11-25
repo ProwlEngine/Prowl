@@ -94,10 +94,27 @@ public sealed class BuiltInSkies(Renderer renderer)
 /// </summary>
 public sealed class BuiltInStandard(Renderer renderer)
 {
-    private Shader? _lit, _unlit, _impostor;
+    private Shader? _lit, _unlit, _impostor, _clearCoat, _cloth, _subsurface, _thinSubsurface, _anisotropic;
 
     public Shader Lit => _lit ??= Load("Lit");
     public Shader Unlit => _unlit ??= Load("Unlit");
+
+    /// <summary>Lit under a clear coat.</summary>
+    public Shader ClearCoat => _clearCoat ??= Model("ClearCoat");
+
+    /// <summary>Lit under fuzz.</summary>
+    public Shader Cloth => _cloth ??= Model("Cloth");
+
+    /// <summary>Lit over subsurface scattering in the bulk.</summary>
+    public Shader Subsurface => _subsurface ??= Model("Subsurface");
+
+    /// <summary>Lit as a thin walled sheet light passes through, lit as it is drawn in every view.</summary>
+    public Shader ThinSubsurface => _thinSubsurface ??= Model("ThinSubsurface");
+
+    /// <summary>Lit with its highlight stretched along the tangent, lit as it is drawn in every view.</summary>
+    public Shader Anisotropic => _anisotropic ??= Model("Anisotropic");
+
+    private Shader Model(string name) => renderer.LoadShader(ShaderParser.Parse($"Shader \"Graphite/{name}\"\n{{\n    Surface \"{name}\"\n    {{\n    }}\n}}\n"));
 
     /// <summary>The card an <see cref="ImpostorAsset"/> draws with.</summary>
     public Shader Impostor => _impostor ??= Load("Impostor");
@@ -305,6 +322,12 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The shading models deferred views light their GBuffer by, which a host may add to.</summary>
     public ShadingModels ShadingModels => Resources.ShadingModels;
+
+    /// <summary>
+    /// Loads a ShadingModel document: a surface model built on another, such as Lit, that shaders name in a Surface
+    /// block, lit the same in forward and deferred views. Returns the model, null for a forward only one. Host thread.
+    /// </summary>
+    public ShadingModel? LoadShadingModel(string source) => ShadingModels.Load(ShaderParser.ParseShadingModel(source));
 
     /// <summary>Values and keywords every shader can read, overridden per world.</summary>
     public GlobalProperties Globals => _globals.Renderer;

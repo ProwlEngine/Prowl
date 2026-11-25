@@ -419,10 +419,10 @@ public sealed class StandardShaderTests : IDisposable
         Assert.Contains("Toon", error.Message);
     }
 
-    private static readonly string[] s_lobes = ["PBR_COAT", "PBR_FUZZ", "PBR_ANISOTROPY", "PBR_SUBSURFACE", "PBR_THIN_WALLED"];
+    private static readonly string[] s_lobes = ["PBR_THIN_WALLED"];
 
     // The axes deciding how much light a caster lets through to its shadow
-    private static readonly string[] s_shadowAxes = ["PBR_SUBSURFACE", "PBR_THIN_WALLED", "PBR_TRANSMISSION"];
+    private static readonly string[] s_shadowAxes = ["PBR_THIN_WALLED", "PBR_TRANSMISSION"];
 
     [Fact]
     public void Unlit_DeclaresOnlyTheSurfaceAxis_AndPBRItsLobesBeside_MapsBeingBitsOfTheMaterial()
@@ -442,28 +442,30 @@ public sealed class StandardShaderTests : IDisposable
         Assert.DoesNotContain(_unlit.GlobalAxes, a => a.Name == "PBR_TIER");
     }
 
-    // Each lobe turns on with its weight, anisotropy with either roughness anisotropy, and off again at zero
+    private Shader Model(string name) => new(ShaderParser.Parse($"Shader \"Test/{name}\" {{ Surface \"{name}\" {{ }} }}"), _compiler);
+
+    // Coat, fuzz, subsurface and anisotropy are surface models built on Lit, each with its lobe's properties and the
+    // lobe always on, where Lit has neither
     [Fact]
-    public void LobeAxes_FollowTheirWeights()
+    public void TheLobes_AreSurfaceModelsOfTheirOwn()
+    {
+        foreach ((string model, string property, string lobe) in new[] { ("ClearCoat", "coat_weight", "PBR_COAT"), ("Cloth", "fuzz_weight", "PBR_FUZZ"), ("Subsurface", "subsurface_weight", "PBR_SUBSURFACE"), ("Anisotropic", "specular_roughness_anisotropy", "PBR_ANISOTROPY") })
+        {
+            Shader shader = Model(model);
+            Assert.True(shader.FindProperty(property) >= 0, $"{model} has {property}");
+            Assert.True(_pbr.FindProperty(property) < 0, $"Lit has {property}");
+            Assert.DoesNotContain(shader.MaterialAxes, axis => axis.Name == lobe);
+            Assert.DoesNotContain(_pbr.MaterialAxes, axis => axis.Name == lobe);
+            Assert.Equal(model != "Anisotropic", shader.HasPass(PassType.GBuffer));
+            Assert.Contains($"#define {lobe}", shader.Definition.Passes![0].Source);
+        }
+    }
+
+    [Fact]
+    public void ThinWalled_FollowsItsProperty()
     {
         Material material = _system.Create(_pbr);
-        foreach (string lobe in s_lobes)
-            Assert.Equal("false", Keyword(material, lobe));
-
-        foreach ((string property, string lobe) in new[] { ("coat_weight", "PBR_COAT"), ("fuzz_weight", "PBR_FUZZ"), ("specular_roughness_anisotropy", "PBR_ANISOTROPY"), ("coat_roughness_anisotropy", "PBR_ANISOTROPY"), ("subsurface_weight", "PBR_SUBSURFACE") })
-        {
-            material.SetFloat(property, 0.4f);
-            Assert.Equal("true", Keyword(material, lobe));
-            material.SetFloat(property, 0);
-            Assert.Equal("false", Keyword(material, lobe));
-        }
-
-        material.SetFloat("specular_roughness_anisotropy", 0.5f);
-        material.SetFloat("coat_roughness_anisotropy", 0);
-        Assert.Equal("true", Keyword(material, "PBR_ANISOTROPY"));
-        material.SetFloat("specular_roughness_anisotropy", 0);
-        material.SetFloat("coat_roughness_anisotropy", 0.5f);
-        Assert.Equal("true", Keyword(material, "PBR_ANISOTROPY"));
+        Assert.Equal("false", Keyword(material, "PBR_THIN_WALLED"));
 
         material.SetInt("geometry_thin_walled", 1);
         Assert.Equal("true", Keyword(material, "PBR_THIN_WALLED"));
@@ -733,20 +735,16 @@ public sealed class StandardShaderTests : IDisposable
         Assert.False(material.Draw.Transparent);
     }
 
-    // Every OpenPBR v1.1.1 parameter under its spec name with the spec's default, and whether it has a map
+    // Every OpenPBR v1.1.1 parameter Lit has under its spec name with the spec's default, and whether it has a map. The
+    // coat, fuzz, subsurface and anisotropy ones belong to their own surface models.
     private static readonly (string Name, float[] Default, bool Map)[] s_spec =
     [
         ("base_weight", [1], true), ("base_color", [0.8f, 0.8f, 0.8f], true), ("base_metalness", [0], true), ("base_diffuse_roughness", [0], true),
         ("specular_weight", [1], true), ("specular_color", [1, 1, 1], true), ("specular_roughness", [0.3f], true),
-        ("specular_roughness_anisotropy", [0], true), ("specular_ior", [1.5f], false),
+        ("specular_ior", [1.5f], false),
         ("transmission_weight", [0], true), ("transmission_color", [1, 1, 1], true), ("transmission_depth", [0], false),
         ("transmission_scatter", [0, 0, 0], false), ("transmission_scatter_anisotropy", [0], false),
         ("transmission_dispersion_scale", [0], false), ("transmission_dispersion_abbe_number", [20], false),
-        ("subsurface_weight", [0], true), ("subsurface_color", [0.8f, 0.8f, 0.8f], true), ("subsurface_radius", [1], true),
-        ("subsurface_radius_scale", [1, 0.5f, 0.25f], false), ("subsurface_scatter_anisotropy", [0], false),
-        ("coat_weight", [0], true), ("coat_color", [1, 1, 1], true), ("coat_roughness", [0], true), ("coat_roughness_anisotropy", [0], true),
-        ("coat_ior", [1.6f], false), ("coat_darkening", [1], true),
-        ("fuzz_weight", [0], true), ("fuzz_color", [1, 1, 1], true), ("fuzz_roughness", [0.5f], true),
         ("emission_luminance", [0], true), ("emission_color", [1, 1, 1], true),
         ("geometry_opacity", [1], true), ("geometry_thin_walled", [0], false),
     ];
@@ -766,9 +764,9 @@ public sealed class StandardShaderTests : IDisposable
                 Assert.True(properties[index].MapBit >= 0, name);
         }
 
-        foreach (string geometry in new[] { "geometry_normal_map", "geometry_coat_normal_map", "geometry_tangent_map", "geometry_height_map", "ambient_occlusion_map" })
+        foreach (string geometry in new[] { "geometry_normal_map", "geometry_height_map", "ambient_occlusion_map" })
             Assert.True(properties[_pbr.FindProperty(geometry)].MapBit >= 0, geometry);
-        Assert.Equal(29, properties.Count(p => p.MapBit >= 0));
+        Assert.Equal(15, properties.Count(p => p.MapBit >= 0));
         Assert.True(_pbr.Schema.MapMaskOffset >= 0);
     }
 

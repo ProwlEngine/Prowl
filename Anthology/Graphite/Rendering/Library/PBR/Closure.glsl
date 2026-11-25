@@ -15,6 +15,9 @@
 // A volume with transmission_depth 0 tints by transmission_color, a deeper one absorbs and scatters along its path,
 // see Graphite/PBR/Transmission.glsl. The translucent base takes its share only with PBR_TRANSMISSION.
 //
+// PBR_LIGHT_WRAPS: an expression saying whether the lights behind the surface light it too, for a Graphite_BRDF that
+// wraps light past the terminator as Graphite/PBR/Lobes.glsl's subsurface does.
+//
 // A Lighting block may replace how lights and ambient light are shaded:
 //   vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l), defining GRAPHITE_CUSTOM_BRDF, default PBR_EvaluateLight
 //   vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i), defining GRAPHITE_CUSTOM_AMBIENT_BRDF, default PBR_EvaluateAmbient
@@ -604,7 +607,9 @@ vec3 PBR_ShadeLights(PBR_Closure c, Graphite_LightIterator it)
             total += Graphite_BRDF(c, l);
     }
 
-#ifdef PBR_WRAP
+#ifdef PBR_LIGHT_WRAPS
+    bool wraps = PBR_LIGHT_WRAPS;
+#elif defined(PBR_WRAP)
     bool wraps = true;
 #else
     bool wraps = false;
@@ -630,7 +635,9 @@ vec3 PBR_ShadeLights(PBR_Closure c)
             total += Graphite_BRDF(c, l);
     }
 
-#ifdef PBR_WRAP
+#ifdef PBR_LIGHT_WRAPS
+    bool wraps = PBR_LIGHT_WRAPS;
+#elif defined(PBR_WRAP)
     bool wraps = true;
 #else
     bool wraps = false;

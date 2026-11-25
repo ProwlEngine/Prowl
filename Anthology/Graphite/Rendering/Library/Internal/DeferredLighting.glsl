@@ -2,7 +2,8 @@
 // light function of its shading model, onto the scene with its top specular lobe, which screen space reflections read.
 // Its depth tests against the scene's, so a surface drawn in front by the prepass keeps its pixel. Pixels of an unlit
 // model pass their emission through. Included last in the program ShadingModels writes, after
-// Graphite/Internal/DeferredLightingHead.glsl, the models' light functions, Graphite_BRDF and graphite_DeferredUnlit.
+// Graphite/Internal/DeferredLightingHead.glsl, the models' code, graphite_DeferredUnpack, Graphite_BRDF,
+// Graphite_AmbientBRDF and graphite_DeferredUnlit.
 layout(location = 4) out vec4 outMaterial;
 
 void main()
@@ -27,6 +28,7 @@ void main()
     if (!graphite_DeferredUnlit(model))
     {
         PBR_Params p = PBR_FromGBuffer(g);
+        graphite_DeferredUnpack(model, g.custom, p);
         Graphite_LightIterator lights = Graphite_BeginLights(relative);
         Graphite_ShadowLights(lights, relative, g.normal);
         PBR_Closure c = PBR_Prepare(p, relative, Graphite_ViewDir(relative), g.normal, 0.0);

@@ -12,6 +12,14 @@ public sealed record ShaderSurface(string Model, string Code, int Line, string L
 
 
 /// <summary>
+/// A ShadingModel document: a surface model made from another, with what a deferred renderer needs to light it from a
+/// GBuffer. Properties join the base model's. Defines are set in every pass. Pack is code for the pass that keeps the
+/// surface, Unpack and Lighting code for the pass that lights it. ForwardOnly models are never kept, only lit as they draw.
+/// </summary>
+public sealed record ShadingModelDefinition(string Name, string Base, ShaderProperty[] Properties, string[] Defines, bool ForwardOnly, string Pack, string Unpack, string Lighting);
+
+
+/// <summary>
 /// Parsed shaderdef shader, plus runtime binding to a device/compiler once Create is called.
 /// </summary>
 public sealed class ShaderDefinition

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 using Xunit;
@@ -41,9 +42,35 @@ public sealed partial class LightingTests
             Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, 40)) * Double4x4.RotateY(degrees * Math.PI / 180) * Double4x4.CreateScale(20),
         }, [material]);
 
+    private Shader? _wide;
+
+    // Lit with the coat, fuzz, subsurface and anisotropy lobes all on at once, which no shipped surface model has, lit as
+    // it is drawn
+    private Shader Wide => _wide ??= LoadWide();
+
+    // The wide model's name, loaded when first asked for, for shaders that build on it
+    private string WideModel
+    {
+        get
+        {
+            _ = Wide;
+            return "TestWide";
+        }
+    }
+
+    private Shader LoadWide()
+    {
+        List<ShaderProperty> properties = new();
+        foreach (string model in new[] { "ClearCoat", "Cloth", "Subsurface", "Anisotropic" })
+            properties.AddRange(ShaderParser.ParseShadingModel(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{model}.shader")!).Properties);
+        properties.AddRange(ShaderParser.ParseShadingModel("ShadingModel \"Extra\" { Properties { coat_roughness_anisotropy(\"Coat Roughness Anisotropy\", Float) = 0.0 [Range(0, 1)] coat_roughness_anisotropy_map(\"Coat Roughness Anisotropy Map\", Texture2D) = \"white\" {} [Map] } Base \"Lit\" }").Properties);
+        _renderer.ShadingModels.Load(new ShadingModelDefinition("TestWide", "Lit", [.. properties], ["PBR_COAT", "PBR_FUZZ", "PBR_SUBSURFACE", "PBR_ANISOTROPY"], true, "", "", ""));
+        return _renderer.LoadShader(ShaderParser.Parse("Shader \"Test/Wide\" { Surface \"TestWide\" { } }"));
+    }
+
     private Material PBR(Action<Material> set, Shader? shader = null)
     {
-        Material material = _renderer.CreateMaterial(shader ?? _renderer.Standard.Lit);
+        Material material = _renderer.CreateMaterial(shader ?? Wide);
         material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
         set(material);
         return material;

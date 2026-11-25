@@ -15,9 +15,9 @@
 
 // A pixel the GBuffer pass drew nothing on, as the GBuffer's clear leaves it
 #define GRAPHITE_MODEL_NONE 0u
-#define GRAPHITE_MODEL_DEFAULT_LIT 1u
+#define GRAPHITE_MODEL_LIT 1u
 #define GRAPHITE_MODEL_UNLIT 2u
-#define GRAPHITE_MODEL_TWO_SIDED_FOLIAGE 3u
+#define GRAPHITE_MODEL_FOLIAGE 3u
 
 #define GRAPHITE_GBUFFER_SPECULAR_RANGE 0.08
 

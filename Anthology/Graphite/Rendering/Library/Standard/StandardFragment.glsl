@@ -112,13 +112,17 @@ void Graphite_StandardFragment()
         discard;
 #endif
 
-    Graphite_GBuffer g = PBR_ToGBuffer(p, GRAPHITE_MODEL_DEFAULT_LIT, mapVariance);
+#ifdef GRAPHITE_STANDARD_MODEL_PARAMS
+    Model_Params(p);
+#endif
+
+    Graphite_GBuffer g = PBR_ToGBuffer(p, GRAPHITE_MODEL_LIT, mapVariance);
     g.lightLayers = Graphite_Object().layerMask & 7u;
     g.receivesShadows = Graphite_ReceivesShadows();
     g.baked = Graphite_IndirectDiffuse(vLightmapUV, vAmbient);
     g.emission = p.emissionColor * p.emissionLuminance * Graphite_Exposure();
 #ifdef GRAPHITE_STANDARD_GBUFFER_MODEL
-    GRAPHITE_STANDARD_GBUFFER_MODEL(g);
+    GRAPHITE_STANDARD_GBUFFER_MODEL(g, p);
 #endif
     Graphite_WriteGBuffer(g);
     Graphite_WriteMotion(graphite_MotionPrevious);
@@ -153,6 +157,12 @@ void Graphite_StandardFragment()
 
     Graphite_LightIterator lights = Graphite_BeginLights(vRelativePos);
     Graphite_ShadowLights(lights, vRelativePos, i.geometryNormal);
+#ifdef GRAPHITE_STANDARD_MODEL_CUSTOM
+    graphite_ModelCustom = clamp(Model_Pack(p), 0.0, 1.0);
+#endif
+#ifdef GRAPHITE_STANDARD_MODEL_PARAMS
+    Model_Params(p);
+#endif
     PBR_Closure c = PBR_Prepare(p, vRelativePos, i.viewDir, i.geometryNormal, mapVariance);
     vec3 direct = PBR_ShadeLights(c, lights);
     Graphite_ProbeSet probes = PBR_FindProbes(c);

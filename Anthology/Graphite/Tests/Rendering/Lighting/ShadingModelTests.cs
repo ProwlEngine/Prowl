@@ -1,25 +1,28 @@
 using System;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-// The lighting program a deferred view draws is written from the renderer's shading models, and written anew as they change
+// A ShadingModel document is a surface model shaders build on, and the lighting program a deferred view draws is
+// written from the renderer's models, and written anew as they change
 [Collection("GPU Tests")]
 public sealed class ShadingModelTests : IDisposable
 {
     private const int Size = RendererHarness.Size;
 
     private readonly RendererHarness _harness = new();
+    private readonly GpuMesh _quad;
 
     public ShadingModelTests()
     {
         Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
         Float3[] normals = [new(0, 0, -1), new(0, 0, -1), new(0, 0, -1), new(0, 0, -1)];
-        GpuMesh quad = _harness.Renderer.CreateMesh(new MeshData
+        _quad = _harness.Renderer.CreateMesh(new MeshData
         {
             VertexCount = 4,
             Streams =
@@ -29,72 +32,130 @@ public sealed class ShadingModelTests : IDisposable
             ],
             Indices = new uint[] { 0, 2, 1, 0, 3, 2 },
         });
-        _harness.Owned.Add(quad);
-        Material material = _harness.Renderer.CreateMaterial(_harness.Renderer.Standard.Lit);
-        _harness.World.Add(new RenderableDesc { Mesh = quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [material]);
+        _harness.Owned.Add(_quad);
         _harness.World.AddLight(new LightDesc { Type = LightType.Point, Position = new Double3(0, 0, 8), Range = 10, Intensity = 1, Color = new Float3(1, 1, 1), Static = true });
     }
 
     public void Dispose() => _harness.Dispose();
 
-    private RenderView Deferred()
+    private RenderView View(RenderPath path)
     {
         RenderView view = _harness.View();
-        view.Path = RenderPath.Deferred;
+        view.Path = path;
         return view;
     }
 
     private static Float4 Centre(Float4[] pixels) => pixels[Size / 2 * Size + Size / 2];
 
-    // A light function giving a colour for each light, whatever the light. The view's ambient light comes on top.
-    private static string Constant(string name, string color)
-        => $"vec3 {name}(PBR_Closure c, Graphite_LightContribution l, vec4 custom) {{ return {color}; }}\n";
+    // A model lit by a colour for each light, whatever the light, times the first value its Pack keeps. The view's
+    // ambient light comes on top.
+    private static string Flat(string name, string color) => $$"""
+        ShadingModel "{{name}}"
+        {
+            Properties
+            {
+                flat_scale("Scale", Float) = 1.0
+            }
 
-    [Fact]
-    public void TheBuiltInModels_HaveTheIdsTheGBufferPassesWrite()
+            Base "Lit"
+
+            Pack
+            {
+                GLSLPROGRAM
+                uniform float flat_scale;
+                vec4 Model_Pack(PBR_Params p) { return vec4(flat_scale, 0.0, 0.0, 0.0); }
+                ENDGLSL
+            }
+
+            Lighting
+            {
+                GLSLPROGRAM
+                vec3 Model_Light(PBR_Closure c, Graphite_LightContribution l, vec4 custom) { return {{color}} * custom.x; }
+                ENDGLSL
+            }
+        }
+        """;
+
+    private Material On(string model)
     {
-        ShadingModels models = _harness.Renderer.ShadingModels;
-        Assert.Equal(ShadingModels.DefaultLit, models.Find("DefaultLit")!.Id);
-        Assert.Equal(ShadingModels.Unlit, models.Find("Unlit")!.Id);
-        Assert.Equal(ShadingModels.TwoSidedFoliage, models.Find("TwoSidedFoliage")!.Id);
-        Assert.Equal(4u, models.Register("Mine", Constant("Mine_Light", "vec3(0.0)"), "Mine_Light").Id);
-        Assert.Equal(4u, models.Register("Mine", Constant("Mine_Light", "vec3(1.0)"), "Mine_Light").Id);
-        Assert.True(models.Remove("Mine"));
-        Assert.False(models.Remove("DefaultLit"));
+        Shader shader = _harness.Renderer.LoadShader(ShaderParser.Parse($"Shader \"Test/{model}\"\n{{\n    Surface \"{model}\"\n    {{\n    }}\n}}\n"));
+        Material material = _harness.Renderer.CreateMaterial(shader);
+        _harness.World.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [material]);
+        return material;
     }
 
     [Fact]
-    public void ReplacingAModel_RewritesTheLightingProgram_WhichLightsItsPixelsByIt()
+    public void ShippedModels_HaveIds_AndAForwardOnlyOneHasNone()
     {
         ShadingModels models = _harness.Renderer.ShadingModels;
-        Float4 lit = Centre(_harness.Frame(Deferred()));
-        Assert.True(lit.X > 0.01f && MathF.Abs(lit.X - lit.Y) < 0.01f, $"default lit {lit}");
+        Assert.Equal(1u, models.Find("Lit")!.Id);
+        Assert.Equal(2u, models.Find("Unlit")!.Id);
+        Assert.Equal(3u, models.Find("Foliage")!.Id);
+        foreach (string name in new[] { "ClearCoat", "Cloth", "Subsurface" })
+            Assert.InRange(models.Find(name)!.Id, 4u, 15u);
 
-        FullscreenProgram first = models.Program;
-        models.Register("DefaultLit", Constant("Green_Light", "vec3(0.0, 0.25, 0.0)"), "Green_Light");
-        Float4 green = Centre(_harness.Frame(Deferred()));
-        Assert.NotSame(first, models.Program);
-        Assert.True(green.X < 0.03f && MathF.Abs(green.Y - 0.25f) < 0.03f && green.Z < 0.03f, $"green {green}");
+        Assert.True(_harness.Renderer.Standard.Anisotropic.HasPass(PassType.Forward));
+        Assert.False(_harness.Renderer.Standard.Anisotropic.HasPass(PassType.GBuffer));
+        Assert.Null(models.Find("Anisotropic"));
+        Assert.True(_harness.Renderer.Standard.ClearCoat.HasPass(PassType.GBuffer));
+        Assert.True(_harness.Renderer.Standard.ClearCoat.FindProperty("coat_weight") >= 0);
+        Assert.True(_harness.Renderer.Standard.Lit.FindProperty("coat_weight") < 0);
+    }
 
-        models.Register("DefaultLit", Constant("Blue_Light", "vec3(0.0, 0.0, 0.5)"), "Blue_Light");
-        Float4 blue = Centre(_harness.Frame(Deferred()));
+    [Theory]
+    [InlineData(RenderPath.Forward)]
+    [InlineData(RenderPath.Deferred)]
+    public void AModelsLighting_LightsItsSurfaces_ByWhatItsPackKeeps(RenderPath path)
+    {
+        _harness.Renderer.LoadShadingModel(Flat("FlatGreen", "vec3(0.0, 0.5, 0.0)"));
+        Material material = On("FlatGreen");
+        Float4 full = Centre(_harness.Frame(View(path)));
+        Assert.True(full.X < 0.03f && MathF.Abs(full.Y - 0.5f) < 0.03f && full.Z < 0.03f, $"full {full}");
+
+        material.SetFloat("flat_scale", 0.5f);
+        Float4 half = Centre(_harness.Frame(View(path)));
+        Assert.True(MathF.Abs(half.Y - 0.25f) < 0.03f, $"half {half}");
+    }
+
+    [Fact]
+    public void LoadingAModelAgain_RewritesTheLightingProgram_AndKeepsItsId()
+    {
+        ShadingModels models = _harness.Renderer.ShadingModels;
+        ShadingModel first = _harness.Renderer.LoadShadingModel(Flat("FlatSwap", "vec3(0.0, 0.5, 0.0)"))!;
+        On("FlatSwap");
+        Float4 green = Centre(_harness.Frame(View(RenderPath.Deferred)));
+        Assert.True(MathF.Abs(green.Y - 0.5f) < 0.03f && green.Z < 0.03f, $"green {green}");
+
+        FullscreenProgram program = models.Program;
+        ShadingModel second = _harness.Renderer.LoadShadingModel(Flat("FlatSwap", "vec3(0.0, 0.0, 0.5)"))!;
+        Assert.Equal(first.Id, second.Id);
+        Float4 blue = Centre(_harness.Frame(View(RenderPath.Deferred)));
+        Assert.NotSame(program, models.Program);
         Assert.True(blue.Y < 0.03f && MathF.Abs(blue.Z - 0.5f) < 0.03f, $"blue {blue}");
     }
 
     [Fact]
-    public void AModelThatDoesNotCompile_IsReported_AndTheLastProgramStays()
+    public void AModelWhoseLightingDoesNotCompile_IsReported_AndTheLastProgramStays()
     {
         ShadingModels models = _harness.Renderer.ShadingModels;
-        models.Register("DefaultLit", Constant("Green_Light", "vec3(0.0, 0.25, 0.0)"), "Green_Light");
-        _harness.Frame(Deferred());
+        _harness.Renderer.LoadShadingModel(Flat("FlatKept", "vec3(0.0, 0.5, 0.0)"));
+        On("FlatKept");
+        _harness.Frame(View(RenderPath.Deferred));
         FullscreenProgram good = models.Program;
 
-        models.Register("Broken", "vec3 Broken_Light(PBR_Closure c, Graphite_LightContribution l, vec4 custom) { return nothing; }\n", "Broken_Light");
-        _harness.Submit(new FrameDesc { Views = new[] { Deferred() } });
+        _harness.Renderer.LoadShadingModel(Flat("FlatBroken", "nothing"));
+        _harness.Submit(new FrameDesc { Views = new[] { View(RenderPath.Deferred) } });
         RendererError error = Assert.Single(_harness.Errors);
         Assert.Equal("shader.compile", error.Code);
         Assert.Same(good, models.Program);
         Float4 green = Centre(_harness.ReadTarget());
-        Assert.True(MathF.Abs(green.Y - 0.25f) < 0.03f, $"green {green}");
+        Assert.True(MathF.Abs(green.Y - 0.5f) < 0.03f, $"green {green}");
+    }
+
+    [Fact]
+    public void ADocument_NeedsABase_AndCannotTakeAShippedSurfaceModelsName()
+    {
+        Assert.ThrowsAny<Exception>(() => ShaderParser.ParseShadingModel("ShadingModel \"NoBase\"\n{\n}\n"));
+        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel("ShadingModel \"Lit\"\n{\n    Base \"Unlit\"\n}\n"));
     }
 }

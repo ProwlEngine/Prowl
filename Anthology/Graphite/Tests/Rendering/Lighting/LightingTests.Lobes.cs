@@ -110,7 +110,7 @@ public sealed partial class LightingTests
     [Fact]
     public void TheFurnace_TurnedNormalsAndTangents_AreOne()
     {
-        Shader bumpy = _renderer.LoadShader(ShaderParser.Parse(BumpySource));
+        Shader bumpy = _renderer.LoadShader(ShaderParser.Parse(BumpySource.Replace("Surface \"Lit\"", $"Surface \"{WideModel}\"")));
         for (int b = 0; b < s_whiteBases.Length; b++)
         {
             Action<Material> surface = s_whiteBases[b];

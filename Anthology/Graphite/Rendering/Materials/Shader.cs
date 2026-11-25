@@ -609,7 +609,8 @@ public sealed class Shader
     private static readonly System.Text.RegularExpressions.Regex s_lightingMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_lighting[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
-    /// Expands a Surface block into the passes of its model, the library shader Graphite/Standard/{Model}.shader: each
+    /// Expands a Surface block into the passes of its model, the library shader Graphite/Standard/{Model}.shader or a
+    /// ShadingModel document of that name: each
     /// "#pragma surface" line of the model's passes becomes the block's code, which defines the model's Surface function,
     /// void Surface(inout PBR_Params p, Graphite_SurfaceData i) for PBR, before the surface is lit, with
     /// GRAPHITE_SURFACE_FUNCTION defined. A Lighting block's code defines Graphite_BRDF, Graphite_AmbientBRDF or both
@@ -625,10 +626,7 @@ public sealed class Shader
             return;
         string name = definition.Name ?? "";
         string path = $"{ShaderLibrary.Prefix}Standard/{surface.Model}.shader";
-        InternalShaders.Register();
-        string source = ShaderLibrary.Get(path)
-            ?? throw new ShaderLoadException($"{name}:{surface.Line}: there is no surface model \"{surface.Model}\", a model is a shader at {path}.");
-        ShaderDefinition model = ShaderParser.Parse(source);
+        ShaderDefinition model = SurfaceModel(surface.Model, name, surface.Line, 0);
 
         string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
         string lighting = surface.Lighting;
@@ -685,6 +683,87 @@ public sealed class Shader
         }
         definition.Properties = [.. properties];
         definition.Surface = null;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex s_sharedBlock = new(@"\bShared\s*\{");
+    private static readonly System.Text.RegularExpressions.Regex s_modelPack = new(@"\bvec4\s+Model_Pack\s*\(");
+    private static readonly System.Text.RegularExpressions.Regex s_modelParams = new(@"\bvoid\s+Model_Params\s*\(");
+    private static readonly System.Text.RegularExpressions.Regex s_modelLight = new(@"\bvec3\s+Model_Light\s*\(");
+    private static readonly System.Text.RegularExpressions.Regex s_modelAmbient = new(@"\bvec3\s+Model_Ambient\s*\(");
+
+    // The shader a surface model's passes and properties come from: the library shader of its name, or for a
+    // ShadingModel document the model it is based on with the document applied
+    private static ShaderDefinition SurfaceModel(string model, string name, int line, int depth)
+    {
+        if (depth > 8)
+            throw new ShaderLoadException($"{name}:{line}: the surface model \"{model}\" is based on itself.");
+        InternalShaders.Register();
+        if (ShadingModelLibrary.Find(model) is { } shading)
+            return ApplyShadingModel(SurfaceModel(shading.Base, name, line, depth + 1), shading);
+        string path = $"{ShaderLibrary.Prefix}Standard/{model}.shader";
+        string source = ShaderLibrary.Get(path)
+            ?? throw new ShaderLoadException($"{name}:{line}: there is no surface model \"{model}\", a model is a shader at {path} or a ShadingModel the renderer loaded.");
+        return ShaderParser.Parse(source);
+    }
+
+    /// <summary>
+    /// Makes a surface model of a ShadingModel document from the model it is based on: its properties join, its defines
+    /// open every pass, and the GBuffer pass names the model's id and keeps what its Pack block gives, or goes when the
+    /// model is forward only. A Lighting block lights the passes marked "#pragma surface_lighting", reading the same
+    /// values, so a shader built on the model has no Lighting block of its own. A Model_Params function in the Pack
+    /// block changes the inputs in both.
+    /// </summary>
+    private static ShaderDefinition ApplyShadingModel(ShaderDefinition model, ShadingModelDefinition shading)
+    {
+        uint id = ShadingModelLibrary.IdOf(shading.Name);
+        System.Text.StringBuilder defines = new();
+        foreach (string define in shading.Defines)
+            defines.Append($"#define {define}\n");
+        bool packs = s_modelPack.IsMatch(shading.Pack);
+        string paramsDefine = s_modelParams.IsMatch(shading.Pack) ? "#define GRAPHITE_STANDARD_MODEL_PARAMS\n" : "";
+        bool light = s_modelLight.IsMatch(shading.Lighting), ambient = s_modelAmbient.IsMatch(shading.Lighting);
+
+        List<ShaderPass> passes = new();
+        foreach (ShaderPass pass in model.Passes ?? [])
+        {
+            bool gbuffer = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.GBuffer.Name);
+            if (gbuffer && shading.ForwardOnly)
+                continue;
+            string shared = defines.ToString();
+            string code = "";
+            if (gbuffer)
+            {
+                code = "#undef GRAPHITE_STANDARD_GBUFFER_MODEL\n#define GRAPHITE_STANDARD_GBUFFER_MODEL graphite_ModelGBuffer\n" + paramsDefine + shading.Pack
+                    + $"\nvoid graphite_ModelGBuffer(inout Graphite_GBuffer g, PBR_Params p)\n{{\n    g.model = {id}u;\n    g.custom = {(packs ? "Model_Pack(p)" : "vec4(0.0)")};\n}}\n";
+            }
+            else if ((light || ambient || paramsDefine.Length > 0) && s_lightingMarker.IsMatch(pass.Source))
+            {
+                if (light || ambient)
+                    pass.Source = s_lightingMarker.Replace(pass.Source, "");
+                shared += (light ? "#define GRAPHITE_CUSTOM_BRDF\n" : "") + (ambient ? "#define GRAPHITE_CUSTOM_AMBIENT_BRDF\n" : "");
+                code = (packs ? "#define GRAPHITE_STANDARD_MODEL_CUSTOM\n" : "") + paramsDefine + shading.Pack + "\nvec4 graphite_ModelCustom = vec4(0.0);\n" + shading.Lighting + "\n"
+                    + (light ? "vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l) { return Model_Light(c, l, graphite_ModelCustom); }\n" : "")
+                    + (ambient ? "vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i) { return Model_Ambient(c, i, graphite_ModelCustom); }\n" : "");
+            }
+            if (shared.Length > 0)
+                pass.Source = s_sharedBlock.Replace(pass.Source, match => match.Value + "\n" + shared, 1);
+            if (code.Length > 0)
+                pass.Source = s_surfaceMarker.Replace(pass.Source, _ => code + "\n#pragma surface", 1);
+            passes.Add(pass);
+        }
+        model.Passes = [.. passes];
+
+        List<ShaderProperty> properties = new(model.Properties ?? []);
+        foreach (ShaderProperty property in shading.Properties)
+        {
+            int index = properties.FindIndex(p => p.Name == property.Name);
+            if (index >= 0)
+                properties[index] = property;
+            else
+                properties.Add(property);
+        }
+        model.Properties = [.. properties];
+        return model;
     }
 
     /// <summary>

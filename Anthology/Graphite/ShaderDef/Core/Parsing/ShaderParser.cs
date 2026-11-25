@@ -145,6 +145,71 @@ public static class ShaderParser
     }
 
 
+    /// <summary>Whether a document is a ShadingModel rather than a Shader, by the keyword it opens with.</summary>
+    public static bool IsShadingModel(string source)
+    {
+        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
+        return ParserUtility.PeekKeyword(ref t, "ShadingModel");
+    }
+
+
+    /// <summary>
+    /// Parses a ShadingModel document: its name, then in any order Properties, Base "Model", Define "NAME" lines,
+    /// ForwardOnly, and the Pack, Unpack and Lighting blocks, each one program.
+    /// </summary>
+    public static ShadingModelDefinition ParseShadingModel(string source)
+    {
+        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
+        ParserUtility.ExpectKeyword(ref t, "ShadingModel");
+        string name = ParserUtility.QuotedString(ref t);
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ParseException("ShadingModel must contain non-empty name", t.Line, t.Column);
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+
+        ShaderProperty[] properties = [];
+        string? baseModel = null;
+        List<string> defines = new();
+        bool forwardOnly = false;
+        string pack = "", unpack = "", lighting = "";
+        while (true)
+        {
+            if (properties.Length == 0 && ParserUtility.PeekKeyword(ref t, "Properties"))
+                properties = ParsePropertiesBlock(ref t);
+            else if (baseModel == null && ParserUtility.PeekKeyword(ref t, "Base"))
+            {
+                t.Next();
+                baseModel = ParserUtility.QuotedString(ref t);
+            }
+            else if (ParserUtility.PeekKeyword(ref t, "Define"))
+            {
+                t.Next();
+                defines.Add(ParserUtility.QuotedString(ref t));
+            }
+            else if (!forwardOnly && ParserUtility.PeekKeyword(ref t, "ForwardOnly"))
+            {
+                t.Next();
+                forwardOnly = true;
+            }
+            else if (pack.Length == 0 && ParserUtility.PeekKeyword(ref t, "Pack"))
+                pack = ParseSubProgram(ref t);
+            else if (unpack.Length == 0 && ParserUtility.PeekKeyword(ref t, "Unpack"))
+                unpack = ParseSubProgram(ref t);
+            else if (lighting.Length == 0 && ParserUtility.PeekKeyword(ref t, "Lighting"))
+                lighting = ParseSubProgram(ref t);
+            else
+                break;
+        }
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+
+        Token<ShaderToken> trailing = t.Peek();
+        if (trailing.Kind != ShaderToken.EndOfFile)
+            throw Exceptions.TrailingContent(ParserUtility.Text(ref t, trailing), trailing);
+        if (string.IsNullOrWhiteSpace(baseModel))
+            throw new ParseException($"ShadingModel {name} names no Base model", t.Line, t.Column);
+        return new ShadingModelDefinition(name, baseModel, properties, [.. defines], forwardOnly, pack, unpack, lighting);
+    }
+
+
     // ==================== ShaderPass ====================
 
     static string ParsePassName(ref Tokenizer<ShaderToken> t)

@@ -27,6 +27,18 @@
 #include "Graphite/PBR/Params.glsl"
 #include "Graphite/PBR/Microfacet.glsl"
 
+// A lobe's inputs are read while the closure has the lobe, or while a surface model lighting it itself asks with
+// PBR_COAT_INPUTS, PBR_FUZZ_INPUTS or PBR_SUBSURFACE_INPUTS
+#if defined(PBR_COAT) || defined(PBR_COAT_INPUTS)
+    #define PBR_READS_COAT
+#endif
+#if defined(PBR_FUZZ) || defined(PBR_FUZZ_INPUTS)
+    #define PBR_READS_FUZZ
+#endif
+#if defined(PBR_SUBSURFACE) || defined(PBR_SUBSURFACE_INPUTS)
+    #define PBR_READS_SUBSURFACE
+#endif
+
 uniform float base_weight;
 uniform vec4 base_color;
 uniform float base_metalness;
@@ -34,7 +46,6 @@ uniform float base_diffuse_roughness;
 uniform float specular_weight;
 uniform vec4 specular_color;
 uniform float specular_roughness;
-uniform float specular_roughness_anisotropy;
 uniform float specular_ior;
 uniform float transmission_weight;
 uniform vec4 transmission_color;
@@ -43,20 +54,6 @@ uniform vec4 transmission_scatter;
 uniform float transmission_scatter_anisotropy;
 uniform float transmission_dispersion_scale;
 uniform float transmission_dispersion_abbe_number;
-uniform float subsurface_weight;
-uniform vec4 subsurface_color;
-uniform float subsurface_radius;
-uniform vec4 subsurface_radius_scale;
-uniform float subsurface_scatter_anisotropy;
-uniform float coat_weight;
-uniform vec4 coat_color;
-uniform float coat_roughness;
-uniform float coat_roughness_anisotropy;
-uniform float coat_ior;
-uniform float coat_darkening;
-uniform float fuzz_weight;
-uniform vec4 fuzz_color;
-uniform float fuzz_roughness;
 uniform float emission_luminance;
 uniform vec4 emission_color;
 uniform float geometry_opacity;
@@ -64,10 +61,8 @@ uniform int geometry_thin_walled;
 uniform float ambient_occlusion;
 uniform float ambient_occlusion_map_strength;
 uniform float normal_scale;
-uniform float coat_normal_scale;
 uniform float height_scale;
 uniform float alpha_cutoff;
-uniform float tangent_rotation;
 uniform sampler2D base_weight_map;
 uniform sampler2D base_color_map;
 uniform sampler2D base_metalness_map;
@@ -75,28 +70,57 @@ uniform sampler2D base_diffuse_roughness_map;
 uniform sampler2D specular_weight_map;
 uniform sampler2D specular_color_map;
 uniform sampler2D specular_roughness_map;
-uniform sampler2D specular_roughness_anisotropy_map;
 uniform sampler2D transmission_weight_map;
 uniform sampler2D transmission_color_map;
-uniform sampler2D subsurface_weight_map;
-uniform sampler2D subsurface_color_map;
-uniform sampler2D subsurface_radius_map;
-uniform sampler2D coat_weight_map;
-uniform sampler2D coat_color_map;
-uniform sampler2D coat_roughness_map;
-uniform sampler2D coat_roughness_anisotropy_map;
-uniform sampler2D coat_darkening_map;
-uniform sampler2D fuzz_weight_map;
-uniform sampler2D fuzz_color_map;
-uniform sampler2D fuzz_roughness_map;
 uniform sampler2D emission_luminance_map;
 uniform sampler2D emission_color_map;
 uniform sampler2D geometry_opacity_map;
 uniform sampler2D ambient_occlusion_map;
 uniform sampler2D geometry_normal_map;
-uniform sampler2D geometry_coat_normal_map;
-uniform sampler2D geometry_tangent_map;
 uniform sampler2D geometry_height_map;
+
+// A lobe's inputs are properties of the surface models that have it
+#ifdef PBR_ANISOTROPY
+uniform float specular_roughness_anisotropy;
+uniform float tangent_rotation;
+uniform sampler2D specular_roughness_anisotropy_map;
+uniform sampler2D geometry_tangent_map;
+#endif
+#ifdef PBR_READS_SUBSURFACE
+uniform float subsurface_weight;
+uniform vec4 subsurface_color;
+uniform float subsurface_radius;
+uniform vec4 subsurface_radius_scale;
+uniform float subsurface_scatter_anisotropy;
+uniform sampler2D subsurface_weight_map;
+uniform sampler2D subsurface_color_map;
+uniform sampler2D subsurface_radius_map;
+#endif
+#ifdef PBR_READS_COAT
+uniform float coat_weight;
+uniform vec4 coat_color;
+uniform float coat_roughness;
+uniform float coat_ior;
+uniform float coat_darkening;
+uniform float coat_normal_scale;
+uniform sampler2D coat_weight_map;
+uniform sampler2D coat_color_map;
+uniform sampler2D coat_roughness_map;
+uniform sampler2D coat_darkening_map;
+uniform sampler2D geometry_coat_normal_map;
+#endif
+#ifdef PBR_READS_FUZZ
+uniform float fuzz_weight;
+uniform vec4 fuzz_color;
+uniform float fuzz_roughness;
+uniform sampler2D fuzz_weight_map;
+uniform sampler2D fuzz_color_map;
+uniform sampler2D fuzz_roughness_map;
+#endif
+#if defined(PBR_READS_COAT) && defined(PBR_ANISOTROPY)
+uniform float coat_roughness_anisotropy;
+uniform sampler2D coat_roughness_anisotropy_map;
+#endif
 
 #ifdef PBR_PARALLAX
 
@@ -209,7 +233,9 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
     p.specularWeight = specular_weight;
     p.specularColor = specular_color.rgb;
     p.specularRoughness = specular_roughness;
+#ifdef PBR_ANISOTROPY
     p.specularRoughnessAnisotropy = specular_roughness_anisotropy;
+#endif
     p.specularIor = specular_ior;
     p.transmissionWeight = transmission_weight;
     p.transmissionColor = transmission_color.rgb;
@@ -218,20 +244,28 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
     p.transmissionScatterAnisotropy = transmission_scatter_anisotropy;
     p.transmissionDispersionScale = transmission_dispersion_scale;
     p.transmissionDispersionAbbeNumber = transmission_dispersion_abbe_number;
+#ifdef PBR_READS_SUBSURFACE
     p.subsurfaceWeight = subsurface_weight;
     p.subsurfaceColor = subsurface_color.rgb;
     p.subsurfaceRadius = subsurface_radius;
     p.subsurfaceRadiusScale = subsurface_radius_scale.rgb;
     p.subsurfaceScatterAnisotropy = subsurface_scatter_anisotropy;
+#endif
+#ifdef PBR_READS_COAT
     p.coatWeight = coat_weight;
     p.coatColor = coat_color.rgb;
     p.coatRoughness = coat_roughness;
-    p.coatRoughnessAnisotropy = coat_roughness_anisotropy;
     p.coatIor = coat_ior;
     p.coatDarkening = coat_darkening;
+#ifdef PBR_ANISOTROPY
+    p.coatRoughnessAnisotropy = coat_roughness_anisotropy;
+#endif
+#endif
+#ifdef PBR_READS_FUZZ
     p.fuzzWeight = fuzz_weight;
     p.fuzzColor = fuzz_color.rgb;
     p.fuzzRoughness = fuzz_roughness;
+#endif
     p.emissionLuminance = emission_luminance;
     p.emissionColor = emission_color.rgb;
     p.geometryOpacity = geometry_opacity;
@@ -262,7 +296,7 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
     if (transmission_color_map_Present)
         p.transmissionColor *= texture(transmission_color_map, Graphite_StandardUV(transmission_color_map_UV, transmission_color_map_ST, transmission_color_map_Rotation, i)).rgb;
 #endif
-#ifdef PBR_SUBSURFACE
+#ifdef PBR_READS_SUBSURFACE
     if (subsurface_weight_map_Present)
         p.subsurfaceWeight *= texture(subsurface_weight_map, Graphite_StandardUV(subsurface_weight_map_UV, subsurface_weight_map_ST, subsurface_weight_map_Rotation, i))[subsurface_weight_map_Channel];
     if (subsurface_color_map_Present)
@@ -270,7 +304,7 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
     if (subsurface_radius_map_Present)
         p.subsurfaceRadius *= texture(subsurface_radius_map, Graphite_StandardUV(subsurface_radius_map_UV, subsurface_radius_map_ST, subsurface_radius_map_Rotation, i))[subsurface_radius_map_Channel];
 #endif
-#ifdef PBR_COAT
+#ifdef PBR_READS_COAT
     if (coat_weight_map_Present)
         p.coatWeight *= texture(coat_weight_map, Graphite_StandardUV(coat_weight_map_UV, coat_weight_map_ST, coat_weight_map_Rotation, i))[coat_weight_map_Channel];
     if (coat_color_map_Present)
@@ -284,7 +318,7 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
         p.coatRoughnessAnisotropy *= texture(coat_roughness_anisotropy_map, Graphite_StandardUV(coat_roughness_anisotropy_map_UV, coat_roughness_anisotropy_map_ST, coat_roughness_anisotropy_map_Rotation, i))[coat_roughness_anisotropy_map_Channel];
 #endif
 #endif
-#ifdef PBR_FUZZ
+#ifdef PBR_READS_FUZZ
     if (fuzz_weight_map_Present)
         p.fuzzWeight *= texture(fuzz_weight_map, Graphite_StandardUV(fuzz_weight_map_UV, fuzz_weight_map_ST, fuzz_weight_map_Rotation, i))[fuzz_weight_map_Channel];
     if (fuzz_color_map_Present)
@@ -313,7 +347,7 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
         mapVariance = PBR_ToksvigVariance(length(texel * 2.0 - 1.0));
         p.geometryNormal = Graphite_SurfaceNormalMap(i, texel, normal_scale);
     }
-#ifdef PBR_COAT
+#ifdef PBR_READS_COAT
     if (geometry_coat_normal_map_Present)
         p.geometryCoatNormal = Graphite_SurfaceNormalMap(i, texture(geometry_coat_normal_map, Graphite_StandardUV(geometry_coat_normal_map_UV, geometry_coat_normal_map_ST, geometry_coat_normal_map_Rotation, i)).rgb, coat_normal_scale);
 #endif
