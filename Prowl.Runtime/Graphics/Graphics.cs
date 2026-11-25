@@ -150,7 +150,7 @@ public static class Graphics
     }
 
     /// <summary>Opens the device on the window's Vulkan surface and starts the renderer.</summary>
-    internal static void Initialize(IWindow window, bool vsync)
+    internal static void Initialize(IWindow window, VSyncMode vsync)
     {
         if (window.VkSurface == null)
             throw new InvalidOperationException("The window has no Vulkan surface.");
@@ -164,7 +164,7 @@ public static class Graphics
             Source = SwapchainSource.CreateVulkan(window.VkSurface),
             Width = (uint)Math.Max(1, window.FramebufferSize.X),
             Height = (uint)Math.Max(1, window.FramebufferSize.Y),
-            VSync = vsync ? VSyncMode.On : VSyncMode.Off,
+            VSync = (Graphite.VSyncMode)vsync,
         };
         Device = GraphicsDevice.CreateVulkan(options, swapchain, XR.VulkanOptions());
         CreateRenderer();
@@ -205,11 +205,23 @@ public static class Graphics
         }
     }
 
-    /// <summary>Whether vertical sync paces presents.</summary>
-    public static bool VSync
+    /// <summary>How presents wait for the display. Mailbox until a device with a window is open.</summary>
+    public static VSyncMode VSync
     {
-        get => Device?.VSync == VSyncMode.On;
-        set { if (Device != null) Device.VSync = value ? VSyncMode.On : VSyncMode.Off; }
+        get => (VSyncMode?)Device?.VSync ?? VSyncMode.Mailbox;
+        set
+        {
+            if (Device?.MainSwapchain == null || Renderer == null || VSync == value) return;
+
+            // Left to the render thread's next acquire, the swapchain is remade for the new present
+            // mode mid frame, which leaves the window blank until the next resize. So the mode is
+            // set once the render thread is idle and the swapchain remade here, between frames, the
+            // same way a resize does.
+            Renderer.WaitForRenderThread();
+            Device.VSync = (Graphite.VSyncMode)value;
+            if (Window.InternalWindow is { } window)
+                Resize(window.FramebufferSize.X, window.FramebufferSize.Y);
+        }
     }
 
     internal static void Resize(int width, int height)

@@ -50,8 +50,7 @@ public abstract class Game
     /// </summary>
     public virtual void InitializeWindow(string title, int width, int height)
     {
-        // A game runs unpaced until its own code says otherwise, so no vsync and no frame limit.
-        Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, vsync: false);
+        Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal);
     } 
 
     // Invariant culture ensures consistent float parsing (dot decimal separator)

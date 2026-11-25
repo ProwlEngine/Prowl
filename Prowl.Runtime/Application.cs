@@ -47,13 +47,13 @@ public static class Application
     public static bool IsGameplayExecuting { get; set; }
 
     private static readonly FrameLimiter s_limiter = new();
-    private static bool s_vsync;
+    private static VSyncMode s_vsync;
 
     /// <summary>
     /// Frames per second the loop is paced to, whether that loop is the editor's, a standalone
     /// game's or a headless server's. Zero or less runs unlimited, which is what a game starts at
-    /// until its own code says otherwise. This is a ceiling, so with <see cref="VSync"/> on the
-    /// lower of the two wins.
+    /// until its own code says otherwise. This is a ceiling, so while <see cref="VSync"/> holds frames to
+    /// the refresh the lower of the two wins.
     /// <para>
     /// In the editor this belongs to the editor's own preferences until play mode starts, which
     /// hands it back to this default so the game's code decides, exactly as in a build.
@@ -66,29 +66,17 @@ public static class Application
     }
 
     /// <summary>
-    /// Whether a frame is held back until the display is ready for it, which caps the rate to the
-    /// refresh rate and removes tearing. Off in a game until its own code turns it on, and on in
-    /// the editor unless its preferences say otherwise. Has nothing to act on when
-    /// <see cref="IsHeadless"/>.
+    /// How a frame waits for the display before it is shown. <see cref="VSyncMode.Mailbox"/> in a
+    /// game until its own code says otherwise, and the editor's preference in the editor. Has
+    /// nothing to act on when <see cref="IsHeadless"/>.
     /// </summary>
-    public static bool VSync
+    public static VSyncMode VSync
     {
         get => s_vsync;
         set
         {
             s_vsync = value;
-            if (Graphics.VSync == value) return;
-
-            // Silk.NET's own window property is only read by the automatic Run loop, which Prowl
-            // does not use. The swap interval is the whole setting, and the render thread applies
-            // it because it is the thread holding the context.
             Graphics.VSync = value;
-            
-            // Left alone, the swapchain is remade for the new present mode mid frame on the render
-            // thread, which leaves the window blank until the next resize. Remake it here instead,
-            // between frames, the same way a resize does.
-            if (Window.InternalWindow is { } window)
-                Graphics.Resize(window.FramebufferSize.X, window.FramebufferSize.Y);
         }
     }
 
