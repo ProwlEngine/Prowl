@@ -48,7 +48,7 @@ public static class Program
 
         SwapchainDescription swapchain = new()
         {
-            SyncToVerticalBlank = false
+            VSync = VSyncMode.Mailbox
         };
 
         // Create and run the window

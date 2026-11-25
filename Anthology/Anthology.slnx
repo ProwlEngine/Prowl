@@ -35,6 +35,7 @@
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
     <Project Path="Slang/COMApi/Prowl.Slang.COMApi.csproj" />
     <Project Path="Ember/Analyzers/Prowl.Ember.Analyzers.csproj" />
+    <Project Path="Clay/DiffDebugger/DiffDebugger.csproj" />
     <Project Path="Echo/Benchmarks/Benchmarks.csproj" />
     <Project Path="Quill/ShaderGen/Quill.ShaderGen.csproj" />
     <Project Path="Graphite/Tools/GraphiteBench/GraphiteBench.csproj" />

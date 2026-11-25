@@ -22,8 +22,8 @@ public abstract class Swapchain : GraphicsResource
     /// <param name="width">New width.</param>
     /// <param name="height">New height.</param>
     public abstract void Resize(uint width, uint height);
-    /// <summary>Whether presentation syncs to vblank.</summary>
-    public abstract bool SyncToVerticalBlank { get; set; }
+    /// <summary>How presents are paced against the display's refresh. A change takes effect at the next image acquire, and this reads back the mode asked for even where the surface stands in another.</summary>
+    public abstract VSyncMode VSync { get; set; }
 
     /// <summary>
     /// How the display turns the images when <see cref="SwapchainDescription.PreRotate"/> is set, so the host draws
