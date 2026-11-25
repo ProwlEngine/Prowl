@@ -76,6 +76,19 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void AClientLeavingDestroysWhatTheHostSpawnedThere()
+    {
+        GameObject copy = JoinTransformProxy(out FakePeer host, out _);
+        using (host)
+        {
+            Assert.True(copy.Network.Active);
+            Networking.Networking.Shutdown();
+            EngineObject.ProcessDestroyed();
+            Assert.True(copy.IsNotValid());
+        }
+    }
+
+    [Fact]
     public void ABodyNoLongerDrivenFromElsewhereSimulatesAgain()
     {
         Scene scene = CreateScene();
@@ -335,18 +348,24 @@ public partial class NetworkingTests
         LocalNetwork network = new();
         using FakePeer host = FakePeer.Host(network);
         SendJoin(host, snapshot, spawns);
+        NetworkLifecycleListener? received = null;
+        NetworkLifecycleListener.SpawnedOnClient = l => received = l;
         try
         {
             Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
             Pump(() => Networking.Networking.Session == null, host);
             Assert.Equal(NetworkJoinState.Disconnected, Networking.Networking.JoinState);
             Assert.Same(local, Scene.Main);
-            NetworkLifecycleListener received = Find(local, root.Identifier).GetComponent<NetworkLifecycleListener>()!;
-            Assert.Equal(new[] { "spawn", "despawn" }, received.Events);
+            Assert.Equal(new[] { "spawn", "despawn" }, received!.Events);
+            Assert.DoesNotContain(local.Objects, o => o.Identifier == root.Identifier);
             Assert.Same(root, Assert.Single(original.Objects, o => o.Identifier == root.Identifier));
             Assert.False(root.IsDisposed);
         }
-        finally { Networking.Networking.Shutdown(); }
+        finally
+        {
+            NetworkLifecycleListener.SpawnedOnClient = null;
+            Networking.Networking.Shutdown();
+        }
     }
 
     [Theory]

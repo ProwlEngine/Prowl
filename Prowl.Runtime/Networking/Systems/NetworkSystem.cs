@@ -61,6 +61,7 @@ internal sealed partial class NetworkSystem : IDisposable
         }
 
         _detached = true;
+        bool client = IsClient;
         Session = null;
         Scene.Loaded -= OnWorldLoaded;
         Scene.Unloading -= OnWorldUnloading;
@@ -71,9 +72,14 @@ internal sealed partial class NetworkSystem : IDisposable
             Scene.RefuseAdditive = null;
         }
 
+        // A client's copies of what the host spawned go with the session. Its scene objects are held, disabled.
         foreach (NetworkObject entry in Entries.Values.ToArray())
         {
             entry.NotifyDespawn(NetworkDespawnReason.SessionEnded);
+            if (client)
+            {
+                ReleaseCopy(entry);
+            }
         }
 
         Entries.Clear();
