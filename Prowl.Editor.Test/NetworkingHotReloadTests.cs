@@ -18,7 +18,7 @@ public class NetworkingHotReloadTests : EditorTestHarness
         const string script = """
             using Prowl.Runtime;
             using Prowl.Runtime.Networking;
-            public class Actor : Component
+            public class Actor : NetworkBehaviour
             {
                 [Sync] public int Health { get; set; }
                 EXTRA

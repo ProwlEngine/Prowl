@@ -17,7 +17,7 @@ namespace NetworkingShowcase;
 ///     travel. A client asks for one with a host RPC, and the host spawns it owned by that client, who then drives
 ///     it. When its owner leaves, it goes too.
 /// </summary>
-public class Hangar : Component
+public class Hangar : NetworkBehaviour
 {
     private int _spawned;
 
@@ -85,7 +85,7 @@ public class Crate : Component
 ///     like everything else here: it builds the level itself, and receives every networked object with its [Sync]
 ///     values and collections.
 /// </summary>
-public class Guestbook : Component
+public class Guestbook : NetworkBehaviour
 {
     [Sync] public NetList<string> Entries { get; } = new();
 

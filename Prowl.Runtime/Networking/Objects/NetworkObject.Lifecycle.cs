@@ -8,6 +8,19 @@ namespace Prowl.Runtime.Networking;
 
 internal sealed partial class NetworkObject
 {
+    // True when this peer owns the object, which is what authority callbacks follow.
+    private bool OwnedHere() => System.Session?.LocalPeer is { } local && Owner == local.Id;
+
+    // Runs action on each of the object's behaviours, disabled ones too, while the spawn lasts.
+    private void Run(System.Action<NetworkBehaviour> action) =>
+        SceneEvents.RunLifecycle<NetworkBehaviour>(GameObject, behaviour =>
+        {
+            if (SpawnNotified)
+            {
+                action(behaviour);
+            }
+        });
+
     internal void NotifySpawn()
     {
         if (SpawnNotified || !System.IsActive || System.FindEntry(GameObject) != this)
@@ -18,13 +31,25 @@ internal sealed partial class NetworkObject
         // Record membership before game code runs: callbacks may destroy this root or end the session.
         SpawnNotified = true;
         NotifiedOwnerId = Owner;
-        HasLocalAuthority = System.HasControl(GameObject);
+        HasLocalAuthority = OwnedHere();
         UpdatePhysics();
-        SceneEvents.RunLifecycle<INetworkEvents>(GameObject, e =>
+        if (System.IsHost)
         {
-            if (SpawnNotified && SpawnListeners.Add((Component)e))
+            Run(behaviour =>
             {
-                e.OnNetworkSpawn();
+                if (SpawnListeners.Add(behaviour))
+                {
+                    behaviour.OnStartServer();
+                }
+            });
+        }
+
+        Run(behaviour =>
+        {
+            if (ClientListeners.Add(behaviour))
+            {
+                SpawnListeners.Add(behaviour);
+                behaviour.OnStartClient();
             }
         });
 
@@ -35,20 +60,19 @@ internal sealed partial class NetworkObject
     }
 
     internal void NotifyAuthority(bool gained) =>
-        SceneEvents.RunLifecycle<INetworkEvents>(GameObject, e =>
+        SceneEvents.RunLifecycle<NetworkBehaviour>(GameObject, behaviour =>
         {
-            Component component = (Component)e;
             if (gained)
             {
-                if (SpawnNotified && HasLocalAuthority && SpawnListeners.Contains(component) &&
-                    AuthorityListeners.Add(component))
+                if (SpawnNotified && HasLocalAuthority && ClientListeners.Contains(behaviour) &&
+                    AuthorityListeners.Add(behaviour))
                 {
-                    e.OnNetworkAuthorityGained();
+                    behaviour.OnStartAuthority();
                 }
             }
-            else if (AuthorityListeners.Remove(component))
+            else if (AuthorityListeners.Remove(behaviour))
             {
-                e.OnNetworkAuthorityLost();
+                behaviour.OnStopAuthority();
             }
         });
 
@@ -62,7 +86,7 @@ internal sealed partial class NetworkObject
         bool hadAuthority = HasLocalAuthority;
         int previousOwnerId = NotifiedOwnerId;
         uint generation = Generation;
-        bool hasAuthority = System.HasControl(GameObject);
+        bool hasAuthority = OwnedHere();
         HasLocalAuthority = hasAuthority;
         NotifiedOwnerId = Owner;
         if (hadAuthority && !hasAuthority)
@@ -82,11 +106,11 @@ internal sealed partial class NetworkObject
         }
 
         NetPeer? newOwner = System.GetOwner(GameObject);
-        SceneEvents.RunLifecycle<INetworkEvents>(GameObject, e =>
+        Run(behaviour =>
         {
-            if (SpawnNotified && Generation == generation && SpawnListeners.Contains((Component)e))
+            if (Generation == generation && SpawnListeners.Contains(behaviour))
             {
-                e.OnNetworkOwnerChanged(oldOwner, newOwner);
+                behaviour.OnOwnerChanged(oldOwner, newOwner);
             }
         });
 
@@ -110,15 +134,23 @@ internal sealed partial class NetworkObject
         GameObject.Network.DespawnReason = reason;
         TearingDown = true;
         HasLocalAuthority = false;
-        NotifyAuthority(false);
-        SceneEvents.RunLifecycle<INetworkEvents>(GameObject, e =>
+        SceneEvents.RunLifecycle<NetworkBehaviour>(GameObject, behaviour =>
         {
-            if (SpawnListeners.Remove((Component)e))
+            if (ClientListeners.Remove(behaviour))
             {
-                e.OnNetworkDespawn();
+                behaviour.OnStopClient();
+            }
+        });
+        NotifyAuthority(false);
+        SceneEvents.RunLifecycle<NetworkBehaviour>(GameObject, behaviour =>
+        {
+            if (SpawnListeners.Remove(behaviour) && System.IsHost)
+            {
+                behaviour.OnStopServer();
             }
         });
         SpawnListeners.Clear();
+        ClientListeners.Clear();
         AuthorityListeners.Clear();
         RestorePhysics();
     }

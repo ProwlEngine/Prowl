@@ -13,7 +13,7 @@ namespace NetworkingShowcase;
 ///     changes it. A late joiner gets the current heat with its spawn, and the hook runs once for it there, from the
 ///     heat the reactor is built with to the heat it has.
 /// </summary>
-public class Reactor : Component
+public class Reactor : NetworkBehaviour
 {
     private readonly List<string> _log = [];
     private readonly Tint _tint = new();

@@ -41,7 +41,7 @@ public struct Loadout
 /// </code>
 /// written out by hand, with what its handlers saw.
 /// </summary>
-public class NetCollectionTestComponent : Component
+public class NetCollectionTestComponent : NetworkBehaviour
 {
     public const uint HealthSlot = 301, ScoresSlot = 302, StatsSlot = 303, TagsSlot = 304, LoadoutSlot = 305;
 
@@ -54,23 +54,23 @@ public class NetCollectionTestComponent : Component
     [SerializeIgnore] public int? ScoreCountWhenEnabled;
 
     private int __sync_Health = 100;
-    private static readonly SyncMember<NetCollectionTestComponent, int> __syncnet_Health = new(HealthSlot, "Health", SyncFlags.FromOwner, static s => s.__sync_Health, static (s, v) => s.__sync_Health = v, static (s, o, n) => s.OnHealthChanged(o, n));
+    private static readonly SyncMember<NetCollectionTestComponent, int> __syncnet_Health = new(HealthSlot, "Health", static s => s.__sync_Health, static (s, v) => s.__sync_Health = v, static (s, o, n) => s.OnHealthChanged(o, n));
     public int Health { get => __sync_Health; set => __syncnet_Health.Set(this, ref __sync_Health, value); }
 
     private readonly NetList<int> __sync_Scores = new();
-    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetList<int>> __syncnet_Scores = new(ScoresSlot, "Scores", SyncFlags.FromOwner, static s => s.__sync_Scores);
+    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetList<int>> __syncnet_Scores = new(ScoresSlot, "Scores", static s => s.__sync_Scores);
     public NetList<int> Scores { get => __syncnet_Scores.Bind(this); }
 
     private readonly NetDictionary<string, int> __sync_Stats = new();
-    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetDictionary<string, int>> __syncnet_Stats = new(StatsSlot, "Stats", SyncFlags.FromOwner, static s => s.__sync_Stats);
+    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetDictionary<string, int>> __syncnet_Stats = new(StatsSlot, "Stats", static s => s.__sync_Stats);
     public NetDictionary<string, int> Stats { get => __syncnet_Stats.Bind(this); }
 
     private readonly NetSet<string> __sync_Tags = new();
-    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetSet<string>> __syncnet_Tags = new(TagsSlot, "Tags", SyncFlags.FromOwner, static s => s.__sync_Tags);
+    private static readonly SyncCollectionMember<NetCollectionTestComponent, NetSet<string>> __syncnet_Tags = new(TagsSlot, "Tags", static s => s.__sync_Tags);
     public NetSet<string> Tags { get => __syncnet_Tags.Bind(this); }
 
     private Loadout __sync_Loadout;
-    private static readonly SyncMember<NetCollectionTestComponent, Loadout> __syncnet_Loadout = new(LoadoutSlot, "Loadout", SyncFlags.FromOwner, static s => s.__sync_Loadout, static (s, v) => s.__sync_Loadout = v);
+    private static readonly SyncMember<NetCollectionTestComponent, Loadout> __syncnet_Loadout = new(LoadoutSlot, "Loadout", static s => s.__sync_Loadout, static (s, v) => s.__sync_Loadout = v);
     public Loadout Loadout { get => __sync_Loadout; set => __syncnet_Loadout.Set(this, ref __sync_Loadout, value); }
 
     public NetCollectionTestComponent()
@@ -383,7 +383,7 @@ public partial class NetworkingTests
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
 
             GameObject ship = CreateGameObject("Ship");
-            NetCollectionTestComponent component = ship.AddComponent<NetCollectionTestComponent>();
+            NetCollectionTestComponent component = ship.AddComponent<NetCollectionTestComponent>().OwnerWritten();
             scene.Add(ship);
             ship.SpawnBuilt(aliceHere);
             Pump(() => alice.Has(FakePeer.Spawn), alice);
@@ -556,7 +556,7 @@ public partial class NetworkingTests
         Scene scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
         ship.Network.Networked = true;
-        NetCollectionTestComponent source = ship.AddComponent<NetCollectionTestComponent>();
+        NetCollectionTestComponent source = ship.AddComponent<NetCollectionTestComponent>().OwnerWritten();
         scene.Add(ship);
         MakeCurrent(scene);
         LocalNetwork network = new();
@@ -575,7 +575,7 @@ public partial class NetworkingTests
                 given = observer.Last(FakePeer.Owner);
                 observer.Received.Clear();
 
-                ship.Network.AssignOwnership(null);
+                ship.Network.AssignOwnership(Networking.Networking.Session!.LocalPeer);
                 Pump(() => observer.Has(FakePeer.Owner), observer);
                 handoff = observer.Last(FakePeer.OwnershipState);
                 takenBack = observer.Last(FakePeer.Owner);

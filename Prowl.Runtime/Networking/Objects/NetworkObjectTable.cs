@@ -26,6 +26,28 @@ internal sealed class NetworkObjectTable
         {
             _byNetId[entry.NetId] = entry;
         }
+
+        Component[] components = entry.Components;
+        for (int i = 0; i < components.Length; i++)
+        {
+            if (components[i] is NetworkBehaviour behaviour)
+            {
+                behaviour.Entry = entry;
+                behaviour.Index = i;
+            }
+        }
+    }
+
+    private static void Detach(NetworkObject entry)
+    {
+        foreach (Component component in entry.Components)
+        {
+            if (component is NetworkBehaviour behaviour && behaviour.Entry == entry)
+            {
+                behaviour.Entry = null;
+                behaviour.Index = -1;
+            }
+        }
     }
 
     public bool Contains(Guid id) => _byId.ContainsKey(id);
@@ -49,6 +71,7 @@ internal sealed class NetworkObjectTable
             _byNetId.Remove(entry.NetId);
         }
 
+        Detach(entry);
         return true;
     }
 
@@ -62,6 +85,11 @@ internal sealed class NetworkObjectTable
 
     public void Clear()
     {
+        foreach (NetworkObject entry in _byId.Values)
+        {
+            Detach(entry);
+        }
+
         _byId.Clear();
         _byNetId.Clear();
     }

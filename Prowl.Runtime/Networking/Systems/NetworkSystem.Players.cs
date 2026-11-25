@@ -174,12 +174,12 @@ internal sealed partial class NetworkSystem
         _localPlayer = entry;
         if (previous != null && previous.GameObject.IsValid())
         {
-            SceneEvents.RunLifecycle<INetworkEvents>(previous.GameObject, e => e.OnStopLocalPlayer());
+            SceneEvents.RunLifecycle<NetworkBehaviour>(previous.GameObject, behaviour => behaviour.OnStopLocalPlayer());
         }
 
         if (entry != null && entry.GameObject.IsValid())
         {
-            SceneEvents.RunLifecycle<INetworkEvents>(entry.GameObject, e => e.OnStartLocalPlayer());
+            SceneEvents.RunLifecycle<NetworkBehaviour>(entry.GameObject, behaviour => behaviour.OnStartLocalPlayer());
         }
     }
 }

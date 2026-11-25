@@ -377,8 +377,18 @@ public static class Undo
     public static Component AddComponent(GameObject go, Type type)
     {
         MainThreadContext.AssertMainThread();
+
+        // A networked script needs a networked object, so one with none above it becomes one, in the same step.
+        bool markNetworked = typeof(Runtime.Networking.NetworkBehaviour).IsAssignableFrom(type) && !go.Network.Active &&
+                             go.Network.Root.IsNotValid() && !Runtime.Networking.NetworkAccessor.IsExcludedFromNetwork(go);
         var before = new HashSet<Component>(go.GetComponents<Component>(), ReferenceEqualityComparer.Instance);
         Component added = go.AddComponent(type);
+        if (markNetworked)
+        {
+            RecordObject(go, $"Add {type.Name}");
+            go.Network.Networked = true;
+        }
+
         var created = go._components.Where(c => !before.Contains(c)).ToList();
         if (created.Count > 0)
         {
@@ -1424,6 +1434,9 @@ public static class Undo
         values["LocalPosition"] = Serializer.Serialize(typeof(Float3), go.Transform.LocalPosition);
         values["LocalRotation"] = Serializer.Serialize(typeof(Quaternion), go.Transform.LocalRotation);
         values["LocalScale"] = Serializer.Serialize(typeof(Float3), go.Transform.LocalScale);
+        EchoObject network = EchoObject.NewCompound();
+        Runtime.Networking.NetworkSerialization.Write(go, network);
+        values["Network"] = network;
     }
 
     private static void RestoreGameObject(GameObject go, Dictionary<string, EchoObject> values)
@@ -1440,6 +1453,7 @@ public static class Undo
                 case "LocalPosition": go.Transform.LocalPosition = Serializer.Deserialize<Float3>(value); break;
                 case "LocalRotation": go.Transform.LocalRotation = Serializer.Deserialize<Quaternion>(value); break;
                 case "LocalScale": go.Transform.LocalScale = Serializer.Deserialize<Float3>(value); break;
+                case "Network": Runtime.Networking.NetworkSerialization.Read(go, value); break;
             }
         if (go.RectTransform is RectTransform rect) rect.MarkLayoutDirty();
     }

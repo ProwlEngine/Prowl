@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Test;
 ///     What the script compiler generates for <c>[Rpc.Target] public void Whisper(NetPeer target, string text)</c> and
 ///     <c>[Rpc.Broadcast(RpcFlags.ExcludeOwner)] public void Announce(string text)</c>.
 /// </summary>
-public class WhisperTestComponent : Component
+public class WhisperTestComponent : NetworkBehaviour
 {
     public const uint WhisperId = 961, AnnounceId = 962;
     public readonly List<(NetPeer? Target, string Text)> Heard = new();

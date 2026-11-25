@@ -8,12 +8,12 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>A [Sync] GameObject reference, as the script compiler generates for <c>[Sync] public GameObject? Target { get; set; }</c>.</summary>
-public class SyncReferenceTestComponent : Component
+public class SyncReferenceTestComponent : NetworkBehaviour
 {
     public const uint TargetSlot = 401;
     private GameObject? _target;
     private static readonly SyncMember<SyncReferenceTestComponent, GameObject?> TargetState = new(TargetSlot, "Target",
-        SyncFlags.FromOwner, static c => c._target, static (c, v) => c._target = v);
+        static c => c._target, static (c, v) => c._target = v);
     public GameObject? Target { get => _target; set => TargetState.Set(this, ref _target, value); }
 }
 
@@ -41,7 +41,7 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void HostRelaysAClientsValuesToOthersButNotBackAndHostOnlyValuesReachTheOwner()
+    public void HostRelaysAClientsValuesToOthersButNotBackAndHostValuesReachTheOwner()
     {
         MakeCurrent(CreateScene());
         LocalNetwork network = new();
@@ -52,17 +52,22 @@ public partial class NetworkingTests
         {
             Pump(() => alice.IsReady && bob.IsReady, alice, bob);
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
-            (_, GameObject crate, NetTestComponent component) = SpawnCrate(network, aliceHere, alice, bob);
+            GameObject crate = CreateGameObject("Crate");
+            NetTestComponent component = crate.AddComponent<NetTestComponent>().OwnerWritten();
+            NetCollectionTestComponent hostSide = crate.AddComponent<NetCollectionTestComponent>();
+            Scene.Main.Add(crate);
+            crate.SpawnBuilt(aliceHere);
+            Pump(() => alice.Has(FakePeer.Spawn) && bob.Has(FakePeer.Spawn), alice, bob);
             uint generation = NetworkGeneration(crate);
 
             alice.SendSyncValues(null, 1, 1, (component.Identifier, NetTestComponent.HealthSlot, generation, IntValue(42)));
             Pump(() => bob.SyncInt(component.Identifier, NetTestComponent.HealthSlot) == 42, alice, bob);
             Assert.Equal(42, component.Health);
 
-            // Only the host writes Score, so it goes to the owner too.
-            component.Score = 9;
-            Pump(() => alice.SyncInt(component.Identifier, NetTestComponent.ScoreSlot) == 9 &&
-                       bob.SyncInt(component.Identifier, NetTestComponent.ScoreSlot) == 9, alice, bob);
+            // The host writes the other behaviour, so it goes to the owner too.
+            hostSide.Health = 9;
+            Pump(() => alice.SyncInt(hostSide.Identifier, NetCollectionTestComponent.HealthSlot) == 9 &&
+                       bob.SyncInt(hostSide.Identifier, NetCollectionTestComponent.HealthSlot) == 9, alice, bob);
             Assert.Null(alice.SyncInt(component.Identifier, NetTestComponent.HealthSlot));
         }
         finally { Networking.Networking.Shutdown(); }

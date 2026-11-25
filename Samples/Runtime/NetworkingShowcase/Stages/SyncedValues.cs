@@ -13,7 +13,7 @@ namespace NetworkingShowcase;
 ///     the next update would undo it anyway. The lamp eases toward its height on every peer by itself, so its
 ///     transform isn't synced: only the two values travel.
 /// </summary>
-public class SyncLamp : Component
+public class SyncLamp : NetworkBehaviour
 {
     public static readonly Color[] Colors =
     [

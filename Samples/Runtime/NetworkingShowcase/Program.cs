@@ -193,7 +193,9 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
             GameObject rover = Model("Rover", Mesh.CreateCube(new Float3(1f, 0.6f, 1.4f)),
                 Lit(new Color(0.9f, 0.9f, 0.95f, 1f)), StationCenter(1) + new Float3(3f, 0.6f, 0f));
             rover.AddComponent<NetworkTransform>();
-            rover.AddComponent<Rover>().Center = StationCenter(1);
+            Rover driver = rover.AddComponent<Rover>();
+            driver.Center = StationCenter(1);
+            driver.SyncDirection = SyncDirection.ClientToServer;
             return rover;
         });
         for (int i = 0; i < 4; i++)
@@ -525,9 +527,9 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
 
         Header(paper, font, "Rover", 2);
         Label(paper, font, $"Driven by {Who(rover.GameObject.Network.Owner)}", 3);
-        if (rover.GameObject.IsProxy)
+        if (!rover.Authority)
         {
-            Label(paper, font, "This window follows its transform.", 4);
+            Label(paper, font, "Its owner sets its speed, and this window follows it.", 4);
         }
         else
         {
@@ -540,7 +542,7 @@ public sealed class NetworkingShowcaseGame(string? joinAddress) : StationGame
         }
 
         Header(paper, font, "Hand the rover to", 6);
-        Button(paper, font, "The host", () => rover.GameObject.Network.AssignOwnership(null), 7);
+        Button(paper, font, "The host", () => rover.GameObject.Network.AssignOwnership(Networking.Session!.LocalPeer), 7);
         int id = 8;
         foreach (NetPeer peer in Networking.Session!.Peers.Where(p => !p.IsLocal))
         {

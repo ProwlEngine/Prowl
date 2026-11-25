@@ -29,7 +29,7 @@ public class SerializerTests
             NetworkMembers members = NetworkMembers.Of(fleet);
             Assert.Equal(typeof(SyncCollectionMember<,>),
                 members.Sync(NetworkCodeGen.NetworkId("Crew"))!.GetType().GetGenericTypeDefinition());
-            Assert.Equal(SyncFlags.None, members.Sync(NetworkCodeGen.NetworkId("Kits"))!.Flags);
+            Assert.NotNull(members.Sync(NetworkCodeGen.NetworkId("Kits")));
 
             // Everything goes across as it was: generated serializers and a hand-written one, a Bow sent as a
             // Weapon, a Ring as an ITrinket, two crew who mentor each other.
@@ -59,7 +59,7 @@ public class SerializerTests
                                                      public struct Hidden { private int _a; }
                                                      public abstract class Spell { }
                                                      public class Curse : Spell { public System.Action Effect; }
-                                                     public class A : Prowl.Runtime.Component
+                                                     public class A : Prowl.Runtime.Networking.NetworkBehaviour
                                                      {
                                                          [Prowl.Runtime.Networking.Sync] public Outer X { get; set; }
                                                          [Prowl.Runtime.Networking.Sync] public Spell Cast { get; set; }

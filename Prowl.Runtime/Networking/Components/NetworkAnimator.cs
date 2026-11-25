@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Networking;
 /// </summary>
 [AddComponentMenu("Networking/Network Animator")]
 [DisallowMultipleComponent]
-public sealed class NetworkAnimator : Component, INetworkEvents
+public sealed class NetworkAnimator : NetworkBehaviour
 {
     public Animator? Animator;
 
@@ -43,11 +43,11 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     private readonly List<int> _triggerScratch = new();
 
     private static readonly SyncMember<NetworkAnimator, AnimatorParameters> s_parameters =
-        new(1, "Parameters", SyncFlags.FromOwner, static c => c._parameters, static (c, v) => c._parameters = v);
+        new(1, "Parameters", static c => c._parameters, static (c, v) => c._parameters = v);
     private static readonly SyncMember<NetworkAnimator, AnimatorTriggers> s_triggers =
-        new(2, "Triggers", SyncFlags.FromOwner, static c => c._triggers, static (c, v) => c._triggers = v);
+        new(2, "Triggers", static c => c._triggers, static (c, v) => c._triggers = v);
     private static readonly SyncMember<NetworkAnimator, float> s_speed =
-        new(3, "Speed", SyncFlags.FromOwner, static c => c._speed, static (c, v) => c._speed = v);
+        new(3, "Speed", static c => c._speed, static (c, v) => c._speed = v);
 
     static NetworkAnimator()
     {
@@ -89,7 +89,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
     private void Synchronize()
     {
         if (_bound.IsNotValid()) return;
-        if (IsProxy) ApplyState();
+        if (Network.Active && !Authority) ApplyState();
         else if (Time.TimeSinceStartup >= _nextSample)
         {
             // No faster than the network sends; a sample in between would never be seen.
@@ -200,7 +200,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
 
     private void ParameterWritten(string name, ParameterValue value)
     {
-        if (_applying || IsProxy || value.Type != AnimationValueType.Bool || _bound.IsNotValid() || _bound!.Graph.IsNotValid()) return;
+        if (_applying || (Network.Active && !Authority) || value.Type != AnimationValueType.Bool || _bound.IsNotValid() || _bound!.Graph.IsNotValid()) return;
         if (!IsTrigger(_bound.Graph!.Parameters, name)) return;
         bool previous = _triggerLevels.GetValueOrDefault(name);
         _triggerLevels[name] = value.Bool;
@@ -209,7 +209,7 @@ public sealed class NetworkAnimator : Component, INetworkEvents
 
     private void TriggerWritten(string name)
     {
-        if (_applying || IsProxy || _bound.IsNotValid() || _bound!.Graph.IsNotValid()) return;
+        if (_applying || (Network.Active && !Authority) || _bound.IsNotValid() || _bound!.Graph.IsNotValid()) return;
         int index = IndexOf(_bound.Graph!.Parameters, name);
         if (index < 0) return;
         s_triggers.Set(this, ref _triggers, _triggers.Fired(index));
@@ -229,15 +229,15 @@ public sealed class NetworkAnimator : Component, INetworkEvents
         return -1;
     }
 
-    public void OnNetworkSpawn() => ResetTriggerBaseline();
-    public void OnNetworkDespawn() => _triggersBaselined = false;
-    public void OnNetworkAuthorityGained()
+    public override void OnStartClient() => ResetTriggerBaseline();
+    public override void OnStopClient() => _triggersBaselined = false;
+    public override void OnStartAuthority()
     {
         ResetTriggerBaseline();
         ForgetApplied();
         if (_parameters.Count > 0) ApplyState();
     }
-    public void OnNetworkAuthorityLost() => ResetTriggerBaseline();
+    public override void OnStopAuthority() => ResetTriggerBaseline();
 
     private void ResetTriggerBaseline()
     {

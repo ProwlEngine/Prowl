@@ -16,7 +16,7 @@ internal static class NetworkSerialization
         NetworkAccessor? network = go._network;
         if (network == null || (!network.Networked && !network.ServerOnly &&
                                 network.Orphaned == NetworkOrphaned.Destroy &&
-                                network.Visibility == NetworkVisibility.Default && !network.HasComponentIntervals))
+                                network.Visibility == NetworkVisibility.Default))
         {
             return;
         }
@@ -38,27 +38,6 @@ internal static class NetworkSerialization
             settings.Add("Visibility", new EchoObject((byte)network.Visibility));
         }
 
-        if (network.HasComponentIntervals)
-        {
-            // By each component's identifier, with its place among the object's own for data that lost the identifiers.
-            EchoObject intervals = EchoObject.NewList();
-            List<Component> components = [.. go.GetComponents<Component>()];
-            for (int i = 0; i < components.Count; i++)
-            {
-                int interval = NetworkAccessor.SendIntervalOf(components[i]);
-                if (interval > 1)
-                {
-                    EchoObject entry = EchoObject.NewCompound(2);
-                    entry.Add("Index", new EchoObject(i));
-                    entry.Add("Component", new EchoObject(components[i].Identifier.ToString()));
-                    entry.Add("Ticks", new EchoObject((byte)interval));
-                    intervals.ListAdd(entry);
-                }
-            }
-
-            settings.Add("ComponentIntervals", intervals);
-        }
-
         output.Add("Network", settings);
     }
 
@@ -72,7 +51,6 @@ internal static class NetworkSerialization
             }
 
             existing.LoadSharing(false, false);
-            existing.ClearComponentIntervals();
             existing.Orphaned = NetworkOrphaned.Destroy;
             existing.Visibility = NetworkVisibility.Default;
             return;
@@ -86,10 +64,10 @@ internal static class NetworkSerialization
         // Scenes and prefabs saved with the old Manual visibility, 3, hide the object as it did.
         byte visibility = settings["Visibility"]?.ByteValue ?? (byte)NetworkVisibility.Default;
         network.Visibility = visibility == 3 ? NetworkVisibility.ForceHidden : (NetworkVisibility)visibility;
-        network.ClearComponentIntervals();
+        // Older versions saved each behaviour's send interval here, in ticks. The components are read after this, so
+        // the intervals wait for them.
         if (settings["ComponentIntervals"]?.List is { } intervals)
         {
-            // The object's components are read after this, so the intervals wait for them.
             List<(Guid Component, int Index, int Ticks)> pending = new();
             foreach (EchoObject entry in intervals)
             {

@@ -24,7 +24,7 @@ public struct Loadout
 ///     Stage 6. A [Sync] struct goes as one value: change any field and the whole loadout arrives together. The
 ///     same struct is an RPC argument too, when someone shows theirs off.
 /// </summary>
-public class Armory : Component
+public class Armory : NetworkBehaviour
 {
     public static readonly Loadout[] Weapons =
     [
@@ -35,7 +35,7 @@ public class Armory : Component
 
     private readonly Tint _tint = new();
 
-    [Sync(SyncFlags.FromOwner)] public Loadout Current { get; set; } = Weapons[0];
+    [Sync] public Loadout Current { get; set; } = Weapons[0];
 
     public string LastShown { get; private set; } = "Nobody has shown off yet";
 

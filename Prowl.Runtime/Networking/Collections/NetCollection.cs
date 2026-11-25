@@ -15,8 +15,8 @@ namespace Prowl.Runtime.Networking;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         Declare one get-only, as in <c>[Sync] public NetList&lt;int&gt; Scores { get; } = new();</c>. The host
-///         changes it, or the object's owner with <see cref="SyncFlags.FromOwner" />; anywhere else, changes are
+///         Declare one get-only, as in <c>[Sync] public NetList&lt;int&gt; Scores { get; } = new();</c>. Where its
+///         behaviour's <see cref="NetworkBehaviour.Authority" /> holds it can be changed; anywhere else, changes are
 ///         ignored (with a warning, once). Changes
 ///         are sent at the next network tick, in order, and late joiners get the whole collection. Without a
 ///         network session, or before it belongs to a component, it's an ordinary collection.
@@ -82,9 +82,9 @@ public abstract class NetCollection
             return true;
         }
 
-        if (!Networking.System!.HasControl(_owner, _member.Flags))
+        if (_owner is NetworkBehaviour { Spawned: not null } behaviour && !behaviour.Authority)
         {
-            Networking.System!.Sync.WarnSyncOnce(_owner, _member, "was changed on a peer that doesn't control it");
+            Networking.System!.Sync.WarnSyncOnce(_owner, _member, "was changed on a peer without authority over it");
             return false;
         }
 

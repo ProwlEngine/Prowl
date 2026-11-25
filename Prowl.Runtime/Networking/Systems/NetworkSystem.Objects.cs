@@ -76,12 +76,6 @@ internal sealed partial class NetworkSystem
     internal bool HasControl(NetworkObject entry) =>
         !IsActive || (entry.Owner == NoOwner ? IsHost : entry.Owner == Session!.LocalPeer!.Id);
 
-    /// <summary>Whether this peer may set a [Sync] member with these flags. One on an object nobody else has is always its own.</summary>
-    internal bool HasControl(Component component, SyncFlags flags) =>
-        !IsActive || NetworkAccessor.IsExcludedFromNetwork(component.GameObject) ||
-        FindEntry(component.GameObject) is not { } entry ||
-        ((flags & SyncFlags.FromOwner) == 0 ? IsHost : HasControl(entry));
-
     internal NetPeer? GetOwner(GameObject go)
     {
         if (!IsActive || FindEntry(go) is { TearingDown: true })

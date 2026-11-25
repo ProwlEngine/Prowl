@@ -10,7 +10,7 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>A broadcast RPC taking a GameObject, as the script compiler generates it.</summary>
-public class BeaconTestComponent : Component
+public class BeaconTestComponent : NetworkBehaviour
 {
     public const uint MarkId = 601;
 
@@ -29,12 +29,12 @@ public class BeaconTestComponent : Component
 public readonly record struct TestReferencePair(GameObject? First, GameObject? Second);
 
 /// <summary>A [Sync] value naming two objects at once.</summary>
-public class SyncPairTestComponent : Component
+public class SyncPairTestComponent : NetworkBehaviour
 {
     public const uint PairSlot = 402;
     private TestReferencePair _pair;
     private static readonly SyncMember<SyncPairTestComponent, TestReferencePair> PairState = new(PairSlot, "Pair",
-        SyncFlags.FromOwner, static c => c._pair, static (c, v) => c._pair = v);
+        static c => c._pair, static (c, v) => c._pair = v);
     public TestReferencePair Pair { get => _pair; set => PairState.Set(this, ref _pair, value); }
 
     public static void RegisterSerializer() => NetSerializer<TestReferencePair>.Register(

@@ -98,7 +98,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             NetworkMembers members = NetworkMembers.Of(component);
             for (int m = 0; m < members.SyncCount; m++)
             {
-                if (members.SyncAt(m) is { } sync && (sync.Flags & SyncFlags.FromOwner) != 0)
+                if (members.SyncAt(m) is { } sync && (NetworkMembers.FlagsOf(component) & SyncFlags.FromOwner) != 0)
                 {
                     MarkSyncDirty(component, sync.Slot);
                 }
@@ -354,22 +354,19 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     ///     Marks a [Sync] member changed, to go out with the next state. False if its component is not part of a
     ///     networked object, so it won't be.
     /// </summary>
-    internal bool MarkSyncDirty(Component component, uint slot)
+    internal bool MarkSyncDirty(Component component, uint slot) =>
+        component is NetworkBehaviour { Spawned: { } entry } behaviour &&
+        MarkDirty(entry, behaviour.Index, NetworkMembers.Of(component).Sync(slot)?.Bit ?? -1);
+
+    /// <summary>Marks the member with <paramref name="bit" /> of the behaviour at <paramref name="index" /> changed.</summary>
+    internal bool MarkDirty(NetworkObject entry, int index, int bit)
     {
-        if (scene.FindEntry(component.GameObject) is not { TearingDown: false } entry)
+        if (index < 0 || bit < 0)
         {
             return false;
         }
 
-        int index = entry.IndexOf(component);
-        NetworkMembers members = NetworkMembers.Of(component);
-        int member = members.Sync(slot) is { } sync ? members.IndexOf(sync) : -1;
-        if (index < 0 || member < 0)
-        {
-            return false;
-        }
-
-        (entry.Dirty ??= new ulong[entry.Components.Length])[index] |= 1UL << member;
+        (entry.Dirty ??= new ulong[entry.Components.Length])[index] |= 1UL << bit;
         if (!entry.StateDirty)
         {
             entry.StateDirty = true;
@@ -377,6 +374,21 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
         }
 
         return true;
+    }
+
+    /// <summary>Marks every member of <paramref name="behaviour" /> changed, its custom state included.</summary>
+    internal void MarkAllDirty(NetworkBehaviour behaviour)
+    {
+        if (behaviour.Spawned is not { } entry)
+        {
+            return;
+        }
+
+        int count = NetworkMembers.Of(behaviour).SyncCount;
+        for (int bit = 0; bit < count; bit++)
+        {
+            MarkDirty(entry, behaviour.Index, bit);
+        }
     }
 
     internal void WarnSyncOnce(Component component, SyncMember sync, string problem)
@@ -403,7 +415,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
     /// <summary>Whether <paramref name="sender" /> may change a [Sync] member of an object.</summary>
     internal bool AcceptSync(NetPeer sender, NetworkObject entry, SyncFlags flags) =>
-        // The host is the authority over everything; a client only over the FromOwner members of what it owns.
+        // The host is the authority over everything; a client only over the ClientToServer behaviours of what it owns.
         sender.IsHost || ((flags & SyncFlags.FromOwner) != 0 && entry.Owner == sender.Id);
 
     // --- Sending --------------------------------------------------------------------------------------
@@ -506,6 +518,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             scene.NoteStateSent(entry, c, tick);
             masks[c] = 0;
             NetworkMembers members = NetworkMembers.Of(component);
+            SyncFlags flags = NetworkMembers.FlagsOf(component);
             ulong observerBits = 0, ownerBits = 0;
             _observerValues.Reset();
             _ownerValues.Reset();
@@ -521,13 +534,13 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
 
                 // Only the owner gets an owner only member. The owner wrote its own, so it gets those back from nobody,
                 // and everything a client wrote goes to the host, which is the one to keep it from the others.
-                if (!host || (sync.Flags & SyncFlags.ToOwner) == 0)
+                if (!host || (flags & SyncFlags.ToOwner) == 0)
                 {
                     observerBits |= bit;
                     _observerValues.WriteBytes(_value.WrittenSpan);
                 }
 
-                if (host && ((sync.Flags & SyncFlags.FromOwner) == 0 || entry.Owner == NoOwner))
+                if (host && ((flags & SyncFlags.FromOwner) == 0 || entry.Owner == NoOwner))
                 {
                     ownerBits |= bit;
                     _ownerValues.WriteBytes(_value.WrittenSpan);
@@ -766,7 +779,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
     ///     Queues the whole value of every member of <paramref name="entry" /> that <paramref name="which" /> picks for
     ///     one peer: the owner only ones for a new owner, or the ones a past owner wrote, as the host has them.
     /// </summary>
-    internal void QueueMembers(NetPeer peer, NetworkObject entry, Func<SyncMember, bool> which)
+    internal void QueueMembers(NetPeer peer, NetworkObject entry, SyncFlags which)
     {
         ulong components = 0;
         _observerBlocks.Reset();
@@ -784,7 +797,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             for (int m = 0; m < members.SyncCount; m++)
             {
                 SyncMember sync = members.SyncAt(m)!;
-                if (which(sync) && WriteMember(component, sync, true))
+                if ((NetworkMembers.FlagsOf(component) & which) != 0 && WriteMember(component, sync, true))
                 {
                     bits |= 1UL << m;
                     _observerValues.WriteBytes(_value.WrittenSpan);
@@ -819,7 +832,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             for (int m = 0; m < members.SyncCount; m++)
             {
                 SyncMember sync = members.SyncAt(m)!;
-                if ((sync.Flags & SyncFlags.ToOwner) == 0 && WriteMember(component, sync, true))
+                if ((NetworkMembers.FlagsOf(component) & SyncFlags.ToOwner) == 0 && WriteMember(component, sync, true))
                 {
                     bits |= 1UL << m;
                     _observerValues.WriteBytes(_value.WrittenSpan);
@@ -983,8 +996,8 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             // A spawn's state is the host's own, so all of it is taken, but for what this peer writes itself on an
             // object it kept.
             bool take = entry == null
-                ? !keepOwnerWritten || (sync.Flags & SyncFlags.FromOwner) == 0
-                : AcceptSync(sender, entry, sync.Flags);
+                ? !keepOwnerWritten || (NetworkMembers.FlagsOf(component) & SyncFlags.FromOwner) == 0
+                : AcceptSync(sender, entry, NetworkMembers.FlagsOf(component));
             int start = block.Position;
             try
             {
@@ -1028,7 +1041,7 @@ internal sealed class SyncSystem(NetworkSystem scene) : IDisposable
             }
 
             // What is taken to pass on leaves out what only the owner gets: it came from the owner, and stops here.
-            if (taken != null && (sync.Flags & SyncFlags.ToOwner) != 0)
+            if (taken != null && (NetworkMembers.FlagsOf(component) & SyncFlags.ToOwner) != 0)
             {
                 continue;
             }

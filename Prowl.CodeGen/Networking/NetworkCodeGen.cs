@@ -38,7 +38,6 @@ namespace Prowl.CodeGen.Networking;
 /// </remarks>
 internal sealed partial class NetworkCodeGen : IScriptGenerator
 {
-    private const string SyncFlagsType = "global::Prowl.Runtime.Networking.SyncFlags";
     private const string RpcFlagsType = "global::Prowl.Runtime.Networking.RpcFlags";
     private const string RpcModeType = "global::Prowl.Runtime.Networking.RpcMode";
     private const string Serializer = "global::Prowl.Runtime.Networking.NetSerializer";
@@ -60,8 +59,8 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         "Networking", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor s_notInClass = new(
-        "PROWLNET003", "Network member outside a component",
-        "'{0}' is networked, which only works on a Component class",
+        "PROWLNET003", "Network member outside a NetworkBehaviour",
+        "'{0}' is networked, which only works on a class derived from NetworkBehaviour",
         "Networking", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor s_collision = new(
@@ -103,6 +102,11 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         "PROWLNET014", "RPC flag has no effect",
         "RpcFlags.{1} does nothing on RPC '{0}': {2}",
         "Networking", DiagnosticSeverity.Warning, true);
+
+    private static readonly DiagnosticDescriptor s_guardShape = new(
+        "PROWLNET015", "[Server] or [Client] not usable",
+        "[{1}] on '{0}' {2}",
+        "Networking", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor s_tooManySyncs = new(
         "PROWLNET012", "Too many [Sync] values",
@@ -188,7 +192,7 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
     }
 
     private static readonly string[] s_networkingWords =
-        ["Sync", "Rpc", "Change", "Broadcast", "Host", "Owner", "Target", "INetworkSerialize"];
+        ["Sync", "Rpc", "Change", "Broadcast", "Host", "Owner", "Target", "OnSerialize", "Server", "Client"];
 
     private static bool Mentions(SyntaxTree tree, string word) =>
         tree.GetText().ToString().Contains(word, StringComparison.Ordinal);
@@ -202,6 +206,20 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         }).Value!;
 
     // --- Helpers --------------------------------------------------------------------------------------
+
+    /// <summary>True when the type, or a base of it, overrides <c>NetworkBehaviour.OnSerialize</c>.</summary>
+    private static bool WritesOwnState(INamedTypeSymbol type)
+    {
+        for (INamedTypeSymbol? t = type; t != null; t = t.BaseType)
+        {
+            if (t.GetMembers("OnSerialize").OfType<IMethodSymbol>().Any(m => m.IsOverride))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static bool DerivesFrom(ITypeSymbol? type, INamedTypeSymbol baseType)
     {
@@ -242,6 +260,9 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
     /// <summary>The engine types networking is described with, or null when the compilation doesn't reference the engine.</summary>
     private sealed record Symbols(
         INamedTypeSymbol Component,
+        INamedTypeSymbol NetworkBehaviour,
+        INamedTypeSymbol Server,
+        INamedTypeSymbol Client,
         INamedTypeSymbol GameObject,
         INamedTypeSymbol NetCollection,
         INamedTypeSymbol INetSerializable,
@@ -253,7 +274,11 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         public static Symbols? Of(Compilation compilation)
         {
             INamedTypeSymbol? Get(string name) => compilation.GetTypeByMetadataName(name);
-            return Get("Prowl.Runtime.Component") is { } component && Get("Prowl.Runtime.GameObject") is { } gameObject
+            return Get("Prowl.Runtime.Component") is { } component
+                   && Get("Prowl.Runtime.Networking.NetworkBehaviour") is { } behaviour
+                   && Get("Prowl.Runtime.Networking.ServerAttribute") is { } server
+                   && Get("Prowl.Runtime.Networking.ClientAttribute") is { } client
+                   && Get("Prowl.Runtime.GameObject") is { } gameObject
                                                                    && Get("Prowl.Runtime.Networking.NetCollection") is
                                                                        { } collection
                                                                    && Get("Prowl.Runtime.Networking.INetSerializable`1")
@@ -266,7 +291,7 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
                                                                        is { } rpc
                                                                    && Get("Prowl.Runtime.Networking.NetSerializer`1") is
                                                                        { } serializer
-                ? new Symbols(component, gameObject, collection, selfSerializable, sync, change, rpc,
+                ? new Symbols(component, behaviour, server, client, gameObject, collection, selfSerializable, sync, change, rpc,
                     BuiltInTypes(serializer))
                 : null;
         }
@@ -338,7 +363,7 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
                 }
             }
 
-            int count = names.Count + (type.AllInterfaces.Any(i => i.Name == "INetworkSerialize") ? 1 : 0);
+            int count = names.Count + (WritesOwnState(type) ? 1 : 0);
             if (count > MaxSyncMembers)
             {
                 Report(s_tooManySyncs, location, type.Name, count);
@@ -365,7 +390,6 @@ internal sealed partial class NetworkCodeGen : IScriptGenerator
         string Name,
         string Type,
         uint Slot,
-        uint Flags,
         string? Initializer,
         bool Collection,
         string? Hook)

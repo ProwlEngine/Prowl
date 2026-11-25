@@ -1669,6 +1669,8 @@ public partial class GameObject : EngineObject, ISerializable
             if (inScene) NotifyComponentAddedToScene(_components[i]);
         }
 
+        _network?.ApplyStoredIntervals();
+
         // Children are deserialized AFTER components so the visit order matches serialization
         // (Serialize writes Components then Children). Echo's reference encoding is single-pass and
         // definition-first, so visiting out of order would turn intra-object references (e.g. a

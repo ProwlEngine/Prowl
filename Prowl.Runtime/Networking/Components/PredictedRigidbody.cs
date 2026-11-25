@@ -20,7 +20,7 @@ namespace Prowl.Runtime.Networking;
 [AddComponentMenu("Networking/Predicted Rigidbody")]
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Rigidbody3D))]
-public sealed class PredictedRigidbody : Component, INetworkSerialize
+public sealed class PredictedRigidbody : NetworkBehaviour
 {
     /// <summary>How far, in units, a client's body may be from the host's before it is corrected.</summary>
     public float PositionThreshold = 0.1f;
@@ -89,7 +89,7 @@ public sealed class PredictedRigidbody : Component, INetworkSerialize
         if (now - _sentAt >= RestInterval || Differs(current, _sent, MovedDistance, MovedAngle) ||
             current.Velocity != _sent.Velocity || current.AngularVelocity != _sent.AngularVelocity)
         {
-            Networking.SetDirty(this);
+            SetDirty();
         }
     }
 
@@ -201,7 +201,7 @@ public sealed class PredictedRigidbody : Component, INetworkSerialize
         Transform.Rotation = state.Rotation;
     }
 
-    void INetworkSerialize.OnSerialize(NetWriter writer, bool initial)
+    public override void OnSerialize(NetWriter writer, bool initial)
     {
         // A spawn goes to one peer. What everyone was last sent, and when, is only what a send to all carried.
         BodyState state = Current();
@@ -218,7 +218,7 @@ public sealed class PredictedRigidbody : Component, INetworkSerialize
         NetSerializers.WriteFloat3(writer, state.AngularVelocity);
     }
 
-    void INetworkSerialize.OnDeserialize(ref NetReader reader, bool initial)
+    public override void OnDeserialize(ref NetReader reader, bool initial)
     {
         double time = reader.ReadDouble();
         Float3 position = NetSerializers.ReadFloat3(ref reader);

@@ -11,8 +11,7 @@ namespace Prowl.Runtime.Test;
 public class RpcStateTestComponent : NetCollectionTestComponent
 {
     private int _hostValue;
-    private static readonly SyncMember<RpcStateTestComponent, int> HostState = new(799, "HostValue", SyncFlags.None,
-        static c => c._hostValue, static (c, v) => c._hostValue = v);
+    private static readonly SyncMember<RpcStateTestComponent, int> HostState = new(799, "HostValue", static c => c._hostValue, static (c, v) => c._hostValue = v);
     public int HostValue { get => _hostValue; set => HostState.Set(this, ref _hostValue, value); }
     [SerializeIgnore] public readonly List<(int Health, int Scores, float Position)> Observed = new();
     private static readonly RpcMember<RpcStateTestComponent> Broadcast = new(701, "Observe()", RpcMode.Broadcast, RpcFlags.AnyCaller,
@@ -113,7 +112,7 @@ public partial class NetworkingTests
         {
             Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = CreateGameObject("Crate");
-            NetTestComponent component = crate.AddComponent<NetTestComponent>();
+            NetTestComponent component = crate.AddComponent<NetTestComponent>().OwnerWritten();
             scene.Add(crate);
             crate.SpawnBuilt(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
             Pump(() => alice.Has(FakePeer.Spawn), alice);
@@ -247,7 +246,7 @@ public partial class NetworkingTests
         Scene scene = CreateScene();
         GameObject root = CreateGameObject("Client RPC");
         root.Network.Networked = true;
-        RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
+        RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>().OwnerWritten();
         scene.Add(root); Bind(scene);
         LocalNetwork network = new();
         try

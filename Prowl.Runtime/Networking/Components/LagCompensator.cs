@@ -14,7 +14,7 @@ namespace Prowl.Runtime.Networking;
 ///     client's hit can be checked against where the object was when that client saw it.
 /// </summary>
 [AddComponentMenu("Networking/Lag Compensator")]
-public sealed class LagCompensator : Component, INetworkTick
+public sealed class LagCompensator : NetworkBehaviour, INetworkTick
 {
     private readonly List<(double Time, Float3 Position, Quaternion Rotation)> _history = new();
 

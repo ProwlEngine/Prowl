@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-public class NetworkSpawnCleanupComponent : NetCollectionTestComponent, INetworkEvents
+public class NetworkSpawnCleanupComponent : NetCollectionTestComponent
 {
     public static readonly List<NetworkSpawnCleanupComponent> Decoded = new();
     public bool EndSessionOnDeserialize;
@@ -20,7 +20,7 @@ public class NetworkSpawnCleanupComponent : NetCollectionTestComponent, INetwork
         Decoded.Add(this);
         if (EndSessionOnDeserialize) Networking.Networking.Shutdown();
     }
-    public void OnNetworkSpawn() => SpawnCalls++;
+    public override void OnStartClient() => SpawnCalls++;
     protected override void OnDispose() { DisposeCalls++; base.OnDispose(); }
 }
 

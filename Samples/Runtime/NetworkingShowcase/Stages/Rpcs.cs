@@ -13,7 +13,7 @@ namespace NetworkingShowcase;
 ///     asks with <see cref="RequestRing" /> and the host rings it for everyone. Inside an RPC,
 ///     <see cref="Rpc.Caller" /> is the peer that called it.
 /// </summary>
-public class Bell : Component
+public class Bell : NetworkBehaviour
 {
     private readonly List<string> _log = [];
     private readonly Tint _tint = new();

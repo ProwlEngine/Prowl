@@ -300,8 +300,6 @@
   "network.visibility.force_hidden": "Tylko jego właściciel",
   "network.visibility.host_only": "Tylko host może zmienić, kto otrzymuje utworzony obiekt.",
   "network.sync_transform": "Synchronizuj transform",
-  "network.component_interval": "Interwał wysyłania komponentu (ticki)",
-  "network.component_interval.desc": "Co ile ticków każdy komponent wysyła zmienione wartości [Sync]. 1 wysyła w każdym ticku.",
   "network.sync_transform.desc": "Ten, kto nim steruje, wysyła pozycję, obrót i skalę wszystkim pozostałym.",
   "network.live": "Na żywo",
   "network.not_spawned": "Nie utworzony. Host tworzy to, co buduje zapisana scena, prefab lub fabryka.",

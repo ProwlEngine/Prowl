@@ -8,13 +8,13 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>A grid of cells packed into bits by hand.</summary>
-public class PackedGridTestComponent : Component, INetworkSerialize
+public class PackedGridTestComponent : NetworkBehaviour
 {
     public bool[] Cells = new bool[16];
     public readonly List<bool> Initial = new();
     public readonly List<bool> WrittenInitial = new();
 
-    public void OnSerialize(NetWriter writer, bool initial)
+    public override void OnSerialize(NetWriter writer, bool initial)
     {
         WrittenInitial.Add(initial);
         ushort bits = 0;
@@ -22,7 +22,7 @@ public class PackedGridTestComponent : Component, INetworkSerialize
         writer.WriteUInt16(bits);
     }
 
-    public void OnDeserialize(ref NetReader reader, bool initial)
+    public override void OnDeserialize(ref NetReader reader, bool initial)
     {
         ushort bits = reader.ReadUInt16();
         for (int i = 0; i < Cells.Length; i++) Cells[i] = (bits & (1 << i)) != 0;
@@ -31,12 +31,12 @@ public class PackedGridTestComponent : Component, INetworkSerialize
 }
 
 /// <summary>Game code that fails while reading its own state.</summary>
-public class FailingStateTestComponent : Component, INetworkSerialize
+public class FailingStateTestComponent : NetworkBehaviour
 {
     public static Func<Exception>? Failure;
-    public void OnSerialize(NetWriter writer, bool initial) => writer.WriteByte(1);
+    public override void OnSerialize(NetWriter writer, bool initial) => writer.WriteByte(1);
 
-    public void OnDeserialize(ref NetReader reader, bool initial)
+    public override void OnDeserialize(ref NetReader reader, bool initial)
     {
         if (Failure != null) throw Failure();
         reader.ReadByte();
@@ -44,20 +44,20 @@ public class FailingStateTestComponent : Component, INetworkSerialize
 }
 
 /// <summary>Game code that reads less of its state than it wrote.</summary>
-public class ShortReadStateTestComponent : Component, INetworkSerialize
+public class ShortReadStateTestComponent : NetworkBehaviour
 {
-    public void OnSerialize(NetWriter writer, bool initial) => writer.WriteUInt16(1);
+    public override void OnSerialize(NetWriter writer, bool initial) => writer.WriteUInt16(1);
 
-    public void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
+    public override void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
 }
 
 /// <summary>Game code that changes the network while it is asked for its state.</summary>
-public class MeddlingStateTestComponent : Component, INetworkSerialize
+public class MeddlingStateTestComponent : NetworkBehaviour
 {
     [Prowl.Echo.SerializeIgnore] public Action? WhileWriting;
     [Prowl.Echo.SerializeIgnore] public Exception? Thrown;
 
-    public void OnSerialize(NetWriter writer, bool initial)
+    public override void OnSerialize(NetWriter writer, bool initial)
     {
         writer.WriteByte(1);
         if (initial || WhileWriting == null) return;
@@ -65,7 +65,7 @@ public class MeddlingStateTestComponent : Component, INetworkSerialize
         catch (Exception e) { Thrown = e; }
     }
 
-    public void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
+    public override void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
 }
 
 public partial class NetworkingTests
@@ -100,7 +100,7 @@ public partial class NetworkingTests
             {
                 meddler.Thrown = null;
                 meddler.WhileWriting = change;
-                Networking.Networking.SetDirty(meddler);
+                meddler.SetDirty();
                 Pump(() => meddler.Thrown != null, alice);
                 Assert.IsType<InvalidOperationException>(meddler.Thrown);
             }
@@ -231,7 +231,7 @@ public partial class NetworkingTests
             Assert.All(grid.WrittenInitial, Assert.True);
             grid.WrittenInitial.Clear();
             grid.Cells[0] = true;
-            Networking.Networking.SetDirty(grid);
+            grid.SetDirty();
             Pump(() => alice.SyncValues().Any(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot), alice);
             Assert.Equal([false], grid.WrittenInitial);
             byte[] bytes = alice.SyncValues().Last(v => v.Component == grid.Identifier && v.Slot == NetworkSerializeMember.CustomSlot).Value;

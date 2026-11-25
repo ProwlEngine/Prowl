@@ -5,9 +5,9 @@ using System;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>Describes how a <see cref="SyncAttribute" /> property is synchronized.</summary>
+/// <summary>A behaviour's <see cref="SyncDirection" /> and <see cref="SyncMode" /> as the engine reads them.</summary>
 [Flags]
-public enum SyncFlags : uint
+internal enum SyncFlags : uint
 {
     None = 0,
 

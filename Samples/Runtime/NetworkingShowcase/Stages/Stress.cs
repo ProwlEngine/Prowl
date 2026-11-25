@@ -16,7 +16,7 @@ namespace NetworkingShowcase;
 ///     frame, so every transform goes out every tick. Churn changes a [Sync] value on every drone every frame too,
 ///     and spreading hands the drones out across every peer, so each window drives its share and sends it on.
 /// </summary>
-public class Swarm : Component
+public class Swarm : NetworkBehaviour
 {
     [Sync] public bool Churn { get; set; }
 
@@ -74,13 +74,13 @@ public class Swarm : Component
 }
 
 /// <summary>Flies a figure of its own while its owner runs it; in churn, rerolls a synced hue every frame.</summary>
-public class Drone : Component
+public class Drone : NetworkBehaviour
 {
     private readonly Tint _tint = new();
     public float Seed;
     private Swarm? _swarm;
 
-    [Sync(SyncFlags.FromOwner)] public float Hue { get; set; }
+    [Sync] public float Hue { get; set; }
 
     public override void Update()
     {
@@ -93,7 +93,7 @@ public class Drone : Component
         }
 
         _swarm ??= GameObject.Scene.IsValid() ? GameObject.Scene!.GetAll<Swarm>(includeDisabled: true).FirstOrDefault() : null;
-        if (_swarm?.Churn == true)
+        if (_swarm?.Churn == true && Authority)
         {
             Hue = Random.Shared.NextSingle();
         }

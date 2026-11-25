@@ -8,7 +8,7 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>What the script compiler generates for an unreliable <c>[Rpc.Broadcast] Shout(string)</c> and <c>[Rpc.Host] Ask(string)</c>.</summary>
-public class LoudTestComponent : Component
+public class LoudTestComponent : NetworkBehaviour
 {
     private static readonly RpcMember<LoudTestComponent> s_shout = new(991, "Shout(string)", RpcMode.Broadcast, RpcFlags.Unreliable,
         static (LoudTestComponent c, ref NetReader r, bool execute) => { NetSerializer<string>.Read(ref r); if (execute) RpcMember.ArgumentsRead(); });

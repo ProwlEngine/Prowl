@@ -199,32 +199,6 @@ public static partial class Networking
         NetworkFactories.Register(name, build, destroy);
 
     /// <summary>
-    ///     Sends an <see cref="INetworkSerialize" /> component's state at the next tick. Only the
-    ///     peer that writes it may; anywhere else the change is dropped with a warning.
-    /// </summary>
-    public static void SetDirty(Component component)
-    {
-        ArgumentNullException.ThrowIfNull(component);
-        if (component is not INetworkSerialize)
-        {
-            throw new ArgumentException($"{component.GetType().Name} doesn't implement INetworkSerialize.", nameof(component));
-        }
-
-        if (!IsActive || NetworkMembers.Of(component).Sync(NetworkSerializeMember.CustomSlot) is not { } member)
-        {
-            return;
-        }
-
-        if (!System!.HasControl(component, member.Flags))
-        {
-            System.Sync.WarnSyncOnce(component, member, "was marked dirty on a peer that doesn't write it");
-            return;
-        }
-
-        System.Sync.MarkSyncDirty(component, member.Slot);
-    }
-
-    /// <summary>
     ///     The spawned networked object with this <see cref="NetworkAccessor.NetId" /> on this peer, or null when it
     ///     has none: the id is the same on every peer, so it names an object in a message of the game's own.
     /// </summary>

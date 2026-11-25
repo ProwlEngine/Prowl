@@ -5,13 +5,13 @@ using System.Collections.Generic;
 
 namespace Prowl.Runtime.Networking;
 
-/// <summary>The networked components of a networked object: those with [Sync] values, RPCs or their own state.</summary>
+/// <summary>The networked components of a networked object: its NetworkBehaviours.</summary>
 internal static class NetworkComponents
 {
     /// <summary>The most a networked object can hold.</summary>
     public const int MaxPerObject = 64;
 
-    /// <summary>A tree's networked components in build order: each object's own, then its children's. Disabled ones count.</summary>
+    /// <summary>A tree's NetworkBehaviours in build order: each object's own, then its children's. Disabled ones count.</summary>
     public static Component[] Gather(GameObject root)
     {
         List<Component> found = new();
@@ -23,7 +23,7 @@ internal static class NetworkComponents
     {
         foreach (Component component in go.GetComponents<Component>())
         {
-            if (NetworkMembers.Of(component).Any)
+            if (component is NetworkBehaviour)
             {
                 found.Add(component);
             }

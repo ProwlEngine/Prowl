@@ -11,6 +11,16 @@ namespace Prowl.Runtime.Test;
 /// <summary>Spawns objects a test built by hand, as ones from a factory every peer has.</summary>
 internal static class NetworkTestSpawn
 {
+    /// <summary>Seconds that make <paramref name="ticks" /> network ticks, for a SyncInterval.</summary>
+    public static float Ticks(int ticks) => (float)(ticks * Networking.Networking.TickInterval);
+
+    /// <summary>Makes the behaviour one its owner writes, and returns it.</summary>
+    public static T OwnerWritten<T>(this T behaviour) where T : NetworkBehaviour
+    {
+        behaviour.SyncDirection = SyncDirection.ClientToServer;
+        return behaviour;
+    }
+
     private static int s_next;
 
     // Scenes here are built in code, so their networked objects are ones a factory builds a copy of.

@@ -21,13 +21,14 @@ namespace Prowl.Runtime.Networking;
 
 /// <summary>A [Sync] property, as the script compiler describes it. Not meant to be created by hand.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public abstract class SyncMember(uint slot, string name, SyncFlags flags)
+public abstract class SyncMember(uint slot, string name)
 {
     public uint Slot { get; } = slot;
 
     public string Name { get; } = name;
 
-    public SyncFlags Flags { get; } = flags;
+    // Its bit in the dirty mask of its type and every type derived from it, or -1 past the limit.
+    internal int Bit = -1;
 
     /// <summary>Writes the whole value, for a spawn or a new owner.</summary>
     internal abstract void Write(Component component, NetWriter writer);
@@ -60,14 +61,14 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 
 /// <inheritdoc />
 [EditorBrowsable(EditorBrowsableState.Never)]
-public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : SyncMember(slot, name, flags)
+public abstract class SyncMember<T>(uint slot, string name) : SyncMember(slot, name)
 {
     /// <summary>True when the value is a reference to a networked object or component, which travels by NetId.</summary>
     [ReloadIgnore] internal static readonly bool IsReference =
         typeof(GameObject).IsAssignableFrom(typeof(T)) || typeof(Component).IsAssignableFrom(typeof(T));
 
     /// <summary>Generated setter: applies an authorized local change and queues it for replication.</summary>
-    public void Set(Component component, ref T field, T value)
+    public void Set(NetworkBehaviour component, ref T field, T value)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
@@ -75,21 +76,21 @@ public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : S
         }
 
         T old = field;
-        if (Networking.IsActive)
+        if (component.Spawned is { } entry)
         {
             using FrameStatScope stats = FrameStats.Network.Scope();
-            if (!Networking.System!.HasControl(component, Flags))
+            if (!component.Authority)
             {
-                Networking.System!.Sync.WarnSyncOnce(component, this, "was changed on a peer that doesn't control it");
+                entry.System.Sync.WarnSyncOnce(component, this, "was changed on a peer without authority over it");
                 return;
             }
 
             field = value;
-            Networking.System!.Sync.MarkSyncDirty(component, Slot);
+            entry.System.Sync.MarkDirty(entry, component.Index, Bit);
             if (IsReference)
             {
                 // Set here, so nothing received names it any more.
-                Networking.System!.Sync.NoteReference(component, this, default);
+                entry.System.Sync.NoteReference(component, this, default);
             }
         }
         else
@@ -109,11 +110,10 @@ public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : S
 public sealed class SyncMember<TComponent, T>(
     uint slot,
     string name,
-    SyncFlags flags,
     Func<TComponent, T> get,
     Action<TComponent, T> set,
     Action<TComponent, T, T>? changed = null)
-    : SyncMember<T>(slot, name, flags) where TComponent : Component
+    : SyncMember<T>(slot, name) where TComponent : NetworkBehaviour
 {
     internal override void Write(Component component, NetWriter writer) =>
         NetSerializer<T>.Write(writer, get((TComponent)component));
@@ -181,9 +181,8 @@ public sealed class SyncMember<TComponent, T>(
 public sealed class SyncCollectionMember<TComponent, TCollection>(
     uint slot,
     string name,
-    SyncFlags flags,
     Func<TComponent, TCollection> get)
-    : SyncMember(slot, name, flags) where TComponent : Component where TCollection : NetCollection
+    : SyncMember(slot, name) where TComponent : NetworkBehaviour where TCollection : NetCollection
 {
     /// <summary>Generated getter: binds the component's collection to this property.</summary>
     public TCollection Bind(TComponent component) => Bound(component);
@@ -292,7 +291,7 @@ public sealed class RpcMember<TComponent>(
     RpcFlags flags,
     RpcInvoker<TComponent> invoke,
     byte channel = 0)
-    : RpcMember(id, signature, mode, flags, channel) where TComponent : Component
+    : RpcMember(id, signature, mode, flags, channel) where TComponent : NetworkBehaviour
 {
     internal override void Invoke(Component component, ref NetReader reader) =>
         invoke((TComponent)component, ref reader, true);
@@ -332,7 +331,7 @@ internal sealed class NetworkMembers
 
     private readonly Dictionary<uint, SyncMember> _syncs = new();
 
-    /// <summary>True when the type has anything networked, which makes its components networked components.</summary>
+    /// <summary>True when the type has [Sync] members, RPCs or state of its own.</summary>
     public bool Any => !ReferenceEquals(this, s_none);
 
     public static NetworkMembers Of(Component component) => Of(component.GetType());
@@ -358,80 +357,108 @@ internal sealed class NetworkMembers
     /// <summary>Where <paramref name="rpc" /> is among the type's RPCs sorted by id, or -1.</summary>
     public int IndexOf(RpcMember rpc) => _rpcIndex.GetValueOrDefault(rpc.Id, -1);
 
+    /// <summary>A behaviour's sync rules as the engine reads them, or none for anything else.</summary>
+    public static SyncFlags FlagsOf(Component component) =>
+        component is NetworkBehaviour behaviour ? behaviour.Flags : SyncFlags.None;
+
+    // A member's bit is fixed by the type that declares it: the base type's members keep theirs in every type derived
+    // from it, and a type's own come after them, by slot. The custom state is always last, so a block's tail is its.
     [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
         Justification =
             "Player builds preserve component assemblies and their network descriptor fields for reflection.")]
     private static NetworkMembers Build(Type type)
     {
-        Stack<Type> hierarchy = new();
-        for (Type? t = type; t != null && t != typeof(Component); t = t.BaseType)
+        if (!typeof(NetworkBehaviour).IsAssignableFrom(type) || type == typeof(NetworkBehaviour))
         {
-            hierarchy.Push(t);
+            return s_none;
         }
 
-        NetworkMembers? members = null;
-        foreach (Type t in hierarchy)
+        NetworkMembers inherited = type.BaseType is { } parent ? Of(parent) : s_none;
+        NetworkMembers members = new();
+        List<SyncMember> order = [.. inherited._syncOrder];
+        if (order.Count > 0 && order[^1] is NetworkSerializeMember)
         {
-            foreach (FieldInfo field in t.GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public |
-                                                    BindingFlags.DeclaredOnly))
+            order.RemoveAt(order.Count - 1);
+        }
+
+        foreach ((uint id, RpcMember rpc) in inherited._rpcs)
+        {
+            members._rpcs[id] = rpc;
+        }
+
+        List<SyncMember> own = new();
+        foreach (FieldInfo field in type.GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public |
+                                                   BindingFlags.DeclaredOnly))
+        {
+            if (!typeof(SyncMember).IsAssignableFrom(field.FieldType) &&
+                !typeof(RpcMember).IsAssignableFrom(field.FieldType))
             {
-                if (!typeof(SyncMember).IsAssignableFrom(field.FieldType) &&
-                    !typeof(RpcMember).IsAssignableFrom(field.FieldType))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                switch (field.GetValue(null))
-                {
-                    case SyncMember sync:
-                        members ??= new NetworkMembers();
-                        // A derived class redeclaring a property under the same name takes its slot over.
-                        if (members._syncs.TryGetValue(sync.Slot, out SyncMember? hidden))
-                        {
-                            members.Syncs.Remove(hidden);
-                        }
+            switch (field.GetValue(null))
+            {
+                case SyncMember sync:
+                    // A derived class redeclaring a property under the same name takes its bit over.
+                    int hidden = order.FindIndex(m => m.Slot == sync.Slot);
+                    if (hidden >= 0)
+                    {
+                        order[hidden] = sync;
+                    }
+                    else
+                    {
+                        own.Add(sync);
+                    }
 
-                        members._syncs[sync.Slot] = sync;
-                        members.Syncs.Add(sync);
-                        break;
+                    break;
 
-                    case RpcMember rpc:
-                        // An override is the same RPC; the derived class's call is virtual either way.
-                        (members ??= new NetworkMembers())._rpcs[rpc.Id] = rpc;
-                        break;
-                }
+                case RpcMember rpc:
+                    // An override is the same RPC; the derived class's call is virtual either way.
+                    members._rpcs[rpc.Id] = rpc;
+                    break;
             }
         }
 
-        if (typeof(INetworkSerialize).IsAssignableFrom(type))
+        own.Sort(static (a, b) => a.Slot.CompareTo(b.Slot));
+        order.AddRange(own);
+        if (WritesOwnState(type))
         {
-            NetworkSerializeMember custom = new(type.GetCustomAttribute<NetworkSerializeAttribute>()?.Flags ?? SyncFlags.None);
-            members ??= new NetworkMembers();
-            members._syncs[custom.Slot] = custom;
-            members.Syncs.Add(custom);
+            order.Add(new NetworkSerializeMember());
         }
 
-        members?.OrderRpcs();
-        members?.OrderSyncs(type);
-        return members ?? s_none;
+        if (order.Count == 0 && members._rpcs.Count == 0)
+        {
+            return s_none;
+        }
+
+        members.OrderRpcs();
+        members.OrderSyncs(type, order);
+        return members;
     }
 
-    private void OrderSyncs(Type type)
+    // True when the type, or a base of it below NetworkBehaviour, overrides OnSerialize.
+    private static bool WritesOwnState(Type type) =>
+        type.GetMethod(nameof(NetworkBehaviour.OnSerialize), BindingFlags.Public | BindingFlags.Instance)?.DeclaringType
+            is { } declaring && declaring != typeof(NetworkBehaviour);
+
+    private void OrderSyncs(Type type, List<SyncMember> order)
     {
-        SyncMember[] order = [.. Syncs];
-        Array.Sort(order, static (a, b) => a.Slot.CompareTo(b.Slot));
-        if (order.Length > MaxSyncMembers)
+        if (order.Count > MaxSyncMembers)
         {
             Debug.LogError(
-                $"[Network] {type.Name} has {order.Length} [Sync] members and a component can hold {MaxSyncMembers}, " +
+                $"[Network] {type.Name} has {order.Count} [Sync] members and a component can hold {MaxSyncMembers}, " +
                 "so the last ones are not sent. Split it into several components.");
             order = order[..MaxSyncMembers];
         }
 
-        _syncOrder = order;
-        for (int i = 0; i < order.Length; i++)
+        _syncOrder = [.. order];
+        for (int i = 0; i < _syncOrder.Length; i++)
         {
-            _syncIndex[order[i].Slot] = i;
+            SyncMember sync = _syncOrder[i];
+            sync.Bit = i;
+            _syncs[sync.Slot] = sync;
+            _syncIndex[sync.Slot] = i;
+            Syncs.Add(sync);
         }
     }
 

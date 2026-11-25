@@ -7,23 +7,31 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-/// <summary>What the script compiler generates for <c>[Sync(SyncFlags.ToOwner)] public int Ammo</c>.</summary>
-public class AmmoTestComponent : Component
+/// <summary>What the script compiler generates for <c>[Sync] public int Ammo</c>, on a behaviour only its owner receives.</summary>
+public class AmmoTestComponent : NetworkBehaviour
 {
     public const uint AmmoSlot = 971;
+    public AmmoTestComponent() => SyncMode = SyncMode.Owner;
     private int __sync_Ammo;
     private static readonly SyncMember<AmmoTestComponent, int> __syncnet_Ammo =
-        new(AmmoSlot, "Ammo", SyncFlags.ToOwner, static s => s.__sync_Ammo, static (s, v) => s.__sync_Ammo = v);
+        new(AmmoSlot, "Ammo", static s => s.__sync_Ammo, static (s, v) => s.__sync_Ammo = v);
     public int Ammo { get => __sync_Ammo; set => __syncnet_Ammo.Set(this, ref __sync_Ammo, value); }
 }
 
-/// <summary>What the script compiler generates for <c>[Sync(SyncFlags.FromOwner | SyncFlags.ToOwner)] public int Stash</c>.</summary>
-public class StashTestComponent : Component
+/// <summary>What the script compiler generates for <c>[Sync] public int Stash</c>, on a behaviour its owner writes and alone receives.</summary>
+public class StashTestComponent : NetworkBehaviour
 {
     public const uint StashSlot = 972;
+
+    public StashTestComponent()
+    {
+        SyncDirection = SyncDirection.ClientToServer;
+        SyncMode = SyncMode.Owner;
+    }
+
     private int __sync_Stash;
     private static readonly SyncMember<StashTestComponent, int> __syncnet_Stash =
-        new(StashSlot, "Stash", SyncFlags.FromOwner | SyncFlags.ToOwner, static s => s.__sync_Stash, static (s, v) => s.__sync_Stash = v);
+        new(StashSlot, "Stash", static s => s.__sync_Stash, static (s, v) => s.__sync_Stash = v);
     public int Stash { get => __sync_Stash; set => __syncnet_Stash.Set(this, ref __sync_Stash, value); }
 }
 
@@ -73,7 +81,7 @@ public partial class NetworkingTests
             NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => p.Name == "alice");
             GameObject purse = CreateGameObject("Purse");
             StashTestComponent stash = purse.AddComponent<StashTestComponent>();
-            NetTestComponent stats = purse.AddComponent<NetTestComponent>();
+            NetTestComponent stats = purse.AddComponent<NetTestComponent>().OwnerWritten();
             scene.Add(purse);
             purse.SpawnBuilt(aliceHere);
             Pump(() => alice.Has(FakePeer.Spawn) && bob.Has(FakePeer.Spawn), alice, bob);
@@ -128,7 +136,7 @@ public partial class NetworkingTests
         Scene scene = CreateScene();
         GameObject gun = CreateGameObject("Gun");
         AmmoTestComponent ammo = gun.AddComponent<AmmoTestComponent>();
-        NetTestComponent stats = gun.AddComponent<NetTestComponent>();
+        NetTestComponent stats = gun.AddComponent<NetTestComponent>().OwnerWritten();
         ammo.Ammo = 30;
         scene.Add(gun);
         MakeCurrent(scene);

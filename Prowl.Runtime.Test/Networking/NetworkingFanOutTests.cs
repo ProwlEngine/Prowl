@@ -73,10 +73,10 @@ public readonly record struct CountedWrites(int Number)
 }
 
 /// <summary>What the script compiler generates for <c>[Sync] public CountedWrites Value</c>.</summary>
-public class CountedWritesTestComponent : Component
+public class CountedWritesTestComponent : NetworkBehaviour
 {
     private CountedWrites __sync_Value;
     private static readonly SyncMember<CountedWritesTestComponent, CountedWrites> __syncnet_Value =
-        new(951, "Value", SyncFlags.None, static s => s.__sync_Value, static (s, v) => s.__sync_Value = v);
+        new(951, "Value", static s => s.__sync_Value, static (s, v) => s.__sync_Value = v);
     public CountedWrites Value { get => __sync_Value; set => __syncnet_Value.Set(this, ref __sync_Value, value); }
 }

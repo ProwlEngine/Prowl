@@ -7,13 +7,13 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-public class LocalPlayerListener : Component, INetworkEvents
+public class LocalPlayerListener : NetworkBehaviour
 {
     public int Started, Stopped;
 
-    public void OnStartLocalPlayer() => Started++;
+    public override void OnStartLocalPlayer() => Started++;
 
-    public void OnStopLocalPlayer() => Stopped++;
+    public override void OnStopLocalPlayer() => Stopped++;
 }
 
 public partial class NetworkingTests

@@ -24,7 +24,7 @@ namespace Prowl.Runtime.Test;
 /// </code>
 /// written out by hand, since runtime tests don't go through the script compiler.
 /// </summary>
-public class NetTestComponent : Component
+public class NetTestComponent : NetworkBehaviour
 {
     public const uint HealthSlot = 101, ScoreSlot = 102, ShoutId = 201, AskHostId = 202, ExplodeId = 203;
 
@@ -32,11 +32,11 @@ public class NetTestComponent : Component
     public readonly List<int> Asked = new();
 
     private int __sync_Health = 100;
-    private static readonly SyncMember<NetTestComponent, int> __syncnet_Health = new(HealthSlot, "Health", SyncFlags.FromOwner, static s => s.__sync_Health, static (s, v) => s.__sync_Health = v);
+    private static readonly SyncMember<NetTestComponent, int> __syncnet_Health = new(HealthSlot, "Health", static s => s.__sync_Health, static (s, v) => s.__sync_Health = v);
     public int Health { get => __sync_Health; set => __syncnet_Health.Set(this, ref __sync_Health, value); }
 
     private int __sync_Score;
-    private static readonly SyncMember<NetTestComponent, int> __syncnet_Score = new(ScoreSlot, "Score", SyncFlags.None, static s => s.__sync_Score, static (s, v) => s.__sync_Score = v);
+    private static readonly SyncMember<NetTestComponent, int> __syncnet_Score = new(ScoreSlot, "Score", static s => s.__sync_Score, static (s, v) => s.__sync_Score = v);
     public int Score { get => __sync_Score; set => __syncnet_Score.Set(this, ref __sync_Score, value); }
 
     private static readonly RpcMember<NetTestComponent> __rpc_201 = new(ShoutId, "Shout(string)", RpcMode.Broadcast, RpcFlags.AnyCaller,
@@ -591,7 +591,8 @@ public partial class NetworkingTests : RuntimeTestBase
 
             GameObject ship = CreateGameObject("Ship");
             ship.AddComponent<NetworkTransform>();
-            NetTestComponent component = ship.AddComponent<NetTestComponent>();
+            NetTestComponent component = ship.AddComponent<NetTestComponent>().OwnerWritten();
+            NetCollectionTestComponent hostSide = ship.AddComponent<NetCollectionTestComponent>();
             scene.Add(ship);
             ship.SpawnBuilt(aliceHere);
 
@@ -601,20 +602,20 @@ public partial class NetworkingTests : RuntimeTestBase
 
             // Alice drives it, so the host's own changes are ignored, except for what only the host may set.
             component.Health = 1;
-            component.Score = 5;
+            hostSide.Health = 5;
             Assert.Equal(100, component.Health);
-            Assert.Equal(5, component.Score);
+            Assert.Equal(5, hostSide.Health);
 
-            Pump(() => alice.Has(FakePeer.Spawn) && alice.SyncInt(component.Identifier, NetTestComponent.ScoreSlot) == 5, alice);
+            Pump(() => alice.Has(FakePeer.Spawn) && alice.SyncInt(hostSide.Identifier, NetCollectionTestComponent.HealthSlot) == 5, alice);
             NetReader spawn = new(alice.Last(FakePeer.Spawn));
             Assert.Equal(ship.Identifier, spawn.ReadGuid());
 
             // Alice's changes land; she can't touch the host-only one.
             alice.SendSync(component.Identifier, NetTestComponent.HealthSlot, 42);
-            alice.SendSync(component.Identifier, NetTestComponent.ScoreSlot, 99);
+            alice.SendSync(hostSide.Identifier, NetCollectionTestComponent.HealthSlot, 99);
             Pump(() => component.Health == 42, alice);
             PumpFor(30, alice);
-            Assert.Equal(5, component.Score);
+            Assert.Equal(5, hostSide.Health);
 
             // Her transform updates move it on the host, smoothed.
             alice.Send(FakePeer.Transform, w => WriteTransforms(w, 1, 1,
@@ -1034,7 +1035,7 @@ public partial class NetworkingTests : RuntimeTestBase
 
         GameObject ship = CreateGameObject("Ship");
         ship.AddComponent<NetworkTransform>();
-        ship.AddComponent<NetTestComponent>().Health = 9;
+        ship.AddComponent<NetTestComponent>().OwnerWritten().Health = 9;
         ship.Network.Networked = true;
         using NetWriter shipSpawn = new();
         NetworkTestScene.Current.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, shipSpawn); // the first client is peer 1

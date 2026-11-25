@@ -300,8 +300,6 @@
   "network.visibility.force_hidden": "Только владелец",
   "network.visibility.host_only": "Только хост может менять, кто получает созданный объект.",
   "network.sync_transform": "Синхронизировать transform",
-  "network.component_interval": "Интервал отправки компонента (тики)",
-  "network.component_interval.desc": "Сколько тиков проходит между отправками изменённых значений [Sync] каждого компонента. 1 — каждый тик.",
   "network.sync_transform.desc": "Тот, кто управляет, отправляет позицию, поворот и масштаб всем остальным.",
   "network.live": "Сейчас",
   "network.not_spawned": "Не создан. Хост создаёт то, что строит сохранённая сцена, префаб или фабрика.",

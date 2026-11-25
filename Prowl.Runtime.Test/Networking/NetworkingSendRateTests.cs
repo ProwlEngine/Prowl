@@ -28,12 +28,12 @@ public partial class NetworkingTests
         GameObject go = CreateGameObject("Rated");
         NetworkTransform transform = go.AddComponent<NetworkTransform>();
         Assert.Equal(1, transform.Interval);
-        transform.SendInterval = 0;
+        transform.SyncInterval = -1;
         Assert.Equal(1, transform.Interval);
-        transform.SendInterval = 256;
+        transform.SyncInterval = 1000;
         Assert.Equal(255, transform.Interval);
 
-        transform.SendInterval = 4;
+        transform.SyncInterval = NetworkTestSpawn.Ticks(4);
         using GameObject copy = Serializer.Deserialize<GameObject>(Serializer.Serialize(go))!;
         Assert.Equal(4, copy.GetComponent<NetworkTransform>()!.Interval);
         Assert.False(Serializer.Serialize(go).TryGet("Network", out _));
@@ -51,7 +51,7 @@ public partial class NetworkingTests
         {
             Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject slow = CreateGameObject("Slow"), fast = CreateGameObject("Fast");
-            slow.AddComponent<NetworkTransform>().SendInterval = 3;
+            slow.AddComponent<NetworkTransform>().SyncInterval = NetworkTestSpawn.Ticks(3);
             fast.AddComponent<NetworkTransform>();
             scene.Add(slow); scene.Add(fast);
             slow.SpawnBuilt(); fast.SpawnBuilt();
@@ -78,18 +78,37 @@ public partial class NetworkingTests
         GameObject go = CreateGameObject("Saved");
         go.AddComponent<PlainTestComponent>();
         NetTestComponent slow = go.AddComponent<NetTestComponent>();
-        go.Network.SetSendInterval(slow, 6);
-        Assert.Throws<ArgumentOutOfRangeException>(() => go.Network.SetSendInterval(slow, 0));
-        Assert.Throws<ArgumentException>(() => go.Network.SetSendInterval(CreateGameObject().AddComponent<NetTestComponent>(), 2));
+        slow.SyncInterval = NetworkTestSpawn.Ticks(6);
 
         GameObject copy = Serializer.Deserialize<GameObject>(Serializer.Serialize(go))!;
-        Assert.Equal(6, copy.Network.GetSendInterval(copy.GetComponent<NetTestComponent>()!));
-        Assert.Equal(1, copy.Network.GetSendInterval(copy.GetComponent<PlainTestComponent>()!));
+        Assert.Equal(6, NetworkAccessor.SendIntervalOf(copy.GetComponent<NetTestComponent>()!));
+        Assert.Equal(1, NetworkAccessor.SendIntervalOf(copy.GetComponent<PlainTestComponent>()!));
 
-        // Back at 1 it is the default, and nothing is stored for it.
-        go.Network.SetSendInterval(slow, 1);
+        // It is the behaviour's own field, so the object stores no network settings for it.
         Assert.False(Serializer.Serialize(go).TryGet("Network", out _));
         copy.Dispose();
+        go.Dispose();
+    }
+
+    [Fact]
+    public void SendIntervalsSavedInTicksOnTheObjectMoveOntoTheirBehaviours()
+    {
+        GameObject go = CreateGameObject("Old");
+        go.AddComponent<PlainTestComponent>();
+        go.AddComponent<NetTestComponent>();
+        go.Network.Networked = true;
+        EchoObject saved = Serializer.Serialize(go);
+        EchoObject entry = EchoObject.NewCompound(2);
+        entry.Add("Index", new EchoObject(1));
+        entry.Add("Ticks", new EchoObject((byte)6));
+        EchoObject intervals = EchoObject.NewList();
+        intervals.ListAdd(entry);
+        saved["Network"].Add("ComponentIntervals", intervals);
+
+        using GameObject copy = Serializer.Deserialize<GameObject>(saved)!;
+        Assert.Equal(6, NetworkAccessor.SendIntervalOf(copy.GetComponent<NetTestComponent>()!));
+        Assert.Equal(NetworkTestSpawn.Ticks(6), copy.GetComponent<NetTestComponent>()!.SyncInterval, 5);
+        Assert.False(Serializer.Serialize(copy)["Network"].TryGet("ComponentIntervals", out _));
         go.Dispose();
     }
 
@@ -99,7 +118,7 @@ public partial class NetworkingTests
         GameObject source = CreateGameObject("Source");
         source.AddComponent<PlainTestComponent>();
         NetTestComponent slow = source.AddComponent<NetTestComponent>();
-        source.Network.SetSendInterval(slow, 6);
+        slow.SyncInterval = NetworkTestSpawn.Ticks(6);
 
         // An instance that came from it, with a component of its own put first.
         GameObject instance = CreateGameObject("Instance");
@@ -114,9 +133,9 @@ public partial class NetworkingTests
         map.Fill(slow, copied);
         ObjectCopy.CopyTo(source, instance, map);
 
-        Assert.Equal(6, instance.Network.GetSendInterval(copied));
-        Assert.Equal(1, instance.Network.GetSendInterval(plain));
-        Assert.Equal(1, instance.Network.GetSendInterval(extra));
+        Assert.Equal(6, NetworkAccessor.SendIntervalOf(copied));
+        Assert.Equal(1, NetworkAccessor.SendIntervalOf(plain));
+        Assert.Equal(1, NetworkAccessor.SendIntervalOf(extra));
         instance.Dispose();
         source.Dispose();
     }
@@ -134,8 +153,8 @@ public partial class NetworkingTests
             Pump(() => alice.Has(FakePeer.Scene), alice);
             GameObject crate = CreateGameObject("Crate");
             NetTestComponent component = crate.AddComponent<NetTestComponent>();
-            crate.Network.SetSendInterval(component, 4);
-            Assert.Equal(4, crate.Network.GetSendInterval(component));
+            component.SyncInterval = NetworkTestSpawn.Ticks(4);
+            Assert.Equal(4, NetworkAccessor.SendIntervalOf(component));
             scene.Add(crate);
             crate.SpawnBuilt();
             Pump(() => alice.Has(FakePeer.Spawn), alice);
@@ -170,9 +189,9 @@ public partial class NetworkingTests
         {
             GameObject go = CreateGameObject($"Slow {i}");
             go.Network.Networked = true;
-            go.AddComponent<NetworkTransform>().SendInterval = 2;
+            go.AddComponent<NetworkTransform>().SyncInterval = NetworkTestSpawn.Ticks(2);
             NetTestComponent component = go.AddComponent<NetTestComponent>();
-            go.Network.SetSendInterval(component, 2);
+            component.SyncInterval = NetworkTestSpawn.Ticks(2);
             scene.Add(go);
             objects.Add(go);
             components.Add(component);

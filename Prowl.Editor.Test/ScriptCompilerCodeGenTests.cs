@@ -25,9 +25,9 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
 
         namespace Fleet;
 
-        public partial class Ship : Component
+        public partial class Ship : NetworkBehaviour
         {
-            [Sync(SyncFlags.FromOwner)] public int Health { get; set; } = 100;
+            [Sync] public int Health { get; set; } = 100;
 
             [Rpc.Broadcast] public void Fire(int power) => Fired += power;
 
@@ -76,7 +76,7 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
         WriteScript("ShipB.cs", "namespace Fleet { public partial class Ship { } }");
         Assert.Equal(new[] { NetworkCodeGen.NetworkId("Health") }, SlotsOfFreshShip());
 
-        // ShipA.cs is untouched; only the other part gains a [Sync(SyncFlags.FromOwner)], and a type its RPC sends.
+        // ShipA.cs is untouched; only the other part gains a [Sync], and a type its RPC sends.
         WriteScript("ShipB.cs", ShipPartB);
         Assert.Equal(new[] { NetworkCodeGen.NetworkId("Health"), NetworkCodeGen.NetworkId("Ammo") }, SlotsOfFreshShip());
     }
@@ -84,7 +84,7 @@ public class ScriptCompilerCodeGenTests : EditorTestHarness
     [Fact]
     public void GenerationErrorsFailTheCompile()
     {
-        WriteScript("Bad.cs", "public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public System.Action X { get; set; } }");
+        WriteScript("Bad.cs", "public class A : Prowl.Runtime.Networking.NetworkBehaviour { [Prowl.Runtime.Networking.Sync] public System.Action X { get; set; } }");
 
         ScriptCompiler.CompileResult result = ScriptCompiler.CompileAll(Project);
 

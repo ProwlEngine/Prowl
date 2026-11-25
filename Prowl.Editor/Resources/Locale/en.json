@@ -544,8 +544,6 @@
   "network.visibility.force_hidden": "Only its owner",
   "network.visibility.host_only": "Only the host can change who receives a spawned object.",
   "network.sync_transform": "Sync Transform",
-  "network.component_interval": "Component Send Interval (ticks)",
-  "network.component_interval.desc": "How many ticks apart each component sends its changed [Sync] values. 1 sends every tick.",
   "network.sync_transform.desc": "Whoever controls it sends its position, rotation and scale to everyone else.",
   "network.live": "Live",
   "network.not_spawned": "Not spawned. The host spawns what a saved scene, a prefab or a factory builds.",

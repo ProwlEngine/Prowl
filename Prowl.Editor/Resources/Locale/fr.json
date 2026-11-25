@@ -300,8 +300,6 @@
   "network.visibility.force_hidden": "Seulement son propriétaire",
   "network.visibility.host_only": "Seul l'hôte peut changer qui reçoit un objet déjà apparu.",
   "network.sync_transform": "Synchroniser le transform",
-  "network.component_interval": "Intervalle d'envoi du composant (ticks)",
-  "network.component_interval.desc": "Nombre de ticks entre deux envois des valeurs [Sync] modifiées de chaque composant. 1 envoie à chaque tick.",
   "network.sync_transform.desc": "Celui qui le contrôle envoie sa position, rotation et échelle aux autres.",
   "network.live": "En direct",
   "network.not_spawned": "Pas apparu. L'hôte fait apparaître ce que construit une scène enregistrée, un prefab ou une fabrique.",

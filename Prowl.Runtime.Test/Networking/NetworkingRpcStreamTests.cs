@@ -8,22 +8,22 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>Records its spawn callback and a broadcast RPC in the order they run.</summary>
-public class RpcSpawnOrderTestComponent : Component, INetworkEvents
+public class RpcSpawnOrderTestComponent : NetworkBehaviour
 {
     public const uint PingId = 721;
     [SerializeIgnore] public List<string> Order = new();
     private static readonly RpcMember<RpcSpawnOrderTestComponent> Pinging = new(PingId, "Ping()", RpcMode.Broadcast, RpcFlags.AnyCaller,
         static (c, ref r, execute) => { if (execute) { RpcMember.ArgumentsRead(); c.Order.Add("call"); } });
     public void Ping() { if (Pinging.Begin(this, out var w) && !Pinging.Send(this, w)) return; Order.Add("call"); }
-    public void OnNetworkSpawn() => Order.Add("spawn");
-    public void OnNetworkDespawn() { }
-    public void OnNetworkAuthorityGained() { }
-    public void OnNetworkAuthorityLost() { }
-    public void OnNetworkOwnerChanged(NetPeer? previousOwner, NetPeer? owner) { }
+    public override void OnStartClient() => Order.Add("spawn");
+    public override void OnStopClient() { }
+    public override void OnStartAuthority() { }
+    public override void OnStopAuthority() { }
+    public override void OnOwnerChanged(NetPeer? previousOwner, NetPeer? owner) { }
 }
 
 /// <summary>Writes its own state, and calls an RPC while doing so, as game code may.</summary>
-public class ReentrantRpcTestComponent : Component, INetworkSerialize
+public class ReentrantRpcTestComponent : NetworkBehaviour
 {
     public const uint OuterId = 731, PingId = 732;
     [SerializeIgnore] public int Pings, Written;
@@ -34,7 +34,7 @@ public class ReentrantRpcTestComponent : Component, INetworkSerialize
     public void Outer(int value) { if (Outering.Begin(this, out NetWriter w)) { NetSerializer<int>.Write(w, value); if (!Outering.Send(this, w)) return; } }
     public void Ping() { if (Pinging.Begin(this, out var w) && !Pinging.Send(this, w)) return; Pings++; }
 
-    public void OnSerialize(NetWriter writer, bool initial)
+    public override void OnSerialize(NetWriter writer, bool initial)
     {
         writer.WriteByte(7);
         if (!initial)
@@ -44,7 +44,7 @@ public class ReentrantRpcTestComponent : Component, INetworkSerialize
         }
     }
 
-    public void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
+    public override void OnDeserialize(ref NetReader reader, bool initial) => reader.ReadByte();
 }
 
 public partial class NetworkingTests
@@ -65,7 +65,7 @@ public partial class NetworkingTests
             client.WireReceived.Clear();
 
             // The call sends the pending state first, and writing that state calls another RPC.
-            Networking.Networking.SetDirty(component);
+            component.SetDirty();
             component.Outer(42);
             Assert.Equal(1, component.Written);
             Pump(() => client.WireReceived.Count(m => m.Id == FakePeer.RpcFromHost) >= 2, client);
@@ -95,7 +95,7 @@ public partial class NetworkingTests
         Scene scene = CreateScene();
         GameObject root = CreateGameObject(); root.Network.Networked = true;
         RpcStateTestComponent component = root.AddComponent<RpcStateTestComponent>();
-        root.Network.SetSendInterval(component, 255);
+        component.SyncInterval = NetworkTestSpawn.Ticks(255);
         scene.Add(root); Bind(scene);
         LocalNetwork network = new();
         try

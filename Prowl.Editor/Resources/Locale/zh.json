@@ -300,8 +300,6 @@
   "network.visibility.force_hidden": "仅所有者",
   "network.visibility.host_only": "只有主机可以更改谁会收到已生成的对象。",
   "network.sync_transform": "同步变换",
-  "network.component_interval": "组件发送间隔（tick）",
-  "network.component_interval.desc": "每个组件每隔多少个 tick 发送其已更改的 [Sync] 值。1 表示每个 tick 都发送。",
   "network.sync_transform.desc": "控制者把位置、旋转和缩放发送给其他所有人。",
   "network.live": "实时",
   "network.not_spawned": "尚未生成。主机会生成由已保存的场景、预制体或工厂构建的对象。",

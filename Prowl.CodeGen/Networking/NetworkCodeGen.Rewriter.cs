@@ -32,8 +32,8 @@ internal sealed partial class NetworkCodeGen
             // A component that writes its own state takes one of the values a type may have, with or without a
             // [Sync] of its own to bring the count up.
             if (model.GetDeclaredSymbol(node) is INamedTypeSymbol declared &&
-                declared.Interfaces.Any(i => i.Name == "INetworkSerialize") &&
-                DerivesFrom(declared, context.Symbols.Component))
+                declared.GetMembers("OnSerialize").OfType<IMethodSymbol>().Any(m => m.IsOverride) &&
+                DerivesFrom(declared, context.Symbols.NetworkBehaviour))
             {
                 context.CountSyncs(declared, node.Identifier.GetLocation());
             }
@@ -101,9 +101,10 @@ internal sealed partial class NetworkCodeGen
         {
             if (Rpc(node) is not { } rpc)
             {
-                return base.VisitMethodDeclaration(node);
+                return Guard(node, false) is { } guard ? WithChecks(node, [guard], false) : base.VisitMethodDeclaration(node);
             }
 
+            Guard(node, true);
             Changed = true;
             StringBuilder prologue = new();
             prologue.Append($"if ({rpc.Descriptor}.Begin(this, out {WriterType} __rpc_w)) {{ ");
@@ -121,6 +122,16 @@ internal sealed partial class NetworkCodeGen
             // RPCs can be overridden: a base call made from the running body runs here, not sent again.
             checks.Add(SyntaxFactory.ParseStatement(
                 $"using global::Prowl.Runtime.Networking.RpcBodyScope __rpc_body = {rpc.Descriptor}.EnterBody(this); "));
+            return WithChecks(node, checks, true);
+        }
+
+        /// <summary>
+        ///     Puts <paramref name="checks" /> at the top of the method's body, on the line its body opens on, so no line
+        ///     of the method moves. An expression body becomes a block on the arrow's line.
+        /// </summary>
+        private MethodDeclarationSyntax WithChecks(MethodDeclarationSyntax node, List<StatementSyntax> checks, bool returnsVoid)
+        {
+            Changed = true;
 
             // Inserted right after the opening brace, on its line, taking over whatever followed the brace, so
             // the body's own lines don't change at all.
@@ -140,7 +151,9 @@ internal sealed partial class NetworkCodeGen
             SyntaxToken semicolon = node.SemicolonToken.WithTrailingTrivia(SyntaxFactory.Space);
             StatementSyntax statement = expression is ThrowExpressionSyntax thrown
                 ? SyntaxFactory.ThrowStatement(default, thrown.ThrowKeyword, thrown.Expression, semicolon)
-                : SyntaxFactory.ExpressionStatement(expression, semicolon);
+                : returnsVoid || ReturnsNothing(node)
+                    ? SyntaxFactory.ExpressionStatement(expression, semicolon)
+                    : SyntaxFactory.ReturnStatement(SyntaxFactory.Token(SyntaxKind.ReturnKeyword).WithTrailingTrivia(SyntaxFactory.Space), expression, semicolon);
             List<StatementSyntax> statements = checks.Select(c => c.WithTrailingTrivia(SyntaxFactory.Space)).ToList();
             statements[^1] = statements[^1].WithTrailingTrivia();
             statements.Add(statement);
@@ -151,6 +164,66 @@ internal sealed partial class NetworkCodeGen
                     .WithTrailingTrivia(node.SemicolonToken.TrailingTrivia));
             return node.WithExpressionBody(null).WithSemicolonToken(default).WithBody(block);
         }
+
+        /// <summary>
+        ///     The check a [Server] or [Client] method starts with, or null when it has neither or misuses one, which is
+        ///     reported. An RPC only gets the report: its own rules say where it runs.
+        /// </summary>
+        private StatementSyntax? Guard(MethodDeclarationSyntax node, bool rpc)
+        {
+            if (node.AttributeLists.Count == 0 || model.GetDeclaredSymbol(node) is not { } method)
+            {
+                return null;
+            }
+
+            AttributeData? server = Find(method, context.Symbols.Server), client = Find(method, context.Symbols.Client);
+            if ((server ?? client) is not { } guard)
+            {
+                return null;
+            }
+
+            string kind = server != null ? "Server" : "Client";
+            Location location = node.Identifier.GetLocation();
+            string? problem = server != null && client != null ? "can't go with the other guard on the same method"
+                : rpc ? "can't go on an RPC, whose kind already says where it runs"
+                : !DerivesFrom(method.ContainingType, context.Symbols.NetworkBehaviour) ? "only works on a method of a NetworkBehaviour"
+                : method.IsStatic ? "only works on an instance method"
+                : node.Body == null && node.ExpressionBody == null ? "needs a method with a body"
+                : null;
+            if (problem != null)
+            {
+                context.Report(s_guardShape, location, method.Name, kind, problem);
+                return null;
+            }
+
+            bool quiet = guard.NamedArguments.Any(a => a.Key == "Quiet" && a.Value.Value is true);
+            string leave = IsIterator(node) ? "yield break;" : ReturnsNothing(node) ? "return;" : "return default!;";
+            return SyntaxFactory.ParseStatement(
+                $"if (!global::Prowl.Runtime.Networking.NetworkGuard.Allows(this, {SymbolDisplay.FormatLiteral(method.Name, true)}, "
+                + $"{(server != null ? "true" : "false")}, {(quiet ? "true" : "false")})) {leave} ");
+        }
+
+        // True for a method whose body returns no value: void, and async ones returning a plain Task or ValueTask.
+        private bool ReturnsNothing(MethodDeclarationSyntax node)
+        {
+            if (model.GetDeclaredSymbol(node) is not { } method)
+            {
+                return true;
+            }
+
+            if (method.ReturnsVoid)
+            {
+                return true;
+            }
+
+            return method.IsAsync && method.ReturnType is INamedTypeSymbol { IsGenericType: false } returned &&
+                   returned.Name is "Task" or "ValueTask";
+        }
+
+        private static bool IsIterator(MethodDeclarationSyntax node) =>
+            node.Body != null && node.Body
+                .DescendantNodes(n => n is not (LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax))
+                .OfType<YieldStatementSyntax>().Any();
 
         /// <summary>
         ///     The members one class part gets for the [Sync] properties and RPCs it declares: backing fields and
@@ -165,13 +238,12 @@ internal sealed partial class NetworkCodeGen
             {
                 if (member is PropertyDeclarationSyntax property && Sync(property) is { } sync)
                 {
-                    string flags = $"({SyncFlagsType}){sync.Flags}u";
                     if (sync.Collection)
                     {
                         members.Add($"private readonly {sync.Type} {sync.Field} = {sync.Initializer};");
                         members.Add(
                             $"{Descriptor} global::Prowl.Runtime.Networking.SyncCollectionMember<{self}, {sync.Type}> {sync.Descriptor} = new("
-                            + $"{sync.Slot}u, {SymbolDisplay.FormatLiteral(sync.Name, true)}, {flags}, static __c => __c.{sync.Field});");
+                            + $"{sync.Slot}u, {SymbolDisplay.FormatLiteral(sync.Name, true)}, static __c => __c.{sync.Field});");
                         continue;
                     }
 
@@ -179,7 +251,7 @@ internal sealed partial class NetworkCodeGen
                         $"private {sync.Type} {sync.Field}{(sync.Initializer == null ? "" : " = " + sync.Initializer)};");
                     members.Add(
                         $"{Descriptor} global::Prowl.Runtime.Networking.SyncMember<{self}, {sync.Type}> {sync.Descriptor} = new({sync.Slot}u, "
-                        + $"{SymbolDisplay.FormatLiteral(sync.Name, true)}, {flags}, static __c => __c.{sync.Field}, static (__c, __v) => __c.{sync.Field} = __v"
+                        + $"{SymbolDisplay.FormatLiteral(sync.Name, true)}, static __c => __c.{sync.Field}, static (__c, __v) => __c.{sync.Field} = __v"
                         + (sync.Hook == null ? "" : ", " + sync.Hook) + ");");
                 }
                 else if (member is MethodDeclarationSyntax method && Rpc(method) is { } rpc)
@@ -295,7 +367,7 @@ internal sealed partial class NetworkCodeGen
                 return null;
             }
 
-            if (node.Parent is not ClassDeclarationSyntax || !DerivesFrom(property.ContainingType, symbols.Component))
+            if (node.Parent is not ClassDeclarationSyntax || !DerivesFrom(property.ContainingType, symbols.NetworkBehaviour))
             {
                 context.Report(s_notInClass, location, name);
                 return null;
@@ -358,20 +430,8 @@ internal sealed partial class NetworkCodeGen
                 return null;
             }
 
-            uint flags = sync.ConstructorArguments
-                .Concat(sync.NamedArguments.Where(a => a.Key == "Flags").Select(a => a.Value))
-                .Select(a => Convert.ToUInt32(a.Value)).LastOrDefault();
-
-            // SyncFlags.ToOwner: a collection's changes go to everyone that has the object.
-            if (collection && (flags & 2u) != 0)
-            {
-                context.Report(s_collectionShape, location, name,
-                    "is a network collection, which can't take SyncFlags.ToOwner. Only plain values go to the owner alone");
-                return null;
-            }
-
             context.ClaimId(property.ContainingType, false, name, location);
-            return new SyncInfo(name, OneLine(node.Type), NetworkId(name), flags,
+            return new SyncInfo(name, OneLine(node.Type), NetworkId(name),
                 node.Initializer == null ? null : OneLine(node.Initializer.Value),
                 collection, hook);
         }
@@ -431,7 +491,7 @@ internal sealed partial class NetworkCodeGen
                 return null;
             }
 
-            if (node.Parent is not ClassDeclarationSyntax || !DerivesFrom(method.ContainingType, context.Symbols.Component))
+            if (node.Parent is not ClassDeclarationSyntax || !DerivesFrom(method.ContainingType, context.Symbols.NetworkBehaviour))
             {
                 context.Report(s_notInClass, location, method.Name);
                 return null;

@@ -18,10 +18,7 @@ public sealed class NetworkAccessor
     private NetworkOrphaned _orphaned = NetworkOrphaned.Destroy;
     private NetworkVisibility _visibility;
 
-    // The send interval of each component of this object that has one set.
-    private Dictionary<Component, int>? _componentIntervals;
-
-    // Intervals as stored, by component identity and index, until the object's components are there to take them.
+    // Send intervals saved in ticks by older versions, by component identity and index, until the components are read.
     private List<(Guid Component, int Index, int Ticks)>? _storedIntervals;
 
     internal NetworkAccessor(GameObject owner) => _object = owner;
@@ -93,74 +90,15 @@ public sealed class NetworkAccessor
         }
     }
 
-    /// <summary>
-    ///     How many ticks apart a component on this object sends its changed state, [Sync] values and its own
-    ///     <see cref="INetworkSerialize" /> state alike, from 1 (every tick) to 255. It is this
-    ///     peer's own setting for the state it writes, and is never sent. Call it on the object the component is on.
-    /// </summary>
-    public void SetSendInterval(Component component, int ticks)
-    {
-        ArgumentNullException.ThrowIfNull(component);
-        if (ticks < 1 || ticks > MaxSendInterval)
-        {
-            throw new ArgumentOutOfRangeException(nameof(ticks));
-        }
-
-        if (component.GameObject != _object)
-        {
-            throw new ArgumentException("The component is not on this object.", nameof(component));
-        }
-
-        TakeStoredIntervals();
-        if (ticks == 1)
-        {
-            _componentIntervals?.Remove(component);
-        }
-        else
-        {
-            (_componentIntervals ??= new Dictionary<Component, int>())[component] = ticks;
-        }
-    }
-
-    internal bool HasComponentIntervals
-    {
-        get
-        {
-            if (TakeStoredIntervals() is not { } intervals)
-            {
-                return false;
-            }
-
-            // Components that were removed since are let go here, as the object is saved.
-            List<Component>? gone = null;
-            foreach (Component component in intervals.Keys)
-            {
-                if (component.IsNotValid() || component.GameObject != _object)
-                {
-                    (gone ??= new List<Component>()).Add(component);
-                }
-            }
-
-            foreach (Component component in gone ?? [])
-            {
-                intervals.Remove(component);
-            }
-
-            return intervals.Count > 0;
-        }
-    }
-
-    internal void ClearComponentIntervals() => (_componentIntervals, _storedIntervals) = (null, null);
-
     internal void SetStoredIntervals(List<(Guid Component, int Index, int Ticks)> stored) =>
         _storedIntervals = stored.Count > 0 ? stored : null;
 
-    // The intervals by component, once the stored ones found theirs.
-    private Dictionary<Component, int>? TakeStoredIntervals()
+    /// <summary>Moves send intervals saved in ticks by older versions onto the behaviours they belong to, as seconds.</summary>
+    internal void ApplyStoredIntervals()
     {
         if (_storedIntervals is not { } stored)
         {
-            return _componentIntervals;
+            return;
         }
 
         _storedIntervals = null;
@@ -173,7 +111,7 @@ public sealed class NetworkAccessor
             if (Matching(components, id) is { } match)
             {
                 anyMatched = true;
-                (_componentIntervals ??= new Dictionary<Component, int>())[match] = ticks;
+                SetSeconds(match, ticks);
             }
             else
             {
@@ -188,12 +126,18 @@ public sealed class NetworkAccessor
             {
                 if (index < components.Count)
                 {
-                    (_componentIntervals ??= new Dictionary<Component, int>())[components[index]] = ticks;
+                    SetSeconds(components[index], ticks);
                 }
             }
         }
 
-        return _componentIntervals;
+        static void SetSeconds(Component component, int ticks)
+        {
+            if (component is NetworkBehaviour behaviour)
+            {
+                behaviour.SyncInterval = (float)(ticks * NetworkSystem.TickInterval);
+            }
+        }
     }
 
     private static Component? Matching(List<Component> components, Guid id)
@@ -222,13 +166,6 @@ public sealed class NetworkAccessor
         return null;
     }
 
-    /// <summary>The ticks between sends of a component's changed state. See <see cref="SetSendInterval" />.</summary>
-    public int GetSendInterval(Component component)
-    {
-        ArgumentNullException.ThrowIfNull(component);
-        return SendIntervalOf(component);
-    }
-
     /// <summary>
     ///     Which clients receive this object. Only the host may change this after spawning. It is read from the
     ///     networked object itself, not from the objects under it.
@@ -255,7 +192,7 @@ public sealed class NetworkAccessor
         }
     }
 
-    /// <summary>Why the object left this peer. Read it in <see cref="INetworkEvents.OnNetworkDespawn" />.</summary>
+    /// <summary>Why the object left this peer. Read it in <see cref="NetworkBehaviour.OnStopClient" />.</summary>
     public NetworkDespawnReason DespawnReason { get; internal set; }
 
     /// <summary>True while this object belongs to a live network session.</summary>
@@ -360,12 +297,9 @@ public sealed class NetworkAccessor
 
     internal static bool ServerOnlyOf(GameObject go) => go._network?._serverOnly == true;
 
-    /// <summary>The ticks between sends of a component's [Sync] state: its own, or 1 when it has none set.</summary>
+    /// <summary>The ticks between sends of a component's changed state, from its <see cref="NetworkBehaviour.SyncInterval" />.</summary>
     internal static int SendIntervalOf(Component component) =>
-        component.GameObject._network?.TakeStoredIntervals() is { } intervals &&
-        intervals.TryGetValue(component, out int interval)
-            ? interval
-            : 1;
+        component is NetworkBehaviour behaviour ? behaviour.IntervalTicks : 1;
 
     internal static bool IsExcludedFromNetwork(GameObject go)
     {

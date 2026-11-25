@@ -18,7 +18,7 @@ using Xunit;
 namespace Prowl.CodeGen.Test.Networking;
 
 /// <summary>
-///     What [Sync(SyncFlags.FromOwner)] properties and RPCs compile to: plain members without a session, and descriptors the runtime
+///     What [Sync] properties and RPCs compile to: plain members without a session, and descriptors the runtime
 ///     networks them by.
 /// </summary>
 public class SyncAndRpcTests
@@ -53,7 +53,7 @@ public class SyncAndRpcTests
                 Scripts.Slots(ship));
             SyncMember health = members.Sync(NetworkCodeGen.NetworkId("Health"))!;
             Assert.Equal("Health", health.Name);
-            Assert.Equal(SyncFlags.None, members.Sync(NetworkCodeGen.NetworkId("Callsign"))!.Flags);
+            Assert.NotNull(members.Sync(NetworkCodeGen.NetworkId("Callsign")));
             Assert.Null(members.Sync(0));
             Assert.Equal("100", health.FormatValue(ship));
 
@@ -98,7 +98,7 @@ public class SyncAndRpcTests
 
             NetworkMembers members = NetworkMembers.Of(ship);
             Assert.Equal(RpcMode.Host, members.Rpc(NetworkCodeGen.NetworkId("Reload()"))!.Mode);
-            Assert.Equal(SyncFlags.None, members.Sync(NetworkCodeGen.NetworkId("Ammo"))!.Flags);
+            Assert.NotNull(members.Sync(NetworkCodeGen.NetworkId("Ammo")));
             Assert.NotNull(members.Rpc(NetworkCodeGen.NetworkId("Fire(int)")));
 
             // Offline, both parts' RPCs are plain calls.
@@ -108,7 +108,7 @@ public class SyncAndRpcTests
     }
 
     /// <summary>
-    ///     A [Sync(SyncFlags.FromOwner)] type and initializer only the declaring file's usings resolve: the field has to stay where those
+    ///     A [Sync] type and initializer only the declaring file's usings resolve: the field has to stay where those
     ///     usings apply.
     /// </summary>
     [Fact]
@@ -124,7 +124,7 @@ public class SyncAndRpcTests
 
                                    public partial class Ship
                                    {
-                                       [Sync(SyncFlags.FromOwner)] public Rank Rank { get; set; } = Rank.Captain;
+                                       [Sync] public Rank Rank { get; set; } = Rank.Captain;
 
                                        [Rpc.Broadcast] public void Promote(Rank to) => Rank = to;
                                    }
@@ -142,9 +142,9 @@ public class SyncAndRpcTests
                                           using Prowl.Runtime;
                                           using Prowl.Runtime.Networking;
 
-                                          public class Holder<T> : Component
+                                          public class Holder<T> : Prowl.Runtime.Networking.NetworkBehaviour
                                           {
-                                              [Sync(SyncFlags.FromOwner)] public int Count { get; set; } = 3;
+                                              [Sync] public int Count { get; set; } = 3;
 
                                               [Rpc.Broadcast] public void Bump(int by) => Count += by;
                                           }
@@ -167,7 +167,7 @@ public class SyncAndRpcTests
             using Prowl.Runtime;
             using Prowl.Runtime.Networking;
 
-            public class Bell : Component
+            public class Bell : Prowl.Runtime.Networking.NetworkBehaviour
             {
                 public string Heard = "";
                 [Rpc.Target] public void Whisper(NetPeer target, string text) => Heard = text;
@@ -188,7 +188,7 @@ public class SyncAndRpcTests
     [Theory]
     [InlineData("[Rpc.Target] public void Whisper(string text) { }")]
     public void ATargetRpcNeedsAnInstanceMethodTakingItsPeerFirst(string method) =>
-        Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Bell : Component { " + method + " }").Errors,
+        Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Bell : Prowl.Runtime.Networking.NetworkBehaviour { " + method + " }").Errors,
             e => e.Id == "PROWLNET011");
 
     [Fact]
@@ -201,7 +201,7 @@ public class SyncAndRpcTests
 
             public struct Point { public int X, Y; }
 
-            public class Board : Component
+            public class Board : Prowl.Runtime.Networking.NetworkBehaviour
             {
                 [Sync] public int[] Scores { get; set; }
                 [Sync] public List<Point> Path { get; set; }
@@ -212,19 +212,52 @@ public class SyncAndRpcTests
     }
 
     [Fact]
-    public void ANetworkCollectionCannotGoToTheOwnerAlone() =>
-        Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Bag : Component { [Sync(SyncFlags.ToOwner)] public NetList<int> Items { get; } = new(); }").Errors,
-            e => e.Id == "PROWLNET007");
+    public void ANetworkCollectionCanBeOnABehaviourOnlyItsOwnerReceives() =>
+        Assert.Empty(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Bag : Prowl.Runtime.Networking.NetworkBehaviour { [Sync] public NetList<int> Items { get; } = new(); public override void OnStartServer() => SyncMode = SyncMode.Owner; }").Errors);
+
+    [Fact]
+    public void ServerAndClientMethodsReturnAtOnceWhereTheyDontRun()
+    {
+        Assembly game = Scripts.Compile("""
+                                        using System.Collections.Generic;
+                                        using Prowl.Runtime.Networking;
+
+                                        public class Door : NetworkBehaviour
+                                        {
+                                            public int Opened;
+                                            [Server] public int Open() { Opened++; return 5; }
+                                            [Client(Quiet = true)] public void Shake() => Opened += 10;
+                                            [Server] public IEnumerable<int> Hinges() { yield return 1; }
+                                        }
+                                        """);
+        Type door = game.GetType("Door")!;
+        Scripts.WithComponent(door, component =>
+        {
+            // Without a session the object is on no server and no client, so neither runs.
+            Assert.Equal(0, door.GetMethod("Open")!.Invoke(component, []));
+            door.GetMethod("Shake")!.Invoke(component, []);
+            Assert.Empty((IEnumerable<int>)door.GetMethod("Hinges")!.Invoke(component, [])!);
+            Assert.Equal(0, door.GetField("Opened")!.GetValue(component));
+        });
+    }
+
+    [Theory]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Server] public void F() { } }")]
+    [InlineData("public class A : Prowl.Runtime.Networking.NetworkBehaviour { [Prowl.Runtime.Networking.Server] public static void F() { } }")]
+    [InlineData("public class A : Prowl.Runtime.Networking.NetworkBehaviour { [Prowl.Runtime.Networking.Server, Prowl.Runtime.Networking.Client] public void F() { } }")]
+    [InlineData("public class A : Prowl.Runtime.Networking.NetworkBehaviour { [Prowl.Runtime.Networking.Server, Prowl.Runtime.Networking.Rpc.Broadcast] public void F() { } }")]
+    public void AGuardWhereItCantWorkIsAnError(string script) =>
+        Assert.Contains(Scripts.Build(script).Errors, e => e.Id == "PROWLNET015");
 
     [Fact]
     public void AnArrayOfAnUnsendableTypeIsReported() =>
-        Assert.NotEmpty(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Board : Component { [Sync] public System.IO.Stream[] Streams { get; set; } }").Errors);
+        Assert.NotEmpty(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Board : Prowl.Runtime.Networking.NetworkBehaviour { [Sync] public System.IO.Stream[] Streams { get; set; } }").Errors);
 
     [Fact]
     public void RpcsNamedThroughAGlobalUsingStaticAreNetworked()
     {
         Type bell = Scripts.Compile("global using static Prowl.Runtime.Networking.Rpc;",
-                "public class Bell : Prowl.Runtime.Component { [Broadcast] public void Ring() { } [Host] public void Ask() { } [Owner] public void Tell() { } }")
+                "public class Bell : Prowl.Runtime.Networking.NetworkBehaviour { [Broadcast] public void Ring() { } [Host] public void Ask() { } [Owner] public void Tell() { } }")
             .GetType("Bell")!;
         Scripts.WithComponent(bell, component =>
         {
@@ -239,7 +272,7 @@ public class SyncAndRpcTests
     public void AFileWhoseOnlyNetworkingIsATargetRpcIsNetworked()
     {
         Type bell = Scripts.Compile("global using static Prowl.Runtime.Networking.Rpc;",
-                "public class Bell : Prowl.Runtime.Component { [Target] public void Whisper(Prowl.Courier.NetPeer to, int code) { } }")
+                "public class Bell : Prowl.Runtime.Networking.NetworkBehaviour { [Target] public void Whisper(Prowl.Courier.NetPeer to, int code) { } }")
             .GetType("Bell")!;
         Scripts.WithComponent(bell, component => Assert.True(NetworkMembers.Of(component).Any));
     }
@@ -253,7 +286,7 @@ public class SyncAndRpcTests
                                     using Prowl.Runtime.Networking;
                                     using Prowl.Courier;
 
-                                    public class Bell : Component { [Rpc.Target] public void Whisper(NetPeer? to, int code) { } }
+                                    public class Bell : Prowl.Runtime.Networking.NetworkBehaviour { [Rpc.Target] public void Whisper(NetPeer? to, int code) { } }
                                     """).GetType("Bell")!;
         Scripts.WithComponent(bell, component => Assert.True(NetworkMembers.Of(component).Any));
     }
@@ -273,7 +306,7 @@ public class SyncAndRpcTests
                                                     static (w, v) => w.WriteInt64(v.Ticks), static (ref NetReader r) => new DateTime(r.ReadInt64()));
                                             }
 
-                                            public class Clock : Component
+                                            public class Clock : Prowl.Runtime.Networking.NetworkBehaviour
                                             {
                                                 [Sync] public DateTime Started { get; set; }
                                                 [Rpc.Broadcast] public void Stamp(DateTime at) { }
@@ -282,7 +315,7 @@ public class SyncAndRpcTests
         Assert.NotNull(assembly.GetType("Clock"));
 
         // One nobody registers is still refused.
-        Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Clock : Component { [Sync] public System.DateTime Started { get; set; } }").Errors,
+        Assert.Contains(Scripts.Build("using Prowl.Runtime; using Prowl.Runtime.Networking; public class Clock : Prowl.Runtime.Networking.NetworkBehaviour { [Sync] public System.DateTime Started { get; set; } }").Errors,
             e => e.Id == "PROWLNET005");
     }
 
@@ -295,16 +328,16 @@ public class SyncAndRpcTests
                                         using Prowl.Runtime.Networking;
                                         using Prowl.Courier;
 
-                                        public class Full : Component { {{properties}} }
+                                        public class Full : Prowl.Runtime.Networking.NetworkBehaviour { {{properties}} }
                                         """, """
                                         using Prowl.Runtime;
                                         using Prowl.Runtime.Networking;
                                         using Prowl.Courier;
 
-                                        public class Over : Full, INetworkSerialize
+                                        public class Over : Full
                                         {
-                                            public void OnSerialize(NetWriter writer, bool initial) { }
-                                            public void OnDeserialize(ref NetReader reader, bool initial) { }
+                                            public override void OnSerialize(NetWriter writer, bool initial) { }
+                                            public override void OnDeserialize(ref NetReader reader, bool initial) { }
                                         }
                                         """).Errors, e => e.Id == "PROWLNET012");
     }
@@ -316,7 +349,7 @@ public class SyncAndRpcTests
                                             using Prowl.Runtime;
                                             using Prowl.Runtime.Networking;
 
-                                            public class Radio : Component
+                                            public class Radio : Prowl.Runtime.Networking.NetworkBehaviour
                                             {
                                                 [Rpc.Broadcast(Channel = 2)] public void Chat(string text) { }
                                                 [Rpc.Host(RpcFlags.Unreliable, Channel = 1)] public void Ping() { }
@@ -337,7 +370,7 @@ public class SyncAndRpcTests
     [Fact]
     public void RpcPrologueDoesNotCollideWithTheMethodsOwnNames() =>
         Assert.NotNull(Scripts.Compile("""
-                                       public class StatsNames : Prowl.Runtime.Component
+                                       public class StatsNames : Prowl.Runtime.Networking.NetworkBehaviour
                                        {
                                            [Prowl.Runtime.Networking.Rpc.Broadcast]
                                            public void WithParameter(int __rpc_stats) { }
@@ -355,7 +388,7 @@ public class SyncAndRpcTests
                                             using Prowl.Runtime;
                                             using Prowl.Runtime.Networking;
 
-                                            public class Gun : Component
+                                            public class Gun : Prowl.Runtime.Networking.NetworkBehaviour
                                             {
                                                 [Rpc.Broadcast] public virtual void Fire(int power) { }
                                             }
@@ -387,7 +420,7 @@ public class SyncAndRpcTests
                                             using Prowl.Runtime;
                                             using Prowl.Runtime.Networking;
 
-                                            public class Gun : Component
+                                            public class Gun : Prowl.Runtime.Networking.NetworkBehaviour
                                             {
                                                 public int Fired;
                                                 [Rpc.Host(RpcFlags.AnyCaller)] public virtual void Fire(int power) => Fired++;
@@ -422,7 +455,7 @@ public class SyncAndRpcTests
                                               using Prowl.Runtime;
                                               using Prowl.Runtime.Networking;
 
-                                              public class Gun : Component
+                                              public class Gun : Prowl.Runtime.Networking.NetworkBehaviour
                                               {
                                                   public int Fired, Extra;
                                                   [Rpc.Broadcast] public virtual void Fire(int power) => Fired++;

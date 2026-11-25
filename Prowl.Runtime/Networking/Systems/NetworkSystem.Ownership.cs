@@ -25,12 +25,12 @@ internal sealed partial class NetworkSystem
 
         if (session.TryGetPeer(entry.Owner, out NetPeer? owner) && !owner!.IsLocal && Sees(entry, owner))
         {
-            Sync.QueueMembers(owner, entry, static sync => (sync.Flags & SyncFlags.ToOwner) != 0);
+            Sync.QueueMembers(owner, entry, SyncFlags.ToOwner);
         }
 
         if (session.TryGetPeer(previous, out NetPeer? last) && !last!.IsLocal && Sees(entry, last))
         {
-            Sync.QueueMembers(last, entry, static sync => (sync.Flags & SyncFlags.FromOwner) != 0);
+            Sync.QueueMembers(last, entry, SyncFlags.FromOwner);
         }
     }
 

@@ -300,8 +300,6 @@
   "network.visibility.force_hidden": "所有者のみ",
   "network.visibility.host_only": "スポーン済みのオブジェクトを誰が受け取るかを変更できるのはホストだけです。",
   "network.sync_transform": "トランスフォームを同期",
-  "network.component_interval": "コンポーネントの送信間隔 (ティック)",
-  "network.component_interval.desc": "各コンポーネントが変更された [Sync] 値を送る間隔をティック数で指定します。1 で毎ティック送信します。",
   "network.sync_transform.desc": "制御者が位置・回転・スケールを他の全員に送ります。",
   "network.live": "ライブ",
   "network.not_spawned": "スポーンされていません。ホストは、保存済みのシーン、プレハブ、またはファクトリーが作るものをスポーンします。",

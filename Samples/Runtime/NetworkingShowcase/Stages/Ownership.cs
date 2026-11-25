@@ -14,13 +14,13 @@ namespace NetworkingShowcase;
 ///     hands the rover to a client. Only the controller moves it and sets its speed; everyone else follows its
 ///     transform, smoothed. Its color says who drives it, worked out on each peer from the owner.
 /// </summary>
-public class Rover : Component
+public class Rover : NetworkBehaviour
 {
     private readonly Tint _tint = new();
     [SerializeField] public Float3 Center;
     [SerializeField] public float Radius = 3f;
 
-    [Sync(SyncFlags.FromOwner)] public float Speed { get; set; } = 1f;
+    [Sync] public float Speed { get; set; } = 1f;
 
     public override void Update()
     {
@@ -44,7 +44,7 @@ public class Rover : Component
 ///     mouse and it asks the host for control, through a host RPC; once the host hands it over, this window moves
 ///     it and every other follows. Whoever grabs it next takes it over. <see cref="Home" /> is where it goes back to.
 /// </summary>
-public class Grabbable : Component
+public class Grabbable : NetworkBehaviour
 {
     private readonly Tint _tint = new();
     public Float3 Home;

@@ -10,7 +10,7 @@ namespace NetworkingShowcase;
 ///     Which station the host is showing, as a [Sync] value only the host sets. Clients go where it goes, so the
 ///     host walks everyone through the showcase.
 /// </summary>
-public class Tour : Component
+public class Tour : NetworkBehaviour
 {
     [Sync] public int Station { get; set; }
 }

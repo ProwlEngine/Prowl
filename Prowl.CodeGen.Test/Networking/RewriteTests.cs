@@ -113,11 +113,11 @@ public class RewriteTests
         SyntaxTree first = Scripts.Generate(a, b).Trees[0];
         Assert.Same(first, Scripts.Generate(a, b).Trees[0]);
 
-        // A new [Sync(SyncFlags.FromOwner)] in another part leaves this part's rewrite as it was, so its tree is reused.
+        // A new [Sync] in another part leaves this part's rewrite as it was, so its tree is reused.
         SyntaxTree b2 =
             Scripts.Parse(
                 TestScripts.ShipPartB.Replace("public int Ammo",
-                    "public int Ammo2 { get; set; } [Sync(SyncFlags.FromOwner)] public int Ammo"), "B.cs");
+                    "public int Ammo2 { get; set; } [Sync] public int Ammo"), "B.cs");
         Assert.Same(first, Scripts.Generate(a, b2).Trees[0]);
     }
 
@@ -127,7 +127,7 @@ public class RewriteTests
         Assert.NotNull(Scripts.Compile("""
             using Prowl.Runtime;
             using Prowl.Runtime.Networking;
-            public class Gun : Component
+            public class Gun : Prowl.Runtime.Networking.NetworkBehaviour
             {
                 [Rpc.Broadcast] public void Fire(int shots) => throw new System.InvalidOperationException();
             }

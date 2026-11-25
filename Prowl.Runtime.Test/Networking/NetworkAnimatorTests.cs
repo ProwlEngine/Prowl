@@ -49,7 +49,7 @@ public class NetworkAnimatorTests
         replica.Animator.SetTarget("Hand", hand);
         source.Network.CaptureState();
         Copy(source.Network, replica.Network, initial: true);
-        replica.Network.OnNetworkSpawn();
+        replica.Network.OnStartClient();
         replica.Network.ApplyState();
         Assert.Equal(4.5f, replica.Animator.GetFloat("Speed"));
         Assert.True(replica.Animator.GetBool("Crouch"));
@@ -70,7 +70,7 @@ public class NetworkAnimatorTests
         using var replicaRoot = replica.Root;
         source.Animator.SetTrigger("Jump");
         Copy(source.Network, replica.Network, initial: true);
-        replica.Network.OnNetworkSpawn();
+        replica.Network.OnStartClient();
         replica.Network.ApplyState();
         Assert.False(replica.Animator.GetBool("Jump"));
 
@@ -101,7 +101,7 @@ public class NetworkAnimatorTests
         // A trigger fired before this peer had the object is not played.
         replica.Network.ApplyState();
         Assert.False(replica.Animator.GetBool("Jump"));
-        replica.Network.OnNetworkSpawn();
+        replica.Network.OnStartClient();
         replica.Network.ApplyState();
         Assert.False(replica.Animator.GetBool("Jump"));
 
@@ -121,7 +121,7 @@ public class NetworkAnimatorTests
         source.Animator.SetFloat("Speed", 7.5f);
         source.Network.CaptureState();
         Copy(source.Network, replica.Network, initial: true);
-        replica.Network.OnNetworkSpawn();
+        replica.Network.OnStartClient();
         var child = new GameObject("New model");
         child.SetParent(replica.Root, false);
         var replacement = child.AddComponent<Animator>();
@@ -141,7 +141,7 @@ public class NetworkAnimatorTests
         source.Animator.SetFloat("Speed", 4.5f);
         source.Network.CaptureState();
         Copy(source.Network, replica.Network, initial: true);
-        replica.Network.OnNetworkSpawn();
+        replica.Network.OnStartClient();
         replica.Network.ApplyState();
         Assert.Equal(4.5f, replica.Animator.GetFloat("Speed"));
 

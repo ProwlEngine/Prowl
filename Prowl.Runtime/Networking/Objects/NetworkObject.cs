@@ -13,9 +13,11 @@ namespace Prowl.Runtime.Networking;
 internal sealed partial class NetworkObject(NetworkSystem scene, GameObject gameObject)
 {
     public readonly HashSet<Component> AuthorityListeners = new();
+    public readonly HashSet<Component> ClientListeners = new();
     public readonly HashSet<Component> SpawnListeners = new();
     internal readonly NetworkSystem System = scene;
     public uint Generation;
+    /// <summary>True while this peer owns it, as the authority callbacks last saw.</summary>
     public bool HasLocalAuthority;
 
     /// <summary>Host: the clients that do not have this object, or null when they all do.</summary>

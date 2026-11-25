@@ -235,8 +235,8 @@ public partial class NetworkingTests
                 Assert.NotSame(door, fresh);
                 Assert.True(fresh.Network.Active);
                 Assert.False(fresh.Persistent);
-                Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
-                Assert.Equal(new[] { "spawn", "authority gained" }, fresh.GetComponent<NetworkLifecycleListener>()!.Events);
+                Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
+                Assert.Equal(new[] { "spawn" }, fresh.GetComponent<NetworkLifecycleListener>()!.Events);
             }
             finally { Networking.Networking.Shutdown(); }
         }

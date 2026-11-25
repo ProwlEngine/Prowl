@@ -326,7 +326,7 @@ internal sealed partial class NetworkSystem
             // A spawn is written for everyone, so what only the owner gets follows to it.
             if (peer.Id == entry.Owner)
             {
-                Sync.QueueMembers(peer, entry, static sync => (sync.Flags & SyncFlags.ToOwner) != 0);
+                Sync.QueueMembers(peer, entry, SyncFlags.ToOwner);
             }
         }
     }

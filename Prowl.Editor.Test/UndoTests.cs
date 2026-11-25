@@ -12,6 +12,10 @@ using Xunit;
 namespace Prowl.Editor.Test;
 
 /// <summary>A simple component with undoable fields.</summary>
+public sealed class UndoNetworked : Prowl.Runtime.Networking.NetworkBehaviour
+{
+}
+
 public sealed class UndoComp : Component
 {
     public int Value;
@@ -866,6 +870,24 @@ public class UndoTests : EditorTestHarness
         Undo.FlushUndoRecordObjects();
 
         Assert.False(Undo.CanUndo);
+    }
+
+    [Fact]
+    public void AddingANetworkBehaviourMakesTheObjectNetworkedInTheSameStep()
+    {
+        Scene scene = OpenScene();
+        GameObject root = Add(scene, "Root");
+        GameObject child = Add(scene, "Child", root);
+        Undo.AddComponent<UndoNetworked>(root);
+        Undo.AddComponent<UndoNetworked>(child);
+        Undo.FlushUndoRecordObjects();
+        Assert.True(root.Network.Networked);
+        Assert.False(child.Network.Networked);
+
+        while (Undo.CanUndo) Undo.PerformUndo();
+        GameObject restored = scene.Objects.Single(o => o.Name == "Root");
+        Assert.False(restored.Network.Networked);
+        Assert.Null(restored.GetComponent<UndoNetworked>());
     }
 
     [Fact]

@@ -9,11 +9,11 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-public class VisibilityListener : Component, INetworkEvents
+public class VisibilityListener : NetworkBehaviour
 {
     [SerializeIgnore] public NetworkDespawnReason? DespawnReason;
 
-    public void OnNetworkDespawn() => DespawnReason = GameObject.Network.DespawnReason;
+    public override void OnStopClient() => DespawnReason = GameObject.Network.DespawnReason;
 }
 
 /// <summary>Kept from every client by <see cref="ManualInterest" /> until it is shown to one.</summary>
@@ -60,11 +60,11 @@ public static class ManualVisibility
     }
 }
 
-public class ShowOnSpawn : Component, INetworkEvents
+public class ShowOnSpawn : NetworkBehaviour
 {
     [SerializeIgnore] public static NetPeer? Peer;
 
-    public void OnNetworkSpawn()
+    public override void OnStartClient()
     {
         if (Peer != null) GameObject.Network.ShowTo(Peer);
     }
@@ -80,7 +80,7 @@ public class VisibilityPeerListener : Component, INetworkListener
 }
 
 /// <summary>A host RPC taking a GameObject, as the script compiler generates it.</summary>
-public class PointerTestComponent : Component
+public class PointerTestComponent : NetworkBehaviour
 {
     public const uint PointId = 501;
 
@@ -570,7 +570,7 @@ public partial class NetworkingTests
         using VisibilitySession session = VisibilityHost();
         GameObject lever = CreateGameObject("Lever");
         PointerTestComponent pointer = lever.AddComponent<PointerTestComponent>();
-        SyncReferenceTestComponent holder = lever.AddComponent<SyncReferenceTestComponent>();
+        SyncReferenceTestComponent holder = lever.AddComponent<SyncReferenceTestComponent>().OwnerWritten();
         session.World.Add(lever);
         lever.SpawnBuilt(session.BobHere);
         GameObject crate = HiddenCrate(session.World);

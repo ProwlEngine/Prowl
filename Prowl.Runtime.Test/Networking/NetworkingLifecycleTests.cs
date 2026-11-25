@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-public class NetworkLifecycleListener : Component, INetworkEvents
+public class NetworkLifecycleListener : NetworkBehaviour
 {
     [SerializeIgnore] public List<string> Events = new();
     [SerializeIgnore] public Action? SpawnAction;
@@ -20,7 +20,7 @@ public class NetworkLifecycleListener : Component, INetworkEvents
     [SerializeIgnore] public bool StructuralEditApplied;
     [SerializeIgnore] public bool? WasNetworkedAtDespawn;
     public static Action<NetworkLifecycleListener>? SpawnedOnClient;
-    public void OnNetworkSpawn()
+    public override void OnStartClient()
     {
         HealthAtSpawn = GameObject.GetComponent<NetCollectionTestComponent>()?.Health;
         if (TryEditOnSpawn)
@@ -32,15 +32,15 @@ public class NetworkLifecycleListener : Component, INetworkEvents
         SpawnedOnClient?.Invoke(this);
         if (EndSessionOnSpawn) Networking.Networking.Shutdown();
     }
-    public void OnNetworkDespawn()
+    public override void OnStopClient()
     {
         WasNetworkedAtDespawn = GameObject.Network.Active;
         Events.Add("despawn");
         DespawnAction?.Invoke();
     }
-    public void OnNetworkAuthorityGained() => Events.Add("authority gained");
-    public void OnNetworkAuthorityLost() { Events.Add("authority lost"); LostAction?.Invoke(); }
-    public void OnNetworkOwnerChanged(NetPeer? previousOwner, NetPeer? owner) =>
+    public override void OnStartAuthority() => Events.Add("authority gained");
+    public override void OnStopAuthority() { Events.Add("authority lost"); LostAction?.Invoke(); }
+    public override void OnOwnerChanged(NetPeer? previousOwner, NetPeer? owner) =>
         Events.Add($"owner {previousOwner?.Id ?? -1} -> {owner?.Id ?? -1}");
 }
 
@@ -134,7 +134,7 @@ public partial class NetworkingTests
         var (root, listener, network) = LifecycleHost();
         try
         {
-            Assert.Equal(new[] { "spawn", "authority gained" }, listener.Events);
+            Assert.Equal(new[] { "spawn" }, listener.Events);
             listener.Enabled = false;
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.Scene), client);
@@ -142,9 +142,11 @@ public partial class NetworkingTests
             root.Network.AssignOwnership(owner);
             root.Network.AssignOwnership(owner); // No-op.
             root.Network.AssignOwnership(null);
+            NetPeer host = Networking.Networking.Session!.LocalPeer!;
+            root.Network.AssignOwnership(host);
             Networking.Networking.Shutdown();
-            Assert.Equal(new[] { "spawn", "authority gained", "authority lost", $"owner -1 -> {owner.Id}",
-                $"owner {owner.Id} -> -1", "authority gained", "authority lost", "despawn" }, listener.Events);
+            Assert.Equal(new[] { "spawn", $"owner -1 -> {owner.Id}", $"owner {owner.Id} -> -1", $"owner -1 -> {host.Id}",
+                "authority gained", "despawn", "authority lost" }, listener.Events);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -157,7 +159,7 @@ public partial class NetworkingTests
         {
             root.Dispose();
             root.Dispose();
-            Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
+            Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
             Assert.False(listener.WasNetworkedAtDespawn);
         }
         finally { Networking.Networking.Shutdown(); }
@@ -190,7 +192,7 @@ public partial class NetworkingTests
             Scene.Main.ReplaceContent(new SceneContent(), "Next", null);
             Assert.True(root.IsDisposed);
             Assert.True(listener.IsDisposed);
-            Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
+            Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -249,10 +251,10 @@ public partial class NetworkingTests
             NetworkLifecycleListener listener = child.AddComponent<NetworkLifecycleListener>();
             scene.Add(root);
             root.SpawnBuilt();
-            Assert.Equal(new[] { "spawn", "authority gained" }, listener.Events);
+            Assert.Equal(new[] { "spawn" }, listener.Events);
             Assert.NotNull(child.AddComponent<NetTestComponent>());
             root.Destroy(); EngineObject.ProcessDestroyed();
-            Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
+            Assert.Equal(new[] { "spawn", "despawn" }, listener.Events);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -265,9 +267,11 @@ public partial class NetworkingTests
         {
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.Scene), client);
+            NetPeer host = Networking.Networking.Session!.LocalPeer!;
+            root.Network.AssignOwnership(host);
             listener.LostAction = () => Networking.Networking.Shutdown();
             root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
-            Assert.Equal(new[] { "spawn", "authority gained", "authority lost", "despawn" }, listener.Events);
+            Assert.Equal(new[] { "spawn", $"owner -1 -> {host.Id}", "authority gained", "authority lost", "despawn" }, listener.Events);
             Assert.Null(Networking.Networking.Session);
         }
         finally { Networking.Networking.Shutdown(); }
@@ -614,7 +618,8 @@ public partial class NetworkingTests
         GameObject kept = CreateGameObject("Kept");
         kept.AddComponent<KeptAcrossLoadsComponent>();
         kept.AddComponent<NetworkTransform>();
-        NetTestComponent state = kept.AddComponent<NetTestComponent>();
+        NetTestComponent state = kept.AddComponent<NetTestComponent>().OwnerWritten();
+        NetCollectionTestComponent hostSide = kept.AddComponent<NetCollectionTestComponent>();
         kept.Network.Networked = true;
         (state.Health, state.Score) = (3, 1);
         kept.Transform.LocalPosition = new Float3(1, 0, 0);
@@ -634,7 +639,7 @@ public partial class NetworkingTests
             // The owner moved on while the host was loading, and the host's copy of what the owner writes is old.
             here.Health = 77;
             copy.Transform.LocalPosition = new Float3(5, 0, 0);
-            (state.Health, state.Score) = (9, 2);
+            (state.Health, state.Score, hostSide.Health) = (9, 2, 4);
             kept.Transform.LocalPosition = new Float3(2, 0, 0);
             host.JoinSpawns.Clear();
             host.JoinSpawns.Add(RunSpawn(kept, owner: 1));
@@ -644,7 +649,8 @@ public partial class NetworkingTests
 
             Assert.Equal(77, here.Health);
             Assert.Equal(new Float3(5, 0, 0), copy.Transform.LocalPosition);
-            Assert.Equal(2, here.Score);
+            Assert.Equal(1, here.Score);
+            Assert.Equal(4, copy.GetComponent<NetCollectionTestComponent>()!.Health);
 
             // The host may have missed what the owner wrote while it was loading, so the owner says it again.
             Pump(() => host.SyncInt(here.Identifier, NetTestComponent.HealthSlot) == 77 && host.Has(FakePeer.Transform), host);

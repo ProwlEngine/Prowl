@@ -15,7 +15,7 @@ namespace Prowl.Runtime.Networking;
 ///     the object runs, is not networked. A static object, or one with every channel off, sends nothing.
 /// </summary>
 [AddComponentMenu("Networking/Network Transform")]
-public sealed class NetworkTransform : Component
+public sealed class NetworkTransform : NetworkBehaviour
 {
     /// <summary>Send the position.</summary>
     public bool SyncPosition = true;
@@ -28,9 +28,6 @@ public sealed class NetworkTransform : Component
 
     /// <summary>Blend between received poses. Off, the object jumps to each one as it arrives.</summary>
     public bool Interpolate = true;
-
-    /// <summary>How many ticks apart the transform goes out while it moves, from 1 (every tick) to 255.</summary>
-    [Range(1, 255)] public int SendInterval = 1;
 
     /// <summary>
     ///     The object whose transform this sends: its own when not set, or a child of the networked object. It
@@ -77,7 +74,11 @@ public sealed class NetworkTransform : Component
     /// <summary>False for a static object, or with every channel off: nothing to send.</summary>
     internal bool Syncs => Channels != 0 && Moved.IsValid() && !Moved.IsStatic;
 
-    internal int Interval => Math.Clamp(SendInterval, 1, byte.MaxValue);
+    /// <summary>Ticks apart the pose goes out while it moves: <see cref="NetworkBehaviour.SyncInterval" /> in ticks, rounded, at least 1.</summary>
+    internal int Interval =>
+        float.IsFinite(SyncInterval) && SyncInterval > 0
+            ? (int)Math.Clamp(Math.Round(SyncInterval / NetworkSystem.TickInterval), 1, byte.MaxValue)
+            : 1;
 
     /// <summary>Sets the channels it syncs on the object it moves, leaving the others as they are.</summary>
     internal void Apply(Float3 position, Quaternion rotation, Float3 scale)

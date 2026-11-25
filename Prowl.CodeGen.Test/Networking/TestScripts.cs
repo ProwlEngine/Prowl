@@ -6,16 +6,16 @@ namespace Prowl.CodeGen.Test.Networking;
 /// <summary>Game scripts the networking tests compile, each using most of what one part of it does.</summary>
 internal static class TestScripts
 {
-    /// <summary>[Sync(SyncFlags.FromOwner)] and RPCs, laid out over lines in every way the rewrite has to keep.</summary>
+    /// <summary>[Sync] and RPCs, laid out over lines in every way the rewrite has to keep.</summary>
     public const string Ship = """
                                using System.Collections.Generic;
                                using Prowl.Runtime;
                                using Prowl.Runtime.Networking;
                                using Prowl.Vector;
 
-                               public class Ship : Component
+                               public class Ship : Prowl.Runtime.Networking.NetworkBehaviour
                                {
-                                   [Sync(SyncFlags.FromOwner)] public int Health { get; set; } = 100;
+                                   [Sync] public int Health { get; set; } = 100;
 
                                    [Sync]
                                    public string Callsign
@@ -43,9 +43,9 @@ internal static class TestScripts
                                    public void SetCallsign(string value) => Callsign = value;
 
                                    #region Nested
-                                   public class Turret : Component
+                                   public class Turret : Prowl.Runtime.Networking.NetworkBehaviour
                                    {
-                                       [Sync(SyncFlags.FromOwner)] public float Angle { get; set; }
+                                       [Sync] public float Angle { get; set; }
                                    }
                                    #endregion
                                }
@@ -60,9 +60,9 @@ internal static class TestScripts
 
                                     namespace Fleet;
 
-                                    public partial class Ship : Component
+                                    public partial class Ship : Prowl.Runtime.Networking.NetworkBehaviour
                                     {
-                                        [Sync(SyncFlags.FromOwner)] public int Health { get; set; } = 100;
+                                        [Sync] public int Health { get; set; } = 100;
 
                                         [Rpc.Broadcast] public void Fire(int power) => Fired += power;
 
@@ -133,26 +133,26 @@ internal static class TestScripts
                                     public static Packed Read(ref NetReader reader) => new() { Value = (byte)(reader.ReadByte() - 1) };
                                 }
 
-                                public class Fleet : Component
+                                public class Fleet : Prowl.Runtime.Networking.NetworkBehaviour
                                 {
                                     [Sync, Change(nameof(OnHealthChanged))] public int Health { get; set; } = 100;
 
                                     [Sync, Change("Ping")] public int Shield { get; set; }
 
-                                    [Sync(SyncFlags.FromOwner)] public NetList<Crew> Crew { get; }
+                                    [Sync] public NetList<Crew> Crew { get; }
                                         = new(); // MARKER-CREW
 
                                     [Sync] public NetDictionary<string, Loadout> Kits { get; } = new();
 
-                                    [Sync(SyncFlags.FromOwner)] public NetSet<Packed> Codes { get; } = new();
+                                    [Sync] public NetSet<Packed> Codes { get; } = new();
 
-                                    [Sync(SyncFlags.FromOwner)] public Loadout Kit { get; set; }
+                                    [Sync] public Loadout Kit { get; set; }
 
-                                    [Sync(SyncFlags.FromOwner)] public Badge Badge { get; set; }
+                                    [Sync] public Badge Badge { get; set; }
 
-                                    [Sync(SyncFlags.FromOwner)] public Weapon Gear { get; set; }
+                                    [Sync] public Weapon Gear { get; set; }
 
-                                    [Sync(SyncFlags.FromOwner)] public NetList<ITrinket> Trinkets { get; } = new();
+                                    [Sync] public NetList<ITrinket> Trinkets { get; } = new();
 
                                     public List<string> Log = new();
 

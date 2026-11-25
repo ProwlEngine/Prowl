@@ -15,7 +15,7 @@ namespace NetworkingShowcase;
 ///     host edits the bars; anyone can vote, through a host RPC that counts votes in a dictionary and voters in a
 ///     set. Every peer rebuilds its bars from the <c>Changed</c> events, and a late joiner gets the whole lot.
 /// </summary>
-public class Board : Component
+public class Board : NetworkBehaviour
 {
     private readonly List<string> _events = [];
     private readonly List<GameObject> _shown = [];

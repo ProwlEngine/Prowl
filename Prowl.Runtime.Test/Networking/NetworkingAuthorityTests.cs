@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Test;
 ///     What the script compiler generates for <c>[Rpc.Host(RpcFlags.AnyCaller)] public void Knock(int)</c> and
 ///     <c>[Rpc.Host] public void Ring(int)</c>.
 /// </summary>
-public class OpenDoorTestComponent : Component
+public class OpenDoorTestComponent : NetworkBehaviour
 {
     public const uint KnockId = 901, RingId = 902;
     public readonly List<int> Knocks = new(), Rings = new();
@@ -69,11 +69,12 @@ public partial class NetworkingTests
     }
 
     [Fact]
-    public void AnOwnerWritesOnlyTheSyncValuesThatTakeFromOwner()
+    public void AnOwnerWritesOnlyItsClientToServerBehaviours()
     {
         Scene scene = CreateScene();
         GameObject ship = CreateGameObject("Ship");
-        NetTestComponent component = ship.AddComponent<NetTestComponent>();
+        NetTestComponent component = ship.AddComponent<NetTestComponent>().OwnerWritten();
+        NetCollectionTestComponent hostSide = ship.AddComponent<NetCollectionTestComponent>();
         scene.Add(ship);
         MakeCurrent(scene);
         LocalNetwork network = new();
@@ -85,11 +86,11 @@ public partial class NetworkingTests
             ship.SpawnBuilt(Networking.Networking.Session!.Peers.Single(p => p.Name == "alice"));
             Pump(() => alice.Has(FakePeer.Spawn), alice);
 
-            alice.SendSync(component.Identifier, NetTestComponent.ScoreSlot, 7);
+            alice.SendSync(hostSide.Identifier, NetCollectionTestComponent.HealthSlot, 7);
             alice.SendSync(component.Identifier, NetTestComponent.HealthSlot, 5);
             Pump(() => component.Health == 5, alice);
             PumpFor(5, alice);
-            Assert.Equal(0, component.Score);
+            Assert.Equal(100, hostSide.Health);
         }
         finally { Networking.Networking.Shutdown(); }
     }
@@ -126,7 +127,7 @@ public partial class NetworkingTests
             copy.Health = 5;
             copy.Health = 6;
             Assert.Equal(100, copy.Health);
-            Assert.Single(warnings, w => w.Contains("Health") && w.Contains("doesn't control it"));
+            Assert.Single(warnings, w => w.Contains("Health") && w.Contains("without authority"));
         }
         finally
         {

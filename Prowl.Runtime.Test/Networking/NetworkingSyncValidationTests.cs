@@ -145,7 +145,7 @@ public partial class NetworkingTests
             Pump(() => owner.IsReady && observer.IsReady, owner, observer);
             NetPeer peer = Networking.Networking.Session!.Peers.Single(p => p.Name == "owner");
             GameObject root = CreateGameObject();
-            NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>();
+            NetCollectionTestComponent component = root.AddComponent<NetCollectionTestComponent>().OwnerWritten();
             scene.Add(root); root.SpawnBuilt(peer);
             GameObject foreign = CreateGameObject();
             NetCollectionTestComponent unauthorized = foreign.AddComponent<NetCollectionTestComponent>();
