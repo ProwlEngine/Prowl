@@ -317,9 +317,8 @@ public static class XR
             return;
         }
 
-        // The window presenting with vsync would hold back the frames the headset paces
-        bool vsync = Application.VSync && !Session.IsPacingFrames;
-        if (Graphics.VSync != vsync) Graphics.VSync = vsync;
+        // Off doesn't wait for a refresh, so the window can't hold back the frames the headset paces
+        Graphics.VSync = Session.IsPacingFrames ? VSyncMode.Off : Application.VSync;
     }
 
     /// <summary>Hands the frame's eyes to the headset. Runs after everything for the frame has been drawn.</summary>
