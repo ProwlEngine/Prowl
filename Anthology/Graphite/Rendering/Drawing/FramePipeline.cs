@@ -113,6 +113,7 @@ internal sealed partial class FramePipeline : IDisposable
         Globals = globals;
         DrawPrograms = programs;
         Programs = new ProgramCache(device, compiler, globals, programs, report, policy, _retired.Add);
+        resources.ShadingModels.Retire = _retired.Add;
         programs.Freed += Programs.Drop;
         _graph = new FrameGraph(device, "Graphite");
         BuiltIns = FeatureSelection.BuiltIns(resources);

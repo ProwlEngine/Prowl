@@ -123,8 +123,6 @@ internal static class ShadingModelLibrary
 /// </summary>
 public sealed class ShadingModels : IDisposable
 {
-    private const int RetireFrames = 8;
-
     private static readonly string[] s_shipped = ["ClearCoat", "Cloth", "Subsurface", "Hair", "Eye"];
     private static readonly Regex s_light = new(@"\bvec3\s+Model_Light\s*\("), s_ambient = new(@"\bvec3\s+Model_Ambient\s*\("),
         s_unpack = new(@"\bvoid\s+Model_Unpack\s*\(");
@@ -135,7 +133,6 @@ public sealed class ShadingModels : IDisposable
     private readonly BlendStateDescription _blend;
     private readonly object _lock = new();
     private readonly List<ShadingModel> _models = new();
-    private readonly List<(FullscreenProgram Program, int Frames)> _retired = new();
     private readonly HashSet<ShadingModel> _broken = new();
     private readonly Action<RendererError>? _report;
     private FullscreenProgram? _pending;
@@ -164,6 +161,9 @@ public sealed class ShadingModels : IDisposable
         _source = Source(out _lit);
         Program = Create(_source, _report);
     }
+
+    /// <summary>Takes a program views drew with until now, to dispose once no frame in flight draws with it.</summary>
+    internal Action<IDisposable>? Retire { get; set; }
 
     /// <summary>The lighting program in use. Render thread.</summary>
     internal FullscreenProgram Program { get; private set; }
@@ -235,17 +235,6 @@ public sealed class ShadingModels : IDisposable
     /// </summary>
     internal bool Update()
     {
-        for (int i = _retired.Count - 1; i >= 0; i--)
-        {
-            if (_retired[i].Frames > 1)
-            {
-                _retired[i] = (_retired[i].Program, _retired[i].Frames - 1);
-                continue;
-            }
-            _retired[i].Program.Dispose();
-            _retired.RemoveAt(i);
-        }
-
         string? source = null;
         ShadingModel[] models = [];
         lock (_lock)
@@ -290,7 +279,10 @@ public sealed class ShadingModels : IDisposable
         }
         if (!ready)
             return false;
-        _retired.Add((Program, RetireFrames));
+        if (Retire is { } retire)
+            retire(Program);
+        else
+            Program.Dispose();
         Program = _pending;
         (_source, _lit) = (_pendingSource, _pendingModels);
         _pending = null;
@@ -357,8 +349,5 @@ public sealed class ShadingModels : IDisposable
     {
         Program.Dispose();
         _pending?.Dispose();
-        foreach ((FullscreenProgram program, _) in _retired)
-            program.Dispose();
-        _retired.Clear();
     }
 }
