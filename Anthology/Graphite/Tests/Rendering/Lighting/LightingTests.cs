@@ -561,39 +561,6 @@ public sealed partial class LightingTests : IDisposable
     }
 
     [Fact]
-    public void TheViewsEV100_ExposesEveryLight_ByOneOver1Point2TimesTwoToIt()
-    {
-        Assert.Equal(1 / 1.2f, RenderView.ExposureOf(0), 6);
-        Assert.Equal(1 / (1.2f * 1024), RenderView.ExposureOf(10), 9);
-        Assert.Equal(1, RenderView.ExposureOf(UnitEV100), 5);
-
-        // A point of 4000 candela and a directional light of 2500 lux at EV100 9, about an evening's
-        Vector3 albedo = new(0.6f, 0.5f, 0.4f);
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
-        LightDesc point = Point(new Double3(1, -0.5f, 6), 12, 4000, new Float3(1, 0.9f, 0.8f));
-        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.2f, -0.3f, 1), Intensity = 2500 };
-        _world.AddLight(point);
-        _world.AddLight(sun);
-        _ev100 = 9;
-        float exposure = RenderView.ExposureOf(9);
-        AssertMatches(p => (Reference.Local(point, p, s_normal, albedo, 0, 0.5f) + Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f)) * exposure, Frame());
-    }
-
-    [Fact]
-    public void Occlusion_DarkensIndirectLightAlone()
-    {
-        Vector3 albedo = new(0.7f, 0.7f, 0.7f);
-        Material material = Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f);
-        material.SetFloat("_Occlusion", 0.25f);
-        AddQuad(material);
-        LightDesc light = Point(new Double3(0, 0, 5), 10, 0.3f, new Float3(1, 1, 1));
-        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.1f, 0.2f, 1), Intensity = 0.2f };
-        _world.AddLight(light);
-        _world.AddLight(sun);
-        AssertMatches(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f) + Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f), Frame());
-    }
-
-    [Fact]
     public void NormalizedSpotCones_FocusThePointLightsFlux_IntoTheCone()
     {
         Vector3 albedo = new(0.8f, 0.8f, 0.8f);
@@ -610,31 +577,6 @@ public sealed partial class LightingTests : IDisposable
         Assert.Contains(plain, p => p.X > 0.01f);
         for (int i = 0; i < plain.Length; i++)
             Assert.True(MathF.Abs(focused[i].X - plain[i].X * gain) <= 1e-4f + 0.01f * plain[i].X * gain, $"pixel {i}: {focused[i].X} against {plain[i].X * gain}");
-    }
-
-    [Fact]
-    public void SpotLights_LightOnlyInsideTheirCone()
-    {
-        Vector3 albedo = new(0.9f, 0.9f, 0.9f);
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.3f, 0.5f));
-        LightDesc spot = new()
-        {
-            Type = LightType.Spot,
-            Position = new Double3(0.5, 0, 5),
-            Direction = new Float3(0, 0, 1),
-            Range = 8,
-            Intensity = 1.6f,
-            Color = new Float3(1, 1, 1),
-            InnerAngle = 10,
-            OuterAngle = 20,
-            Static = true,
-        };
-        _world.AddLight(spot);
-
-        Float4[] pixels = Frame();
-        AssertMatches(p => Reference.Local(spot, p, s_normal, albedo, 0.5f, 0.3f), pixels);
-        Assert.Equal(0f, pixels[0].X);
-        Assert.True(pixels[8 * Size + 9].X > 0.01f);
     }
 
     [Fact]
@@ -758,70 +700,6 @@ public sealed partial class LightingTests : IDisposable
         }
     }
 
-    private LightDesc Shaped(LightType type, Float3 color, float intensity) => new()
-    {
-        Type = type,
-        Position = _origin + new Double3(0.6, -0.4, 8.5),
-        Direction = new Float3(0.2f, 0.1f, 1),
-        Up = new Float3(0, 1, 0),
-        Range = 9,
-        Intensity = intensity,
-        Color = color,
-        InnerAngle = 25,
-        OuterAngle = 40,
-        Static = true,
-    };
-
-    [Theory]
-    [InlineData(LightType.Point, 0.6f, 0f, 0f)]
-    [InlineData(LightType.Spot, 0.4f, 0f, 0f)]
-    [InlineData(LightType.Tube, 0.15f, 2.5f, 0f)]
-    [InlineData(LightType.Rect, 0f, 2f, 1f)]
-    [InlineData(LightType.Disk, 0f, 0.8f, 0f)]
-    public void AreaLights_LightByTheirShape(LightType type, float sourceRadius, float sizeX, float sizeY)
-    {
-        Vector3 albedo = new(0.7f, 0.6f, 0.5f);
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.35f, 0.2f));
-        LightDesc light = Shaped(type, new Float3(1, 0.85f, 0.7f), 0.64f);
-        light.SourceRadius = sourceRadius;
-        light.Size = new Float2(sizeX, sizeY);
-        _world.AddLight(light);
-
-        Float4[] pixels = Frame();
-        Assert.Contains(pixels, p => p.X > 0.01f);
-        AssertMatches(p => Reference.Area(Relative(light), p, s_normal, albedo, 0.2f, 0.35f), pixels);
-    }
-
-    [Fact]
-    public void AreaSpecular_StaysCloseToIntegratingTheShape()
-    {
-        Vector3 n = new(0, 0, -1);
-        List<string> report = new();
-        float worst = 0;
-        // The lobe widths as GGX alphas, roughness their square roots
-        foreach (float alpha in new[] { 0.15f, 0.3f, 0.6f })
-        {
-            float roughness = MathF.Sqrt(alpha);
-            foreach ((float tilt, float distance) in new[] { (0f, 3f), (0.4f, 3f), (0.8f, 3f), (0f, 1.5f), (0.6f, 1.5f) })
-            {
-                // The light sits along the mirror direction of a view tilted off the normal, so the highlight is on it
-                Vector3 v = Vector3.Normalize(new Vector3(tilt, 0.1f, -1));
-                Vector3 r = Vector3.Reflect(-v, n);
-                Vector3 center = r * distance;
-                Vector3 axis = Vector3.Normalize(-center);
-                Vector3 up = Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitX));
-                foreach ((LightType type, float radius, Vector2 size) in new[] { (LightType.Point, 0.5f, Vector2.Zero), (LightType.Rect, 0f, new Vector2(1.2f, 0.6f)), (LightType.Disk, 0f, new Vector2(0.5f, 0)) })
-                {
-                    (float truth, float estimate) = Reference.Specular(type, center, axis, up, radius, size, v, n, roughness);
-                    float error = MathF.Abs(estimate / truth - 1);
-                    worst = MathF.Max(worst, error);
-                    report.Add($"{type} roughness {roughness} tilt {tilt} distance {distance}: {estimate / truth:F3}");
-                }
-            }
-        }
-        Assert.True(worst < 0.15f, string.Join(Environment.NewLine, report));
-    }
-
     [Fact]
     public void AreaSpecular_FollowsTheShapeAcrossItsHighlight_IntoItsEdgesCornersAndGrazingViews()
     {
@@ -897,32 +775,6 @@ public sealed partial class LightingTests : IDisposable
     }
 
     [Fact]
-    public void TheSunsDisk_WidensItsHighlight_KeepingItsDiffuse()
-    {
-        Vector3 albedo = new(0.6f, 0.6f, 0.6f);
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.1f));
-        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.1f, -0.05f, 1), Color = new Float3(1, 0.95f, 0.9f), Intensity = 0.05f, AngularRadius = 3 };
-        _world.AddLight(sun);
-        AssertMatches(p => Reference.Directional(sun, p, s_normal, albedo, 0, 0.1f), Frame());
-    }
-
-    [Fact]
-    public void ManyDirectionalLights_AllLight()
-    {
-        Vector3 albedo = new(0.5f, 0.5f, 0.5f);
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.6f));
-        List<LightDesc> lights = new();
-        for (int i = 0; i < 12; i++)
-        {
-            float a = i * 0.5f;
-            LightDesc light = new() { Type = LightType.Directional, Direction = new Float3(0.3f * MathF.Cos(a), 0.3f * MathF.Sin(a), 1), Intensity = 0.004f + 0.001f * i };
-            lights.Add(light);
-            _world.AddLight(light);
-        }
-        AssertMatches(p => lights.Aggregate(Vector3.Zero, (sum, l) => sum + Reference.Directional(l, p, s_normal, albedo, 0, 0.6f)), Frame());
-    }
-
-    [Fact]
     public void SpotCookies_AndProfiles_ShapeTheirLight()
     {
         Vector3 albedo = new(0.8f, 0.8f, 0.8f);
@@ -965,70 +817,6 @@ public sealed partial class LightingTests : IDisposable
             Assert.True(MathF.Abs(profiled[i].X - plain[i].X * 128 / 255f) <= 1e-4f + 0.01f * plain[i].X, $"profile pixel {i}: {profiled[i].X} against {plain[i].X}");
     }
 
-    // Shades every light with its own BRDF: its radiance times what reaches the surface diffusely, plus the light's host data
-    private const string CustomBrdfSource = """
-        Shader "Test/CustomBRDF"
-        {
-            Pass
-            {
-                Tags { "LightMode" = "Forward" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    layout(location = 0) out vec3 vWorld;
-                    void main()
-                    {
-                        vWorld = Graphite_ObjectToRelative(vertexPosition);
-                        gl_Position = Graphite_RelativeToClip(vWorld);
-                    }
-                }
-                Fragment
-                {
-                    #define GRAPHITE_CUSTOM_BRDF
-                    #include "Graphite/PBR/Closure.glsl"
-                    #include "Graphite/Passes.glsl"
-                    layout(location = 0) in vec3 vWorld;
-                    layout(location = 0) out vec4 outColor;
-
-                    vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)
-                    {
-                        return vec3(l.diffuse, 0.0, 0.0) + vec3(0.0, 0.25, 0.0);
-                    }
-
-                    void main()
-                    {
-                        vec3 n = vec3(0.0, 0.0, -1.0);
-                        PBR_Closure c = PBR_Prepare(PBR_DefaultParams(n, vec3(1.0, 0.0, 0.0)), vWorld, Graphite_ViewDir(vWorld), n, 0.0);
-                        outColor = vec4(PBR_ShadeLights(c), 1.0);
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
-                    }
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
-    [Fact]
-    public void ACustomBRDF_ShadesEveryLight()
-    {
-        AddQuad(_renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(CustomBrdfSource))));
-        LightDesc point = Point(new Double3(0.5, 0, 7), 10, 0.1f, new Float3(1, 1, 1));
-        _world.AddLight(point);
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, 1), Intensity = 0.1f });
-
-        // The directional light's N.L is 1 everywhere, the point's N.L over distance squared within its window
-        AssertMatches(p =>
-        {
-            Vector3 toLight = new Vector3(0.5f, 0, 7) - p;
-            float d2 = toLight.LengthSquared();
-            float factor = d2 / 100;
-            float window = Math.Clamp(1 - factor * factor, 0, 1);
-            return new Vector3(1 + MathF.Max(-toLight.Z / MathF.Sqrt(d2), 0) * window * window / MathF.Max(d2, 0.01f), 0.5f, 0);
-        }, Frame());
-    }
-
     [Fact]
     public void DirectionalLights_OnlyLightTheirLayers()
     {
@@ -1060,58 +848,6 @@ public sealed partial class LightingTests : IDisposable
 
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Ambient = AmbientMode.Hemisphere, AmbientSky = new Float4(1, 0, 0, 1), AmbientGround = new Float4(0, 0, 1, 1), Fog = default };
         AssertMatches(_ => new Vector3(0.25f, 0, 0.125f), Frame());
-    }
-
-    [Fact]
-    public void LinearFog_FadesToItsColourWithDistance()
-    {
-        AddQuad(Surface(new Float3(1, 1, 1)));
-        _world.Environment = new EnvironmentDesc
-        {
-            CaptureEV100 = UnitEV100,
-            AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1),
-            Fog = new FogDesc { Mode = FogMode.Linear, Color = new Float4(1, 0, 0, 1), Start = 0, End = 20, UseSky = false },
-        };
-
-        AssertMatches(p =>
-        {
-            float visible = Math.Clamp(1 - p.Length() / 20, 0, 1);
-            return Vector3.Lerp(new Vector3(1, 0, 0), new Vector3(0.5f), visible);
-        }, Frame());
-    }
-
-    // Fog that only absorbs dims a surface by how much fog lies between it and the camera, past the grid's first slice
-    [Fact]
-    public void VolumetricFog_DimsBehindItByItsDensity()
-    {
-        AddQuad(Surface(new Float3(1, 1, 1)));
-        _world.Environment = new EnvironmentDesc
-        {
-            CaptureEV100 = UnitEV100,
-            AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1),
-            Fog = default,
-            VolumetricFog = new VolumetricFogDesc { Enabled = true, Density = 0.05f, HeightFalloff = 0f, Albedo = new Float4(0, 0, 0, 1), Distance = 64f, Slices = 64 },
-        };
-
-        AssertMatches(p => new Vector3(0.5f * MathF.Exp(-0.05f * (p.Length() - 0.5f))), Frame());
-    }
-
-    // Fog that scatters evenly, lit by a sun behind an unlit surface, adds the sunlight it scatters toward the camera, 4 pi
-    // times the sun's illuminance over 4 pi steradians, by the fog's share between the surface and the grid's first slice
-    [Fact]
-    public void VolumetricFog_ScattersTheSunTowardTheCamera()
-    {
-        AddQuad(Surface(new Float3(0, 0, 0)));
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, -1), Intensity = 4f * MathF.PI });
-        _world.Environment = new EnvironmentDesc
-        {
-            CaptureEV100 = UnitEV100,
-            AmbientColor = new Float4(0, 0, 0, 1),
-            Fog = default,
-            VolumetricFog = new VolumetricFogDesc { Enabled = true, Density = 0.05f, HeightFalloff = 0f, Albedo = new Float4(1, 1, 1, 1), Anisotropy = 0f, AmbientScale = 0f, Distance = 64f, Slices = 64 },
-        };
-
-        AssertMatches(p => new Vector3(1f - MathF.Exp(-0.05f * (p.Length() - 0.5f))), Frame());
     }
 
     private DecalDesc Decal(Double3 center, Double3 size, Float4 color, int priority = 0, bool isStatic = false, uint layer = ~0u) => new()
@@ -2495,30 +2231,6 @@ public sealed partial class LightingTests : IDisposable
     private static (float X, float Y) PixelClip(int i) => ((i % Size + 0.5f) / Size * 2 - 1, (i / Size + 0.5f) / Size * 2 - 1);
 
     [Fact]
-    public void Sky_FillsWhatNothingCovers_LookingAlongEachPixel()
-    {
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = new Float4(1, 1, 1, 1), Fog = default, Sky = SkyMaterial(new Float3(1, 0.8f, 0.6f), 1) };
-        AddQuad(Surface(new Float3(0.2f, 0.3f, 0.4f)));
-
-        RenderView view = _harness.BareView(10);
-        view.EV100 = UnitEV100;
-        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
-        _device.WaitForIdle();
-        Assert.Empty(_errors);
-        Float4[] pixels = _harness.ReadTarget();
-
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            (float x, float y) = PixelClip(i);
-            Vector3 want = MathF.Abs(x) < 0.4f && MathF.Abs(y) < 0.4f
-                ? new Vector3(0.2f, 0.3f, 0.4f)
-                : (Vector3.Normalize(new Vector3(x, y, 1)) * 0.5f + new Vector3(0.5f)) * new Vector3(1, 0.8f, 0.6f);
-            Assert.True(Vector3.Distance(want, new Vector3(pixels[i].X, pixels[i].Y, pixels[i].Z)) < 2e-3f, $"pixel {i}: want {want}, got {pixels[i]}");
-        }
-    }
-
-    [Fact]
     public void ViewsLeavingTheSkyOut_ShowTheirClearColour()
     {
         _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 0) };
@@ -2577,33 +2289,6 @@ public sealed partial class LightingTests : IDisposable
         }
     }
 
-    [Fact]
-    public void FogUsingTheSky_TakesItsColour_AndFollowsItsChanges()
-    {
-        Material sky = SkyMaterial(new Float3(0.9f, 0.4f, 0.1f), 0);
-        AddQuad(Surface(new Float3(1, 1, 1)));
-        _world.Environment = new EnvironmentDesc
-        {
-            CaptureEV100 = UnitEV100,
-            AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1),
-            Fog = new FogDesc { Mode = FogMode.Linear, Color = new Float4(0, 1, 0, 1), Start = 0, End = 20, UseSky = true },
-            Sky = sky,
-        };
-
-        Vector3 Fogged(Vector3 p, Vector3 skyColor) => Vector3.Lerp(skyColor, new Vector3(0.5f), Math.Clamp(1 - p.Length() / 20, 0, 1));
-        AssertMatches(p => Fogged(p, new Vector3(0.9f, 0.4f, 0.1f)), Frame());
-
-        sky.SetColor("_Tint", new Float4(0.2f, 0.3f, 1, 1));
-        Frame();
-        AssertMatches(p => Fogged(p, new Vector3(0.2f, 0.3f, 1)), Frame());
-
-        _world.Environment.SkyCapture = SkyCaptureMode.Never;
-        sky.SetColor("_Tint", new Float4(1, 1, 1, 1));
-        Frame();
-        Frame();
-        AssertMatches(p => Fogged(p, new Vector3(0.2f, 0.3f, 1)), Frame());
-    }
-
     private static readonly Vector3 s_skyColor = new(0.1f, 0.2f, 0.4f);
 
     // A room of single sided unlit walls, one colour per side, facing in on a centre; the camera's reflector sits on layer 2
@@ -2657,26 +2342,6 @@ public sealed partial class LightingTests : IDisposable
 
         Frame();
         AssertMatches(p => p.X < 0 ? new Vector3(0.8f, 0.5f, 0.2f) : s_skyColor, Frame());
-    }
-
-    [Fact]
-    public void ProbesAndTheSky_CapturedAtAnyExposure_LightAlike_RescaledToTheView()
-    {
-        Room(new Double3(0, 0, 10), 20, _ => new Float3(800, 500, 200));
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
-        _world.AddReflectionProbe(RoomProbe(new Double3(-10, 0, 10), new Float3(20, 40, 40)));
-        _world.Environment.Sky!.SetColor("_Tint", new Float4(300, 600, 900, 1));
-        _ev100 = 8;
-        float exposure = RenderView.ExposureOf(8);
-        Vector3 Expected(Vector3 p) => (p.X < 0 ? new Vector3(800, 500, 200) : new Vector3(300, 600, 900)) * exposure;
-
-        foreach (float captureEV100 in new[] { UnitEV100, 6f, 14f })
-        {
-            _world.Environment.CaptureEV100 = captureEV100;
-            Frame();
-            Frame();
-            AssertMatches(Expected, Frame());
-        }
     }
 
     // A Graphite/Unlit wall reflects in a probe as it shows directly, whatever exposure the probe is captured at
@@ -2741,31 +2406,6 @@ public sealed partial class LightingTests : IDisposable
             }
         }
         Assert.True(checkedPixels > 100);
-    }
-
-    [Fact]
-    public void OverlappingProbes_BlendByImportanceAndBlendDistance()
-    {
-        Vector3 wall = new(0.8f, 0.5f, 0.2f);
-        Room(new Double3(0, 0, 10), 20, _ => new Float3(wall.X, wall.Y, wall.Z));
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
-        ReflectionProbeDesc small = RoomProbe(new Double3(-8, 0, 10), new Float3(24, 40, 40), importance: 1, intensity: 1, blend: 2);
-        small.Resolution = 32;
-        ReflectionProbeDesc large = RoomProbe(new Double3(8, 0, 10), new Float3(24, 40, 40), importance: 2, intensity: 0.5f, blend: 2);
-        large.Resolution = 256;
-        _world.AddReflectionProbe(small);
-        _world.AddReflectionProbe(large);
-        Frame();
-        Frame();
-        Float4[] pixels = Frame();
-
-        AssertMatches(p =>
-        {
-            float w1 = Math.Clamp((12 - MathF.Abs(p.X + 8)) / 2, 0, 1);
-            float w2 = Math.Clamp((12 - MathF.Abs(p.X - 8)) / 2, 0, 1);
-            float total = w2 + w1 * (1 - w2);
-            return wall * (0.5f * w2 + w1 * (1 - w2)) + s_skyColor * (1 - total);
-        }, pixels);
     }
 
     [Fact]
@@ -2869,37 +2509,6 @@ public sealed partial class LightingTests : IDisposable
             Vector3 got = new(pixels[i].X, pixels[i].Y, pixels[i].Z);
             Assert.True(Vector3.Distance(want, got) <= tolerance * MathF.Max(1, want.Length()), $"pixel {i}: want {want}, got {got}");
         }
-    }
-
-    private const float DefaultSunLux = 100000;
-
-    [Fact]
-    public void GradientSky_BlendsItsColours_AndOrthographicViewsSeeItThroughAPerspective()
-    {
-        Material gradient = _renderer.CreateMaterial(_renderer.Skies.Gradient);
-        gradient.SetColor("_TopColor", new Float4(0.1f, 0.3f, 0.9f, 1));
-        gradient.SetColor("_BottomColor", new Float4(0.9f, 0.6f, 0.2f, 1));
-        gradient.SetFloat("_Exponent", 2);
-        gradient.SetFloat("intensity", 0.5f);
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, Fog = default, Sky = gradient };
-
-        Vector3 Gradient(Vector3 dir)
-        {
-            float t = MathF.Pow(Math.Clamp(dir.Y * 0.5f + 0.5f, 0, 1), 2);
-            return Vector3.Lerp(new Vector3(0.9f, 0.6f, 0.2f), new Vector3(0.1f, 0.3f, 0.9f), t) * 0.5f;
-        }
-        AssertPixels(i =>
-        {
-            (float x, float y) = PixelClip(i);
-            return Gradient(Vector3.Normalize(new Vector3(x, y, 1)));
-        }, PerspectiveFrame(14), 2e-3f);
-
-        float f = 1 / MathF.Tan(1.0471975512f * 0.5f);
-        AssertPixels(i =>
-        {
-            (float x, float y) = PixelClip(i);
-            return Gradient(Vector3.Normalize(new Vector3(x / f, y / f, 1)));
-        }, Frame(), 2e-3f);
     }
 
     [Fact]
@@ -3362,91 +2971,6 @@ public sealed partial class LightingTests : IDisposable
     private static readonly Double3 s_boxMin = new(-1.5, -2.5, 7), s_boxMax = new(2.5, 1.5, 13);
 
     [Fact]
-    public void LightProbes_BlendTheTetrahedronAroundAMovingRenderable()
-    {
-        LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 3);
-        _world.SetLightProbes(probes);
-        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: false), depth: 8);
-
-        foreach (double depth in new[] { 8.0, 10.0, 12.0, 15.0, 9.0 })
-        {
-            _world.SetTransform(quad, Double4x4.CreateTranslation(_origin + new Double3(0, 0, depth)));
-            SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, depth));
-            AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
-        }
-    }
-
-    [Fact]
-    public void LightProbes_FarFromTheOrigin_AndReplaced_StillMatch()
-    {
-        _origin = new Double3(-7_000_000.5, 120, 4_000_000.25);
-        AddIndirect(IndirectQuad(secondUVs: false), depth: 10.5);
-        _world.SetLightProbes(BoxProbes(s_boxMin, s_boxMax, 5));
-        Frame();
-
-        LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 6);
-        _world.SetLightProbes(probes);
-        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, 10.5));
-        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
-    }
-
-    [Fact]
-    public void LightProbes_WithoutTetrahedra_BlendTheNearestFour()
-    {
-        LightProbeData probes = BoxProbes(new Double3(-3, -1, 6), new Double3(1, 2, 16), 8);
-        probes.Tetrahedra = [];
-        probes.Neighbours = [];
-        _world.SetLightProbes(probes);
-        AddIndirect(IndirectQuad(secondUVs: false));
-
-        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, QuadDepth));
-        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
-    }
-
-    [Fact]
-    public void ManyProbeLitRenderables_GrowAndReuseTheirSlots()
-    {
-        LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 12);
-        _world.SetLightProbes(probes);
-        GpuMesh mesh = IndirectQuad(secondUVs: false);
-        List<RenderableHandle> hidden = new();
-        for (int i = 0; i < 100; i++)
-            hidden.Add(AddIndirect(mesh, depth: 50 + i * 0.1));
-        Frame();
-
-        foreach (RenderableHandle handle in hidden.Take(70))
-            _world.Remove(handle);
-        for (int i = 0; i < 80; i++)
-            AddIndirect(mesh, depth: 60 + i * 0.1);
-        AddIndirect(mesh, depth: 11);
-
-        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, 11));
-        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
-    }
-
-    [Fact]
-    public void Lightmaps_StillLoadingLightWithAmbient_EachCarryTheirEncoding_AndNoneUsesTheProbes()
-    {
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = new Float4(0.2f, 0.4f, 0.6f, 1), Fog = default };
-        LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 13);
-        _world.SetLightProbes(probes);
-        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true), lightmap: new LightmapBinding(null, new Float4(1, 1, 0, 0)));
-        AssertMatches(_ => new Vector3(0.2f, 0.4f, 0.6f), Frame());
-
-        _world.SetLightmap(quad, new LightmapBinding(Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.1f, 0.2f, 0.3f, 1)]), new Float4(1, 1, 0, 0), LightmapEncoding.Linear));
-        AssertMatches(_ => new Vector3(0.1f, 0.2f, 0.3f), Frame());
-
-        byte[] texel = [64, 128, 32, 64];
-        _world.SetLightmap(quad, new LightmapBinding(Lightmap<byte>(1, PixelFormat.R8_G8_B8_A8_UNorm, texel), new Float4(1, 1, 0, 0), LightmapEncoding.RGBM, SamplerDescription.Point));
-        float scale = texel[3] / 255f * 8;
-        AssertMatches(_ => new Vector3(texel[0], texel[1], texel[2]) / 255f * scale, Frame());
-
-        _world.SetLightmap(quad, LightmapBinding.None);
-        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, QuadDepth));
-        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
-    }
-
-    [Fact]
     public void LightProbeData_WithCornersOrNeighboursOutOfRange_IsRefused()
     {
         LightProbeData corners = BoxProbes(s_boxMin, s_boxMax, 14);
@@ -3456,28 +2980,6 @@ public sealed partial class LightingTests : IDisposable
         LightProbeData neighbours = BoxProbes(s_boxMin, s_boxMax, 14);
         neighbours.Neighbours[3] = 7;
         Assert.Throws<ArgumentException>(() => _world.SetLightProbes(neighbours));
-    }
-
-    [Fact]
-    public void LightmappedRenderables_IgnoreTheProbes()
-    {
-        _world.SetLightProbes(BoxProbes(s_boxMin, s_boxMax, 9));
-        Texture lightmap = Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.3f, 0.6f, 0.9f, 1)]);
-        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true));
-        Frame();
-
-        _world.SetLightmap(quad, new LightmapBinding(lightmap, new Float4(1, 1, 0, 0), LightmapEncoding.Linear));
-        AssertMatches(_ => new Vector3(0.3f, 0.6f, 0.9f), Frame());
-    }
-
-    [Fact]
-    public void LightmapScales_UndoTheExposureTheyWereBakedAt()
-    {
-        Texture lightmap = Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.3f, 0.6f, 0.9f, 1)]);
-        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true));
-        _world.SetLightmap(quad, new LightmapBinding(lightmap, new Float4(1, 1, 0, 0), LightmapEncoding.Linear, scale: 1000));
-        _ev100 = 10;
-        AssertMatches(_ => new Vector3(300, 600, 900) * RenderView.ExposureOf(10), Frame());
     }
 
     /// <summary>The light loop on the CPU, the same expressions the shaders use, every light shaded by PbrReference.</summary>

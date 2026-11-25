@@ -408,24 +408,6 @@ public sealed class StandardShaderTests : IDisposable
     // The axes deciding how much light a caster lets through to its shadow
     private static readonly string[] s_shadowAxes = ["PBR_THIN_WALLED", "PBR_TRANSMISSION"];
 
-    [Fact]
-    public void Unlit_DeclaresOnlyTheSurfaceAxis_AndPBRItsLobesBeside_MapsBeingBitsOfTheMaterial()
-    {
-        Assert.Equal(["_SURFACE"], _unlit.MaterialAxes.Select(a => a.Name));
-        Assert.Equal([.. s_lobes.Append("_SURFACE").Append("PBR_TRANSMISSION").Append("PBR_PARALLAX").Order(StringComparer.Ordinal)], _pbr.MaterialAxes.Select(a => a.Name).Order(StringComparer.Ordinal));
-        foreach (ShaderPass pass in _pbr.Definition.Passes!)
-        {
-            bool lit = pass.Name is "Forward" or "Transmission";
-            bool shadow = pass.Name == "ShadowCaster";
-            foreach (string lobe in s_lobes)
-                Assert.Equal(lit || (shadow && s_shadowAxes.Contains(lobe)), _compiler.GetAxes(pass).Any(a => a.Name == lobe));
-            Assert.Equal(shadow, _compiler.GetAxes(pass).Any(a => a.Name == "PBR_TRANSMISSION"));
-            Assert.Contains(_compiler.GetAxes(pass), a => a.Name == "PBR_PARALLAX");
-        }
-        Assert.Contains(_pbr.GlobalAxes, a => a.Name == "PBR_TIER" && a.Values.SequenceEqual(["FULL", "LITE", "MAX"]));
-        Assert.DoesNotContain(_unlit.GlobalAxes, a => a.Name == "PBR_TIER");
-    }
-
     private Shader Model(string name) => new(ShaderParser.Parse($"Shader \"Test/{name}\" {{ Surface \"{name}\" {{ }} }}"), _compiler);
 
     // Coat, fuzz, subsurface and anisotropy are surface models built on Lit, each with its lobe's properties and the

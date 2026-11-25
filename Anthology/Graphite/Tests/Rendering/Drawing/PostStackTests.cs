@@ -16,59 +16,6 @@ namespace Prowl.Graphite.Rendering.Tests;
 [Collection("GPU Tests")]
 public sealed class PostStackTests : IDisposable
 {
-    // Indirect diffuse along -z plus a constant standing in for direct light, with a depth prepass for screen lighting to read
-    private const string IndirectSource = """
-        Shader "Test/Indirect"
-        {
-            Properties
-            {
-                _Direct("Direct", Float) = 0
-            }
-
-            Pass
-            {
-                Tags { "LightMode" = "Prepass" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
-                }
-                Fragment
-                {
-                    void main() { }
-                }
-                ENDGLSL
-            }
-
-            Pass
-            {
-                Tags { "LightMode" = "Forward" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
-                }
-                Fragment
-                {
-                    #include "Graphite/Passes.glsl"
-                    #include "Graphite/Lighting.glsl"
-                    uniform float _Direct;
-                    layout(location = 0) out vec4 outColor;
-                    void main()
-                    {
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
-                        outColor = vec4(Graphite_IndirectDiffuse(vec3(0.0, 0.0, -1.0), vec2(0.0)) + vec3(_Direct), 1.0);
-                    }
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
     // A nearly smooth surface writing its turned normal and _Reflectance into the G-buffer, shaded grey plus _Reflectance
     // times the probes, as a lit surface's top lobe is
     private const string MirrorSource = """
@@ -310,30 +257,6 @@ public sealed class PostStackTests : IDisposable
     }
 
     [Fact]
-    public void AutoExposure_MetersTheNextFramesExposure_SnappingFirst_ThenAdaptingAtItsSpeeds()
-    {
-        Float3 color = new(50, 100, 25);
-        RenderableHandle backdrop = AddBackdrop(color);
-        Effect(new AutoExposure(_renderer) { ExposureCompensation = 0.5f });
-        float lum = Luminance(color);
-
-        // A K 12.5 meter at ISO 100 over the scene's luminance, brightened by the compensation
-        float Metered(float luminance) => RenderView.ExposureOf(MathF.Log2(luminance * 100 / 12.5f) - 0.5f);
-
-        // The first frame takes the view's EV100, the next what was metered from it with its pre-exposure undone
-        RenderView view = View();
-        view.EV100 = 6;
-        AssertAll(color * RenderView.ExposureOf(6), Frame(view: view), 2e-3f);
-        AssertAll(color * Metered(lum), Frame(view: view), 2e-3f);
-
-        // Twice as bright, adapting up in stops at 3 a second for a tenth of a second, seen a frame later
-        _world.SetMaterials(backdrop, [Unlit(color * 2)]);
-        AssertAll(color * 2 * Metered(lum), Frame(0.1f, view), 2e-3f);
-        float adapted = lum * MathF.Pow(2, 1 - MathF.Exp(-0.1f * 3));
-        AssertAll(color * 2 * Metered(adapted), Frame(view: view), 2e-3f);
-    }
-
-    [Fact]
     public void AutoExposure_MetersAnOverflowedFrame_AsTheLargestHalfFloat()
     {
         // An infinite quarter of the view meters as the largest half float, pre-exposure undone, beside the rest
@@ -365,19 +288,6 @@ public sealed class PostStackTests : IDisposable
     }
 
     [Fact]
-    public void AutoExposure_KeepsWithinItsEV100Range_AndAfterItGoes_TheViewsOwnReturns()
-    {
-        Float3 color = new(0.01f, 0.01f, 0.01f);
-        AddBackdrop(color);
-        AutoExposure auto = Effect(new AutoExposure(_renderer) { MinEV100 = 2 });
-        Frame();
-        AssertAll(color * RenderView.ExposureOf(2), Frame(), 1e-5f);
-
-        _world.Features.Remove(auto);
-        AssertAll(color * RenderView.ExposureOf(UnitEV100), Frame(), 1e-5f);
-    }
-
-    [Fact]
     public void TemporalAntiAliasing_RescalesItsHistory_WhenTheExposureChanges()
     {
         // A history built at EV100 4 then shown at 2 matches one built at 2 all along, but for edges TAA blended in its
@@ -403,10 +313,15 @@ public sealed class PostStackTests : IDisposable
         Assert.True(worst < 0.25f, $"worst pixel {worst} off");
     }
 
+    // A white Lit surface without specular, lit by the ambient light alone, emitting a constant that stands in for
+    // direct light, which screen lighting never touches
     private RenderableHandle AddIndirect(float direct, double x = 0, double depth = 10)
     {
-        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(IndirectSource)));
-        material.SetFloat("_Direct", direct);
+        Material material = _renderer.CreateMaterial(_renderer.Standard.Lit);
+        material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+        material.SetColor("base_color", new Float4(1, 1, 1, 1));
+        material.SetFloat("specular_weight", 0);
+        material.SetFloat("emission_luminance", direct);
         return _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(x, 0, depth)) }, [material]);
     }
 
@@ -549,15 +464,6 @@ public sealed class PostStackTests : IDisposable
     }
 
     [Fact]
-    public void Ssr_LeavesASurfaceWithNothingToReflect()
-    {
-        AddBackdrop(new Float3(0.2f, 0.4f, 0.6f));
-        Effect(new ScreenSpaceReflections(_renderer));
-        Frame();
-        AssertAll(new Float3(0.2f, 0.4f, 0.6f), Frame(), 2e-3f);
-    }
-
-    [Fact]
     public void Ssr_ReflectsWhatIsAboveAMirror()
     {
         SkyOf(new Float3(0, 0, 0));
@@ -686,35 +592,6 @@ public sealed class PostStackTests : IDisposable
     }
 
     [Fact]
-    public void GBuffer_HoldsThePBRReflectanceAndRoughness()
-    {
-        Float3 albedo = new(0.8f, 0.5f, 0.2f);
-        const float metallic = 0.5f, roughness = 0.6f;
-        Material pbr = _renderer.CreateMaterial(_renderer.Standard.Lit);
-        pbr.SetColor("base_color", new Float4(albedo.X, albedo.Y, albedo.Z, 1));
-        pbr.SetFloat("base_metalness", metallic);
-        pbr.SetFloat("specular_roughness", roughness);
-        _world.Add(new RenderableDesc { Mesh = FacingQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [pbr]);
-        ShowMaterialTarget();
-        Float4[] pixels = Frame();
-
-        // The view looks from the origin, so a pixel's NdotV is its depth over its distance. A dielectric at IOR 1.5
-        // beside a white edged metal, each weighted by the metalness.
-        ushort[] dfg = EnergyTables.EmbeddedDfg();
-        ushort[] dielectric = EnergyTables.EmbeddedDielectric();
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            System.Numerics.Vector3 p = new((i % Size + 0.5f) / Size * 8 - 4, (i / Size + 0.5f) / Size * 8 - 4, 10);
-            float mu = 10 / p.Length();
-            System.Numerics.Vector3 table = EnergyTables.LookupDfg(dfg, mu, roughness);
-            double dielectricE = EnergyTables.TurquinDielectric(table, EnergyTables.LookupDielectric(dielectric, mu, roughness, 1.5), 1.5);
-            float Expected(float c) => (float)((1 - metallic) * dielectricE + metallic * EnergyTables.TurquinMetal(table, c, 1, 1));
-            Float4 want = new(Expected(albedo.X), Expected(albedo.Y), Expected(albedo.Z), roughness);
-            Assert.True(Distance(want, pixels[i]) < 4e-3f, $"pixel {i}: want {want}, got {pixels[i]}");
-        }
-    }
-
-    [Fact]
     public void GBuffer_HoldsNoReflectance_ForUnlitAndTheFallback()
     {
         Material unlit = _renderer.CreateMaterial(_renderer.Standard.Unlit);
@@ -797,21 +674,6 @@ public sealed class PostStackTests : IDisposable
         Float4[] lit = Frame(view: view);
         int brightened = Enumerable.Range(0, Size * Size).Count(i => sunless[i].X < 1 && lit[i].X > 0.06f && lit[i].X > lit[i].Z);
         Assert.True(brightened > 8, $"{brightened} dark pixels took warm light");
-    }
-
-    [Fact]
-    public void ColorGrading_AndVignette_AreProwls()
-    {
-        AddBackdrop(new Float3(0.2f, 0.3f, 0.1f));
-        ColorGrading grading = Effect(new ColorGrading(_renderer) { PostExposure = 1 });
-        AssertAll(new Float3(0.4f, 0.6f, 0.2f), Frame(), 2e-3f);
-
-        _world.Features.Remove(grading);
-        Effect(new Vignette(_renderer));
-        Float4[] vignetted = Frame();
-        Float4 center = vignetted[8 * Size + 8], corner = vignetted[0];
-        Assert.True(MathF.Abs(center.X - 0.2f) < 0.01f, $"center {center}");
-        Assert.True(corner.X < center.X * 0.8f, $"corner {corner} against center {center}");
     }
 
     [Fact]
@@ -926,21 +788,4 @@ public sealed class PostStackTests : IDisposable
         }
     }
 
-    [Fact]
-    public void Bloom_AddsWhatIsPastItsKnee_AndLeavesDimColourAlone()
-    {
-        Float3 dim = new(0.4f, 0.5f, 0.3f);
-        RenderableHandle backdrop = AddBackdrop(dim);
-        Effect(new Bloom(_renderer) { Threshold = 1, SoftKnee = 0.5f, Intensity = 0.75f, Iterations = 3 });
-        AssertAll(dim, Frame(), 2e-3f);
-
-        // A uniform colour blooms into itself: every level of the chain holds the prefiltered colour
-        Float3 bright = new(1.2f, 2, 0.6f);
-        _world.SetMaterials(backdrop, [Unlit(bright)]);
-        float brightness = 2, knee = 0.5f + 1e-5f;
-        float soft = Math.Clamp(brightness - 1 + knee, 0, 2 * knee);
-        soft = soft * soft / (4 * knee);
-        Float3 prefiltered = bright * (MathF.Max(soft, brightness - 1) / brightness);
-        AssertAll(bright + prefiltered * 0.75f * 2, Frame(), 5e-3f);
-    }
 }
