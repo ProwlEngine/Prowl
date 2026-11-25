@@ -43,7 +43,7 @@ public static class ShaderParser
 
     // The main parser for a shader markup language inspired by ShaderLab.
     // Contains a property block, a surface block or pass blocks or both, and a fallback. A surface block is kept as data
-    // for the renderer to expand.
+    // for the renderer to expand: Surface "Model" { ... }, or Surface "Model" Forward { ... } for one lit as it is drawn.
     static ShaderDefinition ParseShader(ref Tokenizer<ShaderToken> t)
     {
         ParserUtility.ExpectKeyword(ref t, "Shader");
@@ -65,6 +65,9 @@ public static class ShaderParser
         {
             Token<ShaderToken> surfaceToken = t.Next();
             string model = ParserUtility.QuotedString(ref t);
+            bool forward = ParserUtility.PeekKeyword(ref t, "Forward");
+            if (forward)
+                t.Next();
             ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
             string code = t.Peek().Kind == ShaderToken.GlslProgram ? ParserUtility.Program(ref t) : "";
             string lighting = "";
@@ -79,7 +82,7 @@ public static class ShaderParser
                     break;
             }
             ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
-            surface = new ShaderSurface(model, code, surfaceToken.Line, lighting, vertex);
+            surface = new ShaderSurface(model, code, surfaceToken.Line, lighting, vertex, forward);
         }
 
         while (ParserUtility.PeekKeyword(ref t, "Pass"))

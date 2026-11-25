@@ -152,6 +152,81 @@ public sealed class ShadingModelTests : IDisposable
         Assert.True(MathF.Abs(green.Y - 0.5f) < 0.03f, $"green {green}");
     }
 
+    // Light in three bands by how far the surface faces it, green
+    private const string ToonLight = "float lit = dot(c.normal, l.diffuseL) * 0.5 + 0.5; return vec3(0.0, 0.5, 0.0) * (floor(lit * 3.0 + 0.5) / 3.0);";
+
+    private const string ToonShader = $$"""
+        Shader "Test/ToonShader"
+        {
+            Surface "Lit"
+            {
+                Lighting
+                {
+                    GLSLPROGRAM
+                    vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l) { {{ToonLight}} }
+                    ENDGLSL
+                }
+            }
+        }
+        """;
+
+    private const string ToonModel = $$"""
+        ShadingModel "TestToon"
+        {
+            Base "Lit"
+
+            Lighting
+            {
+                GLSLPROGRAM
+                vec3 Model_Light(PBR_Closure c, Graphite_LightContribution l, vec4 custom) { {{ToonLight}} }
+                ENDGLSL
+            }
+        }
+        """;
+
+    private Float4 Lit(Shader shader, RenderPath path)
+    {
+        RenderableHandle handle = _harness.World.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [_harness.Renderer.CreateMaterial(shader)]);
+        Float4 centre = Centre(_harness.Frame(View(path)));
+        _harness.World.Remove(handle);
+        return centre;
+    }
+
+    // A toon look written twice: as one shader's own Lighting block, which a GBuffer cannot keep, and as a model
+    [Theory]
+    [InlineData(RenderPath.Forward)]
+    [InlineData(RenderPath.Deferred)]
+    public void AToonLook_IsTheSame_AsAForwardOnlyShaderAndAsAModel(RenderPath path)
+    {
+        Shader shader = _harness.Renderer.LoadShader(ShaderParser.Parse(ToonShader));
+        Assert.True(shader.HasPass(PassType.Forward));
+        Assert.False(shader.HasPass(PassType.GBuffer));
+
+        _harness.Renderer.LoadShadingModel(ToonModel);
+        Shader model = _harness.Renderer.LoadShader(ShaderParser.Parse("Shader \"Test/ToonModel\" { Surface \"TestToon\" { } }"));
+        Assert.True(model.HasPass(PassType.GBuffer));
+
+        Float4 own = Lit(shader, path);
+        Float4 shared = Lit(model, path);
+        Assert.True(own.X < 0.03f && MathF.Abs(own.Y - 0.5f) < 0.03f && own.Z < 0.03f, $"shader {own}");
+        Assert.True(MathF.Abs(own.Y - shared.Y) < 0.02f && MathF.Abs(own.X - shared.X) < 0.02f, $"shader {own} model {shared}");
+    }
+
+    [Fact]
+    public void ASurfaceMarkedForward_TakesNoGBufferPass_AndLooksTheSameInADeferredView()
+    {
+        Shader forward = _harness.Renderer.LoadShader(ShaderParser.Parse("Shader \"Test/ForwardLit\" { Surface \"Lit\" Forward { } }"));
+        Assert.True(forward.HasPass(PassType.Forward));
+        Assert.False(forward.HasPass(PassType.GBuffer));
+        Assert.True(_harness.Renderer.Standard.Lit.HasPass(PassType.GBuffer));
+
+        Float4 drawn = Lit(forward, RenderPath.Deferred);
+        Float4 kept = Lit(_harness.Renderer.Standard.Lit, RenderPath.Deferred);
+        Assert.True(drawn.X > 0.01f, $"lit {drawn}");
+        for (int c = 0; c < 3; c++)
+            Assert.True(MathF.Abs(drawn[c] - kept[c]) < 0.01f + 0.02f * kept[c], $"channel {c}: forward {drawn[c]}, deferred {kept[c]}");
+    }
+
     [Fact]
     public void ADocument_NeedsABase_AndCannotTakeAShippedSurfaceModelsName()
     {

@@ -173,7 +173,7 @@ public sealed class StandardShaderTests : IDisposable
     public void SurfaceLighting_ReplacesTheBRDF_AndEveryFeatureStillCompiles(string surface)
     {
         ShaderDefinition definition = new Shader(ShaderParser.Parse(ToonSource), _compiler).Definition;
-        Assert.Equal(s_pbrPasses, definition.Passes!.Select(p => p.Name));
+        Assert.Equal(s_pbrPasses.Where(pass => pass != "GBuffer"), definition.Passes!.Select(p => p.Name));
 
         foreach (ShaderPass pass in definition.Passes!)
         {

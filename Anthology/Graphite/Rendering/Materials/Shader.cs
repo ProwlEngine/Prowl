@@ -613,7 +613,8 @@ public sealed class Shader
     /// ShadingModel document of that name: each
     /// "#pragma surface" line of the model's passes becomes the block's code, which defines the model's Surface function,
     /// void Surface(inout PBR_Params p, Graphite_SurfaceData i) for PBR, before the surface is lit, with
-    /// GRAPHITE_SURFACE_FUNCTION defined. A Lighting block's code defines Graphite_BRDF, Graphite_AmbientBRDF or both
+    /// GRAPHITE_SURFACE_FUNCTION defined. A block marked Forward, or with a Lighting block, takes no GBuffer pass, so a
+    /// deferred view lights it as it is drawn. A Lighting block's code defines Graphite_BRDF, Graphite_AmbientBRDF or both
     /// for the passes with a "#pragma surface_lighting" line, which becomes GRAPHITE_CUSTOM_BRDF and
     /// GRAPHITE_CUSTOM_AMBIENT_BRDF for the ones it defines, the code following the block's at their "#pragma surface". A Vertex block's code, defining void SurfaceVertex(inout Graphite_SurfaceVertex v), goes
     /// in place of each "#pragma surface_vertex" line with GRAPHITE_SURFACE_VERTEX_FUNCTION defined. The model's
@@ -635,7 +636,10 @@ public sealed class Shader
         if (lighting.Length > 0 && lightingDefines.Length == 0)
             throw new ShaderLoadException($"{name}:{surface.Line}: the Lighting block defines neither Graphite_BRDF nor Graphite_AmbientBRDF.");
         string vertex = surface.Vertex.Length > 0 ? "#define GRAPHITE_SURFACE_VERTEX_FUNCTION\n" + surface.Vertex : "";
+        // A shader with lighting of its own, or marked Forward, is lit as it is drawn: a GBuffer keeps neither
         ShaderPass[] standard = model.Passes ?? [];
+        if (surface.Forward || lighting.Length > 0)
+            standard = Array.FindAll(standard, pass => !ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.GBuffer.Name));
         bool spliced = false;
         bool lit = false;
         bool moved = false;
