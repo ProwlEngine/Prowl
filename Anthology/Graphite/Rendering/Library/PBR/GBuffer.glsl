@@ -34,7 +34,7 @@ PBR_Params PBR_FromGBuffer(Graphite_GBuffer g)
     p.baseMetalness = g.metalness;
     p.specularRoughness = g.roughness;
     p.specularWeight = 1.0;
-    float r = sqrt(clamp(g.specular * GRAPHITE_GBUFFER_SPECULAR_RANGE, 0.0, 0.99999));
+    float r = sqrt(g.specular * GRAPHITE_GBUFFER_SPECULAR_RANGE);
     p.specularIor = (1.0 + r) / (1.0 - r);
     p.occlusion = g.occlusion;
     return p;
