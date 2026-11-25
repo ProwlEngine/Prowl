@@ -46,14 +46,6 @@ public abstract class NetworkInterest
     /// <summary>Works out again who receives every networked object.</summary>
     protected static void RebuildAll() => Networking.System?.RebuildAllObservers();
 
-    /// <summary>The clients of the session, not the host itself.</summary>
-    protected static IEnumerable<NetPeer> Clients()
-    {
-        if (Networking.System is not { } system)
-        {
-            return [];
-        }
-
-        return system.RemotePeers();
-    }
+    /// <summary>The clients of the session, not the host itself. Kept until a peer joins or leaves, so it costs nothing to ask again.</summary>
+    protected static IReadOnlyList<NetPeer> Clients() => Networking.System?.RemotePeers() ?? [];
 }

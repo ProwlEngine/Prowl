@@ -28,11 +28,12 @@ public sealed class DistanceInterest : NetworkInterest
 
     public override void OnRebuildObservers(GameObject go, HashSet<NetPeer> observers)
     {
-        foreach (NetPeer peer in Clients())
+        IReadOnlyList<NetPeer> clients = Clients();
+        for (int i = 0; i < clients.Count; i++)
         {
-            if (OnCheckObserver(go, peer))
+            if (OnCheckObserver(go, clients[i]))
             {
-                observers.Add(peer);
+                observers.Add(clients[i]);
             }
         }
     }

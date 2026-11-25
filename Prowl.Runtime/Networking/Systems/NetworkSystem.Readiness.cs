@@ -71,6 +71,7 @@ internal sealed partial class NetworkSystem
 
     internal void OnPeerConnected(NetPeer peer)
     {
+        ForgetRemotePeers();
         if (!FitsPeer(peer, EngineMessage.Transform, TransformBatchMessage.MinMessageSize - sizeof(ushort)))
         {
             return;

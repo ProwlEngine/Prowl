@@ -44,9 +44,10 @@ public sealed class TeamInterest : NetworkInterest
     {
         if (go.GetComponent<NetworkTeam>() is not { } team || team.ForceShown)
         {
-            foreach (NetPeer peer in Clients())
+            IReadOnlyList<NetPeer> clients = Clients();
+            for (int i = 0; i < clients.Count; i++)
             {
-                observers.Add(peer);
+                observers.Add(clients[i]);
             }
 
             return;

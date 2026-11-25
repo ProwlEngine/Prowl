@@ -29,8 +29,16 @@ internal sealed partial class NetworkSystem
     /// <summary>On the host, <paramref name="peer" /> when it is a client, whose references are checked as they are read.</summary>
     internal NetPeer? RemoteClient(NetPeer peer) => IsHost && !peer.IsLocal ? peer : null;
 
+    // The session's clients, made again after a peer joins or leaves rather than cleared, so a list in use stays whole.
+    private List<NetPeer>? _remotePeers;
+
     internal List<NetPeer> RemotePeers()
     {
+        if (_remotePeers != null)
+        {
+            return _remotePeers;
+        }
+
         List<NetPeer> peers = new();
         foreach (NetPeer peer in Session?.Peers ?? [])
         {
@@ -40,8 +48,10 @@ internal sealed partial class NetworkSystem
             }
         }
 
-        return peers;
+        return Session == null ? peers : _remotePeers = peers;
     }
+
+    private void ForgetRemotePeers() => _remotePeers = null;
 
     // What the owner and the object's visibility decide for peer, or null to leave it to the interest.
     private static bool? Forced(NetworkObject entry, NetPeer peer)
@@ -148,6 +158,7 @@ internal sealed partial class NetworkSystem
     private void ForgetVisibility()
     {
         Restricted.Clear();
+        ForgetRemotePeers();
         Networking.Interest?.ResetState();
     }
 
@@ -270,7 +281,10 @@ internal sealed partial class NetworkSystem
             }
         }
 
-        SendVisibility(entry, [.. _entering], [.. _leaving]);
+        if (_entering.Count > 0 || _leaving.Count > 0)
+        {
+            SendVisibility(entry, [.. _entering], [.. _leaving]);
+        }
     }
 
     // Removes entry from leaving and sends it whole to entering.

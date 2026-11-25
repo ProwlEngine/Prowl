@@ -1102,6 +1102,7 @@ internal sealed partial class NetworkSystem
 
     internal void OnPeerLeft(NetPeer peer, SessionEndReason reason)
     {
+        ForgetRemotePeers();
         NetSession? session = Session;
         LoadingPeers.Remove(peer.Id);
         Transforms.RemovePeer(peer.Id);
