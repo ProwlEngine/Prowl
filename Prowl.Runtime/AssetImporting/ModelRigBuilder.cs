@@ -235,8 +235,9 @@ internal static class ModelRigBuilder
     /// <summary>
     /// Moves the body bone's travel and turn out of the pose and into root motion, relative to where the
     /// clip starts, so a walk plays on the spot and moves the character instead of sliding away from it
-    /// and snapping back each loop. The turn is taken as an even sweep from the first frame's heading to
-    /// the last, which keeps the sway of a stride in the pose and the net turn of a turn in the root.
+    /// and snapping back each loop. The turn is the body's heading on each frame relative to its heading
+    /// on the first, taken about the vertical only, so the pose keeps no turn at all and any pitch or
+    /// roll of the body stays in it.
     /// </summary>
     private static RootMotion ExtractRootMotion(Pose[] poses, MotionSkeleton skeleton, float duration, RootExtraction root)
     {
