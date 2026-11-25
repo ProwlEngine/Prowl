@@ -50,9 +50,9 @@ public sealed class ShadingModel
 }
 
 /// <summary>
-/// The ShadingModel documents every renderer of the process knows by name, which Surface blocks build on, and the id
-/// each has in a GBuffer. A model is a library file Graphite/Standard/{Name}.shader holding a ShadingModel document, or
-/// one a host loaded through <see cref="Renderer.LoadShadingModel"/>.
+/// The surface models every renderer has: the library's shaders Lit, Unlit and Foliage, and the ShadingModel documents
+/// among its files, Graphite/Standard/{Name}.shader, with the id each has in a GBuffer. The ids after them are a
+/// renderer's own to give, see <see cref="ShadingModels"/>.
 /// </summary>
 internal static class ShadingModelLibrary
 {
@@ -61,63 +61,41 @@ internal static class ShadingModelLibrary
     /// <summary>The highest id the GBuffer holds.</summary>
     public const uint MaxId = 15;
 
+    /// <summary>The library's ShadingModel documents a GBuffer keeps, whose ids follow Foliage's in this order.</summary>
+    public static readonly string[] Shipped = ["ClearCoat", "Cloth", "Subsurface", "Hair", "Eye"];
+
+    /// <summary>The first id a renderer gives a model its host loads.</summary>
+    public static uint FirstLoadedId => Foliage + (uint)Shipped.Length + 1;
+
     private static readonly object s_lock = new();
-    private static readonly Dictionary<string, ShadingModelDefinition> s_definitions = new(StringComparer.Ordinal);
-    private static readonly Dictionary<string, uint> s_ids = new(StringComparer.Ordinal) { ["Lit"] = Lit, ["Unlit"] = Unlit, ["Foliage"] = Foliage };
+    private static readonly Dictionary<string, ShadingModelDefinition?> s_documents = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// Adds a document, or replaces the one of its name, which keeps its id. Its Base names a surface model shader,
-    /// Graphite/Standard/{Base}.shader, not another ShadingModel.
-    /// </summary>
-    public static void Register(ShadingModelDefinition definition)
-    {
-        InternalShaders.Register();
-        string? source = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{definition.Base}.shader");
-        lock (s_lock)
-        {
-            if (definition.Name is "Lit" or "Unlit" or "Foliage" or "Terrain")
-                throw new ArgumentException($"{definition.Name} is a surface model the renderer ships, a ShadingModel takes another name.");
-            if (s_definitions.ContainsKey(definition.Base) || (source != null && ShaderParser.IsShadingModel(source)))
-                throw new ArgumentException($"The ShadingModel {definition.Name} is based on the ShadingModel {definition.Base}, its Base is a surface model shader such as Lit.");
-            if (source == null)
-                throw new ArgumentException($"The ShadingModel {definition.Name} is based on {definition.Base}, and there is no surface model shader of that name.");
-            if (!definition.ForwardOnly && !s_ids.ContainsKey(definition.Name))
-            {
-                if (s_ids.Count >= MaxId)
-                    throw new InvalidOperationException($"Every one of the {MaxId} shading model ids is taken.");
-                s_ids[definition.Name] = (uint)s_ids.Count + 1;
-            }
-            s_definitions[definition.Name] = definition;
-        }
-    }
-
-    /// <summary>The document of a name: one registered, else the library file of that name when it holds one.</summary>
+    /// <summary>The ShadingModel document the library holds under a name, null when it holds none.</summary>
     public static ShadingModelDefinition? Find(string name)
     {
         lock (s_lock)
         {
-            if (s_definitions.TryGetValue(name, out ShadingModelDefinition? found))
+            if (s_documents.TryGetValue(name, out ShadingModelDefinition? found))
                 return found;
         }
         InternalShaders.Register();
-        if (ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader") is not { } source || !ShaderParser.IsShadingModel(source))
-            return null;
-        ShadingModelDefinition definition = ShaderParser.ParseShadingModel(source);
-        Register(definition);
-        return definition;
+        ShadingModelDefinition? document = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader") is { } source && ShaderParser.IsShadingModel(source)
+            ? ShaderParser.ParseShadingModel(source) : null;
+        lock (s_lock)
+            return s_documents[name] = document;
     }
 
-    /// <summary>The GBuffer id of a model, 0 for one that is forward only or unknown.</summary>
+    /// <summary>The GBuffer id of a model the library holds, 0 for one that is forward only or not the library's.</summary>
     public static uint IdOf(string name)
     {
-        lock (s_lock)
-            return s_ids.GetValueOrDefault(name);
+        int shipped = Array.IndexOf(Shipped, name);
+        return shipped >= 0 ? Foliage + 1 + (uint)shipped : name switch { "Lit" => Lit, "Unlit" => Unlit, "Foliage" => Foliage, _ => 0 };
     }
 }
 
 /// <summary>
-/// The shading models of a renderer, and the one lighting program its deferred views draw, written from them: each
-/// pixel is lit as its own model says. It holds every model from the start, so nothing compiles as surfaces come into
+/// The shading models of a renderer, the library's and the ones its host loaded, which only its own shaders build
+/// on, and the one lighting program its deferred views draw, written from them: each pixel is lit as its own model says. It holds every model from the start, so nothing compiles as surfaces come into
 /// view. Only loading or replacing a model writes it anew, compiled as the renderer's <see cref="CompilePolicy"/> says,
 /// and views keep the last one until it is ready. A program that fails to compile is reported and leaves out the models
 /// new to it, whose pixels are lit as Lit until a document that compiles replaces them. The models' code shares one
@@ -125,8 +103,6 @@ internal static class ShadingModelLibrary
 /// </summary>
 public sealed class ShadingModels : IDisposable
 {
-    private static readonly string[] s_shipped = ["ClearCoat", "Cloth", "Subsurface", "Hair", "Eye"];
-
     private readonly GraphicsDevice _device;
     private readonly IShaderCompiler? _compiler;
     private readonly CompilePolicy _policy;
@@ -134,6 +110,8 @@ public sealed class ShadingModels : IDisposable
     private readonly object _lock = new();
     private readonly List<ShadingModel> _models = new();
     private readonly HashSet<ShadingModel> _broken = new();
+    private readonly Dictionary<string, ShadingModelDefinition> _loaded = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, uint> _ids = new(StringComparer.Ordinal);
     private readonly Action<RendererError>? _report;
     private FullscreenProgram? _pending;
     private ShadingModel[] _lit, _pendingModels = [];
@@ -153,7 +131,7 @@ public sealed class ShadingModels : IDisposable
         _models.Add(new ShadingModel("Unlit", ShadingModelLibrary.Unlit, "", "", true));
         InternalShaders.Register();
         _models.Add(new ShadingModel("Foliage", ShadingModelLibrary.Foliage, "", ShaderLibrary.Get($"{ShaderLibrary.Prefix}Foliage/FoliageModel.glsl")!, false));
-        foreach (string name in s_shipped)
+        foreach (string name in ShadingModelLibrary.Shipped)
         {
             if (ShadingModelLibrary.Find(name) is { } shipped)
                 Add(shipped);
@@ -185,37 +163,58 @@ public sealed class ShadingModels : IDisposable
     }
 
     /// <summary>
-    /// Takes a ShadingModel document: shaders may then build on it with Surface "Name", and the lighting program is
-    /// written anew with it. A document of a name already loaded replaces it and keeps its id. Shaders loaded before
-    /// keep the passes they were given. Returns the model, null for a forward only one. Host thread.
+    /// Takes a ShadingModel document: the renderer's shaders may then build on it with Surface "Name", and the lighting
+    /// program is written anew with it. A document of a name already loaded, or of one of the library's documents,
+    /// replaces it and keeps its id. Shaders loaded before keep the passes they were given. Its Base names a surface
+    /// model shader, Graphite/Standard/{Base}.shader, not another ShadingModel. Returns the model, null for a forward
+    /// only one. Host thread.
     /// </summary>
     public ShadingModel? Load(ShadingModelDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
-        ShadingModelLibrary.Register(definition);
+        string name = definition.Name;
+        if (name is "Lit" or "Unlit" or "Foliage" or "Terrain")
+            throw new ArgumentException($"{name} is a surface model the renderer ships, a ShadingModel takes another name.");
+        InternalShaders.Register();
+        string? source = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{definition.Base}.shader");
         lock (_lock)
         {
+            if (_loaded.ContainsKey(definition.Base) || (source != null && ShaderParser.IsShadingModel(source)))
+                throw new ArgumentException($"The ShadingModel {name} is based on the ShadingModel {definition.Base}, its Base is a surface model shader such as Lit.");
+            if (source == null)
+                throw new ArgumentException($"The ShadingModel {name} is based on {definition.Base}, and there is no surface model shader of that name.");
+            if (!definition.ForwardOnly && ShadingModelLibrary.IdOf(name) == 0 && !_ids.ContainsKey(name))
+            {
+                uint id = ShadingModelLibrary.FirstLoadedId + (uint)_ids.Count;
+                if (id > ShadingModelLibrary.MaxId)
+                    throw new InvalidOperationException($"Every one of the {ShadingModelLibrary.MaxId} shading model ids is taken.");
+                _ids[name] = id;
+            }
+            _loaded[name] = definition;
             ShadingModel? model = Add(definition);
             _version++;
             return model;
         }
     }
 
-    /// <summary>
-    /// Takes the document of a name as the process knows it, which another renderer may have loaded, when a shader
-    /// built on it loads. Any thread.
-    /// </summary>
-    internal void Ensure(string name)
+    /// <summary>The document a Surface block of one of the renderer's shaders builds on by name, null when it names none. Any thread.</summary>
+    internal ShadingModelDefinition? Definition(string name)
     {
-        if (ShadingModelLibrary.Find(name) is not { ForwardOnly: false } definition)
-            return;
         lock (_lock)
         {
-            if (_models.Exists(model => model.Definition == definition))
-                return;
-            Add(definition);
-            _version++;
+            if (_loaded.TryGetValue(name, out ShadingModelDefinition? loaded))
+                return loaded;
         }
+        return ShadingModelLibrary.Find(name);
+    }
+
+    /// <summary>The GBuffer id of a model by name, 0 for one that is forward only or unknown. Any thread.</summary>
+    internal uint IdOf(string name)
+    {
+        if (ShadingModelLibrary.IdOf(name) is > 0 and uint shipped)
+            return shipped;
+        lock (_lock)
+            return _ids.GetValueOrDefault(name);
     }
 
     private ShadingModel? Add(ShadingModelDefinition definition)
@@ -224,7 +223,7 @@ public sealed class ShadingModels : IDisposable
         _broken.RemoveWhere(model => model.Name == definition.Name);
         if (definition.ForwardOnly)
             return null;
-        ShadingModel model = new(definition.Name, ShadingModelLibrary.IdOf(definition.Name), definition.Unpack, definition.Lighting, false, definition);
+        ShadingModel model = new(definition.Name, IdOf(definition.Name), definition.Unpack, definition.Lighting, false, definition);
         _models.Add(model);
         return model;
     }

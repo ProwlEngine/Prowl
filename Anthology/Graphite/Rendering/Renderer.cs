@@ -424,9 +424,7 @@ public sealed class Renderer : IDisposable
     /// </summary>
     public Shader LoadShader(ShaderDefinition definition)
     {
-        Shader shader = new(definition, _compiler);
-        if (shader.ShadingModel is { } model)
-            ShadingModels.Ensure(model);
+        Shader shader = new(definition, _compiler, Resources.ShadingModels);
         if (string.IsNullOrEmpty(shader.Definition.Fallback) || shader.Definition.Fallback == FallbackShaderName)
             shader.Fallback = _fallbackShader;
         return shader;

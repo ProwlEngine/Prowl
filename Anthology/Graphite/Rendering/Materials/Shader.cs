@@ -532,17 +532,19 @@ public sealed class Shader
     private readonly (string Axis, string[] Values)?[] _discards;
     private readonly HashSet<string>[] _passAxes;
 
-    /// <summary>The ShadingModel document its GBuffer pass names, null for a shader of the renderer's own models or without the pass.</summary>
-    internal string? ShadingModel { get; }
-
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
     public Shader? Fallback { get; set; }
 
-    /// <summary>A shader drawing a copy of the definition, which is left as it is.</summary>
-    public Shader(ShaderDefinition definition, IShaderCompiler? compiler)
+    /// <summary>
+    /// A shader drawing a copy of the definition, which is left as it is. Its Surface block builds on a surface model
+    /// of the library. <see cref="Renderer.LoadShader"/> knows the ShadingModel documents its renderer loaded too.
+    /// </summary>
+    public Shader(ShaderDefinition definition, IShaderCompiler? compiler) : this(definition, compiler, null) { }
+
+    internal Shader(ShaderDefinition definition, IShaderCompiler? compiler, ShadingModels? models)
     {
         definition = definition.Copy();
-        ShadingModel = ExpandSurface(definition);
+        ExpandSurface(definition, models);
         Definition = definition;
         Name = definition.Name ?? "";
         Schema = new MaterialSchema(definition.Properties ?? []);
@@ -625,13 +627,13 @@ public sealed class Shader
     /// properties come before the shader's own, which replace any of the same name. A shader naming no Fallback takes the
     /// model's.
     /// </summary>
-    private static string? ExpandSurface(ShaderDefinition definition)
+    private static void ExpandSurface(ShaderDefinition definition, ShadingModels? models)
     {
         if (definition.Surface is not { } surface)
-            return null;
+            return;
         string name = definition.Name ?? "";
         string path = $"{ShaderLibrary.Prefix}Standard/{surface.Model}.shader";
-        ShaderDefinition model = SurfaceModel(surface.Model, name, surface.Line);
+        ShaderDefinition model = SurfaceModel(surface.Model, name, surface.Line, models);
 
         string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
         string lighting = surface.Lighting;
@@ -691,19 +693,17 @@ public sealed class Shader
         }
         definition.Properties = [.. properties];
         definition.Surface = null;
-        bool kept = Array.Exists(standard, pass => ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.GBuffer.Name));
-        return kept && ShadingModelLibrary.IdOf(surface.Model) > ShadingModelLibrary.Foliage ? surface.Model : null;
     }
 
     private static readonly System.Text.RegularExpressions.Regex s_sharedBlock = new(@"\bShared\s*\{");
 
     // The shader a surface model's passes and properties come from: the library shader of its name, or for a
-    // ShadingModel document the model it is based on with the document applied
-    private static ShaderDefinition SurfaceModel(string model, string name, int line)
+    // ShadingModel document, the renderer's or the library's, the model it is based on with the document applied
+    private static ShaderDefinition SurfaceModel(string model, string name, int line, ShadingModels? models)
     {
         InternalShaders.Register();
-        if (ShadingModelLibrary.Find(model) is { } shading)
-            return ApplyShadingModel(LibraryModel(shading.Base, name, line), shading);
+        if ((models?.Definition(model) ?? ShadingModelLibrary.Find(model)) is { } shading)
+            return ApplyShadingModel(LibraryModel(shading.Base, name, line), shading, models?.IdOf(model) ?? ShadingModelLibrary.IdOf(model));
         return LibraryModel(model, name, line);
     }
 
@@ -722,9 +722,8 @@ public sealed class Shader
     /// values, so a shader built on the model has no Lighting block of its own. A Model_Surface or Model_Params
     /// function in the Pack block makes or changes inputs in both, before and after the shader's Surface function.
     /// </summary>
-    private static ShaderDefinition ApplyShadingModel(ShaderDefinition model, ShadingModelDefinition shading)
+    private static ShaderDefinition ApplyShadingModel(ShaderDefinition model, ShadingModelDefinition shading, uint id)
     {
-        uint id = ShadingModelLibrary.IdOf(shading.Name);
         System.Text.StringBuilder defines = new();
         foreach (string define in shading.Defines)
             defines.Append($"#define {define}\n");

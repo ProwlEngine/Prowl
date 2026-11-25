@@ -180,17 +180,22 @@ public sealed class ShadingModelTests : IDisposable
     }
 
     [Fact]
-    public void AModelAnotherRendererLoaded_LightsTheShadersBuiltOnItHere()
+    public void AModelIsItsRenderersOwn_AndAnotherRendererGivesItsOwnTheSameIds()
     {
-        _harness.Renderer.LoadShadingModel(Flat("FlatGreen", "vec3(0.0, 0.5, 0.0)"));
+        ShadingModel green = _harness.Renderer.LoadShadingModel(Flat("FlatGreen", "vec3(0.0, 0.5, 0.0)"))!;
         using RendererHarness other = new();
         other.World.AddLight(s_light);
         Assert.Null(other.Renderer.ShadingModels.Find("FlatGreen"));
+        Assert.Throws<ShaderLoadException>(() => On(other, Quad(other), "FlatGreen"));
 
-        On(other, Quad(other), "FlatGreen");
-        Assert.NotNull(other.Renderer.ShadingModels.Find("FlatGreen"));
-        Float4 green = Centre(other.Frame(View(other, RenderPath.Deferred)));
-        Assert.True(green.X < 0.03f && MathF.Abs(green.Y - 0.5f) < 0.03f, $"green {green}");
+        ShadingModel blue = other.Renderer.LoadShadingModel(Flat("FlatBlue", "vec3(0.0, 0.0, 0.5)"))!;
+        Assert.Equal(green.Id, blue.Id);
+        On(other, Quad(other), "FlatBlue");
+        On("FlatGreen");
+        Float4 there = Centre(other.Frame(View(other, RenderPath.Deferred)));
+        Float4 here = Centre(_harness.Frame(View(RenderPath.Deferred)));
+        Assert.True(there.Y < 0.03f && MathF.Abs(there.Z - 0.5f) < 0.03f, $"blue {there}");
+        Assert.True(here.Z < 0.03f && MathF.Abs(here.Y - 0.5f) < 0.03f, $"green {here}");
     }
 
     [Fact]
