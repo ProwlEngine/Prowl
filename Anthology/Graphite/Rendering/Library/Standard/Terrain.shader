@@ -136,7 +136,7 @@ Shader "Graphite/Terrain"
     Pass
     {
         Name "GBuffer"
-        Tags { "LightMode" = "GBuffer" }
+        Tags { "LightMode" = "GBuffer" "Discards" = "_SURFACE CUTOUT" }
         GLSLPROGRAM
         Shared
         {

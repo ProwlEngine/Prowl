@@ -518,8 +518,10 @@ public sealed class Shader
     public const string OutputTag = "Output";
 
     /// <summary>
-    /// The pass tag of a Forward pass whose fragments discard, "Discards" = "On", so a material without a ShadowCaster
-    /// pass casts no shadow in place of one shaped by its whole depth.
+    /// The pass tag of a pass whose fragments discard. On a Forward pass, "Discards" = "On", a material without a
+    /// ShadowCaster pass casts no shadow in place of one shaped by its whole depth. On a GBuffer pass, "On" or
+    /// "Discards" = "AXIS VALUE VALUE" for the material keyword values it discards under, its surface counts as alpha
+    /// cut for <see cref="EarlyDepth.AlphaCut"/>.
     /// </summary>
     public const string DiscardsTag = "Discards";
 
@@ -527,6 +529,7 @@ public sealed class Shader
     private readonly bool[] _readsSceneDepth;
     private readonly bool[] _readsBackDepth;
     private readonly (string Axis, string[] Values)?[] _readsWhen;
+    private readonly (string Axis, string[] Values)?[] _discards;
     private readonly HashSet<string>[] _passAxes;
 
     /// <summary>The ShadingModel document its GBuffer pass names, null for a shader of the renderer's own models or without the pass.</summary>
@@ -551,6 +554,7 @@ public sealed class Shader
         _readsSceneDepth = new bool[passes.Length];
         _readsBackDepth = new bool[passes.Length];
         _readsWhen = new (string, string[])?[passes.Length];
+        _discards = new (string, string[])?[passes.Length];
         for (int i = 0; i < passes.Length; i++)
         {
             _readsSceneColor[i] = ShaderDefinition.PassHasTag(passes[i], SceneColorTag, "Read");
@@ -558,6 +562,8 @@ public sealed class Shader
             _readsBackDepth[i] = ShaderDefinition.PassHasTag(passes[i], BackDepthTag, "Read");
             if (passes[i].Tags != null && passes[i].Tags!.TryGetValue(ReadsWhenTag, out string? when) && when.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [string axis, .. string[] values] && values.Length > 0)
                 _readsWhen[i] = (axis, values);
+            if (passes[i].Tags != null && passes[i].Tags!.TryGetValue(DiscardsTag, out string? discards) && discards.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [string first, .. string[] rest])
+                _discards[i] = rest.Length > 0 ? (first, rest) : first == "On" ? ("", []) : null;
             PremultipliedOutput |= ShaderDefinition.PassHasTag(passes[i], OutputTag, "Premultiplied");
         }
 
@@ -907,6 +913,14 @@ public sealed class Shader
     public bool ReadsBackDepth => Array.IndexOf(_readsBackDepth, true) >= 0;
 
     internal bool PassReadsBackDepth(int passIndex) => passIndex >= 0 && passIndex < _readsBackDepth.Length && _readsBackDepth[passIndex];
+
+    /// <summary>Whether a pass's fragments discard for a material with these keywords, see <see cref="DiscardsTag"/>.</summary>
+    internal bool PassDiscards(int passIndex, Keyword[] keywords)
+    {
+        if (passIndex < 0 || passIndex >= _discards.Length || _discards[passIndex] is not (string axis, string[] values))
+            return false;
+        return axis.Length == 0 || Array.Exists(keywords, keyword => keyword.Name == axis && Array.IndexOf(values, keyword.Value) >= 0);
+    }
 
     /// <summary>Whether a pass's screen reads count in a view with these global keywords, see <see cref="ReadsWhenTag"/>.</summary>
     internal bool PassReadsIn(int passIndex, IReadOnlyDictionary<string, string> keywords)

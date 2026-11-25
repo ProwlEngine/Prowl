@@ -408,6 +408,16 @@ public sealed class StandardShaderTests : IDisposable
     // The axes deciding how much light a caster lets through to its shadow
     private static readonly string[] s_shadowAxes = ["PBR_THIN_WALLED", "PBR_TRANSMISSION"];
 
+    [Fact]
+    public void TheGBufferPass_DiscardsUnderTheCutoutSurface_AsItsTagSays()
+    {
+        Shader lit = Model("Lit");
+        int gbuffer = lit.PassIndex(PassType.GBuffer);
+        Assert.True(lit.PassDiscards(gbuffer, [new Keyword("_SURFACE", "CUTOUT")]));
+        Assert.False(lit.PassDiscards(gbuffer, [new Keyword("_SURFACE", "OPAQUE")]));
+        Assert.False(lit.PassDiscards(lit.PassIndex(PassType.Forward), [new Keyword("_SURFACE", "CUTOUT")]));
+    }
+
     private Shader Model(string name) => new(ShaderParser.Parse($"Shader \"Test/{name}\" {{ Surface \"{name}\" {{ }} }}"), _compiler);
 
     // Coat, fuzz, subsurface and anisotropy are surface models built on Lit, each with its lobe's properties and the

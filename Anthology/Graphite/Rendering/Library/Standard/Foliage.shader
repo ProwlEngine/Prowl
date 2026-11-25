@@ -120,7 +120,7 @@ Shader "Graphite/Foliage"
     Pass
     {
         Name "GBuffer"
-        Tags { "LightMode" = "GBuffer" }
+        Tags { "LightMode" = "GBuffer" "Discards" = "_SURFACE CUTOUT" }
         Cull Off
         GLSLPROGRAM
         Shared

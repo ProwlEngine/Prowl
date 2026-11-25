@@ -395,7 +395,7 @@ internal sealed class DrawPrograms
             state = over.Apply(state);
         DepthStencilStateDescription depth = state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
         bool draws = depth.DepthWriteEnabled && depth.DepthComparison != ComparisonKind.Equal;
-        return (draws, Array.Exists(program.Keywords, static keyword => keyword.Name == "_SURFACE" && keyword.Value == "CUTOUT"));
+        return (draws, shader.PassDiscards(gbuffer, program.Keywords));
     }
 
     private int Prepassed(ushort id)
