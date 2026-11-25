@@ -79,6 +79,29 @@ public sealed class GBufferViewTests : IDisposable
         Assert.True(MathF.Abs(plain.X - mapped.X) < 0.01f, $"without {plain}, with {mapped}");
     }
 
+    private sealed class Upscaler(FullscreenProgram program) : RenderFeature(RenderSlot.Upscale)
+    {
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteOutputColor();
+        public override void Render(FeatureContext context) => context.Fullscreen(program);
+    }
+
+    [Fact]
+    public void AfterAnUpscaler_TheImageStillShowsTheSurfaceWhereItIs()
+    {
+        FullscreenProgram copy = _harness.Renderer.CreateFullscreenProgram("void main() { outColor = Graphite_SampleSource(vUV); }");
+        _harness.Owned.Add(copy);
+        _harness.World.Features.Add(new Upscaler(copy));
+        _debug.Mode = GBufferDebugMode.Occlusion;
+        RenderView view = View(RenderPath.Deferred);
+        view.RenderScale = 0.5f;
+        Float4[] pixels = _harness.Frame(view);
+
+        // The quad covers the middle half of the image, whatever size its GBuffer was drawn at
+        float At(int x, int y) => pixels[y * Size + x].X;
+        Assert.True(At(2, Size / 2) < 0.1f && At(13, Size / 2) < 0.1f && At(Size / 2, 2) < 0.1f && At(Size / 2, 13) < 0.1f, "outside the quad");
+        Assert.True(At(5, Size / 2) > 0.9f && At(10, Size / 2) > 0.9f && At(Size / 2, 5) > 0.9f && At(Size / 2, 10) > 0.9f, "inside the quad");
+    }
+
     [Fact]
     public void AForwardView_SkipsIt_AndSaysSo()
     {

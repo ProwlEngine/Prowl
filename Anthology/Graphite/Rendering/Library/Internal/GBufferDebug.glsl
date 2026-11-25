@@ -17,7 +17,9 @@ vec3 Encode(vec3 linear) { return pow(clamp(linear, 0.0, 1.0), vec3(1.0 / 2.2));
 
 void main()
 {
-    ivec2 pixel = ivec2(gl_FragCoord.xy);
+    // The GBuffer keeps the render resolution, which an upscaler before this pass leaves below the image's
+    ivec2 size = Graphite_Size(Graphite_GBufferSurface, 0);
+    ivec2 pixel = min(ivec2(vUV * vec2(size)), size - 1);
     float depth = Graphite_GBufferDepthAt(pixel);
     vec4 surface = Graphite_GBufferSurfaceAt(pixel);
     if (Graphite_GBufferModelOf(surface) == GRAPHITE_MODEL_NONE)
