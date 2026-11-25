@@ -151,8 +151,8 @@ public sealed class ShadingModels : IDisposable
 
         _models.Add(new ShadingModel("Lit", ShadingModelLibrary.Lit, "", "", false));
         _models.Add(new ShadingModel("Unlit", ShadingModelLibrary.Unlit, "", "", true));
-        _models.Add(new ShadingModel("Foliage", ShadingModelLibrary.Foliage, "",
-            "#include \"Graphite/Foliage/FoliageLight.glsl\"\nvec3 Model_Light(PBR_Closure c, Graphite_LightContribution l, vec4 custom) { return Foliage_DeferredLight(c, l, custom); }\n", false));
+        InternalShaders.Register();
+        _models.Add(new ShadingModel("Foliage", ShadingModelLibrary.Foliage, "", ShaderLibrary.Get($"{ShaderLibrary.Prefix}Foliage/FoliageModel.glsl")!, false));
         foreach (string name in s_shipped)
         {
             if (ShadingModelLibrary.Find(name) is { } shipped)
