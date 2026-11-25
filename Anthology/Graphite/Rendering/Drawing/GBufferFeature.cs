@@ -130,7 +130,7 @@ public sealed class GBufferFeature : RenderFeature
             formats[(int)GBufferTarget.Base], formats[(int)GBufferTarget.Surface], formats[(int)GBufferTarget.Custom],
             formats[(int)GBufferTarget.Baked], formats[(int)GBufferTarget.Emission],
         ];
-        if (scene <= SceneTarget.Normals || builder.Runs(FeatureGroup.GBufferDecals))
+        if (scene <= SceneTarget.Normals || (view.HasDecals && builder.Runs(FeatureGroup.GBufferDecals)))
             own.Add(formats[(int)GBufferTarget.Normal]);
         if (scene <= SceneTarget.Motion)
             own.Add(formats[(int)GBufferTarget.Motion]);
@@ -230,7 +230,8 @@ internal struct GBufferRead
 /// <summary>
 /// Lays the world's decals over a deferred view's GBuffer once its pass has drawn: base colour, metalness, roughness and
 /// occlusion into the targets it publishes as <see cref="RendererOutputs.GBufferDecals"/>, and the normal onto the
-/// scene's, or beside them where the scene has no normal target. Adds its pass while the world has a decal. Group
+/// scene's, or beside them where the scene has no normal target. Adds its pass on the frames a decal of the world
+/// reaches into the view. Group
 /// <see cref="FeatureGroup.GBufferDecals"/>.
 /// </summary>
 public sealed class GBufferDecalsFeature : RenderFeature
@@ -255,6 +256,8 @@ public sealed class GBufferDecalsFeature : RenderFeature
     }
 
     public override bool IsActive(in FeatureView view) => view.World.Lighting.LiveDecals > 0;
+
+    public override bool HasWork(in FeatureView view) => view.HasDecals;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {

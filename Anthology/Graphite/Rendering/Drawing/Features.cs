@@ -101,10 +101,10 @@ public readonly struct FeatureView
     internal FeatureView AtOutput() => this with { Width = OutputWidth, Height = OutputHeight, RenderScale = 1, Upscaled = true };
 
     /// <summary>The view once it is culled, with what its draws read this frame.</summary>
-    internal FeatureView Culled(bool sceneColor, bool sceneDepth, bool backDepth, bool cascades, bool hiZBeforeOpaques, bool hiZAfterOpaques)
+    internal FeatureView Culled(bool sceneColor, bool sceneDepth, bool backDepth, bool cascades, bool decals, bool hiZBeforeOpaques, bool hiZAfterOpaques)
         => this with
         {
-            ReadsSceneColor = sceneColor, ReadsSceneDepth = sceneDepth, ReadsBackDepth = backDepth, HasCascades = cascades,
+            ReadsSceneColor = sceneColor, ReadsSceneDepth = sceneDepth, ReadsBackDepth = backDepth, HasCascades = cascades, HasDecals = decals,
             ReadsHiZBeforeOpaques = hiZBeforeOpaques, ReadsHiZAfterOpaques = hiZAfterOpaques,
         };
 
@@ -161,6 +161,9 @@ public readonly struct FeatureView
 
     /// <summary>Whether the view has directional cascades this frame. Known from HasWork on, not in IsActive.</summary>
     public bool HasCascades { get; private init; }
+
+    /// <summary>Whether a decal of the world reaches into the view this frame. Known from HasWork on, not in IsActive.</summary>
+    public bool HasDecals { get; private init; }
 
     /// <summary>Whether a feature of the view reads its depth pyramid this frame. Known from HasWork on, not in IsActive.</summary>
     public bool ReadsHiZ => ReadsHiZBeforeOpaques || ReadsHiZAfterOpaques;
