@@ -21,8 +21,8 @@ public sealed class NetworkAccessor
     // The send interval of each component of this object that has one set.
     private Dictionary<Component, int>? _componentIntervals;
 
-    // Intervals as stored, by component index, until the object's components are there to take them.
-    private List<(int Index, int Ticks)>? _storedIntervals;
+    // Intervals as stored, by component identity and index, until the object's components are there to take them.
+    private List<(Guid Component, int Index, int Ticks)>? _storedIntervals;
 
     internal NetworkAccessor(GameObject owner) => _object = owner;
 
@@ -122,11 +122,37 @@ public sealed class NetworkAccessor
         }
     }
 
-    internal bool HasComponentIntervals => TakeStoredIntervals() is { Count: > 0 };
+    internal bool HasComponentIntervals
+    {
+        get
+        {
+            if (TakeStoredIntervals() is not { } intervals)
+            {
+                return false;
+            }
+
+            // Components that were removed since are let go here, as the object is saved.
+            List<Component>? gone = null;
+            foreach (Component component in intervals.Keys)
+            {
+                if (component.IsNotValid() || component.GameObject != _object)
+                {
+                    (gone ??= new List<Component>()).Add(component);
+                }
+            }
+
+            foreach (Component component in gone ?? [])
+            {
+                intervals.Remove(component);
+            }
+
+            return intervals.Count > 0;
+        }
+    }
 
     internal void ClearComponentIntervals() => (_componentIntervals, _storedIntervals) = (null, null);
 
-    internal void SetStoredIntervals(List<(int Index, int Ticks)> stored) =>
+    internal void SetStoredIntervals(List<(Guid Component, int Index, int Ticks)> stored) =>
         _storedIntervals = stored.Count > 0 ? stored : null;
 
     // The intervals by component, once the stored ones found theirs.
@@ -139,15 +165,61 @@ public sealed class NetworkAccessor
 
         _storedIntervals = null;
         List<Component> components = [.. _object.GetComponents<Component>()];
-        foreach ((int index, int ticks) in stored)
+        bool anyMatched = false;
+        List<(int Index, int Ticks)> unmatched = new();
+        foreach ((Guid id, int index, int ticks) in stored)
         {
-            if (index < components.Count)
+            // The component it was saved with, or the one copied from it, wherever it sits now.
+            if (Matching(components, id) is { } match)
             {
-                (_componentIntervals ??= new Dictionary<Component, int>())[components[index]] = ticks;
+                anyMatched = true;
+                (_componentIntervals ??= new Dictionary<Component, int>())[match] = ticks;
+            }
+            else
+            {
+                unmatched.Add((index, ticks));
+            }
+        }
+
+        // Read with fresh identities, or saved before identities were stored, the components are where they were.
+        if (!anyMatched)
+        {
+            foreach ((int index, int ticks) in unmatched)
+            {
+                if (index < components.Count)
+                {
+                    (_componentIntervals ??= new Dictionary<Component, int>())[components[index]] = ticks;
+                }
             }
         }
 
         return _componentIntervals;
+    }
+
+    private static Component? Matching(List<Component> components, Guid id)
+    {
+        if (id == Guid.Empty)
+        {
+            return null;
+        }
+
+        foreach (Component component in components)
+        {
+            if (component.Identifier == id)
+            {
+                return component;
+            }
+        }
+
+        foreach (Component component in components)
+        {
+            if (component.SourceIdentifier == id)
+            {
+                return component;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The ticks between sends of a component's changed state. See <see cref="SetSendInterval" />.</summary>

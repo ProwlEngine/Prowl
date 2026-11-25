@@ -94,6 +94,34 @@ public partial class NetworkingTests
     }
 
     [Fact]
+    public void ACopiedSendIntervalFindsItsComponentWhereverItSits()
+    {
+        GameObject source = CreateGameObject("Source");
+        source.AddComponent<PlainTestComponent>();
+        NetTestComponent slow = source.AddComponent<NetTestComponent>();
+        source.Network.SetSendInterval(slow, 6);
+
+        // An instance that came from it, with a component of its own put first.
+        GameObject instance = CreateGameObject("Instance");
+        VisibilityListener extra = instance.AddComponent<VisibilityListener>();
+        PlainTestComponent plain = instance.AddComponent<PlainTestComponent>();
+        NetTestComponent copied = instance.AddComponent<NetTestComponent>();
+        plain.SourceIdentifier = source.GetComponent<PlainTestComponent>()!.Identifier;
+        copied.SourceIdentifier = slow.Identifier;
+
+        CopyMap map = new();
+        map.Fill(source.GetComponent<PlainTestComponent>()!, plain);
+        map.Fill(slow, copied);
+        ObjectCopy.CopyTo(source, instance, map);
+
+        Assert.Equal(6, instance.Network.GetSendInterval(copied));
+        Assert.Equal(1, instance.Network.GetSendInterval(plain));
+        Assert.Equal(1, instance.Network.GetSendInterval(extra));
+        instance.Dispose();
+        source.Dispose();
+    }
+
+    [Fact]
     public void ASyncValueChangingEveryTickWaitsForItsComponentsInterval()
     {
         Scene scene = CreateScene();

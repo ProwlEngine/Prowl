@@ -40,7 +40,7 @@ internal static class NetworkSerialization
 
         if (network.HasComponentIntervals)
         {
-            // By each component's place among the object's own, which is how they are stored too.
+            // By each component's identifier, with its place among the object's own for data that lost the identifiers.
             EchoObject intervals = EchoObject.NewList();
             List<Component> components = [.. go.GetComponents<Component>()];
             for (int i = 0; i < components.Count; i++)
@@ -50,6 +50,7 @@ internal static class NetworkSerialization
                 {
                     EchoObject entry = EchoObject.NewCompound(2);
                     entry.Add("Index", new EchoObject(i));
+                    entry.Add("Component", new EchoObject(components[i].Identifier.ToString()));
                     entry.Add("Ticks", new EchoObject((byte)interval));
                     intervals.ListAdd(entry);
                 }
@@ -88,15 +89,16 @@ internal static class NetworkSerialization
         network.ClearComponentIntervals();
         if (settings["ComponentIntervals"]?.List is { } intervals)
         {
-            // The object's components are read after this, so the intervals wait for them by index.
-            List<(int Index, int Ticks)> pending = new();
+            // The object's components are read after this, so the intervals wait for them.
+            List<(Guid Component, int Index, int Ticks)> pending = new();
             foreach (EchoObject entry in intervals)
             {
                 int index = entry["Index"]?.IntValue ?? -1;
                 int ticks = entry["Ticks"]?.ByteValue ?? 1;
+                Guid.TryParse(entry["Component"]?.StringValue, out Guid component);
                 if (index >= 0 && ticks > 1)
                 {
-                    pending.Add((index, ticks));
+                    pending.Add((component, index, ticks));
                 }
             }
 
