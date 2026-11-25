@@ -150,8 +150,7 @@ public sealed class ShadingModels : IDisposable
         _compiler = compiler;
         _policy = policy;
         BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
-        BlendAttachmentDescription kept = written with { ColorWriteMask = ColorWriteMask.None };
-        _blend = BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, kept, kept, kept, written] };
+        _blend = BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written] };
 
         _models.Add(new ShadingModel("Lit", ShadingModelLibrary.Lit, "", "", false));
         _models.Add(new ShadingModel("Unlit", ShadingModelLibrary.Unlit, "", "", true));
@@ -317,7 +316,7 @@ public sealed class ShadingModels : IDisposable
     }
 
     private FullscreenProgram Create(string source, Action<RendererError>? report)
-        => FullscreenProgram.Create(_device, _compiler, source, "Graphite/DeferredLighting", source: false, blend: _blend, lit: true, depth: true, policy: _policy, report: report);
+        => FullscreenProgram.Create(_device, _compiler, source, "Graphite/DeferredLighting", source: false, blend: _blend, lit: true, policy: _policy, report: report);
 
     // The head, each model's code under names of its own, the functions that pick by the pixel's model, then the pass
     // itself. No model adds to the closure, so a pixel pays for its own model's lighting alone.

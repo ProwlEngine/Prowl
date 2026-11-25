@@ -52,6 +52,13 @@ public sealed partial class FrameGraph : IDisposable
 
     internal IReadOnlyList<GroupInfo> Groups => _groups;
 
+    /// <summary>How many colour targets a texture of this frame's graph has.</summary>
+    public int ColorTargetCount(TextureHandle texture)
+    {
+        FrameResource resource = _resources[texture.Index];
+        return resource.ImportedTexture is { } imported ? imported.ColorTextures.Length : resource.Texture.ColorFormats?.Length ?? 0;
+    }
+
     public TextureHandle Create(RenderResourceID id, in GraphTextureDesc desc, Lifetime lifetime = default, int scope = 0)
     {
         if (desc.Width <= 0 || desc.Height <= 0)

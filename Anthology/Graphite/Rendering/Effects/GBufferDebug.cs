@@ -50,12 +50,13 @@ public sealed class GBufferDebug : PostEffect
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.GetViewState<State>().GBuffer = GBufferRead.Declare(builder);
+        builder.ReadScene();
         builder.WriteColor();
     }
 
     public override void Render(FeatureContext context)
     {
-        context.GetViewState<State>().GBuffer.Bind(context, _properties, PointClamp);
+        context.GetViewState<State>().GBuffer.Bind(context, _properties, PointClamp, context.SceneRead!);
         _properties.SetInt(s_mode, (int)_mode);
         context.Fullscreen(_program, _properties);
     }

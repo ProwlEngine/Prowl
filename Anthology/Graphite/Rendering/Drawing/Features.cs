@@ -216,7 +216,7 @@ public sealed class FeatureGroup(string name)
         Opaque = new("Opaque"), Sky = new("Sky"), SceneColor = new("SceneColor"), SceneDepth = new("SceneDepth"),
         BackDepth = new("BackDepth"), Transparent = new("Transparent"), Present = new("Present"), VolumetricFog = new("VolumetricFog"),
         VolumetricFogSky = new("VolumetricFogSky"), HiZ = new("HiZ"), HiZAfterOpaques = new("HiZAfterOpaques"), GBuffer = new("GBuffer"),
-        GBufferDecals = new("GBufferDecals"), GBufferResolve = new("GBufferResolve"), DeferredLighting = new("DeferredLighting");
+        GBufferDecals = new("GBufferDecals"), DeferredLighting = new("DeferredLighting");
 
     /// <summary>The stock effects' groups, of which a view runs one each.</summary>
     public static readonly FeatureGroup ScreenLighting = new("ScreenLighting"), Tonemap = new("Tonemap"), AntiAliasing = new("AntiAliasing");
@@ -757,6 +757,35 @@ public sealed class FeatureBuilder
         Write(View.Scene);
     }
 
+    /// <summary>
+    /// Draws onto targets of the scene the feature picks, in a framebuffer of its own, and may sample the scene's other
+    /// targets in the same pass. Returns the scene to get them from.
+    /// </summary>
+    internal TextureHandle WriteSceneTargets()
+    {
+        if (!View.SceneWritten)
+            throw new InvalidOperationException($"{_pass.Name} draws onto the scene, which no earlier feature drew.");
+        if (_pass.SceneRead != null || _pass.Wrote)
+            throw new InvalidOperationException($"{_pass.Name} draws onto the scene's targets beside another use of the scene.");
+        if (!View.CurrentIsScene)
+        {
+            _pass.CopyBack = _graph.Read(View.Current);
+            View.CurrentIsScene = true;
+        }
+        TextureHandle written = _graph.Write(View.Scene, TextureState.Attachment | TextureState.Sampled);
+        View.Scene = View.Current = written;
+        View.CurrentWritten = true;
+        ReadPostViews();
+        return written;
+    }
+
+    /// <summary>How many colour targets the view's scene has.</summary>
+    internal int SceneTargetCount => View.SceneWritten ? View.Graph.ColorTargetCount(View.Scene)
+        : throw new InvalidOperationException($"{_pass.Name} asks about the scene, which no earlier feature drew.");
+
+    /// <summary>Whether a feature of a group runs on the view this frame.</summary>
+    internal bool Runs(FeatureGroup group) => FeatureSelection.Has(View.Camera.Selected, group);
+
     /// <summary>Writes a new colour from the current one, which later features read. <see cref="FeatureContext.Fullscreen"/> draws it.</summary>
     public void WriteColor()
     {
@@ -1075,6 +1104,26 @@ public sealed class FeatureContext
 
     private RenderTexture? Scene => _pass.SceneRead is { } scene ? Graph.Get(scene) : null;
 
+    /// <summary>The scene the feature reads, null when it reads none.</summary>
+    internal RenderTexture? SceneRead => Scene;
+
+    /// <summary>
+    /// Copies a colour written since the scene was last drawn into the scene, for a feature that draws onto the
+    /// scene's targets through <see cref="FeatureBuilder.WriteSceneTargets"/>.
+    /// </summary>
+    internal void CopyBack(RenderTexture scene)
+    {
+        if (_pass.CopyBack is not { } copy)
+            return;
+        Command.SetFramebuffer(scene.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+        Command.SetFullViewport();
+        Command.SetShader(_pass.Frame.Resources.CopyBackProgram.For(View.LayerCount));
+        Command.SetVertexSource(VertexSource.None);
+        _properties.SetTexture(s_source, Graph.Get(copy).ColorTextures[0], _pass.Frame.Resources.LinearRepeat);
+        Command.SetProperties(_properties);
+        Command.Draw(3);
+    }
+
     /// <summary>A texture the feature declared.</summary>
     public RenderTexture Get(TextureHandle texture) => Graph.Get(texture);
 
@@ -1207,14 +1256,21 @@ public sealed class FeatureContext
     /// form on a layered view so the view sized textures it reads give their first layer.
     /// </summary>
     public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null, bool clear = false, bool shared = false)
-        => DrawFullscreen(program, target, properties, shared ? 1 : View.LayerCount, clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store), null);
+        => DrawFullscreen(program, target.Framebuffer, properties, shared ? 1 : View.LayerCount, clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store), null);
+
+    /// <summary>
+    /// Draws a fullscreen program over a framebuffer of targets the feature declared, keeping what they hold, but for
+    /// one colour target cleared to transparent black first when asked.
+    /// </summary>
+    internal void Fullscreen(FullscreenProgram program, Framebuffer framebuffer, PropertySet? properties = null, int clear = -1)
+        => DrawFullscreen(program, framebuffer, properties, View.LayerCount, AttachmentOps.Loaded, null, clear);
 
     /// <summary>
     /// Draws a fullscreen program over one region of a texture the feature declared, keeping the rest of what it holds,
     /// for a texture filled a region at a time. Shared as for <see cref="Fullscreen(FullscreenProgram, RenderTexture, PropertySet?, bool, bool)"/>.
     /// </summary>
     public void Fullscreen(FullscreenProgram program, RenderTexture target, int x, int y, int width, int height, PropertySet? properties = null, bool shared = false)
-        => DrawFullscreen(program, target, properties, shared ? 1 : View.LayerCount, AttachmentOps.Loaded, (x, y, width, height));
+        => DrawFullscreen(program, target.Framebuffer, properties, shared ? 1 : View.LayerCount, AttachmentOps.Loaded, (x, y, width, height));
 
     /// <summary>
     /// Draws a procedural program's vertices over a texture the feature declared, for geometry made in the shader such as
@@ -1239,7 +1295,7 @@ public sealed class FeatureContext
         Command.Draw(vertexCount);
     }
 
-    private void DrawFullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties, int layers, AttachmentOps color, (int X, int Y, int Width, int Height)? region)
+    private void DrawFullscreen(FullscreenProgram program, Framebuffer framebuffer, PropertySet? properties, int layers, AttachmentOps color, (int X, int Y, int Width, int Height)? region, int clear = -1)
     {
         if (program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a procedural program as a fullscreen one; draw it with DrawProcedural.");
@@ -1247,9 +1303,10 @@ public sealed class FeatureContext
             throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
         if (Program(program) is not { } shader)
             return;
-        Framebuffer framebuffer = target.Framebuffer;
         Command.SetFramebuffer(framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
+        if (clear >= 0)
+            Command.ClearColorTarget((uint)clear, new Color(0f, 0f, 0f, 0f));
         if (region is { } r)
         {
             int width = (int)framebuffer.Width, height = (int)framebuffer.Height;
@@ -1716,7 +1773,6 @@ internal static class FeatureSelection
             new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
             new GBufferFeature(resources),
             new GBufferDecalsFeature(resources),
-            new GBufferResolveFeature(resources),
             new HiZFeature(resources, afterOpaques: false),
             new DeferredLightingFeature(resources),
             new DrawPassFeature(PassType.Forward, RenderSlot.Opaque, group: FeatureGroup.Opaque, runsOn: ViewKinds.All),
@@ -1773,13 +1829,13 @@ internal static class FeatureSelection
     }
 
     /// <summary>
-    /// Whether a view's features draw a GBuffer, resolve it and light it. A deferred view missing one of the three, as
-    /// while its lighting program compiles, drops every feature of the deferred path alone and draws forward.
+    /// Whether a view's features draw a GBuffer and light it. A deferred view missing one of the two, as while its
+    /// lighting program compiles, drops every feature of the deferred path alone and draws forward.
     /// </summary>
     public static bool LightsDeferred(List<RenderFeature> features)
-        => Has(features, FeatureGroup.GBuffer) && Has(features, FeatureGroup.GBufferResolve) && Has(features, FeatureGroup.DeferredLighting);
+        => Has(features, FeatureGroup.GBuffer) && Has(features, FeatureGroup.DeferredLighting);
 
-    private static bool Has(List<RenderFeature> features, FeatureGroup group)
+    public static bool Has(List<RenderFeature> features, FeatureGroup group)
     {
         foreach (RenderFeature feature in features)
         {

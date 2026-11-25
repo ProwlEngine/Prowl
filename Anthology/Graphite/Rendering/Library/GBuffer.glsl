@@ -1,4 +1,6 @@
 // The GBuffer of a deferred view: what the GBuffer pass keeps of each visible opaque surface for the lighting pass.
+// Its depth is the scene's, and its normal and motion the scene's own targets where the scene has them. The rest is
+// a texture of its own.
 //   Base      rgb base colour, a metalness
 //   Normal    world normal, octahedral
 //   Surface   r roughness, g specular, b occlusion, a the shading model, light layers and shadow flag in one byte
@@ -100,7 +102,7 @@ uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferDepth;
 // The pixel's shading model alone, GRAPHITE_MODEL_NONE where the GBuffer holds no surface
 uint Graphite_GBufferModelAt(ivec2 pixel) { return uint(Graphite_Fetch(Graphite_GBufferSurface, pixel, 0).a * 255.0 + 0.5) & 15u; }
 
-// Reversed Z. Where the GBuffer holds no surface it is what the prepass drew there, or 0.
+// The scene's depth, reversed Z. Where the GBuffer holds no surface it is what the prepass drew there, or 0.
 float Graphite_GBufferDepthAt(ivec2 pixel) { return Graphite_Fetch(Graphite_GBufferDepth, pixel, 0).r; }
 
 vec2 Graphite_GBufferMotionAt(ivec2 pixel) { return Graphite_Fetch(Graphite_GBufferMotion, pixel, 0).rg; }

@@ -1,10 +1,10 @@
 // The lighting pass of a deferred view: every pixel of the GBuffer lit as the forward pass lights a surface, by the
-// light function of its shading model, onto the scene with its top specular lobe, which screen space reflections read.
-// Its depth tests against the scene's, so a surface drawn in front by the prepass keeps its pixel. Pixels of an unlit
-// model pass their emission through. Included last in the program ShadingModels writes, after
+// light function of its shading model, onto the scene's colour and, with its top specular lobe, the scene's material
+// target, which screen space reflections read. A surface drawn in front by the prepass left the GBuffer no surface at
+// its pixel, which is skipped. Pixels of an unlit model pass their emission through. Included last in the program ShadingModels writes, after
 // Graphite/Internal/DeferredLightingHead.glsl, the models' code, graphite_DeferredUnpack, Graphite_BRDF,
 // Graphite_AmbientBRDF and graphite_DeferredUnlit.
-layout(location = 4) out vec4 outMaterial;
+layout(location = 1) out vec4 outMaterial;
 
 void main()
 {
@@ -42,5 +42,4 @@ void main()
 
     outColor = vec4(Graphite_SaturateHalf(Graphite_ApplyFog(color, relative)), 1.0);
     outMaterial = vec4(reflectance, roughness);
-    gl_FragDepth = depth;
 }

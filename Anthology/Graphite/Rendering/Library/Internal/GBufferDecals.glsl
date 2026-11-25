@@ -1,7 +1,7 @@
 // The world's decals over a deferred view's GBuffer: its base colour, metalness, normal, roughness and occlusion with
-// every decal covering the pixel applied, as Graphite/Decals.glsl applies them in a forward pass, into targets of their
-// own which the view's lighting then reads in place of the GBuffer's. Unlit pixels and pixels without a surface pass
-// through. A pixel's layers are the three its GBuffer keeps, with every higher one taken as set.
+// every decal covering the pixel applied, as Graphite/Decals.glsl applies them in a forward pass. Base and Surface go
+// into targets of their own, which the view's lighting then reads in place of the GBuffer's, and the normal, read from
+// the GBuffer's own target, onto the scene's or beside them. Unlit pixels pass through and pixels without a surface are left alone. A pixel's layers are the three its GBuffer keeps, with every higher one taken as set.
 #define GRAPHITE_GBUFFER_READ
 #define GRAPHITE_SURFACE_LAYERS graphite_DecalLayers
 
@@ -22,7 +22,9 @@ void main()
 
     Graphite_GBuffer g;
     Graphite_UnpackModel(surface.a, g);
-    if (g.model != GRAPHITE_MODEL_NONE && g.model != GRAPHITE_MODEL_UNLIT)
+    if (g.model == GRAPHITE_MODEL_NONE)
+        discard;
+    if (g.model != GRAPHITE_MODEL_UNLIT)
     {
         Graphite_ViewData view = Graphite_View();
         vec3 relative = Graphite_RelativeFromDepth(view, gl_FragCoord.xy * view.screen.zw, Graphite_GBufferDepthAt(pixel));

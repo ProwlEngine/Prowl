@@ -44,14 +44,8 @@ internal sealed class RendererResources : IDisposable
         BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
         BlendAttachmentDescription kept = written with { ColorWriteMask = ColorWriteMask.None };
         ShadingModels = new ShadingModels(device, compiler, policy, report);
-        BlendAttachmentDescription[] none = new BlendAttachmentDescription[GBufferFeature.TargetCount];
-        Array.Fill(none, kept);
-        GBufferDepthProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDepth"), "Graphite/GBufferDepth", source: false,
-            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = none }, depth: true, policy: policy);
         GBufferDecalsProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDecals"), "Graphite/GBufferDecals", source: false,
             blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written] }, lit: true, variant: "#define GRAPHITE_DECALS 1\n", policy: policy);
-        GBufferResolveProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferResolve"), "Graphite/GBufferResolve", source: false,
-            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [kept, written, kept, written, kept] }, depth: true, policy: policy);
         HiZProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, policy: policy);
         HiZPackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, variant: "#define HIZ_PACK 1\n", policy: policy);
 
@@ -227,14 +221,10 @@ internal sealed class RendererResources : IDisposable
     /// <summary>The renderer's shading models and the program that lights a deferred view's GBuffer by them.</summary>
     public ShadingModels ShadingModels { get; }
 
-    /// <summary>Copies a GBuffer's depth, motion and normals onto the scene, see Graphite/Internal/GBufferResolve.glsl.</summary>
-    public FullscreenProgram GBufferResolveProgram { get; }
-
     /// <summary>Applies the world's decals to a GBuffer, see Graphite/Internal/GBufferDecals.glsl.</summary>
     public FullscreenProgram GBufferDecalsProgram { get; }
 
-    /// <summary>Copies the scene's depth into a GBuffer, see Graphite/Internal/GBufferDepth.glsl.</summary>
-    public FullscreenProgram GBufferDepthProgram { get; }
+    public ResourceFactory Factory => _device.ResourceFactory;
     public FullscreenProgram HiZPackProgram { get; }
 
     private static GraphicsProgram Fullscreen(GraphicsDevice device, PassVariants variants)
@@ -311,8 +301,6 @@ internal sealed class RendererResources : IDisposable
         FogSkyProgram.Dispose();
         HiZProgram.Dispose();
         ShadingModels.Dispose();
-        GBufferResolveProgram.Dispose();
-        GBufferDepthProgram.Dispose();
         GBufferDecalsProgram.Dispose();
         HiZPackProgram.Dispose();
         Textures.Dispose();

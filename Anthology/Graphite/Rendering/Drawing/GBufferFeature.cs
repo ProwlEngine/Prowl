@@ -1,14 +1,17 @@
+using System;
+using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
 
-/// <summary>The targets of a view's GBuffer, in the order its texture holds them. See Graphite/GBuffer.glsl.</summary>
+/// <summary>The targets a GBuffer pass draws, in the order of its outputs. See Graphite/GBuffer.glsl.</summary>
 public enum GBufferTarget
 {
     /// <summary>Base colour in rgb, metalness in a.</summary>
     Base,
 
-    /// <summary>The world normal, octahedral.</summary>
+    /// <summary>The world normal, octahedral: the scene's own normal target where it has one.</summary>
     Normal,
 
     /// <summary>Roughness, specular and occlusion, then the shading model, light layers and shadow flag in a.</summary>
@@ -23,78 +26,159 @@ public enum GBufferTarget
     /// <summary>Pre-exposed emission.</summary>
     Emission,
 
-    /// <summary>How far the surface moved across the screen since last frame, in uv.</summary>
+    /// <summary>How far the surface moved across the screen since last frame, in uv: the scene's own motion target where it has one.</summary>
     Motion,
 }
 
 /// <summary>
-/// Draws the GBuffer pass of a deferred view's opaque renderables, the shader pass tagged "LightMode" = "GBuffer", into
-/// the view's GBuffer and its depth, and publishes it as <see cref="RendererOutputs.GBuffer"/>. Renderables whose shader
-/// has no such pass are left to the forward passes. Its depth starts as the scene's after the prepass, which the
-/// surfaces the prepass drew test equal against, see <see cref="EarlyDepth"/>. Group <see cref="FeatureGroup.GBuffer"/>.
+/// Framebuffers over targets of more than one texture, such as a GBuffer's beside the scene's, kept while the same
+/// targets come back and let go a few frames after they stop.
+/// </summary>
+internal sealed class TargetSets : IDisposable
+{
+    private const int Frames = 8;
+
+    private readonly List<(Texture?[] Targets, Framebuffer Framebuffer, int Age)> _sets = new();
+
+    /// <summary>The framebuffer over a depth target, or none, and colour targets in order.</summary>
+    public Framebuffer Get(ResourceFactory factory, int layers, Texture? depth, params ReadOnlySpan<Texture> colors)
+    {
+        for (int i = 0; i < _sets.Count; i++)
+        {
+            Texture?[] targets = _sets[i].Targets;
+            if (targets.Length != colors.Length + 1 || targets[0] != depth)
+                continue;
+            bool same = true;
+            for (int c = 0; c < colors.Length && same; c++)
+                same = targets[c + 1] == colors[c];
+            if (!same)
+                continue;
+            _sets[i] = (targets, _sets[i].Framebuffer, 0);
+            return _sets[i].Framebuffer;
+        }
+        Texture[] attached = colors.ToArray();
+        Framebuffer framebuffer = factory.CreateFramebuffer(new FramebufferDescription(depth, attached) { ViewCount = layers > 1 ? (uint)layers : 0 });
+        _sets.Add(([depth, .. attached], framebuffer, 0));
+        return framebuffer;
+    }
+
+    /// <summary>Once a frame: lets go of the framebuffers nothing asked for lately.</summary>
+    public void Age()
+    {
+        for (int i = _sets.Count - 1; i >= 0; i--)
+        {
+            if (_sets[i].Age < Frames)
+            {
+                _sets[i] = (_sets[i].Targets, _sets[i].Framebuffer, _sets[i].Age + 1);
+                continue;
+            }
+            _sets[i].Framebuffer.Dispose();
+            _sets.RemoveAt(i);
+        }
+    }
+
+    public void Dispose()
+    {
+        foreach ((_, Framebuffer framebuffer, _) in _sets)
+            framebuffer.Dispose();
+        _sets.Clear();
+    }
+}
+
+/// <summary>
+/// Draws the GBuffer pass of a deferred view's opaque renderables, the shader pass tagged "LightMode" = "GBuffer", and
+/// publishes the view's GBuffer as <see cref="RendererOutputs.GBuffer"/>. The pass draws against the scene's depth, and
+/// writes its normal and motion into the scene's own targets where the scene has them, so the features after it read
+/// the scene as they do in a forward view. The GBuffer itself holds the rest, with a normal and a motion target of its
+/// own only where the scene has none. Renderables whose shader has no such pass are left to the forward passes. The
+/// surfaces the prepass drew test depth equal, see <see cref="EarlyDepth"/>. While the view lays decals over its
+/// GBuffer the normals go to a target of the GBuffer's own, which the decals then write onto the scene's. Group
+/// <see cref="FeatureGroup.GBuffer"/>.
 /// </summary>
 public sealed class GBufferFeature : RenderFeature
 {
+    /// <summary>The targets a GBuffer pass draws.</summary>
     public const int TargetCount = 7;
 
-    private sealed class State
+    private sealed class State : IDisposable
     {
-        public TextureHandle Target;
+        public TextureHandle Target, Scene;
+        public readonly TargetSets Sets = new();
+
+        public void Dispose() => Sets.Dispose();
     }
 
-    private static readonly PropertyID s_sceneDepth = "_SceneDepth";
-
     private readonly RendererResources _resources;
-    private readonly PropertySet _properties = new();
 
     internal GBufferFeature(RendererResources resources)
         : base(RenderSlot.GBuffer, group: FeatureGroup.GBuffer, passes: [PassType.GBuffer])
     {
         _resources = resources;
         Paths = RenderPaths.Deferred;
-        Uses(resources.GBufferDepthProgram);
     }
 
     public override bool IsActive(in FeatureView view) => _resources.SupportsGBuffer;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
+        State state = builder.GetViewState<State>();
         builder.DrawsRenderables();
-        builder.ReadScene();
+        int scene = builder.SceneTargetCount;
+        PixelFormat[] formats = _resources.GBufferFormats;
+        List<PixelFormat> own =
+        [
+            formats[(int)GBufferTarget.Base], formats[(int)GBufferTarget.Surface], formats[(int)GBufferTarget.Custom],
+            formats[(int)GBufferTarget.Baked], formats[(int)GBufferTarget.Emission],
+        ];
+        if (scene <= GBufferRead.SceneNormal || builder.Runs(FeatureGroup.GBufferDecals))
+            own.Add(formats[(int)GBufferTarget.Normal]);
+        if (scene <= GBufferRead.SceneMotion)
+            own.Add(formats[(int)GBufferTarget.Motion]);
         GraphTextureDesc desc = new()
         {
             Width = (int)view.Width,
             Height = (int)view.Height,
-            ColorFormats = _resources.GBufferFormats,
-            EnableDepth = true,
-            DepthFormat = _resources.SceneDepthFormat,
+            ColorFormats = [.. own],
             ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0,
         };
-        TextureHandle target = builder.Temporary("GBuffer", desc);
-        builder.GetViewState<State>().Target = target;
-        builder.Publish(RendererOutputs.GBuffer, target);
+        state.Target = builder.Temporary("GBuffer", desc);
+        state.Scene = builder.WriteSceneTargets();
+        builder.Publish(RendererOutputs.GBuffer, state.Target);
     }
 
     public override void Render(FeatureContext context)
     {
-        RenderTexture target = context.Get(context.GetViewState<State>().Target);
-        context.Command.SetFramebuffer(target.Framebuffer, TargetLoadStoreOps.Clear(new Color(0f, 0f, 0f, 0f), 0f));
+        State state = context.GetViewState<State>();
+        state.Sets.Age();
+        Texture[] own = context.Get(state.Target).ColorTextures;
+        RenderTexture scene = context.Get(state.Scene);
+        context.CopyBack(scene);
+        Texture normal = own.Length > GBufferRead.OwnNormal ? own[GBufferRead.OwnNormal] : scene.ColorTextures[GBufferRead.SceneNormal];
+        Framebuffer framebuffer = state.Sets.Get(_resources.Factory, context.View.LayerCount, scene.DepthTexture,
+            own[0], normal, own[1], own[2], own[3], own[4], GBufferRead.Motion(own, scene));
+        context.Command.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
         context.Command.SetFullViewport();
-        context.Command.SetShader(_resources.GBufferDepthProgram.For(context.View.LayerCount));
-        context.Command.SetVertexSource(VertexSource.None);
-        _properties.SetTexture(s_sceneDepth, context.Depth!, _resources.PointClamp);
-        context.Command.SetProperties(_properties);
-        context.Command.Draw(3);
+        context.Command.ClearColorTarget((uint)GBufferTarget.Surface, new Color(0f, 0f, 0f, 0f));
         context.DrawPass(PassType.GBuffer);
     }
 }
 
 /// <summary>
-/// A feature's read of the view's GBuffer: its targets as Graphite/GBuffer.glsl names them, the Base, Normal and Surface
-/// ones from <see cref="RendererOutputs.GBufferDecals"/> while the world has decals.
+/// A feature's read of the view's GBuffer as Graphite/GBuffer.glsl names its targets: the GBuffer's own, the Base and
+/// Surface ones from <see cref="RendererOutputs.GBufferDecals"/> while the world has decals, and the scene's depth,
+/// with its normal and motion where the scene has them.
 /// </summary>
 internal struct GBufferRead
 {
+    /// <summary>The indices of the scene's motion and normal targets.</summary>
+    public const int SceneMotion = 1, SceneNormal = 3;
+
+    /// <summary>The indices of a GBuffer texture's own normal and motion targets, where it has them.</summary>
+    public const int OwnNormal = 5, OwnMotion = 6;
+
+    /// <summary>The index of the normal among the decals' targets, where the scene has none for them to write.</summary>
+    public const int DecaledNormal = 2;
+
     private static readonly PropertyID s_base = "Graphite_GBufferBase", s_normal = "Graphite_GBufferNormal", s_surface = "Graphite_GBufferSurface",
         s_custom = "Graphite_GBufferCustom", s_baked = "Graphite_GBufferBaked", s_emission = "Graphite_GBufferEmission",
         s_motion = "Graphite_GBufferMotion", s_depth = "Graphite_GBufferDepth";
@@ -109,36 +193,58 @@ internal struct GBufferRead
         _decals = decals && builder.Has(RendererOutputs.GBufferDecals) ? builder.Read(RendererOutputs.GBufferDecals) : null,
     };
 
-    /// <summary>The GBuffer itself, for its depth and size.</summary>
-    public readonly RenderTexture Texture(FeatureContext context) => context.Get(_gbuffer);
+    /// <summary>The GBuffer's own targets: Base, Surface, Custom, Baked, Emission, then a normal and a motion where it has them.</summary>
+    public readonly Texture[] Own(FeatureContext context) => context.Get(_gbuffer).ColorTextures;
 
-    public readonly void Bind(FeatureContext context, PropertySet properties, Sampler point)
+    /// <summary>Where a view's GBuffer pass wrote motion: the scene's target, or the GBuffer's own.</summary>
+    public static Texture Motion(Texture[] own, RenderTexture scene)
+        => scene.ColorTextures.Length > SceneMotion ? scene.ColorTextures[SceneMotion] : own[OwnMotion];
+
+    /// <summary>Binds the GBuffer as the view's lighting reads it, decals applied.</summary>
+    public readonly void Bind(FeatureContext context, PropertySet properties, Sampler point, RenderTexture scene)
     {
-        RenderTexture gbuffer = context.Get(_gbuffer);
-        Texture[] targets = gbuffer.ColorTextures;
+        Texture[] own = context.Get(_gbuffer).ColorTextures;
         Texture[]? decaled = _decals is { } decals ? context.Get(decals).ColorTextures : null;
-        properties.SetTexture(s_base, decaled?[0] ?? targets[(int)GBufferTarget.Base], point);
-        properties.SetTexture(s_normal, decaled?[1] ?? targets[(int)GBufferTarget.Normal], point);
-        properties.SetTexture(s_surface, decaled?[2] ?? targets[(int)GBufferTarget.Surface], point);
-        properties.SetTexture(s_custom, targets[(int)GBufferTarget.Custom], point);
-        properties.SetTexture(s_baked, targets[(int)GBufferTarget.Baked], point);
-        properties.SetTexture(s_emission, targets[(int)GBufferTarget.Emission], point);
-        properties.SetTexture(s_motion, targets[(int)GBufferTarget.Motion], point);
-        properties.SetTexture(s_depth, gbuffer.DepthTexture!, point);
+        Texture normal = scene.ColorTextures.Length > SceneNormal ? scene.ColorTextures[SceneNormal]
+            : decaled is { Length: > DecaledNormal } ? decaled[DecaledNormal] : own[OwnNormal];
+        Bind(properties, point, own, decaled, scene, normal);
+    }
+
+    /// <summary>Binds the GBuffer as its pass left it, for the decals to read.</summary>
+    public readonly void BindUndecaled(FeatureContext context, PropertySet properties, Sampler point, RenderTexture scene)
+    {
+        Texture[] own = context.Get(_gbuffer).ColorTextures;
+        Bind(properties, point, own, null, scene, own[OwnNormal]);
+    }
+
+    private static void Bind(PropertySet properties, Sampler point, Texture[] own, Texture[]? decaled, RenderTexture scene, Texture normal)
+    {
+        properties.SetTexture(s_base, decaled?[0] ?? own[0], point);
+        properties.SetTexture(s_normal, normal, point);
+        properties.SetTexture(s_surface, decaled?[1] ?? own[1], point);
+        properties.SetTexture(s_custom, own[2], point);
+        properties.SetTexture(s_baked, own[3], point);
+        properties.SetTexture(s_emission, own[4], point);
+        properties.SetTexture(s_motion, Motion(own, scene), point);
+        properties.SetTexture(s_depth, scene.DepthTexture!, point);
     }
 }
 
 /// <summary>
-/// Lays the world's decals over a deferred view's GBuffer once its pass has drawn, into the targets it publishes as
-/// <see cref="RendererOutputs.GBufferDecals"/>. Adds its pass while the world has a decal. Group
+/// Lays the world's decals over a deferred view's GBuffer once its pass has drawn: base colour, metalness, roughness and
+/// occlusion into the targets it publishes as <see cref="RendererOutputs.GBufferDecals"/>, and the normal onto the
+/// scene's, or beside them where the scene has no normal target. Adds its pass while the world has a decal. Group
 /// <see cref="FeatureGroup.GBufferDecals"/>.
 /// </summary>
 public sealed class GBufferDecalsFeature : RenderFeature
 {
-    private sealed class State
+    private sealed class State : IDisposable
     {
         public GBufferRead GBuffer;
-        public TextureHandle Target;
+        public TextureHandle Target, Scene;
+        public readonly TargetSets Sets = new();
+
+        public void Dispose() => Sets.Dispose();
     }
 
     private readonly RendererResources _resources;
@@ -160,56 +266,29 @@ public sealed class GBufferDecalsFeature : RenderFeature
         builder.ReadViews();
         builder.DrawsRenderables();
         PixelFormat[] formats = _resources.GBufferFormats;
+        PixelFormat[] own = [formats[(int)GBufferTarget.Base], formats[(int)GBufferTarget.Surface]];
         GraphTextureDesc desc = new()
         {
             Width = (int)view.Width,
             Height = (int)view.Height,
-            ColorFormats = [formats[(int)GBufferTarget.Base], formats[(int)GBufferTarget.Normal], formats[(int)GBufferTarget.Surface]],
+            ColorFormats = builder.SceneTargetCount > GBufferRead.SceneNormal ? own : [.. own, formats[(int)GBufferTarget.Normal]],
             ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0,
         };
         state.Target = builder.Temporary("Decaled", desc);
+        state.Scene = builder.WriteSceneTargets();
         builder.Publish(RendererOutputs.GBufferDecals, state.Target);
     }
 
     public override void Render(FeatureContext context)
     {
         State state = context.GetViewState<State>();
-        state.GBuffer.Bind(context, _properties, _resources.PointClamp);
-        context.Fullscreen(_resources.GBufferDecalsProgram, context.Get(state.Target), _properties);
-    }
-}
-
-/// <summary>
-/// Copies a deferred view's GBuffer depth, motion and normals onto its scene, where the prepass drew nothing nearer, for
-/// the features before lighting that read the scene. Group <see cref="FeatureGroup.GBufferResolve"/>.
-/// </summary>
-public sealed class GBufferResolveFeature : RenderFeature
-{
-    private sealed class State
-    {
-        public GBufferRead GBuffer;
-    }
-
-    private readonly RendererResources _resources;
-    private readonly PropertySet _properties = new();
-
-    internal GBufferResolveFeature(RendererResources resources) : base(RenderSlot.GBuffer, 100, FeatureGroup.GBufferResolve)
-    {
-        _resources = resources;
-        Paths = RenderPaths.Deferred;
-        Uses(resources.GBufferResolveProgram);
-    }
-
-    public override void Setup(FeatureBuilder builder, in FeatureView view)
-    {
-        builder.GetViewState<State>().GBuffer = GBufferRead.Declare(builder);
-        builder.ReadViews();
-        builder.DrawToScene();
-    }
-
-    public override void Render(FeatureContext context)
-    {
-        context.GetViewState<State>().GBuffer.Bind(context, _properties, _resources.PointClamp);
-        context.FullscreenScene(_resources.GBufferResolveProgram, _properties);
+        state.Sets.Age();
+        Texture[] decaled = context.Get(state.Target).ColorTextures;
+        RenderTexture scene = context.Get(state.Scene);
+        context.CopyBack(scene);
+        state.GBuffer.BindUndecaled(context, _properties, _resources.PointClamp, scene);
+        Texture normal = decaled.Length > GBufferRead.DecaledNormal ? decaled[GBufferRead.DecaledNormal] : scene.ColorTextures[GBufferRead.SceneNormal];
+        Framebuffer framebuffer = state.Sets.Get(_resources.Factory, context.View.LayerCount, null, decaled[0], normal, decaled[1]);
+        context.Fullscreen(_resources.GBufferDecalsProgram, framebuffer, _properties, clear: (int)GBufferTarget.Surface);
     }
 }
