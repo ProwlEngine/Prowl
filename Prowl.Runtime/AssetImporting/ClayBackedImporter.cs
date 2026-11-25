@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -745,7 +745,7 @@ internal static class ClayBackedImporter
             : PAnim.FromSkeletal(sampled, avatar, name, events);
 
         clip.Loop = overrides.Loop ?? settings.LoopAnimations;
-        clip.WrapMode = clip.Loop ? SceneClipWrapMode.Loop : SceneClipWrapMode.Once;
+        clip.WrapMode = clip.Loop ? AnimationClipWrapMode.Loop : AnimationClipWrapMode.Once;
         clip.SourceName = sourceName;
         clip.TakeStart = start;
         if (overrides.PropertyEvents is { Count: > 0 } propOnTake)
@@ -767,7 +767,7 @@ internal static class ClayBackedImporter
             source, clayModel, nodeGOs, rootGO, settings.AnimationSampleRate, overrides.TrimStart, overrides.TrimEnd, name, events);
 
         clip.Loop = overrides.Loop ?? settings.LoopAnimations;
-        clip.WrapMode = clip.Loop ? SceneClipWrapMode.Loop : SceneClipWrapMode.Once;
+        clip.WrapMode = clip.Loop ? AnimationClipWrapMode.Loop : AnimationClipWrapMode.Once;
         clip.SourceName = sourceName;
         clip.TakeStart = start;
         if (overrides.PropertyEvents is { Count: > 0 } propOnTake)

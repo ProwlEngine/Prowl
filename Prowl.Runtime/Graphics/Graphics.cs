@@ -164,7 +164,7 @@ public static class Graphics
             Source = SwapchainSource.CreateVulkan(window.VkSurface),
             Width = (uint)Math.Max(1, window.FramebufferSize.X),
             Height = (uint)Math.Max(1, window.FramebufferSize.Y),
-            SyncToVerticalBlank = vsync,
+            VSync = vsync ? VSyncMode.On : VSyncMode.Off,
         };
         Device = GraphicsDevice.CreateVulkan(options, swapchain, XR.VulkanOptions());
         CreateRenderer();
@@ -208,8 +208,8 @@ public static class Graphics
     /// <summary>Whether vertical sync paces presents.</summary>
     public static bool VSync
     {
-        get => Device?.SyncToVerticalBlank ?? false;
-        set { if (Device != null) Device.SyncToVerticalBlank = value; }
+        get => Device?.VSync == VSyncMode.On;
+        set { if (Device != null) Device.VSync = value ? VSyncMode.On : VSyncMode.Off; }
     }
 
     internal static void Resize(int width, int height)

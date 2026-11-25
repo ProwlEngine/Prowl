@@ -1532,10 +1532,10 @@ public class EditorAssetBackend : AssetBackend
         string metaPath = MetaFile.GetMetaPath(absoluteModelPath);
 
         string sourceName = !string.IsNullOrEmpty(clip.SourceName) ? clip.SourceName : clip.Name;
-        var takeEvents = new List<SceneAnimationEvent>(clip.PropertyEvents.Count);
+        var takeEvents = new List<AnimationClipEvent>(clip.PropertyEvents.Count);
         for (int i = 0; i < clip.PropertyEvents.Count; i++)
         {
-            SceneAnimationEvent copy = clip.PropertyEvents[i].Clone();
+            AnimationClipEvent copy = clip.PropertyEvents[i].Clone();
             copy.Time = MathF.Max(0f, copy.Time + clip.TakeStart);
             copy.EndTime = copy.IsRange ? MathF.Max(copy.Time + 1e-4f, copy.EndTime + clip.TakeStart) : copy.Time;
             takeEvents.Add(copy);

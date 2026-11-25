@@ -33,7 +33,7 @@ public readonly struct AnimatablePropertyDescriptor
     public string[] SubChannels { get; init; }
 }
 
-/// <summary>Describes a callable component method discovered on a <see cref="GameObject"/> for <see cref="SceneAnimationEvent"/> authoring.</summary>
+/// <summary>Describes a callable component method discovered on a <see cref="GameObject"/> for <see cref="AnimationClipEvent"/> authoring.</summary>
 public readonly struct AnimatableEventMethodDescriptor
 {
     public string ComponentType { get; init; }
@@ -51,7 +51,7 @@ public readonly struct AnimatableEventMethodDescriptor
 /// Groups sub-channel tracks (such as <c>LocalPosition.X</c>, <c>.Y</c>, <c>.Z</c> or <c>Color.R</c>, <c>.G</c>, <c>.B</c>, <c>.A</c>)
 /// into a single property read-modify-write per frame so setters and dirty notifications run cleanly.
 /// </summary>
-public sealed class SceneClipBinding
+public sealed class AnimationClipBinding
 {
     private const BindingFlags MemberFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
@@ -81,7 +81,7 @@ public sealed class SceneClipBinding
     public int BoundStringTrackCount => _stringTracks.Count;
     public bool HasActiveRangedEvents => _activeRangedEvents.Count > 0;
 
-    public SceneClipBinding(GameObject root, AnimationClip clip)
+    public AnimationClipBinding(GameObject root, AnimationClip clip)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(clip);
@@ -136,7 +136,7 @@ public sealed class SceneClipBinding
         }
     }
 
-    /// <summary>Captures the current property values on the target hierarchy as the pre-animated baseline for Additive tracks and <see cref="SceneClipCompletionMode.RestoreState"/>.</summary>
+    /// <summary>Captures the current property values on the target hierarchy as the pre-animated baseline for Additive tracks and <see cref="AnimationClipCompletionMode.RestoreState"/>.</summary>
     public void CaptureBaseline()
     {
         if (_root.IsNotValid()) return;
@@ -165,8 +165,8 @@ public sealed class SceneClipBinding
     }
 
     /// <summary>
-    /// Fires any instant <see cref="SceneAnimationEvent"/> whose timestamp falls between <paramref name="previousTime"/> and <paramref name="currentTime"/>,
-    /// and evaluates Enter, Stay (passing normalized 0..1 progress), and Exit callbacks for ranged events (<see cref="SceneAnimationEvent.IsRange"/>).
+    /// Fires any instant <see cref="AnimationClipEvent"/> whose timestamp falls between <paramref name="previousTime"/> and <paramref name="currentTime"/>,
+    /// and evaluates Enter, Stay (passing normalized 0..1 progress), and Exit callbacks for ranged events (<see cref="AnimationClipEvent.IsRange"/>).
     /// Handles loop wrap-around when <paramref name="looped"/> is true.
     /// </summary>
     public void FireEvents(float previousTime, float currentTime, bool forward, bool looped)
@@ -176,7 +176,7 @@ public sealed class SceneClipBinding
         float duration = _clip.Duration;
         for (int i = 0; i < _clip.PropertyEvents.Count; i++)
         {
-            SceneAnimationEvent ev = _clip.PropertyEvents[i];
+            AnimationClipEvent ev = _clip.PropertyEvents[i];
             if (!ev.IsRange)
             {
                 if (ShouldFire(ev.Time, previousTime, currentTime, duration, forward, looped))
@@ -212,14 +212,14 @@ public sealed class SceneClipBinding
             int idx = activeIndices[i];
             if (idx >= 0 && idx < _clip.PropertyEvents.Count)
             {
-                SceneAnimationEvent ev = _clip.PropertyEvents[idx];
+                AnimationClipEvent ev = _clip.PropertyEvents[idx];
                 if (ev.IsRange && !string.IsNullOrEmpty(ev.ExitFunctionName))
                     InvokeBoundExit(idx, ev);
             }
         }
     }
 
-    private void EvaluateRangedEvent(int index, SceneAnimationEvent ev, float prev, float curr, float duration, bool forward, bool looped)
+    private void EvaluateRangedEvent(int index, AnimationClipEvent ev, float prev, float curr, float duration, bool forward, bool looped)
     {
         float start = ev.Time;
         float end = ev.EndTime;
@@ -284,21 +284,21 @@ public sealed class SceneClipBinding
         }
     }
 
-    private void InvokeBoundEnter(int index, SceneAnimationEvent ev)
+    private void InvokeBoundEnter(int index, AnimationClipEvent ev)
     {
         if ((uint)index < (uint)_boundEvents.Length && _boundEvents[index].TryInvokeEnter(ev))
             return;
         InvokeEvent(_root, ev);
     }
 
-    private void InvokeBoundStay(int index, SceneAnimationEvent ev, float progress)
+    private void InvokeBoundStay(int index, AnimationClipEvent ev, float progress)
     {
         if ((uint)index < (uint)_boundEvents.Length && _boundEvents[index].TryInvokeStay(progress))
             return;
         InvokeNamedEventMethod(_root, ev.RelativePath, ev.StayFunctionName, ProwlActionArgType.Float, progress);
     }
 
-    private void InvokeBoundExit(int index, SceneAnimationEvent ev)
+    private void InvokeBoundExit(int index, AnimationClipEvent ev)
     {
         if ((uint)index < (uint)_boundEvents.Length && _boundEvents[index].TryInvokeExit(ev))
             return;
@@ -337,7 +337,7 @@ public sealed class SceneClipBinding
         }
     }
 
-    private static object? GetEventArg(SceneAnimationEvent ev) => ev.ArgType switch
+    private static object? GetEventArg(AnimationClipEvent ev) => ev.ArgType switch
     {
         ProwlActionArgType.Bool => ev.BoolParam,
         ProwlActionArgType.Int => ev.IntParam,
@@ -347,7 +347,7 @@ public sealed class SceneClipBinding
         _ => null,
     };
 
-    public static void InvokeEvent(GameObject root, SceneAnimationEvent ev)
+    public static void InvokeEvent(GameObject root, AnimationClipEvent ev)
     {
         if (root.IsNotValid() || string.IsNullOrEmpty(ev.FunctionName)) return;
         InvokeNamedEventMethod(root, ev.RelativePath, ev.FunctionName, ev.ArgType, GetEventArg(ev));
@@ -1035,7 +1035,7 @@ public sealed class SceneClipBinding
 
         for (int i = 0; i < _clip.CurveTracks.Count; i++)
         {
-            SceneCurveTrack track = _clip.CurveTracks[i];
+            AnimationCurveTrack track = _clip.CurveTracks[i];
             if (track.Curve.Count == 0) continue;
 
             GameObject? go = ResolveGameObject(_root, track.RelativePath);
@@ -1073,7 +1073,7 @@ public sealed class SceneClipBinding
 
         for (int i = 0; i < _clip.ObjectTracks.Count; i++)
         {
-            SceneObjectTrack track = _clip.ObjectTracks[i];
+            AnimationObjectTrack track = _clip.ObjectTracks[i];
             if (track.Keyframes.Count == 0) continue;
 
             GameObject? go = ResolveGameObject(_root, track.RelativePath);
@@ -1091,7 +1091,7 @@ public sealed class SceneClipBinding
 
         for (int i = 0; i < _clip.StringTracks.Count; i++)
         {
-            SceneStringTrack track = _clip.StringTracks[i];
+            AnimationStringTrack track = _clip.StringTracks[i];
             if (track.Keyframes.Count == 0) continue;
 
             GameObject? go = ResolveGameObject(_root, track.RelativePath);
@@ -1384,7 +1384,7 @@ public sealed class SceneClipBinding
             ObjectCall = objectCall;
         }
 
-        public void InvokeWithEventArg(SceneAnimationEvent ev)
+        public void InvokeWithEventArg(AnimationClipEvent ev)
         {
             if (Component.IsNotValid() || !Component.EnabledInHierarchy) return;
             try
@@ -1434,7 +1434,7 @@ public sealed class SceneClipBinding
             _exitCalls = exit;
         }
 
-        public static BoundEvent Create(GameObject root, SceneAnimationEvent ev)
+        public static BoundEvent Create(GameObject root, AnimationClipEvent ev)
         {
             GameObject? targetGo = ResolveGameObject(root, ev.RelativePath);
             if (targetGo.IsNotValid()) return default;
@@ -1510,7 +1510,7 @@ public sealed class SceneClipBinding
 
         private bool IsTargetUnchanged => _targetGo.IsValid() && _targetGo!._components.Count == _boundComponentCount;
 
-        public bool TryInvokeEnter(SceneAnimationEvent ev)
+        public bool TryInvokeEnter(AnimationClipEvent ev)
         {
             if (!IsTargetUnchanged) return false;
             if (_enterCalls != null)
@@ -1528,7 +1528,7 @@ public sealed class SceneClipBinding
             return true;
         }
 
-        public bool TryInvokeExit(SceneAnimationEvent ev)
+        public bool TryInvokeExit(AnimationClipEvent ev)
         {
             if (!IsTargetUnchanged) return false;
             if (_exitCalls != null)
@@ -1970,7 +1970,7 @@ public sealed class SceneClipBinding
     {
         private readonly object _target;
         private readonly MemberAccessChain _chain;
-        private readonly List<(SubChannelKind Sub, SceneCurveTrack Track)> _channels = [];
+        private readonly List<(SubChannelKind Sub, AnimationCurveTrack Track)> _channels = [];
         private readonly Func<object, float>? _scalarGet;
         private readonly Action<object, float>? _scalarSet;
         private readonly Func<object, Float4>? _vec4Get;
@@ -2064,7 +2064,7 @@ public sealed class SceneClipBinding
             _notifier.Notify();
         }
 
-        public void AddChannel(SubChannelKind sub, SceneCurveTrack track)
+        public void AddChannel(SubChannelKind sub, AnimationCurveTrack track)
         {
             for (int i = 0; i < _channels.Count; i++)
             {
@@ -2077,7 +2077,7 @@ public sealed class SceneClipBinding
             _channels.Add((sub, track));
         }
 
-        private static bool IsTrackActive(SceneCurveTrack track, bool hasSolo)
+        private static bool IsTrackActive(AnimationCurveTrack track, bool hasSolo)
             => !track.Muted && (!hasSolo || track.Solo);
 
         public void Apply(float time, float weight = 1f, bool hasSolo = false)
@@ -2108,9 +2108,9 @@ public sealed class SceneClipBinding
             // Fast Path 1: Compiled scalar field/property (float, double, int, bool — 0 boxing)
             if (_scalarGet != null && _scalarSet != null)
             {
-                SceneCurveTrack track = _channels[0].Track;
+                AnimationCurveTrack track = _channels[0].Track;
                 float sampled = track.Curve.Evaluate(time);
-                if (track.BlendMode == SceneTrackBlendMode.Additive)
+                if (track.BlendMode == AnimationTrackBlendMode.Additive)
                 {
                     sampled = _baselineScalar + sampled * weight;
                 }
@@ -2130,10 +2130,10 @@ public sealed class SceneClipBinding
                 Float4 v = _vec4Get(_target);
                 for (int i = 0; i < _channels.Count; i++)
                 {
-                    (SubChannelKind sub, SceneCurveTrack track) = _channels[i];
+                    (SubChannelKind sub, AnimationCurveTrack track) = _channels[i];
                     if (!IsTrackActive(track, hasSolo)) continue;
                     float s = track.Curve.Evaluate(time);
-                    bool add = track.BlendMode == SceneTrackBlendMode.Additive;
+                    bool add = track.BlendMode == AnimationTrackBlendMode.Additive;
                     switch (sub)
                     {
                         case SubChannelKind.Y or SubChannelKind.G:
@@ -2161,11 +2161,11 @@ public sealed class SceneClipBinding
 
             for (int i = 0; i < _channels.Count; i++)
             {
-                (SubChannelKind sub, SceneCurveTrack track) = _channels[i];
+                (SubChannelKind sub, AnimationCurveTrack track) = _channels[i];
                 if (!IsTrackActive(track, hasSolo)) continue;
 
                 float sampled = track.Curve.Evaluate(time);
-                if (track.BlendMode == SceneTrackBlendMode.Additive)
+                if (track.BlendMode == AnimationTrackBlendMode.Additive)
                 {
                     TryConvertToFloat(_baselineValue, sub, out float baseF);
                     sampled = baseF + sampled * weight;
@@ -2193,10 +2193,10 @@ public sealed class SceneClipBinding
                     Float3 v = tf.LocalPosition;
                     for (int i = 0; i < _channels.Count; i++)
                     {
-                        (SubChannelKind sub, SceneCurveTrack track) = _channels[i];
+                        (SubChannelKind sub, AnimationCurveTrack track) = _channels[i];
                         if (!IsTrackActive(track, hasSolo)) continue;
                         float s = track.Curve.Evaluate(time);
-                        bool additive = track.BlendMode == SceneTrackBlendMode.Additive;
+                        bool additive = track.BlendMode == AnimationTrackBlendMode.Additive;
                         switch (sub)
                         {
                             case SubChannelKind.Y:
@@ -2218,10 +2218,10 @@ public sealed class SceneClipBinding
                     Float3 v = tf.LocalEulerAngles;
                     for (int i = 0; i < _channels.Count; i++)
                     {
-                        (SubChannelKind sub, SceneCurveTrack track) = _channels[i];
+                        (SubChannelKind sub, AnimationCurveTrack track) = _channels[i];
                         if (!IsTrackActive(track, hasSolo)) continue;
                         float s = track.Curve.Evaluate(time);
-                        bool additive = track.BlendMode == SceneTrackBlendMode.Additive;
+                        bool additive = track.BlendMode == AnimationTrackBlendMode.Additive;
                         switch (sub)
                         {
                             case SubChannelKind.Y:
@@ -2243,10 +2243,10 @@ public sealed class SceneClipBinding
                     Float3 v = tf.LocalScale;
                     for (int i = 0; i < _channels.Count; i++)
                     {
-                        (SubChannelKind sub, SceneCurveTrack track) = _channels[i];
+                        (SubChannelKind sub, AnimationCurveTrack track) = _channels[i];
                         if (!IsTrackActive(track, hasSolo)) continue;
                         float s = track.Curve.Evaluate(time);
-                        bool additive = track.BlendMode == SceneTrackBlendMode.Additive;
+                        bool additive = track.BlendMode == AnimationTrackBlendMode.Additive;
                         switch (sub)
                         {
                             case SubChannelKind.Y:
@@ -2270,9 +2270,9 @@ public sealed class SceneClipBinding
                     bool anyAdditive = false;
                     for (int i = 0; i < _channels.Count; i++)
                     {
-                        (SubChannelKind sub, SceneCurveTrack track) = _channels[i];
+                        (SubChannelKind sub, AnimationCurveTrack track) = _channels[i];
                         if (!IsTrackActive(track, hasSolo)) continue;
-                        if (track.BlendMode == SceneTrackBlendMode.Additive) anyAdditive = true;
+                        if (track.BlendMode == AnimationTrackBlendMode.Additive) anyAdditive = true;
                         float s = track.Curve.Evaluate(time);
                         switch (sub)
                         {
@@ -2296,7 +2296,7 @@ public sealed class SceneClipBinding
     {
         private readonly object _target;
         private readonly MemberAccessChain _chain;
-        private readonly SceneObjectTrack _track;
+        private readonly AnimationObjectTrack _track;
         private readonly Func<object, EngineObject?>? _fastGet;
         private readonly Action<object, EngineObject?>? _fastSet;
         private TargetDirtyNotifier _notifier;
@@ -2304,7 +2304,7 @@ public sealed class SceneClipBinding
         private EngineObject? _baselineObj;
         private object? _baselineValue;
 
-        public BoundObjectTrack(object target, MemberAccessChain chain, SceneObjectTrack track)
+        public BoundObjectTrack(object target, MemberAccessChain chain, AnimationObjectTrack track)
         {
             _target = target;
             _chain = chain;
@@ -2350,7 +2350,7 @@ public sealed class SceneClipBinding
     {
         private readonly object _target;
         private readonly MemberAccessChain _chain;
-        private readonly SceneStringTrack _track;
+        private readonly AnimationStringTrack _track;
         private readonly Func<object, string?>? _fastGet;
         private readonly Action<object, string>? _fastSet;
         private TargetDirtyNotifier _notifier;
@@ -2358,7 +2358,7 @@ public sealed class SceneClipBinding
         private string? _baselineString;
         private object? _baselineValue;
 
-        public BoundStringTrack(object target, MemberAccessChain chain, SceneStringTrack track)
+        public BoundStringTrack(object target, MemberAccessChain chain, AnimationStringTrack track)
         {
             _target = target;
             _chain = chain;
@@ -2531,7 +2531,7 @@ public sealed class SceneClipBinding
         private readonly IMaterialRenderer _renderer;
         private readonly string _uniformName;
         private readonly MaterialPropertyType _propType;
-        private readonly List<(SubChannelKind Sub, SceneCurveTrack Track)> _channels = [];
+        private readonly List<(SubChannelKind Sub, AnimationCurveTrack Track)> _channels = [];
         private TargetDirtyNotifier _notifier;
         private float _baseFloat;
         private int _baseInt;
@@ -2547,7 +2547,7 @@ public sealed class SceneClipBinding
             CaptureBaseline();
         }
 
-        public void AddChannel(SubChannelKind sub, SceneCurveTrack track)
+        public void AddChannel(SubChannelKind sub, AnimationCurveTrack track)
         {
             for (int i = 0; i < _channels.Count; i++)
             {
@@ -2618,18 +2618,18 @@ public sealed class SceneClipBinding
             {
                 case MaterialPropertyType.Float:
                 {
-                    SceneCurveTrack t = _channels[0].Track;
+                    AnimationCurveTrack t = _channels[0].Track;
                     float s = t.Curve.Evaluate(time);
                     float cur = mat!.GetFloat(_uniformName);
-                    float val = t.BlendMode == SceneTrackBlendMode.Additive ? _baseFloat + s * weight : (weight >= 0.9999f ? s : cur + (s - cur) * weight);
+                    float val = t.BlendMode == AnimationTrackBlendMode.Additive ? _baseFloat + s * weight : (weight >= 0.9999f ? s : cur + (s - cur) * weight);
                     mat.SetFloat(_uniformName, val);
                     break;
                 }
                 case MaterialPropertyType.Int:
                 {
-                    SceneCurveTrack t = _channels[0].Track;
+                    AnimationCurveTrack t = _channels[0].Track;
                     float s = t.Curve.Evaluate(time);
-                    int val = t.BlendMode == SceneTrackBlendMode.Additive ? _baseInt + (int)MathF.Round(s * weight) : (int)MathF.Round(s);
+                    int val = t.BlendMode == AnimationTrackBlendMode.Additive ? _baseInt + (int)MathF.Round(s * weight) : (int)MathF.Round(s);
                     mat!.SetInt(_uniformName, val);
                     break;
                 }
@@ -2638,10 +2638,10 @@ public sealed class SceneClipBinding
                     Color c = mat!.GetColor(_uniformName);
                     for (int i = 0; i < _channels.Count; i++)
                     {
-                        (SubChannelKind sub, SceneCurveTrack t) = _channels[i];
+                        (SubChannelKind sub, AnimationCurveTrack t) = _channels[i];
                         if (t.Muted || (hasSolo && !t.Solo)) continue;
                         float s = t.Curve.Evaluate(time);
-                        bool add = t.BlendMode == SceneTrackBlendMode.Additive;
+                        bool add = t.BlendMode == AnimationTrackBlendMode.Additive;
                         switch (sub)
                         {
                             case SubChannelKind.G or SubChannelKind.Y: c.G = add ? _baseColor.G + s * weight : (weight >= 0.9999f ? s : c.G + (s - c.G) * weight); break;
@@ -2658,10 +2658,10 @@ public sealed class SceneClipBinding
                     Float4 v = mat!.GetVector(_uniformName);
                     for (int i = 0; i < _channels.Count; i++)
                     {
-                        (SubChannelKind sub, SceneCurveTrack t) = _channels[i];
+                        (SubChannelKind sub, AnimationCurveTrack t) = _channels[i];
                         if (t.Muted || (hasSolo && !t.Solo)) continue;
                         float s = t.Curve.Evaluate(time);
-                        bool add = t.BlendMode == SceneTrackBlendMode.Additive;
+                        bool add = t.BlendMode == AnimationTrackBlendMode.Additive;
                         switch (sub)
                         {
                             case SubChannelKind.Y or SubChannelKind.G: v.Y = add ? _baseVec.Y + s * weight : (weight >= 0.9999f ? s : v.Y + (s - v.Y) * weight); break;

@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -168,7 +168,7 @@ internal static class ModelRigBuilder
     }
 
     /// <summary>
-    /// Converts a Clay <see cref="ClayAnim"/> directly into <see cref="SceneCurveTrack"/> property tracks on a
+    /// Converts a Clay <see cref="ClayAnim"/> directly into <see cref="AnimationCurveTrack"/> property tracks on a
     /// <see cref="Prowl.Runtime.AnimationClip"/> without building a skeleton rig. Used when <see cref="ModelRigType.None"/>
     /// is selected so non-skeletal node and blend-shape animations import as editable property curve tracks.
     /// </summary>
@@ -209,9 +209,9 @@ internal static class ModelRigBuilder
             {
                 case AnimatedProperty.Position:
                 {
-                    SceneCurveTrack tx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.X");
-                    SceneCurveTrack ty = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Y");
-                    SceneCurveTrack tz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Z");
+                    AnimationCurveTrack tx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.X");
+                    AnimationCurveTrack ty = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Y");
+                    AnimationCurveTrack tz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Z");
                     tx.Curve.Clear(); ty.Curve.Clear(); tz.Curve.Clear();
                     for (int f = 0; f < frameCount; f++)
                     {
@@ -230,10 +230,10 @@ internal static class ModelRigBuilder
 
                 case AnimatedProperty.Rotation:
                 {
-                    SceneCurveTrack rx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.X");
-                    SceneCurveTrack ry = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Y");
-                    SceneCurveTrack rz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Z");
-                    SceneCurveTrack rw = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.W");
+                    AnimationCurveTrack rx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.X");
+                    AnimationCurveTrack ry = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Y");
+                    AnimationCurveTrack rz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Z");
+                    AnimationCurveTrack rw = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.W");
                     rx.Curve.Clear(); ry.Curve.Clear(); rz.Curve.Clear(); rw.Curve.Clear();
                     Quaternion prevQ = Quaternion.Identity;
                     for (int f = 0; f < frameCount; f++)
@@ -258,9 +258,9 @@ internal static class ModelRigBuilder
 
                 case AnimatedProperty.Scale:
                 {
-                    SceneCurveTrack sx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.X");
-                    SceneCurveTrack sy = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Y");
-                    SceneCurveTrack sz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Z");
+                    AnimationCurveTrack sx = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.X");
+                    AnimationCurveTrack sy = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Y");
+                    AnimationCurveTrack sz = clip.GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Z");
                     sx.Curve.Clear(); sy.Curve.Clear(); sz.Curve.Clear();
                     for (int f = 0; f < frameCount; f++)
                     {
@@ -322,13 +322,13 @@ internal static class ModelRigBuilder
     }
 
     /// <summary>
-    /// Moves component method events (<see cref="SceneAnimationEvent"/>) timed on the take onto a trimmed clip slice:
+    /// Moves component method events (<see cref="AnimationClipEvent"/>) timed on the take onto a trimmed clip slice:
     /// shifted by <paramref name="start"/>, clamped to <paramref name="end"/> for ranged windows, and dropped when outside the slice.
     /// </summary>
-    public static List<SceneAnimationEvent> PlacePropertyEvents(IReadOnlyList<SceneAnimationEvent> onTake, float start, float end)
+    public static List<AnimationClipEvent> PlacePropertyEvents(IReadOnlyList<AnimationClipEvent> onTake, float start, float end)
     {
-        var placed = new List<SceneAnimationEvent>(onTake.Count);
-        foreach (SceneAnimationEvent e in onTake)
+        var placed = new List<AnimationClipEvent>(onTake.Count);
+        foreach (AnimationClipEvent e in onTake)
         {
             if (e.IsRange)
             {
@@ -336,7 +336,7 @@ internal static class ModelRigBuilder
                 float to = Math.Min(e.EndTime, end);
                 if (from > end || to < start || to <= from + 1e-5f) continue;
 
-                SceneAnimationEvent copy = e.Clone();
+                AnimationClipEvent copy = e.Clone();
                 copy.Time = MathF.Max(0f, from - start);
                 copy.EndTime = MathF.Max(copy.Time + 1e-4f, to - start);
                 placed.Add(copy);
@@ -345,7 +345,7 @@ internal static class ModelRigBuilder
             {
                 if (e.Time < start - 1e-5f || e.Time > end + 1e-5f) continue;
 
-                SceneAnimationEvent copy = e.Clone();
+                AnimationClipEvent copy = e.Clone();
                 copy.Time = Math.Clamp(e.Time - start, 0f, MathF.Max(0f, end - start));
                 copy.EndTime = copy.Time;
                 placed.Add(copy);

@@ -176,7 +176,7 @@ public class PreviewRenderer : IDisposable
 
         if (_subjectGo.IsValid() && clip.IsValid() && clip!.HasPropertyTracks)
         {
-            var propBinding = new SceneClipBinding(_subjectGo!, clip);
+            var propBinding = new AnimationClipBinding(_subjectGo!, clip);
             propBinding.Sample(clampedNorm * clip.Duration);
         }
     }

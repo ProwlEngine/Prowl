@@ -72,7 +72,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
             Origami.EnumDropdown(paper, $"{id}_wrap_v", clip.WrapMode, v =>
             {
                 clip.WrapMode = v;
-                clip.Loop = v is SceneClipWrapMode.Loop or SceneClipWrapMode.PingPong;
+                clip.Loop = v is AnimationClipWrapMode.Loop or AnimationClipWrapMode.PingPong;
                 clip.Invalidate();
                 EditorUtility.SetDirty(clip);
             }).Show());
@@ -88,7 +88,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
         EditorGUI.SettingsToggle(paper, $"{id}_loop", "Loop", clip.Loop, v =>
         {
             clip.Loop = v;
-            clip.WrapMode = v ? SceneClipWrapMode.Loop : SceneClipWrapMode.Once;
+            clip.WrapMode = v ? AnimationClipWrapMode.Loop : AnimationClipWrapMode.Once;
             clip.Invalidate();
             EditorUtility.SetDirty(clip);
         }, separator: false);
@@ -112,7 +112,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
             {
                 for (int i = 0; i < clip.CurveTracks.Count; i++)
                 {
-                    SceneCurveTrack track = clip.CurveTracks[i];
+                    AnimationCurveTrack track = clip.CurveTracks[i];
                     int idx = i;
                     string label = FormatTrackLabel(track.RelativePath, track.ComponentType, track.PropertyPath);
                     using (paper.Row($"{id}_ct_{i}").Height(28).Padding(8, 8, 0, 0).Gap(8)
@@ -158,7 +158,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
             {
                 for (int i = 0; i < clip.ObjectTracks.Count; i++)
                 {
-                    SceneObjectTrack track = clip.ObjectTracks[i];
+                    AnimationObjectTrack track = clip.ObjectTracks[i];
                     int idx = i;
                     string label = FormatTrackLabel(track.RelativePath, track.ComponentType, track.PropertyPath);
                     using (paper.Row($"{id}_ot_{i}").Height(28).Padding(8, 8, 0, 0).Gap(8)
@@ -204,7 +204,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
             {
                 for (int i = 0; i < clip.StringTracks.Count; i++)
                 {
-                    SceneStringTrack track = clip.StringTracks[i];
+                    AnimationStringTrack track = clip.StringTracks[i];
                     int idx = i;
                     string label = FormatTrackLabel(track.RelativePath, track.ComponentType, track.PropertyPath);
                     using (paper.Row($"{id}_st_{i}").Height(28).Padding(8, 8, 0, 0).Gap(8)
@@ -251,7 +251,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
         {
             for (int i = 0; i < clip.PropertyEvents.Count; i++)
             {
-                SceneAnimationEvent ev = clip.PropertyEvents[i];
+                AnimationClipEvent ev = clip.PropertyEvents[i];
                 int idx = i;
                 bool expanded = _expandedEventIndex == idx;
                 string targetLabel = string.IsNullOrEmpty(ev.RelativePath) ? "(Root)" : ev.RelativePath;
@@ -325,7 +325,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
                     Origami.Button(paper, $"{id}_ev_add", $"{EditorIcons.Plus}  Add Event", () =>
                     {
                         Undo.RecordObject(clip, "Add Animation Event");
-                        clip.PropertyEvents.Add(new SceneAnimationEvent { Time = 0f });
+                        clip.PropertyEvents.Add(new AnimationClipEvent { Time = 0f });
                         _expandedEventIndex = clip.PropertyEvents.Count - 1;
                         clip.Invalidate();
                         EditorUtility.SetDirty(clip);
@@ -335,7 +335,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
                     {
                         Undo.RecordObject(clip, "Add Ranged Animation Event");
                         float defaultEnd = Math.Max(0.25f, Math.Min(0.5f, clip.Duration > 0f ? clip.Duration : 0.5f));
-                        clip.PropertyEvents.Add(new SceneAnimationEvent { Time = 0f, EndTime = defaultEnd });
+                        clip.PropertyEvents.Add(new AnimationClipEvent { Time = 0f, EndTime = defaultEnd });
                         _expandedEventIndex = clip.PropertyEvents.Count - 1;
                         clip.Invalidate();
                         EditorUtility.SetDirty(clip);
@@ -356,7 +356,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
         return $"{obj}{componentType}.{propertyPath}";
     }
 
-    private static string FormatEventSummary(SceneAnimationEvent ev)
+    private static string FormatEventSummary(AnimationClipEvent ev)
     {
         string FormatCall(string fn)
         {
@@ -381,7 +381,7 @@ public class AnimationClipAssetEditor : AssetImporterEditor
         return $"Enter:{enter}{stay} | Exit:{exit}";
     }
 
-    private static void DrawInlineEventEditor(Paper paper, string id, AnimationClip clip, SceneAnimationEvent ev)
+    private static void DrawInlineEventEditor(Paper paper, string id, AnimationClip clip, AnimationClipEvent ev)
     {
         bool isRanged = ev.IsRange;
         using (paper.Column(id).Height(UnitValue.Auto).Padding(10, 10, 4, 8).Gap(4)

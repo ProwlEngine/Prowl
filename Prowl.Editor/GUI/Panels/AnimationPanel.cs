@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -240,20 +240,20 @@ public class AnimationPanel : DockPanel
     private int _selectedKeyIndex = -1;
     private int _selectedEventIndex = -1;
     private readonly HashSet<(int RowIndex, int KeyIndex)> _selectedKeys = [];
-    private readonly Dictionary<SceneCurveTrack, HashSet<int>> _selectedDirectCurveKeys = new(ReferenceEqualityComparer.Instance);
-    private SceneCurveTrack? _dragTangentTrack;
+    private readonly Dictionary<AnimationCurveTrack, HashSet<int>> _selectedDirectCurveKeys = new(ReferenceEqualityComparer.Instance);
+    private AnimationCurveTrack? _dragTangentTrack;
 
     internal readonly record struct VisibleCurveChannel(
-        SceneCurveTrack Track,
+        AnimationCurveTrack Track,
         string Label,
         Color Color,
         int RowIndex,
         bool IsLocked);
 
     // Collision-free per-track snapshots captured at the start of a multi-key drag
-    private readonly List<(SceneCurveTrack Track, Keyframe[] OriginalKeys, HashSet<int> DraggedIndices)> _dragCurveSnapshots = [];
-    private readonly List<(SceneObjectTrack Track, SceneObjectKeyframe[] OriginalKeys, HashSet<int> DraggedIndices)> _dragObjectSnapshots = [];
-    private readonly List<(SceneStringTrack Track, SceneStringKeyframe[] OriginalKeys, HashSet<int> DraggedIndices)> _dragStringSnapshots = [];
+    private readonly List<(AnimationCurveTrack Track, Keyframe[] OriginalKeys, HashSet<int> DraggedIndices)> _dragCurveSnapshots = [];
+    private readonly List<(AnimationObjectTrack Track, AnimationObjectKeyframe[] OriginalKeys, HashSet<int> DraggedIndices)> _dragObjectSnapshots = [];
+    private readonly List<(AnimationStringTrack Track, AnimationStringKeyframe[] OriginalKeys, HashSet<int> DraggedIndices)> _dragStringSnapshots = [];
 
     // Multi-key clipboard (times stored as relative offsets from the earliest copied key)
     private readonly List<(string RelPath, string CompType, string PropPath, float RelTime, Keyframe Key)> _copiedCurveKeys = [];
@@ -324,7 +324,7 @@ public class AnimationPanel : DockPanel
 
     // Baseline snapshots taken when Preview / Record mode starts so stopping Preview restores the scene
     private readonly Dictionary<(GameObject Go, string ComponentType, string BasePath), (object? Value, Type? MemberType)> _previewBaseline = [];
-    private SceneClipBinding? _cachedPreviewBinding;
+    private AnimationClipBinding? _cachedPreviewBinding;
     private GameObject? _cachedPreviewRoot;
     private AnimationClip? _cachedPreviewClip;
     private int _cachedPreviewVersion = -1;
@@ -370,11 +370,11 @@ public class AnimationPanel : DockPanel
         public int Indent;
         public bool IsMissing;
         public string GroupKey = string.Empty;
-        public List<SceneCurveTrack>? GroupTracks;
+        public List<AnimationCurveTrack>? GroupTracks;
         public List<float>? SummaryTimes;
-        public SceneCurveTrack? CurveTrack;
-        public SceneObjectTrack? ObjectTrack;
-        public SceneStringTrack? StringTrack;
+        public AnimationCurveTrack? CurveTrack;
+        public AnimationObjectTrack? ObjectTrack;
+        public AnimationStringTrack? StringTrack;
     }
 
     private readonly List<TrackRow> _rows = [];
@@ -588,9 +588,9 @@ public class AnimationPanel : DockPanel
 
         if (_selectedDirectCurveKeys.Count > 0)
         {
-            var validTracks = new HashSet<SceneCurveTrack>(_clip.CurveTracks, ReferenceEqualityComparer.Instance);
-            List<SceneCurveTrack>? deadTracks = null;
-            foreach ((SceneCurveTrack ct, HashSet<int> indices) in _selectedDirectCurveKeys)
+            var validTracks = new HashSet<AnimationCurveTrack>(_clip.CurveTracks, ReferenceEqualityComparer.Instance);
+            List<AnimationCurveTrack>? deadTracks = null;
+            foreach ((AnimationCurveTrack ct, HashSet<int> indices) in _selectedDirectCurveKeys)
             {
                 if (!validTracks.Contains(ct))
                 {
@@ -607,7 +607,7 @@ public class AnimationPanel : DockPanel
             }
             if (deadTracks != null)
             {
-                foreach (SceneCurveTrack dt in deadTracks)
+                foreach (AnimationCurveTrack dt in deadTracks)
                     _selectedDirectCurveKeys.Remove(dt);
             }
         }
@@ -828,8 +828,8 @@ public class AnimationPanel : DockPanel
         }
 
         _previewElapsedTime += unscaledDt;
-        SceneClipWrapMode wrap = _clip.EffectiveWrapMode;
-        if (wrap == SceneClipWrapMode.Once && _previewElapsedTime >= duration)
+        AnimationClipWrapMode wrap = _clip.EffectiveWrapMode;
+        if (wrap == AnimationClipWrapMode.Once && _previewElapsedTime >= duration)
         {
             _previewElapsedTime = duration;
             _currentTime = duration;
@@ -920,7 +920,7 @@ public class AnimationPanel : DockPanel
                     !ReferenceEquals(_cachedPreviewClip, _clip) ||
                     _cachedPreviewVersion != _clip!.Version)
                 {
-                    _cachedPreviewBinding = new SceneClipBinding(_targetRoot!, _clip!);
+                    _cachedPreviewBinding = new AnimationClipBinding(_targetRoot!, _clip!);
                     _cachedPreviewRoot = _targetRoot;
                     _cachedPreviewClip = _clip;
                     _cachedPreviewVersion = _clip.Version;
@@ -1020,7 +1020,7 @@ public class AnimationPanel : DockPanel
             foreach (((GameObject go, string compType, string basePath), (object? val, Type? _)) in _previewBaseline)
             {
                 if (go.IsNotValid()) continue;
-                SceneClipBinding.TryWriteRawProperty(go, "", compType, basePath, val);
+                AnimationClipBinding.TryWriteRawProperty(go, "", compType, basePath, val);
             }
         }
         finally
@@ -1045,17 +1045,17 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _clip!.CurveTracks.Count; i++)
         {
-            SceneCurveTrack t = _clip.CurveTracks[i];
+            AnimationCurveTrack t = _clip.CurveTracks[i];
             CacheBaselineProperty(t.RelativePath, t.ComponentType, StripSubChannel(t.PropertyPath));
         }
         for (int i = 0; i < _clip.ObjectTracks.Count; i++)
         {
-            SceneObjectTrack t = _clip.ObjectTracks[i];
+            AnimationObjectTrack t = _clip.ObjectTracks[i];
             CacheBaselineProperty(t.RelativePath, t.ComponentType, t.PropertyPath);
         }
         for (int i = 0; i < _clip.StringTracks.Count; i++)
         {
-            SceneStringTrack t = _clip.StringTracks[i];
+            AnimationStringTrack t = _clip.StringTracks[i];
             CacheBaselineProperty(t.RelativePath, t.ComponentType, t.PropertyPath);
         }
     }
@@ -1074,13 +1074,13 @@ public class AnimationPanel : DockPanel
     private void CacheBaselineProperty(string relativePath, string componentType, string basePath)
     {
         if (Application.IsPlaying || _targetRoot.IsNotValid()) return;
-        GameObject? go = SceneClipBinding.ResolveGameObject(_targetRoot!, relativePath);
+        GameObject? go = AnimationClipBinding.ResolveGameObject(_targetRoot!, relativePath);
         if (go.IsNotValid()) return;
 
         var key = (go!, componentType, basePath);
         if (_previewBaseline.ContainsKey(key)) return;
 
-        if (SceneClipBinding.TryReadRawProperty(_targetRoot!, relativePath, componentType, basePath, out object? val, out Type? memberType))
+        if (AnimationClipBinding.TryReadRawProperty(_targetRoot!, relativePath, componentType, basePath, out object? val, out Type? memberType))
             _previewBaseline[key] = (val, memberType);
     }
 
@@ -1146,7 +1146,7 @@ public class AnimationPanel : DockPanel
                 // Put the scene back before rebuilding, so the new binding captures pristine baselines
                 // (otherwise additive tracks and material uniforms would capture already-animated values).
                 _cachedPreviewBinding?.RestoreBaseline();
-                _cachedPreviewBinding = new SceneClipBinding(_targetRoot!, _clip!);
+                _cachedPreviewBinding = new AnimationClipBinding(_targetRoot!, _clip!);
                 _cachedPreviewRoot = _targetRoot;
                 _cachedPreviewClip = _clip;
                 _cachedPreviewVersion = _clip.Version;
@@ -1171,20 +1171,20 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _clip!.CurveTracks.Count; i++)
         {
-            SceneCurveTrack t = _clip.CurveTracks[i];
-            if (SceneClipBinding.TryReadScalar(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out float v))
+            AnimationCurveTrack t = _clip.CurveTracks[i];
+            if (AnimationClipBinding.TryReadScalar(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out float v))
                 _recordedScalars[(t.RelativePath, t.ComponentType, t.PropertyPath)] = v;
         }
         for (int i = 0; i < _clip.ObjectTracks.Count; i++)
         {
-            SceneObjectTrack t = _clip.ObjectTracks[i];
-            if (SceneClipBinding.TryReadObject(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out EngineObject? v))
+            AnimationObjectTrack t = _clip.ObjectTracks[i];
+            if (AnimationClipBinding.TryReadObject(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out EngineObject? v))
                 _recordedObjects[(t.RelativePath, t.ComponentType, t.PropertyPath)] = v;
         }
         for (int i = 0; i < _clip.StringTracks.Count; i++)
         {
-            SceneStringTrack t = _clip.StringTracks[i];
-            if (SceneClipBinding.TryReadString(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out string v))
+            AnimationStringTrack t = _clip.StringTracks[i];
+            if (AnimationClipBinding.TryReadString(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out string v))
                 _recordedStrings[(t.RelativePath, t.ComponentType, t.PropertyPath)] = v;
         }
 
@@ -1217,9 +1217,9 @@ public class AnimationPanel : DockPanel
         // 1. Check all existing tracks for value changes
         for (int i = 0; i < _clip!.CurveTracks.Count; i++)
         {
-            SceneCurveTrack t = _clip.CurveTracks[i];
+            AnimationCurveTrack t = _clip.CurveTracks[i];
             var key = (t.RelativePath, t.ComponentType, t.PropertyPath);
-            if (!SceneClipBinding.TryReadScalar(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out float current))
+            if (!AnimationClipBinding.TryReadScalar(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out float current))
                 continue;
 
             if (_recordedScalars.TryGetValue(key, out float prev) && MathF.Abs(current - prev) > 1e-4f)
@@ -1232,9 +1232,9 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _clip.ObjectTracks.Count; i++)
         {
-            SceneObjectTrack t = _clip.ObjectTracks[i];
+            AnimationObjectTrack t = _clip.ObjectTracks[i];
             var key = (t.RelativePath, t.ComponentType, t.PropertyPath);
-            if (!SceneClipBinding.TryReadObject(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out EngineObject? current))
+            if (!AnimationClipBinding.TryReadObject(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out EngineObject? current))
                 continue;
 
             if (_recordedObjects.TryGetValue(key, out EngineObject? prev) && !ReferenceEquals(current, prev))
@@ -1247,9 +1247,9 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _clip.StringTracks.Count; i++)
         {
-            SceneStringTrack t = _clip.StringTracks[i];
+            AnimationStringTrack t = _clip.StringTracks[i];
             var key = (t.RelativePath, t.ComponentType, t.PropertyPath);
-            if (!SceneClipBinding.TryReadString(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out string current))
+            if (!AnimationClipBinding.TryReadString(_targetRoot!, t.RelativePath, t.ComponentType, t.PropertyPath, out string current))
                 continue;
 
             if (_recordedStrings.TryGetValue(key, out string? prev) && current != prev)
@@ -1413,13 +1413,13 @@ public class AnimationPanel : DockPanel
             string compName = comp.GetType().Name;
             string memberName = mod.PropertyPath.TrimStart('_');
 
-            if (!SceneClipBinding.TryResolveAccessChain(comp, memberName, out SceneClipBinding.MemberAccessChain chain))
+            if (!AnimationClipBinding.TryResolveAccessChain(comp, memberName, out AnimationClipBinding.MemberAccessChain chain))
                 continue;
 
             string basePath = chain.BasePath;
             CacheBaselineProperty(relPath, compName, basePath);
 
-            if (!SceneClipBinding.TryDescribeType(compName, basePath, chain.LeafType, out AnimatablePropertyDescriptor desc))
+            if (!AnimationClipBinding.TryDescribeType(compName, basePath, chain.LeafType, out AnimatablePropertyDescriptor desc))
                 continue;
 
             if (!recorded)
@@ -1430,7 +1430,7 @@ public class AnimationPanel : DockPanel
 
             if (desc.IsObjectReference)
             {
-                if (SceneClipBinding.TryReadObject(_targetRoot!, relPath, compName, basePath, out EngineObject? objVal))
+                if (AnimationClipBinding.TryReadObject(_targetRoot!, relPath, compName, basePath, out EngineObject? objVal))
                 {
                     _clip!.SetObjectKey(relPath, compName, basePath, _currentTime, objVal);
                     _recordedObjects[(relPath, compName, basePath)] = objVal;
@@ -1438,7 +1438,7 @@ public class AnimationPanel : DockPanel
             }
             else if (desc.IsString)
             {
-                if (SceneClipBinding.TryReadString(_targetRoot!, relPath, compName, basePath, out string strVal))
+                if (AnimationClipBinding.TryReadString(_targetRoot!, relPath, compName, basePath, out string strVal))
                 {
                     _clip!.SetStringKey(relPath, compName, basePath, _currentTime, strVal);
                     _recordedStrings[(relPath, compName, basePath)] = strVal;
@@ -1449,7 +1449,7 @@ public class AnimationPanel : DockPanel
                 foreach (string sub in desc.SubChannels)
                 {
                     string subPath = $"{basePath}.{sub}";
-                    if (SceneClipBinding.TryReadScalar(_targetRoot!, relPath, compName, subPath, out float fVal))
+                    if (AnimationClipBinding.TryReadScalar(_targetRoot!, relPath, compName, subPath, out float fVal))
                     {
                         _clip!.SetCurveKey(relPath, compName, subPath, _currentTime, fVal);
                         _recordedScalars[(relPath, compName, subPath)] = fVal;
@@ -1458,7 +1458,7 @@ public class AnimationPanel : DockPanel
             }
             else
             {
-                if (SceneClipBinding.TryReadScalar(_targetRoot!, relPath, compName, basePath, out float fVal))
+                if (AnimationClipBinding.TryReadScalar(_targetRoot!, relPath, compName, basePath, out float fVal))
                 {
                     _clip!.SetCurveKey(relPath, compName, basePath, _currentTime, fVal);
                     _recordedScalars[(relPath, compName, basePath)] = fVal;
@@ -1482,15 +1482,15 @@ public class AnimationPanel : DockPanel
         if (!IsClipValid) return;
 
         // Group sub-channel curve tracks (e.g. LocalPosition.X/.Y/.Z, Color.R/.G/.B/.A) into collapsible parent rows
-        var grouped = new Dictionary<string, List<(int Index, SceneCurveTrack Track)>>(StringComparer.Ordinal);
+        var grouped = new Dictionary<string, List<(int Index, AnimationCurveTrack Track)>>(StringComparer.Ordinal);
         var groupOrder = new List<string>();
 
         for (int i = 0; i < _clip!.CurveTracks.Count; i++)
         {
-            SceneCurveTrack t = _clip.CurveTracks[i];
+            AnimationCurveTrack t = _clip.CurveTracks[i];
             string basePath = StripSubChannel(t.PropertyPath);
             string key = $"{t.RelativePath}|{t.ComponentType}|{basePath}";
-            if (!grouped.TryGetValue(key, out List<(int Index, SceneCurveTrack Track)>? list))
+            if (!grouped.TryGetValue(key, out List<(int Index, AnimationCurveTrack Track)>? list))
             {
                 list = [];
                 grouped[key] = list;
@@ -1501,14 +1501,14 @@ public class AnimationPanel : DockPanel
 
         foreach (string key in groupOrder)
         {
-            List<(int Index, SceneCurveTrack Track)> list = grouped[key];
-            SceneCurveTrack first = list[0].Track;
+            List<(int Index, AnimationCurveTrack Track)> list = grouped[key];
+            AnimationCurveTrack first = list[0].Track;
             string basePath = StripSubChannel(first.PropertyPath);
             bool isMultiChannelGroup = list.Count > 1 || basePath != first.PropertyPath;
 
             if (isMultiChannelGroup)
             {
-                var groupTracks = new List<SceneCurveTrack>(list.Count);
+                var groupTracks = new List<AnimationCurveTrack>(list.Count);
                 for (int i = 0; i < list.Count; i++)
                     groupTracks.Add(list[i].Track);
 
@@ -1529,7 +1529,7 @@ public class AnimationPanel : DockPanel
                 {
                     for (int i = 0; i < list.Count; i++)
                     {
-                        (int idx, SceneCurveTrack t) = list[i];
+                        (int idx, AnimationCurveTrack t) = list[i];
                         string subLabel = t.PropertyPath.Length > basePath.Length + 1
                             ? t.PropertyPath[(basePath.Length + 1)..]
                             : t.PropertyPath;
@@ -1550,7 +1550,7 @@ public class AnimationPanel : DockPanel
             }
             else
             {
-                (int idx, SceneCurveTrack t) = list[0];
+                (int idx, AnimationCurveTrack t) = list[0];
                 _rows.Add(new TrackRow
                 {
                     Kind = TrackRowKind.Curve,
@@ -1566,7 +1566,7 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _clip.ObjectTracks.Count; i++)
         {
-            SceneObjectTrack t = _clip.ObjectTracks[i];
+            AnimationObjectTrack t = _clip.ObjectTracks[i];
             _rows.Add(new TrackRow
             {
                 Kind = TrackRowKind.Object,
@@ -1581,7 +1581,7 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _clip.StringTracks.Count; i++)
         {
-            SceneStringTrack t = _clip.StringTracks[i];
+            AnimationStringTrack t = _clip.StringTracks[i];
             _rows.Add(new TrackRow
             {
                 Kind = TrackRowKind.String,
@@ -1613,7 +1613,7 @@ public class AnimationPanel : DockPanel
                 var key = (r.RelativePath, r.ComponentType, checkProp);
                 if (!_missingCache.TryGetValue(key, out bool valid))
                 {
-                    valid = SceneClipBinding.IsTrackTargetValid(_targetRoot!, r.RelativePath, r.ComponentType, checkProp);
+                    valid = AnimationClipBinding.IsTrackTargetValid(_targetRoot!, r.RelativePath, r.ComponentType, checkProp);
                     _missingCache[key] = valid;
                 }
                 r.IsMissing = !valid;
@@ -1674,7 +1674,7 @@ public class AnimationPanel : DockPanel
         RebuildRows();
     }
 
-    private static List<float> ComputeGroupSummaryTimes(List<SceneCurveTrack> tracks)
+    private static List<float> ComputeGroupSummaryTimes(List<AnimationCurveTrack> tracks)
     {
         var times = new List<float>();
         for (int i = 0; i < tracks.Count; i++)
@@ -1746,10 +1746,10 @@ public class AnimationPanel : DockPanel
         if (row.Kind == TrackRowKind.Group && row.GroupTracks is { Count: > 0 } gt)
         {
             for (int i = 0; i < gt.Count; i++)
-                if (gt[i].BlendMode != SceneTrackBlendMode.Additive) return false;
+                if (gt[i].BlendMode != AnimationTrackBlendMode.Additive) return false;
             return true;
         }
-        return row.CurveTrack is { BlendMode: SceneTrackBlendMode.Additive };
+        return row.CurveTrack is { BlendMode: AnimationTrackBlendMode.Additive };
     }
 
     private void ToggleRowMute(TrackRow row)
@@ -1758,7 +1758,7 @@ public class AnimationPanel : DockPanel
         Undo.RecordObject(ClipAsset!, "Toggle Track Mute");
         bool next = !IsRowMuted(row);
         if (row.Kind == TrackRowKind.Group && row.GroupTracks != null)
-            foreach (SceneCurveTrack t in row.GroupTracks) t.Muted = next;
+            foreach (AnimationCurveTrack t in row.GroupTracks) t.Muted = next;
         else if (row.CurveTrack != null) row.CurveTrack.Muted = next;
         else if (row.ObjectTrack != null) row.ObjectTrack.Muted = next;
         else if (row.StringTrack != null) row.StringTrack.Muted = next;
@@ -1772,7 +1772,7 @@ public class AnimationPanel : DockPanel
         if (!IsClipValid) return;
         bool next = !IsRowSolo(row);
         if (row.Kind == TrackRowKind.Group && row.GroupTracks != null)
-            foreach (SceneCurveTrack t in row.GroupTracks) t.Solo = next;
+            foreach (AnimationCurveTrack t in row.GroupTracks) t.Solo = next;
         else if (row.CurveTrack != null) row.CurveTrack.Solo = next;
         else if (row.ObjectTrack != null) row.ObjectTrack.Solo = next;
         else if (row.StringTrack != null) row.StringTrack.Solo = next;
@@ -1785,7 +1785,7 @@ public class AnimationPanel : DockPanel
         Undo.RecordObject(ClipAsset!, "Toggle Track Lock");
         bool next = !IsRowLocked(row);
         if (row.Kind == TrackRowKind.Group && row.GroupTracks != null)
-            foreach (SceneCurveTrack t in row.GroupTracks) t.Locked = next;
+            foreach (AnimationCurveTrack t in row.GroupTracks) t.Locked = next;
         else if (row.CurveTrack != null) row.CurveTrack.Locked = next;
         else if (row.ObjectTrack != null) row.ObjectTrack.Locked = next;
         else if (row.StringTrack != null) row.StringTrack.Locked = next;
@@ -1796,9 +1796,9 @@ public class AnimationPanel : DockPanel
     {
         if (!IsClipValid) return;
         Undo.RecordObject(ClipAsset!, "Toggle Track Blend Mode");
-        SceneTrackBlendMode next = IsRowAdditive(row) ? SceneTrackBlendMode.Override : SceneTrackBlendMode.Additive;
+        AnimationTrackBlendMode next = IsRowAdditive(row) ? AnimationTrackBlendMode.Override : AnimationTrackBlendMode.Additive;
         if (row.Kind == TrackRowKind.Group && row.GroupTracks != null)
-            foreach (SceneCurveTrack t in row.GroupTracks) t.BlendMode = next;
+            foreach (AnimationCurveTrack t in row.GroupTracks) t.BlendMode = next;
         else if (row.CurveTrack != null) row.CurveTrack.BlendMode = next;
         _clip!.Invalidate();
         MarkClipDirty();
@@ -2278,7 +2278,7 @@ public class AnimationPanel : DockPanel
         {
             Name = clipName,
             FrameRate = 60f,
-            WrapMode = SceneClipWrapMode.Loop,
+            WrapMode = AnimationClipWrapMode.Loop,
             Loop = true,
         };
 
@@ -2495,7 +2495,7 @@ public class AnimationPanel : DockPanel
 
         // Highlight tracks belonging to the currently selected child/external GameObject in the scene
         GameObject? activeSceneGo = Selection.GetActiveAs<GameObject>();
-        GameObject? resolvedTargetGo = _targetRoot.IsValid() ? SceneClipBinding.ResolveGameObject(_targetRoot!, row.RelativePath) : null;
+        GameObject? resolvedTargetGo = _targetRoot.IsValid() ? AnimationClipBinding.ResolveGameObject(_targetRoot!, row.RelativePath) : null;
         bool matchesSceneSelection = activeSceneGo.IsValid() && resolvedTargetGo.IsValid() && ReferenceEquals(activeSceneGo, resolvedTargetGo);
 
         Color rowBg = selected
@@ -2545,7 +2545,7 @@ public class AnimationPanel : DockPanel
                 bool isMuted = IsRowMuted(r);
                 bool isSolo = IsRowSolo(r);
                 bool isAdditive = IsRowAdditive(r);
-                GameObject? targetGo = _targetRoot.IsValid() ? SceneClipBinding.ResolveGameObject(_targetRoot!, r.RelativePath) : null;
+                GameObject? targetGo = _targetRoot.IsValid() ? AnimationClipBinding.ResolveGameObject(_targetRoot!, r.RelativePath) : null;
                 GameObject? selGo = Selection.GetActiveAs<GameObject>();
                 bool canRelink = selGo.IsValid() && _targetRoot.IsValid() && (r.IsMissing || !ReferenceEquals(selGo, targetGo));
 
@@ -2681,7 +2681,7 @@ public class AnimationPanel : DockPanel
         if (row.Kind == TrackRowKind.Curve && row.CurveTrack != null)
         {
             float val = row.CurveTrack.Curve.Count > 0 ? row.CurveTrack.Curve.Evaluate(_currentTime) : 0f;
-            if (_targetRoot.IsValid() && SceneClipBinding.TryReadScalar(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out float live))
+            if (_targetRoot.IsValid() && AnimationClipBinding.TryReadScalar(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out float live))
                 val = live;
 
             using (paper.Box($"anim_trow_{index}_vw").Width(62).Height(20).StopEventPropagation().Enter())
@@ -2713,7 +2713,7 @@ public class AnimationPanel : DockPanel
         else if (row.Kind == TrackRowKind.String && row.StringTrack != null)
         {
             string val = row.StringTrack.Evaluate(_currentTime);
-            if (_targetRoot.IsValid() && SceneClipBinding.TryReadString(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out string live))
+            if (_targetRoot.IsValid() && AnimationClipBinding.TryReadString(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out string live))
                 val = live;
 
             using (paper.Box($"anim_trow_{index}_sw").Width(62).Height(20).StopEventPropagation().Enter())
@@ -2733,7 +2733,7 @@ public class AnimationPanel : DockPanel
     {
         if (!IsClipValid || row.ObjectTrack == null) return;
         Type targetType = typeof(EngineObject);
-        if (_targetRoot.IsValid() && SceneClipBinding.TryReadRawProperty(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out _, out Type? mt) && mt != null)
+        if (_targetRoot.IsValid() && AnimationClipBinding.TryReadRawProperty(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out _, out Type? mt) && mt != null)
             targetType = mt;
 
         SelectorTabs tabs = typeof(Asset).IsAssignableFrom(targetType)
@@ -2809,17 +2809,17 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _clip!.CurveTracks.Count; i++)
         {
-            SceneCurveTrack t = _clip.CurveTracks[i];
+            AnimationCurveTrack t = _clip.CurveTracks[i];
             _addPropertyAnimatedSet.Add((t.RelativePath, t.ComponentType, StripSubChannel(t.PropertyPath)));
         }
         for (int i = 0; i < _clip.ObjectTracks.Count; i++)
         {
-            SceneObjectTrack t = _clip.ObjectTracks[i];
+            AnimationObjectTrack t = _clip.ObjectTracks[i];
             _addPropertyAnimatedSet.Add((t.RelativePath, t.ComponentType, t.PropertyPath));
         }
         for (int i = 0; i < _clip.StringTracks.Count; i++)
         {
-            SceneStringTrack t = _clip.StringTracks[i];
+            AnimationStringTrack t = _clip.StringTracks[i];
             _addPropertyAnimatedSet.Add((t.RelativePath, t.ComponentType, t.PropertyPath));
         }
     }
@@ -2892,7 +2892,7 @@ public class AnimationPanel : DockPanel
             ? nodeLabelInBreadcrumb
             : $"{breadcrumbPrefix} › {nodeLabelInBreadcrumb}";
 
-        List<AnimatablePropertyDescriptor> rawProps = SceneClipBinding.GetAnimatableProperties(current);
+        List<AnimatablePropertyDescriptor> rawProps = AnimationClipBinding.GetAnimatableProperties(current);
         var items = new List<AddPropertyItem>(rawProps.Count);
         for (int i = 0; i < rawProps.Count; i++)
         {
@@ -3482,7 +3482,7 @@ public class AnimationPanel : DockPanel
         Undo.RecordObject(ClipAsset!, "Relink Animation Track Path");
         if (row.Kind == TrackRowKind.Group && row.GroupTracks != null)
         {
-            foreach (SceneCurveTrack ct in row.GroupTracks)
+            foreach (AnimationCurveTrack ct in row.GroupTracks)
                 ct.RelativePath = newRelPath;
         }
         else if (row.CurveTrack != null)
@@ -3532,14 +3532,14 @@ public class AnimationPanel : DockPanel
         {
             EngineObject? initial = null;
             if (_targetRoot.IsValid())
-                SceneClipBinding.TryReadObject(_targetRoot!, relPath, desc.ComponentType, desc.PropertyPath, out initial);
+                AnimationClipBinding.TryReadObject(_targetRoot!, relPath, desc.ComponentType, desc.PropertyPath, out initial);
             _clip.SetObjectKey(relPath, desc.ComponentType, desc.PropertyPath, 0f, initial);
         }
         else if (desc.IsString)
         {
             string initial = "";
             if (_targetRoot.IsValid())
-                SceneClipBinding.TryReadString(_targetRoot!, relPath, desc.ComponentType, desc.PropertyPath, out initial);
+                AnimationClipBinding.TryReadString(_targetRoot!, relPath, desc.ComponentType, desc.PropertyPath, out initial);
             _clip.SetStringKey(relPath, desc.ComponentType, desc.PropertyPath, 0f, initial);
         }
         else if (desc.SubChannels.Length > 0)
@@ -3549,9 +3549,9 @@ public class AnimationPanel : DockPanel
                 string subPath = $"{desc.PropertyPath}.{sub}";
                 float initial = 0f;
                 if (_targetRoot.IsValid())
-                    SceneClipBinding.TryReadScalar(_targetRoot!, relPath, desc.ComponentType, subPath, out initial);
+                    AnimationClipBinding.TryReadScalar(_targetRoot!, relPath, desc.ComponentType, subPath, out initial);
 
-                SceneCurveTrack track = _clip.GetOrCreateCurveTrack(relPath, desc.ComponentType, subPath);
+                AnimationCurveTrack track = _clip.GetOrCreateCurveTrack(relPath, desc.ComponentType, subPath);
                 if (track.Curve.Count == 0)
                 {
                     track.Curve.AddKey(new Keyframe(0f, initial));
@@ -3563,9 +3563,9 @@ public class AnimationPanel : DockPanel
         {
             float initial = 0f;
             if (_targetRoot.IsValid())
-                SceneClipBinding.TryReadScalar(_targetRoot!, relPath, desc.ComponentType, desc.PropertyPath, out initial);
+                AnimationClipBinding.TryReadScalar(_targetRoot!, relPath, desc.ComponentType, desc.PropertyPath, out initial);
 
-            SceneCurveTrack track = _clip.GetOrCreateCurveTrack(relPath, desc.ComponentType, desc.PropertyPath);
+            AnimationCurveTrack track = _clip.GetOrCreateCurveTrack(relPath, desc.ComponentType, desc.PropertyPath);
             if (track.Curve.Count == 0)
             {
                 track.Curve.AddKey(new Keyframe(0f, initial));
@@ -3586,11 +3586,11 @@ public class AnimationPanel : DockPanel
 
         if (row.Kind == TrackRowKind.Group && row.GroupTracks != null)
         {
-            foreach (SceneCurveTrack ct in row.GroupTracks)
+            foreach (AnimationCurveTrack ct in row.GroupTracks)
             {
                 if (ct.Locked) continue;
                 float v = ct.Curve.Count > 0 ? ct.Curve.Evaluate(time) : 0f;
-                if (_targetRoot.IsValid() && SceneClipBinding.TryReadScalar(_targetRoot!, ct.RelativePath, ct.ComponentType, ct.PropertyPath, out float live))
+                if (_targetRoot.IsValid() && AnimationClipBinding.TryReadScalar(_targetRoot!, ct.RelativePath, ct.ComponentType, ct.PropertyPath, out float live))
                     v = live;
                 _clip!.SetCurveKey(ct.RelativePath, ct.ComponentType, ct.PropertyPath, time, v);
             }
@@ -3598,21 +3598,21 @@ public class AnimationPanel : DockPanel
         else if (row.Kind == TrackRowKind.Curve && row.CurveTrack != null)
         {
             float v = row.CurveTrack.Curve.Count > 0 ? row.CurveTrack.Curve.Evaluate(time) : 0f;
-            if (_targetRoot.IsValid() && SceneClipBinding.TryReadScalar(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out float live))
+            if (_targetRoot.IsValid() && AnimationClipBinding.TryReadScalar(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out float live))
                 v = live;
             _clip!.SetCurveKey(row.RelativePath, row.ComponentType, row.PropertyPath, time, v);
         }
         else if (row.Kind == TrackRowKind.Object && row.ObjectTrack != null)
         {
             EngineObject? v = row.ObjectTrack.Evaluate(time);
-            if (_targetRoot.IsValid() && SceneClipBinding.TryReadObject(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out EngineObject? live))
+            if (_targetRoot.IsValid() && AnimationClipBinding.TryReadObject(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out EngineObject? live))
                 v = live;
             _clip!.SetObjectKey(row.RelativePath, row.ComponentType, row.PropertyPath, time, v);
         }
         else if (row.Kind == TrackRowKind.String && row.StringTrack != null)
         {
             string v = row.StringTrack.Evaluate(time);
-            if (_targetRoot.IsValid() && SceneClipBinding.TryReadString(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out string live))
+            if (_targetRoot.IsValid() && AnimationClipBinding.TryReadString(_targetRoot!, row.RelativePath, row.ComponentType, row.PropertyPath, out string live))
                 v = live;
             _clip!.SetStringKey(row.RelativePath, row.ComponentType, row.PropertyPath, time, v);
         }
@@ -3626,7 +3626,7 @@ public class AnimationPanel : DockPanel
         Undo.RecordObject(ClipAsset!, "Remove Track");
         if (row.Kind == TrackRowKind.Group && row.GroupTracks != null)
         {
-            foreach (SceneCurveTrack ct in row.GroupTracks)
+            foreach (AnimationCurveTrack ct in row.GroupTracks)
                 _clip!.RemoveCurveTrack(ct);
         }
         if (row.CurveTrack != null) _clip!.RemoveCurveTrack(row.CurveTrack);
@@ -3661,7 +3661,7 @@ public class AnimationPanel : DockPanel
         SetPlayhead(_clip.PropertyEvents[eventIndex].Time, snapToFrame: false);
     }
 
-    internal SceneAnimationEvent? AddEventAtPlayhead(bool ranged = false)
+    internal AnimationClipEvent? AddEventAtPlayhead(bool ranged = false)
     {
         if (!IsClipValid) return null;
         Undo.RecordObject(ClipAsset!, ranged ? "Add Ranged Animation Event" : "Add Animation Event");
@@ -3672,7 +3672,7 @@ public class AnimationPanel : DockPanel
             ? _rows[_selectedRowIndex].RelativePath
             : string.Empty;
 
-        var ev = new SceneAnimationEvent
+        var ev = new AnimationClipEvent
         {
             Time = _currentTime,
             EndTime = ranged ? _currentTime + defaultLength : _currentTime,
@@ -3694,8 +3694,8 @@ public class AnimationPanel : DockPanel
     {
         if (!IsClipValid || index < 0 || index >= _clip!.PropertyEvents.Count) return;
         Undo.RecordObject(ClipAsset!, "Duplicate Animation Event");
-        SceneAnimationEvent src = _clip.PropertyEvents[index];
-        SceneAnimationEvent copy = src.Clone();
+        AnimationClipEvent src = _clip.PropertyEvents[index];
+        AnimationClipEvent copy = src.Clone();
         float step = src.IsRange ? src.Duration : (1f / MathF.Max(1f, _clip.FrameRate));
         copy.Time += step;
         copy.EndTime = src.IsRange ? copy.Time + src.Duration : copy.Time;
@@ -3903,7 +3903,7 @@ public class AnimationPanel : DockPanel
         if (!IsClipValid) return -1;
         for (int i = _clip!.PropertyEvents.Count - 1; i >= 0; i--)
         {
-            SceneAnimationEvent ev = _clip.PropertyEvents[i];
+            AnimationClipEvent ev = _clip.PropertyEvents[i];
             float ex0 = xFromTime(ev.Time);
             if (ev.IsRange)
             {
@@ -3928,21 +3928,21 @@ public class AnimationPanel : DockPanel
         {
             _selectedEventIndex = hitIdx;
             _selectedKeyIndex = -1;
-            SceneAnimationEvent ev = _clip.PropertyEvents[hitIdx];
+            AnimationClipEvent ev = _clip.PropertyEvents[hitIdx];
             string title = string.IsNullOrEmpty(ev.FunctionName) ? "Unassigned Event" : ev.FunctionName;
 
             Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
             {
                 menu.Header($"{title} @ {ev.Time:0.00}s");
                 if (_targetRoot.IsValid() && !string.IsNullOrEmpty(ev.FunctionName))
-                    menu.Item(ev.IsRange ? "Test Fire Enter" : "Test Fire Event", () => SceneClipBinding.InvokeEvent(_targetRoot!, ev), icon: EditorIcons.Play);
+                    menu.Item(ev.IsRange ? "Test Fire Enter" : "Test Fire Event", () => AnimationClipBinding.InvokeEvent(_targetRoot!, ev), icon: EditorIcons.Play);
                 if (_targetRoot.IsValid() && ev.IsRange && !string.IsNullOrEmpty(ev.ExitFunctionName))
                 {
                     menu.Item("Test Fire Exit", () =>
                     {
                         var tmpExit = ev.Clone();
                         tmpExit.FunctionName = ev.ExitFunctionName;
-                        SceneClipBinding.InvokeEvent(_targetRoot!, tmpExit);
+                        AnimationClipBinding.InvokeEvent(_targetRoot!, tmpExit);
                     }, icon: EditorIcons.Play);
                 }
 
@@ -4000,7 +4000,7 @@ public class AnimationPanel : DockPanel
         // Hit-test in reverse so top-most / latest events win
         for (int i = _clip!.PropertyEvents.Count - 1; i >= 0; i--)
         {
-            SceneAnimationEvent ev = _clip.PropertyEvents[i];
+            AnimationClipEvent ev = _clip.PropertyEvents[i];
             float ex0 = xFromTime(ev.Time);
 
             if (ev.IsRange)
@@ -4078,7 +4078,7 @@ public class AnimationPanel : DockPanel
         float minStep = freeSnap ? 0.005f : (1f / fps);
         float rawT = MathF.Max(0f, timeFromX(localPos.X));
         float snappedT = freeSnap ? rawT : MathF.Round(rawT * fps) / fps;
-        SceneAnimationEvent ev = _clip.PropertyEvents[_dragKey];
+        AnimationClipEvent ev = _clip.PropertyEvents[_dragKey];
 
         if (_dragPart == DragPart.Event)
         {
@@ -4104,7 +4104,7 @@ public class AnimationPanel : DockPanel
         }
     }
 
-    private static string FormatEventBadgeText(SceneAnimationEvent ev)
+    private static string FormatEventBadgeText(AnimationClipEvent ev)
     {
         if (ev.IsRange)
         {
@@ -4145,7 +4145,7 @@ public class AnimationPanel : DockPanel
         {
             for (int i = 0; i < _clip!.PropertyEvents.Count; i++)
             {
-                SceneAnimationEvent ev = _clip.PropertyEvents[i];
+                AnimationClipEvent ev = _clip.PropertyEvents[i];
                 bool sel = i == _selectedEventIndex;
                 bool unassigned = string.IsNullOrEmpty(ev.FunctionName) && string.IsNullOrEmpty(ev.StayFunctionName) && string.IsNullOrEmpty(ev.ExitFunctionName);
                 string badge = FormatEventBadgeText(ev);
@@ -4541,7 +4541,7 @@ public class AnimationPanel : DockPanel
             count++;
         }
 
-        foreach ((SceneCurveTrack ct, HashSet<int> indices) in _selectedDirectCurveKeys)
+        foreach ((AnimationCurveTrack ct, HashSet<int> indices) in _selectedDirectCurveKeys)
         {
             foreach (int kIdx in indices)
             {
@@ -4574,9 +4574,9 @@ public class AnimationPanel : DockPanel
     }
 
     private void ResolveSelectedUnderlyingKeys(
-        Dictionary<SceneCurveTrack, HashSet<int>> curveKeys,
-        Dictionary<SceneObjectTrack, HashSet<int>> objectKeys,
-        Dictionary<SceneStringTrack, HashSet<int>> stringKeys)
+        Dictionary<AnimationCurveTrack, HashSet<int>> curveKeys,
+        Dictionary<AnimationObjectTrack, HashSet<int>> objectKeys,
+        Dictionary<AnimationStringTrack, HashSet<int>> stringKeys)
     {
         if (_selectedKeys.Count == 0 && _selectedRowIndex >= 0 && _selectedKeyIndex >= 0)
             _selectedKeys.Add((_selectedRowIndex, _selectedKeyIndex));
@@ -4590,7 +4590,7 @@ public class AnimationPanel : DockPanel
             if (row.Kind == TrackRowKind.Group && row.GroupTracks != null && row.SummaryTimes != null && kIdx >= 0 && kIdx < row.SummaryTimes.Count)
             {
                 float targetTime = row.SummaryTimes[kIdx];
-                foreach (SceneCurveTrack ct in row.GroupTracks)
+                foreach (AnimationCurveTrack ct in row.GroupTracks)
                 {
                     if (ct.Locked) continue;
                     for (int k = 0; k < ct.Curve.Count; k++)
@@ -4624,7 +4624,7 @@ public class AnimationPanel : DockPanel
             }
         }
 
-        foreach ((SceneCurveTrack ct, HashSet<int> directSet) in _selectedDirectCurveKeys)
+        foreach ((AnimationCurveTrack ct, HashSet<int> directSet) in _selectedDirectCurveKeys)
         {
             if (ct.Locked) continue;
             if (!curveKeys.TryGetValue(ct, out HashSet<int>? set))
@@ -4638,16 +4638,16 @@ public class AnimationPanel : DockPanel
     }
 
     private void RebuildSelectionFromTrackTimes(
-        Dictionary<SceneCurveTrack, List<float>> curveTimes,
-        Dictionary<SceneObjectTrack, List<float>> objectTimes,
-        Dictionary<SceneStringTrack, List<float>> stringTimes)
+        Dictionary<AnimationCurveTrack, List<float>> curveTimes,
+        Dictionary<AnimationObjectTrack, List<float>> objectTimes,
+        Dictionary<AnimationStringTrack, List<float>> stringTimes)
     {
         _selectedKeys.Clear();
         _selectedDirectCurveKeys.Clear();
         _selectedKeyIndex = -1;
         bool keepRowSelection = (_selectedRowIndex >= 0 && _selectedRowIndex < _rows.Count && _rows[_selectedRowIndex].Kind == TrackRowKind.Group)
             || _selectedTrackRows.Count > 1;
-        var matchedExpandedTracks = new HashSet<SceneCurveTrack>(ReferenceEqualityComparer.Instance);
+        var matchedExpandedTracks = new HashSet<AnimationCurveTrack>(ReferenceEqualityComparer.Instance);
 
         for (int i = 0; i < _rows.Count; i++)
         {
@@ -4657,7 +4657,7 @@ public class AnimationPanel : DockPanel
                 row.SummaryTimes = ComputeGroupSummaryTimes(row.GroupTracks);
                 if (!_curvesMode)
                 {
-                    foreach (SceneCurveTrack ct in row.GroupTracks)
+                    foreach (AnimationCurveTrack ct in row.GroupTracks)
                     {
                         if (!curveTimes.TryGetValue(ct, out List<float>? times)) continue;
                         for (int k = 0; k < row.SummaryTimes.Count; k++)
@@ -4702,7 +4702,7 @@ public class AnimationPanel : DockPanel
             }
             else if (row.Kind == TrackRowKind.Object && row.ObjectTrack != null && objectTimes.TryGetValue(row.ObjectTrack, out List<float>? oTimes))
             {
-                List<SceneObjectKeyframe> kfs = row.ObjectTrack.Keyframes;
+                List<AnimationObjectKeyframe> kfs = row.ObjectTrack.Keyframes;
                 for (int k = 0; k < kfs.Count; k++)
                 {
                     for (int t = 0; t < oTimes.Count; t++)
@@ -4722,7 +4722,7 @@ public class AnimationPanel : DockPanel
             }
             else if (row.Kind == TrackRowKind.String && row.StringTrack != null && stringTimes.TryGetValue(row.StringTrack, out List<float>? sTimes))
             {
-                List<SceneStringKeyframe> kfs = row.StringTrack.Keyframes;
+                List<AnimationStringKeyframe> kfs = row.StringTrack.Keyframes;
                 for (int k = 0; k < kfs.Count; k++)
                 {
                     for (int t = 0; t < sTimes.Count; t++)
@@ -4743,7 +4743,7 @@ public class AnimationPanel : DockPanel
         }
 
         // Preserve curve key selection for collapsed group tracks that have no expanded Curve row in _rows
-        foreach ((SceneCurveTrack ct, List<float> cTimes) in curveTimes)
+        foreach ((AnimationCurveTrack ct, List<float> cTimes) in curveTimes)
         {
             if (matchedExpandedTracks.Contains(ct)) continue;
             AnimationCurve c = ct.Curve;
@@ -4777,28 +4777,28 @@ public class AnimationPanel : DockPanel
             return;
         }
 
-        var curveKeys = new Dictionary<SceneCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var objectKeys = new Dictionary<SceneObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var stringKeys = new Dictionary<SceneStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var curveKeys = new Dictionary<AnimationCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var objectKeys = new Dictionary<AnimationObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var stringKeys = new Dictionary<AnimationStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
         ResolveSelectedUnderlyingKeys(curveKeys, objectKeys, stringKeys);
 
         if (curveKeys.Count == 0 && objectKeys.Count == 0 && stringKeys.Count == 0) return;
 
         Undo.RecordObject(ClipAsset!, "Delete Selected Keyframes");
 
-        foreach ((SceneCurveTrack track, HashSet<int> indices) in curveKeys)
+        foreach ((AnimationCurveTrack track, HashSet<int> indices) in curveKeys)
         {
             foreach (int idx in indices.OrderByDescending(static x => x))
                 if (idx >= 0 && idx < track.Curve.Count)
                     track.Curve.RemoveKey(idx);
         }
-        foreach ((SceneObjectTrack track, HashSet<int> indices) in objectKeys)
+        foreach ((AnimationObjectTrack track, HashSet<int> indices) in objectKeys)
         {
             foreach (int idx in indices.OrderByDescending(static x => x))
                 if (idx >= 0 && idx < track.Keyframes.Count)
                     track.Keyframes.RemoveAt(idx);
         }
-        foreach ((SceneStringTrack track, HashSet<int> indices) in stringKeys)
+        foreach ((AnimationStringTrack track, HashSet<int> indices) in stringKeys)
         {
             foreach (int idx in indices.OrderByDescending(static x => x))
                 if (idx >= 0 && idx < track.Keyframes.Count)
@@ -4863,21 +4863,21 @@ public class AnimationPanel : DockPanel
         earliestTime = 0f;
         if (!IsClipValid) return false;
 
-        var curveKeys = new Dictionary<SceneCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var objectKeys = new Dictionary<SceneObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var stringKeys = new Dictionary<SceneStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var curveKeys = new Dictionary<AnimationCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var objectKeys = new Dictionary<AnimationObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var stringKeys = new Dictionary<AnimationStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
         ResolveSelectedUnderlyingKeys(curveKeys, objectKeys, stringKeys);
 
         if (curveKeys.Count == 0 && objectKeys.Count == 0 && stringKeys.Count == 0) return false;
 
         float minT = float.MaxValue;
-        foreach ((SceneCurveTrack track, HashSet<int> indices) in curveKeys)
+        foreach ((AnimationCurveTrack track, HashSet<int> indices) in curveKeys)
             foreach (int idx in indices)
                 minT = MathF.Min(minT, track.Curve[idx].Time);
-        foreach ((SceneObjectTrack track, HashSet<int> indices) in objectKeys)
+        foreach ((AnimationObjectTrack track, HashSet<int> indices) in objectKeys)
             foreach (int idx in indices)
                 minT = MathF.Min(minT, track.Keyframes[idx].Time);
-        foreach ((SceneStringTrack track, HashSet<int> indices) in stringKeys)
+        foreach ((AnimationStringTrack track, HashSet<int> indices) in stringKeys)
             foreach (int idx in indices)
                 minT = MathF.Min(minT, track.Keyframes[idx].Time);
 
@@ -4888,22 +4888,22 @@ public class AnimationPanel : DockPanel
         _copiedObjectKeys.Clear();
         _copiedStringKeys.Clear();
 
-        foreach ((SceneCurveTrack track, HashSet<int> indices) in curveKeys)
+        foreach ((AnimationCurveTrack track, HashSet<int> indices) in curveKeys)
             foreach (int idx in indices)
             {
                 Keyframe kf = track.Curve[idx];
                 _copiedCurveKeys.Add((track.RelativePath, track.ComponentType, track.PropertyPath, kf.Time - minT, kf));
             }
-        foreach ((SceneObjectTrack track, HashSet<int> indices) in objectKeys)
+        foreach ((AnimationObjectTrack track, HashSet<int> indices) in objectKeys)
             foreach (int idx in indices)
             {
-                SceneObjectKeyframe kf = track.Keyframes[idx];
+                AnimationObjectKeyframe kf = track.Keyframes[idx];
                 _copiedObjectKeys.Add((track.RelativePath, track.ComponentType, track.PropertyPath, kf.Time - minT, kf.Value));
             }
-        foreach ((SceneStringTrack track, HashSet<int> indices) in stringKeys)
+        foreach ((AnimationStringTrack track, HashSet<int> indices) in stringKeys)
             foreach (int idx in indices)
             {
-                SceneStringKeyframe kf = track.Keyframes[idx];
+                AnimationStringKeyframe kf = track.Keyframes[idx];
                 _copiedStringKeys.Add((track.RelativePath, track.ComponentType, track.PropertyPath, kf.Time - minT, kf.Value));
             }
 
@@ -4924,14 +4924,14 @@ public class AnimationPanel : DockPanel
         if (_copiedCurveKeys.Count == 0 && _copiedObjectKeys.Count == 0 && _copiedStringKeys.Count == 0) return;
 
         Undo.RecordObject(ClipAsset!, "Paste Keyframes");
-        var pastedCurveTimes = new Dictionary<SceneCurveTrack, List<float>>(ReferenceEqualityComparer.Instance);
-        var pastedObjectTimes = new Dictionary<SceneObjectTrack, List<float>>(ReferenceEqualityComparer.Instance);
-        var pastedStringTimes = new Dictionary<SceneStringTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var pastedCurveTimes = new Dictionary<AnimationCurveTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var pastedObjectTimes = new Dictionary<AnimationObjectTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var pastedStringTimes = new Dictionary<AnimationStringTrack, List<float>>(ReferenceEqualityComparer.Instance);
 
         foreach (var item in _copiedCurveKeys)
         {
             float t = MathF.Max(0f, baseTime + item.RelTime);
-            SceneCurveTrack track = _clip!.GetOrCreateCurveTrack(item.RelPath, item.CompType, item.PropPath);
+            AnimationCurveTrack track = _clip!.GetOrCreateCurveTrack(item.RelPath, item.CompType, item.PropPath);
             if (track.Locked) continue;
             Keyframe kf = item.Key;
             _clip.SetCurveKey(item.RelPath, item.CompType, item.PropPath, t, kf.Value);
@@ -4951,7 +4951,7 @@ public class AnimationPanel : DockPanel
         foreach (var item in _copiedObjectKeys)
         {
             float t = MathF.Max(0f, baseTime + item.RelTime);
-            SceneObjectTrack track = _clip!.SetObjectKey(item.RelPath, item.CompType, item.PropPath, t, item.Value);
+            AnimationObjectTrack track = _clip!.SetObjectKey(item.RelPath, item.CompType, item.PropPath, t, item.Value);
             if (!pastedObjectTimes.TryGetValue(track, out List<float>? list))
                 pastedObjectTimes[track] = list = [];
             list.Add(t);
@@ -4960,7 +4960,7 @@ public class AnimationPanel : DockPanel
         foreach (var item in _copiedStringKeys)
         {
             float t = MathF.Max(0f, baseTime + item.RelTime);
-            SceneStringTrack track = _clip!.SetStringKey(item.RelPath, item.CompType, item.PropPath, t, item.Value);
+            AnimationStringTrack track = _clip!.SetStringKey(item.RelPath, item.CompType, item.PropPath, t, item.Value);
             if (!pastedStringTimes.TryGetValue(track, out List<float>? list))
                 pastedStringTimes[track] = list = [];
             list.Add(t);
@@ -5019,15 +5019,15 @@ public class AnimationPanel : DockPanel
     {
         if (!IsClipValid) return;
 
-        var curveKeys = new Dictionary<SceneCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var objectKeys = new Dictionary<SceneObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var stringKeys = new Dictionary<SceneStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var curveKeys = new Dictionary<AnimationCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var objectKeys = new Dictionary<AnimationObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var stringKeys = new Dictionary<AnimationStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
         ResolveSelectedUnderlyingKeys(curveKeys, objectKeys, stringKeys);
 
         if (curveKeys.Count == 0) return;
 
         Undo.RecordObject(ClipAsset!, undoLabel);
-        foreach ((SceneCurveTrack track, HashSet<int> indices) in curveKeys)
+        foreach ((AnimationCurveTrack track, HashSet<int> indices) in curveKeys)
         {
             foreach (int idx in indices)
             {
@@ -5103,14 +5103,14 @@ public class AnimationPanel : DockPanel
         }
         else if (row.Kind == TrackRowKind.Object && row.ObjectTrack != null)
         {
-            List<SceneObjectKeyframe> kfs = row.ObjectTrack.Keyframes;
+            List<AnimationObjectKeyframe> kfs = row.ObjectTrack.Keyframes;
             for (int k = 0; k < kfs.Count; k++)
                 if (MathF.Abs(localPos.X - xFromTime(kfs[k].Time)) <= hitRadius)
                     return (rowIdx, k);
         }
         else if (row.Kind == TrackRowKind.String && row.StringTrack != null)
         {
-            List<SceneStringKeyframe> kfs = row.StringTrack.Keyframes;
+            List<AnimationStringKeyframe> kfs = row.StringTrack.Keyframes;
             for (int k = 0; k < kfs.Count; k++)
                 if (MathF.Abs(localPos.X - xFromTime(kfs[k].Time)) <= hitRadius)
                     return (rowIdx, k);
@@ -5216,28 +5216,28 @@ public class AnimationPanel : DockPanel
         _dragObjectSnapshots.Clear();
         _dragStringSnapshots.Clear();
 
-        var curveKeys = new Dictionary<SceneCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var objectKeys = new Dictionary<SceneObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var stringKeys = new Dictionary<SceneStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var curveKeys = new Dictionary<AnimationCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var objectKeys = new Dictionary<AnimationObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var stringKeys = new Dictionary<AnimationStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
         ResolveSelectedUnderlyingKeys(curveKeys, objectKeys, stringKeys);
 
-        foreach ((SceneCurveTrack track, HashSet<int> indices) in curveKeys)
+        foreach ((AnimationCurveTrack track, HashSet<int> indices) in curveKeys)
         {
             var arr = new Keyframe[track.Curve.Count];
             for (int k = 0; k < arr.Length; k++) arr[k] = track.Curve[k];
             _dragCurveSnapshots.Add((track, arr, indices));
         }
 
-        foreach ((SceneObjectTrack track, HashSet<int> indices) in objectKeys)
+        foreach ((AnimationObjectTrack track, HashSet<int> indices) in objectKeys)
         {
-            var arr = new SceneObjectKeyframe[track.Keyframes.Count];
+            var arr = new AnimationObjectKeyframe[track.Keyframes.Count];
             for (int k = 0; k < arr.Length; k++) arr[k] = track.Keyframes[k].Clone();
             _dragObjectSnapshots.Add((track, arr, indices));
         }
 
-        foreach ((SceneStringTrack track, HashSet<int> indices) in stringKeys)
+        foreach ((AnimationStringTrack track, HashSet<int> indices) in stringKeys)
         {
-            var arr = new SceneStringKeyframe[track.Keyframes.Count];
+            var arr = new AnimationStringKeyframe[track.Keyframes.Count];
             for (int k = 0; k < arr.Length; k++) arr[k] = track.Keyframes[k].Clone();
             _dragStringSnapshots.Add((track, arr, indices));
         }
@@ -5247,13 +5247,13 @@ public class AnimationPanel : DockPanel
     {
         if (!IsClipValid) return;
 
-        var movedCurveTimes = new Dictionary<SceneCurveTrack, List<float>>(ReferenceEqualityComparer.Instance);
-        var movedObjectTimes = new Dictionary<SceneObjectTrack, List<float>>(ReferenceEqualityComparer.Instance);
-        var movedStringTimes = new Dictionary<SceneStringTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var movedCurveTimes = new Dictionary<AnimationCurveTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var movedObjectTimes = new Dictionary<AnimationObjectTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var movedStringTimes = new Dictionary<AnimationStringTrack, List<float>>(ReferenceEqualityComparer.Instance);
 
         for (int i = 0; i < _dragCurveSnapshots.Count; i++)
         {
-            (SceneCurveTrack track, Keyframe[] orig, HashSet<int> dragged) = _dragCurveSnapshots[i];
+            (AnimationCurveTrack track, Keyframe[] orig, HashSet<int> dragged) = _dragCurveSnapshots[i];
             if (track.Locked) continue;
 
             var movedTimes = new List<float>(dragged.Count);
@@ -5278,14 +5278,14 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _dragObjectSnapshots.Count; i++)
         {
-            (SceneObjectTrack track, SceneObjectKeyframe[] orig, HashSet<int> dragged) = _dragObjectSnapshots[i];
+            (AnimationObjectTrack track, AnimationObjectKeyframe[] orig, HashSet<int> dragged) = _dragObjectSnapshots[i];
             if (track.Locked) continue;
 
             var movedTimes = new List<float>(dragged.Count);
             track.Keyframes.Clear();
             for (int k = 0; k < orig.Length; k++)
             {
-                SceneObjectKeyframe kf = orig[k].Clone();
+                AnimationObjectKeyframe kf = orig[k].Clone();
                 if (dragged.Contains(k))
                 {
                     kf.Time = MathF.Max(0f, kf.Time + dt);
@@ -5299,14 +5299,14 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _dragStringSnapshots.Count; i++)
         {
-            (SceneStringTrack track, SceneStringKeyframe[] orig, HashSet<int> dragged) = _dragStringSnapshots[i];
+            (AnimationStringTrack track, AnimationStringKeyframe[] orig, HashSet<int> dragged) = _dragStringSnapshots[i];
             if (track.Locked) continue;
 
             var movedTimes = new List<float>(dragged.Count);
             track.Keyframes.Clear();
             for (int k = 0; k < orig.Length; k++)
             {
-                SceneStringKeyframe kf = orig[k].Clone();
+                AnimationStringKeyframe kf = orig[k].Clone();
                 if (dragged.Contains(k))
                 {
                     kf.Time = MathF.Max(0f, kf.Time + dt);
@@ -5345,9 +5345,9 @@ public class AnimationPanel : DockPanel
         if (!IsClipValid) return;
         float fps = MathF.Max(1f, _clip!.FrameRate);
 
-        var movedCurveTimes = new Dictionary<SceneCurveTrack, List<float>>(ReferenceEqualityComparer.Instance);
-        var movedObjectTimes = new Dictionary<SceneObjectTrack, List<float>>(ReferenceEqualityComparer.Instance);
-        var movedStringTimes = new Dictionary<SceneStringTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var movedCurveTimes = new Dictionary<AnimationCurveTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var movedObjectTimes = new Dictionary<AnimationObjectTrack, List<float>>(ReferenceEqualityComparer.Instance);
+        var movedStringTimes = new Dictionary<AnimationStringTrack, List<float>>(ReferenceEqualityComparer.Instance);
 
         float TransformTime(float origT)
         {
@@ -5357,7 +5357,7 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _dragCurveSnapshots.Count; i++)
         {
-            (SceneCurveTrack track, Keyframe[] orig, HashSet<int> dragged) = _dragCurveSnapshots[i];
+            (AnimationCurveTrack track, Keyframe[] orig, HashSet<int> dragged) = _dragCurveSnapshots[i];
             if (track.Locked) continue;
 
             var movedTimes = new List<float>(dragged.Count);
@@ -5381,14 +5381,14 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _dragObjectSnapshots.Count; i++)
         {
-            (SceneObjectTrack track, SceneObjectKeyframe[] orig, HashSet<int> dragged) = _dragObjectSnapshots[i];
+            (AnimationObjectTrack track, AnimationObjectKeyframe[] orig, HashSet<int> dragged) = _dragObjectSnapshots[i];
             if (track.Locked) continue;
 
             var movedTimes = new List<float>(dragged.Count);
             track.Keyframes.Clear();
             for (int k = 0; k < orig.Length; k++)
             {
-                SceneObjectKeyframe kf = orig[k].Clone();
+                AnimationObjectKeyframe kf = orig[k].Clone();
                 if (dragged.Contains(k))
                 {
                     kf.Time = TransformTime(kf.Time);
@@ -5402,14 +5402,14 @@ public class AnimationPanel : DockPanel
 
         for (int i = 0; i < _dragStringSnapshots.Count; i++)
         {
-            (SceneStringTrack track, SceneStringKeyframe[] orig, HashSet<int> dragged) = _dragStringSnapshots[i];
+            (AnimationStringTrack track, AnimationStringKeyframe[] orig, HashSet<int> dragged) = _dragStringSnapshots[i];
             if (track.Locked) continue;
 
             var movedTimes = new List<float>(dragged.Count);
             track.Keyframes.Clear();
             for (int k = 0; k < orig.Length; k++)
             {
-                SceneStringKeyframe kf = orig[k].Clone();
+                AnimationStringKeyframe kf = orig[k].Clone();
                 if (dragged.Contains(k))
                 {
                     kf.Time = TransformTime(kf.Time);
@@ -5621,7 +5621,7 @@ public class AnimationPanel : DockPanel
         if (row.Kind == TrackRowKind.Group && row.GroupTracks != null && row.SummaryTimes != null && keyIndex >= 0 && keyIndex < row.SummaryTimes.Count)
         {
             float targetTime = row.SummaryTimes[keyIndex];
-            foreach (SceneCurveTrack ct in row.GroupTracks)
+            foreach (AnimationCurveTrack ct in row.GroupTracks)
             {
                 if (ct.Locked) continue;
                 for (int k = ct.Curve.Count - 1; k >= 0; k--)
@@ -5713,7 +5713,7 @@ public class AnimationPanel : DockPanel
             }
             else if (row.Kind == TrackRowKind.Object && row.ObjectTrack != null)
             {
-                List<SceneObjectKeyframe> kfs = row.ObjectTrack.Keyframes;
+                List<AnimationObjectKeyframe> kfs = row.ObjectTrack.Keyframes;
                 for (int k = 0; k < kfs.Count; k++)
                 {
                     float kx = x + (kfs[k].Time - _viewMinTime) / range * w;
@@ -5724,7 +5724,7 @@ public class AnimationPanel : DockPanel
             }
             else if (row.Kind == TrackRowKind.String && row.StringTrack != null)
             {
-                List<SceneStringKeyframe> kfs = row.StringTrack.Keyframes;
+                List<AnimationStringKeyframe> kfs = row.StringTrack.Keyframes;
                 for (int k = 0; k < kfs.Count; k++)
                 {
                     float kx = x + (kfs[k].Time - _viewMinTime) / range * w;
@@ -5822,15 +5822,15 @@ public class AnimationPanel : DockPanel
         var result = new List<VisibleCurveChannel>();
         if (!IsClipValid) return result;
 
-        var seenTracks = new HashSet<SceneCurveTrack>(ReferenceEqualityComparer.Instance);
-        var expandedRowMap = new Dictionary<SceneCurveTrack, int>(ReferenceEqualityComparer.Instance);
+        var seenTracks = new HashSet<AnimationCurveTrack>(ReferenceEqualityComparer.Instance);
+        var expandedRowMap = new Dictionary<AnimationCurveTrack, int>(ReferenceEqualityComparer.Instance);
         for (int i = 0; i < _rows.Count; i++)
         {
             if (_rows[i].Kind == TrackRowKind.Curve && _rows[i].CurveTrack != null)
                 expandedRowMap[_rows[i].CurveTrack!] = i;
         }
 
-        void AddTrack(SceneCurveTrack track, int fallbackColorIdx)
+        void AddTrack(AnimationCurveTrack track, int fallbackColorIdx)
         {
             if (!seenTracks.Add(track)) return;
             if (expandedRowMap.TryGetValue(track, out int rowIdx))
@@ -5892,7 +5892,7 @@ public class AnimationPanel : DockPanel
         return total;
     }
 
-    private bool TryGetSingleSelectedCurveKey(out SceneCurveTrack? track, out int keyIndex)
+    private bool TryGetSingleSelectedCurveKey(out AnimationCurveTrack? track, out int keyIndex)
     {
         track = null;
         keyIndex = -1;
@@ -5911,7 +5911,7 @@ public class AnimationPanel : DockPanel
             return false;
         }
 
-        foreach ((SceneCurveTrack ct, HashSet<int> set) in _selectedDirectCurveKeys)
+        foreach ((AnimationCurveTrack ct, HashSet<int> set) in _selectedDirectCurveKeys)
         {
             if (set.Count == 1)
             {
@@ -5938,7 +5938,7 @@ public class AnimationPanel : DockPanel
         List<VisibleCurveChannel> visible = GetVisibleCurves();
         for (int i = 0; i < visible.Count; i++)
         {
-            SceneCurveTrack ct = visible[i].Track;
+            AnimationCurveTrack ct = visible[i].Track;
             if (ct.Curve.Count == 0) continue;
 
             CurveRenderer.GetBounds(ct.Curve, out _, out _, out float cMinV, out float cMaxV);
@@ -6077,7 +6077,7 @@ public class AnimationPanel : DockPanel
         {
             VisibleCurveChannel ch = visible[i];
             if (ch.IsLocked) continue;
-            SceneCurveTrack ct = ch.Track;
+            AnimationCurveTrack ct = ch.Track;
 
             for (int k = 0; k < ct.Curve.Count; k++)
             {
@@ -6120,7 +6120,7 @@ public class AnimationPanel : DockPanel
         {
             VisibleCurveChannel ch = visible[i];
             if (ch.IsLocked) continue;
-            SceneCurveTrack ct = ch.Track;
+            AnimationCurveTrack ct = ch.Track;
 
             for (int k = 0; k < ct.Curve.Count; k++)
             {
@@ -6213,7 +6213,7 @@ public class AnimationPanel : DockPanel
     {
         if ((_dragPart == DragPart.TangentIn || _dragPart == DragPart.TangentOut) && IsClipValid && _dragTangentTrack != null)
         {
-            SceneCurveTrack ct = _dragTangentTrack;
+            AnimationCurveTrack ct = _dragTangentTrack;
             if (ct.Locked || _dragKey < 0 || _dragKey >= ct.Curve.Count) return;
 
             Keyframe kf = ct.Curve[_dragKey];
@@ -6283,7 +6283,7 @@ public class AnimationPanel : DockPanel
         {
             VisibleCurveChannel ch = visible[i];
             if (ch.IsLocked) continue;
-            SceneCurveTrack ct = ch.Track;
+            AnimationCurveTrack ct = ch.Track;
 
             for (int k = 0; k < ct.Curve.Count; k++)
             {
@@ -6444,7 +6444,7 @@ public class AnimationPanel : DockPanel
         for (int i = 0; i < visible.Count; i++)
         {
             VisibleCurveChannel ch = visible[i];
-            SceneCurveTrack ct = ch.Track;
+            AnimationCurveTrack ct = ch.Track;
             if (ct.Curve.Count == 0) continue;
 
             AnimationCurve curve = ct.Curve;
@@ -6565,7 +6565,7 @@ public class AnimationPanel : DockPanel
                     {
                         Undo.RecordObject(ClipAsset!, "Change Wrap Mode");
                         _clip.WrapMode = v;
-                        _clip.Loop = v is SceneClipWrapMode.Loop or SceneClipWrapMode.PingPong;
+                        _clip.Loop = v is AnimationClipWrapMode.Loop or AnimationClipWrapMode.PingPong;
                         _clip.Invalidate();
                         MarkClipDirty();
                     }).Show();
@@ -6597,7 +6597,7 @@ public class AnimationPanel : DockPanel
                 // Multi-Key / Single-Key inline editor (Selected Events use the spacious Event Setup Drawer above)
                 if (_selectedEventIndex >= 0 && _selectedEventIndex < _clip.PropertyEvents.Count)
                 {
-                    SceneAnimationEvent selEv = _clip.PropertyEvents[_selectedEventIndex];
+                    AnimationClipEvent selEv = _clip.PropertyEvents[_selectedEventIndex];
                     Color evAccent = selEv.IsRange ? EditorTheme.Purple400 : EditorTheme.Blue400;
                     paper.Box("anim_bot_ev_hint").Width(UnitValue.Auto).Height(20).Padding(6, 6, 0, 0)
                         .Rounded(4).BackgroundColor(EditorTheme.WithAlpha(evAccent, 35))
@@ -6609,7 +6609,7 @@ public class AnimationPanel : DockPanel
                 {
                     DrawMultiSelectedKeysFooter(paper, font);
                 }
-                else if (TryGetSingleSelectedCurveKey(out SceneCurveTrack? singleTrack, out int singleKeyIdx) && singleTrack != null)
+                else if (TryGetSingleSelectedCurveKey(out AnimationCurveTrack? singleTrack, out int singleKeyIdx) && singleTrack != null)
                 {
                     DrawSelectedCurveTrackKeyFooter(paper, font, singleTrack, singleKeyIdx);
                 }
@@ -6661,7 +6661,7 @@ public class AnimationPanel : DockPanel
         return list;
     }
 
-    private void PickEventTargetFromScene(SceneAnimationEvent ev)
+    private void PickEventTargetFromScene(AnimationClipEvent ev)
     {
         if (!IsClipValid || _targetRoot.IsNotValid()) return;
         SelectorModal.Open("Select Event Target GameObject", typeof(GameObject), SelectorTabs.Scene, picked =>
@@ -6704,7 +6704,7 @@ public class AnimationPanel : DockPanel
         long now = Environment.TickCount64;
         if (!ReferenceEquals(_cachedEventMethodsTarget, target) || now - _cachedEventMethodsTick > 500)
         {
-            _cachedEventMethods = SceneClipBinding.GetCallableEventMethods(target!);
+            _cachedEventMethods = AnimationClipBinding.GetCallableEventMethods(target!);
             _cachedEventMethodsTarget = target;
             _cachedEventMethodsTick = now;
         }
@@ -6712,12 +6712,12 @@ public class AnimationPanel : DockPanel
         return _cachedEventMethods;
     }
 
-    private void DrawSelectedEventInspector(Paper paper, Scribe.FontFile font, float width, float drawerHeight, float desiredHeight, SceneAnimationEvent ev)
+    private void DrawSelectedEventInspector(Paper paper, Scribe.FontFile font, float width, float drawerHeight, float desiredHeight, AnimationClipEvent ev)
     {
         if (!IsClipValid) return;
 
         bool isRanged = ev.IsRange;
-        GameObject? resolvedTarget = _targetRoot.IsValid() ? SceneClipBinding.ResolveGameObject(_targetRoot!, ev.RelativePath) : null;
+        GameObject? resolvedTarget = _targetRoot.IsValid() ? AnimationClipBinding.ResolveGameObject(_targetRoot!, ev.RelativePath) : null;
         List<AnimatableEventMethodDescriptor> methods = GetCachedCallableEventMethods(resolvedTarget);
 
         const float LabelColWidth = 64f;
@@ -6732,7 +6732,7 @@ public class AnimationPanel : DockPanel
         Type? expectedParamType = null;
         bool hasEnter = !string.IsNullOrEmpty(ev.FunctionName);
         bool enterValid = _targetRoot.IsValid() && hasEnter &&
-            SceneClipBinding.TryValidateEventMethod(_targetRoot!, ev.RelativePath, ev.FunctionName, ev.ArgType, out resolvedSig, out resolvedParamName, out expectedParamType);
+            AnimationClipBinding.TryValidateEventMethod(_targetRoot!, ev.RelativePath, ev.FunctionName, ev.ArgType, out resolvedSig, out resolvedParamName, out expectedParamType);
 
         void EnableRangedMode()
         {
@@ -6759,7 +6759,7 @@ public class AnimationPanel : DockPanel
             bool hasTarget = _targetRoot.IsValid();
             string sig = string.Empty;
             bool isValid = hasTarget && hasMethod &&
-                SceneClipBinding.TryValidateEventMethod(_targetRoot!, ev.RelativePath, currentMethod, validationArgType, out sig, out _, out _);
+                AnimationClipBinding.TryValidateEventMethod(_targetRoot!, ev.RelativePath, currentMethod, validationArgType, out sig, out _, out _);
 
             using (paper.Row(rowId).Width(UnitValue.Stretch()).Height(RowHeight).Gap(8).AlignItems(LayoutAlignment.Center).Enter())
             {
@@ -7034,7 +7034,7 @@ public class AnimationPanel : DockPanel
                             }
                             MarkClipDirty();
                         },
-                        onTest: () => SceneClipBinding.InvokeEvent(_targetRoot!, ev),
+                        onTest: () => AnimationClipBinding.InvokeEvent(_targetRoot!, ev),
                         drawTrailingExtras: () =>
                         {
                             if (methods.Count == 0 || (hasEnter && !enterValid))
@@ -7091,7 +7091,7 @@ public class AnimationPanel : DockPanel
                                 tmpStay.FunctionName = ev.StayFunctionName;
                                 tmpStay.ArgType = ProwlActionArgType.Float;
                                 tmpStay.FloatParam = 0.5f;
-                                SceneClipBinding.InvokeEvent(_targetRoot!, tmpStay);
+                                AnimationClipBinding.InvokeEvent(_targetRoot!, tmpStay);
                             },
                             drawTrailingExtras: () =>
                             {
@@ -7123,7 +7123,7 @@ public class AnimationPanel : DockPanel
                             {
                                 var tmpExit = ev.Clone();
                                 tmpExit.FunctionName = ev.ExitFunctionName;
-                                SceneClipBinding.InvokeEvent(_targetRoot!, tmpExit);
+                                AnimationClipBinding.InvokeEvent(_targetRoot!, tmpExit);
                             });
                     }
                 }
@@ -7136,7 +7136,7 @@ public class AnimationPanel : DockPanel
         }
     }
 
-    private void DrawEventArgumentField(Paper paper, SceneAnimationEvent ev, Type? expectedObjectType)
+    private void DrawEventArgumentField(Paper paper, AnimationClipEvent ev, Type? expectedObjectType)
     {
         switch (ev.ArgType)
         {
@@ -7189,9 +7189,9 @@ public class AnimationPanel : DockPanel
     {
         if (!IsClipValid) return;
 
-        var curveKeys = new Dictionary<SceneCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var objectKeys = new Dictionary<SceneObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
-        var stringKeys = new Dictionary<SceneStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var curveKeys = new Dictionary<AnimationCurveTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var objectKeys = new Dictionary<AnimationObjectTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
+        var stringKeys = new Dictionary<AnimationStringTrack, HashSet<int>>(ReferenceEqualityComparer.Instance);
         ResolveSelectedUnderlyingKeys(curveKeys, objectKeys, stringKeys);
 
         int totalCount = 0;
@@ -7200,7 +7200,7 @@ public class AnimationPanel : DockPanel
         CurveInterpolation commonInterp = CurveInterpolation.CubicSpline;
         bool hasInterp = false;
 
-        foreach ((SceneCurveTrack track, HashSet<int> indices) in curveKeys)
+        foreach ((AnimationCurveTrack track, HashSet<int> indices) in curveKeys)
         {
             foreach (int idx in indices)
             {
@@ -7290,7 +7290,7 @@ public class AnimationPanel : DockPanel
         Origami.Button(paper, "anim_mk_del", $"Delete {totalCount}", DeleteSelectedKeysOrEvent).Danger().Small().Height(20).Show();
     }
 
-    private void DrawSelectedCurveTrackKeyFooter(Paper paper, Scribe.FontFile font, SceneCurveTrack track, int keyIndex)
+    private void DrawSelectedCurveTrackKeyFooter(Paper paper, Scribe.FontFile font, AnimationCurveTrack track, int keyIndex)
     {
         if (!IsClipValid || keyIndex < 0 || keyIndex >= track.Curve.Count) return;
 
@@ -7338,7 +7338,7 @@ public class AnimationPanel : DockPanel
         }
         else if (row.Kind == TrackRowKind.Object && row.ObjectTrack != null && keyIndex < row.ObjectTrack.Keyframes.Count)
         {
-            SceneObjectKeyframe kf = row.ObjectTrack.Keyframes[keyIndex];
+            AnimationObjectKeyframe kf = row.ObjectTrack.Keyframes[keyIndex];
             string objName = kf.Value.IsValid() ? kf.Value!.Name : "None";
             Origami.Button(paper, "anim_okf_pick", $"Object @ {kf.Time:0.00}s: {objName}", () => OpenObjectKeyPicker(row, kf.Time))
                 .Small().Height(20).Show();
@@ -7346,7 +7346,7 @@ public class AnimationPanel : DockPanel
         }
         else if (row.Kind == TrackRowKind.String && row.StringTrack != null && keyIndex < row.StringTrack.Keyframes.Count)
         {
-            SceneStringKeyframe kf = row.StringTrack.Keyframes[keyIndex];
+            AnimationStringKeyframe kf = row.StringTrack.Keyframes[keyIndex];
             paper.Box("anim_skf_lbl").Width(UnitValue.Auto).Height(20).IsNotInteractable()
                 .Text($"String @ {kf.Time:0.00}s =", font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);

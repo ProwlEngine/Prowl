@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -147,10 +147,10 @@ public static class ModelImportOverrides
         ClipBlock(settings, clipName)[ModelImportKeys.ClipEvents] = list;
     }
 
-    /// <summary>Reads component method events (<see cref="SceneAnimationEvent"/>) timed in seconds of the take.</summary>
-    public static List<SceneAnimationEvent> ReadPropertyEvents(EchoObject? clipBlock)
+    /// <summary>Reads component method events (<see cref="AnimationClipEvent"/>) timed in seconds of the take.</summary>
+    public static List<AnimationClipEvent> ReadPropertyEvents(EchoObject? clipBlock)
     {
-        var events = new List<SceneAnimationEvent>();
+        var events = new List<AnimationClipEvent>();
         if (clipBlock == null || !clipBlock.TryGet(ModelImportKeys.ClipPropertyEvents, out EchoObject list) || list.TagType != EchoType.List)
             return events;
 
@@ -166,7 +166,7 @@ public static class ModelImportOverrides
             if (entry.TryGet("objectGuid", out EchoObject og) && Guid.TryParse(og.StringValue, out Guid guid) && guid != Guid.Empty)
                 objParam = AssetDatabase.Get(guid);
 
-            events.Add(new SceneAnimationEvent
+            events.Add(new AnimationClipEvent
             {
                 Time = time,
                 EndTime = MathF.Max(time, endTime),
@@ -185,7 +185,7 @@ public static class ModelImportOverrides
         return events;
     }
 
-    public static void WritePropertyEvents(EchoObject settings, string clipName, IReadOnlyList<SceneAnimationEvent> events)
+    public static void WritePropertyEvents(EchoObject settings, string clipName, IReadOnlyList<AnimationClipEvent> events)
     {
         EchoObject block = ClipBlock(settings, clipName);
         if (events.Count == 0)
@@ -195,7 +195,7 @@ public static class ModelImportOverrides
         }
 
         EchoObject list = EchoObject.NewList();
-        foreach (SceneAnimationEvent e in events)
+        foreach (AnimationClipEvent e in events)
         {
             EchoObject entry = EchoObject.NewCompound();
             entry["time"] = new EchoObject(e.Time);

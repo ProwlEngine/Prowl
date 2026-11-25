@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -28,7 +28,7 @@ public enum AnimationClipKind
 }
 
 /// <summary>How an <see cref="AnimationClip"/> repeats or stops when playback reaches the end.</summary>
-public enum SceneClipWrapMode
+public enum AnimationClipWrapMode
 {
     /// <summary>Plays once and stops at the final keyframe.</summary>
     Once,
@@ -41,7 +41,7 @@ public enum SceneClipWrapMode
 }
 
 /// <summary>How a property curve track combines with the target property's value.</summary>
-public enum SceneTrackBlendMode
+public enum AnimationTrackBlendMode
 {
     /// <summary>Replaces the target property value with the evaluated curve value.</summary>
     Override = 0,
@@ -50,7 +50,7 @@ public enum SceneTrackBlendMode
 }
 
 /// <summary>What happens to animated properties when clip playback stops or finishes (Sequencer-style completion state).</summary>
-public enum SceneClipCompletionMode
+public enum AnimationClipCompletionMode
 {
     /// <summary>Animated properties remain at their last evaluated value when playback stops.</summary>
     KeepState = 0,
@@ -63,7 +63,8 @@ public enum SceneClipCompletionMode
 /// on a GameObject, Transform, or Component relative to the animated root.
 /// </summary>
 [Serializable]
-public sealed class SceneCurveTrack
+[FormerlySerializedAs("Prowl.Runtime.SceneCurveTrack")]
+public sealed class AnimationCurveTrack
 {
     /// <summary>
     /// Path from the animated root to the target GameObject (e.g. <c>""</c> for root, <c>"Arm/Hand"</c> for a descendant).
@@ -84,7 +85,7 @@ public sealed class SceneCurveTrack
     public AnimationCurve Curve = new();
 
     /// <summary>Whether this track overrides the target property or adds its evaluated value as a delta onto the pre-animated baseline.</summary>
-    public SceneTrackBlendMode BlendMode = SceneTrackBlendMode.Override;
+    public AnimationTrackBlendMode BlendMode = AnimationTrackBlendMode.Override;
 
     /// <summary>When true, this track is skipped during evaluation.</summary>
     public bool Muted;
@@ -95,9 +96,9 @@ public sealed class SceneCurveTrack
     /// <summary>Editor/runtime solo flag: when any track on a clip has Solo enabled, only soloed tracks evaluate.</summary>
     [NonSerialized] public bool Solo;
 
-    public SceneCurveTrack() { }
+    public AnimationCurveTrack() { }
 
-    public SceneCurveTrack(string relativePath, string componentType, string propertyPath, AnimationCurve? curve = null)
+    public AnimationCurveTrack(string relativePath, string componentType, string propertyPath, AnimationCurve? curve = null)
     {
         RelativePath = relativePath ?? string.Empty;
         ComponentType = componentType ?? string.Empty;
@@ -105,9 +106,9 @@ public sealed class SceneCurveTrack
         Curve = curve ?? new AnimationCurve();
     }
 
-    public SceneCurveTrack Clone()
+    public AnimationCurveTrack Clone()
     {
-        var copy = new SceneCurveTrack(RelativePath, ComponentType, PropertyPath)
+        var copy = new AnimationCurveTrack(RelativePath, ComponentType, PropertyPath)
         {
             BlendMode = BlendMode,
             Muted = Muted,
@@ -121,38 +122,40 @@ public sealed class SceneCurveTrack
 
 /// <summary>A discrete keyframe holding an <see cref="EngineObject"/> reference (such as a Sprite or Material) at a given time.</summary>
 [Serializable]
-public sealed class SceneObjectKeyframe
+[FormerlySerializedAs("Prowl.Runtime.SceneObjectKeyframe")]
+public sealed class AnimationObjectKeyframe
 {
     public float Time;
     public EngineObject? Value;
 
-    public SceneObjectKeyframe() { }
+    public AnimationObjectKeyframe() { }
 
-    public SceneObjectKeyframe(float time, EngineObject? value)
+    public AnimationObjectKeyframe(float time, EngineObject? value)
     {
         Time = time;
         Value = value;
     }
 
-    public SceneObjectKeyframe Clone() => new(Time, Value);
+    public AnimationObjectKeyframe Clone() => new(Time, Value);
 }
 
 /// <summary>A discrete keyframe holding a string value at a given time.</summary>
 [Serializable]
-public sealed class SceneStringKeyframe
+[FormerlySerializedAs("Prowl.Runtime.SceneStringKeyframe")]
+public sealed class AnimationStringKeyframe
 {
     public float Time;
     public string Value = string.Empty;
 
-    public SceneStringKeyframe() { }
+    public AnimationStringKeyframe() { }
 
-    public SceneStringKeyframe(float time, string value)
+    public AnimationStringKeyframe(float time, string value)
     {
         Time = time;
         Value = value ?? string.Empty;
     }
 
-    public SceneStringKeyframe Clone() => new(Time, Value);
+    public AnimationStringKeyframe Clone() => new(Time, Value);
 }
 
 /// <summary>
@@ -160,19 +163,20 @@ public sealed class SceneStringKeyframe
 /// Evaluates using step (hold-previous) semantics.
 /// </summary>
 [Serializable]
-public sealed class SceneObjectTrack
+[FormerlySerializedAs("Prowl.Runtime.SceneObjectTrack")]
+public sealed class AnimationObjectTrack
 {
     public string RelativePath = string.Empty;
     public string ComponentType = string.Empty;
     public string PropertyPath = string.Empty;
-    public List<SceneObjectKeyframe> Keyframes = [];
+    public List<AnimationObjectKeyframe> Keyframes = [];
     public bool Muted;
     public bool Locked;
     [NonSerialized] public bool Solo;
 
-    public SceneObjectTrack() { }
+    public AnimationObjectTrack() { }
 
-    public SceneObjectTrack(string relativePath, string componentType, string propertyPath)
+    public AnimationObjectTrack(string relativePath, string componentType, string propertyPath)
     {
         RelativePath = relativePath ?? string.Empty;
         ComponentType = componentType ?? string.Empty;
@@ -192,11 +196,11 @@ public sealed class SceneObjectTrack
             }
             if (Keyframes[i].Time > time)
             {
-                Keyframes.Insert(i, new SceneObjectKeyframe(time, value));
+                Keyframes.Insert(i, new AnimationObjectKeyframe(time, value));
                 return i;
             }
         }
-        Keyframes.Add(new SceneObjectKeyframe(time, value));
+        Keyframes.Add(new AnimationObjectKeyframe(time, value));
         return Keyframes.Count - 1;
     }
 
@@ -217,14 +221,14 @@ public sealed class SceneObjectTrack
         return result;
     }
 
-    public SceneObjectTrack Clone()
+    public AnimationObjectTrack Clone()
     {
-        var copy = new SceneObjectTrack(RelativePath, ComponentType, PropertyPath)
+        var copy = new AnimationObjectTrack(RelativePath, ComponentType, PropertyPath)
         {
             Muted = Muted,
             Locked = Locked,
         };
-        foreach (SceneObjectKeyframe kf in Keyframes)
+        foreach (AnimationObjectKeyframe kf in Keyframes)
             copy.Keyframes.Add(kf.Clone());
         return copy;
     }
@@ -235,19 +239,20 @@ public sealed class SceneObjectTrack
 /// Evaluates using step (hold-previous) semantics.
 /// </summary>
 [Serializable]
-public sealed class SceneStringTrack
+[FormerlySerializedAs("Prowl.Runtime.SceneStringTrack")]
+public sealed class AnimationStringTrack
 {
     public string RelativePath = string.Empty;
     public string ComponentType = string.Empty;
     public string PropertyPath = string.Empty;
-    public List<SceneStringKeyframe> Keyframes = [];
+    public List<AnimationStringKeyframe> Keyframes = [];
     public bool Muted;
     public bool Locked;
     [NonSerialized] public bool Solo;
 
-    public SceneStringTrack() { }
+    public AnimationStringTrack() { }
 
-    public SceneStringTrack(string relativePath, string componentType, string propertyPath)
+    public AnimationStringTrack(string relativePath, string componentType, string propertyPath)
     {
         RelativePath = relativePath ?? string.Empty;
         ComponentType = componentType ?? string.Empty;
@@ -267,11 +272,11 @@ public sealed class SceneStringTrack
             }
             if (Keyframes[i].Time > time)
             {
-                Keyframes.Insert(i, new SceneStringKeyframe(time, value));
+                Keyframes.Insert(i, new AnimationStringKeyframe(time, value));
                 return i;
             }
         }
-        Keyframes.Add(new SceneStringKeyframe(time, value));
+        Keyframes.Add(new AnimationStringKeyframe(time, value));
         return Keyframes.Count - 1;
     }
 
@@ -292,14 +297,14 @@ public sealed class SceneStringTrack
         return result;
     }
 
-    public SceneStringTrack Clone()
+    public AnimationStringTrack Clone()
     {
-        var copy = new SceneStringTrack(RelativePath, ComponentType, PropertyPath)
+        var copy = new AnimationStringTrack(RelativePath, ComponentType, PropertyPath)
         {
             Muted = Muted,
             Locked = Locked,
         };
-        foreach (SceneStringKeyframe kf in Keyframes)
+        foreach (AnimationStringKeyframe kf in Keyframes)
             copy.Keyframes.Add(kf.Clone());
         return copy;
     }
@@ -313,7 +318,8 @@ public sealed class SceneStringTrack
 /// and <see cref="ExitFunctionName"/> callbacks.
 /// </summary>
 [Serializable]
-public sealed class SceneAnimationEvent
+[FormerlySerializedAs("Prowl.Runtime.SceneAnimationEvent")]
+public sealed class AnimationClipEvent
 {
     /// <summary>Start time in seconds from the beginning of the clip.</summary>
     public float Time;
@@ -364,7 +370,7 @@ public sealed class SceneAnimationEvent
     public string StringParam = string.Empty;
     public EngineObject? ObjectParam;
 
-    public SceneAnimationEvent Clone() => (SceneAnimationEvent)MemberwiseClone();
+    public AnimationClipEvent Clone() => (AnimationClipEvent)MemberwiseClone();
 }
 
 /// <summary>
@@ -384,21 +390,21 @@ public sealed class AnimationClip : Asset, ISerializable
     public float FrameRate = 60f;
 
     /// <summary>How property track playback behaves when reaching the end of the clip.</summary>
-    public SceneClipWrapMode WrapMode = SceneClipWrapMode.Loop;
+    public AnimationClipWrapMode WrapMode = AnimationClipWrapMode.Loop;
 
     /// <summary>Whether animated properties keep their final evaluated state or revert to their pre-animated baseline when playback stops or finishes.</summary>
-    public SceneClipCompletionMode CompletionMode = SceneClipCompletionMode.KeepState;
+    public AnimationClipCompletionMode CompletionMode = AnimationClipCompletionMode.KeepState;
 
     /// <summary>
     /// Effective wrap mode reconciling both <see cref="WrapMode"/> and <see cref="Loop"/>
     /// so code that sets either property observes consistent playback behavior.
     /// </summary>
-    public SceneClipWrapMode EffectiveWrapMode
-        => !Loop && WrapMode == SceneClipWrapMode.Loop ? SceneClipWrapMode.Once : WrapMode;
+    public AnimationClipWrapMode EffectiveWrapMode
+        => !Loop && WrapMode == AnimationClipWrapMode.Loop ? AnimationClipWrapMode.Once : WrapMode;
 
-    /// <summary>True when <see cref="EffectiveWrapMode"/> repeats continuously (<see cref="SceneClipWrapMode.Loop"/> or <see cref="SceneClipWrapMode.PingPong"/>).</summary>
+    /// <summary>True when <see cref="EffectiveWrapMode"/> repeats continuously (<see cref="AnimationClipWrapMode.Loop"/> or <see cref="AnimationClipWrapMode.PingPong"/>).</summary>
     public bool EffectiveLoop
-        => EffectiveWrapMode is SceneClipWrapMode.Loop or SceneClipWrapMode.PingPong;
+        => EffectiveWrapMode is AnimationClipWrapMode.Loop or AnimationClipWrapMode.PingPong;
 
     /// <summary>True when at least one track on this clip has its Solo flag enabled.</summary>
     public bool HasSoloTrack
@@ -422,16 +428,16 @@ public sealed class AnimationClip : Asset, ISerializable
     public List<ClipEvent> Events = [];
 
     /// <summary>Scalar curve tracks (floats, ints, bools, enums, and vector/color/quaternion channels) evaluated alongside or instead of skeletal poses.</summary>
-    public List<SceneCurveTrack> CurveTracks = [];
+    public List<AnimationCurveTrack> CurveTracks = [];
 
     /// <summary>Discrete object reference tracks (Sprites, Materials, Meshes, etc.).</summary>
-    public List<SceneObjectTrack> ObjectTracks = [];
+    public List<AnimationObjectTrack> ObjectTracks = [];
 
     /// <summary>Discrete string tracks.</summary>
-    public List<SceneStringTrack> StringTracks = [];
+    public List<AnimationStringTrack> StringTracks = [];
 
     /// <summary>Component method invocation events fired when playback crosses their timestamp.</summary>
-    public List<SceneAnimationEvent> PropertyEvents = [];
+    public List<AnimationClipEvent> PropertyEvents = [];
 
     /// <summary>Where in the take the clip starts, in seconds, as the import cut it.</summary>
     public float TakeStart;
@@ -512,13 +518,13 @@ public sealed class AnimationClip : Asset, ISerializable
         }
         for (int i = 0; i < ObjectTracks.Count; i++)
         {
-            List<SceneObjectKeyframe> kfs = ObjectTracks[i].Keyframes;
+            List<AnimationObjectKeyframe> kfs = ObjectTracks[i].Keyframes;
             for (int j = 0; j < kfs.Count; j++)
                 max = MathF.Max(max, kfs[j].Time);
         }
         for (int i = 0; i < StringTracks.Count; i++)
         {
-            List<SceneStringKeyframe> kfs = StringTracks[i].Keyframes;
+            List<AnimationStringKeyframe> kfs = StringTracks[i].Keyframes;
             for (int j = 0; j < kfs.Count; j++)
                 max = MathF.Max(max, kfs[j].Time);
         }
@@ -682,7 +688,7 @@ public sealed class AnimationClip : Asset, ISerializable
     // ================================================================
 
     /// <summary>Finds an existing curve track for the given target and property path, or null if none exists.</summary>
-    public SceneCurveTrack? FindCurveTrack(string relativePath, string componentType, string propertyPath)
+    public AnimationCurveTrack? FindCurveTrack(string relativePath, string componentType, string propertyPath)
     {
         EnsureLoaded();
         relativePath ??= string.Empty;
@@ -690,7 +696,7 @@ public sealed class AnimationClip : Asset, ISerializable
         propertyPath ??= string.Empty;
         for (int i = 0; i < CurveTracks.Count; i++)
         {
-            SceneCurveTrack t = CurveTracks[i];
+            AnimationCurveTrack t = CurveTracks[i];
             if (t.RelativePath == relativePath && t.ComponentType == componentType && t.PropertyPath == propertyPath)
                 return t;
         }
@@ -698,21 +704,21 @@ public sealed class AnimationClip : Asset, ISerializable
     }
 
     /// <summary>Finds or creates a curve track for the given target and property path.</summary>
-    public SceneCurveTrack GetOrCreateCurveTrack(string relativePath, string componentType, string propertyPath)
+    public AnimationCurveTrack GetOrCreateCurveTrack(string relativePath, string componentType, string propertyPath)
     {
         if (FindCurveTrack(relativePath, componentType, propertyPath) is { } existing)
             return existing;
 
-        var track = new SceneCurveTrack(relativePath, componentType, propertyPath);
+        var track = new AnimationCurveTrack(relativePath, componentType, propertyPath);
         CurveTracks.Add(track);
         Invalidate();
         return track;
     }
 
     /// <summary>Adds or updates a keyframe on the curve track matching the target and property path, preserving custom tangents on existing keys.</summary>
-    public SceneCurveTrack SetCurveKey(string relativePath, string componentType, string propertyPath, float time, float value, float tolerance = 0.0005f)
+    public AnimationCurveTrack SetCurveKey(string relativePath, string componentType, string propertyPath, float time, float value, float tolerance = 0.0005f)
     {
-        SceneCurveTrack track = GetOrCreateCurveTrack(relativePath, componentType, propertyPath);
+        AnimationCurveTrack track = GetOrCreateCurveTrack(relativePath, componentType, propertyPath);
         AnimationCurve curve = track.Curve;
         for (int i = 0; i < curve.Count; i++)
         {
@@ -763,7 +769,7 @@ public sealed class AnimationClip : Asset, ISerializable
     }
 
     /// <summary>Finds an existing object reference track for the given target and property path, or null.</summary>
-    public SceneObjectTrack? FindObjectTrack(string relativePath, string componentType, string propertyPath)
+    public AnimationObjectTrack? FindObjectTrack(string relativePath, string componentType, string propertyPath)
     {
         EnsureLoaded();
         relativePath ??= string.Empty;
@@ -771,7 +777,7 @@ public sealed class AnimationClip : Asset, ISerializable
         propertyPath ??= string.Empty;
         for (int i = 0; i < ObjectTracks.Count; i++)
         {
-            SceneObjectTrack t = ObjectTracks[i];
+            AnimationObjectTrack t = ObjectTracks[i];
             if (t.RelativePath == relativePath && t.ComponentType == componentType && t.PropertyPath == propertyPath)
                 return t;
         }
@@ -779,28 +785,28 @@ public sealed class AnimationClip : Asset, ISerializable
     }
 
     /// <summary>Finds or creates an object reference track for the given target and property path.</summary>
-    public SceneObjectTrack GetOrCreateObjectTrack(string relativePath, string componentType, string propertyPath)
+    public AnimationObjectTrack GetOrCreateObjectTrack(string relativePath, string componentType, string propertyPath)
     {
         if (FindObjectTrack(relativePath, componentType, propertyPath) is { } existing)
             return existing;
 
-        var track = new SceneObjectTrack(relativePath, componentType, propertyPath);
+        var track = new AnimationObjectTrack(relativePath, componentType, propertyPath);
         ObjectTracks.Add(track);
         Invalidate();
         return track;
     }
 
     /// <summary>Adds or updates a discrete object reference keyframe on the matching track.</summary>
-    public SceneObjectTrack SetObjectKey(string relativePath, string componentType, string propertyPath, float time, EngineObject? value, float tolerance = 0.0005f)
+    public AnimationObjectTrack SetObjectKey(string relativePath, string componentType, string propertyPath, float time, EngineObject? value, float tolerance = 0.0005f)
     {
-        SceneObjectTrack track = GetOrCreateObjectTrack(relativePath, componentType, propertyPath);
+        AnimationObjectTrack track = GetOrCreateObjectTrack(relativePath, componentType, propertyPath);
         track.SetKey(time, value, tolerance);
         Invalidate();
         return track;
     }
 
     /// <summary>Finds an existing string track for the given target and property path, or null.</summary>
-    public SceneStringTrack? FindStringTrack(string relativePath, string componentType, string propertyPath)
+    public AnimationStringTrack? FindStringTrack(string relativePath, string componentType, string propertyPath)
     {
         EnsureLoaded();
         relativePath ??= string.Empty;
@@ -808,7 +814,7 @@ public sealed class AnimationClip : Asset, ISerializable
         propertyPath ??= string.Empty;
         for (int i = 0; i < StringTracks.Count; i++)
         {
-            SceneStringTrack t = StringTracks[i];
+            AnimationStringTrack t = StringTracks[i];
             if (t.RelativePath == relativePath && t.ComponentType == componentType && t.PropertyPath == propertyPath)
                 return t;
         }
@@ -816,28 +822,28 @@ public sealed class AnimationClip : Asset, ISerializable
     }
 
     /// <summary>Finds or creates a string track for the given target and property path.</summary>
-    public SceneStringTrack GetOrCreateStringTrack(string relativePath, string componentType, string propertyPath)
+    public AnimationStringTrack GetOrCreateStringTrack(string relativePath, string componentType, string propertyPath)
     {
         if (FindStringTrack(relativePath, componentType, propertyPath) is { } existing)
             return existing;
 
-        var track = new SceneStringTrack(relativePath, componentType, propertyPath);
+        var track = new AnimationStringTrack(relativePath, componentType, propertyPath);
         StringTracks.Add(track);
         Invalidate();
         return track;
     }
 
     /// <summary>Adds or updates a discrete string keyframe on the matching track.</summary>
-    public SceneStringTrack SetStringKey(string relativePath, string componentType, string propertyPath, float time, string value, float tolerance = 0.0005f)
+    public AnimationStringTrack SetStringKey(string relativePath, string componentType, string propertyPath, float time, string value, float tolerance = 0.0005f)
     {
-        SceneStringTrack track = GetOrCreateStringTrack(relativePath, componentType, propertyPath);
+        AnimationStringTrack track = GetOrCreateStringTrack(relativePath, componentType, propertyPath);
         track.SetKey(time, value, tolerance);
         Invalidate();
         return track;
     }
 
     /// <summary>Removes a curve track and invalidates the clip.</summary>
-    public bool RemoveCurveTrack(SceneCurveTrack track)
+    public bool RemoveCurveTrack(AnimationCurveTrack track)
     {
         EnsureLoaded();
         if (!CurveTracks.Remove(track)) return false;
@@ -846,7 +852,7 @@ public sealed class AnimationClip : Asset, ISerializable
     }
 
     /// <summary>Removes an object track and invalidates the clip.</summary>
-    public bool RemoveObjectTrack(SceneObjectTrack track)
+    public bool RemoveObjectTrack(AnimationObjectTrack track)
     {
         EnsureLoaded();
         if (!ObjectTracks.Remove(track)) return false;
@@ -855,7 +861,7 @@ public sealed class AnimationClip : Asset, ISerializable
     }
 
     /// <summary>Removes a string track and invalidates the clip.</summary>
-    public bool RemoveStringTrack(SceneStringTrack track)
+    public bool RemoveStringTrack(AnimationStringTrack track)
     {
         EnsureLoaded();
         if (!StringTracks.Remove(track)) return false;
@@ -871,11 +877,11 @@ public sealed class AnimationClip : Asset, ISerializable
 
         switch (EffectiveWrapMode)
         {
-            case SceneClipWrapMode.Once:
-            case SceneClipWrapMode.ClampForever:
+            case AnimationClipWrapMode.Once:
+            case AnimationClipWrapMode.ClampForever:
                 return Math.Clamp(time, 0f, duration);
 
-            case SceneClipWrapMode.Loop:
+            case AnimationClipWrapMode.Loop:
             {
                 if (time >= 0f && time <= duration)
                     return time;
@@ -884,7 +890,7 @@ public sealed class AnimationClip : Asset, ISerializable
                 return wrapped;
             }
 
-            case SceneClipWrapMode.PingPong:
+            case AnimationClipWrapMode.PingPong:
             {
                 float cycle = duration * 2f;
                 float t = time % cycle;
@@ -975,9 +981,9 @@ public sealed class AnimationClip : Asset, ISerializable
 
             if (movesPos)
             {
-                SceneCurveTrack tx = GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.X");
-                SceneCurveTrack ty = GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Y");
-                SceneCurveTrack tz = GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Z");
+                AnimationCurveTrack tx = GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.X");
+                AnimationCurveTrack ty = GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Y");
+                AnimationCurveTrack tz = GetOrCreateCurveTrack(relPath, "Transform", "LocalPosition.Z");
                 tx.Curve.Clear(); ty.Curve.Clear(); tz.Curve.Clear();
                 for (int f = 0; f < frames; f++)
                 {
@@ -995,10 +1001,10 @@ public sealed class AnimationClip : Asset, ISerializable
 
             if (movesRot)
             {
-                SceneCurveTrack rx = GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.X");
-                SceneCurveTrack ry = GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Y");
-                SceneCurveTrack rz = GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Z");
-                SceneCurveTrack rw = GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.W");
+                AnimationCurveTrack rx = GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.X");
+                AnimationCurveTrack ry = GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Y");
+                AnimationCurveTrack rz = GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.Z");
+                AnimationCurveTrack rw = GetOrCreateCurveTrack(relPath, "Transform", "LocalRotation.W");
                 rx.Curve.Clear(); ry.Curve.Clear(); rz.Curve.Clear(); rw.Curve.Clear();
                 Quaternion prevQ = poses[0].GetTransform(b).rotation;
                 for (int f = 0; f < frames; f++)
@@ -1022,9 +1028,9 @@ public sealed class AnimationClip : Asset, ISerializable
 
             if (movesScale)
             {
-                SceneCurveTrack sx = GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.X");
-                SceneCurveTrack sy = GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Y");
-                SceneCurveTrack sz = GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Z");
+                AnimationCurveTrack sx = GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.X");
+                AnimationCurveTrack sy = GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Y");
+                AnimationCurveTrack sz = GetOrCreateCurveTrack(relPath, "Transform", "LocalScale.Z");
                 sx.Curve.Clear(); sy.Curve.Clear(); sz.Curve.Clear();
                 for (int f = 0; f < frames; f++)
                 {
@@ -1247,11 +1253,11 @@ public sealed class AnimationClip : Asset, ISerializable
         Loop = value.Get("Loop")?.BoolValue ?? true;
         FrameRate = value.Get("FrameRate")?.FloatValue ?? 60f;
         WrapMode = value.Get("WrapMode") is { } wm
-            ? (SceneClipWrapMode)wm.IntValue
-            : (Loop ? SceneClipWrapMode.Loop : SceneClipWrapMode.Once);
+            ? (AnimationClipWrapMode)wm.IntValue
+            : (Loop ? AnimationClipWrapMode.Loop : AnimationClipWrapMode.Once);
         CompletionMode = value.Get("CompletionMode") is { } cm
-            ? (SceneClipCompletionMode)cm.IntValue
-            : SceneClipCompletionMode.KeepState;
+            ? (AnimationClipCompletionMode)cm.IntValue
+            : AnimationClipCompletionMode.KeepState;
         SourceName = value.Get("SourceName")?.StringValue ?? string.Empty;
         _duration = value.Get("Duration")?.FloatValue ?? 0f;
         _frameCount = value.Get("FrameCount")?.IntValue ?? 0;
@@ -1259,10 +1265,10 @@ public sealed class AnimationClip : Asset, ISerializable
         Events = value.Get("Events") is { } events ? Serializer.Deserialize<List<ClipEvent>>(events, ctx) ?? [] : [];
         TakeStart = value.Get("TakeStart")?.FloatValue ?? 0f;
 
-        CurveTracks = value.Get("CurveTracks") is { } ct ? Serializer.Deserialize<List<SceneCurveTrack>>(ct, ctx) ?? [] : [];
-        ObjectTracks = value.Get("ObjectTracks") is { } ot ? Serializer.Deserialize<List<SceneObjectTrack>>(ot, ctx) ?? [] : [];
-        StringTracks = value.Get("StringTracks") is { } st ? Serializer.Deserialize<List<SceneStringTrack>>(st, ctx) ?? [] : [];
-        PropertyEvents = value.Get("PropertyEvents") is { } pe ? Serializer.Deserialize<List<SceneAnimationEvent>>(pe, ctx) ?? [] : [];
+        CurveTracks = value.Get("CurveTracks") is { } ct ? Serializer.Deserialize<List<AnimationCurveTrack>>(ct, ctx) ?? [] : [];
+        ObjectTracks = value.Get("ObjectTracks") is { } ot ? Serializer.Deserialize<List<AnimationObjectTrack>>(ot, ctx) ?? [] : [];
+        StringTracks = value.Get("StringTracks") is { } st ? Serializer.Deserialize<List<AnimationStringTrack>>(st, ctx) ?? [] : [];
+        PropertyEvents = value.Get("PropertyEvents") is { } pe ? Serializer.Deserialize<List<AnimationClipEvent>>(pe, ctx) ?? [] : [];
 
         byte[]? payload = value.Get("Clip")?.ByteArrayValue;
         _payload = payload is { Length: > 0 } ? payload : null;

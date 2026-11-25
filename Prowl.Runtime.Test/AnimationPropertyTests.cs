@@ -39,7 +39,7 @@ public class AnimationPropertyTests : RuntimeTestBase
         var clip = new AnimationClip
         {
             Name = "Cutscene",
-            WrapMode = SceneClipWrapMode.Once,
+            WrapMode = AnimationClipWrapMode.Once,
             Loop = false,
         };
         clip.SetCurveKey("@Camera", "Transform", "LocalPosition.Y", 0f, 0f);
@@ -52,9 +52,9 @@ public class AnimationPropertyTests : RuntimeTestBase
         animator.Clips.Add(clip);
         scene.Activate();
 
-        Assert.True(SceneClipBinding.IsTrackTargetValid(director, "@Camera", "Transform", "LocalPosition.Y"));
-        Assert.True(SceneClipBinding.IsTrackTargetValid(director, "@Camera/Lens", nameof(TestReceiver), nameof(TestReceiver.Value)));
-        Assert.False(SceneClipBinding.IsTrackTargetValid(director, "@UnboundSlot", "Transform", "LocalPosition.Y"));
+        Assert.True(AnimationClipBinding.IsTrackTargetValid(director, "@Camera", "Transform", "LocalPosition.Y"));
+        Assert.True(AnimationClipBinding.IsTrackTargetValid(director, "@Camera/Lens", nameof(TestReceiver), nameof(TestReceiver.Value)));
+        Assert.False(AnimationClipBinding.IsTrackTargetValid(director, "@UnboundSlot", "Transform", "LocalPosition.Y"));
 
         animator.Sample(clip, 0.5f);
 
@@ -71,14 +71,14 @@ public class AnimationPropertyTests : RuntimeTestBase
         hand.SetParent(root, false);
         scene.Add(root);
 
-        Assert.True(SceneClipBinding.IsTrackTargetValid(root, "Hand", "Transform", "LocalPosition.X"));
-        Assert.False(SceneClipBinding.IsTrackTargetValid(root, "MissingChild", "Transform", "LocalPosition.X"));
-        Assert.False(SceneClipBinding.IsTrackTargetValid(root, "Hand", "NonExistentComponent", "Value"));
+        Assert.True(AnimationClipBinding.IsTrackTargetValid(root, "Hand", "Transform", "LocalPosition.X"));
+        Assert.False(AnimationClipBinding.IsTrackTargetValid(root, "MissingChild", "Transform", "LocalPosition.X"));
+        Assert.False(AnimationClipBinding.IsTrackTargetValid(root, "Hand", "NonExistentComponent", "Value"));
 
         // Renaming the child causes the old relative path to report as missing
         hand.Name = "RightHand";
-        Assert.False(SceneClipBinding.IsTrackTargetValid(root, "Hand", "Transform", "LocalPosition.X"));
-        Assert.True(SceneClipBinding.IsTrackTargetValid(root, "RightHand", "Transform", "LocalPosition.X"));
+        Assert.False(AnimationClipBinding.IsTrackTargetValid(root, "Hand", "Transform", "LocalPosition.X"));
+        Assert.True(AnimationClipBinding.IsTrackTargetValid(root, "RightHand", "Transform", "LocalPosition.X"));
     }
 
     [Fact]
@@ -93,15 +93,15 @@ public class AnimationPropertyTests : RuntimeTestBase
         var clip = new AnimationClip
         {
             Name = "AdditiveAttack",
-            WrapMode = SceneClipWrapMode.Once,
+            WrapMode = AnimationClipWrapMode.Once,
             Loop = false,
-            CompletionMode = SceneClipCompletionMode.RestoreState,
+            CompletionMode = AnimationClipCompletionMode.RestoreState,
         };
-        SceneCurveTrack posX = clip.SetCurveKey("", "Transform", "LocalPosition.X", 0f, 0f);
+        AnimationCurveTrack posX = clip.SetCurveKey("", "Transform", "LocalPosition.X", 0f, 0f);
         clip.SetCurveKey("", "Transform", "LocalPosition.X", 0.5f, 5f);
-        posX.BlendMode = SceneTrackBlendMode.Additive;
+        posX.BlendMode = AnimationTrackBlendMode.Additive;
 
-        clip.PropertyEvents.Add(new SceneAnimationEvent
+        clip.PropertyEvents.Add(new AnimationClipEvent
         {
             Time = 0.1f,
             EndTime = 0.4f,
@@ -138,12 +138,12 @@ public class AnimationPropertyTests : RuntimeTestBase
         var clip = new AnimationClip
         {
             Name = "AdditiveLoop",
-            WrapMode = SceneClipWrapMode.Loop,
-            CompletionMode = SceneClipCompletionMode.RestoreState,
+            WrapMode = AnimationClipWrapMode.Loop,
+            CompletionMode = AnimationClipCompletionMode.RestoreState,
         };
-        SceneCurveTrack posX = clip.SetCurveKey("", "Transform", "LocalPosition.X", 0f, 0f);
+        AnimationCurveTrack posX = clip.SetCurveKey("", "Transform", "LocalPosition.X", 0f, 0f);
         clip.SetCurveKey("", "Transform", "LocalPosition.X", 1f, 6f);
-        posX.BlendMode = SceneTrackBlendMode.Additive;
+        posX.BlendMode = AnimationTrackBlendMode.Additive;
 
         Animator animator = root.AddComponent<Animator>();
         animator.Clips.Add(clip);
@@ -162,7 +162,7 @@ public class AnimationPropertyTests : RuntimeTestBase
     public void SetCurveKey_PreservesCustomBezierTangentsOnExistingKeys()
     {
         var clip = new AnimationClip();
-        SceneCurveTrack track = clip.GetOrCreateCurveTrack("", "Transform", "LocalPosition.X");
+        AnimationCurveTrack track = clip.GetOrCreateCurveTrack("", "Transform", "LocalPosition.X");
         track.Curve.AddKey(new Keyframe(0f, 0f, 7.5f, 7.5f, CurveInterpolation.CubicSpline));
         track.Curve.AddKey(new Keyframe(2f, 4f, -3.25f, -3.25f, CurveInterpolation.CubicSpline));
 

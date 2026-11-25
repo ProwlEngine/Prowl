@@ -32,19 +32,19 @@ public class AnimationPropertyConsistencyTests
         var clip = new AnimationClip
         {
             Loop = false,
-            WrapMode = SceneClipWrapMode.Loop,
+            WrapMode = AnimationClipWrapMode.Loop,
         };
         clip.SetCurveKey("", "Transform", "LocalPosition.X", 0f, 0f);
         clip.SetCurveKey("", "Transform", "LocalPosition.X", 1f, 10f);
 
-        Assert.Equal(SceneClipWrapMode.Once, clip.EffectiveWrapMode);
+        Assert.Equal(AnimationClipWrapMode.Once, clip.EffectiveWrapMode);
         Assert.False(clip.EffectiveLoop);
         // WrapTime clamps at duration (1.0s) instead of wrapping 1.5s -> 0.5s
         Assert.Equal(1f, clip.WrapTime(1.5f), 3);
 
         clip.Loop = true;
-        clip.WrapMode = SceneClipWrapMode.PingPong;
-        Assert.Equal(SceneClipWrapMode.PingPong, clip.EffectiveWrapMode);
+        clip.WrapMode = AnimationClipWrapMode.PingPong;
+        Assert.Equal(AnimationClipWrapMode.PingPong, clip.EffectiveWrapMode);
         Assert.True(clip.EffectiveLoop);
         Assert.Equal(0.5f, clip.WrapTime(1.5f), 3);
     }
@@ -53,7 +53,7 @@ public class AnimationPropertyConsistencyTests
     public void SetCurveKey_And_ReduceKeyframes_PreserveTangentsAndStepCurves()
     {
         var clip = new AnimationClip();
-        SceneCurveTrack bezier = clip.GetOrCreateCurveTrack("", "Transform", "LocalPosition.X");
+        AnimationCurveTrack bezier = clip.GetOrCreateCurveTrack("", "Transform", "LocalPosition.X");
         bezier.Curve.AddKey(new Keyframe(0f, 0f, 5f, 5f, CurveInterpolation.CubicSpline));
         bezier.Curve.AddKey(new Keyframe(2f, 10f, -4f, -4f, CurveInterpolation.CubicSpline));
 
@@ -64,7 +64,7 @@ public class AnimationPropertyConsistencyTests
         Assert.Equal(-4f, bezier.Curve[2].InTangent, 3);
 
         // Step curves must not be simplified away by ReduceKeyframes
-        SceneCurveTrack step = clip.GetOrCreateCurveTrack("", "GameObject", "Enabled");
+        AnimationCurveTrack step = clip.GetOrCreateCurveTrack("", "GameObject", "Enabled");
         step.Curve.AddKey(new Keyframe(0f, 0f, 0f, 0f, CurveInterpolation.Step));
         step.Curve.AddKey(new Keyframe(0.5f, 1f, 0f, 0f, CurveInterpolation.Step));
         step.Curve.AddKey(new Keyframe(1f, 0f, 0f, 0f, CurveInterpolation.Step));
@@ -80,16 +80,16 @@ public class AnimationPropertyConsistencyTests
         {
             Name = "RoundTripClip",
             FrameRate = 30f,
-            WrapMode = SceneClipWrapMode.PingPong,
+            WrapMode = AnimationClipWrapMode.PingPong,
             Loop = true,
-            CompletionMode = SceneClipCompletionMode.RestoreState,
+            CompletionMode = AnimationClipCompletionMode.RestoreState,
         };
-        SceneCurveTrack ct = clip.SetCurveKey("Child", "Transform", "LocalPosition.Y", 0f, 1f);
-        ct.BlendMode = SceneTrackBlendMode.Additive;
+        AnimationCurveTrack ct = clip.SetCurveKey("Child", "Transform", "LocalPosition.Y", 0f, 1f);
+        ct.BlendMode = AnimationTrackBlendMode.Additive;
         ct.Muted = true;
         ct.Locked = true;
 
-        clip.PropertyEvents.Add(new SceneAnimationEvent
+        clip.PropertyEvents.Add(new AnimationClipEvent
         {
             Time = 0.2f,
             EndTime = 0.8f,
@@ -102,10 +102,10 @@ public class AnimationPropertyConsistencyTests
         var loaded = Serializer.Deserialize<AnimationClip>(serialized)!;
 
         Assert.Equal(30f, loaded.FrameRate);
-        Assert.Equal(SceneClipWrapMode.PingPong, loaded.WrapMode);
-        Assert.Equal(SceneClipCompletionMode.RestoreState, loaded.CompletionMode);
+        Assert.Equal(AnimationClipWrapMode.PingPong, loaded.WrapMode);
+        Assert.Equal(AnimationClipCompletionMode.RestoreState, loaded.CompletionMode);
         Assert.Single(loaded.CurveTracks);
-        Assert.Equal(SceneTrackBlendMode.Additive, loaded.CurveTracks[0].BlendMode);
+        Assert.Equal(AnimationTrackBlendMode.Additive, loaded.CurveTracks[0].BlendMode);
         Assert.True(loaded.CurveTracks[0].Muted);
         Assert.True(loaded.CurveTracks[0].Locked);
         Assert.Single(loaded.PropertyEvents);
@@ -178,12 +178,12 @@ public class AnimationPropertyConsistencyTests
         var clip = new AnimationClip
         {
             Name = "AdditiveLoop",
-            WrapMode = SceneClipWrapMode.Loop,
-            CompletionMode = SceneClipCompletionMode.RestoreState,
+            WrapMode = AnimationClipWrapMode.Loop,
+            CompletionMode = AnimationClipCompletionMode.RestoreState,
         };
-        SceneCurveTrack posX = clip.SetCurveKey("", "Transform", "LocalPosition.X", 0f, 0f);
+        AnimationCurveTrack posX = clip.SetCurveKey("", "Transform", "LocalPosition.X", 0f, 0f);
         clip.SetCurveKey("", "Transform", "LocalPosition.X", 1f, 6f);
-        posX.BlendMode = SceneTrackBlendMode.Additive;
+        posX.BlendMode = AnimationTrackBlendMode.Additive;
 
         animator.Clips.Add(clip);
         scene.Add(go);
@@ -310,7 +310,7 @@ public class AnimationPropertyConsistencyTests
             go.Transform.LocalPosition = new Float3(12f, 2f, 3f);
             panel.PollAutoKeyChanges();
 
-            SceneCurveTrack? recordedTrack = clip.FindCurveTrack("", "Transform", "LocalPosition.X");
+            AnimationCurveTrack? recordedTrack = clip.FindCurveTrack("", "Transform", "LocalPosition.X");
             Assert.NotNull(recordedTrack);
             Assert.Equal(12f, recordedTrack!.Curve.Evaluate(0f), 2);
             Assert.True(panel.HasUnsavedClipChanges);
@@ -348,8 +348,8 @@ public class AnimationPropertyConsistencyTests
         scene.Activate();
 
         // 1. GetCallableEventMethods discovers user script methods before built-in Prowl.Runtime methods and excludes lifecycle hooks
-        var rootMethods = SceneClipBinding.GetCallableEventMethods(root);
-        var weaponMethods = SceneClipBinding.GetCallableEventMethods(weapon);
+        var rootMethods = AnimationClipBinding.GetCallableEventMethods(root);
+        var weaponMethods = AnimationClipBinding.GetCallableEventMethods(weapon);
 
         Assert.Contains(weaponMethods, m => m.MethodName == "SpawnSlashVfx" && m.ArgType == ProwlActionArgType.None && m.IsUserScript);
         Assert.Contains(weaponMethods, m => m.MethodName == "PlayFootstep" && m.ArgType == ProwlActionArgType.Float && m.ParameterName == "volume" && m.ParameterType == typeof(float));
@@ -359,11 +359,11 @@ public class AnimationPropertyConsistencyTests
 
         // Verify user script methods sort ahead of built-in engine methods when both are on the same GameObject
         root.AddComponent<UserEventReceiverForTests>();
-        var combined = SceneClipBinding.GetCallableEventMethods(root);
+        var combined = AnimationClipBinding.GetCallableEventMethods(root);
         Assert.True(combined[0].IsUserScript);
 
         // 2. TryValidateEventMethod resolves target, signature, parameter name, and expected EngineObject subtype
-        bool validFloat = SceneClipBinding.TryValidateEventMethod(
+        bool validFloat = AnimationClipBinding.TryValidateEventMethod(
             root, "Sword", "PlayFootstep", ProwlActionArgType.Float,
             out string sigFloat, out string paramName, out System.Type? paramType);
         Assert.True(validFloat);
@@ -371,17 +371,17 @@ public class AnimationPropertyConsistencyTests
         Assert.Equal("volume", paramName);
         Assert.Equal(typeof(float), paramType);
 
-        bool validObj = SceneClipBinding.TryValidateEventMethod(
+        bool validObj = AnimationClipBinding.TryValidateEventMethod(
             root, "Sword", "AttachTarget", ProwlActionArgType.Object,
             out _, out string objParamName, out System.Type? objParamType);
         Assert.True(validObj);
         Assert.Equal("target", objParamName);
         Assert.Equal(typeof(GameObject), objParamType);
 
-        Assert.False(SceneClipBinding.TryValidateEventMethod(
+        Assert.False(AnimationClipBinding.TryValidateEventMethod(
             root, "MissingChild", "PlayFootstep", ProwlActionArgType.Float,
             out _, out _, out _));
-        Assert.False(SceneClipBinding.TryValidateEventMethod(
+        Assert.False(AnimationClipBinding.TryValidateEventMethod(
             root, "Sword", "NonExistentMethod", ProwlActionArgType.None,
             out _, out _, out _));
 
@@ -390,12 +390,12 @@ public class AnimationPropertyConsistencyTests
         try
         {
             panel.BindAnimator(animator);
-            SceneAnimationEvent? instant = panel.AddEventAtPlayhead(ranged: false);
+            AnimationClipEvent? instant = panel.AddEventAtPlayhead(ranged: false);
             Assert.NotNull(instant);
             Assert.False(instant!.IsRange);
             Assert.Equal(string.Empty, instant.FunctionName);
 
-            SceneAnimationEvent? ranged = panel.AddEventAtPlayhead(ranged: true);
+            AnimationClipEvent? ranged = panel.AddEventAtPlayhead(ranged: true);
             Assert.NotNull(ranged);
             Assert.True(ranged!.IsRange);
             Assert.True(ranged.EndTime > ranged.Time);
@@ -544,7 +544,7 @@ public class AnimationPropertyConsistencyTests
         clip.SetStringKey("", nameof(ZeroAllocTestReceiver), nameof(ZeroAllocTestReceiver.Label), 0f, "Active");
         clip.SetObjectKey("", nameof(ZeroAllocTestReceiver), nameof(ZeroAllocTestReceiver.LinkedObject), 0f, child);
 
-        clip.PropertyEvents.Add(new SceneAnimationEvent
+        clip.PropertyEvents.Add(new AnimationClipEvent
         {
             Time = 0.1f,
             EndTime = 0.9f,
@@ -555,7 +555,7 @@ public class AnimationPropertyConsistencyTests
             IntParam = 42,
         });
 
-        var binding = new SceneClipBinding(root, clip);
+        var binding = new AnimationClipBinding(root, clip);
 
         // Warm up JIT once before measuring thread allocations
         binding.Sample(0.05f);
@@ -614,12 +614,12 @@ public class AnimationPropertyConsistencyTests
         ZeroAllocTestReceiver latchReceiver = latch.AddComponent<ZeroAllocTestReceiver>();
         latchReceiver.Intensity = 0f;
 
-        var clip = new AnimationClip { Name = "ChestOpen", FrameRate = 60f, WrapMode = SceneClipWrapMode.Once };
+        var clip = new AnimationClip { Name = "ChestOpen", FrameRate = 60f, WrapMode = AnimationClipWrapMode.Once };
         clip.SetCurveKey("Lid", "Transform", "LocalPosition.Y", 0f, 1f);
         clip.SetCurveKey("Lid", "Transform", "LocalPosition.Y", 1f, 5f);
         clip.SetCurveKey("@LatchSlot", nameof(ZeroAllocTestReceiver), nameof(ZeroAllocTestReceiver.Intensity), 0f, 0f);
         clip.SetCurveKey("@LatchSlot", nameof(ZeroAllocTestReceiver), nameof(ZeroAllocTestReceiver.Intensity), 1f, 20f);
-        clip.PropertyEvents.Add(new SceneAnimationEvent
+        clip.PropertyEvents.Add(new AnimationClipEvent
         {
             Time = 0.4f,
             RelativePath = "Lid",
@@ -648,10 +648,10 @@ public class AnimationPropertyConsistencyTests
         Assert.Single(animA.Clips);
         Assert.Single(animB.Clips);
 
-        GameObject lidA = SceneClipBinding.ResolveGameObject(instA, "Lid")!;
-        GameObject lidB = SceneClipBinding.ResolveGameObject(instB, "Lid")!;
-        GameObject latchA = SceneClipBinding.ResolveGameObject(instA, "Latch")!;
-        GameObject latchB = SceneClipBinding.ResolveGameObject(instB, "Latch")!;
+        GameObject lidA = AnimationClipBinding.ResolveGameObject(instA, "Lid")!;
+        GameObject lidB = AnimationClipBinding.ResolveGameObject(instB, "Lid")!;
+        GameObject latchA = AnimationClipBinding.ResolveGameObject(instA, "Latch")!;
+        GameObject latchB = AnimationClipBinding.ResolveGameObject(instB, "Latch")!;
 
         // Internal @Slot bindings inside the prefab clone to each instance's own child, never sharing references
         Assert.Same(latchA, animA.GetObjectBinding("LatchSlot"));
@@ -885,7 +885,7 @@ public class ImportedAnimationClipWorkflowTests : EditorTestHarness
 
         // 1. Add instant + ranged AnimationEvents AND unpack/modify animation curves on the imported clip
         Undo.RecordObject(clip, "Edit Imported Clip");
-        clip.PropertyEvents.Add(new SceneAnimationEvent
+        clip.PropertyEvents.Add(new AnimationClipEvent
         {
             Time = 0.25f,
             RelativePath = "Arm",
@@ -893,7 +893,7 @@ public class ImportedAnimationClipWorkflowTests : EditorTestHarness
             ArgType = ProwlActionArgType.Float,
             FloatParam = 0.8f,
         });
-        clip.PropertyEvents.Add(new SceneAnimationEvent
+        clip.PropertyEvents.Add(new AnimationClipEvent
         {
             Time = 0.4f,
             EndTime = 0.85f,
@@ -906,7 +906,7 @@ public class ImportedAnimationClipWorkflowTests : EditorTestHarness
 
         int unpackedCount = clip.UnpackMotionToCurveTracks();
         Assert.True(unpackedCount > 0);
-        SceneCurveTrack? initialArmY = clip.FindCurveTrack("Root/Arm", "Transform", "LocalPosition.Y");
+        AnimationCurveTrack? initialArmY = clip.FindCurveTrack("Root/Arm", "Transform", "LocalPosition.Y");
         Assert.NotNull(initialArmY);
         Assert.Equal(2f, initialArmY!.Curve.Evaluate(1f), 2);
 
@@ -924,7 +924,7 @@ public class ImportedAnimationClipWorkflowTests : EditorTestHarness
         AnimationClip reopenedClip = Load<AnimationClip>(clipSub.Guid)!;
         Assert.NotNull(reopenedClip);
         Assert.Equal(2, reopenedClip.PropertyEvents.Count);
-        SceneCurveTrack? modifiedTrack = reopenedClip.FindCurveTrack("Root/Arm", "Transform", "LocalPosition.Y");
+        AnimationCurveTrack? modifiedTrack = reopenedClip.FindCurveTrack("Root/Arm", "Transform", "LocalPosition.Y");
         Assert.NotNull(modifiedTrack);
         Assert.Equal(99f, modifiedTrack!.Curve.Evaluate(1f), 2);
 
@@ -949,7 +949,7 @@ public class ImportedAnimationClipWorkflowTests : EditorTestHarness
 
         // Verify the fresh skeletal animation from the updated .gltf (endY = 6) plays accurately
         reimportedClip.UnpackMotionToCurveTracks();
-        SceneCurveTrack? freshArmY = reimportedClip.FindCurveTrack("Root/Arm", "Transform", "LocalPosition.Y");
+        AnimationCurveTrack? freshArmY = reimportedClip.FindCurveTrack("Root/Arm", "Transform", "LocalPosition.Y");
         Assert.NotNull(freshArmY);
         Assert.Equal(6f, freshArmY!.Curve.Evaluate(1f), 2);
     }
@@ -991,7 +991,7 @@ public class ImportedAnimationClipWorkflowTests : EditorTestHarness
         }
 
         // Also verify PlacePropertyEvents shifts & clamps take-timed events against TrimStart / TrimEnd
-        var takeEvents = new System.Collections.Generic.List<SceneAnimationEvent>
+        var takeEvents = new System.Collections.Generic.List<AnimationClipEvent>
         {
             new() { Time = 0.1f, FunctionName = "DroppedBeforeTrim" },
             new() { Time = 0.5f, FunctionName = "KeptInstant" },

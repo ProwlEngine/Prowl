@@ -119,7 +119,7 @@ public class Animator : Component
     // Property track bindings and playback cursor for clips that carry CurveTracks, ObjectTracks, StringTracks, or PropertyEvents.
     private sealed class CachedPropertyBinding
     {
-        public required SceneClipBinding Binding;
+        public required AnimationClipBinding Binding;
         public required int Version;
     }
 
@@ -401,14 +401,14 @@ public class Animator : Component
         if (CurrentClip.IsValid() && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
         {
             prevBinding.Binding.ResetActiveEvents(fireExitCallbacks: true);
-            if ((!ReferenceEquals(CurrentClip, clip) || restartingSameActiveClip) && CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
+            if ((!ReferenceEquals(CurrentClip, clip) || restartingSameActiveClip) && CurrentClip!.CompletionMode == AnimationClipCompletionMode.RestoreState)
                 prevBinding.Binding.RestoreBaseline();
         }
         if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? nextBinding))
         {
             // When restarting the same active KeepState clip mid-playback, preserve its initial baseline rather than
             // capturing mid-animation values (which would corrupt Additive tracks).
-            if (!restartingSameActiveClip || clip.CompletionMode == SceneClipCompletionMode.RestoreState)
+            if (!restartingSameActiveClip || clip.CompletionMode == AnimationClipCompletionMode.RestoreState)
                 nextBinding.Binding.CaptureBaseline();
         }
         CurrentClip = clip;
@@ -439,7 +439,7 @@ public class Animator : Component
         if (CurrentClip.IsValid() && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
         {
             prevBinding.Binding.ResetActiveEvents(fireExitCallbacks: true);
-            if (CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
+            if (CurrentClip!.CompletionMode == AnimationClipCompletionMode.RestoreState)
                 prevBinding.Binding.RestoreBaseline();
         }
         _propertyPlaying = false;
@@ -546,7 +546,7 @@ public class Animator : Component
         // 2. Sample property tracks layered on top
         if (clip.HasPropertyTracks)
         {
-            SceneClipBinding propBinding = GetOrCreatePropertyBinding(clip);
+            AnimationClipBinding propBinding = GetOrCreatePropertyBinding(clip);
             propBinding.Sample(_propertyClipTime);
         }
     }
@@ -562,12 +562,12 @@ public class Animator : Component
         if (CurrentClip.IsValid() && _propertyBindings.TryGetValue(CurrentClip!, out CachedPropertyBinding? prevBinding))
         {
             prevBinding.Binding.ResetActiveEvents(fireExitCallbacks: true);
-            if ((!ReferenceEquals(CurrentClip, clip) || restartingSameActiveClip) && CurrentClip!.CompletionMode == SceneClipCompletionMode.RestoreState)
+            if ((!ReferenceEquals(CurrentClip, clip) || restartingSameActiveClip) && CurrentClip!.CompletionMode == AnimationClipCompletionMode.RestoreState)
                 prevBinding.Binding.RestoreBaseline();
         }
         if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? nextBinding))
         {
-            if (!restartingSameActiveClip || clip.CompletionMode == SceneClipCompletionMode.RestoreState)
+            if (!restartingSameActiveClip || clip.CompletionMode == AnimationClipCompletionMode.RestoreState)
                 nextBinding.Binding.CaptureBaseline();
         }
 
@@ -753,7 +753,7 @@ public class Animator : Component
 
     private MotionClip? Resolve(AnimationClip clip) => clip.GetClip(_boundAvatar, _animator?.Skeleton ?? _fallbackSkeleton);
 
-    private SceneClipBinding GetOrCreatePropertyBinding(AnimationClip clip)
+    private AnimationClipBinding GetOrCreatePropertyBinding(AnimationClip clip)
     {
         if (_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? cached))
         {
@@ -765,7 +765,7 @@ public class Animator : Component
                 cached.Binding.RestoreBaseline();
         }
 
-        var binding = new SceneClipBinding(GameObject, clip);
+        var binding = new AnimationClipBinding(GameObject, clip);
         _propertyBindings[clip] = new CachedPropertyBinding { Binding = binding, Version = clip.Version };
         return binding;
     }
@@ -778,7 +778,7 @@ public class Animator : Component
             clip.Load();
         if (!clip.IsLoaded || !clip.HasPropertyTracks) return;
 
-        SceneClipBinding propBinding = GetOrCreatePropertyBinding(clip);
+        AnimationClipBinding propBinding = GetOrCreatePropertyBinding(clip);
         float duration = clip.Duration;
         if (duration <= 1e-6f)
         {
@@ -796,11 +796,11 @@ public class Animator : Component
         bool looped = false;
         bool finishedOnce = false;
 
-        SceneClipWrapMode wrap = clip.EffectiveWrapMode;
+        AnimationClipWrapMode wrap = clip.EffectiveWrapMode;
 
         switch (wrap)
         {
-            case SceneClipWrapMode.Once:
+            case AnimationClipWrapMode.Once:
                 if (forward && _propertyElapsedTime >= duration)
                 {
                     _propertyElapsedTime = duration;
@@ -819,11 +819,11 @@ public class Animator : Component
                 }
                 break;
 
-            case SceneClipWrapMode.ClampForever:
+            case AnimationClipWrapMode.ClampForever:
                 _propertyClipTime = Math.Clamp(_propertyElapsedTime, 0f, duration);
                 break;
 
-            case SceneClipWrapMode.Loop:
+            case AnimationClipWrapMode.Loop:
             {
                 int prevCycle = (int)MathF.Floor(prevElapsed / duration);
                 int newCycle = (int)MathF.Floor(_propertyElapsedTime / duration);
@@ -834,7 +834,7 @@ public class Animator : Component
                 break;
             }
 
-            case SceneClipWrapMode.PingPong:
+            case AnimationClipWrapMode.PingPong:
             {
                 _propertyClipTime = clip.WrapTime(_propertyElapsedTime);
                 forward = _propertyClipTime >= prevClipTime;
@@ -854,7 +854,7 @@ public class Animator : Component
         if (finishedOnce)
         {
             propBinding.ResetActiveEvents(fireExitCallbacks: true);
-            if (clip.CompletionMode == SceneClipCompletionMode.RestoreState)
+            if (clip.CompletionMode == AnimationClipCompletionMode.RestoreState)
                 propBinding.RestoreBaseline();
             _propertyPlaying = false;
         }
@@ -887,7 +887,7 @@ public class Animator : Component
                 continue;
             }
 
-            SceneClipBinding propBinding = GetOrCreatePropertyBinding(clip);
+            AnimationClipBinding propBinding = GetOrCreatePropertyBinding(clip);
             if (_activeGraphClipNodes.Add(nodeIndex))
                 propBinding.CaptureBaseline();
 
@@ -920,7 +920,7 @@ public class Animator : Component
         if (!_propertyBindings.TryGetValue(clip, out CachedPropertyBinding? cached)) return;
         if (cached.Binding.HasActiveRangedEvents)
             cached.Binding.ResetActiveEvents(fireExitCallbacks: true);
-        if (wasActive && clip.CompletionMode == SceneClipCompletionMode.RestoreState)
+        if (wasActive && clip.CompletionMode == AnimationClipCompletionMode.RestoreState)
             cached.Binding.RestoreBaseline();
     }
 
