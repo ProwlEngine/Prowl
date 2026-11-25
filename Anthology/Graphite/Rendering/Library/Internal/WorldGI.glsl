@@ -2,7 +2,7 @@
 #pragma variant GI_GATHER_OCCLUSION
 #pragma variant GI_SPLIT_VERTICAL
 // World space GI from screen probes, one pass a define. A probe sits at a jittered pixel of each GI_PROBE square of the
-// view, its sixteen rays spread over the hemisphere of its normal, a 4 x 4 cell each, traced through last frame's image
+// view, a side that grows with the view's height so taller views trace about as many rays, its sixteen rays spread over the hemisphere of its normal, a 4 x 4 cell each, traced through last frame's image
 // and then the world's voxels, lit by their hit light, the radiance cache and the sky. Each cell keeps a ReSTIR
 // reservoir over frames, its sample a hit point, resampled with the same cell of last frame's nearest probe and then of
 // probes around it, each sample moved to the probe reusing it with the change in solid angle that brings. Samples live
@@ -40,12 +40,14 @@
 //                      alone, averaged over the frames the camera holds still
 //   GI_FILTER          the history blurred over the 5 x 5 around each pixel on its surface, the blur's step wider the
 //                      fewer frames the pixel's history holds, so new pixels lose their noise and settled ones keep detail
-//   GI_OUTPUT          the filtered history as the view's screen irradiance, or none while the world has no box
+//   GI_OUTPUT          the filtered history as the view's screen irradiance, trusted less over the box's last
+//                      GI_FADE metres and not at all past it, where the baked light stands, or none while the world
+//                      has no box
 //   GI_VISIBILITY      the history's sky visibility as the view's screen visibility, which occludes the sky's
-//                      reflection, or full visibility while the world has no box
+//                      reflection, fading to full visibility the same way, or full visibility while the world has no box
 #include "Graphite/Internal/PostView.glsl"
 
-#define GI_PROBE 8
+#define GI_PROBE _ProbeSize
 #define GI_CELLS 4
 #define GI_FAR 1000.0               // the hit distance of a ray that reached the sky
 #define GI_MAX_M 20.0
@@ -54,6 +56,7 @@
 #define GI_SAME_NORMAL 0.9          // how near the same way two normals must face on one surface
 
 uniform vec2 _ScreenSize;       // the view's pixels, which probes and the scene targets are laid over
+uniform int _ProbeSize;         // the side in pixels of the square a probe stands for
 uniform vec2 _ProbeJitter;      // where in its square this frame's probes sit, 0 to 1
 uniform int _Frame;
 uniform vec4 _BoxMin;           // the box's first corner relative to the first layer's camera in metres, the voxel size
@@ -1370,6 +1373,7 @@ uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _Normals;
 uniform float _HasVoxels;
 
+#define GI_FADE 4.0                 // metres in from the box's faces over which the GI gives way to the baked light
 #define GI_UPSAMPLE_DISTANCE 0.05   // a difference in camera distance, relative, that halves a texel's weight
 #define GI_UPSAMPLE_NORMAL 8.0      // how sharply a texel facing away from the pixel loses weight
 
@@ -1415,9 +1419,23 @@ vec4 GI_Upsample()
     return weights > 1e-4 ? sum / weights : Graphite_Fetch(_History, best, 0);
 }
 
+// How far the GI is trusted at the pixel: wholly inside the box, falling to nothing at its faces, as past them rays
+// have only the screen and the sky to find
+float GI_Trust()
+{
+    ivec2 pixel = min(ivec2(vUV * _ScreenSize), ivec2(_ScreenSize) - 1);
+    float depth = Graphite_Fetch(_CameraDepthTexture, pixel, 0).r;
+    if (depth == 0.0)
+        return 0.0;
+    Graphite_ViewData view = Graphite_PostView();
+    vec3 v = GI_VoxelPosition(view, Graphite_RelativeFromDepth(view, GI_PixelUV(pixel), depth));
+    vec3 inside = min(v, _BoxSize / _BoxMin.w - v);
+    return clamp(min(min(inside.x, inside.y), inside.z) * _BoxMin.w / GI_FADE, 0.0, 1.0);
+}
+
 #if defined(GI_OUTPUT)
-void main() { outColor = _HasVoxels != 0.0 ? vec4(GI_Upsample().rgb, 1.0) : vec4(0.0); }
+void main() { outColor = _HasVoxels != 0.0 ? vec4(GI_Upsample().rgb, GI_Trust()) : vec4(0.0); }
 #else
-void main() { outColor = vec4(_HasVoxels != 0.0 ? clamp(GI_Upsample().a, 0.0, 1.0) : 1.0); }
+void main() { outColor = vec4(_HasVoxels != 0.0 ? mix(1.0, clamp(GI_Upsample().a, 0.0, 1.0), GI_Trust()) : 1.0); }
 #endif
 #endif

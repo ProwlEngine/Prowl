@@ -10,7 +10,7 @@ struct Graphite_VoxelLightingData
     mat4 sunShadow;     // voxel coordinates to the sun shadow's clip space
     vec4 sunDirection;  // toward the sun, whether it casts a shadow
     vec4 sunColor;      // illuminance, whether there is a sun
-    vec4 sky;           // the sky's colour without a capture, the capture's mip to read or -1 without one
+    vec4 sky;           // the sky's colour without a capture, else what scales the capture, then the capture's mip to read or -1 without one
 };
 
 layout(std430) readonly buffer Graphite_VoxelLighting { Graphite_VoxelLightingData graphite_VoxelLight; };
@@ -39,11 +39,12 @@ float Graphite_VoxelSkyReach(float sunShadow)
     return mix(1.0, sunShadow, clamp(graphite_VoxelLight.sunDirection.y / 0.25, 0.0, 1.0));
 }
 
-// The sky seen along a direction, a blurred mip of its capture or its colour without one
+// The sky seen along a direction, a blurred mip of its capture at the strength the ambient light takes it, or its
+// colour without one
 vec3 Graphite_VoxelSkyRadiance(vec3 direction)
 {
     vec4 sky = graphite_VoxelLight.sky;
-    return sky.w < 0.0 ? sky.rgb : textureLod(Graphite_VoxelSky, direction, sky.w).rgb;
+    return sky.w < 0.0 ? sky.rgb : textureLod(Graphite_VoxelSky, direction, sky.w).rgb * sky.rgb;
 }
 
 // Where a ray from origin in direction, in voxel units, leaves the box, in voxels along it

@@ -106,7 +106,7 @@ internal struct VoxelLightingRecord
     /// <summary>The sun's illuminance, then 1 while there is a sun.</summary>
     public Float4 SunColor;
 
-    /// <summary>The sky's colour while it has no capture, then the capture's mip to read, or -1 without one.</summary>
+    /// <summary>The sky's colour while it has no capture, else what scales the capture, then the capture's mip to read, or -1 without one.</summary>
     public Float4 Sky;
 }
 

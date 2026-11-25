@@ -105,9 +105,11 @@ internal sealed partial class FramePipeline
         EnvironmentDesc environment = world.World.Lighting.Environment;
         float exposure = voxels.Header.EmissionExposure;
         WorldReflections reflections = world.World.Reflections;
+        // While the sky is the ambient light its strength scales the sky rays find too, so the light meets across the box's faces
+        float strength = environment.Ambient == AmbientMode.Sky ? environment.AmbientIntensity : 1f;
         Float4 sky = reflections.Sky is { } target
-            ? new Float4(0, 0, 0, Math.Max((int)target.Mips - 3, 0))
-            : new Float4(environment.SkyColor.X * exposure, environment.SkyColor.Y * exposure, environment.SkyColor.Z * exposure, -1);
+            ? new Float4(strength, strength, strength, Math.Max((int)target.Mips - 3, 0))
+            : new Float4(environment.SkyColor.X * exposure * strength, environment.SkyColor.Y * exposure * strength, environment.SkyColor.Z * exposure * strength, -1);
         VoxelLightingRecord record = new() { Sky = sky };
 
         if (world.World.Lighting.Sun is { } sun)

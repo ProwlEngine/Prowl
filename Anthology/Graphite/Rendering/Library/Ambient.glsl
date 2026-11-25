@@ -98,6 +98,19 @@ vec4 Graphite_ScreenIndirect()
 {
     return Graphite_HasScreenLighting() ? texture(sampler2DArray(Graphite_ScreenIrradiance, Graphite_ScreenSampler), graphite_ScreenCoord()) : vec4(0.0);
 }
+
+// Both of the view's screen lighting at this pixel, read once
+void Graphite_ScreenLighting(out vec4 indirect, out float visibility)
+{
+    indirect = vec4(0.0);
+    visibility = 1.0;
+    if (Graphite_HasScreenLighting())
+    {
+        vec3 at = graphite_ScreenCoord();
+        indirect = texture(sampler2DArray(Graphite_ScreenIrradiance, Graphite_ScreenSampler), at);
+        visibility = texture(sampler2DArray(Graphite_ScreenVisibility, Graphite_ScreenSampler), at).r;
+    }
+}
 #endif
 
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
@@ -106,21 +119,36 @@ vec4 Graphite_ScreenIndirect()
 // lightmapUV comes from Graphite_LightmapUV in the vertex stage.
 vec3 graphite_BakedDiffuse(vec3 worldNormal, vec2 lightmapUV);
 
+// With the view's screen lighting already read by Graphite_ScreenLighting
+vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV, vec4 screen, float visibility)
+{
+    return mix(graphite_BakedDiffuse(worldNormal, lightmapUV) * visibility, screen.rgb, screen.a);
+}
+
 vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV)
 {
-    vec4 screen = Graphite_ScreenIndirect();
-    return mix(graphite_BakedDiffuse(worldNormal, lightmapUV) * Graphite_ScreenOcclusion(), screen.rgb, screen.a);
+    vec4 screen;
+    float visibility;
+    Graphite_ScreenLighting(screen, visibility);
+    return Graphite_IndirectDiffuse(worldNormal, lightmapUV, screen, visibility);
 }
 
 // The same with the light of an object without a lightmap found per vertex by Graphite_ObjectAmbient
-vec3 Graphite_IndirectDiffuse(vec2 lightmapUV, vec3 objectAmbient)
+vec3 Graphite_IndirectDiffuse(vec2 lightmapUV, vec3 objectAmbient, vec4 screen, float visibility)
 {
-    vec4 screen = Graphite_ScreenIndirect();
     Graphite_ObjectData object = Graphite_Object();
     vec3 baked = objectAmbient;
     if (object.lightmapTexture < GRAPHITE_LIGHTMAP_LOADING)
         baked = Graphite_DecodeLightmap(GRAPHITE_SAMPLE_2D(object.lightmapTexture, object.lightmapSampler & 0xFFFFu, lightmapUV), object.lightmapSampler >> 16, object.lightmapScale) * Graphite_Exposure();
-    return mix(baked * Graphite_ScreenOcclusion(), screen.rgb, screen.a);
+    return mix(baked * visibility, screen.rgb, screen.a);
+}
+
+vec3 Graphite_IndirectDiffuse(vec2 lightmapUV, vec3 objectAmbient)
+{
+    vec4 screen;
+    float visibility;
+    Graphite_ScreenLighting(screen, visibility);
+    return Graphite_IndirectDiffuse(lightmapUV, objectAmbient, screen, visibility);
 }
 
 vec3 graphite_BakedDiffuse(vec3 worldNormal, vec2 lightmapUV)

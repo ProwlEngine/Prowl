@@ -8,16 +8,21 @@ namespace Prowl.Graphite.Rendering;
 /// World space global illumination as the view's screen lighting: probes over the view trace the world's voxels, lit by
 /// their hit light, the radiance cache and the sky, resampled over frames and between probes as ReSTIR reservoirs, and
 /// every pixel takes the probe around it that suits it best, smoothed over frames. Past the voxel box rays march the
-/// screen further and take the sky where they find nothing. Needs a voxel box, see <see cref="RenderWorld.SetVoxelVolume"/>,
+/// screen further and take the sky where they find nothing, and what the box does not hold keeps its baked light, the
+/// GI fading into it over the box's last metres. Needs a voxel box, see <see cref="RenderWorld.SetVoxelVolume"/>,
 /// and leaves the baked light without one. See Graphite/Internal/WorldGI.glsl.
 /// </summary>
 public sealed class WorldGI : ScreenLightingFeature
 {
-    private const int ProbeSize = 8, Cells = 4;
+    private const int Cells = 4;
+
+    // A probe for every 8 pixels up to 1080 rows, its square growing a pixel for every 90 rows more up to 16, so a
+    // taller view traces about as many rays
+    private static int ProbeSize(uint height) => (int)Math.Clamp(MathF.Round(8f + ((float)height - 1080f) / 90f), 8f, 16f);
 
     private static readonly PropertyID s_depth = "_CameraDepthTexture", s_normals = "_Normals", s_motion = "_Motion", s_probes = "_Probes",
         s_atlas = "_Atlas", s_current = "_Current", s_history = "_History", s_historyMeta = "_HistoryMeta", s_historyValid = "_HistoryValid",
-        s_probeHistoryValid = "_ProbeHistoryValid", s_maxHistory = "_MaxHistory", s_hasVoxels = "_HasVoxels", s_screenSize = "_ScreenSize", s_probeJitter = "_ProbeJitter", s_frame = "_Frame",
+        s_probeHistoryValid = "_ProbeHistoryValid", s_maxHistory = "_MaxHistory", s_hasVoxels = "_HasVoxels", s_screenSize = "_ScreenSize", s_probeJitter = "_ProbeJitter", s_probeSize = "_ProbeSize", s_frame = "_Frame",
         s_boxMin = "_BoxMin", s_voxels = "Graphite_Voxels", s_cache = "Graphite_VoxelCache", s_lighting = "Graphite_VoxelLighting",
         s_sunShadow = "Graphite_VoxelSunShadow", s_sky = "Graphite_VoxelSky", s_previousColor = "_PreviousColor", s_hasPreviousColor = "_HasPreviousColor",
         s_boxSize = "_BoxSize", s_previousProbes = "_PreviousProbes", s_previousProbeJitter = "_PreviousProbeJitter",
@@ -33,7 +38,7 @@ public sealed class WorldGI : ScreenLightingFeature
     private readonly FullscreenProgram _probes, _trace, _probeAO, _temporalReuse, _spatialReuse, _sh, _occlusion, _gather, _gatherOccluded, _splitRows, _splitColumns, _temporal, _filter, _reference, _output, _visibility;
     private readonly PropertySet _properties = new();
     private int _spatialPasses;
-    private bool _showReference, _directionalOcclusion;
+    private bool _showReference, _directionalOcclusion, _screenTrace = true;
     private float _occlusionRadius, _occlusionThickness, _resolution = 1f;
     private float _maxHistory;
 
@@ -85,13 +90,19 @@ public sealed class WorldGI : ScreenLightingFeature
     /// The resolution the GI is gathered and smoothed at. Probes are a pixel in 8 x 8 of the view whatever it is, and the
     /// result is brought up to the view's resolution by depth and normal, so the screen lighting stays full resolution.
     /// </summary>
-    public EffectResolution Resolution { get; set; } = EffectResolution.Half;
+    public EffectResolution Resolution { get; set; } = EffectResolution.Quarter;
 
     /// <summary>How many passes of eight neighbours each reservoir is resampled with, 0 to 4.</summary>
     public int SpatialPasses { get; set; } = 4;
 
     /// <summary>How many frames the denoiser's history holds at most.</summary>
     public int MaxHistory { get; set; } = 32;
+
+    /// <summary>
+    /// Whether rays march the view's depth against last frame's colour before the voxels. On, rays find what the voxels
+    /// are too coarse for, as far as the view shows it. Off, the light depends on the voxels alone, the same from any view.
+    /// </summary>
+    public bool ScreenTrace { get; set; } = true;
 
     /// <summary>
     /// Occludes the GI below the probes' spacing from a horizon search of the depth around each pixel: its light comes
@@ -124,6 +135,7 @@ public sealed class WorldGI : ScreenLightingFeature
     {
         _spatialPasses = System.Math.Clamp(SpatialPasses, 0, 4);
         _showReference = Reference;
+        _screenTrace = ScreenTrace;
         _maxHistory = System.Math.Max(MaxHistory, 1);
         _directionalOcclusion = DirectionalOcclusion && OcclusionRadius > 0;
         _occlusionRadius = OcclusionRadius;
@@ -139,7 +151,8 @@ public sealed class WorldGI : ScreenLightingFeature
         state.Inputs = builder.ReadVoxels();
         (state.Visibility, TextureHandle? irradiance) = builder.WriteScreenLighting(true);
         state.Irradiance = irradiance!.Value;
-        int probesX = ((int)view.Width + ProbeSize - 1) / ProbeSize, probesY = ((int)view.Height + ProbeSize - 1) / ProbeSize;
+        int probe = ProbeSize(view.Height);
+        int probesX = ((int)view.Width + probe - 1) / probe, probesY = ((int)view.Height + probe - 1) / probe;
         GraphTextureDesc atlas = view.Texture(PixelFormat.R16_G16_B16_A16_Float) with { Width = probesX * Cells, Height = probesY * Cells };
         GraphTextureDesc reservoirs = atlas with { ColorFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_B16_A16_Float] };
         GraphTextureDesc probeTargets = view.Texture(PixelFormat.R32_G32_B32_A32_Float) with { Width = probesX, Height = probesY, ColorFormats = [PixelFormat.R32_G32_B32_A32_Float, PixelFormat.R32_G32_B32_A32_Float] };
@@ -179,6 +192,7 @@ public sealed class WorldGI : ScreenLightingFeature
         Float3 extent = voxels.Extent;
         Double3 min = voxels.Center - new Double3(extent.X, extent.Y, extent.Z) * 0.5 - context.View.Position;
         _properties.SetFloat2(s_screenSize, new Float2(context.View.Width, context.View.Height));
+        _properties.SetInt(s_probeSize, ProbeSize(context.View.Height));
         Float2 jitter = new(Halton.Of(frame % 4 + 1, 2), Halton.Of(frame % 4 + 1, 3));
         _properties.SetFloat2(s_probeJitter, jitter);
         _properties.SetFloat2(s_previousProbeJitter, state.PreviousJitter);
@@ -194,7 +208,7 @@ public sealed class WorldGI : ScreenLightingFeature
         _properties.SetTexture(s_sunShadow, inputs.SunShadow, inputs.ShadowSampler);
         _properties.SetTexture(s_sky, inputs.Sky, _shared.LinearClamp);
         Texture? copy = context.SceneColorCopy;
-        bool hasPrevious = copy != null && copy == state.Copied && context.HasPreviousFrame;
+        bool hasPrevious = _screenTrace && copy != null && copy == state.Copied && context.HasPreviousFrame;
         state.Copied = copy;
         _properties.SetTexture(s_previousColor, copy ?? _shared.NoSceneColor, _shared.LinearClamp);
         _properties.SetFloat(s_hasPreviousColor, hasPrevious ? 1 : 0);
@@ -302,6 +316,7 @@ public sealed class WorldGI : ScreenLightingFeature
         _properties.SetTexture(s_depth, context.Depth!, _shared.PointClamp);
         _properties.SetTexture(s_normals, context.Normals!, _shared.PointClamp);
         _properties.SetFloat2(s_screenSize, new Float2(context.View.Width, context.View.Height));
+        _properties.SetInt(s_probeSize, ProbeSize(context.View.Height));
         _properties.SetFloat(s_hasVoxels, history != null ? 1 : 0);
         context.Fullscreen(_output, irradiance, _properties);
         context.Fullscreen(_visibility, context.Get(state.Visibility), _properties);

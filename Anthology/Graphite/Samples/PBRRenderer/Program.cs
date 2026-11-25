@@ -47,6 +47,10 @@ internal sealed class DemoWindow
     private bool _lightSpread;
     private int _voxelView = -1;
     private bool _gi;
+    private bool _giScreenTrace = true;
+    private bool _giOcclusion = true;
+    private int _giSpatialPasses = -1;
+    private EffectResolution? _giResolution;
     private int _forcedLod = -1;
     private readonly System.Diagnostics.Stopwatch _shotClock = new();
     private PassTimer? _timer;
@@ -77,6 +81,14 @@ internal sealed class DemoWindow
                 _debugView = Array.IndexOf(DebugViews, args[++i].ToUpperInvariant());
             else if (args[i] == "--tier" && i + 1 < args.Length)
                 _tier = args[++i].ToUpperInvariant();
+            else if (args[i] == "--noscreentrace")
+                _giScreenTrace = false;
+            else if (args[i] == "--gi-noocclusion")
+                _giOcclusion = false;
+            else if (args[i] == "--gi-spatial" && i + 1 < args.Length)
+                _giSpatialPasses = int.Parse(args[++i]);
+            else if (args[i] == "--gi-res" && i + 1 < args.Length)
+                _giResolution = Enum.Parse<EffectResolution>(args[++i], true);
             else if (args[i] == "--gi")
                 _gi = true;
             else if (args[i] == "--voxels" && i + 1 < args.Length)
@@ -141,7 +153,7 @@ internal sealed class DemoWindow
         _demo = new Demo(_device);
         _demo.Bloom.Enabled = !_noBloom;
         _demo.Tonemap.Enabled = !_noTonemap;
-        SelectScene(Math.Clamp(_startScene, 0, 7));
+        SelectScene(Math.Clamp(_startScene, 0, 8));
         _paused = _freeze;
         _scene.View.ForcedLod = _forcedLod;
         if (_hour is { } hour && _scene is ShadowsScene shadows)
@@ -184,6 +196,7 @@ internal sealed class DemoWindow
                 3 => new InstancingScene(_demo),
                 5 => new LodScene(_demo),
                 6 => new TerrainScene(_demo),
+                8 => new CornellScene(_demo),
                 7 => new ManyLightsScene(_demo, _lightCount >= 0 ? _lightCount : 1000, _lightRange > 0 ? _lightRange : 8f, _lightSpread),
                 _ => new MaterialsScene(_demo),
             };
@@ -215,9 +228,11 @@ internal sealed class DemoWindow
             case Key.Number6: SelectScene(5); break;
             case Key.Number7: SelectScene(6); break;
             case Key.Number8: SelectScene(7); break;
+            case Key.Number9: SelectScene(8); break;
             case Key.F: _debugView = _debugView + 1 < DebugViews.Length ? _debugView + 1 : -1; break;
             case Key.G: _voxelView = _voxelView + 1 < Enum.GetValues<VoxelDebugMode>().Length ? _voxelView + 1 : -1; break;
             case Key.I: _gi = !_gi; break;
+            case Key.H: _giScreenTrace = !_giScreenTrace; break;
             case Key.Space: _paused = !_paused; break;
             case Key.B: _demo.Bloom.Enabled = !_demo.Bloom.Enabled; break;
             case Key.V: _device.SyncToVerticalBlank = !_device.SyncToVerticalBlank; break;
@@ -258,6 +273,12 @@ internal sealed class DemoWindow
         _demo.Voxels.Enabled = _voxelView >= 0;
         _demo.Voxels.Mode = (VoxelDebugMode)Math.Max(_voxelView, 0);
         _demo.Gi.Enabled = _gi;
+        _demo.Gi.ScreenTrace = _giScreenTrace;
+        _demo.Gi.DirectionalOcclusion = _giOcclusion;
+        if (_giSpatialPasses >= 0)
+            _demo.Gi.SpatialPasses = _giSpatialPasses;
+        if (_giResolution is { } giResolution)
+            _demo.Gi.Resolution = giResolution;
         _scene.World.SetVoxelVolume(_voxelView < 0 && !_gi ? null : new VoxelVolumeDesc { Center = _camera.Position });
 
         _demo.Renderer.SubmitFrame(new FrameDesc
@@ -272,7 +293,7 @@ internal sealed class DemoWindow
         if (_titleTimer >= 0.5)
         {
             _timer?.Print(100);
-            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 8 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}, G voxels, I GI{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? " - GI" : "")}";
+            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 to 9 scene, B bloom, T tonemap, X TAA, V vsync, +/- exposure, space pause, {_scene.Controls}{(_debugView < 0 ? "" : $" - debug {DebugViews[_debugView]}")}, G voxels, I GI, H GI screen trace{(_voxelView < 0 ? "" : $" - voxels {(VoxelDebugMode)_voxelView}")}{(_gi ? _giScreenTrace ? " - GI" : " - GI, voxels only" : "")}";
             _titleTimer = 0;
             _titleFrames = 0;
         }
