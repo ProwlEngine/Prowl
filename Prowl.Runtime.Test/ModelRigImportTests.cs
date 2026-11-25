@@ -440,6 +440,99 @@ public class ModelRigImportTests
         Assert.Equal(2.0, pose.GetTransform(skeleton.GetBoneIndex(new StringID("Bone"))).position.Z, 2);
     }
 
+    // ---- rotational root motion -----------------------------------------------------------------
+
+    // These drive ModelRigBuilder.BuildClip directly: a Root bone with a Hips bone under it, and a
+    // rotation track on the hips, so the heading the clip turns through is exactly what the test says.
+    private static Quaternion Yaw(float degrees) => Quaternion.AxisAngle(Float3.UnitY, degrees * MathF.PI / 180f);
+
+    private static float HeadingOf(Quaternion rotation)
+    {
+        Float3 forward = rotation * Float3.UnitZ;
+        return MathF.Atan2(forward.X, forward.Z) * 180f / MathF.PI;
+    }
+
+    private static (MotionClip Clip, Skeleton Skeleton) BuildTurningClip(
+        Quaternion from, Quaternion to, ModelRigBuilder.RootExtraction root, Float3? hipsRest = null, Quaternion? middle = null)
+    {
+        var from4 = new Float4(from.X, from.Y, from.Z, from.W);
+        var to4 = new Float4(to.X, to.Y, to.Z, to.W);
+
+        var skeleton = new Skeleton(
+            new[] { new StringID("Root"), new StringID("Hips") },
+            new[] { Skeleton.InvalidIndex, 0 },
+            new[] { Transform3D.Identity, new Transform3D(hipsRest ?? Float3.Zero, Quaternion.Identity, Float3.One) });
+
+        var take = new Prowl.Clay.AnimationClip
+        {
+            Name = "Turn",
+            EndTime = 1f,
+            Bindings =
+            [
+                new Prowl.Clay.AnimationBinding
+                {
+                    NodeIndex = 1,
+                    Property = Clay.AnimatedProperty.Rotation,
+                    Curve = middle is Quaternion mid
+                        ? new AnimationCurve(4, new Keyframe(0f, from4), new Keyframe(0.5f, new Float4(mid.X, mid.Y, mid.Z, mid.W)), new Keyframe(1f, to4))
+                        : new AnimationCurve(4, new Keyframe(0f, from4), new Keyframe(1f, to4)),
+                },
+            ],
+        };
+
+        var rig = new ModelRigBuilder.Rig { Skeleton = skeleton };
+        MotionClip clip = ModelRigBuilder.BuildClip(take, null!, rig, 30f, 0f, 0f, root);
+        return (clip, skeleton);
+    }
+
+    private static Quaternion HipsAt(MotionClip clip, Skeleton skeleton, float time)
+    {
+        var pose = new Pose(skeleton);
+        clip.GetPose(time, pose);
+        return pose.GetTransform(1).rotation;
+    }
+
+    [Fact]
+    public void TurnTurnedOffStaysInThePose()
+    {
+        // Travel is on only so the clip has root motion to inspect; the body never moves.
+        var root = new ModelRigBuilder.RootExtraction(1, Travel: true, Turn: false, Height: false);
+        (MotionClip clip, Skeleton skeleton) = BuildTurningClip(Yaw(0f), Yaw(90f), root);
+
+        Assert.True(clip.HasRootMotion);
+        Assert.Equal(0.0, HeadingOf(clip.RootMotion!.TotalDelta.rotation), 1);
+        Assert.Equal(90.0, HeadingOf(HipsAt(clip, skeleton, 1f)), 1);
+    }
+
+    // The root turns by how far the body has turned since the clip began, not by where it points.
+    [Fact]
+    public void TurnIsRelativeToWhereTheClipStarts()
+    {
+        var root = new ModelRigBuilder.RootExtraction(1, Travel: false, Turn: true, Height: false);
+        (MotionClip clip, Skeleton skeleton) = BuildTurningClip(Yaw(90f), Yaw(150f), root);
+
+        Assert.Equal(60.0, HeadingOf(clip.RootMotion!.TotalDelta.rotation), 1);
+
+        // The body begins facing 90 degrees off the root, and that offset is the pose's to keep.
+        Assert.Equal(90.0, HeadingOf(HipsAt(clip, skeleton, 0f)), 1);
+        Assert.Equal(90.0, HeadingOf(HipsAt(clip, skeleton, 1f)), 1);
+    }
+
+    // The root follows the body's heading frame by frame, so a turn that is uneven (a quick swing then
+    // a slow one) is all in the root and none of it is left in the pose. Nothing sways in the hips.
+    [Fact]
+    public void TurnFollowsTheBodyFrameByFrameRatherThanSweepingEvenly()
+    {
+        var root = new ModelRigBuilder.RootExtraction(1, Travel: false, Turn: true, Height: false);
+        // 0 -> 40 -> 60 degrees. An even sweep would be at 30 half way along, 10 degrees short of the body.
+        (MotionClip clip, Skeleton skeleton) = BuildTurningClip(Yaw(0f), Yaw(60f), root, middle: Yaw(40f));
+
+        Assert.Equal(60.0, HeadingOf(clip.RootMotion!.TotalDelta.rotation), 1);
+        Assert.Equal(0.0, HeadingOf(HipsAt(clip, skeleton, 0.25f)), 1);
+        Assert.Equal(0.0, HeadingOf(HipsAt(clip, skeleton, 0.5f)), 1);
+        Assert.Equal(0.0, HeadingOf(HipsAt(clip, skeleton, 1f)), 1);
+    }
+
     // ---- events -------------------------------------------------------------------------------
 
     /// <summary>
