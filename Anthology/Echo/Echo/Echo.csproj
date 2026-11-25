@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
+    <RootNamespace>Prowl.Echo</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 

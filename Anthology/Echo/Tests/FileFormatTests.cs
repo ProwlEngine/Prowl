@@ -99,6 +99,8 @@ public class FileFormatTests
         original.Add("sbyte", new EchoObject((sbyte)-128));
         original.Add("short", new EchoObject((short)1000));
         original.Add("float", new EchoObject(3.14f));
+        original.Add("bytes1", new EchoObject(new byte[0]));
+        original.Add("bytes2", new EchoObject([1, 2, 3]));
 
         var text = EchoTextFormat.Instance.WriteToString(original);
         var result = EchoTextFormat.Instance.ReadFromString(text);
@@ -107,6 +109,8 @@ public class FileFormatTests
         Assert.Equal((sbyte)-128, result.Get("sbyte").sByteValue);
         Assert.Equal((short)1000, result.Get("short").ShortValue);
         Assert.Equal(3.14f, result.Get("float").FloatValue);
+        Assert.Equal(new byte[0], result.Get("bytes1").ByteArrayValue);
+        Assert.Equal(new byte[] { 1, 2, 3 }, result.Get("bytes2").ByteArrayValue);
     }
 
     [Fact]
@@ -116,7 +120,8 @@ public class FileFormatTests
         original.Add("byte", new EchoObject((byte)255));
         original.Add("ushort", new EchoObject((ushort)60000));
         original.Add("decimal", new EchoObject(123.456m));
-        original.Add("bytes", new EchoObject(new byte[] { 1, 2, 3 }));
+        original.Add("bytes1", new EchoObject(new byte[0]));
+        original.Add("bytes2", new EchoObject([1, 2, 3]));
 
         var bytes = EchoBinaryFormat.Instance.WriteToBytes(original);
         var result = EchoBinaryFormat.Instance.ReadFromBytes(bytes);
@@ -124,7 +129,8 @@ public class FileFormatTests
         Assert.Equal((byte)255, result.Get("byte").ByteValue);
         Assert.Equal((ushort)60000, result.Get("ushort").UShortValue);
         Assert.Equal(123.456m, result.Get("decimal").DecimalValue);
-        Assert.Equal(new byte[] { 1, 2, 3 }, result.Get("bytes").ByteArrayValue);
+        Assert.Equal(new byte[0], result.Get("bytes1").ByteArrayValue);
+        Assert.Equal(new byte[] { 1, 2, 3 }, result.Get("bytes2").ByteArrayValue);
     }
 
     #endregion
