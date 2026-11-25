@@ -60,7 +60,7 @@ public class DesktopBuildPipeline : BuildPipeline
     }
 
     /// <summary>Paths, profile and assemblies worked out by Validate and read by everything after it.</summary>
-    private sealed record DesktopPlan
+    internal sealed record DesktopPlan
     {
         public required DesktopBuildProfile Profile { get; init; }
         public required string TargetPlatform { get; init; }
@@ -578,7 +578,7 @@ public class DesktopBuildPipeline : BuildPipeline
     /// Writes the icon files the generated project and the bundle pick up from the build folder: the window icon
     /// and, on Windows, the exe icon, or on macOS the app icon alone.
     /// </summary>
-    private static void GenerateIconFiles(IBuildContext context, DesktopPlan plan)
+    internal static void GenerateIconFiles(IBuildContext context, DesktopPlan plan)
     {
         GameIcon.Source source = GameIcon.Load(TryGetGeneralSettings()?.Icon ?? default);
 
@@ -595,7 +595,14 @@ public class DesktopBuildPipeline : BuildPipeline
 
         File.WriteAllBytes(Path.Combine(plan.BuildTempDir, GameIcon.ExeFile), GameIcon.ToIco(windows));
         if (!OperatingSystem.IsWindows())
-            context.Log("The exe will have no icon: the .NET SDK only writes an exe icon when it builds on Windows. The window icon still works.", BuildSeverity.Warning);
+            context.Report(new BuildIssue
+            {
+                Severity = BuildSeverity.Warning,
+                Code = "PB2004",
+                Message = "The exe will have no icon: the .NET SDK only writes an exe icon when it builds on Windows. " +
+                          "The window icon still works.",
+                Stage = BuildStage.GeneratePlayer,
+            });
     }
 
     private async Task PublishPlayer(IBuildContext context, CancellationToken ct)
@@ -906,8 +913,13 @@ public class DesktopBuildPipeline : BuildPipeline
         };
 
         string platform = PlatformOf(desktopProfile.Target);
+        Dictionary<string, string> conditions = [];
         if (platform == BuildPlatforms.Windows)
+        {
+            // The project's own Directory.Build.props is imported first, so an icon or resource file it sets wins.
             properties["ApplicationIcon"] = GameIcon.ExeFile;
+            conditions["ApplicationIcon"] = "'$(ApplicationIcon)' == '' and '$(Win32Resource)' == ''";
+        }
 
         EmbeddedResourceRef[] windowIcon = HasWindowIcon(platform) ? [new(GameIcon.WindowResourceFile, GameIcon.WindowResourceName)] : [];
 
@@ -950,6 +962,7 @@ public class DesktopBuildPipeline : BuildPipeline
             TargetFramework = "net11.0",
             RuntimeIdentifiers = desktopProfile.Target.RuntimeIdentifiers,
             Properties = properties,
+            PropertyConditions = conditions,
             References = references,
             Packages = [.. GetRuntimePackageReferences().Select(p => new PackageRef(p.Name, p.Version))],
             TrimmerRootAssemblies = [.. trimmerRoots.Distinct()],
@@ -1252,7 +1265,7 @@ public class DesktopBuildPipeline : BuildPipeline
     /// minimal Contents/Info.plist. Does NOT code-sign or notarize - Gatekeeper will still show an
     /// "unidentified developer" warning until the user right-clicks Open (or runs `xattr -cr`).
     /// </summary>
-    private static void BundleMacApp(string outputDir, string iconPath, string executableName, string productName, string companyName, string version)
+    internal static void BundleMacApp(string outputDir, string iconPath, string executableName, string productName, string companyName, string version)
     {
         // Snapshot BEFORE creating the bundle folder so it never sweeps up itself.
         List<string> existingEntries = [.. Directory.GetFileSystemEntries(outputDir)];

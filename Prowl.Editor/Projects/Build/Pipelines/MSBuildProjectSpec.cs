@@ -48,6 +48,12 @@ public sealed record MSBuildProjectSpec
     /// <summary> Additional MSBuild properties to include in the project. </summary>
     public IReadOnlyDictionary<string, string> Properties { get; init; } = new Dictionary<string, string>();
 
+    /// <summary>
+    /// An MSBuild condition for the properties named here, so a property is only set when nothing before it in the
+    /// project, such as a Directory.Build.props, has set it already.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> PropertyConditions { get; init; } = new Dictionary<string, string>();
+
     /// <summary> Assembly references resolved from file paths rather than packages. </summary>
     public IReadOnlyList<AssemblyRef> References { get; init; } = [];
     /// <summary> NuGet package references to include in the project. </summary>
@@ -81,7 +87,8 @@ public sealed record MSBuildProjectSpec
             if (!IsValidElementName(key))
                 throw new InvalidOperationException($"'{key}' is not a usable MSBuild property name.");
 
-            sb.AppendLine($"    <{key}>{Escape(value)}</{key}>");
+            string condition = PropertyConditions.TryGetValue(key, out string? when) ? $" Condition=\"{SecurityElement.Escape(when)}\"" : "";
+            sb.AppendLine($"    <{key}{condition}>{Escape(value)}</{key}>");
         }
 
         sb.AppendLine("  </PropertyGroup>");

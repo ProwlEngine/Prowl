@@ -933,7 +933,11 @@ public class BuildSystemProjectTests : EditorTestHarness
     {
         string csproj = PlayerCsprojFor(BuiltInTargets.WindowsX64);
 
-        Assert.Contains("<ApplicationIcon>icon.ico</ApplicationIcon>", csproj);
+        // The project's own Directory.Build.props is imported first, and an icon or resource file it sets wins.
+        Assert.Contains(
+            "<ApplicationIcon Condition=\"&apos;$(ApplicationIcon)&apos; == &apos;&apos; and &apos;$(Win32Resource)&apos; == &apos;&apos;\">" +
+            "icon.ico</ApplicationIcon>",
+            csproj);
         Assert.Contains("<EmbeddedResource Include=\"prowl-icon.rgba\">", csproj);
         Assert.Contains("<LogicalName>Game.prowl-icon.rgba</LogicalName>", csproj);
     }
@@ -946,6 +950,75 @@ public class BuildSystemProjectTests : EditorTestHarness
 
         Assert.DoesNotContain("ApplicationIcon", csproj);
         Assert.DoesNotContain("prowl-icon.rgba", csproj);
+    }
+
+    [Fact]
+    public void BundleMacApp_CopiesTheIcnsIntoResourcesAndNamesItInTheInfoPlist()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "ProwlIconBundle", Guid.NewGuid().ToString("N"));
+        string output = Path.Combine(root, "out");
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(output, "Game"), "exe");
+        byte[] icns = GameIcon.ToIcns(GameIcon.MacImages(new GameIcon.Source(32, 32, TestImages.SolidPixels(32, 1, 2, 3))));
+        string iconPath = Path.Combine(root, GameIcon.MacFile);
+        File.WriteAllBytes(iconPath, icns);
+        try
+        {
+            DesktopBuildPipeline.BundleMacApp(output, iconPath, "Game", "Game", "Company", "1.0.0");
+
+            string contents = Path.Combine(output, "Game.app", "Contents");
+            Assert.Equal(icns, File.ReadAllBytes(Path.Combine(contents, "Resources", GameIcon.MacFile)));
+            Assert.Contains($"<key>CFBundleIconFile</key><string>{GameIcon.MacFile}</string>", File.ReadAllText(Path.Combine(contents, "Info.plist")));
+        }
+        finally
+        {
+            TryDeleteDir(root);
+        }
+    }
+
+    [Theory]
+    [InlineData(BuildPlatforms.Windows, new[] { "icon.ico", "prowl-icon.rgba" }, new[] { "icon.icns" })]
+    [InlineData(BuildPlatforms.Linux, new[] { "prowl-icon.rgba" }, new[] { "icon.ico", "icon.icns" })]
+    [InlineData(BuildPlatforms.MacOS, new[] { "icon.icns" }, new[] { "icon.ico", "prowl-icon.rgba" })]
+    public void GenerateIconFiles_WritesOnlyTheFilesThePlatformReads(string platform, string[] written, string[] absent)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "ProwlIconFiles", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var request = new BuildRequest
+            {
+                ProjectName = Project.Name,
+                ProjectRoot = dir,
+                AssetCachePath = dir,
+                TempPath = dir,
+                OutputDirectory = dir,
+                Scenes = [],
+                Configuration = BuildConfiguration.Release,
+                Packaging = AssetPackagingMode.LooseFiles,
+                DependenciesOnly = false,
+            };
+            var plan = new DesktopBuildPipeline.DesktopPlan
+            {
+                Profile = Profile(),
+                TargetPlatform = platform,
+                OutputDirectory = dir,
+                ContentDir = dir,
+                SettingsDir = dir,
+                BuildTempDir = dir,
+                DefaultScene = Guid.Empty,
+                Assemblies = [],
+            };
+
+            DesktopBuildPipeline.GenerateIconFiles(new BuildContext(request), plan);
+
+            foreach (string file in written) Assert.True(File.Exists(Path.Combine(dir, file)), file);
+            foreach (string file in absent) Assert.False(File.Exists(Path.Combine(dir, file)), file);
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
     }
 
     // Build and Run has to know it cannot start a binary this machine does not run.

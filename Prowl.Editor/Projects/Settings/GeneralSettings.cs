@@ -37,7 +37,7 @@ public class GeneralSettings : ProjectSettingsBase
         EditorGUI.SettingsTextField(paper, "gen_version", "Version", Version, v => Version = v);
 
         using (paper.Column("gen_icon_tip").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-            .Tooltip("The icon of the built game, on its program file and in its window. It has to be square and at least 16 pixels wide. When empty, the game gets the Prowl logo.").Enter())
+            .Tooltip("The icon of the built game: its Windows program file, its window on Windows and Linux, and its Mac app. It has to be square and at least 16 pixels wide. When empty, the game gets the Prowl logo.").Enter())
         {
             PropertyGridUtils.DrawField(paper, "gen_icon", "Icon", typeof(AssetRef<Texture2D>), Icon, v =>
             {
