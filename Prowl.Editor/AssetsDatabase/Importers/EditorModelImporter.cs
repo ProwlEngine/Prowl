@@ -11,8 +11,8 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
 
-/// <summary> Imports .gltf, .glb, .obj and .fbx model files into the editor asset database. Produces a PrefabAsset with meshes, materials, animations, textures and mesh features as sub-assets. </summary>
-[ImporterFor(".gltf", ".glb", ".obj", ".fbx")]
+/// <summary> Imports .gltf, .glb, .obj, .fbx and .bvh model files into the editor asset database. Produces a PrefabAsset with meshes, materials, animations, textures and mesh features as sub-assets. </summary>
+[ImporterFor(".gltf", ".glb", ".obj", ".fbx", ".bvh")]
 public class EditorModelImporter : AssetImporter
 {
     // 7: Model became a PrefabAsset, which serializes its tree through a backing field.

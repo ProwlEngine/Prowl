@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
-using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -12,8 +10,6 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.AssetImporting;
 using Prowl.Runtime.Resources;
-
-using static Prowl.Editor.GUI.EditorGUI;
 
 namespace Prowl.Editor.Inspector;
 
@@ -37,9 +33,20 @@ public class ModelAssetEditor : ImportSettingsEditor
 
     private static readonly Dictionary<Guid, ViewState> s_views = [];
 
-    private static ViewState View(Guid guid)
+    private static ViewState View(Guid guid, ModelStats stats)
     {
-        if (!s_views.TryGetValue(guid, out ViewState? state)) s_views[guid] = state = new ViewState();
+        if (!s_views.TryGetValue(guid, out ViewState? state))
+        {
+            s_views[guid] = state = new ViewState();
+
+            // Default to the first tab that has content.
+            if (stats.AvatarCount > 0 || stats.AnimationCount > 0)
+                state.Tab = Tab.Animation;
+            else if (stats.MaterialCount > 0)
+                state.Tab = Tab.Materials;
+            else
+                state.Tab = Tab.Model;
+        }
         return state;
     }
 
@@ -84,11 +91,14 @@ public class ModelAssetEditor : ImportSettingsEditor
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
         OrigamiMetrics m = Origami.Current.Metrics;
-        var model = asset as PrefabAsset;
-        ViewState view = View(entry.Guid);
+
+        ModelStats stats = GetStats(entry);
+        ViewState view = View(entry.Guid, stats);
 
         EchoObject settings = Settings(entry);
 
+        // Show a preview scene.
+        var model = asset as PrefabAsset;
         PreviewRenderer? preview = model.IsValid()
             ? PreviewWidget.For(entry.Guid, showGrid: true).Get(model, p => p.SetupForPrefab(model))
             : null;
@@ -96,10 +106,10 @@ public class ModelAssetEditor : ImportSettingsEditor
         if (preview != null)
         {
             DrawPreview(paper, id, m, preview, view);
-            DrawStats(paper, id, m, font, entry);
+            DrawStats(paper, id, m, font, stats);
         }
 
-        DrawTabs(paper, id, view, entry);
+        DrawTabs(paper, id, view, entry, stats);
 
         switch (view.Tab)
         {
@@ -163,9 +173,10 @@ public class ModelAssetEditor : ImportSettingsEditor
         preview.PoseAt(clip, view.Time);
     }
 
-    private static void DrawStats(Paper paper, string id, OrigamiMetrics m, Scribe.FontFile font, AssetEntry entry)
+    private record struct ModelStats(int SubAssetCount, int MeshCount, int AvatarCount, int AnimationCount, int MaterialCount);
+    private static ModelStats GetStats(AssetEntry entry)
     {
-        int meshCount = 0, matCount = 0, animCount = 0;
+        int meshCount = 0, matCount = 0, animCount = 0, avatarCount = 0;
         foreach (SubAssetEntry sub in entry.SubAssets)
         {
             Type? t = sub.Type;
@@ -173,24 +184,27 @@ public class ModelAssetEditor : ImportSettingsEditor
             if (typeof(Mesh).IsAssignableFrom(t)) meshCount++;
             else if (typeof(Material).IsAssignableFrom(t)) matCount++;
             else if (typeof(AnimationClip).IsAssignableFrom(t)) animCount++;
+            else if (typeof(Avatar).IsAssignableFrom(t)) avatarCount++;
         }
+        return new ModelStats(SubAssetCount: entry.SubAssets.Length, MeshCount: meshCount, AvatarCount: avatarCount, AnimationCount: animCount, MaterialCount: matCount);
+    }
 
+    private static void DrawStats(Paper paper, string id, OrigamiMetrics m, Scribe.FontFile font, ModelStats stats)
+    {
         using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Gap(m.SpacingMedium).Enter())
         {
-            EditorGUI.StatChip(paper, $"{id}_st_meshes", $"{meshCount} {(meshCount == 1 ? "Mesh" : "Meshes")}", font);
-            EditorGUI.StatChip(paper, $"{id}_st_mats", $"{matCount} {(matCount == 1 ? "Material" : "Materials")}", font);
-            if (animCount > 0)
-                EditorGUI.StatChip(paper, $"{id}_st_anims", $"{animCount} {(animCount == 1 ? "Animation" : "Animations")}", font);
-            EditorGUI.StatChip(paper, $"{id}_st_subs", $"{entry.SubAssets.Length} Sub-Assets", font);
+            EditorGUI.StatChip(paper, $"{id}_st_meshes", $"{stats.MeshCount} {(stats.MeshCount == 1 ? "Mesh" : "Meshes")}", font);
+            EditorGUI.StatChip(paper, $"{id}_st_mats", $"{stats.MaterialCount} {(stats.MaterialCount == 1 ? "Material" : "Materials")}", font);
+            if (stats.AnimationCount > 0)
+                EditorGUI.StatChip(paper, $"{id}_st_anims", $"{stats.AnimationCount} {(stats.AnimationCount == 1 ? "Animation" : "Animations")}", font);
+            EditorGUI.StatChip(paper, $"{id}_st_subs", $"{stats.SubAssetCount} Sub-Assets", font);
             paper.Box($"{id}_st_pad").Height(1).IsNotInteractable();
         }
     }
 
-    private static void DrawTabs(Paper paper, string id, ViewState view, AssetEntry entry)
+    private static void DrawTabs(Paper paper, string id, ViewState view, AssetEntry entry, ModelStats stats)
     {
-        int animations = CountOf(entry, typeof(AnimationClip));
-
         OrigamiMetrics m = Origami.Current.Metrics;
         using (paper.Box($"{id}_tabsRow").Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.Spacing).Enter())
@@ -198,18 +212,10 @@ public class ModelAssetEditor : ImportSettingsEditor
             Origami.Tabs(paper, $"{id}_tabs", (int)view.Tab, i => view.Tab = (Tab)i)
                 .Underline()
                 .Tab("Model")
-                .Tab("Animation", null, animations > 0 ? animations.ToString() : null)
+                .Tab("Animation", null, stats.AnimationCount > 0 ? stats.AnimationCount.ToString() : null)
                 .Tab("Materials")
                 .Show();
         }
-    }
-
-    private static int CountOf(AssetEntry entry, Type type)
-    {
-        int count = 0;
-        foreach (SubAssetEntry sub in entry.SubAssets)
-            if (sub.Type != null && type.IsAssignableFrom(sub.Type)) count++;
-        return count;
     }
 
     // ---- model --------------------------------------------------------------------------------
