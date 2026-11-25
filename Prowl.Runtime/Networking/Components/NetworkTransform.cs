@@ -63,6 +63,9 @@ public sealed class NetworkTransform : Component
     // True once a rest pose of it may be owed to some peer.
     internal bool PoseOwed;
 
+    // Whether it synced when last checked, so a body it drives is handed back once it stops.
+    internal bool WasSyncing;
+
     /// <summary>The object it moves.</summary>
     internal GameObject Moved => Target.IsValid() ? Target! : GameObject;
 

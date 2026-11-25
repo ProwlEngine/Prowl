@@ -35,12 +35,29 @@ internal sealed partial class NetworkSystem
                 continue;
             }
 
+            bool changed = false;
             foreach (NetworkTransform transform in transforms)
             {
-                if (transform.Sync.HasPendingInterpolation && transform.IsValid())
+                if (transform.IsNotValid())
+                {
+                    continue;
+                }
+
+                if (transform.Syncs != transform.WasSyncing)
+                {
+                    transform.WasSyncing = !transform.WasSyncing;
+                    changed = true;
+                }
+
+                if (transform.Sync.HasPendingInterpolation)
                 {
                     transform.Sync.Interpolate(transform.Moved, now);
                 }
+            }
+
+            if (changed)
+            {
+                entry.UpdatePhysics();
             }
         }
     }

@@ -23,6 +23,14 @@ internal sealed partial class NetworkObject
         // A body here is only driven from elsewhere when a NetworkTransform brings its object's poses. Any other
         // body in the tree, a loose part say, keeps simulating here.
         bool proxy = System.IsProxy(GameObject) && Transforms.Length > 0;
+        foreach (NetworkTransform transform in Transforms)
+        {
+            if (transform.IsValid())
+            {
+                transform.WasSyncing = transform.Syncs;
+            }
+        }
+
         foreach (Rigidbody3D body in GameObject.GetComponentsInChildren<Rigidbody3D>(includeInactive: true))
         {
             // A predicted body keeps simulating here, corrected from the host's states.
@@ -34,7 +42,7 @@ internal sealed partial class NetworkObject
                 body.AngularVelocity = Float3.Zero;
                 body.MotionType = MotionType.Kinematic;
             }
-            else if (!proxy && ProxyBodies.TryGetValue(body, out MotionType authored))
+            else if ((!proxy || !Moves(body.GameObject)) && ProxyBodies.TryGetValue(body, out MotionType authored))
             {
                 ProxyBodies.Remove(body);
                 body.MotionType = authored;

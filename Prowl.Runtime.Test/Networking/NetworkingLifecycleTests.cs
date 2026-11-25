@@ -75,6 +75,34 @@ public partial class NetworkingTests
         finally { Networking.Networking.Shutdown(); }
     }
 
+    [Fact]
+    public void ABodyNoLongerDrivenFromElsewhereSimulatesAgain()
+    {
+        Scene scene = CreateScene();
+        GameObject root = CreateGameObject("Physics root");
+        NetworkTransform transform = root.AddComponent<NetworkTransform>();
+        root.Network.Networked = true;
+        Rigidbody3D body = root.AddComponent<Rigidbody3D>();
+        body.MotionType = Jitter2.Dynamics.MotionType.Dynamic;
+        scene.Add(root);
+        Bind(scene);
+        LocalNetwork network = new();
+        try
+        {
+            Networking.Networking.Host(new LocalTransport(network, "host"));
+            using FakePeer client = FakePeer.Join(network, "client");
+            Pump(() => client.IsReady, client);
+            root.Network.AssignOwnership(Networking.Networking.Session!.Peers.Single(p => !p.IsLocal));
+            Assert.Equal(Jitter2.Dynamics.MotionType.Kinematic, body.MotionType);
+
+            transform.SyncPosition = transform.SyncRotation = transform.SyncScale = false;
+            Pump(() => body.MotionType == Jitter2.Dynamics.MotionType.Dynamic, client);
+            transform.SyncPosition = true;
+            Pump(() => body.MotionType == Jitter2.Dynamics.MotionType.Kinematic, client);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
     private (GameObject Root, NetworkLifecycleListener Listener, LocalNetwork Network) LifecycleHost()
     {
         Scene scene = CreateScene();
