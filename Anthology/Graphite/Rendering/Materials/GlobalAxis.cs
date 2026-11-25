@@ -18,7 +18,7 @@ public sealed class GlobalAxis
     /// <summary>The debug view a view draws, see Graphite/Debug.glsl. Shaders may declare fewer of its values.</summary>
     public static readonly GlobalAxis Debug = Define("GRAPHITE_DEBUG", "UNLIT", "ALBEDO", "NORMALS", "ROUGHNESS", "METALLIC", "AO", "EMISSION", "LIGHTING",
         "CASCADES", "LIGHTMAP_DENSITY", "DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "THROUGHPUT", "DIRECT", "INDIRECT", "FURNACE", "COAT", "FUZZ",
-        "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS");
+        "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS");
 
     /// <summary>
     /// The standard surfaces' quality: FULL, LITE for mobile, or MAX for energy compensated lobes, exact Fresnel, rough

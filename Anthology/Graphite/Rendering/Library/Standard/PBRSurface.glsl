@@ -56,9 +56,6 @@ uniform vec4 fuzz_color;
 uniform float fuzz_roughness;
 uniform float emission_luminance;
 uniform vec4 emission_color;
-uniform float thin_film_weight;
-uniform float thin_film_thickness;
-uniform float thin_film_ior;
 uniform float geometry_opacity;
 uniform int geometry_thin_walled;
 uniform float ambient_occlusion;
@@ -91,8 +88,6 @@ uniform sampler2D fuzz_color_map;
 uniform sampler2D fuzz_roughness_map;
 uniform sampler2D emission_luminance_map;
 uniform sampler2D emission_color_map;
-uniform sampler2D thin_film_weight_map;
-uniform sampler2D thin_film_thickness_map;
 uniform sampler2D geometry_opacity_map;
 uniform sampler2D ambient_occlusion_map;
 uniform sampler2D geometry_normal_map;
@@ -199,8 +194,8 @@ void PBR_Parallax(inout Graphite_SurfaceData i, vec3 toViewer)
 
 // The material's inputs at a point, the vertex colour multiplying the base colour and opacity. mapVariance is the
 // normal map's own variance, Toksvig's from a three channel texel, for specular antialiasing. Normal and tangent maps
-// need the mesh's tangents. A lobe's maps are read only while its axis is on, the thin film's and anisotropy's only at
-// the FULL tier, as the closure reads nothing of a lobe that is off.
+// need the mesh's tangents. A lobe's maps are read only while its axis is on, anisotropy's only at the FULL tier,
+// as the closure reads nothing of a lobe that is off.
 PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out float mapVariance)
 {
     PBR_Params p = PBR_DefaultParams(i.geometryNormal, i.tangent);
@@ -236,9 +231,6 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
     p.fuzzRoughness = fuzz_roughness;
     p.emissionLuminance = emission_luminance;
     p.emissionColor = emission_color.rgb;
-    p.thinFilmWeight = thin_film_weight;
-    p.thinFilmThickness = thin_film_thickness;
-    p.thinFilmIor = thin_film_ior;
     p.geometryOpacity = geometry_opacity;
     p.occlusion = ambient_occlusion;
     p.geometryThinWalled = geometry_thin_walled != 0;
@@ -301,12 +293,6 @@ PBR_Params PBR_MaterialParams(Graphite_SurfaceData i, bool hasTangents, out floa
         p.emissionLuminance *= texture(emission_luminance_map, Graphite_StandardUV(emission_luminance_map_UV, emission_luminance_map_ST, emission_luminance_map_Rotation, i))[emission_luminance_map_Channel];
     if (emission_color_map_Present)
         p.emissionColor *= texture(emission_color_map, Graphite_StandardUV(emission_color_map_UV, emission_color_map_ST, emission_color_map_Rotation, i)).rgb;
-#if defined(PBR_THIN_FILM) && !defined(PBR_TIER_LITE)
-    if (thin_film_weight_map_Present)
-        p.thinFilmWeight *= texture(thin_film_weight_map, Graphite_StandardUV(thin_film_weight_map_UV, thin_film_weight_map_ST, thin_film_weight_map_Rotation, i))[thin_film_weight_map_Channel];
-    if (thin_film_thickness_map_Present)
-        p.thinFilmThickness *= texture(thin_film_thickness_map, Graphite_StandardUV(thin_film_thickness_map_UV, thin_film_thickness_map_ST, thin_film_thickness_map_Rotation, i))[thin_film_thickness_map_Channel];
-#endif
     if (geometry_opacity_map_Present)
         p.geometryOpacity *= texture(geometry_opacity_map, Graphite_StandardUV(geometry_opacity_map_UV, geometry_opacity_map_ST, geometry_opacity_map_Rotation, i))[geometry_opacity_map_Channel];
     if (ambient_occlusion_map_Present)

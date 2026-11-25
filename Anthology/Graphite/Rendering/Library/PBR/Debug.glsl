@@ -1,12 +1,12 @@
 // The PBR model's debug views beside Graphite/Debug.glsl's: each lobe lit alone, the base specular albedo E_spec,
 // the diffuse throughput, direct and indirect light apart, the furnace, the closure under a white environment with
-// every light off, which shows 1 wherever the surface keeps its energy, the thin film's reflectance at the view and the
-// coat's darkening factor. The base lobes show through the coat and fuzz above them, and the coat through the fuzz.
+// every light off, which shows 1 wherever the surface keeps its energy, and the coat's darkening
+// factor. The base lobes show through the coat and fuzz above them, and the coat through the fuzz.
 // SUBSURFACE shows the subsurface lobe alone, the sheet's transmission included, BACK only the light reaching a thin
 // walled sheet from its far side. DIFFUSE leaves subsurface out. TRANSMISSION shows what a transmissive surface lets
 // through from behind, THICKNESS the refracted path's length through its volume, both 0 without PBR_TRANSMISSION. The
 // furnace sees a white background through transmissive surfaces.
-//   DIFFUSE SPECULAR SPECULAR_ALBEDO THROUGHPUT DIRECT INDIRECT FURNACE COAT FUZZ THIN_FILM DARKENING SUBSURFACE BACK
+//   DIFFUSE SPECULAR SPECULAR_ALBEDO THROUGHPUT DIRECT INDIRECT FURNACE COAT FUZZ DARKENING SUBSURFACE BACK
 //   TRANSMISSION THICKNESS
 #pragma once
 
@@ -54,10 +54,6 @@ void pbr_DebugNoSpecular(inout PBR_Closure c)
 {
     c.dielectricScale = 0.0;
     c.metalScale = vec3(0.0);
-#ifdef PBR_FILM
-    c.dielectricFilm = vec3(0.0);
-    c.metalFilm = vec3(0.0);
-#endif
     c.specularAlbedo = vec3(0.0);
 }
 
@@ -123,12 +119,6 @@ vec3 PBR_DebugView(vec3 color, PBR_Params p, PBR_Closure c, vec3 direct, vec3 am
     return transmitted;
 #elif defined(GRAPHITE_DEBUG_THICKNESS)
     return vec3(pathLength);
-#elif defined(GRAPHITE_DEBUG_THIN_FILM)
-#ifdef PBR_FILM
-    return c.film;
-#else
-    return vec3(0.0);
-#endif
 #elif defined(GRAPHITE_DEBUG_DARKENING)
 #ifdef PBR_COAT
     return c.darkening;

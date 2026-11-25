@@ -1,7 +1,7 @@
 // How much light a PBR caster lets through to its shadow, grey: T = 1 - alpha (1 - (1 - M) T_dielectric), alpha the
 // coverage, M base_metalness. T_dielectric = transmission_weight (1 - E_spec) times the transmittance, plus thin walled
 // subsurface's 0.5 S (1 + g) of what the opaque base keeps. E_spec is the base dielectric's at the light's angle, without
-// coat, film or anisotropy. A volume passes transmission_color, one transmission_depth's worth of its extinction.
+// coat or anisotropy. A volume passes transmission_color, one transmission_depth's worth of its extinction.
 // Shadow casters dither their coverage by it, see Graphite_StandardShadowDiscards.
 #pragma once
 

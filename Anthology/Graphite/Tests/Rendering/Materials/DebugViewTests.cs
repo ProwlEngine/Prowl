@@ -29,7 +29,7 @@ public sealed class DebugViewTests
     private static readonly string[] s_modes = ["UNLIT", "ALBEDO", "NORMALS", "ROUGHNESS", "METALLIC", "AO", "EMISSION", "LIGHTING", "CASCADES", "LIGHTMAP_DENSITY"];
 
     // The PBR model's own views follow the shared ones
-    private static readonly string[] s_pbrModes = [.. s_modes, "DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "THROUGHPUT", "DIRECT", "INDIRECT", "FURNACE", "COAT", "FUZZ", "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS"];
+    private static readonly string[] s_pbrModes = [.. s_modes, "DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "THROUGHPUT", "DIRECT", "INDIRECT", "FURNACE", "COAT", "FUZZ", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS"];
 
     private static string[] ModesOf(string shader) => shader == "Lit" ? s_pbrModes : s_modes;
 

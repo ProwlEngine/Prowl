@@ -15,20 +15,6 @@ float PBR_FresnelDielectric(float cosTheta, float eta)
     return 0.5 * a * a * (1.0 + b * b);
 }
 
-// Exact dielectric Fresnel per polarization, (Rp, Rs), 1 past total internal reflection
-vec2 PBR_FresnelDielectricPolarized(float cosTheta, float eta)
-{
-    float cos2 = clamp(cosTheta * cosTheta, 0.0, 1.0);
-    float sin2 = 1.0 - cos2;
-    float t0 = max(eta * eta - sin2, 0.0);
-    float t1 = t0 + cos2;
-    float t2 = 2.0 * sqrt(t0) * sqrt(cos2);
-    float rs = (t1 - t2) / max(t1 + t2, 1e-9);
-    float t3 = cos2 * t0 + sin2 * sin2;
-    float t4 = t2 * sin2;
-    return vec2(rs * (t3 - t4) / max(t3 + t4, 1e-9), rs);
-}
-
 // The cosine weighted average of dielectric Fresnel, d'Eon's fit, within 0.2% for eta 1 to 3, mirrored below 1
 float PBR_FresnelAverage(float eta)
 {

@@ -38,10 +38,6 @@ internal readonly record struct PbrInputs(
     public float FuzzWeight { get; init; }
     public Vector3 FuzzColor { get; init; } = Vector3.One;
     public float FuzzRoughness { get; init; } = 0.5f;
-
-    public float FilmWeight { get; init; }
-    public float FilmThickness { get; init; } = 0.5f;
-    public float FilmIor { get; init; } = 1.4f;
 }
 
 // A GGX lobe's frame and alphas, isotropic when both alphas match
@@ -74,8 +70,8 @@ internal readonly record struct GgxLobe(Vector3 N, Vector3 T, Vector3 B, double 
 }
 
 // Graphite/PBR/Closure.glsl on the CPU at the FULL tier, the same expressions and tables: EON under a GGX dielectric
-// with exact Fresnel beside an F82 metal, Turquin compensated, the diffuse throughput 1 - E_spec of the view, a thin film
-// in the specular Fresnel, the coat with absorption, darkening and roughening, and the fuzz on top. Subsurface as the
+// with exact Fresnel beside an F82 metal, Turquin compensated, the diffuse throughput 1 - E_spec of the view, the coat
+// with absorption, darkening and roughening, and the fuzz on top. Subsurface as the
 // wrapped bulk lobe or the thin walled sheet. Transmission always takes its share of the base here, as the shader does
 // only with PBR_TRANSMISSION, thin walled at color^(1 / mu_t), a volume of depth 0 tinted, a deeper one untinted.
 internal sealed class PbrReference
@@ -92,7 +88,7 @@ internal sealed class PbrReference
 
     private readonly Vector3 _n, _v;
     private readonly double _nv, _rd, _eta, _dielectricScale;
-    private readonly Vector3 _rho, _tint, _metalTint, _metalScale, _diffuseSingle, _diffuseMultiple, _dielectricFilm, _metalFilm;
+    private readonly Vector3 _rho, _tint, _metalTint, _metalScale, _diffuseSingle, _diffuseMultiple;
 
     private readonly double _coatWeight, _coatScale, _coatThroughput, _coatEta, _coatInvMuO;
     private readonly Vector3 _coatLogColor, _darkening;
@@ -109,7 +105,6 @@ internal sealed class PbrReference
     public double DiffuseWeight { get; }
     public Vector3 SpecularAlbedo { get; }
     public Vector3 DiffuseAlbedo { get; }
-    public Vector3 Film { get; }
     public double CoatAlbedo { get; }
     public Vector3 CoatedBase { get; }
     public Vector3 FuzzAlbedo { get; }
@@ -154,7 +149,6 @@ internal sealed class PbrReference
         double rb = Lerp(specularRoughness, Math.Pow(Math.Min(1, Math.Pow(specularRoughness, 4) + 2 * Math.Pow(rc, 4)), 0.25), C);
         double baseEta = Math.Max(p.Ior, 1e-4);
         double eta = Lerp(baseEta, nc > baseEta ? nc / baseEta : baseEta / nc, C);
-        double outer = Lerp(1, nc, C);
 
         double alpha = Alpha((float)rb);
         Roughness = Math.Sqrt(alpha);
@@ -193,28 +187,6 @@ internal sealed class PbrReference
         _metalTint = metalTint;
         Vector3 dielectricE3 = new((float)dielectricE);
 
-        double filmWeight = p.FilmThickness > 0 ? Math.Clamp(p.FilmWeight, 0, 1) : 0;
-        if (filmWeight > 0)
-        {
-            double filmCos = RefractedCosine(_nv, outer);
-            Vector3 filmDielectric = ThinFilmDielectric(filmCos, outer, p.FilmIor, outer * ModulatedEta(baseEta / outer, weight), p.FilmThickness);
-            Vector3 filmMetal = ThinFilmMetal(filmCos, outer, p.FilmIor, _rho, _tint, p.FilmThickness);
-            Vector3 dielectricFilm = Vector3.Zero, metalFilm = Vector3.Zero;
-            for (int c = 0; c < 3; c++)
-            {
-                double dt = EnergyTables.TurquinFactor(E1, filmDielectric[c]);
-                double mt = EnergyTables.TurquinFactor(E1, filmMetal[c] * weight);
-                dielectricE3[c] = (float)Lerp(dielectricE3[c], filmDielectric[c] * E1 * dt, filmWeight);
-                metalE[c] = (float)Lerp(metalE[c], weight * filmMetal[c] * E1 * mt, filmWeight);
-                dielectricFilm[c] = (float)((1 - M) * filmWeight * filmDielectric[c] * dt);
-                metalFilm[c] = (float)(M * weight * filmWeight * filmMetal[c] * mt);
-            }
-            _dielectricFilm = dielectricFilm;
-            _metalFilm = metalFilm;
-            _dielectricScale *= 1 - filmWeight;
-            metalScale *= (float)(1 - filmWeight);
-            Film = Vector3.Lerp(filmDielectric, filmMetal, (float)M);
-        }
         _metalScale = metalScale;
         SpecularAlbedo = (float)(1 - M) * dielectricE3 * _tint + (float)M * metalE;
 
@@ -371,15 +343,6 @@ internal sealed class PbrReference
         return 0.5 * a * a * (1 + b * b);
     }
 
-    public static (double P, double S) FresnelPolarized(double cosTheta, double eta)
-    {
-        double cos2 = Math.Clamp(cosTheta * cosTheta, 0, 1), sin2 = 1 - cos2;
-        double t0 = Math.Max(eta * eta - sin2, 0), t1 = t0 + cos2, t2 = 2 * Math.Sqrt(t0) * Math.Sqrt(cos2);
-        double rs = (t1 - t2) / Math.Max(t1 + t2, 1e-9);
-        double t3 = cos2 * t0 + sin2 * sin2, t4 = t2 * sin2;
-        return (rs * (t3 - t4) / Math.Max(t3 + t4, 1e-9), rs);
-    }
-
     // d'Eon's fit to the cosine weighted average of dielectric Fresnel, mirrored below 1
     public static double FresnelAverage(double eta)
     {
@@ -419,81 +382,6 @@ internal sealed class PbrReference
         => ((2.58126 * x + 0.813703 * y) * y / (1 + 0.310327 * x * x + 2.60994 * x * y),
             Math.Sqrt(1 - x) * (y - 1) * y * y * y / (0.0000254053 + 1.71228 * x - 1.71506 * x * y + 1.34174 * y * y));
 
-    private static Vector3 FilmSensitivity(double opd, Vector3 shift)
-    {
-        double phase = 2 * Math.PI * opd;
-        double[] val = [5.4856e-13, 4.4201e-13, 5.2481e-13], pos = [1.6810e+06, 1.7953e+06, 2.2084e+06], var = [4.3278e+09, 9.3046e+09, 6.6121e+09];
-        Vector3 xyz = Vector3.Zero;
-        for (int c = 0; c < 3; c++)
-            xyz[c] = (float)(val[c] * Math.Sqrt(2 * Math.PI * var[c]) * Math.Cos(pos[c] * phase + shift[c]) * Math.Exp(-var[c] * phase * phase));
-        xyz.X += (float)(9.7470e-14 * Math.Sqrt(2 * Math.PI * 4.5282e+09) * Math.Cos(2.2399e+06 * phase + shift.X) * Math.Exp(-4.5282e+09 * phase * phase));
-        return xyz / 1.0685e-7f;
-    }
-
-    private static Vector3 FilmPolarization(double r12, Vector3 r23, Vector3 phi23, double phi21, double opd)
-    {
-        double t121 = 1 - r12;
-        Vector3 i = Vector3.Zero, rs = Vector3.Zero, cm = Vector3.Zero, r123 = Vector3.Zero;
-        for (int c = 0; c < 3; c++)
-        {
-            rs[c] = (float)(t121 * t121 * r23[c] / Math.Max(1 - r12 * r23[c], 1e-7));
-            i[c] = (float)(r12 + rs[c]);
-            r123[c] = (float)Math.Sqrt(Math.Max(r12 * r23[c], 0));
-            cm[c] = (float)(rs[c] - t121);
-        }
-        for (int m = 1; m <= 2; m++)
-        {
-            cm *= r123;
-            i += cm * 2 * FilmSensitivity(m * opd, m * (phi23 + new Vector3((float)phi21)));
-        }
-        return i;
-    }
-
-    private static (double CosT, double Eta2) FilmAngle(double cosTheta, double eta1, double filmIor)
-    {
-        double eta2 = Math.Max(filmIor, eta1), ratio = eta1 / eta2;
-        return (Math.Sqrt(Math.Max(1 - (1 - cosTheta * cosTheta) * ratio * ratio, 0)), eta2);
-    }
-
-    private static Vector3 FilmResolve(double cosTheta, double eta1, double eta2, double cosThetaT, double thickness, Vector3 r23p, Vector3 r23s, Vector3 phi23p, Vector3 phi23s)
-    {
-        (double r12p, double r12s) = cosThetaT <= 0 ? (1, 1) : FresnelPolarized(cosTheta, eta2 / eta1);
-        double cosB = Math.Cos(Math.Atan(eta2 / eta1));
-        double opd = 2 * eta2 * cosThetaT * thickness * 1e-6;
-        Vector3 xyz = 0.5f * (FilmPolarization(r12p, r23p, phi23p, cosTheta < cosB ? 0 : Math.PI, opd) + FilmPolarization(r12s, r23s, phi23s, Math.PI, opd));
-        Vector3 rgb = new(
-            2.3706743f * xyz.X - 0.9000405f * xyz.Y - 0.4706338f * xyz.Z,
-            -0.5138850f * xyz.X + 1.4253036f * xyz.Y + 0.0885814f * xyz.Z,
-            0.0052982f * xyz.X - 0.0146949f * xyz.Y + 1.0093968f * xyz.Z);
-        return Vector3.Clamp(rgb, Vector3.Zero, Vector3.One);
-    }
-
-    public static Vector3 ThinFilmDielectric(double cosTheta, double eta1, double filmIor, double eta3, double thickness)
-    {
-        (double cosT, double eta2) = FilmAngle(cosTheta, eta1, filmIor);
-        (double r23p, double r23s) = FresnelPolarized(cosT, eta3 / eta2);
-        double sin2 = 1 - cosT * cosT;
-        double A = eta3 * eta3 - eta2 * eta2 * sin2;
-        double U = Math.Sqrt(Math.Max(0.5 * (A + Math.Abs(A)), 0)), V = Math.Sqrt(Math.Max(0.5 * (Math.Abs(A) - A), 0));
-        double phiS = Math.Atan2(2 * eta2 * V * cosT, U * U + V * V - eta2 * eta2 * cosT * cosT);
-        double phiP = Math.Atan2(-2 * eta2 * eta3 * eta3 * cosT * V, Math.Pow(eta3, 4) * cosT * cosT - eta2 * eta2 * (U * U + V * V));
-        return FilmResolve(cosTheta, eta1, eta2, cosT, thickness, new((float)r23p), new((float)r23s), new((float)phiP), new((float)phiS));
-    }
-
-    public static Vector3 ThinFilmMetal(double cosTheta, double eta1, double filmIor, Vector3 F0, Vector3 tint, double thickness)
-    {
-        (double cosT, double eta2) = FilmAngle(cosTheta, eta1, filmIor);
-        Vector3 r23 = Vector3.Zero, phi = Vector3.Zero;
-        double m = 1 - Math.Clamp(cosT, 0, 1), m5 = Math.Pow(m, 5);
-        for (int c = 0; c < 3; c++)
-        {
-            r23[c] = (float)Math.Clamp(F0[c] + (1 - F0[c]) * m5 - EnergyTables.F82Tint(F0[c], tint[c]) * cosT * m5 * m, 0, 1);
-            double s = Math.Sqrt(Math.Clamp(F0[c], 0.01, 0.99));
-            phi[c] = eta1 * (1 + s) / (1 - s) < eta2 ? MathF.PI : 0;
-        }
-        return FilmResolve(cosTheta, eta1, eta2, cosT, thickness, r23, r23, phi, phi);
-    }
-
     private Vector3 EonLobe(Vector3 single, Vector3 multiple, Vector3 l)
     {
         double muI = Math.Clamp(Vector3.Dot(_n, l), 0, 1);
@@ -531,9 +419,9 @@ internal sealed class PbrReference
         double lh = Math.Clamp(Vector3.Dot(l, h), 0, 1);
         double dv = Base.D(h) * Base.Visibility(_v, l);
         double m = 1 - lh, m5 = m * m * m * m * m;
-        Vector3 f = _tint * ((float)(_dielectricScale * FresnelDielectric(lh, _eta)) * Vector3.One + _dielectricFilm);
+        Vector3 f = _tint * ((float)(_dielectricScale * FresnelDielectric(lh, _eta)) * Vector3.One);
         for (int c = 0; c < 3; c++)
-            f[c] += (float)(_metalScale[c] * Math.Clamp(_rho[c] + (1 - _rho[c]) * m5 - _metalTint[c] * lh * m5 * m, 0, 1) + _metalFilm[c]);
+            f[c] += (float)(_metalScale[c] * Math.Clamp(_rho[c] + (1 - _rho[c]) * m5 - _metalTint[c] * lh * m5 * m, 0, 1));
         return f * (float)dv * CoatedBaseToward(l);
     }
 

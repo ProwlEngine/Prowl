@@ -1,6 +1,6 @@
 // Every input of the PBR model, OpenPBR Surface v1.1.1, as a plain value. Fields are the spec's parameter names in
 // camel case (base_color is baseColor), so they never meet the material properties of the same snake case names.
-// Lengths are in scene units, thin_film_thickness in micrometres, emission_luminance in nits. Directions are world space.
+// Lengths are in scene units, emission_luminance in nits. Directions are world space.
 #pragma once
 
 struct PBR_Params
@@ -43,10 +43,6 @@ struct PBR_Params
 
     float emissionLuminance;
     vec3  emissionColor;
-
-    float thinFilmWeight;
-    float thinFilmThickness;
-    float thinFilmIor;
 
     float geometryOpacity;
     bool  geometryThinWalled;
@@ -94,9 +90,6 @@ PBR_Params PBR_DefaultParams(vec3 normal, vec3 tangent)
     p.fuzzRoughness = 0.5;
     p.emissionLuminance = 0.0;
     p.emissionColor = vec3(1.0);
-    p.thinFilmWeight = 0.0;
-    p.thinFilmThickness = 0.5;
-    p.thinFilmIor = 1.4;
     p.geometryOpacity = 1.0;
     p.geometryThinWalled = false;
     p.geometryNormal = normal;

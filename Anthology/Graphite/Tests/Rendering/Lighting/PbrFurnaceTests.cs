@@ -236,40 +236,6 @@ public sealed class PbrFurnaceTests
                 AssertWhite(s_whiteBases[0] with { CoatWeight = 1, CoatRoughness = r }, 0.01, $"coat r {r} normal turned {turn}", coatNormal: Tilted(15, turn));
     }
 
-    // The film's interference moves energy between channels and keeps it in luminance
-    public const double FilmBand = 0.15;
-
-    [Fact]
-    public void ThinFilm_KeepsLuminance_EachChannelWithinItsBand()
-    {
-        foreach (PbrInputs surface in new[] { s_whiteBases[0], s_whiteBases[2], s_whiteBases[3], s_whiteBases[0] with { CoatWeight = 1, CoatRoughness = 0.2f } })
-        {
-            foreach (float thickness in new[] { 0.1f, 0.3f, 0.5f, 0.8f })
-            {
-                foreach (float ior in new[] { 1.2f, 1.4f, 2f })
-                {
-                    PbrInputs filmed = surface with { FilmWeight = 1, FilmThickness = thickness, FilmIor = ior };
-                    foreach (double mu in s_cosines)
-                    {
-                        Vector3 albedo = Albedo(filmed, mu);
-                        string what = $"film {thickness} um ior {ior} over {surface} at NdotV {mu}";
-                        Assert.True(Math.Abs(PbrReference.Luminance(albedo) - 1) <= 0.01, $"{what}: luminance {PbrReference.Luminance(albedo)}");
-                        for (int c = 0; c < 3; c++)
-                            Assert.True(Math.Abs(albedo[c] - 1) <= FilmBand, $"{what} channel {c}: {albedo[c]}");
-                    }
-                }
-            }
-        }
-    }
-
-    // A film over a white metal reflects white, whatever its thickness
-    [Fact]
-    public void ThinFilm_OverAWhiteMetal_StaysWhite()
-    {
-        foreach (float thickness in new[] { 0.2f, 0.6f })
-            AssertWhite(new PbrInputs(Vector3.One, Metalness: 1, Roughness: 0.3f) { FilmWeight = 1, FilmThickness = thickness }, 0.005, $"film {thickness} um over white metal");
-    }
-
     // White subsurface in bulk keeps the energy at any radius, the light it wraps from behind included
     [Fact]
     public void WhiteSubsurface_InBulk_ReflectsEverything()

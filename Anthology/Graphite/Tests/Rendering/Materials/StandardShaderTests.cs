@@ -419,7 +419,7 @@ public sealed class StandardShaderTests : IDisposable
         Assert.Contains("Toon", error.Message);
     }
 
-    private static readonly string[] s_lobes = ["PBR_COAT", "PBR_FUZZ", "PBR_THIN_FILM", "PBR_ANISOTROPY", "PBR_SUBSURFACE", "PBR_THIN_WALLED"];
+    private static readonly string[] s_lobes = ["PBR_COAT", "PBR_FUZZ", "PBR_ANISOTROPY", "PBR_SUBSURFACE", "PBR_THIN_WALLED"];
 
     // The axes deciding how much light a caster lets through to its shadow
     private static readonly string[] s_shadowAxes = ["PBR_SUBSURFACE", "PBR_THIN_WALLED", "PBR_TRANSMISSION"];
@@ -450,7 +450,7 @@ public sealed class StandardShaderTests : IDisposable
         foreach (string lobe in s_lobes)
             Assert.Equal("false", Keyword(material, lobe));
 
-        foreach ((string property, string lobe) in new[] { ("coat_weight", "PBR_COAT"), ("fuzz_weight", "PBR_FUZZ"), ("thin_film_weight", "PBR_THIN_FILM"), ("specular_roughness_anisotropy", "PBR_ANISOTROPY"), ("coat_roughness_anisotropy", "PBR_ANISOTROPY"), ("subsurface_weight", "PBR_SUBSURFACE") })
+        foreach ((string property, string lobe) in new[] { ("coat_weight", "PBR_COAT"), ("fuzz_weight", "PBR_FUZZ"), ("specular_roughness_anisotropy", "PBR_ANISOTROPY"), ("coat_roughness_anisotropy", "PBR_ANISOTROPY"), ("subsurface_weight", "PBR_SUBSURFACE") })
         {
             material.SetFloat(property, 0.4f);
             Assert.Equal("true", Keyword(material, lobe));
@@ -525,7 +525,7 @@ public sealed class StandardShaderTests : IDisposable
                 {
                     foreach (string transmits in new[] { "false", "true" })
                     {
-                        foreach (string view in new[] { "DIFFUSE", "SPECULAR", "FURNACE", "COAT", "FUZZ", "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS" })
+                        foreach (string view in new[] { "DIFFUSE", "SPECULAR", "FURNACE", "COAT", "FUZZ", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS" })
                             variants.Add((debug, [.. combo, new Keyword("PBR_TRANSMISSION", transmits), new Keyword(GlobalAxis.Debug.Name, view)]));
                     }
                 }
@@ -748,7 +748,6 @@ public sealed class StandardShaderTests : IDisposable
         ("coat_ior", [1.6f], false), ("coat_darkening", [1], true),
         ("fuzz_weight", [0], true), ("fuzz_color", [1, 1, 1], true), ("fuzz_roughness", [0.5f], true),
         ("emission_luminance", [0], true), ("emission_color", [1, 1, 1], true),
-        ("thin_film_weight", [0], true), ("thin_film_thickness", [0.5f], true), ("thin_film_ior", [1.4f], false),
         ("geometry_opacity", [1], true), ("geometry_thin_walled", [0], false),
     ];
 
@@ -769,7 +768,7 @@ public sealed class StandardShaderTests : IDisposable
 
         foreach (string geometry in new[] { "geometry_normal_map", "geometry_coat_normal_map", "geometry_tangent_map", "geometry_height_map", "ambient_occlusion_map" })
             Assert.True(properties[_pbr.FindProperty(geometry)].MapBit >= 0, geometry);
-        Assert.Equal(31, properties.Count(p => p.MapBit >= 0));
+        Assert.Equal(29, properties.Count(p => p.MapBit >= 0));
         Assert.True(_pbr.Schema.MapMaskOffset >= 0);
     }
 

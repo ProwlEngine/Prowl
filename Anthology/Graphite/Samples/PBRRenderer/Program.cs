@@ -57,7 +57,7 @@ internal sealed class DemoWindow
     private Texture? _shotTexture;
     private Framebuffer? _shotTarget;
 
-    private static readonly string[] DebugViews = ["DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "COAT", "FUZZ", "THIN_FILM", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS", "DIRECT", "INDIRECT", "FURNACE", "NORMALS", "ROUGHNESS"];
+    private static readonly string[] DebugViews = ["DIFFUSE", "SPECULAR", "SPECULAR_ALBEDO", "COAT", "FUZZ", "DARKENING", "SUBSURFACE", "BACK", "TRANSMISSION", "THICKNESS", "DIRECT", "INDIRECT", "FURNACE", "NORMALS", "ROUGHNESS"];
 
     public DemoWindow(string[] args)
     {

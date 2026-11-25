@@ -11,8 +11,8 @@ namespace Prowl.Graphite.Samples.PBRRenderer;
 
 /// <summary>
 /// A gallery of the PBR model: in front, Khronos glTF sample models on plinths whose textured materials load through
-/// Clay, behind them one row of spheres per lobe group from front to back: dielectric base, metals, specular, coat, fuzz
-/// and thin film, transmission, subsurface with emission and opacity.
+/// Clay, behind them one row of spheres per lobe group from front to back: dielectric base, metals, specular, coat, fuzz,
+/// transmission, subsurface with emission and opacity.
 /// </summary>
 internal sealed class MaterialsScene : DemoScene
 {
@@ -22,7 +22,7 @@ internal sealed class MaterialsScene : DemoScene
 
     private const double ShowcaseSpacing = 3.2;
 
-    private static readonly string[] RowNames = ["base", "metal", "specular", "coat", "fuzz and thin film", "transmission", "subsurface, emission, opacity"];
+    private static readonly string[] RowNames = ["base", "metal", "specular", "coat", "fuzz", "transmission", "subsurface, emission, opacity"];
 
     // Name, largest side in metres, yaw
     private static readonly (string Name, double Size, float Yaw)[][] Showcase =
@@ -45,7 +45,7 @@ internal sealed class MaterialsScene : DemoScene
         MetalRow();
         SpecularRow();
         CoatRow();
-        FuzzAndFilmRow();
+        FuzzRow();
         TransmissionRow();
         SubsurfaceRow();
 
@@ -115,7 +115,7 @@ internal sealed class MaterialsScene : DemoScene
             model.Dispose();
     }
 
-    // Front row coat, anisotropy, fuzz and specular, back row thin film, volumes with dispersion, diffuse transmission
+    // Front row coat, anisotropy, fuzz and specular, back row volumes with dispersion, diffuse transmission
     private void ShowcaseRows()
     {
         Material plinth = Pbr(new Float3(0.08f, 0.08f, 0.09f), 0f, 0.35f);
@@ -242,8 +242,8 @@ internal sealed class MaterialsScene : DemoScene
         Sphere(3, 5, satin);
     }
 
-    // Velvet and peach fuzz, then thin films: a soap like film on glassy black, oil on steel, two thicknesses
-    private void FuzzAndFilmRow()
+    // Velvet and peach fuzz
+    private void FuzzRow()
     {
         Material velvet = Pbr(new Float3(0.25f, 0.02f, 0.08f), 0f, 0.8f);
         velvet.SetFloat("fuzz_weight", 1f);
@@ -256,28 +256,6 @@ internal sealed class MaterialsScene : DemoScene
         peach.SetColor("fuzz_color", C(1f, 0.9f, 0.8f));
         peach.SetFloat("fuzz_roughness", 0.3f);
         Sphere(4, 1, peach);
-
-        float[] thickness = [0.3f, 0.5f];
-        for (int i = 0; i < thickness.Length; i++)
-        {
-            Material film = Pbr(new Float3(0.02f, 0.02f, 0.02f), 0f, 0.05f);
-            film.SetFloat("thin_film_weight", 1f);
-            film.SetFloat("thin_film_thickness", thickness[i]);
-            film.SetFloat("thin_film_ior", 1.33f);
-            Sphere(4, 2 + i, film);
-        }
-
-        Material oil = Pbr(new Float3(0.6f, 0.6f, 0.62f), 1f, 0.1f);
-        oil.SetFloat("thin_film_weight", 1f);
-        oil.SetFloat("thin_film_thickness", 0.4f);
-        oil.SetFloat("thin_film_ior", 1.5f);
-        Sphere(4, 4, oil);
-
-        Material coatedFilm = Pbr(new Float3(0.05f, 0.05f, 0.2f), 0.8f, 0.2f);
-        coatedFilm.SetFloat("coat_weight", 1f);
-        coatedFilm.SetFloat("thin_film_weight", 1f);
-        coatedFilm.SetFloat("thin_film_thickness", 0.6f);
-        Sphere(4, 5, coatedFilm);
     }
 
     // Clear, coloured, frosted, dispersive, milky and thin walled glass, with striped blocks behind to refract
@@ -308,8 +286,6 @@ internal sealed class MaterialsScene : DemoScene
 
         Material bubble = Glass();
         bubble.SetInt("geometry_thin_walled", 1);
-        bubble.SetFloat("thin_film_weight", 1f);
-        bubble.SetFloat("thin_film_thickness", 0.45f);
         Sphere(5, 5, bubble);
 
         Float3[] stripes = [new(0.9f, 0.1f, 0.1f), new(0.95f, 0.85f, 0.1f), new(0.1f, 0.6f, 0.95f)];

@@ -2,15 +2,15 @@
 // then shades a light from it. Base lobes: EON diffuse under a GGX dielectric with exact Fresnel, beside an F82 metal
 // sharing its D and G. Layers combine by albedo scaling with grey throughput, the substrate under the dielectric taking
 // 1 - E_spec of the view, with E_spec from the dielectric table at the IOR specular_weight leaves and Turquin's multiple
-// scattering compensation on every specular lobe, direct light included. Over the base: a thin film in the specular
-// Fresnel, the coat with its absorption, darkening and roughening of the base, then the fuzz. Emission sits under the coat.
+// scattering compensation on every specular lobe, direct light included. Over the base: the coat with its absorption,
+// darkening and roughening of the base, then the fuzz. Emission sits under the coat.
 // subsurface_weight mixes the diffuse lobe toward subsurface. In bulk that is subsurface_color as diffuse albedo, light
 // wrapping past the terminator by an amount from subsurface_radius and subsurface_radius_scale, an approximation of
 // volumetric diffusion. Thin walled it is a sheet reflecting 0.5 S (1 - g) and transmitting 0.5 S (1 + g) of the light
 // from its far side, both shaped as a white EON lobe of base_diffuse_roughness. Light from the far side passes the coat
 // and fuzz on the view's side only.
 // transmission_weight mixes the dielectric base under the specular between the opaque base and a translucent one, the
-// latter passing 1 - E_spec of what is behind, thin film included. Thin walled transmission goes straight through,
+// latter passing 1 - E_spec of what is behind. Thin walled transmission goes straight through,
 // transmission_color the sheet's transmittance at normal incidence, so color^(1 / mu_t) at the view's refracted cosine.
 // A volume with transmission_depth 0 tints by transmission_color, a deeper one absorbs and scatters along its path,
 // see Graphite/PBR/Transmission.glsl. The translucent base takes its share only with PBR_TRANSMISSION.
@@ -19,13 +19,13 @@
 //   vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l), defining GRAPHITE_CUSTOM_BRDF, default PBR_EvaluateLight
 //   vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i), defining GRAPHITE_CUSTOM_AMBIENT_BRDF, default PBR_EvaluateAmbient
 //
-// Material axes, each on while its weight is not zero: PBR_COAT, PBR_FUZZ, PBR_THIN_FILM, PBR_SUBSURFACE,
+// Material axes, each on while its weight is not zero: PBR_COAT, PBR_FUZZ, PBR_SUBSURFACE,
 // PBR_TRANSMISSION, and PBR_ANISOTROPY while either roughness anisotropy is. PBR_THIN_WALLED follows geometry_thin_walled.
 // Axis PBR_TIER, global, FULL, LITE or MAX, the tier a view draws at. MAX adds to FULL the energy compensated lobes
 // with their directional albedo tables, exact dielectric Fresnel and the metal's F82 edge tint toward lights, rough
 // diffuse with its multiple scattering, and the sun lit as a disk. FULL lights with Schlick's Fresnel, split sum
 // albedos, Lambert diffuse and the sun as a point. LITE also drops specular antialiasing from the normal's change
-// across the pixel, blends at most one probe with the sky, has no thin film and no anisotropy, and lights the coat and
+// across the pixel, blends at most one probe with the sky, has no anisotropy, and lights the coat and
 // fuzz lobes from the surroundings only. It keeps thin walled and subsurface whole, the sheet's back lighting included.
 #pragma once
 
@@ -49,9 +49,6 @@
 #endif
 #ifdef PBR_FUZZ
 #define PBR_DIRECT_FUZZ
-#endif
-#ifdef PBR_THIN_FILM
-#define PBR_FILM
 #endif
 #ifdef PBR_ANISOTROPY
 #define PBR_ANISOTROPIC
@@ -81,7 +78,6 @@
 #include "Graphite/PBR/Diffuse.glsl"
 #include "Graphite/PBR/Energy.glsl"
 #include "Graphite/PBR/Fuzz.glsl"
-#include "Graphite/PBR/ThinFilm.glsl"
 
 struct PBR_Closure
 {
@@ -102,16 +98,11 @@ struct PBR_Closure
     float dielectricEta;     // the relative IOR specular_weight leaves, at least 1, for the Fresnel and energy tables
     float refractionEta;     // specular_ior from outside, at least 1, which light refracts into the base by through any coat
     vec3  specularColor;
-    float dielectricScale;   // (1 - metalness) times the dielectric lobe's Turquin factor, less the film's share
+    float dielectricScale;   // (1 - metalness) times the dielectric lobe's Turquin factor
     vec3  metalF0;
     vec3  metalTint;         // the F82 tint of specular_color
-    vec3  metalScale;        // metalness times specular_weight times the metal lobe's Turquin factor, less the film's share
-#ifdef PBR_FILM
-    vec3  dielectricFilm;    // the film's reflectance over the dielectric, its share and Turquin factor applied
-    vec3  metalFilm;         // the same over the metal
-    vec3  film;              // the film's reflectance at the view, dielectric and metal blended
-#endif
-    vec3  dielectricTransmission;  // 1 - E of the dielectric reflection, thin film included, what passes into the base
+    vec3  metalScale;        // metalness times specular_weight times the metal lobe's Turquin factor
+    vec3  dielectricTransmission;  // 1 - E of the dielectric reflection, what passes into the base
 
     float diffuseRoughness;
     float diffuseWeight;     // the grey throughput reaching the diffuse lobe, (1 - metalness) (1 - E_spec)
@@ -197,14 +188,12 @@ PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNorm
     float specularRoughness = rb;
     float baseEta = max(p.specularIor, 1e-4);
     float eta = baseEta;
-    float outer = 1.0;
 #ifdef PBR_COAT
     C = clamp(p.coatWeight, 0.0, 1.0);
     float rc = clamp(p.coatRoughness, 0.0, 1.0);
     float nc = max(p.coatIor, 1e-4);
     rb = mix(rb, pow(min(1.0, rb * rb * rb * rb + 2.0 * rc * rc * rc * rc), 0.25), C);
     eta = mix(baseEta, nc > baseEta ? nc / baseEta : baseEta / nc, C);
-    outer = mix(1.0, nc, C);
 #endif
 
     float alpha = PBR_Alpha(rb);
@@ -268,21 +257,6 @@ PBR_Closure PBR_Prepare(PBR_Params p, vec3 relativePos, vec3 view, vec3 geomNorm
 #endif
     vec3 dielectricE3 = vec3(dielectricE);
 
-#ifdef PBR_FILM
-    float filmWeight = p.thinFilmThickness > 0.0 ? clamp(p.thinFilmWeight, 0.0, 1.0) : 0.0;
-    float filmCos = PBR_RefractedCosine(c.NdotV, outer);
-    vec3 filmDielectric = PBR_ThinFilmDielectric(filmCos, outer, p.thinFilmIor, outer * PBR_ModulatedEta(baseEta / outer, weight), p.thinFilmThickness);
-    vec3 filmMetal = PBR_ThinFilmMetal(filmCos, outer, p.thinFilmIor, rho, p.specularColor, p.thinFilmThickness);
-    vec3 dielectricFilmTurquin = PBR_TurquinFactor(E1, filmDielectric);
-    vec3 metalFilmTurquin = PBR_TurquinFactor(E1, filmMetal * weight);
-    dielectricE3 = mix(dielectricE3, filmDielectric * E1 * dielectricFilmTurquin, filmWeight);
-    metalE = mix(metalE, weight * filmMetal * E1 * metalFilmTurquin, filmWeight);
-    c.dielectricFilm = (1.0 - M) * filmWeight * filmDielectric * dielectricFilmTurquin;
-    c.metalFilm = M * weight * filmWeight * filmMetal * metalFilmTurquin;
-    c.dielectricScale *= 1.0 - filmWeight;
-    c.metalScale *= 1.0 - filmWeight;
-    c.film = mix(filmDielectric, filmMetal, M);
-#endif
     c.dielectricTransmission = 1.0 - dielectricE3;
     c.specularAlbedo = (1.0 - M) * dielectricE3 * p.specularColor + M * metalE;
 
@@ -503,10 +477,6 @@ vec3 PBR_EvaluateSpecular(PBR_Closure c, vec3 L)
 #endif
     vec3 dielectric = vec3(c.dielectricScale * pbr_Fresnel(LdotH, c.dielectricEta));
     vec3 metal = c.metalScale * PBR_FresnelF82(LdotH, c.metalF0, c.metalTint);
-#ifdef PBR_FILM
-    dielectric += c.dielectricFilm;
-    metal += c.metalFilm;
-#endif
     return (c.specularColor * dielectric + metal) * dv;
 }
 

@@ -235,23 +235,6 @@ internal sealed class PbrModel : IDisposable
             Map(m, "fuzz_roughness_map", sheen.RoughnessTexture, channel: 3);
         }
 
-        if (src.Iridescence is { Factor: > 0f } film)
-        {
-            m.SetFloat("thin_film_weight", film.Factor);
-            m.SetFloat("thin_film_ior", film.Ior);
-            Map(m, "thin_film_weight_map", film.FactorTexture, channel: 0);
-            // The PBR thickness is a factor times its map, which only matches glTF's range when it starts at zero
-            if (film.ThicknessTexture != null && film.ThicknessMinimum <= 0f)
-            {
-                m.SetFloat("thin_film_thickness", film.ThicknessMaximum / 1000f);
-                Map(m, "thin_film_thickness_map", film.ThicknessTexture, channel: 1);
-            }
-            else
-            {
-                m.SetFloat("thin_film_thickness", (film.ThicknessTexture != null ? (film.ThicknessMinimum + film.ThicknessMaximum) * 0.5f : film.ThicknessMaximum) / 1000f);
-            }
-        }
-
         if (src.Anisotropy is { Strength: > 0f } anisotropy)
         {
             m.SetFloat("specular_roughness_anisotropy", anisotropy.Strength);

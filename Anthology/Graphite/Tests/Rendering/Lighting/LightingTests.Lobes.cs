@@ -10,7 +10,7 @@ using Vector3 = System.Numerics.Vector3;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-// The PBR model's coat, fuzz, thin film and anisotropy on the GPU: the white furnace over white bases, turned frames,
+// The PBR model's coat, fuzz and anisotropy on the GPU: the white furnace over white bases, turned frames,
 // the LITE tier, and each lobe against PbrReference under a point and a directional light.
 public sealed partial class LightingTests
 {
@@ -126,37 +126,7 @@ public sealed partial class LightingTests
         }
     }
 
-    // The film moves energy between channels: luminance stays 1, each channel within the CPU furnace's band
-    [Fact]
-    public void TheFurnace_ThinFilm_KeepsLuminance()
-    {
-        foreach (float thickness in new[] { 0.3f, 0.8f })
-        {
-            foreach ((string name, Action<Material> surface) in new (string, Action<Material>)[]
-            {
-                ("dielectric", s_whiteBases[0]),
-                ("half metal", m => { White(m); m.SetFloat("base_metalness", 0.5f); m.SetFloat("specular_roughness", 0.6f); m.SetFloat("specular_ior", 2); }),
-                ("coated", m => { s_whiteBases[0](m); m.SetFloat("coat_weight", 1); m.SetFloat("coat_roughness", 0.2f); }),
-            })
-            {
-                AssertFurnace($"film {thickness} um over {name}", m =>
-                {
-                    surface(m);
-                    m.SetFloat("thin_film_weight", 1);
-                    m.SetFloat("thin_film_thickness", thickness);
-                    m.SetFloat("thin_film_ior", 1.4f);
-                }, check: (where, pixel) =>
-                {
-                    float luminance = 0.2126f * pixel.X + 0.7152f * pixel.Y + 0.0722f * pixel.Z;
-                    Assert.True(MathF.Abs(luminance - 1) <= 2e-3f, $"{where}: luminance {luminance}");
-                    for (int c = 0; c < 3; c++)
-                        Assert.True(MathF.Abs(pixel[c] - 1) <= PbrFurnaceTests.FilmBand, $"{where} channel {c}: {pixel[c]}");
-                });
-            }
-        }
-    }
-
-    // LITE drops the film and anisotropy and lights the coat and fuzz from the surroundings only, and keeps the energy
+    // LITE drops anisotropy and lights the coat and fuzz from the surroundings only, and keeps the energy
     [Fact]
     public void TheFurnace_AtTheLiteTier_IsOne()
     {
@@ -167,7 +137,6 @@ public sealed partial class LightingTests
             m.SetFloat("coat_weight", 0.7f);
             m.SetFloat("coat_roughness", 0.3f);
             m.SetFloat("fuzz_weight", 0.6f);
-            m.SetFloat("thin_film_weight", 1);
             m.SetFloat("specular_roughness_anisotropy", 0.8f);
         });
     }
@@ -177,8 +146,7 @@ public sealed partial class LightingTests
         new(new Vector3(0.6f, 0.3f, 0.2f), Roughness: 0.5f, DiffuseRoughness: 0.3f) { CoatWeight = 0.8f, CoatColor = new Vector3(0.9f, 0.7f, 0.5f), CoatRoughness = 0.2f, CoatIor = 1.7f },
         new(new Vector3(0.9f, 0.6f, 0.4f), Metalness: 1, Roughness: 0.4f, SpecularColor: new Vector3(0.9f, 0.8f, 0.6f)) { Anisotropy = 0.7f, CoatWeight = 1, CoatRoughness = 0.1f, CoatAnisotropy = 0.5f, CoatDarkening = 0.5f },
         new(new Vector3(0.3f, 0.4f, 0.6f), Roughness: 0.6f) { FuzzWeight = 0.9f, FuzzColor = new Vector3(1, 0.8f, 0.6f), FuzzRoughness = 0.4f },
-        new(new Vector3(0.5f, 0.5f, 0.5f), Metalness: 0.4f, Roughness: 0.3f) { FilmWeight = 1, FilmThickness = 0.45f, FilmIor = 1.6f },
-        new(new Vector3(0.7f, 0.5f, 0.3f), Roughness: 0.35f, Ior: 1.4f) { Anisotropy = 0.5f, CoatWeight = 0.5f, CoatRoughness = 0.3f, CoatIor = 1.8f, FuzzWeight = 0.5f, FuzzRoughness = 0.7f, FilmWeight = 0.7f, FilmThickness = 0.3f, SubsurfaceWeight = 0.5f, SubsurfaceColor = new Vector3(0.9f, 0.4f, 0.3f) },
+        new(new Vector3(0.7f, 0.5f, 0.3f), Roughness: 0.35f, Ior: 1.4f) { Anisotropy = 0.5f, CoatWeight = 0.5f, CoatRoughness = 0.3f, CoatIor = 1.8f, FuzzWeight = 0.5f, FuzzRoughness = 0.7f, SubsurfaceWeight = 0.5f, SubsurfaceColor = new Vector3(0.9f, 0.4f, 0.3f) },
     ];
 
     public static IEnumerable<object[]> LobeCases()
@@ -213,9 +181,6 @@ public sealed partial class LightingTests
         m.SetFloat("fuzz_weight", p.FuzzWeight);
         m.SetColor("fuzz_color", new Float4(p.FuzzColor.X, p.FuzzColor.Y, p.FuzzColor.Z, 1));
         m.SetFloat("fuzz_roughness", p.FuzzRoughness);
-        m.SetFloat("thin_film_weight", p.FilmWeight);
-        m.SetFloat("thin_film_thickness", p.FilmThickness);
-        m.SetFloat("thin_film_ior", p.FilmIor);
     }
 
     // Each lobe through its material inputs against the CPU closure under a point and a directional light
