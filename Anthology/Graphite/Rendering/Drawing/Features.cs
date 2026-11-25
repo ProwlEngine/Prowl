@@ -1082,22 +1082,22 @@ public sealed class FeatureContext
     public Texture? Depth => Scene?.DepthTexture;
 
     /// <summary>How far each opaque surface moved across the screen since last frame, in uv, when the feature reads the scene and declares it in SceneReads.</summary>
-    public Texture? Motion => SceneTarget(1);
+    public Texture? Motion => SceneTexture(SceneTarget.Motion);
 
     /// <summary>
     /// How much of each pixel shows what transmissive surfaces refract from behind them, 0 to 1 in R8, when the feature
     /// reads the scene, declares it in SceneReads and the view draws a transmissive surface this frame. Their motion does
     /// not move that, so temporal effects trust history less there.
     /// </summary>
-    public Texture? Reactive => SceneTarget(2);
+    public Texture? Reactive => SceneTexture(SceneTarget.Reactive);
 
     /// <summary>The scene's octahedral world normals, when the feature reads the scene and declares them in SceneReads.</summary>
-    public Texture? Normals => SceneTarget(3);
+    public Texture? Normals => SceneTexture(SceneTarget.Normals);
 
     /// <summary>The scene's top layer specular reflectance in rgb and perceptual roughness in a, when the feature reads the scene and declares them in SceneReads.</summary>
-    public Texture? Material => SceneTarget(4);
+    public Texture? Material => SceneTexture(SceneTarget.Material);
 
-    private Texture? SceneTarget(int index) => Scene is { } scene && index < scene.ColorTextures.Length ? scene.ColorTextures[index] : null;
+    private Texture? SceneTexture(int index) => Scene is { } scene && index < scene.ColorTextures.Length ? scene.ColorTextures[index] : null;
 
     /// <summary>The colour the feature reads, when it reads or writes colour.</summary>
     public Texture? Color => _pass.Input is { } input ? Graph.Get(input).ColorTextures[0] : null;

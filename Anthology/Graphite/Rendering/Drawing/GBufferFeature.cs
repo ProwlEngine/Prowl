@@ -130,9 +130,9 @@ public sealed class GBufferFeature : RenderFeature
             formats[(int)GBufferTarget.Base], formats[(int)GBufferTarget.Surface], formats[(int)GBufferTarget.Custom],
             formats[(int)GBufferTarget.Baked], formats[(int)GBufferTarget.Emission],
         ];
-        if (scene <= GBufferRead.SceneNormal || builder.Runs(FeatureGroup.GBufferDecals))
+        if (scene <= SceneTarget.Normals || builder.Runs(FeatureGroup.GBufferDecals))
             own.Add(formats[(int)GBufferTarget.Normal]);
-        if (scene <= GBufferRead.SceneMotion)
+        if (scene <= SceneTarget.Motion)
             own.Add(formats[(int)GBufferTarget.Motion]);
         GraphTextureDesc desc = new()
         {
@@ -153,7 +153,7 @@ public sealed class GBufferFeature : RenderFeature
         Texture[] own = context.Get(state.Target).ColorTextures;
         RenderTexture scene = context.Get(state.Scene);
         context.CopyBack(scene);
-        Texture normal = own.Length > GBufferRead.OwnNormal ? own[GBufferRead.OwnNormal] : scene.ColorTextures[GBufferRead.SceneNormal];
+        Texture normal = own.Length > GBufferRead.OwnNormal ? own[GBufferRead.OwnNormal] : scene.ColorTextures[SceneTarget.Normals];
         Framebuffer framebuffer = state.Sets.Get(_resources.Factory, context.View.LayerCount, scene.DepthTexture,
             own[0], normal, own[1], own[2], own[3], own[4], GBufferRead.Motion(own, scene));
         context.Command.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
@@ -170,9 +170,6 @@ public sealed class GBufferFeature : RenderFeature
 /// </summary>
 internal struct GBufferRead
 {
-    /// <summary>The indices of the scene's motion and normal targets.</summary>
-    public const int SceneMotion = 1, SceneNormal = 3;
-
     /// <summary>The indices of a GBuffer texture's own normal and motion targets, where it has them.</summary>
     public const int OwnNormal = 5, OwnMotion = 6;
 
@@ -198,14 +195,14 @@ internal struct GBufferRead
 
     /// <summary>Where a view's GBuffer pass wrote motion: the scene's target, or the GBuffer's own.</summary>
     public static Texture Motion(Texture[] own, RenderTexture scene)
-        => scene.ColorTextures.Length > SceneMotion ? scene.ColorTextures[SceneMotion] : own[OwnMotion];
+        => scene.ColorTextures.Length > SceneTarget.Motion ? scene.ColorTextures[SceneTarget.Motion] : own[OwnMotion];
 
     /// <summary>Binds the GBuffer as the view's lighting reads it, decals applied.</summary>
     public readonly void Bind(FeatureContext context, PropertySet properties, Sampler point, RenderTexture scene)
     {
         Texture[] own = context.Get(_gbuffer).ColorTextures;
         Texture[]? decaled = _decals is { } decals ? context.Get(decals).ColorTextures : null;
-        Texture normal = scene.ColorTextures.Length > SceneNormal ? scene.ColorTextures[SceneNormal]
+        Texture normal = scene.ColorTextures.Length > SceneTarget.Normals ? scene.ColorTextures[SceneTarget.Normals]
             : decaled is { Length: > DecaledNormal } ? decaled[DecaledNormal] : own[OwnNormal];
         Bind(properties, point, own, decaled, scene, normal);
     }
@@ -271,7 +268,7 @@ public sealed class GBufferDecalsFeature : RenderFeature
         {
             Width = (int)view.Width,
             Height = (int)view.Height,
-            ColorFormats = builder.SceneTargetCount > GBufferRead.SceneNormal ? own : [.. own, formats[(int)GBufferTarget.Normal]],
+            ColorFormats = builder.SceneTargetCount > SceneTarget.Normals ? own : [.. own, formats[(int)GBufferTarget.Normal]],
             ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0,
         };
         state.Target = builder.Temporary("Decaled", desc);
@@ -287,7 +284,7 @@ public sealed class GBufferDecalsFeature : RenderFeature
         RenderTexture scene = context.Get(state.Scene);
         context.CopyBack(scene);
         state.GBuffer.BindUndecaled(context, _properties, _resources.PointClamp, scene);
-        Texture normal = decaled.Length > GBufferRead.DecaledNormal ? decaled[GBufferRead.DecaledNormal] : scene.ColorTextures[GBufferRead.SceneNormal];
+        Texture normal = decaled.Length > GBufferRead.DecaledNormal ? decaled[GBufferRead.DecaledNormal] : scene.ColorTextures[SceneTarget.Normals];
         Framebuffer framebuffer = state.Sets.Get(_resources.Factory, context.View.LayerCount, null, decaled[0], normal, decaled[1]);
         context.Fullscreen(_resources.GBufferDecalsProgram, framebuffer, _properties, clear: (int)GBufferTarget.Surface);
     }

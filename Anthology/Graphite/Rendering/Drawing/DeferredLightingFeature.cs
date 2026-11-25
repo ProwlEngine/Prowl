@@ -20,8 +20,6 @@ public sealed class DeferredLightingFeature : RenderFeature
         public void Dispose() => Sets.Dispose();
     }
 
-    private const int SceneColor = 0, SceneMaterial = 4;
-
     private readonly RendererResources _resources;
     private readonly PropertySet _properties = new();
 
@@ -58,9 +56,9 @@ public sealed class DeferredLightingFeature : RenderFeature
         context.CopyBack(scene);
         state.GBuffer.Bind(context, _properties, _resources.PointClamp, scene);
         Texture[] targets = scene.ColorTextures;
-        Framebuffer framebuffer = targets.Length > SceneMaterial
-            ? state.Sets.Get(_resources.Factory, context.View.LayerCount, null, targets[SceneColor], targets[SceneMaterial])
-            : state.Sets.Get(_resources.Factory, context.View.LayerCount, null, targets[SceneColor]);
+        Framebuffer framebuffer = targets.Length > SceneTarget.Material
+            ? state.Sets.Get(_resources.Factory, context.View.LayerCount, null, targets[SceneTarget.Color], targets[SceneTarget.Material])
+            : state.Sets.Get(_resources.Factory, context.View.LayerCount, null, targets[SceneTarget.Color]);
         context.Fullscreen(_resources.ShadingModels.Program, framebuffer, _properties);
     }
 }

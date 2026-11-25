@@ -67,8 +67,8 @@ internal sealed class RendererResources : IDisposable
             ? PixelFormat.R10_G10_B10_A2_UNorm : OpaqueHdrFormat;
         GBufferFormats =
         [
-            PixelFormat.R8_G8_B8_A8_UNorm_SRgb, SceneFormats[3], PixelFormat.R8_G8_B8_A8_UNorm, PixelFormat.R8_G8_B8_A8_UNorm,
-            OpaqueHdrFormat, OpaqueHdrFormat, SceneFormats[1],
+            PixelFormat.R8_G8_B8_A8_UNorm_SRgb, SceneFormats[SceneTarget.Normals], PixelFormat.R8_G8_B8_A8_UNorm, PixelFormat.R8_G8_B8_A8_UNorm,
+            OpaqueHdrFormat, OpaqueHdrFormat, SceneFormats[SceneTarget.Motion],
         ];
         SupportsGBuffer = device.Limits.MaxColorAttachments >= GBufferFeature.TargetCount;
         SceneDepthFormat = ViewGraph.SceneDepth(format => device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.DepthStencil | TextureUsage.Sampled));

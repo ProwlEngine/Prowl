@@ -3,9 +3,19 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite.Rendering;
 
+/// <summary>
+/// Where each of a scene's colour targets sits, the locations Graphite/Passes.glsl writes them at. A scene has the
+/// first <see cref="ViewGraph.SceneTargetCount"/> of them.
+/// </summary>
+internal static class SceneTarget
+{
+    public const int Color = 0, Motion = 1, Reactive = 2, Normals = 3, Material = 4;
+}
+
 /// <summary>Adds one view's passes to the frame graph and tracks the colour its features hand on, rebuilt every frame.</summary>
 internal sealed class ViewGraph
 {
+    /// <summary>The formats of a scene's colour targets, in <see cref="SceneTarget"/> order.</summary>
     internal static PixelFormat[] SceneFormats(Func<PixelFormat, bool> drawable)
         => [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, PixelFormat.R8_UNorm, drawable(PixelFormat.R16_G16_SNorm) ? PixelFormat.R16_G16_SNorm : PixelFormat.R16_G16_Float, PixelFormat.R8_G8_B8_A8_UNorm];
 
@@ -17,7 +27,9 @@ internal sealed class ViewGraph
     public const PixelFormat LdrColorFormat = PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
 
     public static int SceneTargetCount(SceneTargets targets)
-        => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? 5 : (targets & SceneTargets.Reactive) != 0 ? 3 : (targets & SceneTargets.Motion) != 0 ? 2 : 1;
+        => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? SceneTarget.Material + 1
+            : (targets & SceneTargets.Reactive) != 0 ? SceneTarget.Reactive + 1
+            : (targets & SceneTargets.Motion) != 0 ? SceneTarget.Motion + 1 : SceneTarget.Color + 1;
 
     public static readonly RenderResourceID SceneId = RenderResourceID.Intern(RendererOutputs.Scene);
 
