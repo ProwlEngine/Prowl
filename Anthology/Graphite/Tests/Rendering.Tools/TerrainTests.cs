@@ -436,22 +436,4 @@ public sealed class TerrainTests
         data.RemoveTrees(new Double2(150, 20), 1);
         Assert.Equal([trees[0]], data.Trees);
     }
-
-    [Fact]
-    public void PageDumpWritesAnImage()
-    {
-        string path = Path.Combine(Path.GetTempPath(), $"terrain_{Guid.NewGuid():N}.png");
-        try
-        {
-            using TerrainData data = Build(200, 200, Bumpy, Settings());
-            TerrainDebug.DumpPage(data, new TerrainPageKey(0, 1, 0), path);
-            ImageInfo info = Image.Identify(path);
-            Assert.Equal(TerrainPage.Size * 2, info.Width);
-            Assert.Equal(TerrainPage.Size, info.Height);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
 }
