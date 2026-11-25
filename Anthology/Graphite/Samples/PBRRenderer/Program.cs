@@ -46,6 +46,8 @@ internal sealed class DemoWindow
     private float _lightRange = -1;
     private bool _lightSpread;
     private int _voxelView = -1;
+    private int _gbufferView = -1;
+    private bool _deferred;
     private bool _gi;
     private bool _giScreenTrace = true;
     private bool _giOcclusion = true;
@@ -94,6 +96,13 @@ internal sealed class DemoWindow
                 _giResolution = Enum.Parse<EffectResolution>(args[++i], true);
             else if (args[i] == "--gi")
                 _gi = true;
+            else if (args[i] == "--deferred")
+                _deferred = true;
+            else if (args[i] == "--gbuffer" && i + 1 < args.Length)
+            {
+                _deferred = true;
+                _gbufferView = (int)Enum.Parse<GBufferDebugMode>(args[++i], ignoreCase: true);
+            }
             else if (args[i] == "--voxels" && i + 1 < args.Length)
                 _voxelView = (int)Enum.Parse<VoxelDebugMode>(args[++i], ignoreCase: true);
             else if (args[i] == "--lights" && i + 1 < args.Length)
@@ -273,6 +282,9 @@ internal sealed class DemoWindow
         if (_tier != null)
             keywords.Add(GlobalAxis.PbrTier[_tier]);
         view.Keywords = keywords.Count == 0 ? null : [.. keywords];
+        view.Path = _deferred ? RenderPath.Deferred : RenderPath.Forward;
+        _demo.GBuffer.Enabled = _gbufferView >= 0;
+        _demo.GBuffer.Mode = (GBufferDebugMode)Math.Max(_gbufferView, 0);
         _demo.Voxels.Enabled = _voxelView >= 0;
         _demo.Voxels.Mode = (VoxelDebugMode)Math.Max(_voxelView, 0);
         _demo.Gi.Enabled = _gi;

@@ -15,6 +15,7 @@ internal sealed class Demo : IDisposable
     {
         Device = device;
         Renderer = new Renderer(device, ShaderLoader.Compiler);
+        Renderer.Error += error => Console.WriteLine($"{error.Severity} {error.Code}: {error.Message}");
         Renderer.Error += error => Console.WriteLine($"[{error.Severity}] {error.Code}: {error.Message}");
 
         Surface = Renderer.LoadShader(ShaderParser.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shaders", "Demo.shader"))));
@@ -34,6 +35,8 @@ internal sealed class Demo : IDisposable
         Post.Add(Gi);
         Voxels = new VoxelDebug(Renderer) { Enabled = false };
         Post.Add(Voxels);
+        GBuffer = new GBufferDebug(Renderer) { Enabled = false };
+        Post.Add(GBuffer);
     }
 
     public GraphicsDevice Device { get; }
@@ -49,6 +52,7 @@ internal sealed class Demo : IDisposable
     public Bloom Bloom { get; }
     public Tonemapper Tonemap { get; }
     public VoxelDebug Voxels { get; }
+    public GBufferDebug GBuffer { get; }
     public WorldGI Gi { get; }
 
     /// <summary>A Graphite/PBR material, on <see cref="Surface"/> when it shows a grid.</summary>
