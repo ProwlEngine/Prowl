@@ -307,7 +307,7 @@ internal sealed class DrawPrograms
         id = 0;
         if (pass == PassType.BackDepth && !draw.Volume)
             return false;
-        if (pass == PassType.GBuffer && (draw.Transmissive || draw.Transparent))
+        if (pass == PassType.GBuffer && draw.Transparent)
             return false;
         if (pass == PassType.Forward && draw.Transmissive && draw.Shader.PassIndex(PassType.Transmission) >= 0)
             pass = PassType.Transmission;
