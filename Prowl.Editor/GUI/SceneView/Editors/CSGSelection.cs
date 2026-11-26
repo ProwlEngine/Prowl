@@ -33,12 +33,15 @@ public static class CSGSelection
         {
             any = true;
             CSGModel? model = ModelOf(selected);
-            if (model.IsValid()) return _pinned = model;
+            if (model.IsValid() && IsEdited(model!)) return _pinned = model;
         }
 
-        if (any || _pinned.IsNotValid() || !_pinned!.GameObject.IsInWorld) _pinned = null;
+        if (any || _pinned.IsNotValid() || !IsEdited(_pinned!)) _pinned = null;
         return _pinned;
     }
+
+    // A model asleep under a model or prefab being edited is out of reach, its world is not the one being edited
+    private static bool IsEdited(CSGModel model) => model.GameObject.Scene == EditorSceneManager.EditedWorld;
 
     private static CSGModel? _pinned;
 

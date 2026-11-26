@@ -3,8 +3,10 @@
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.GUI.SceneView.Editors;
 using Prowl.Editor.Modeling;
 using Prowl.Runtime;
+using Prowl.Runtime.CSG;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
@@ -363,6 +365,21 @@ public class ModelWorldTests : EditorTestHarness
         document.Objects[0].Name = "Pulled";
         File.WriteAllBytes(AssetAbsolutePath("Crate.pmesh"), document.Write());
         Assert.True(ModelEditingMode.ChangedOnDisk());
+        ModelEditingMode.Exit();
+    }
+
+    [Fact]
+    public void ACSGModelInTheSceneIsNotActiveWhileAModelIsEdited()
+    {
+        GameObject level = EditorSceneManager.EditWorld.Create("Level");
+        level.AddComponent<CSGModel>();
+        Selection.Select(level);
+        Assert.True(CSGSelection.ActiveModel().IsValid());
+
+        ModelEditingMode.Open(WriteModel(out _));
+        Selection.Clear();
+
+        Assert.True(CSGSelection.ActiveModel().IsNotValid());
         ModelEditingMode.Exit();
     }
 }
