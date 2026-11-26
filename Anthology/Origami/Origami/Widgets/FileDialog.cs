@@ -161,16 +161,24 @@ public static class FileDialog
         _drives.Clear();
         try
         {
+            var seen = new HashSet<string>();
             foreach (var d in DriveInfo.GetDrives())
             {
-                if (!d.IsReady) continue;
+                if (!d.IsReady || d.DriveType == DriveType.Ram || IsSystemMount(d.Name)) continue;
                 string dn = d.Name;
+                // One path can be mounted more than once, and its row ID is built from the path
+                if (!seen.Add(dn)) continue;
                 string label = string.IsNullOrWhiteSpace(d.VolumeLabel) ? dn : $"{d.VolumeLabel} ({dn.TrimEnd(Path.DirectorySeparatorChar)})";
                 _drives.Add((label, dn));
             }
         }
         catch { }
     }
+
+    private static readonly string[] SystemMountRoots = ["/proc", "/sys", "/dev", "/run", "/snap", "/boot"];
+
+    private static bool IsSystemMount(string path)
+        => !OperatingSystem.IsWindows() && SystemMountRoots.Any(root => path == root || path.StartsWith(root + "/", StringComparison.Ordinal));
 
     private static readonly Dictionary<string, EmbeddedState> _embedded = [];
 
