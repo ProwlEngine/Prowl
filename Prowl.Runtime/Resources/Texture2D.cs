@@ -521,11 +521,19 @@ public static class TextureProcessing
         return result;
     }
 
-    /// <summary>Scales an image to the target size: a shrinking axis averages the source pixels each target pixel covers and a growing one blends the nearest two, with color weighted by alpha so transparent pixels don't darken edges, and averaged as light when sRGB. Returns <paramref name="source"/> itself when the size already matches.</summary>
+    /// <summary>
+    /// Scales an image to the target size: a shrinking axis averages the source pixels each target pixel covers and a
+    /// growing one blends the nearest two, with color weighted by alpha so transparent pixels don't darken edges, and
+    /// averaged as light when sRGB. Returns <paramref name="source"/> itself when the size already matches.
+    /// </summary>
     public static byte[] Resize(byte[] source, int width, int height, int targetWidth, int targetHeight, bool srgb)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(targetWidth, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(targetHeight, 1);
+        if (targetWidth < 1)
+            throw new ArgumentOutOfRangeException(nameof(targetWidth), targetWidth, nameof(targetWidth) + " must be greater than 0");
+
+        if (targetHeight < 1)
+            throw new ArgumentOutOfRangeException(nameof(targetHeight), targetHeight, nameof(targetHeight) + " must be greater than 0");
+
         if (width == targetWidth && height == targetHeight) return source;
 
         // Premultiplied RGBA, one row per source row, already at the target width.
@@ -580,7 +588,7 @@ public static class TextureProcessing
     // For each target pixel, the first source pixel it reads and the weight of each one from there, summing to one.
     private static (int Start, float[] Weights)[] AxisWeights(int source, int target)
     {
-        var axis = new (int, float[])[target];
+        var axis = new (int Start, float[] Weights)[target];
         double scale = (double)source / target;
         for (int i = 0; i < target; i++)
         {

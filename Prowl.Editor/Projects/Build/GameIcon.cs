@@ -6,6 +6,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 using Prowl.Aperture;
 using Prowl.Editor.Core;
@@ -21,18 +22,12 @@ namespace Prowl.Editor.Build;
 /// </summary>
 public static class GameIcon
 {
-    // ====================
-    // Data Structures
-    // ====================
     /// <summary>A decoded icon source, top row first.</summary>
     public sealed record Source(int Width, int Height, byte[] Pixels);
 
     /// <summary>One size of the icon, top row first.</summary>
     public sealed record IconImage(int Size, byte[] Pixels);
 
-    // ====================
-    // Constants
-    // ====================
     /// <summary>The window icon resource's file name beside the generated project.</summary>
     public const string WindowResourceFile = "prowl-icon.rgba";
 
@@ -56,11 +51,9 @@ public static class GameIcon
         [(1024, "ic10"), (512, "ic09"), (256, "ic08"), (128, "ic07"), (64, "icp6"), (32, "icp5"), (16, "icp4")];
 
     // The same pixels again as the double density version of a smaller size.
-    private static readonly (int Size, string Type)[] MacRetinaSizes = [(32, "ic11"), (64, "ic12"), (256, "ic13"), (512, "ic14")];
+    private static readonly (int Size, string Type)[] MacRetinaSizes =
+        [(32, "ic11"), (64, "ic12"), (256, "ic13"), (512, "ic14")];
 
-    // ====================
-    // Public Methods
-    // ====================
     /// <summary>What is wrong with an icon of this size, or null when it is usable.</summary>
     public static string? Problem(string name, int width, int height)
         => width == height && width >= MinSize
@@ -187,9 +180,6 @@ public static class GameIcon
         return stream.ToArray();
     }
 
-    // ====================
-    // Internal Helpers
-    // ====================
     private static DecodeOptions DecodeOptions => new() { TargetPixelFormat = PixelFormat.Rgba8 };
 
     private static Source Decode(Aperture.Image image)
@@ -205,20 +195,30 @@ public static class GameIcon
     // The icon texture's file on disk and its path under Assets, or the error when it can't be read as an image file.
     private static (string? Error, string Path, string Relative) Resolve(AssetRef<Texture2D> icon)
     {
-        EditorAssetBackend? assets = EditorAssetBackend.Instance;
-        if (assets?.GuidToPathIncludingSubAssets(icon.AssetID) is not { } relative) return (Missing, "", "");
-
-        if (assets.TryGetParentGuid(icon.AssetID, out _))
+        // The asset database belongs to the main thread, and a build runs on a worker.
+        (string? Error, string Path, string Relative) found = (Missing, "", "");
+        EditorApplication.RunOnMainThread(() =>
         {
-            Asset? sub = AssetDatabase.Get(icon.AssetID);
-            return ($"The game icon '{(sub.IsValid() ? sub.Name : icon.AssetID.ToString())}' is inside '{relative}'. Pick an image file.", "", relative);
-        }
+            EditorAssetBackend? assets = EditorAssetBackend.Instance;
+            if (assets?.GuidToPathIncludingSubAssets(icon.AssetID) is not { } relative) return;
 
-        string path = TextureSpriteMeta.AbsolutePath(icon.AssetID);
-        return (File.Exists(path) ? null : Missing, path, relative);
+            if (assets.TryGetParentGuid(icon.AssetID, out _))
+            {
+                Asset? sub = AssetDatabase.Get(icon.AssetID);
+                found = ($"The game icon '{(sub.IsValid() ? sub.Name : icon.AssetID.ToString())}' is inside '{relative}'. Pick an image file.", "", relative);
+                return;
+            }
+
+            found = (null, TextureSpriteMeta.AbsolutePath(icon.AssetID), relative);
+        });
+
+        // The file check is plain IO, so it stays off the main thread.
+        if (found.Error == null && !File.Exists(found.Path)) found.Error = Missing;
+        return found;
     }
 
-    // A size that divides the largest is made from it, so a big source is read once; any other comes from the source, since resizing twice through misaligned pixels blurs it
+    // A size that divides the largest is made from it, so a big source is read once. Any other size comes from the
+    // source, since resizing twice through misaligned pixels blurs it.
     private static List<IconImage> Shrink(Source source, List<int> sizes)
     {
         if (sizes.Count == 0) return [];
@@ -226,7 +226,7 @@ public static class GameIcon
         byte[] largest = TextureProcessing.Resize(source.Pixels, source.Width, source.Height, sizes[0], sizes[0], srgb: true);
         return [.. sizes.Select(size => new IconImage(size, sizes[0] % size == 0
             ? TextureProcessing.Resize(largest, sizes[0], sizes[0], size, size, srgb: true)
-            :TextureProcessing.Resize(source.Pixels, source.Width, source.Height, size, size, srgb: true)))];
+            : TextureProcessing.Resize(source.Pixels, source.Width, source.Height, size, size, srgb: true)))];
     }
 
     private static byte[] ToPng(IconImage image)
@@ -238,7 +238,7 @@ public static class GameIcon
     private static void WriteChunk(Stream stream, string type, int length)
     {
         Span<byte> header = stackalloc byte[8];
-        System.Text.Encoding.ASCII.GetBytes(type, header);
+        Encoding.ASCII.GetBytes(type, header);
         BinaryPrimitives.WriteInt32BigEndian(header[4..], length);
         stream.Write(header);
     }

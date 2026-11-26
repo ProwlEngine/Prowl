@@ -2,10 +2,11 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Buffers.Binary;
+using System.Text;
 
 using Prowl.Aperture;
-using Prowl.Editor.Importers;
 using Prowl.Editor.Build;
+using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -99,7 +100,7 @@ public class GameIconTests
 
         byte[] icns = GameIcon.ToIcns(images);
 
-        Assert.Equal("icns", System.Text.Encoding.ASCII.GetString(icns, 0, 4));
+        Assert.Equal("icns", Encoding.ASCII.GetString(icns, 0, 4));
         Assert.Equal(icns.Length, BinaryPrimitives.ReadInt32BigEndian(icns.AsSpan(4)));
 
         (string Type, int Size)[] expected =
@@ -110,7 +111,7 @@ public class GameIconTests
         int position = 8;
         foreach ((string type, int size) in expected)
         {
-            Assert.Equal(type, System.Text.Encoding.ASCII.GetString(icns, position, 4));
+            Assert.Equal(type, Encoding.ASCII.GetString(icns, position, 4));
             int length = BinaryPrimitives.ReadInt32BigEndian(icns.AsSpan(position + 4));
             using Aperture.Image decoded = Aperture.Image.Load(icns.AsSpan(position + 8, length - 8), new DecodeOptions { TargetPixelFormat = PixelFormat.Rgba8 });
             Assert.Equal(size, decoded.Width);

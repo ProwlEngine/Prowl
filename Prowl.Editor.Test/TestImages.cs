@@ -8,7 +8,7 @@ namespace Prowl.Editor.Test;
 /// <summary>Small real image files for the tests that need something importable on disk.</summary>
 internal static class TestImages
 {
-    /// <summary>The RGBA pixels of a square image of one colour.</summary>
+    /// <summary>The RGBA pixels of a square image of one color.</summary>
     public static byte[] SolidPixels(int size, byte r, byte g, byte b, byte a = 255)
     {
         byte[] pixels = new byte[size * size * 4];
