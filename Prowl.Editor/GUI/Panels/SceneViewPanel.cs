@@ -340,6 +340,7 @@ public class SceneViewPanel : DockPanel
         EditorGUI.HeaderIconButton(paper, "sv_hdr_settings", EditorIcons.Gear, Loc.Get("scene.settings"), () =>
             Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
             {
+                b.AutoWidth(300f, 440f);
                 b.Header(Loc.Get("panel.scene"));
                 b.Toggle(Loc.Get("scene.show_grid"),
                     () => { if (_editorCamera != null) _editorCamera.ShowGrid = !_editorCamera.ShowGrid; },
