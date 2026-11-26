@@ -449,6 +449,22 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <sub><b>notgiven688</b></sub>
                 </a>
             </td>
+            <td align="center">
+                <a href="https://github.com/recore67">
+                    <img src="https://avatars.githubusercontent.com/u/29689492?v=4" width="100;" alt="recore67"/>
+                    <br />
+                    <sub><b>salman ameeri</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/treviasxk">
+                    <img src="https://avatars.githubusercontent.com/u/24716901?v=4" width="100;" alt="treviasxk"/>
+                    <br />
+                    <sub><b>Trevias Xk</b></sub>
+                </a>
+            </td>
 		</tr>
 	<tbody>
 </table>
