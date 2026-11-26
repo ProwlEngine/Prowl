@@ -521,6 +521,97 @@ public static class TextureProcessing
         return result;
     }
 
+    /// <summary>
+    /// Scales an image to the target size: a shrinking axis averages the source pixels each target pixel covers and a
+    /// growing one blends the nearest two, with color weighted by alpha so transparent pixels don't darken edges, and
+    /// averaged as light when sRGB. Returns <paramref name="source"/> itself when the size already matches.
+    /// </summary>
+    public static byte[] Resize(byte[] source, int width, int height, int targetWidth, int targetHeight, bool srgb)
+    {
+        if (targetWidth < 1)
+            throw new ArgumentOutOfRangeException(nameof(targetWidth), targetWidth, nameof(targetWidth) + " must be greater than 0");
+
+        if (targetHeight < 1)
+            throw new ArgumentOutOfRangeException(nameof(targetHeight), targetHeight, nameof(targetHeight) + " must be greater than 0");
+
+        if (width == targetWidth && height == targetHeight) return source;
+
+        // Premultiplied RGBA, one row per source row, already at the target width.
+        (int Start, float[] Weights)[] columns = AxisWeights(width, targetWidth);
+        float[] across = new float[targetWidth * height * 4];
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < targetWidth; x++)
+            {
+                (int start, float[] weights) = columns[x];
+                int to = ((y * targetWidth) + x) * 4;
+                for (int k = 0; k < weights.Length; k++)
+                {
+                    int from = ((y * width) + start + k) * 4;
+                    float alpha = source[from + 3] / 255f;
+                    for (int channel = 0; channel < 3; channel++)
+                        across[to + channel] += weights[k] * alpha * (srgb ? SrgbToLinear[source[from + channel]] : source[from + channel] / 255f);
+                    across[to + 3] += weights[k] * alpha;
+                }
+            }
+        }
+
+        (int Start, float[] Weights)[] rows = AxisWeights(height, targetHeight);
+        byte[] result = new byte[targetWidth * targetHeight * 4];
+        float[] sum = new float[4];
+        for (int y = 0; y < targetHeight; y++)
+        {
+            (int start, float[] weights) = rows[y];
+            for (int x = 0; x < targetWidth; x++)
+            {
+                Array.Clear(sum);
+                for (int k = 0; k < weights.Length; k++)
+                    for (int channel = 0; channel < 4; channel++)
+                        sum[channel] += weights[k] * across[((((start + k) * targetWidth) + x) * 4) + channel];
+
+                int to = ((y * targetWidth) + x) * 4;
+                byte alphaByte = (byte)Math.Clamp((int)((sum[3] * 255f) + 0.5f), 0, 255);
+                result[to + 3] = alphaByte;
+                if (alphaByte == 0) continue;
+
+                for (int channel = 0; channel < 3; channel++)
+                {
+                    float value = Math.Clamp(sum[channel] / sum[3], 0f, 1f);
+                    result[to + channel] = srgb ? LinearToSrgb(value) : (byte)((value * 255f) + 0.5f);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    // For each target pixel, the first source pixel it reads and the weight of each one from there, summing to one.
+    private static (int Start, float[] Weights)[] AxisWeights(int source, int target)
+    {
+        var axis = new (int Start, float[] Weights)[target];
+        double scale = (double)source / target;
+        for (int i = 0; i < target; i++)
+        {
+            if (target <= source)
+            {
+                double from = i * scale, to = from + scale;
+                int first = (int)from, last = Math.Min((int)Math.Ceiling(to), source) - 1;
+                float[] weights = new float[last - first + 1];
+                for (int k = 0; k < weights.Length; k++)
+                    weights[k] = (float)((Math.Min(to, first + k + 1) - Math.Max(from, first + k)) / scale);
+                axis[i] = (first, weights);
+            }
+            else
+            {
+                double center = Math.Clamp(((i + 0.5) * scale) - 0.5, 0, source - 1);
+                int first = (int)center;
+                float t = (float)(center - first);
+                axis[i] = first + 1 < source ? (first, [1f - t, t]) : (first, [1f]);
+            }
+        }
+        return axis;
+    }
+
     /// <summary>Every level from <paramref name="level0"/> down to one pixel, each filtered from the one above.</summary>
     public static List<byte[]> BuildMipChain(byte[] level0, int width, int height, MipChainOptions options)
     {

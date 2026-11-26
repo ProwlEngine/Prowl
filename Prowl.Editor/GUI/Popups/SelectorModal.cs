@@ -37,6 +37,9 @@ public enum SelectorTabs
 /// <summary> Unified asset/scene selector modal. Provides a Scene tab (lists GameObjects and components from the current scene) and an Assets tab (lists project and built-in assets with thumbnails). Only one selector can be open at a time. </summary>
 public static class SelectorModal
 {
+    private const float ModalWidth = 380f;
+    private const float ModalHeight = 460f;
+
     // ---- State ----
     private static readonly ModalHandle _handle = new();
     private static string _title = "";
@@ -83,10 +86,15 @@ public static class SelectorModal
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Modal window (backdrop handled by modal stack)
+        float screenW = (float)paper.ScreenRect.Size.X;
+        float screenH = (float)paper.ScreenRect.Size.Y;
+
+        // Placed on the screen rather than centered by margins: a modal that closes on a backdrop click sits inside a
+        // backdrop that shrinks to nothing once its grace period ends, which would snap the window to the corner
         using (paper.Column("sel_modal")
-            .Size(380, 460)
-            .Margin(UnitValue.StretchOne)
+            .Size(ModalWidth, ModalHeight)
+            .PositionType(PositionType.SelfDirected)
+            .Position(MathF.Max(0, (screenW - ModalWidth) / 2), MathF.Max(0, (screenH - ModalHeight) / 2))
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Layer(layer)
@@ -100,7 +108,7 @@ public static class SelectorModal
                 DrawTabs(paper, font);
 
             // Content
-            float contentH = 460 - 32 - 30 - 8;
+            float contentH = ModalHeight - 32 - 30 - 8;
             if (_tabs.HasFlag(SelectorTabs.Scene) && _tabs.HasFlag(SelectorTabs.Assets))
                 contentH -= 28; // tabs row
 
@@ -182,7 +190,7 @@ public static class SelectorModal
         bool isGameObject = typeof(GameObject).IsAssignableFrom(_targetType);
         bool isComponent = typeof(Component).IsAssignableFrom(_targetType);
 
-        Origami.ScrollView(paper, "sel_scene_scroll", 380, height).Padding(4, 4, 4, 0).Body(() =>
+        Origami.ScrollView(paper, "sel_scene_scroll", ModalWidth, height).Padding(4, 4, 4, 0).Body(() =>
         {
             // None option always first
             paper.Box("sel_s_none")
@@ -305,9 +313,9 @@ public static class SelectorModal
         const float cellSize = 72f;
         const float labelH = 18f;
         const float totalCellH = cellSize + labelH;
-        float gridWidth = 380 - 12;
+        float gridWidth = ModalWidth - 12;
 
-        Origami.ScrollView(paper, "sel_asset_scroll", 380, height).Padding(4, 4, 4, 0).Body(() =>
+        Origami.ScrollView(paper, "sel_asset_scroll", ModalWidth, height).Padding(4, 4, 4, 0).Body(() =>
         {
             // None option always first
             paper.Box("sel_a_none")

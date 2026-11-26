@@ -385,6 +385,8 @@ public static class Window
                 icons[i] = new Silk.NET.Core.RawImage(w, h, pixels);
             }
             InternalWindow.SetWindowIcon(icons);
+            if (OperatingSystem.IsWindows() && InternalWindow.Native?.Win32 is { } win32)
+                Win32WindowIcon.CopyToClass(win32.Hwnd);
         }
         catch { /* no icon shipped, or the platform doesn't support it - keep the default */ }
     }

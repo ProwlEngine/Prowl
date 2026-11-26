@@ -5,6 +5,9 @@ using Prowl.Editor.Inspector;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 namespace Prowl.Editor.Projects.Settings;
 
 /// <summary> Project settings for general project information such as company name, product name, version, and the last opened scene. </summary>
@@ -14,6 +17,9 @@ public class GeneralSettings : ProjectSettingsBase
     public string CompanyName = "DefaultCompany";
     public string ProductName = "My Game";
     public string Version = "0.1.0";
+
+    /// <summary>The icon of the built game, or the Prowl logo when empty.</summary>
+    public AssetRef<Texture2D> Icon;
 
     /// <summary>The scenes open when the project was last used, restored on project open.</summary>
     public List<GUI.SceneView.SceneSetup> LastSetup = [];
@@ -29,5 +35,15 @@ public class GeneralSettings : ProjectSettingsBase
         EditorGUI.SettingsTextField(paper, "gen_company", "Company Name", CompanyName, v => CompanyName = v);
         EditorGUI.SettingsTextField(paper, "gen_product", "Product Name", ProductName, v => ProductName = v);
         EditorGUI.SettingsTextField(paper, "gen_version", "Version", Version, v => Version = v);
+
+        using (paper.Column("gen_icon_tip").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+            .Tooltip("The icon of the built game: its Windows program file, its window on Windows and Linux, and its Mac app. It has to be square and at least 16 pixels wide. When empty, the game gets the Prowl logo.").Enter())
+        {
+            PropertyGridUtils.DrawField(paper, "gen_icon", "Icon", typeof(AssetRef<Texture2D>), Icon, v =>
+            {
+                Icon = (AssetRef<Texture2D>)v!;
+                EditorRegistries.SaveSettings();
+            });
+        }
     }
 }

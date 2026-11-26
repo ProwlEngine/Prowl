@@ -54,7 +54,7 @@ public struct CameraRenderOptions
     /// <summary>Views that must draw before this one, such as ones whose targets it samples.</summary>
     public RenderView[]? DependsOn;
 
-    /// <summary>Global axis values for this render alone, such as a debug view's GRAPHITE_DEBUG.</summary>
+    /// <summary>Global axis values for this render alone, such as a PBR_TIER of its own.</summary>
     public GlobalKeyword[]? Keywords;
 
     /// <summary>
@@ -109,6 +109,17 @@ public class Camera : Component
     /// Off renders into 8 bit sRGB, where light above 1 clips.
     /// </summary>
     public bool HDR = true;
+
+    /// <summary>
+    /// How the camera lights opaque surfaces. Deferred keeps them in a GBuffer and lights each pixel once, which
+    /// screen space reflections, ambient occlusion and global illumination need. Forward lights them as they draw.
+    /// </summary>
+    public RenderPath RenderingPath = RenderPath.Deferred;
+
+    private bool IsDeferred => RenderingPath == RenderPath.Deferred;
+
+    /// <summary>Which surfaces a deferred camera draws depth for before its GBuffer, so hidden pixels are never kept.</summary>
+    [ShowIf(nameof(IsDeferred))] public EarlyDepth EarlyDepth = EarlyDepth.All;
 
     private bool UsesFxaa => AntiAliasing == AntiAliasingMode.FXAA;
     private bool UsesSmaa => AntiAliasing == AntiAliasingMode.SMAA;
@@ -474,6 +485,8 @@ public class Camera : Component
         view.RenderScale = Maths.Clamp(RenderScale * QualitySettings.Active.RenderScale, 0.1f, 2.0f);
         view.EV100 = EV100;
         view.Ldr = !HDR;
+        view.Path = RenderingPath;
+        view.EarlyDepth = EarlyDepth;
         view.Order = Depth;
         view.Features = null;
         view.Keywords = null;

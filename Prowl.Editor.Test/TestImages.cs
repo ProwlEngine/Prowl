@@ -8,13 +8,9 @@ namespace Prowl.Editor.Test;
 /// <summary>Small real image files for the tests that need something importable on disk.</summary>
 internal static class TestImages
 {
-    /// <summary>Writes a PNG of one colour, creating the directory if it is not there yet.</summary>
-    public static void WriteSolidPng(string absolutePath, int size, byte r, byte g, byte b, byte a = 255)
+    /// <summary>The RGBA pixels of a square image of one color.</summary>
+    public static byte[] SolidPixels(int size, byte r, byte g, byte b, byte a = 255)
     {
-        string? directory = Path.GetDirectoryName(absolutePath);
-        if (!string.IsNullOrEmpty(directory))
-            Directory.CreateDirectory(directory);
-
         byte[] pixels = new byte[size * size * 4];
         for (int at = 0; at < pixels.Length; at += 4)
         {
@@ -24,7 +20,17 @@ internal static class TestImages
             pixels[at + 3] = a;
         }
 
-        using Image image = Image.FromPixels(pixels, size, size, PixelFormat.Rgba8);
+        return pixels;
+    }
+
+    /// <summary>Writes a PNG of one colour, creating the directory if it is not there yet.</summary>
+    public static void WriteSolidPng(string absolutePath, int size, byte r, byte g, byte b, byte a = 255)
+    {
+        string? directory = Path.GetDirectoryName(absolutePath);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+
+        using Image image = Image.FromPixels(SolidPixels(size, r, g, b, a), size, size, PixelFormat.Rgba8);
         image.Save(absolutePath);
     }
 }
