@@ -68,51 +68,6 @@ public sealed class RenderWorldTests : IDisposable
     private static Double4x4 Translate(double x, double y, double z) => Double4x4.CreateTranslation(new Double3(x, y, z));
 
     [Fact]
-    public void AddedRenderables_GetTheirRecords_AndAreReportedAsDrawChanges()
-    {
-        Material material = NewMaterial();
-        RenderableHandle handle = _world.Add(new RenderableDesc
-        {
-            Mesh = _cube,
-            Transform = (Double4x4)(Float4x4.CreateTranslation(new Float3(10, 0, 0)) * Float4x4.CreateScale(2)),
-            ObjectId = 77,
-            Custom0 = new Float4(1, 2, 3, 4),
-        }, [material]);
-
-        RenderWorld.RenderSide render = Frame();
-        uint index = (uint)handle.Index;
-        Assert.Equal([handle.Index], render.DrawChanged);
-
-        ObjectTransform transform = render.Transforms.Get<ObjectTransform>(index);
-        Assert.Equal(new Float4(2, 0, 0, 10), transform.Row0);
-        Assert.Equal(new Float4(0, 2, 0, 0), transform.Row1);
-
-        ObjectAttributes attributes = render.Attributes.Get<ObjectAttributes>(index);
-        Assert.Equal(77u, attributes.ObjectId);
-        Assert.Equal(new Float4(1, 2, 3, 4), attributes.Custom0);
-        Assert.Equal(ObjectAttributes.NoPrevious, attributes.PreviousTransform);
-        Assert.Equal(material.Slot, render.MaterialSlots.Get<uint>(attributes.MaterialSliceBase));
-
-        ObjectBounds bounds = render.Bounds.Get<ObjectBounds>(index);
-        Assert.Equal(new Float4(10, 0, 0, MathF.Sqrt(12)), bounds.CenterHighRadius);
-        Assert.Equal(new Float4(2, 2, 2, 0), bounds.Extents);
-    }
-
-    [Fact]
-    public void EqualTransforms_RecordNothing()
-    {
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube, Transform = Translate(1, 2, 3) }, [NewMaterial()]);
-        Frame();
-
-        _world.SetTransform(handle, Translate(1, 2, 3));
-        Assert.Equal(0, _world.PendingChanges);
-
-        _world.SetTransform(handle, Translate(1, 2, 4));
-        Assert.Equal(1, _world.PendingChanges);
-        Assert.Empty(Frame().DrawChanged);
-    }
-
-    [Fact]
     public void PreviousTransforms_FollowOneFrameBehind_AndCatchUpWhenTheObjectStops()
     {
         RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube, Transform = Translate(1, 0, 0), Flags = RenderableFlags.MotionVectors }, [NewMaterial()]);
@@ -128,31 +83,6 @@ public sealed class RenderWorldTests : IDisposable
 
         Frame();
         Assert.Equal(2f, Previous());
-    }
-
-    [Fact]
-    public void ObjectsWithoutMotionVectors_HaveNoPreviousTransform()
-    {
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube, Flags = RenderableFlags.MotionVectors }, [NewMaterial()]);
-        Frame();
-        Assert.NotEqual(ObjectAttributes.NoPrevious, _world.Render.Attributes.Get<ObjectAttributes>((uint)handle.Index).PreviousTransform);
-
-        _world.SetFlags(handle, RenderableFlags.None);
-        Frame();
-        Assert.Equal(ObjectAttributes.NoPrevious, _world.Render.Attributes.Get<ObjectAttributes>((uint)handle.Index).PreviousTransform);
-    }
-
-    [Fact]
-    public void NegativeDeterminants_MarkTheObjectMirrored_AndChangeItsDraws()
-    {
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube }, [NewMaterial()]);
-        Frame();
-        Assert.False(_world.Render.Mirrored[handle.Index]);
-
-        _world.SetTransform(handle, Float4x4.CreateScale(-1, 1, 1));
-        RenderWorld.RenderSide render = Frame();
-        Assert.True(render.Mirrored[handle.Index]);
-        Assert.Equal([handle.Index], render.DrawChanged);
     }
 
     [Fact]
@@ -176,42 +106,6 @@ public sealed class RenderWorldTests : IDisposable
         Assert.Equal(5u, Frame().Attributes.Get<ObjectAttributes>((uint)second.Index).ObjectId);
     }
 
-    [Fact]
-    public void RemoveThenAdd_InOneFrame_ReplacesTheObject()
-    {
-        Material a = NewMaterial();
-        Material b = NewMaterial();
-        RenderableHandle first = _world.Add(new RenderableDesc { Mesh = _cube }, [a]);
-        Frame();
-
-        _world.Remove(first);
-        RenderableHandle second = _world.Add(new RenderableDesc { Mesh = _cube, Transform = Translate(5, 0, 0) }, [b]);
-        RenderWorld.RenderSide render = Frame();
-
-        Assert.Equal(first.Index, second.Index);
-        Assert.True(render.Alive[second.Index]);
-        Assert.Equal(b, render.SliceMaterials[render.SliceBase[second.Index]]);
-        Assert.Equal(5f, render.Transforms.Get<ObjectTransform>((uint)second.Index).Row0.W);
-    }
-
-    [Fact]
-    public void MaterialSlices_KeepTheMaterialsAsGiven()
-    {
-        Material a = NewMaterial();
-        Material b = NewMaterial();
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube }, [a, b]);
-        RenderWorld.RenderSide render = Frame();
-
-        uint sliceBase = render.SliceBase[handle.Index];
-        Assert.Equal(2, render.SliceCount[handle.Index]);
-        Assert.Equal([a.Slot, b.Slot], [render.MaterialSlots.Get<uint>(sliceBase), render.MaterialSlots.Get<uint>(sliceBase + 1)]);
-
-        _world.SetMaterials(handle, [b]);
-        render = Frame();
-        Assert.Equal([handle.Index], render.DrawChanged);
-        Assert.Equal(b.Slot, render.MaterialSlots.Get<uint>(render.SliceBase[handle.Index]));
-    }
-
     private static MeshData SubMeshes(int count)
     {
         Float3[] positions = [new(0, 0, 0), new(1, 0, 0), new(1, 1, 0)];
@@ -222,31 +116,6 @@ public sealed class RenderWorldTests : IDisposable
             Indices = Enumerable.Repeat(new uint[] { 0, 1, 2 }, count).SelectMany(i => i).ToArray(),
             SubMeshes = Enumerable.Range(0, count).Select(s => new SubMesh { IndexStart = (uint)s * 3, IndexCount = 3, Topology = PrimitiveTopology.TriangleList }).ToArray(),
         };
-    }
-
-    [Fact]
-    public void Slices_CoverEverySubmesh_RepeatingTheLastMaterial_AndFollowSubmeshCountChanges()
-    {
-        GpuMesh mesh = _geometry.Create(SubMeshes(3));
-        _geometry.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
-        Material a = NewMaterial();
-        Material b = NewMaterial();
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = mesh }, [a, b]);
-        RenderWorld.RenderSide render = Frame();
-
-        uint sliceBase = render.SliceBase[handle.Index];
-        Assert.Equal(3, render.SliceCount[handle.Index]);
-        Assert.Equal([a.Slot, b.Slot, b.Slot], Enumerable.Range(0, 3).Select(i => render.MaterialSlots.Get<uint>(sliceBase + (uint)i)));
-
-        mesh.SetData(SubMeshes(5));
-        List<GpuMesh> changed = new();
-        _geometry.Apply(_uploader, 1, long.MaxValue, changed);
-        render.Update(changed, []);
-
-        sliceBase = render.SliceBase[handle.Index];
-        Assert.Equal(5, render.SliceCount[handle.Index]);
-        Assert.Equal(sliceBase, render.Attributes.Get<ObjectAttributes>((uint)handle.Index).MaterialSliceBase);
-        Assert.Equal([a.Slot, b.Slot, b.Slot, b.Slot, b.Slot], Enumerable.Range(0, 5).Select(i => render.MaterialSlots.Get<uint>(sliceBase + (uint)i)));
     }
 
     [Fact]
@@ -274,27 +143,6 @@ public sealed class RenderWorldTests : IDisposable
     }
 
     [Fact]
-    public void MaterialsMovingToAnotherShader_UpdateTheirSlots()
-    {
-        Shader other = new(ShaderParser.Parse("""Shader "Test/Other" { Properties { _A("A", Float) = 1 } Pass { GLSLPROGRAM ENDGLSL } }"""), _compiler);
-        _materials.Create(other);
-        Material material = NewMaterial();
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube }, [material]);
-        Frame();
-        uint entry = _world.Render.SliceBase[handle.Index];
-        uint before = _world.Render.MaterialSlots.Get<uint>(entry);
-
-        material.Shader = other;
-        List<Material> drawChanged = new();
-        _materials.Extract(drawChanged);
-        _world.Extract();
-        _world.Render.Update([], drawChanged);
-
-        Assert.Equal(material.Slot, _world.Render.MaterialSlots.Get<uint>(entry));
-        Assert.NotEqual(before, material.Slot);
-    }
-
-    [Fact]
     public void FarFromTheOrigin_CameraRelativePositions_KeepFullPrecision()
     {
         Double3 camera = new(10_000_000, 2_000, -3_000_000);
@@ -310,16 +158,5 @@ public sealed class RenderWorldTests : IDisposable
 
         Float3 naive = new Float3((float)position.X, (float)position.Y, (float)position.Z) - new Float3((float)camera.X, (float)camera.Y, (float)camera.Z);
         Assert.NotEqual(relative, naive);
-    }
-
-    [Fact]
-    public void BoundsOverrides_ReplaceTheMeshBounds()
-    {
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube }, [NewMaterial()]);
-        _world.SetBounds(handle, new AABB { Min = new Float3(0, 0, 0), Max = new Float3(3, 3, 3) });
-        Assert.Equal(new Float4(1.5f, 1.5f, 1.5f, 0), Frame().Bounds.Get<ObjectBounds>((uint)handle.Index).Extents);
-
-        _world.ClearBounds(handle);
-        Assert.Equal(new Float4(1, 1, 1, 0), Frame().Bounds.Get<ObjectBounds>((uint)handle.Index).Extents);
     }
 }

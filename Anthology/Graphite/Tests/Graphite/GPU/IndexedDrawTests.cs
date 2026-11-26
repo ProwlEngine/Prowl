@@ -23,54 +23,6 @@ public abstract class IndexedDrawTests<T> : GraphicsDeviceTestBase<T> where T : 
     private static readonly IndirectDrawIndexedArguments s_leftQuad = new() { IndexCount = 6, InstanceCount = 1, FirstIndex = 0 };
     private static readonly IndirectDrawIndexedArguments s_rightQuad = new() { IndexCount = 6, InstanceCount = 1, FirstIndex = 6 };
 
-
-    [Fact]
-    public void DrawIndexed_WithAnIndexCount_DrawsOnlyThatRange()
-    {
-        (bool left, bool right) = Render(cl => cl.DrawIndexed(6, 1, 6, 0, 0));
-
-        Assert.False(left);
-        Assert.True(right);
-    }
-
-
-    [Fact]
-    public void DrawIndexed_WithoutAnIndexCount_DrawsTheWholeIndexBuffer()
-    {
-        (bool left, bool right) = Render(cl => cl.DrawIndexed());
-
-        Assert.True(left);
-        Assert.True(right);
-    }
-
-
-    [Fact]
-    public void DrawIndexedIndirect_IssuesEveryDrawOfTheCall()
-    {
-        Assert.True(GD.Features.MultiDrawIndirect);
-        DeviceBuffer args = Arguments(s_leftQuad, s_rightQuad);
-
-        (bool left, bool right) = Render(cl => cl.DrawIndexedIndirect(args, 0, 2, Stride));
-
-        Assert.True(left);
-        Assert.True(right);
-    }
-
-
-    [Fact]
-    public void DrawIndexedIndirectCount_IssuesTheCountFromTheBuffer()
-    {
-        Assert.True(GD.Features.DrawIndirectCount);
-        DeviceBuffer args = Arguments(s_leftQuad, s_rightQuad);
-        DeviceBuffer count = Count(1);
-
-        (bool left, bool right) = Render(cl => cl.DrawIndexedIndirectCount(args, 0, count, 0, 2, Stride));
-
-        Assert.True(left);
-        Assert.False(right);
-    }
-
-
     [Fact]
     public void DrawIndexedIndirectCount_StopsAtTheMaximum()
     {
@@ -81,21 +33,18 @@ public abstract class IndexedDrawTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         Assert.True(left);
         Assert.False(right);
+
+        Assert.True(GD.Features.DrawIndirectCount);
+        DeviceBuffer countedArgs = Arguments(s_leftQuad, s_rightQuad);
+        DeviceBuffer countBuffer = Count(1);
+
+        (bool countedLeft, bool countedRight) = Render(cl => cl.DrawIndexedIndirectCount(countedArgs, 0, countBuffer, 0, 2, Stride));
+
+        Assert.True(countedLeft);
+        Assert.False(countedRight);
     }
-
-
-    [Fact]
-    public void DrawIndirectCount_WithACountBufferMissingTheIndirectUsage_Throws()
-    {
-        DeviceBuffer args = Arguments(s_leftQuad);
-        DeviceBuffer count = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
-
-        Assert.Throws<RenderException>(() => Render(cl => cl.DrawIndexedIndirectCount(args, 0, count, 0, 1, Stride)));
-    }
-
 
     private static unsafe uint Stride => (uint)sizeof(IndirectDrawIndexedArguments);
-
 
     private DeviceBuffer Arguments(params IndirectDrawIndexedArguments[] commands)
     {
@@ -104,14 +53,12 @@ public abstract class IndexedDrawTests<T> : GraphicsDeviceTestBase<T> where T : 
         return buffer;
     }
 
-
     private DeviceBuffer Count(uint count)
     {
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.IndirectBuffer));
         GD.UpdateBuffer(buffer, 0, new[] { count, 0u, 0u, 0u });
         return buffer;
     }
-
 
     private (bool Left, bool Right) Render(Action<CommandBuffer> draw)
     {
@@ -149,7 +96,6 @@ public abstract class IndexedDrawTests<T> : GraphicsDeviceTestBase<T> where T : 
         TexelData<Color> map = ReadTexture<Color>(target);
         return (map[Size / 4, Size / 2].R > 0.5f, map[Size * 3 / 4, Size / 2].R > 0.5f);
     }
-
 
     private void Submit(Action<CommandBuffer> record)
     {

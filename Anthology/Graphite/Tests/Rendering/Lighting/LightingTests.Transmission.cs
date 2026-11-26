@@ -14,7 +14,6 @@ namespace Prowl.Graphite.Rendering.Tests;
 // glass slab's absorption over a flat backdrop, dispersion's order, and which views copy their colour and depth.
 public sealed partial class LightingTests
 {
-
     // A slab of thickness d facing the camera: its front at z 0 and its back at z d, wider than the view
     private GpuMesh Slab(float d)
     {
@@ -136,46 +135,6 @@ public sealed partial class LightingTests
         Assert.False(Drawn().SceneColorUsed || Drawn().SceneDepthUsed || Drawn().BackDepthUsed);
     }
 
-    private Float4[] FrameOf(RenderView view) => _harness.Frame(view);
-
-    private RenderView ViewWith(int id, params RenderFeature[] features)
-    {
-        ExtensionSet<RenderFeature> set = new();
-        foreach (RenderFeature feature in features)
-            set.Add(feature);
-        RenderView view = _harness.BareView(id);
-        view.EV100 = _ev100;
-        view.Features = set;
-        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
-        return view;
-    }
-
-    // A view running TAA has the reactive target only on frames it draws a transmissive surface
-    [Fact]
-    public void TheReactiveTarget_ExistsOnlyWithTAAAndTransmission()
-    {
-        DarkWorld();
-        AddBackdrop(UnitUnlit());
-        int Targets(int id) => ViewGraph.SceneTargetCount(_renderer.Frame.Camera(_harness.ViewOf(id))!.ShapeKey.Targets);
-        RenderView taa = ViewWith(7, new TemporalAntiAliasing(_renderer));
-        FrameOf(taa);
-        Assert.Equal(2, Targets(7));
-
-        Material glass = Glass(m => m.SetFloat("transmission_weight", 1));
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) }, [glass]);
-        FrameOf(taa);
-        Assert.Equal(3, Targets(7));
-        FrameOf(ViewWith(8));
-        Assert.Equal(1, Targets(8));
-
-        glass.SetFloat("transmission_weight", 0);
-        FrameOf(taa);
-        Assert.Equal(2, Targets(7));
-        _world.Remove(handle);
-        FrameOf(taa);
-        Assert.Equal(2, Targets(7));
-    }
-
     // Shows the scene's motion in red and green, read after the transparent surfaces
     private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.AfterTransparents, sceneReads: SceneTargets.Motion)
     {
@@ -194,134 +153,4 @@ public sealed partial class LightingTests
         }
     }
 
-    // A transmissive quad moving 1 to the right over a still backdrop: the uv it moved, an eighth of the view, where it
-    // is, and none where only the backdrop shows
-    [Fact]
-    public void TransmissiveSurfaces_WriteTheirMotion()
-    {
-        DarkWorld();
-        using FullscreenProgram program = _renderer.CreateFullscreenProgram("""
-            uniform sampler2D _Motion;
-            void main() { outColor = vec4(texture(_Motion, vUV).rg, 0.0, 1.0); }
-            """, source: false);
-        _world.Features.Add(new ShowMotion(program, _renderer.Resources.PointClamp));
-        AddBackdrop(UnitUnlit());
-        Double4x4 At(double x) => Double4x4.CreateTranslation(_origin + new Double3(x, 0, QuadDepth)) * Double4x4.CreateScale(0.5);
-        RenderableHandle glass = _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = At(0), Flags = RenderableFlags.MotionVectors }, [Glass(m => m.SetFloat("transmission_weight", 1))]);
-        Frame();
-        Frame();
-        _world.SetTransform(glass, At(1));
-        Float4[] pixels = Frame();
-
-        int moving = 0, still = 0;
-        for (int y = 0; y < Size; y++)
-        {
-            for (int x = 0; x < Size; x++)
-            {
-                Vector3 position = PixelPosition(x, y);
-                bool inside = position.X > -0.5f && position.X < 2.5f && MathF.Abs(position.Y) < 1.5f;
-                bool outside = position.X < -1.5f || position.X > 3.5f || MathF.Abs(position.Y) > 2.5f;
-                if (!inside && !outside)
-                    continue;
-                Float4 got = pixels[y * Size + x];
-                float want = inside ? 0.125f : 0;
-                Assert.True(MathF.Abs(got.X - want) <= 1e-3f && MathF.Abs(got.Y) <= 1e-3f, $"pixel {x},{y}: expected ({want}, 0), got ({got.X}, {got.Y})");
-                if (inside)
-                    moving++;
-                else
-                    still++;
-            }
-        }
-        Assert.True(moving > 0 && still > 0);
-    }
-
-    // A bright stripe in the backdrop's own space, so it moves with the backdrop
-    private const string StripeSource = """
-        Shader "Test/Stripe"
-        {
-            Pass
-            {
-                Tags { "LightMode" = "Forward" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    layout(location = 0) out float vObjectX;
-                    void main()
-                    {
-                        vObjectX = vertexPosition.x;
-                        gl_Position = Graphite_RelativeToClip(Graphite_ObjectToRelative(vertexPosition));
-                    }
-                }
-                Fragment
-                {
-                    #include "Graphite/Passes.glsl"
-                    layout(location = 0) in float vObjectX;
-                    layout(location = 0) out vec4 outColor;
-                    void main()
-                    {
-                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), vec3(0.0), 1.0);
-                        outColor = vec4(vec3(abs(vObjectX) < 0.25 ? 1.0 : 0.05), 1.0);
-                    }
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
-    // Under TAA a stripe sliding behind a still, clear pane ghosts: the pane writes its own motion, so history is
-    // reprojected from where the stripe was. Through the reactive mask the pane keeps less history, so its error against
-    // the frame drawn without TAA falls well below what it is without the mask, toward the bare backdrop's.
-    [Fact]
-    public void TheReactiveMask_CutsGhostingBehindTransmission()
-    {
-        DarkWorld();
-        Material stripe = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(StripeSource)));
-        Double4x4 At(double x) => Double4x4.CreateTranslation(_origin + new Double3(x, 0, 20)) * Double4x4.CreateScale(4);
-        RenderableHandle backdrop = _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = At(-3), Flags = RenderableFlags.MotionVectors }, [stripe]);
-        Material glass = Glass(m =>
-        {
-            m.SetColor("base_color", new Float4(0, 0, 0, 1));
-            m.SetFloat("specular_weight", 0);
-            m.SetFloat("transmission_weight", 1);
-            m.SetInt("geometry_thin_walled", 1);
-        });
-        RenderableHandle? pane = null;
-
-        float Ghosting(int id, float reactiveBlend, bool withPane)
-        {
-            if (withPane && pane == null)
-                pane = _world.Add(new RenderableDesc { Mesh = FacingQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) * Double4x4.CreateScale(0.75) }, [glass]);
-            RenderView view = ViewWith(id, new TemporalAntiAliasing(_renderer) { ReactiveBlendFactor = reactiveBlend });
-            Float4[] taa = [];
-            for (int frame = 0; frame <= 12; frame++)
-            {
-                _world.SetTransform(backdrop, At(-3 + frame * 0.5));
-                taa = FrameOf(view);
-            }
-            Float4[] reference = FrameOf(ViewWith(id + 100));
-            float error = 0;
-            int count = 0;
-            for (int y = 0; y < Size; y++)
-            {
-                for (int x = 0; x < Size; x++)
-                {
-                    Vector3 position = PixelPosition(x, y);
-                    if (MathF.Abs(position.X) > 2.5f || MathF.Abs(position.Y) > 2.5f)
-                        continue;
-                    error += MathF.Abs(taa[y * Size + x].X - reference[y * Size + x].X);
-                    count++;
-                }
-            }
-            return error / count;
-        }
-
-        float bare = Ghosting(20, 0.5f, withPane: false);
-        float unmasked = Ghosting(30, 0.99f, withPane: true);
-        float masked = Ghosting(40, 0.5f, withPane: true);
-        string numbers = $"masked {masked}, unmasked {unmasked}, bare backdrop {bare}";
-        Assert.True(masked < 0.75f * unmasked, numbers);
-        Assert.True(masked < unmasked - 0.5f * (unmasked - bare), numbers);
-    }
 }

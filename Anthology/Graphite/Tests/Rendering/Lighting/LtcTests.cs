@@ -64,22 +64,6 @@ public sealed class LtcTests
     }
 
     [Fact]
-    public void BakeLtc()
-    {
-        Assert.SkipUnless(Environment.GetEnvironmentVariable("GRAPHITE_BAKE_TABLES") == "1", "Set GRAPHITE_BAKE_TABLES=1 to rebake the LTC table.");
-        for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
-        {
-            string data = Path.Combine(dir.FullName, "Rendering", "Library", "Data");
-            if (Directory.Exists(data))
-            {
-                EnergyTables.Write(Path.Combine(data, "Ltc.bin"), LtcTables.Bake());
-                return;
-            }
-        }
-        throw new DirectoryNotFoundException("No Rendering/Library/Data above the test binaries.");
-    }
-
-    [Fact]
     public void Ltc_IsWhatTheFitterBakes()
     {
         ushort[] table = LtcTables.Embedded();

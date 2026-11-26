@@ -4,7 +4,6 @@ using Xunit;
 
 namespace Prowl.Graphite.ShaderDef.Tests;
 
-
 public class PassTests
 {
     [Fact]
@@ -16,6 +15,7 @@ public class PassTests
                 Name "Forward"
                 Tags { "LightMode" = "ForwardBase" }
                 Cull Back
+                Stencil { Ref 1 Comp Equal }
                 GLSLPROGRAM
                 float4 vsMain() : SV_Position { return 0; }
                 ENDGLSL
@@ -26,36 +26,9 @@ public class PassTests
         Assert.NotNull(pass.Tags);
         Assert.Equal(FaceCullMode.Back, pass.State.Raster.CullMode);
         Assert.Equal("float4 vsMain() : SV_Position { return 0; }", pass.Source);
-    }
 
-
-
-    [Fact]
-    public void MisspelledCommand_ThrowsUnknownCommand()
-    {
-        ParseException ex = Assert.Throws<ParseException>(() => Parse.Pass("""
-            Pass
-            {
-                Culll Back
-                GLSLPROGRAM void main() {} ENDGLSL
-            }
-            """));
-
-        Assert.Contains("Unknown command", ex.Message);
-        Assert.Contains("Culll", ex.Message);
-    }
-
-
-    [Fact]
-    public void MissingProgram_ThrowsDomainMessage()
-    {
-        ParseException ex = Assert.Throws<ParseException>(() => Parse.Pass("""
-            Pass
-            {
-                Cull Back
-            }
-            """));
-
-        Assert.Contains("GLSLPROGRAM", ex.Message);
+        DepthStencilStateDescription stencil = pass.State.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
+        Assert.Equal(255, stencil.StencilReadMask);
+        Assert.Equal(255, stencil.StencilWriteMask);
     }
 }

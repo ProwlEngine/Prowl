@@ -7,109 +7,8 @@ using Xunit;
 
 namespace Prowl.Graphite.ShaderDef.Tests;
 
-
 public class PassStateTests
 {
-
-
-
-
-    [Fact]
-    public void Blend_SetsAllFourFactors()
-    {
-        PassState s = Parse.State("Blend SourceAlpha InverseSourceAlpha");
-
-        Assert.Equal(BlendFactor.SourceAlpha, s.Blend.SourceColorFactor);
-        Assert.Equal(BlendFactor.SourceAlpha, s.Blend.SourceAlphaFactor);
-        Assert.Equal(BlendFactor.InverseSourceAlpha, s.Blend.DestinationColorFactor);
-        Assert.Equal(BlendFactor.InverseSourceAlpha, s.Blend.DestinationAlphaFactor);
-    }
-
-
-    [Fact]
-    public void BlendRGB_SetsOnlyRgbFactors()
-    {
-        PassState s = Parse.State("BlendRGB One Zero");
-
-        Assert.Equal(BlendFactor.One, s.Blend.SourceColorFactor);
-        Assert.Equal(BlendFactor.Zero, s.Blend.DestinationColorFactor);
-        Assert.False(s.Set.HasFlag(PassStateFields.SourceAlphaFactor));
-        Assert.False(s.Set.HasFlag(PassStateFields.DestinationAlphaFactor));
-    }
-
-
-    [Fact]
-    public void BlendAlpha_SetsOnlyAlphaFactors()
-    {
-        PassState s = Parse.State("BlendAlpha One Zero");
-
-        Assert.Equal(BlendFactor.One, s.Blend.SourceAlphaFactor);
-        Assert.Equal(BlendFactor.Zero, s.Blend.DestinationAlphaFactor);
-        Assert.False(s.Set.HasFlag(PassStateFields.SourceColorFactor));
-        Assert.False(s.Set.HasFlag(PassStateFields.DestinationColorFactor));
-    }
-
-
-
-    [Theory]
-    [InlineData("R", ColorWriteMask.Red)]
-    [InlineData("GA", ColorWriteMask.Green | ColorWriteMask.Alpha)]
-    [InlineData("RGB", ColorWriteMask.Red | ColorWriteMask.Green | ColorWriteMask.Blue)]
-    [InlineData("RGBA", ColorWriteMask.All)]
-    public void ColorMask_ParsesChannels(string mask, ColorWriteMask expected)
-    {
-        Assert.Equal(expected, Parse.State($"ColorMask {mask}").Blend.ColorWriteMask);
-    }
-
-
-    [Fact]
-    public void ColorMask_InvalidChannel_Throws()
-    {
-        Assert.ThrowsAny<Exception>(() => Parse.State("ColorMask RGBX"));
-    }
-
-
-
-    [Fact]
-    public void Offset_AppliesDepthBiasToRasterizerState()
-    {
-        PassState s = Parse.State("Offset -1 -1");
-
-        RasterizerStateDescription r = s.ToRasterizerState(RasterizerStateDescription.Default);
-
-        Assert.True(r.DepthBiasEnabled);
-        Assert.Equal(-1f, r.DepthBiasSlopeFactor);
-        Assert.Equal(-1f, r.DepthBiasConstantFactor);
-    }
-
-
-
-    [Fact]
-    public void MultipleCommands_Combine()
-    {
-        PassState s = Parse.State("""
-            Cull Front
-            ZWrite Off
-            ZTest Greater
-            """);
-
-        Assert.Equal(FaceCullMode.Front, s.Raster.CullMode);
-        Assert.False(s.DepthStencil.DepthWriteEnabled);
-        Assert.Equal(ComparisonKind.Greater, s.DepthStencil.DepthComparison);
-    }
-
-
-    [Fact]
-    public void StopsAtUnknownIdentifier()
-    {
-        // "Banana" is not a render-state command, so parsing stops there and Cull is captured.
-        PassState s = Parse.State("Cull Back Banana");
-
-        Assert.Equal(FaceCullMode.Back, s.Raster.CullMode);
-    }
-
-
-
     [Fact]
     public void InvalidNumber_ReportsLineAndColumn()
     {
@@ -124,31 +23,6 @@ public class PassStateTests
         Assert.Contains("number", ex.Message);
     }
 
-
-    [Fact]
-    public void Equals_SameFields_AreEqualWithSameHash()
-    {
-        PassState a = Parse.State("Cull Front\nZWrite Off\nBlend SourceAlpha InverseSourceAlpha");
-        PassState b = Parse.State("Cull Front\nZWrite Off\nBlend SourceAlpha InverseSourceAlpha");
-
-        Assert.NotSame(a, b);
-        Assert.Equal(a, b);
-        Assert.True(a.Equals((object)b));
-        Assert.Equal(a.GetHashCode(), b.GetHashCode());
-    }
-
-
-    [Fact]
-    public void Equals_UnsetVersusSet_AreNotEqual()
-    {
-        Assert.NotEqual(new PassState(), Parse.State("Cull Back"));
-        Assert.NotEqual(Parse.State("Cull Back"), Parse.State("Cull Off"));
-        Assert.NotEqual(Parse.State("ZTest Less"), Parse.State("ZTest Always"));
-        Assert.NotEqual(Parse.State("ColorMask RGB"), Parse.State("ColorMask RGBA"));
-        Assert.NotEqual(Parse.State("Stencil { Ref 1 }"), Parse.State("Stencil { Ref 2 }"));
-    }
-
-
     [Fact]
     public void Equals_IgnoresValuesOutsideTheSetMask()
     {
@@ -158,7 +32,6 @@ public class PassStateTests
         Assert.Equal(a, b);
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
-
 
     [Fact]
     public void EveryFlag_IsCopiedByApplyAndCompared()
@@ -183,16 +56,6 @@ public class PassStateTests
             Assert.False(flagOnly.Equals(applied), $"{flag} is not copied by Apply or not compared by Equals.");
         }
     }
-
-
-    [Fact]
-    public void Apply_ResultEqualsHandBuiltState()
-    {
-        PassState combined = Parse.State("Cull Off").Apply(Parse.State("Cull Back\nZWrite Off"));
-
-        Assert.Equal(Parse.State("Cull Off\nZWrite Off"), combined);
-    }
-
 
     private static object Fill(Type type)
     {

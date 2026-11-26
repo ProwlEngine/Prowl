@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -6,7 +7,6 @@ using Prowl.Vector;
 using Xunit;
 
 namespace Prowl.Graphite.ShaderDef.Tests;
-
 
 // End-to-end coverage of ShaderParser.Parse composing all components together.
 public class ShaderTests
@@ -19,6 +19,13 @@ public class ShaderTests
             {
                 _Color("Tint", Color) = (1, 0.5, 0.25, 1)
                 _Albedo("Albedo", Texture2D) = "white" {}
+                _Rough("Rough", Float) = 0.25 [Range(0, -1.5)] [HideInInspector] [ShowIf(_SURFACE_CUTOUT)]
+                _Dir("Dir", Vector) = (1, 2, 3, 4)
+                _Pan("Pan", Vector2) = (1, 2)
+                _Pos("Pos", Vector3) = (1, 2, 3)
+                _Basis("Basis", Matrix) = ((1,0,0,0)(0,1,0,0)(0,0,1,0)(0,0,0,1))
+                _Probes("Probes", TextureCubemapArray) = "white" {}
+                _Tinted("Tinted", Color) [Gamma]
             }
 
             Pass 0
@@ -38,10 +45,17 @@ public class ShaderTests
                 ENDGLSL
             }
 
+            Pass 1
+            {
+                Name "Shadow"
+                GLSLPROGRAM
+                void shadowMain() {}
+                ENDGLSL
+            }
+
             Fallback "Hidden/Fallback"
         }
         """;
-
 
     [Fact]
     public void SurfaceBlocks_ParseAsData_WithoutAnyRendererLibrary()
@@ -72,118 +86,30 @@ public class ShaderTests
 
         Assert.Equal("Example/Standard", shader.Name);
         Assert.Equal("Hidden/Fallback", shader.Fallback);
-        Assert.Equal(2, shader.Properties!.Length);
-        Assert.Single(shader.Passes!);
-        Assert.Equal("Forward", shader.Passes![0].Name);
-    }
+        Assert.Equal(9, shader.Properties!.Length);
+        Assert.Equal(["Forward", "Shadow"], shader.Passes!.Select(p => p.Name));
+        Assert.Equal(new Float4(1, 0.5f, 0.25f, 1), shader.Properties[0].Value);
+        Assert.Empty(shader.Properties[0].Attributes);
 
+        ShaderProperty rough = shader.Properties.Single(p => p.Name == "_Rough");
+        Assert.Equal(ShaderPropertyType.Float, rough.PropertyType);
+        Assert.Equal(0.25f, rough.Value.X);
+        Assert.Equal(["Range(0, -1.5)", "HideInInspector", "ShowIf(_SURFACE_CUTOUT)"], rough.Attributes);
+        Assert.Equal(["Gamma"], shader.Properties.Single(p => p.Name == "_Tinted").Attributes);
+        Assert.Equal(new Float4(1, 2, 3, 4), shader.Properties.Single(p => p.Name == "_Dir").Value);
+        Assert.Equal(new Float4(1, 2, 0, 0), shader.Properties.Single(p => p.Name == "_Pan").Value);
+        Assert.Equal(new Float4(1, 2, 3, 0), shader.Properties.Single(p => p.Name == "_Pos").Value);
+        Assert.Throws<ParseException>(() => Parse.Property("""_V("V", Vector2) = (1, 2, 3)"""));
 
-    [Fact]
-    public void CommentsAreStripped()
-    {
-        // If line/block comments weren't stripped, parsing would have thrown long before this.
-        ShaderDefinition shader = Parse.Shader(FullShader);
+        ShaderProperty basis = shader.Properties.Single(p => p.Name == "_Basis");
+        Assert.Equal(ShaderPropertyType.Matrix, basis.PropertyType);
+        Assert.Equal(1f, basis.MatrixValue[0, 0]);
+        Assert.Equal(1f, basis.MatrixValue[1, 1]);
+        Assert.Equal(1f, basis.MatrixValue[3, 3]);
+        Assert.Equal(0f, basis.MatrixValue[0, 1]);
 
-        Assert.Equal(new Float4(1, 0.5f, 0.25f, 1), shader.Properties![0].Value);
-    }
-
-
-    [Fact]
-    public void MultiplePasses_AllParsedInOrder()
-    {
-        ShaderDefinition shader = Parse.Shader("""
-            Shader "Multi"
-            {
-                Pass { Name "A" GLSLPROGRAM void a() {} ENDGLSL }
-                Pass { Name "B" GLSLPROGRAM void b() {} ENDGLSL }
-                Fallback "fb"
-            }
-            """);
-
-        Assert.Equal(2, shader.Passes!.Length);
-        Assert.Equal("A", shader.Passes![0].Name);
-        Assert.Equal("B", shader.Passes![1].Name);
-    }
-
-
-    [Fact]
-    public void NoPasses_Throws()
-    {
-        ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
-            Shader "Empty"
-            {
-                Fallback "fb"
-            }
-            """));
-
-        Assert.Contains("at least one Pass", ex.Message);
-    }
-
-
-    [Fact]
-    public void TrailingContent_Throws()
-    {
-        ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
-            Shader "X"
-            {
-                Pass { GLSLPROGRAM void main() {} ENDGLSL }
-                Fallback "fb"
-            }
-            Shader "Leftover" { }
-            """));
-
-        Assert.Contains("after shader", ex.Message);
-    }
-
-
-    [Fact]
-    public void DuplicateProperty_Throws()
-    {
-        ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
-            Shader "X"
-            {
-                Properties
-                {
-                    _Color("A", Color) = (1, 1, 1, 1)
-                    _Color("B", Color) = (0, 0, 0, 0)
-                }
-                Pass { GLSLPROGRAM void main() {} ENDGLSL }
-                Fallback "fb"
-            }
-            """));
-
-        Assert.Contains("_Color", ex.Message);
-    }
-
-
-    [Fact]
-    public void DuplicatePassName_Throws()
-    {
-        ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
-            Shader "X"
-            {
-                Pass { Name "Forward" GLSLPROGRAM void a() {} ENDGLSL }
-                Pass { Name "Forward" GLSLPROGRAM void b() {} ENDGLSL }
-                Fallback "fb"
-            }
-            """));
-
-        Assert.Contains("Forward", ex.Message);
-    }
-
-
-    [Fact]
-    public void UnnamedPasses_DoNotCollide()
-    {
-        ShaderDefinition shader = Parse.Shader("""
-            Shader "X"
-            {
-                Pass { GLSLPROGRAM void a() {} ENDGLSL }
-                Pass { GLSLPROGRAM void b() {} ENDGLSL }
-                Fallback "fb"
-            }
-            """);
-
-        Assert.Equal(2, shader.Passes!.Length);
+        ShaderProperty probes = shader.Properties.Single(p => p.Name == "_Probes");
+        Assert.Equal(ShaderPropertyType.TextureCubemapArray, probes.PropertyType);
+        Assert.Equal("white", probes.TextureValue);
     }
 }

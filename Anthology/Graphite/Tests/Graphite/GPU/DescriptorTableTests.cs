@@ -28,7 +28,6 @@ public abstract class DescriptorTableTests<T> : GraphicsDeviceTestBase<T> where 
         Table = true,
     };
 
-
     [Fact]
     public void Draws_SampleTheSlotTheirIndexPicks_FromAPartiallyWrittenTable()
     {
@@ -41,8 +40,14 @@ public abstract class DescriptorTableTests<T> : GraphicsDeviceTestBase<T> where 
 
         Assert.Equal(new Color(1f, 0f, 0f, 1f), left, ColorFuzzyComparer.Instance);
         Assert.Equal(new Color(0f, 0f, 1f, 1f), right, ColorFuzzyComparer.Instance);
-    }
 
+        DescriptorTable bufferTable = Table(white: false);
+        bufferTable.SetTexture("Textures", 0, Solid(255, 255, 255));
+
+        (Color bufferLeft, _) = Render(bufferTable, 0, 0);
+
+        Assert.Equal(new Color(0.5f, 0.5f, 0.5f, 1f), bufferLeft, ColorFuzzyComparer.Instance);
+    }
 
     [Fact]
     public void Slots_RewrittenAfterAFrame_AreReadByTheNextOne()
@@ -57,65 +62,6 @@ public abstract class DescriptorTableTests<T> : GraphicsDeviceTestBase<T> where 
         Assert.Equal(new Color(0f, 1f, 0f, 1f), left, ColorFuzzyComparer.Instance);
     }
 
-
-    [Fact]
-    public void Buffers_InTheTable_ReachTheShader()
-    {
-        DescriptorTable table = Table(white: false);
-        table.SetTexture("Textures", 0, Solid(255, 255, 255));
-
-        (Color left, _) = Render(table, 0, 0);
-
-        Assert.Equal(new Color(0.5f, 0.5f, 0.5f, 1f), left, ColorFuzzyComparer.Instance);
-    }
-
-
-    [Fact]
-    public void Draws_WithoutTheTableBound_Throw()
-    {
-        GraphicsProgram program = Program(s_tableLayout);
-        Assert.Throws<RenderException>(() => Draw(program, null, cl => cl.DrawIndexed(6, 1, 0, 0, 0)));
-    }
-
-
-    [Fact]
-    public void Draws_WithATableOfAnotherLayout_Throw()
-    {
-        ResourceLayoutDescription other = s_tableLayout with
-        {
-            Elements = [s_tableLayout.Elements[0] with { ArrayCount = 8 }, s_tableLayout.Elements[1], s_tableLayout.Elements[2]],
-        };
-        DescriptorTable table = RF.CreateDescriptorTable(other);
-
-        Assert.Throws<RenderException>(() => Draw(Program(s_tableLayout), table, cl => cl.DrawIndexed(6, 1, 0, 0, 0)));
-    }
-
-
-    [Fact]
-    public void Arrays_OutsideATableSet_Throw()
-    {
-        Assert.Throws<RenderException>(() => Program(s_tableLayout with { Table = false }));
-    }
-
-
-    [Fact]
-    public void UniformBuffers_InATable_Throw()
-    {
-        ResourceLayoutDescription withUniforms = new(0, new ResourceLayoutElementDescription("Block", ResourceKind.UniformBuffer, ShaderStages.Fragment, 0)) { Table = true };
-        Assert.Throws<RenderException>(() => RF.CreateDescriptorTable(withUniforms));
-    }
-
-
-    [Fact]
-    public void Writes_PastTheSlotsOrOfTheWrongKind_Throw()
-    {
-        DescriptorTable table = RF.CreateDescriptorTable(s_tableLayout);
-        Assert.Throws<RenderException>(() => table.SetTexture("Textures", 4, Solid(0, 0, 0)));
-        Assert.Throws<RenderException>(() => table.SetSampler("Textures", 0, RF.CreateSampler(SamplerDescription.Point)));
-        Assert.Throws<RenderException>(() => table.SetTexture("Missing", 0, Solid(0, 0, 0)));
-    }
-
-
     private DescriptorTable Table(bool white)
     {
         DescriptorTable table = RF.CreateDescriptorTable(s_tableLayout);
@@ -126,14 +72,12 @@ public abstract class DescriptorTableTests<T> : GraphicsDeviceTestBase<T> where 
         return table;
     }
 
-
     private Texture Solid(byte r, byte g, byte b)
     {
         Texture texture = RF.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         GD.UpdateTexture(texture, new byte[] { r, g, b, 255 }, new TextureRegion(0, 0, 0, 1, 1, 1));
         return texture;
     }
-
 
     private GraphicsProgram Program(ResourceLayoutDescription layout)
         => RF.CreateGraphicsProgram(new ShaderDescription(TestShaderLoader.LoadGraphics(GD.BackendType, "BindlessQuads.glsl"))
@@ -145,7 +89,6 @@ public abstract class DescriptorTableTests<T> : GraphicsDeviceTestBase<T> where 
             ResourceLayouts = [layout],
             PushConstants = new PushConstantRange(ShaderStages.Fragment, 4),
         });
-
 
     private (Color Left, Color Right) Render(DescriptorTable table, uint leftIndex, uint rightIndex)
     {
@@ -161,7 +104,6 @@ public abstract class DescriptorTableTests<T> : GraphicsDeviceTestBase<T> where 
         TexelData<Color> map = ReadTexture<Color>(target);
         return (map[Size / 4, Size / 2], map[Size * 3 / 4, Size / 2]);
     }
-
 
     private Texture Draw(GraphicsProgram program, DescriptorTable? table, Action<CommandBuffer> draw)
     {

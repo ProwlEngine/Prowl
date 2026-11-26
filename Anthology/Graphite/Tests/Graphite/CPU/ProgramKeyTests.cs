@@ -13,17 +13,13 @@ public class ProgramKeyTests
         ProgramKey key = ProgramKey.Compute([Stage(ShaderStages.Compute, "main", 1, 2, 3, 4)]);
 
         Assert.Equal("3004609469D02DECFF51C6543D962D81E9C7B50C80F32AB90B83F59BDE5779C0", key.ToString());
-    }
 
-    [Fact]
-    public void Compute_EqualInputs_AreEqual()
-    {
-        ProgramKey a = ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs", 1, 2)]);
-        ProgramKey b = ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs", 1, 2)]);
+        ProgramKey first = ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs", 1, 2)]);
+        ProgramKey second = ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs", 1, 2)]);
 
-        Assert.Equal(a, b);
-        Assert.True(a == b);
-        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+        Assert.Equal(first, second);
+        Assert.True(first == second);
+        Assert.Equal(first.GetHashCode(), second.GetHashCode());
     }
 
     [Fact]
@@ -37,15 +33,11 @@ public class ProgramKeyTests
         Assert.NotEqual(baseKey, ProgramKey.Compute([Stage(ShaderStages.Geometry, "vs", 1, 2), fs]));
         Assert.NotEqual(baseKey, ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs2", 1, 2), fs]));
         Assert.NotEqual(baseKey, ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs", 1, 9), fs]));
-    }
 
-    [Fact]
-    public void Compute_SpecializationsChangeTheKeyOnlyWhenPresent()
-    {
-        ShaderStageDescription[] stages = [Stage(ShaderStages.Vertex, "vs", 1, 2)];
+        ShaderStageDescription[] plain = [Stage(ShaderStages.Vertex, "vs", 1, 2)];
 
-        Assert.Equal(ProgramKey.Compute(stages), ProgramKey.Compute(stages, []));
-        Assert.NotEqual(ProgramKey.Compute(stages), ProgramKey.Compute(stages, [new SpecializationConstant(0, 1)]));
-        Assert.NotEqual(ProgramKey.Compute(stages, [new SpecializationConstant(0, 1)]), ProgramKey.Compute(stages, [new SpecializationConstant(0, 2)]));
+        Assert.Equal(ProgramKey.Compute(plain), ProgramKey.Compute(plain, []));
+        Assert.NotEqual(ProgramKey.Compute(plain), ProgramKey.Compute(plain, [new SpecializationConstant(0, 1)]));
+        Assert.NotEqual(ProgramKey.Compute(plain, [new SpecializationConstant(0, 1)]), ProgramKey.Compute(plain, [new SpecializationConstant(0, 2)]));
     }
 }

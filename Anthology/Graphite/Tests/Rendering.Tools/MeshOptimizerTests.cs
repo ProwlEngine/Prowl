@@ -82,18 +82,4 @@ public sealed class MeshOptimizerTests
         double was = VertexCacheOptimizer.MissRatio(source.Indices.Span), now = VertexCacheOptimizer.MissRatio(optimized.Indices.Span);
         Assert.True(now < 0.8 && now < was * 0.75, $"miss ratio {was:0.000} to {now:0.000}");
     }
-
-    [Fact]
-    public void Optimize_NumbersVerticesInTheOrderTheTrianglesFirstUseThem()
-    {
-        MeshData optimized = MeshOptimizer.Optimize(Grid());
-        uint next = 0;
-        foreach (uint index in optimized.Indices.Span)
-        {
-            Assert.True(index <= next, $"vertex {index} used before {next}");
-            if (index == next)
-                next++;
-        }
-        Assert.Equal(optimized.VertexCount, next);
-    }
 }

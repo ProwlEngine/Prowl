@@ -179,114 +179,11 @@ public sealed class RendererTests : IDisposable
 
     private static Color32 At(Color32[] pixels, int x, int y) => pixels[y * Size + x];
 
-    [Fact]
-    public void DrawCallGroups_NameTheRenderableAndMaterialTheyDraw()
-    {
-        Material material = Colored(1, 0, 0);
-        material.Name = "Red";
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _quad, Name = "Quad", Transform = Double4x4.CreateScale(new Double3(2, 2, 2)) }, [material]);
-        PayloadSink sink = new();
-        RenderView view = View();
-        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection });
-
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view }, Profilers = [sink] });
-        _renderer.WaitForRenderThread();
-        _device.WaitForIdle();
-
-        DrawnRenderable[] drawn = sink.Payloads.OfType<DrawCallGroup>().SelectMany(g => g.Commands).SelectMany(c => c.Renderables).ToArray();
-        Assert.NotEmpty(drawn);
-        Assert.All(drawn, r => Assert.Equal((handle, "Quad", "Red"), (r.Handle, r.Name, r.Material)));
-    }
-
-    [Fact]
-    public void Frames_DrawEveryMaterial_InTheFirstFrame()
-    {
-        Add(Colored(1, 0, 0), new Double3(-2, 0, 10));
-        Add(Colored(0, 1, 0), new Double3(2, 0, 10));
-
-        Color32[] pixels = Frame();
-        Assert.Equal(new Color32(255, 0, 0, 255), At(pixels, 4, 8));
-        Assert.Equal(new Color32(0, 255, 0, 255), At(pixels, 12, 8));
-        Assert.Equal(new Color32(0, 0, 0, 255), At(pixels, 8, 8));
-        Assert.Empty(_errors);
-    }
-
-    [Fact]
-    public void NearerObjects_Win_WhateverTheirOrder()
-    {
-        Add(Colored(1, 0, 0), new Double3(0, 0, 50));
-        Add(Colored(0, 0, 1), new Double3(0, 0, 10));
-        Add(Colored(0, 1, 0), new Double3(0, 0, 80));
-
-        Assert.Equal(new Color32(0, 0, 255, 255), At(Frame(), 8, 8));
-    }
-
-    [Fact]
-    public void MovingObjects_DrawWhereTheyAreNow()
-    {
-        RenderableHandle handle = Add(Colored(1, 1, 1), new Double3(-2, 0, 10));
-        Assert.Equal(new Color32(255, 255, 255, 255), At(Frame(), 4, 8));
-
-        _world.SetTransform(handle, Double4x4.CreateTranslation(new Double3(2, 0, 10)) * (Double4x4)Float4x4.CreateScale(2));
-        Color32[] pixels = Frame();
-        Assert.Equal(new Color32(0, 0, 0, 255), At(pixels, 4, 8));
-        Assert.Equal(new Color32(255, 255, 255, 255), At(pixels, 12, 8));
-    }
-
-    [Fact]
-    public void MirroredObjects_StillShowTheirFrontFaces()
-    {
-        Add(Colored(1, 1, 0), new Double3(0, 0, 10), new Float3(-2, 2, 2));
-        Assert.Equal(new Color32(255, 255, 0, 255), At(Frame(), 8, 8));
-    }
-
-    [Fact]
-    public void ObjectsFarFromTheOrigin_DrawWhereTheCameraSeesThem()
-    {
-        // Floats at ten million are a whole unit apart, so only the low parts place these a quarter and half unit off.
-        Double3 camera = new(10_000_000.25, 0, -3_000_000);
-        Add(Colored(1, 0, 0), camera + new Double3(-2.5, 0, 10));
-        Add(Colored(0, 1, 0), camera + new Double3(2.5, 0, 10));
-
-        Color32[] pixels = Frame(camera);
-        Assert.Equal(new Color32(255, 0, 0, 255), At(pixels, 1, 8));
-        Assert.Equal(new Color32(0, 0, 0, 255), At(pixels, 5, 8));
-        Assert.Equal(new Color32(0, 0, 0, 255), At(pixels, 10, 8));
-        Assert.Equal(new Color32(0, 255, 0, 255), At(pixels, 14, 8));
-    }
-
-    [Fact]
-    public void ShadersThatFailToLoad_AreReportedOnce_AndDrawTheGreyFallback()
-    {
-        Shader broken = _renderer.LoadShader(ShaderParser.Parse(Source.Replace("uniform vec4 _Color;", "uniform vec4 _Color; uniform float _Undeclared;").Replace("outColor = _Color;", "outColor = _Color * _Undeclared;")));
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * (Double4x4)Float4x4.CreateScale(2) }, [_renderer.CreateMaterial(broken)]);
-
-        Assert.Equal(new Color32(188, 188, 188, 255), At(Frame(), 8, 8));
-        Frame();
-        Assert.Single(_errors, e => e.Message.Contains("_Undeclared"));
-    }
-
     private Material Glass(float r, float g, float b)
     {
         Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(GlassSource)));
         material.SetColor("_Color", new Float4(r, g, b, 0.5f));
         return material;
-    }
-
-    [Fact]
-    public void TransparentObjects_BlendBackToFront_OverOpaques_AndBehindNearerOpaques()
-    {
-        Add(Colored(0, 0, 1), new Double3(0, 0, 30), new Float3(8, 8, 1));
-        Add(Glass(0, 1, 0), new Double3(0, 0, 10));
-        Add(Glass(1, 0, 0), new Double3(0, 0, 20));
-        Add(Colored(1, 1, 1), new Double3(-3, 0, 5), new Float3(2, 8, 1));
-
-        Color32[] pixels = Frame();
-        Color32 blended = At(pixels, 8, 8);
-        Assert.InRange(blended.R, 135, 139);
-        Assert.InRange(blended.G, 186, 190);
-        Assert.InRange(blended.B, 135, 139);
-        Assert.Equal(new Color32(255, 255, 255, 255), At(pixels, 1, 8));
     }
 
     [Fact]

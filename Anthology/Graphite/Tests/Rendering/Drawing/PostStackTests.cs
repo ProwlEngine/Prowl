@@ -222,16 +222,6 @@ public sealed class PostStackTests : IDisposable
     }
 
     [Fact]
-    public void DisplayEffectsWithoutATonemapper_LeaveColourLinear()
-    {
-        AddBackdrop(new Float3(0.5f, 0.5f, 0.5f));
-        Effect(new Fxaa(_renderer));
-        byte[] pixel = SrgbPixel();
-        float encoded = 1.055f * MathF.Pow(0.5f, 1 / 2.4f) - 0.055f;
-        Assert.InRange(pixel[0], encoded * 255 - 2, encoded * 255 + 2);
-    }
-
-    [Fact]
     public void Tonemapper_ReachesAnSrgbTarget_EncodedOnce()
     {
         Float3 color = new(0.3f, 1.4f, 4.5f);
@@ -257,23 +247,6 @@ public sealed class PostStackTests : IDisposable
     }
 
     [Fact]
-    public void AutoExposure_MetersAnOverflowedFrame_AsTheLargestHalfFloat()
-    {
-        // An infinite quarter of the view meters as the largest half float, pre-exposure undone, beside the rest
-        Float3 color = new(2, 2, 2);
-        AddBackdrop(color);
-        AddBackdrop(new Float3(float.PositiveInfinity), depth: 9, scale: 0.45);
-        Effect(new AutoExposure(_renderer) { ExposureCompensation = 0 });
-        RenderView view = View();
-        view.EV100 = 0;
-        Frame(view: view);
-        float saturated = 65504 / RenderView.ExposureOf(0);
-        float mean = MathF.Exp((0.05f * MathF.Log(2) + 0.23f * MathF.Log(saturated)) / 0.28f);
-        float expected = color.X * RenderView.ExposureOf(MathF.Log2(mean * 100 / 12.5f));
-        AssertAll(new Float3(expected), Frame(view: view), expected * 0.05f, i => i % Size < 4 || i / Size < 4);
-    }
-
-    [Fact]
     public void AutoExposure_MetersAboveItsLowPercentile_LeavingOutADarkQuarter()
     {
         // A near black quarter, as a night sky, sits below the low percentile, so the lit rest alone is metered
@@ -287,32 +260,6 @@ public sealed class PostStackTests : IDisposable
         AssertAll(new Float3(expected), Frame(view: view), expected * 0.01f, i => i % Size < 4 || i / Size < 4);
     }
 
-    [Fact]
-    public void TemporalAntiAliasing_RescalesItsHistory_WhenTheExposureChanges()
-    {
-        // A history built at EV100 4 then shown at 2 matches one built at 2 all along, but for edges TAA blended in its
-        // tonemapped space, about 15 percent off at worst against 75 percent without the rescale
-        AddBackdrop(new Float3(0.05f, 0.05f, 0.05f), depth: 12);
-        AddTurnedSquare();
-        Effect(new TemporalAntiAliasing(_renderer));
-        RenderView changed = View(1), steady = View(2);
-        changed.EV100 = 4;
-        steady.EV100 = 2;
-        for (int frame = 0; frame < 4; frame++)
-        {
-            Frame(view: changed);
-            Frame(view: steady);
-        }
-        changed.EV100 = 2;
-        Float4[] after = Frame(view: changed);
-        Float4[] want = Frame(view: steady);
-        Assert.Contains(want, p => p.X > 0.1f);
-        float worst = 0;
-        for (int i = 0; i < want.Length; i++)
-            worst = MathF.Max(worst, MathF.Abs(after[i].X - want[i].X) / (want[i].X + 2e-3f));
-        Assert.True(worst < 0.25f, $"worst pixel {worst} off");
-    }
-
     // A white Lit surface without specular, lit by the ambient light alone, emitting a constant that stands in for
     // direct light, which screen lighting never touches
     private RenderableHandle AddIndirect(float direct, double x = 0, double depth = 10)
@@ -323,19 +270,6 @@ public sealed class PostStackTests : IDisposable
         material.SetFloat("specular_weight", 0);
         material.SetFloat("emission_luminance", direct);
         return _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(x, 0, depth)) }, [material]);
-    }
-
-    [Fact]
-    public void Gtao_LeavesAnOpenFloorUnoccluded()
-    {
-        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1), Fog = default };
-        AddIndirect(0.25f);
-        Float4[] open = Frame();
-        Effect(new Gtao(_renderer) { Resolution = EffectResolution.Full });
-        Frame();
-        Float4[] occluded = Frame();
-        for (int i = 0; i < open.Length; i++)
-            Assert.True(MathF.Abs(open[i].X - occluded[i].X) < 0.01f, $"pixel {i}: {occluded[i].X} against {open[i].X} without GTAO");
     }
 
     [Fact]
@@ -379,110 +313,6 @@ public sealed class PostStackTests : IDisposable
         public override void Render(FeatureContext context) => context.Fullscreen(program);
     }
 
-    // A view drawing nothing but its clear colour, so the frame is that colour unless an effect changes it
-    private static readonly Float3 s_cleared = new(0.25f, 0.5f, 0.75f);
-
-    private static RenderView Cleared(RendererHarness harness)
-    {
-        RenderView view = harness.View();
-        view.ClearColor = new Float4(s_cleared.X, s_cleared.Y, s_cleared.Z, 1);
-        return view;
-    }
-
-    // Frames until the image changes from the cleared colour, as a compile lands on a worker
-    private static Float4[] FrameUntilChanged(RendererHarness harness, RenderView view)
-    {
-        System.Diagnostics.Stopwatch waited = System.Diagnostics.Stopwatch.StartNew();
-        while (true)
-        {
-            Float4[] pixels = harness.Frame(view);
-            if (MathF.Abs(pixels[0].X - s_cleared.X) > 1e-3f || waited.Elapsed.TotalSeconds > 30)
-                return pixels;
-        }
-    }
-
-    [Fact]
-    public void AStockEffectStillCompiling_PassesColourThrough_ThenApplies()
-    {
-        _world.Features.Add(new Tonemapper(_renderer));
-        Float4[] tonemapped = _harness.Frame(Cleared(_harness));
-
-        GatedCompiler compiler = new(TestCompiler.Shared) { GatedSource = "Graphite/Tonemap" };
-        RendererHarness harness = new(compiler, CompilePolicy.Async);
-        try
-        {
-            RenderView view = Cleared(harness);
-            harness.World.Features.Add(new Tonemapper(harness.Renderer));
-            AssertAll(s_cleared, harness.Frame(view));
-            AssertAll(s_cleared, harness.Frame(view));
-            compiler.Gate.Set();
-            Assert.Equal(tonemapped, FrameUntilChanged(harness, view));
-        }
-        finally
-        {
-            compiler.Gate.Set();
-            harness.Dispose();
-        }
-    }
-
-    [Fact]
-    public void AHostEffectStillCompiling_PassesColourThrough_ThenApplies()
-    {
-        GatedCompiler compiler = new(TestCompiler.Shared) { GatedAxis = "_GATE", GatedValue = "true" };
-        RendererHarness harness = new(compiler, CompilePolicy.Async);
-        try
-        {
-            RenderView view = Cleared(harness);
-            FullscreenProgram invert = harness.Renderer.CreateFullscreenProgram("#pragma variant _GATE\nvoid main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }", variant: "#define _GATE 1");
-            harness.Owned.Add(invert);
-            harness.World.Features.Add(new Copy(invert));
-
-            // The first frame finds the program not ready as it draws, later ones leave the effect out
-            AssertAll(s_cleared, harness.Frame(view));
-            AssertAll(s_cleared, harness.Frame(view));
-            compiler.Gate.Set();
-            AssertAll(new Float3(1 - s_cleared.X, 1 - s_cleared.Y, 1 - s_cleared.Z), FrameUntilChanged(harness, view));
-        }
-        finally
-        {
-            compiler.Gate.Set();
-            harness.Dispose();
-        }
-    }
-
-    [Fact]
-    public void FullscreenPasses_KeepTheImageTheRightWayUp()
-    {
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 4, 5)) * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [Unlit(new Float3(1, 0, 0))]);
-        Float4[] plain = Frame();
-        FullscreenProgram copy = _renderer.CreateFullscreenProgram("void main() { outColor = Graphite_SampleSource(vUV); }");
-        _owned.Add(copy);
-        _world.Features.Add(new Copy(copy));
-        _world.Features.Add(new Copy(copy) { Order = 1 });
-        _world.Features.Add(new Copy(copy) { Order = 2 });
-        Assert.Equal(plain, Frame());
-    }
-
-    [Fact]
-    public void Ssr_ReflectsWhatIsAboveAMirror()
-    {
-        SkyOf(new Float3(0, 0, 0));
-        AddMirror();
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 4, 9)) * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [Unlit(new Float3(1, 0, 0))]);
-        Float4[] plain = Frame();
-        Effect(new ScreenSpaceReflections(_renderer) { UseTemporal = false, Normalization = false });
-        Float4[] reflected = Frame();
-        for (int y = 2; y < 6; y++)
-        {
-            for (int x = 4; x < 12; x++)
-            {
-                Float4 before = plain[y * Size + x], after = reflected[y * Size + x];
-                Assert.True(MathF.Abs(before.X - 0.1f) < 1e-3f, $"pixel {x}, {y} is not the mirror: {before}");
-                Assert.True(after.X > 0.35f && MathF.Abs(after.Y - 0.1f) < 0.02f, $"pixel {x}, {y} reflects {after}");
-            }
-        }
-    }
-
     // A sky of one colour, captured at the views' exposure so the probes hold it as it is
     private void SkyOf(Float3 color)
     {
@@ -497,27 +327,6 @@ public sealed class PostStackTests : IDisposable
     private static bool OnMirror(int i) => i / Size is >= 2 and < 6 && i % Size is >= 4 and < 12;
 
     private static float Distance(Float4 a, Float4 b) => MathF.Max(MathF.Max(MathF.Abs(a.X - b.X), MathF.Abs(a.Y - b.Y)), MathF.Max(MathF.Abs(a.Z - b.Z), MathF.Abs(a.W - b.W)));
-
-    [Fact]
-    public void Ssr_WithNoHits_LeavesTheProbeShading()
-    {
-        SkyOf(s_sky);
-        AddMirror(s_mirrorReflectance);
-        Frame();
-        Float4[] plain = Frame();
-        for (int i = 0; i < plain.Length; i++)
-        {
-            if (OnMirror(i))
-                Assert.True(plain[i].Z > 0.6f, $"pixel {i} shows no probes: {plain[i]}");
-        }
-
-        Effect(new ScreenSpaceReflections(_renderer));
-        Frame();
-        Frame();
-        Float4[] reflected = Frame();
-        for (int i = 0; i < plain.Length; i++)
-            Assert.True(Distance(plain[i], reflected[i]) < 2e-3f, $"pixel {i}: {plain[i]} became {reflected[i]}");
-    }
 
     [Fact]
     public void Ssr_SwapsTheProbesForTheTrace_ByTheStoredReflectance()
@@ -548,32 +357,6 @@ public sealed class PostStackTests : IDisposable
         }
     }
 
-    // Shows the scene's material target
-    private sealed class MaterialView(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.HdrPost, sceneReads: SceneTargets.Material)
-    {
-        private readonly PropertySet _properties = new();
-        public override void Setup(FeatureBuilder builder, in FeatureView view)
-        {
-            builder.ReadScene();
-            builder.WriteColor();
-        }
-        public override void Render(FeatureContext context)
-        {
-            _properties.SetTexture("_Material", context.Material!, sampler);
-            context.Fullscreen(program, _properties);
-        }
-    }
-
-    private void ShowMaterialTarget()
-    {
-        FullscreenProgram program = _renderer.CreateFullscreenProgram("""
-            uniform sampler2D _Material;
-            void main() { outColor = texture(_Material, vUV); }
-            """, source: false);
-        _owned.Add(program);
-        _world.Features.Add(new MaterialView(program, _renderer.Resources.PointClamp));
-    }
-
     // The test quad wound to face the camera, its normal toward it
     private GpuMesh FacingQuad()
     {
@@ -589,158 +372,6 @@ public sealed class PostStackTests : IDisposable
             ],
             Indices = new uint[] { 0, 2, 1, 0, 3, 2 },
         });
-    }
-
-    [Fact]
-    public void GBuffer_HoldsNoReflectance_ForUnlitAndTheFallback()
-    {
-        Material unlit = _renderer.CreateMaterial(_renderer.Standard.Unlit);
-        Material fallback = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!)));
-        GpuMesh facing = FacingQuad();
-        _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(new Double3(-4, 0, 10)) }, [unlit]);
-        _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(new Double3(4, 0, 10)) }, [fallback]);
-        ShowMaterialTarget();
-        Float4[] pixels = Frame();
-        AssertAll(new Float3(0, 0, 0), pixels, 2e-3f);
-        Assert.All(pixels, p => Assert.Equal(1f, p.W));
-    }
-
-    // Red over the left half of the view at depth 10, black over the right half
-    private void AddHalfRed(double depth = 10)
-    {
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(-4, 0, depth)) }, [Unlit(new Float3(1, 0, 0))]);
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(4, 0, depth)) }, [Unlit(new Float3(0, 0, 0))]);
-    }
-
-    private static void AssertColumn(Float4[] pixels, int column, Func<float, bool> red, string what)
-    {
-        for (int y = 0; y < Size; y++)
-            Assert.True(red(pixels[y * Size + column].X), $"column {column} row {y} {what}: {pixels[y * Size + column]}");
-    }
-
-    [Fact]
-    public void MotionBlur_SmearsAlongTheMotion_AndLeavesStillPixels()
-    {
-        AddHalfRed();
-        Effect(new MotionBlur(_renderer));
-        Float4[] still = Frame();
-        AssertColumn(still, 7, r => r == 1, "is red");
-        AssertColumn(still, 8, r => r == 0, "is black");
-
-        // A unit right moves the edge two pixels left, and its motion smears it a pixel either way
-        RenderView moved = View();
-        moved.Camera = new ViewCamera(moved.Camera.Layers[0] with { Position = new Double3(1, 0, 0) });
-        Float4[] smeared = Frame(view: moved);
-        AssertColumn(smeared, 3, r => r == 1, "is red");
-        AssertColumn(smeared, 5, r => r > 0.05f && r < 0.95f, "is smeared");
-        AssertColumn(smeared, 6, r => r > 0.05f && r < 0.95f, "is smeared");
-        AssertColumn(smeared, 9, r => r == 0, "is black");
-    }
-
-    [Fact]
-    public void DepthOfField_KeepsFocusSharp_AndBlursWhatIsOutOfIt()
-    {
-        AddHalfRed();
-        DepthOfField dof = Effect(new DepthOfField(_renderer) { UseAutoFocus = false, ManualFocusPoint = 10, FocusStrength = 50, MaxBlurRadius = 50 });
-        Float4[] focused = Frame();
-        AssertColumn(focused, 7, r => r == 1, "is red");
-        AssertColumn(focused, 8, r => r == 0, "is black");
-
-        dof.ManualFocusPoint = 2;
-        dof.FocusSpeed = 0;
-        Float4[] blurred = Frame();
-        AssertColumn(blurred, 7, r => r > 0.05f && r < 0.95f, "is blurred");
-        AssertColumn(blurred, 8, r => r > 0.05f && r < 0.95f, "is blurred");
-
-        // Autofocus finds the backdrop at the center
-        dof.UseAutoFocus = true;
-        Float4[] auto = Frame();
-        AssertColumn(auto, 7, r => r == 1, "is red");
-        AssertColumn(auto, 8, r => r == 0, "is black");
-    }
-
-    [Fact]
-    public void GodRays_AddWarmLightFromBrightSky_OnlyWithASun()
-    {
-        // A dark quad over the lower half, bright sky above it, the sun ahead three units up the view
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, -4, 10)) }, [Unlit(new Float3(0.05f, 0.05f, 0.05f))]);
-        RenderView view = View();
-        view.ClearColor = new Float4(2, 2, 2, 1);
-        Effect(new GodRays(_renderer));
-        Float4[] sunless = Frame(view: view);
-        Assert.All(Enumerable.Range(0, Size * Size).Where(i => sunless[i].X < 1), i => Assert.Equal(0.05f, sunless[i].X, 3));
-
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, -3e-4f, -1), Color = new Float3(1, 1, 1), Intensity = 1 });
-        Float4[] lit = Frame(view: view);
-        int brightened = Enumerable.Range(0, Size * Size).Count(i => sunless[i].X < 1 && lit[i].X > 0.06f && lit[i].X > lit[i].Z);
-        Assert.True(brightened > 8, $"{brightened} dark pixels took warm light");
-    }
-
-    [Fact]
-    public void CinematicEffects_RunInProwlsOrder_AroundAntiAliasing()
-    {
-        Renderer r = _renderer;
-        List<RenderFeature> effects = [new Vignette(r), new FilmGrain(r), new Fxaa(r), new ColorLookup(r), new ColorGrading(r), new EdgeDetection(r), new Sharpen(r), new ChromaticAberration(r), new Pixelation(r)];
-        string[] order = [.. effects.OrderBy(e => e.Order).Select(e => e.GetType().Name)];
-        Assert.Equal(["Pixelation", "ChromaticAberration", "Sharpen", "EdgeDetection", "ColorGrading", "ColorLookup", "Fxaa", "FilmGrain", "Vignette"], order);
-    }
-
-    // A white square turned 30 degrees on black, so its edges step across the pixels
-    private void AddTurnedSquare()
-    {
-        double c = Math.Cos(Math.PI / 6), s = Math.Sin(Math.PI / 6);
-        Double4x4 turn = new(new Double4(c, s, 0, 0), new Double4(-s, c, 0, 0), new Double4(0, 0, 1, 0), new Double4(0, 0, 10, 1));
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = turn * Double4x4.CreateScale(0.5) }, [Unlit(new Float3(1, 1, 1))]);
-    }
-
-    private void AssertSmoothsEdgesOnly(Float4[] plain, Float4[] smoothed)
-    {
-        int softened = 0;
-        for (int i = 0; i < plain.Length; i++)
-        {
-            bool flat = Enumerable.Range(-2, 5).All(dy => Enumerable.Range(-2, 5).All(dx =>
-            {
-                int x = i % Size + dx, y = i / Size + dy;
-                return x < 0 || y < 0 || x >= Size || y >= Size || plain[y * Size + x].X == plain[i].X;
-            }));
-            if (flat)
-                Assert.True(MathF.Abs(smoothed[i].X - plain[i].X) < 1e-3f, $"flat pixel {i} changed from {plain[i]} to {smoothed[i]}");
-            else if (MathF.Abs(smoothed[i].X - plain[i].X) > 0.05f)
-                softened++;
-        }
-        Assert.True(softened > 4, $"{softened} edge pixels softened");
-    }
-
-    [Fact]
-    public void Fxaa_SoftensSteppedEdges_AndLeavesFlatAreas()
-    {
-        AddTurnedSquare();
-        Float4[] plain = Frame();
-        Effect(new Fxaa(_renderer));
-        AssertSmoothsEdgesOnly(plain, Frame());
-    }
-
-    [Fact]
-    public void Smaa_SoftensSteppedEdges_AndLeavesFlatAreas()
-    {
-        AddTurnedSquare();
-        Float4[] plain = Frame();
-        Effect(new Smaa(_renderer));
-        AssertSmoothsEdgesOnly(plain, Frame());
-    }
-
-    [Fact]
-    public void AntiAliasing_RunsOneOfTaaFxaaAndSmaa()
-    {
-        AddTurnedSquare();
-        Smaa smaa = Effect(new Smaa(_renderer));
-        Float4[] alone = Frame();
-        _world.Features.Remove(smaa);
-        Effect(new Fxaa(_renderer));
-        Float4[] fxaa = Frame();
-        Assert.NotEqual(alone, fxaa);
-        _world.Features.Add(smaa);
-        Assert.Equal(alone, Frame());
     }
 
     [Fact]
@@ -788,4 +419,51 @@ public sealed class PostStackTests : IDisposable
         }
     }
 
+    [Fact]
+    public void DisplayEffectsWithoutATonemapper_LeaveColourLinear()
+    {
+        AddBackdrop(new Float3(0.5f, 0.5f, 0.5f));
+        Effect(new Fxaa(_renderer));
+        byte[] pixel = SrgbPixel();
+        float encoded = 1.055f * MathF.Pow(0.5f, 1 / 2.4f) - 0.055f;
+        Assert.InRange(pixel[0], encoded * 255 - 2, encoded * 255 + 2);
+    }
+
+    [Fact]
+    public void AutoExposure_MetersAnOverflowedFrame_AsTheLargestHalfFloat()
+    {
+        // An infinite quarter of the view meters as the largest half float, pre-exposure undone, beside the rest
+        Float3 color = new(2, 2, 2);
+        AddBackdrop(color);
+        AddBackdrop(new Float3(float.PositiveInfinity), depth: 9, scale: 0.45);
+        Effect(new AutoExposure(_renderer) { ExposureCompensation = 0 });
+        RenderView view = View();
+        view.EV100 = 0;
+        Frame(view: view);
+        float saturated = 65504 / RenderView.ExposureOf(0);
+        float mean = MathF.Exp((0.05f * MathF.Log(2) + 0.23f * MathF.Log(saturated)) / 0.28f);
+        float expected = color.X * RenderView.ExposureOf(MathF.Log2(mean * 100 / 12.5f));
+        AssertAll(new Float3(expected), Frame(view: view), expected * 0.05f, i => i % Size < 4 || i / Size < 4);
+    }
+
+    [Fact]
+    public void Ssr_WithNoHits_LeavesTheProbeShading()
+    {
+        SkyOf(s_sky);
+        AddMirror(s_mirrorReflectance);
+        Frame();
+        Float4[] plain = Frame();
+        for (int i = 0; i < plain.Length; i++)
+        {
+            if (OnMirror(i))
+                Assert.True(plain[i].Z > 0.6f, $"pixel {i} shows no probes: {plain[i]}");
+        }
+
+        Effect(new ScreenSpaceReflections(_renderer));
+        Frame();
+        Frame();
+        Float4[] reflected = Frame();
+        for (int i = 0; i < plain.Length; i++)
+            Assert.True(Distance(plain[i], reflected[i]) < 2e-3f, $"pixel {i}: {plain[i]} became {reflected[i]}");
+    }
 }

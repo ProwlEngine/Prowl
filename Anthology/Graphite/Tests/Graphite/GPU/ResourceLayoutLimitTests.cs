@@ -8,36 +8,27 @@ namespace Prowl.Graphite.Tests;
 public abstract class ResourceLayoutLimitTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void OversizedSet_IsRejected_ByValidation()
+    public void SetLimit_AcceptsTheMaximum_AndRejectsOneMore()
     {
-        RenderException ex = Assert.Throws<RenderException>(() => CreateProgramWithElements(ResourceLayoutDescription.MaxElementsPerSet + 1));
+        GraphicsProgram program = CreateProgramWithElements(ResourceLayoutDescription.MaxElementsPerSet);
+        Assert.NotNull(program);
 
-        Assert.Contains("65 elements", ex.Message);
-        Assert.Contains($"{ResourceLayoutDescription.MaxElementsPerSet} are supported per set", ex.Message);
-    }
+        RenderException rejected = Assert.Throws<RenderException>(() => CreateProgramWithElements(ResourceLayoutDescription.MaxElementsPerSet + 1));
 
-    // The validation layer is opt-out, so the backend has to refuse the same layout on its own.
-    [Fact]
-    public void OversizedSet_IsRejected_WithValidationDisabled()
-    {
+        Assert.Contains("65 elements", rejected.Message);
+        Assert.Contains($"{ResourceLayoutDescription.MaxElementsPerSet} are supported per set", rejected.Message);
+
         bool previous = GD.ValidationEnabled;
         GD.ValidationEnabled = false;
         try
         {
-            RenderException ex = Assert.Throws<RenderException>(() => CreateProgramWithElements(ResourceLayoutDescription.MaxElementsPerSet + 1));
-            Assert.Contains($"{ResourceLayoutDescription.MaxElementsPerSet} are supported per set", ex.Message);
+            RenderException unvalidated = Assert.Throws<RenderException>(() => CreateProgramWithElements(ResourceLayoutDescription.MaxElementsPerSet + 1));
+            Assert.Contains($"{ResourceLayoutDescription.MaxElementsPerSet} are supported per set", unvalidated.Message);
         }
         finally
         {
             GD.ValidationEnabled = previous;
         }
-    }
-
-    [Fact]
-    public void SetAtTheLimit_IsAccepted()
-    {
-        GraphicsProgram program = CreateProgramWithElements(ResourceLayoutDescription.MaxElementsPerSet);
-        Assert.NotNull(program);
     }
 
     private GraphicsProgram CreateProgramWithElements(int elementCount)

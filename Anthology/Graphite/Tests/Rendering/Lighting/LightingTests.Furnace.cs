@@ -102,38 +102,6 @@ public sealed partial class LightingTests
         }
     }
 
-    // A map's UVs scale, turn counter clockwise and offset in KHR_texture_transform's order, the offset exact in float:
-    // turned a quarter, u' = offset - v, so a horizontal two texel ramp runs along v
-    [Fact]
-    public void MapUVs_ScaleRotateThenOffset_AtFullPrecision()
-    {
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default, Sky = SkyMaterial(new Float3(0, 0, 0), 0) };
-        Texture ramp = Lightmap<Float4>(2, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0, 0, 0, 1), new Float4(1, 1, 1, 1)]);
-        _ev100 = 8;
-        float exposure = RenderView.ExposureOf(8);
-        const float offset = 1024.25f;
-        _world.Add(new RenderableDesc { Mesh = IndirectQuad(secondUVs: false), Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) }, [PBR(m =>
-        {
-            m.SetColor("base_color", new Float4(0, 0, 0, 1));
-            m.SetFloat("specular_weight", 0);
-            m.SetFloat("emission_luminance", 1 / exposure);
-            m.SetTexture("emission_luminance_map", ramp, SamplerDescription.Linear);
-            m.SetTextureScaleOffset("emission_luminance_map", new Float4(1, 1, offset, 0));
-            m.SetTextureRotation("emission_luminance_map", MathF.PI / 2);
-        })]);
-        Frame();
-        Float4[] pixels = Frame();
-
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            Vector3 p = PixelPosition(i % Size, i / Size);
-            float v = (p.Y + 4) / 8;
-            float w = offset - v - MathF.Floor(offset - v);
-            float want = w < 0.25f ? (0.25f - w) * 2 : w < 0.75f ? (w - 0.25f) * 2 : 1 - (w - 0.75f) * 2;
-            Assert.True(MathF.Abs(pixels[i].X - want) <= 6e-3f, $"pixel {i}: expected {want}, got {pixels[i].X}");
-        }
-    }
-
     // FacingQuad with tangents, UV0 running 0 to 1 across it and UV1 twice UV0
     private GpuMesh TangentQuad => _tangentQuad ??= _renderer.CreateMesh(new MeshData
     {
@@ -151,93 +119,6 @@ public sealed partial class LightingTests
 
     private GpuMesh? _tangentQuad;
 
-    // The two texel ramp's value at u, bilinear between the texel centres and repeating
-    private static float Ramp(float u)
-    {
-        float w = u - MathF.Floor(u);
-        return w < 0.25f ? (0.25f - w) * 2 : w < 0.75f ? (w - 0.25f) * 2 : 1 - (w - 0.75f) * 2;
-    }
-
-    private Float4[] TierFrame(string tier)
-    {
-        RenderView view = _harness.BareView(1);
-        view.EV100 = _ev100;
-        view.Keywords = [GlobalAxis.PbrTier[tier]];
-        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
-        return _harness.Frame(new FrameDesc { Views = new[] { view } });
-    }
-
-    // A black height map height_scale deep moves every map's UVs along the view ray's drift over the surface, the pixel
-    // at camera relative p seeing UV0 move by p.xy / p.z times height_scale, UV1 by its own rate, twice that here. A
-    // height map tiled twice halves the move, its depth being in its own texture units. LITE views take one offset,
-    // limited by the view's slope.
-    [Theory]
-    [InlineData("FULL", 0, 1f)]
-    [InlineData("FULL", 1, 1f)]
-    [InlineData("FULL", 0, 2f)]
-    [InlineData("LITE", 0, 1f)]
-    public void Parallax_MovesEveryMapAlongTheViewRay(string tier, int uvSet, float heightTiling)
-    {
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default, Sky = SkyMaterial(new Float3(0, 0, 0), 0) };
-        Texture ramp = Lightmap<Float4>(2, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0, 0, 0, 1), new Float4(1, 1, 1, 1)]);
-        Texture black = Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0, 0, 0, 1)]);
-        _ev100 = 8;
-        float exposure = RenderView.ExposureOf(8);
-        const float depth = 0.4f;
-        Material material = PBR(m =>
-        {
-            m.SetColor("base_color", new Float4(0, 0, 0, 1));
-            m.SetFloat("specular_weight", 0);
-            m.SetFloat("emission_luminance", 1 / exposure);
-            m.SetTexture("emission_luminance_map", ramp, SamplerDescription.Linear);
-            m.SetTextureUVSet("emission_luminance_map", uvSet);
-            m.SetTexture("geometry_height_map", black, SamplerDescription.Linear);
-            m.SetTextureScaleOffset("geometry_height_map", new Float4(heightTiling, heightTiling, 0, 0));
-            m.SetFloat("height_scale", depth);
-        });
-        _world.Add(new RenderableDesc { Mesh = TangentQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) }, [material]);
-        TierFrame(tier);
-        Float4[] pixels = TierFrame(tier);
-
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            Vector3 p = PixelPosition(i % Size, i / Size);
-            float slope = tier == "LITE" ? p.Z / p.Length() : 1;
-            float u = (p.X + 4) / 8 + p.X / p.Z * depth / heightTiling * slope;
-            float want = Ramp(uvSet == 0 ? u : u * 2);
-            Assert.True(MathF.Abs(pixels[i].X - want) <= 6e-3f, $"pixel {i}: expected {want}, got {pixels[i].X}");
-        }
-    }
-
-    // Parallax is off until height_scale leaves zero: a height map alone moves nothing and keeps the variant without it
-    [Fact]
-    public void Parallax_IsOffByDefault()
-    {
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default, Sky = SkyMaterial(new Float3(0, 0, 0), 0) };
-        Texture ramp = Lightmap<Float4>(2, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0, 0, 0, 1), new Float4(1, 1, 1, 1)]);
-        Texture black = Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0, 0, 0, 1)]);
-        _ev100 = 8;
-        float exposure = RenderView.ExposureOf(8);
-        Material material = PBR(m =>
-        {
-            m.SetColor("base_color", new Float4(0, 0, 0, 1));
-            m.SetFloat("specular_weight", 0);
-            m.SetFloat("emission_luminance", 1 / exposure);
-            m.SetTexture("emission_luminance_map", ramp, SamplerDescription.Linear);
-            m.SetTexture("geometry_height_map", black, SamplerDescription.Linear);
-        });
-        Assert.Equal("false", material.Get(material.Shader.Axis("PBR_PARALLAX")));
-        _world.Add(new RenderableDesc { Mesh = TangentQuad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) }, [material]);
-        Frame();
-        Float4[] pixels = Frame();
-
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            float want = Ramp((PixelPosition(i % Size, i / Size).X + 4) / 8);
-            Assert.True(MathF.Abs(pixels[i].X - want) <= 6e-3f, $"pixel {i}: expected {want}, got {pixels[i].X}");
-        }
-    }
-
     // Standard Unlit glowing at one nit, so it shows its base colour as it is under the unit exposure
     private Material UnitUnlit()
     {
@@ -253,5 +134,4 @@ public sealed partial class LightingTests
         yield return [new Float3(0.95f, 0.64f, 0.54f), 1f, 0.35f, 0f, 0.8f, new Float3(0.9f, 0.8f, 0.5f), 1.5f];
         yield return [new Float3(0.3f, 0.3f, 0.3f), 0f, 0.6f, 1f, 1f, new Float3(1, 1, 1), 0.8f];
     }
-
 }

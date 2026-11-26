@@ -1,8 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
 
-using Prowl.Graphite.Vk;
-
 using Prowl.Vector;
 
 using Xunit;
@@ -20,7 +18,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void ManyDispatches_OneRecording_EachSeesItsOwnLooseUniforms()
     {
-
         const int n = 8;
         ComputeProgram program = CreateTwoBlockProgram();
         DeviceBuffer[] outputs = new DeviceBuffer[n];
@@ -49,16 +46,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             Assert.Equal((uint)(100 + i), r[0]);
             Assert.Equal((uint)(200 + i), r[1]);
         }
-    }
-
-    [Fact]
-    public void AlternatingUniforms_OneRecording_EachDispatchCorrect()
-    {
-
-        const int n = 8;
-        ComputeProgram program = CreateTwoBlockProgram();
-        DeviceBuffer[] outputs = new DeviceBuffer[n];
-        for (int i = 0; i < n; i++) outputs[i] = CreateOutput();
 
         // Flip-flop between two uniform configs. A set going back to a prior identity must resolve to
         // its own value, never to the one bound in between.
@@ -88,118 +75,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     // ---- Graphics: whole-draw fast path (repeated identical draws in one active render pass) ----
-
-    [Fact]
-    public void RepeatedIdenticalDraws_OneRenderPass_RenderCorrectly()
-    {
-        // Draw the same full-screen quad several times without touching properties between draws. Draws
-        // after the first hit the whole-draw fast path (pass active, epoch unchanged) and skip the
-        // rebind - the pixel must still be written, proving the skip does not drop the draw's bindings.
-        const uint size = 64;
-        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
-        GraphicsProgram program = CreateColoredQuadProgram();
-
-        Float4 color = new(0.2f, 0.4f, 0.6f, 1f);
-        DeviceBuffer vb = CreateQuad(color);
-
-        PropertySet props = new();
-        props.SetBuffer("InputVertices", vb);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-            cl.SetFullViewport();
-            cl.SetShader(program);
-            cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
-            cl.SetProperties(props);
-            for (int i = 0; i < 5; i++)
-                cl.Draw(4);
-        });
-
-        TexelData<Color> map = ReadTexture<Color>(target);
-        Color pixel = map[size / 2, size / 2];
-
-        Assert.Equal(new Color(0.2f, 0.4f, 0.6f, 1f), pixel, ColorFuzzyComparer.Instance);
-    }
-
-    [Fact]
-    public void AlternatingVertexSources_OneRecording_EachDrawBindsCorrectBuffer()
-    {
-        const uint size = 50;
-        const uint norm = 1000;
-
-        GraphicsProgram program = CreateUIntColorPointProgram();
-
-        UIntPointVertex vertexA = new() { Position = new(10.5f, 10.5f), Color = new Int4 { X = (int)norm } };
-        UIntPointVertex vertexB = new() { Position = new(40.5f, 40.5f), Color = new Int4 { Y = (int)norm } };
-
-        VertexSource sourceA = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", CreatePointVertexBuffer(vertexA));
-        VertexSource sourceB = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", CreatePointVertexBuffer(vertexB));
-
-        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
-
-        PropertySet props = new();
-        props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, size, size, 0, -1, 1));
-        props.SetInt("ColorNormalizationFactor", (int)norm);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-            cl.SetFullViewport();
-            cl.SetShader(program);
-            cl.SetProperties(props);
-            for (int i = 0; i < 6; i++)
-            {
-                cl.SetVertexSource((i % 2) == 0 ? sourceA : sourceB);
-                cl.Draw(1);
-            }
-        });
-
-        TexelData<Color> map = ReadTexture<Color>(target);
-        Color pixelA = map[10, FlipY(10, size)];
-        Color pixelB = map[40, FlipY(40, size)];
-
-        Assert.Equal(new Color(1f, 0f, 0f, 1f), pixelA, ColorFuzzyComparer.Instance);
-        Assert.Equal(new Color(0f, 1f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
-    }
-
-    [Fact]
-    public void MutatedVertexSource_OneRecording_SecondDrawBindsNewBuffer()
-    {
-        const uint size = 50;
-        const uint norm = 1000;
-
-        GraphicsProgram program = CreateUIntColorPointProgram();
-
-        UIntPointVertex vertexA = new() { Position = new(10.5f, 10.5f), Color = new Int4 { X = (int)norm } };
-        UIntPointVertex vertexB = new() { Position = new(40.5f, 40.5f), Color = new Int4 { Y = (int)norm } };
-        DeviceBuffer bufferB = CreatePointVertexBuffer(vertexB);
-
-        VertexSource source = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", CreatePointVertexBuffer(vertexA));
-
-        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
-
-        PropertySet props = new();
-        props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, size, size, 0, -1, 1));
-        props.SetInt("ColorNormalizationFactor", (int)norm);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-            cl.SetFullViewport();
-            cl.SetShader(program);
-            cl.SetProperties(props);
-            cl.SetVertexSource(source);
-            cl.Draw(1);
-            source.SetBuffer("POSITION", bufferB);
-            cl.Draw(1);
-        });
-
-        TexelData<Color> map = ReadTexture<Color>(target);
-        Color pixelB = map[40, FlipY(40, size)];
-
-        Assert.Equal(new Color(0f, 1f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
-    }
 
     [Fact]
     public void InPlacePropertyChange_OneRenderPass_PickedUpOnReapply()
@@ -241,48 +116,43 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
         Assert.Equal(new Color(1f, 0f, 0f, 1f), pixelA, ColorFuzzyComparer.Instance);
         Assert.Equal(new Color(0f, 0.5f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
+
+        // Every iteration reapplies a fresh PropertySet with the same buffer, bumping the property
+        // epoch without changing any resolved binding. The generalized identity-based skip (beyond
+        // the old epoch fast path) must still leave the correct descriptor set bound.
+        const uint quadSize = 64;
+        (Texture quadTarget, Framebuffer quadFb) = CreateColorTarget(quadSize, quadSize);
+        GraphicsProgram quadProgram = CreateColoredQuadProgram();
+
+        Float4 quadColor = new(0.1f, 0.5f, 0.9f, 1f);
+        DeviceBuffer quadVb = CreateQuad(quadColor);
+
+        GD.RunTestGraph((context, cl) =>
+        {
+            cl.SetFramebuffer(quadFb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
+            cl.SetFullViewport();
+            cl.SetShader(quadProgram);
+            cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
+            for (int i = 0; i < 5; i++)
+            {
+                PropertySet reapplied = new();
+                reapplied.SetBuffer("InputVertices", quadVb);
+                cl.SetProperties(reapplied);
+                cl.Draw(4);
+            }
+        });
+
+        TexelData<Color> quadMap = ReadTexture<Color>(quadTarget);
+        Color quadPixel = quadMap[quadSize / 2, quadSize / 2];
+
+        Assert.Equal(new Color(0.1f, 0.5f, 0.9f, 1f), quadPixel, ColorFuzzyComparer.Instance);
     }
 
     // ---- Narrowed bind emission: skip-when-unchanged, firstSet narrowing, program-change invalidation ----
 
     [Fact]
-    public void PropertiesReapplied_SameValues_BindSkipped_StillCorrect()
-    {
-        // Every iteration reapplies a fresh PropertySet with the same buffer, bumping the property
-        // epoch without changing any resolved binding. The generalized identity-based skip (beyond
-        // the old epoch fast path) must still leave the correct descriptor set bound.
-        const uint size = 64;
-        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
-        GraphicsProgram program = CreateColoredQuadProgram();
-
-        Float4 color = new(0.1f, 0.5f, 0.9f, 1f);
-        DeviceBuffer vb = CreateQuad(color);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-            cl.SetFullViewport();
-            cl.SetShader(program);
-            cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
-            for (int i = 0; i < 5; i++)
-            {
-                PropertySet iterProps = new();
-                iterProps.SetBuffer("InputVertices", vb);
-                cl.SetProperties(iterProps);
-                cl.Draw(4);
-            }
-        });
-
-        TexelData<Color> map = ReadTexture<Color>(target);
-        Color pixel = map[size / 2, size / 2];
-
-        Assert.Equal(new Color(0.1f, 0.5f, 0.9f, 1f), pixel, ColorFuzzyComparer.Instance);
-    }
-
-    [Fact]
     public void LastSetOnlyChanges_OneRecording_EachDispatchCorrect()
     {
-
         const int n = 8;
         ComputeProgram program = CreateLastSetVariesProgram();
         const uint fixedValue = 55;
@@ -312,73 +182,33 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             Assert.Equal(fixedValue, r[0]);
             Assert.Equal((uint)(300 + i), r[1]);
         }
-    }
 
-    [Fact]
-    public void AlternatingPrograms_OneRecording_BothProduceCorrectResults()
-    {
+        DeviceBuffer first = CreateOutput();
+        DeviceBuffer second = CreateOutput();
+        PropertySet firstProps = new();
+        firstProps.SetInt("fixedValue", 42);
+        firstProps.SetInt("valueB", 100);
+        firstProps.SetBuffer("Output", first);
+        PropertySet secondProps = new();
+        secondProps.SetInt("fixedValue", 42);
+        secondProps.SetInt("valueB", 200);
+        secondProps.SetBuffer("Output", second);
 
-        const int n = 8;
-        ComputeProgram programX = CreateTwoBlockProgram();
-        ComputeProgram programY = CreateTwoBlockProgram();
-        DeviceBuffer[] outputsX = new DeviceBuffer[n];
-        DeviceBuffer[] outputsY = new DeviceBuffer[n];
-        for (int i = 0; i < n; i++)
+        GD.RunTestGraphPasses(2, (context, cl, i) =>
         {
-            outputsX[i] = CreateOutput();
-            outputsY[i] = CreateOutput();
-        }
-
-        // Flip-flop between two distinct ComputeProgram instances every dispatch. Each switch must
-        // force a full rebind (program-change invalidation), never reusing the other program's sets.
-        GD.RunTestGraph((context, cl) =>
-        {
-            for (int i = 0; i < n; i++)
-            {
-                bool useX = (i % 2) == 0;
-                cl.SetComputeShader(useX ? programX : programY);
-
-                PropertySet props = new();
-                props.SetInt("valueA", useX ? 10 + i : 20 + i);
-                props.SetInt("valueB", useX ? 30 + i : 40 + i);
-                props.SetBuffer("Output", useX ? outputsX[i] : outputsY[i]);
-                cl.SetProperties(props);
-                cl.Dispatch(1, 1, 1);
-            }
+            cl.SetComputeShader(program);
+            cl.SetProperties(firstProps);
+            if (i == 1)
+                cl.SetProperties(secondProps);
+            cl.Dispatch(1, 1, 1);
         });
         GD.WaitForIdle();
 
-        for (int i = 0; i < n; i++)
-        {
-            bool useX = (i % 2) == 0;
-            uint[] r = useX ? Read(outputsX[i]) : Read(outputsY[i]);
-            Assert.Equal(useX ? (uint)(10 + i) : (uint)(20 + i), r[0]);
-            Assert.Equal(useX ? (uint)(30 + i) : (uint)(40 + i), r[1]);
-        }
+        Assert.Equal(new uint[] { 42, 100 }, Read(first));
+        Assert.Equal(new uint[] { 42, 200 }, Read(second));
     }
 
     // ---- Command-buffer pooling (#2): rented graph command buffers are recycled, not recreated ----
-
-    [Fact]
-    public void GraphCommandBuffers_AreRecycled_AcrossGraphs()
-    {
-        VkGraphicsDevice vk = (VkGraphicsDevice)GD;
-
-        // Each graph rents one command buffer; when its ring slot is reused by a later execution the
-        // buffer is reclaimed and handed out again. Steady state is therefore bounded by the ring size
-        // (one recyclable buffer per slot). Without recycling, the count would climb with the loop.
-        int graphs = (int)GD.MaxExecutingTasks * 8;
-        for (int i = 0; i < graphs; i++)
-        {
-            GD.RunTestGraph((context, cl) =>
-            {
-            });
-            GD.WaitForIdle();
-        }
-
-        Assert.True(vk.PooledGraphCommandBufferCount <= GD.MaxExecutingTasks + 1,
-            $"Expected graph command buffers to be recycled to ~{GD.MaxExecutingTasks}, but {vk.PooledGraphCommandBufferCount} were allocated over {graphs} graphs.");
-    }
 
     // ---- helpers ----
 

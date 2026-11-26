@@ -8,7 +8,6 @@ using Xunit;
 
 namespace Prowl.Graphite.ShaderDef.Tests;
 
-
 public class CompileQueueTests
 {
     // The compile threads never exit, so whatever one copied from the thread that started it would never be freed.
@@ -44,6 +43,24 @@ public class CompileQueueTests
 
         local.Value = null;
         Assert.Equal(0, inherited);
+
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(false));
+        GatedCompiler compiler = new();
+        ShaderPass pass = new() { State = new PassState(), Source = "a" };
+        pass.Bind(device, "Test", 0, [], [], compiler);
+        PassVariants variants = pass.Variants(compiler, GraphicsBackend.Vulkan);
+
+        AsyncLocal<object?> requested = new();
+        WeakReference held = HoldInAsyncLocal(requested);
+        Assert.Equal(VariantState.Pending, variants.Request(0, CompilePolicy.Async, out _, out _));
+        requested.Value = null;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        bool alive = held.IsAlive;
+        compiler.Gate.Set();
+        variants.WaitPending();
+        Assert.False(alive, "a variant still compiling kept an object its requester held in an AsyncLocal");
     }
 
     private sealed class GatedCompiler : IShaderCompiler
@@ -60,30 +77,6 @@ public class CompileQueueTests
         }
 
         public ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend) => throw new NotSupportedException();
-    }
-
-    // A queued variant waits behind every compile ahead of it, so whatever it copied from the thread that asked
-    // for it would stay alive until the queue got to it.
-    [Fact]
-    public void AQueuedVariantDoesNotKeepTheAsyncLocalsOfTheThreadThatAskedForIt()
-    {
-        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(false));
-        GatedCompiler compiler = new();
-        ShaderPass pass = new() { State = new PassState(), Source = "a" };
-        pass.Bind(device, "Test", 0, [], [], compiler);
-        PassVariants variants = pass.Variants(compiler, GraphicsBackend.Vulkan);
-
-        AsyncLocal<object?> local = new();
-        WeakReference held = HoldInAsyncLocal(local);
-        Assert.Equal(VariantState.Pending, variants.Request(0, CompilePolicy.Async, out _, out _));
-        local.Value = null;
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-        bool alive = held.IsAlive;
-        compiler.Gate.Set();
-        variants.WaitPending();
-        Assert.False(alive, "a variant still compiling kept an object its requester held in an AsyncLocal");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

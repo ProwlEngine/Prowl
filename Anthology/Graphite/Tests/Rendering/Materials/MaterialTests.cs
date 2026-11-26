@@ -78,29 +78,6 @@ public sealed class MaterialTests : IDisposable
     private static float F(uint bits) => BitConverter.UInt32BitsToSingle(bits);
 
     [Fact]
-    public void Schema_LaysOutPropertiesInDeclarationOrder_Std430()
-    {
-        IReadOnlyList<MaterialProperty> p = _shader.Properties;
-        Assert.Equal(new uint[] { 0, 16, 28, 32, 48, 64, 96, 160 }, p.Select(x => x.Offset));
-        Assert.Equal(80u, p[5].ScaleOffsetOffset);
-        Assert.Equal(176u / 4, _shader.Schema.StrideWords);
-        Assert.True(p[4].Gamma);
-        Assert.False(p[7].Gamma);
-        Assert.True(p[0].HasAttribute("Range"));
-        Assert.Equal(MaterialPropertyType.Float3, p[1].Type);
-    }
-
-    [Fact]
-    public void Shader_SplitsAxesByScope_AndReadsItsQueueAndPasses()
-    {
-        Assert.Equal(["_NORMALMAP"], _shader.MaterialAxes.Select(a => a.Name));
-        Assert.Equal(["FOG"], _shader.GlobalAxes.Select(a => a.Name));
-        Assert.Equal(2450, _shader.RenderQueue);
-        Assert.True(_shader.HasPass(PassType.Forward));
-        Assert.False(_shader.HasPass(PassType.ShadowCaster));
-    }
-
-    [Fact]
     public void Records_HoldDefaults_WithGammaColoursLinearised()
     {
         uint[] r = Record(_system.Create(_shader));
@@ -157,71 +134,6 @@ public sealed class MaterialTests : IDisposable
     }
 
     [Fact]
-    public void DisposedChildren_LeaveTheirParent()
-    {
-        Material parent = _system.Create(_shader);
-        Material kept = parent.CreateChild();
-        for (int i = 0; i < 100; i++)
-            parent.CreateChild().Dispose();
-
-        Assert.Equal([kept], parent.Children);
-    }
-
-    [Fact]
-    public void Cycles_Throw()
-    {
-        Material a = _system.Create(_shader);
-        Material b = a.CreateChild();
-        Assert.Throws<InvalidOperationException>(() => a.Parent = b);
-        Assert.Throws<InvalidOperationException>(() => a.Parent = a);
-    }
-
-    [Fact]
-    public void UnknownNames_AreKept_ReportedOnce_AndGoLiveWhenTheShaderGainsThem()
-    {
-        Shader small = new(ShaderParser.Parse("""
-            Shader "Test/Small"
-            {
-                Properties { _Count("Count", Integer) = 1 }
-                Pass { GLSLPROGRAM ENDGLSL }
-            }
-            """), _compiler);
-        Material material = _system.Create(small);
-        material.SetFloat("_Roughness", 0.3f);
-        material.SetFloat("_Roughness", 0.35f);
-        material.SetInt("_Count", 5);
-        Assert.Single(_reports);
-        Assert.Equal(16u / 4, small.Schema.StrideWords);
-        Assert.Equal(5u, Record(material)[0]);
-
-        material.Shader = _shader;
-        uint[] r = Record(material);
-        Assert.Equal(0.35f, F(r[0]));
-        Assert.Equal(5u, r[7]);
-        Assert.Equal(2, material.LocalValues.Count());
-    }
-
-    [Fact]
-    public void Reports_NameTheProperty()
-    {
-        _system.Create(_shader).SetFloat("_Missing", 1);
-
-        Assert.Contains("_Missing", Assert.Single(_reports).Message);
-    }
-
-    [Fact]
-    public void MismatchedTypes_FallBackToTheDefault()
-    {
-        Material material = _system.Create(_shader);
-        material.SetMatrix("_Roughness", Float4x4.Identity);
-        Assert.Equal(0.5f, F(Record(material)[0]));
-        Assert.Single(_reports);
-
-        material.SetColor("_Offset", new Float4(4, 5, 6, 7));
-        Assert.Equal(new[] { 4f, 5f, 6f }, Record(material)[4..7].Select(F));
-    }
-
-    [Fact]
     public void Textures_StoreTheirSlots_AndKeepTheirScaleOffset()
     {
         using Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
@@ -235,72 +147,6 @@ public sealed class MaterialTests : IDisposable
 
         material.SetTexture("_MainTex", null);
         Assert.Equal([7u, 0u], Record(material)[16..18]);
-    }
-
-    [Fact]
-    public void Keywords_InheritAndDefault_AndGlobalAxesAreRefused()
-    {
-        Material parent = _system.Create(_shader);
-        Material child = parent.CreateChild();
-        MaterialAxis normalMap = _shader.Axis("_NORMALMAP");
-        Assert.Equal("false", child.Get(normalMap));
-
-        parent.Set(normalMap, true);
-        Assert.Equal("true", child.Get(normalMap));
-
-        child.Set(normalMap, false);
-        Assert.Equal("false", child.Get(normalMap));
-        child.Set(normalMap, null);
-        Assert.Equal("true", child.Get(normalMap));
-
-        Assert.Throws<ArgumentException>(() => _shader.Axis("FOG"));
-        Assert.Throws<ArgumentException>(() => _shader.Axis("NOT_AN_AXIS"));
-        Assert.Throws<ArgumentException>(() => child.Set(normalMap, "maybe"));
-        Assert.Empty(child.LocalKeywords);
-        Assert.Empty(_reports);
-    }
-
-    [Fact]
-    public void Shaders_CopyTheirDefinition_AndLeaveItAsItWas()
-    {
-        ShaderDefinition plain = ShaderParser.Parse(Source);
-        Shader first = new(plain, _compiler);
-        Shader second = new(plain, _compiler);
-        Assert.Null(plain.Passes![0].Material);
-        Assert.NotSame(plain.Passes[0], first.Definition.Passes![0]);
-        Assert.NotSame(first.Definition.Passes[0], second.Definition.Passes![0]);
-        Assert.NotNull(first.Definition.Passes[0].Material);
-
-        InternalShaders.Register();
-        ShaderDefinition surface = ShaderParser.Parse("""
-            Shader "Tests/Copied"
-            {
-                Surface "Lit"
-                {
-                    GLSLPROGRAM
-                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { }
-                    ENDGLSL
-                }
-            }
-            """);
-        Shader expanded = new(surface, _compiler);
-        Assert.NotNull(surface.Surface);
-        Assert.Empty(surface.Passes ?? []);
-        Assert.True(string.IsNullOrEmpty(surface.Fallback));
-        Assert.Null(expanded.Definition.Surface);
-        Assert.NotEmpty(expanded.Definition.Passes!);
-        Assert.Equal(Renderer.FallbackShaderName, expanded.Definition.Fallback);
-    }
-
-    [Fact]
-    public void Axes_OfAnotherShader_Throw()
-    {
-        Shader other = new(ShaderParser.Parse(Source), _compiler);
-        Material material = _system.Create(_shader);
-
-        Assert.Throws<ArgumentException>(() => material.Set(other.Axis("_NORMALMAP"), true));
-        Assert.Throws<ArgumentException>(() => material.Get(other.Axis("_NORMALMAP")));
-        Assert.Empty(material.LocalKeywords);
     }
 
     [Fact]
@@ -417,5 +263,14 @@ public sealed class MaterialTests : IDisposable
         float[] values = _device.Map<float>(readback).ToArray();
         _device.Unmap(readback);
         Assert.Equal(new[] { 9f, 4f, 6f, 7f, 1f, 7f, 0.5f, 0.5f }, values);
+
+        IReadOnlyList<MaterialProperty> p = _shader.Properties;
+        Assert.Equal(new uint[] { 0, 16, 28, 32, 48, 64, 96, 160 }, p.Select(x => x.Offset));
+        Assert.Equal(80u, p[5].ScaleOffsetOffset);
+        Assert.Equal(176u / 4, _shader.Schema.StrideWords);
+        Assert.True(p[4].Gamma);
+        Assert.False(p[7].Gamma);
+        Assert.True(p[0].HasAttribute("Range"));
+        Assert.Equal(MaterialPropertyType.Float3, p[1].Type);
     }
 }

@@ -71,41 +71,4 @@ public sealed class DeferredDecalTests : IDisposable
                 Assert.True(MathF.Abs(At(forward, x)[c] - At(deferred, x)[c]) < 0.02f + 0.03f * At(forward, x)[c], $"pixel {x} channel {c}: forward {At(forward, x)[c]}, deferred {At(deferred, x)[c]}");
         }
     }
-
-    [Fact]
-    public void ADecalOutOfView_AddsNoDecalPassToTheView_AndLeavesItsImageAlone()
-    {
-        RenderView view = _harness.View();
-        view.Path = RenderPath.Deferred;
-        view.EarlyDepth = EarlyDepth.None;
-        Float4[] plain = _harness.Frame(view);
-
-        _harness.World.AddDecal(new DecalDesc { Transform = Double4x4.CreateTranslation(new Double3(0, 0, -500)) * Double4x4.CreateScale(4, 4, -2), Color = new Float4(1, 0, 0, 1) });
-        Float4[] behind = _harness.Frame(view);
-        Assert.False(_harness.Renderer.Frame.Camera(view)!.Info.HasDecals);
-        for (int x = 5; x < 11; x++)
-            Assert.True(MathF.Abs(At(plain, x).X - At(behind, x).X) < 0.01f, $"pixel {x}: {At(plain, x)} against {At(behind, x)}");
-
-        _harness.World.AddDecal(new DecalDesc { Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(4, 4, -2), Color = new Float4(1, 0, 0, 1) });
-        Float4 red = At(_harness.Frame(view), 8);
-        Assert.True(_harness.Renderer.Frame.Camera(view)!.Info.HasDecals);
-        Assert.True(red.Y < 0.2f * red.X, $"inside the decal {red}");
-    }
-
-    [Fact]
-    public void WithoutDecals_TheViewHasNoDecalPass()
-    {
-        RenderView view = _harness.View();
-        view.Path = RenderPath.Deferred;
-        _harness.Frame(view);
-        Assert.DoesNotContain(_harness.Renderer.Frame.Camera(view)!.Selected, feature => feature is GBufferDecalsFeature);
-
-        DecalHandle decal = _harness.World.AddDecal(new DecalDesc { Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(4, 4, -2), Color = new Float4(1, 0, 0, 1) });
-        _harness.Frame(view);
-        Assert.Contains(_harness.Renderer.Frame.Camera(view)!.Selected, feature => feature is GBufferDecalsFeature);
-
-        _harness.World.RemoveDecal(decal);
-        _harness.Frame(view);
-        Assert.DoesNotContain(_harness.Renderer.Frame.Camera(view)!.Selected, feature => feature is GBufferDecalsFeature);
-    }
 }

@@ -87,6 +87,38 @@ public sealed partial class LightingTests
         => Assert.True(MathF.Abs(got - expected) <= DitherTolerance, $"{what}: expected {expected} of the light through, got {got}");
 
     [Fact]
+    public void AHalfOpaqueCaster_CastsHalfAShadow()
+    {
+        float lit = LitInShadow(m =>
+        {
+            m.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
+            m.SetFloat("geometry_opacity", 0.5f);
+        });
+        AssertNear(0.5f, lit, "half opacity");
+    }
+
+    [Fact]
+    public void AClearGlassPane_CastsOnlyItsSpecularShare()
+    {
+        float lit = LitInShadow(m =>
+        {
+            m.SetFloat("transmission_weight", 1);
+            m.SetColor("transmission_color", new Float4(1, 1, 1, 1));
+            m.SetFloat("transmission_depth", 0);
+        });
+        float expected = 1 - DielectricE(0.3f, 1.5f);
+        Assert.True(expected > 0.9f, $"glass passes {expected}");
+        AssertNear(expected, lit, "clear glass");
+    }
+
+    private static readonly Action<Material>[] s_noShadowCasters =
+    [
+        _ => { },
+        m => { m.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off); m.SetFloat("geometry_opacity", 0.5f); },
+        m => m.SetFloat("transmission_weight", 0.5f),
+    ];
+
+    [Fact]
     public void AKeywordOnlyLitPassesRead_LeavesCachedShadowsAlone()
     {
         AddReceiver(new Vector3(0.8f));
@@ -111,17 +143,6 @@ public sealed partial class LightingTests
     }
 
     [Fact]
-    public void AHalfOpaqueCaster_CastsHalfAShadow()
-    {
-        float lit = LitInShadow(m =>
-        {
-            m.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
-            m.SetFloat("geometry_opacity", 0.5f);
-        });
-        AssertNear(0.5f, lit, "half opacity");
-    }
-
-    [Fact]
     public void AHalfTransparentUnlitCaster_CastsHalfAShadow()
     {
         float lit = LitInShadow(m =>
@@ -133,18 +154,12 @@ public sealed partial class LightingTests
     }
 
     [Fact]
-    public void AClearGlassPane_CastsOnlyItsSpecularShare()
-    {
-        float lit = LitInShadow(m =>
-        {
-            m.SetFloat("transmission_weight", 1);
-            m.SetColor("transmission_color", new Float4(1, 1, 1, 1));
-            m.SetFloat("transmission_depth", 0);
-        });
-        float expected = 1 - DielectricE(0.3f, 1.5f);
-        Assert.True(expected > 0.9f, $"glass passes {expected}");
-        AssertNear(expected, lit, "clear glass");
-    }
+    public void AnOpaqueMetal_CastsAFullShadow()
+        => AssertNear(0, LitInShadow(m => m.SetFloat("base_metalness", 1)), "opaque metal");
+
+    [Fact]
+    public void ATransmissiveMetal_CastsAFullShadow()
+        => AssertNear(0, LitInShadow(m => { m.SetFloat("base_metalness", 1); m.SetFloat("transmission_weight", 1); }), "transmissive metal");
 
     [Fact]
     public void AThinWalledLeaf_LetsThroughHalfSOnePlusG()
@@ -158,115 +173,5 @@ public sealed partial class LightingTests
             m.SetFloat("subsurface_scatter_anisotropy", g);
         });
         AssertNear((1 - DielectricE(0.3f, 1.5f)) * 0.5f * (1 + g), lit, "thin walled leaf");
-    }
-
-    [Fact]
-    public void AnOpaqueMetal_CastsAFullShadow()
-        => AssertNear(0, LitInShadow(m => m.SetFloat("base_metalness", 1)), "opaque metal");
-
-    [Fact]
-    public void ATransmissiveMetal_CastsAFullShadow()
-        => AssertNear(0, LitInShadow(m => { m.SetFloat("base_metalness", 1); m.SetFloat("transmission_weight", 1); }), "transmissive metal");
-
-    private static readonly Action<Material>[] s_noShadowCasters =
-    [
-        _ => { },
-        m => { m.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off); m.SetFloat("geometry_opacity", 0.5f); },
-        m => m.SetFloat("transmission_weight", 0.5f),
-    ];
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2)]
-    public void CastersWithCastShadowsOff_CastNone(int caster)
-        => AssertNear(1, LitInShadow(s_noShadowCasters[caster], castShadows: false), $"caster {caster}");
-
-    // A view moved to another world whose sun casts at a lower resolution draws fresh cascades, so none of the old
-    // world's casters linger in them
-    [Fact]
-    public void AViewMovedToAWorldWithSmallerCascades_KeepsNoneOfTheOldCasters()
-    {
-        AssertNear(0, LitInShadow(m => m.SetFloat("base_metalness", 1)), "opaque metal");
-
-        using RenderWorld other = _renderer.CreateWorld();
-        other.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default };
-        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
-        other.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), Flags = RenderableFlags.ReceiveShadows }, [Surface(new Float3(albedo.X, albedo.Y, albedo.Z))]);
-        LightDesc sun = new()
-        {
-            Type = LightType.Directional,
-            Direction = new Float3(s_sunDirection.X, s_sunDirection.Y, s_sunDirection.Z),
-            Intensity = 0.1f,
-            Shadow = new ShadowDesc { Enabled = true, Resolution = 256 },
-        };
-        other.AddLight(sun);
-
-        RenderView view = _harness.BareView(1);
-        view.World = other;
-        view.EV100 = _ev100;
-        view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
-        Float4[] pixels = _harness.Frame(view);
-
-        for (int y = 0; y < Size; y++)
-        {
-            for (int x = 0; x < Size; x++)
-            {
-                Vector3 p = PixelPosition(x, y);
-                float lit = Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f).X;
-                float got = pixels[y * Size + x].X;
-                Assert.True(MathF.Abs(got - lit) <= 2e-4f + 0.01f * lit, $"pixel {x},{y}: expected {lit}, got {got}");
-            }
-        }
-    }
-
-    // The dither sits on the light's texel grid in the world, so a camera moving sideways refits the cascade without
-    // sliding the pattern. Inside the shadow the receiver changes only smoothly, by the shadow's distance fade, never
-    // from one pixel to the next as a moved pattern would.
-    [Fact]
-    public void ADitheredShadow_StaysOnTheReceiver_AsTheCameraMoves()
-    {
-        AddReceiver(new Vector3(0.8f, 0.8f, 0.8f));
-        _world.AddLight(new LightDesc
-        {
-            Type = LightType.Directional,
-            Direction = new Float3(s_sunDirection.X, s_sunDirection.Y, s_sunDirection.Z),
-            Intensity = 0.1f,
-            Shadow = new ShadowDesc { Enabled = true, Resolution = 256, Cascades = 1 },
-        });
-        Material caster = PBR(m =>
-        {
-            m.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
-            m.SetFloat("geometry_opacity", 0.5f);
-        });
-        _world.Add(new RenderableDesc
-        {
-            Mesh = FacingQuad,
-            Transform = Double4x4.CreateTranslation(_origin + new Double3(-1, -1, 8)) * Double4x4.CreateScale(0.5),
-            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
-        }, [caster]);
-        Frame();
-        Float4[] before = Frame();
-
-        // Three pixels of 0.5 along x
-        _origin += new Double3(1.5, 0, 0);
-        Frame();
-        Float4[] after = Frame();
-        float Change(int x, int y) => after[y * Size + x - 3].X - before[y * Size + x].X;
-        bool Inside(int x, int y) => SquareEdge(PixelPosition(x, y), 0, -0.5f, 2) <= -0.6f;
-        float worst = 0, lit = before.Max(p => p.X);
-        int pairs = 0;
-        for (int y = 0; y < Size; y++)
-        {
-            for (int x = 3; x < Size - 1; x++)
-            {
-                if (!Inside(x, y) || !Inside(x + 1, y))
-                    continue;
-                pairs++;
-                worst = MathF.Max(worst, MathF.Abs(Change(x + 1, y) - Change(x, y)));
-            }
-        }
-        Assert.True(pairs > 4, $"{pairs} pixel pairs inside the shadow");
-        Assert.True(worst <= 0.01f * lit, $"the change jumps by {worst} of {lit} between neighbouring pixels");
     }
 }

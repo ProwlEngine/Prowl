@@ -282,6 +282,28 @@ public sealed class MaterialAbiTests : IDisposable
     }
 
     [Fact]
+    public void VertexStages_ReadingMaterialsWithoutWritingTheSlot_FailToCompile()
+    {
+        string source = Source
+            .Replace("layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;", "uniform float _Scale;")
+            .Replace("graphite_MaterialSlot = push.slot;", "float s = _Scale + float(push.slot);")
+            .Replace("gl_Position = vec4(x, y, 0.0, 1.0);", "gl_Position = vec4(x, y, 0.0, s);");
+        ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
+        Assert.Contains("graphite_MaterialSlot", error.Message);
+    }
+
+    [Fact]
+    public void MaterialPasses_UseTheRendererSets()
+    {
+        ShaderDescription description = Build(Source, out _);
+
+        Assert.Equal(new uint[] { 0, 1, 2 }, Array.ConvertAll(description.ResourceLayouts, l => l.Set));
+        ResourceLayoutElementDescription materials = Assert.Single(description.ResourceLayouts[2].Elements);
+        Assert.Equal(GraphiteBindings.MaterialsName, materials.Name.Text());
+        Assert.Equal(ShaderStages.Fragment, materials.Stages);
+    }
+
+    [Fact]
     public void PropertiesDeclaredWithAnotherType_FailToCompile()
     {
         string source = Source.Replace("uniform float _Scale;", "uniform vec2 _Scale;").Replace("* _Scale", "* _Scale.x");
@@ -307,17 +329,6 @@ public sealed class MaterialAbiTests : IDisposable
     }
 
     [Fact]
-    public void VertexStages_ReadingMaterialsWithoutWritingTheSlot_FailToCompile()
-    {
-        string source = Source
-            .Replace("layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;", "uniform float _Scale;")
-            .Replace("graphite_MaterialSlot = push.slot;", "float s = _Scale + float(push.slot);")
-            .Replace("gl_Position = vec4(x, y, 0.0, 1.0);", "gl_Position = vec4(x, y, 0.0, s);");
-        ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
-        Assert.Contains("graphite_MaterialSlot", error.Message);
-    }
-
-    [Fact]
     public void FragmentStages_ReadingMaterials_NeedAVertexStageWritingTheSlot()
     {
         string source = Source
@@ -325,16 +336,5 @@ public sealed class MaterialAbiTests : IDisposable
             .Replace("graphite_MaterialSlot = push.slot;", "float unused = float(push.slot);");
         ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
         Assert.Contains("graphite_MaterialSlot", error.Message);
-    }
-
-    [Fact]
-    public void MaterialPasses_UseTheRendererSets()
-    {
-        ShaderDescription description = Build(Source, out _);
-
-        Assert.Equal(new uint[] { 0, 1, 2 }, Array.ConvertAll(description.ResourceLayouts, l => l.Set));
-        ResourceLayoutElementDescription materials = Assert.Single(description.ResourceLayouts[2].Elements);
-        Assert.Equal(GraphiteBindings.MaterialsName, materials.Name.Text());
-        Assert.Equal(ShaderStages.Fragment, materials.Stages);
     }
 }

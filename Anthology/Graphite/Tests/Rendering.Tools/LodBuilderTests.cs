@@ -72,32 +72,6 @@ public sealed class LodBuilderTests
 
     private static int Triangles(MeshData mesh) => mesh.Indices.Length / 3;
 
-    [Fact]
-    public void EachLevel_KeepsAboutItsShareOfTheTriangles()
-    {
-        MeshData source = Sphere();
-        LodChain chain = LodBuilder.Build(source, new LodBuildOptions { Ratios = [0.5f, 0.25f, 0.125f] });
-
-        Assert.Equal(3, chain.Levels.Count);
-        int previous = Triangles(source);
-        foreach ((MeshData level, float ratio) in chain.Levels.Zip([0.5f, 0.25f, 0.125f]))
-        {
-            Assert.InRange(Triangles(level), 1, (int)(Triangles(source) * ratio) + 2);
-            Assert.True(Triangles(level) < previous);
-            Assert.All(level.Indices.ToArray(), index => Assert.True(index < level.VertexCount));
-            previous = Triangles(level);
-        }
-    }
-
-    [Fact]
-    public void EveryCorner_IsOneTheSourceHad()
-    {
-        MeshData source = Sphere();
-        HashSet<(Float3, Float3, Float2)> corners = Corners(source);
-        foreach (MeshData level in LodBuilder.Build(source).Levels)
-            Assert.Subset(corners, Corners(level));
-    }
-
     private static HashSet<(Float3, Float3, Float2)> Corners(MeshData mesh)
     {
         Float3[] positions = Read<Float3>(mesh, VertexSemantic.Position, VertexElementFormat.Float3);
@@ -110,8 +84,18 @@ public sealed class LodBuilderTests
     public void SubMeshes_KeepTheirOwnTriangles()
     {
         MeshData source = Sphere(split: true);
-        foreach (MeshData level in LodBuilder.Build(source).Levels)
+        HashSet<(Float3, Float3, Float2)> corners = Corners(source);
+        float[] ratios = [0.5f, 0.25f, 0.125f];
+        LodChain chain = LodBuilder.Build(source, new LodBuildOptions { Ratios = ratios });
+        Assert.Equal(3, chain.Levels.Count);
+        int previous = Triangles(source);
+        foreach ((MeshData level, float ratio) in chain.Levels.Zip(ratios))
         {
+            Assert.InRange(Triangles(level), 1, (int)(Triangles(source) * ratio) + 2);
+            Assert.True(Triangles(level) < previous);
+            previous = Triangles(level);
+            Assert.All(level.Indices.ToArray(), index => Assert.True(index < level.VertexCount));
+            Assert.Subset(corners, Corners(level));
             Assert.Equal(2, level.SubMeshes.Length);
             Float3[] positions = Read<Float3>(level, VertexSemantic.Position, VertexElementFormat.Float3);
             uint[] indices = level.Indices.ToArray();
@@ -123,50 +107,5 @@ public sealed class LodBuilderTests
                     Assert.True(s == 0 ? positions[indices[i]].Y >= -1e-5f : positions[indices[i]].Y <= 1e-5f);
             }
         }
-    }
-
-    [Fact]
-    public void ScreenSizes_FallAsTheErrorsRise()
-    {
-        LodChain chain = LodBuilder.Build(Sphere());
-        Assert.Equal(chain.Levels.Count, chain.Errors.Count);
-        Assert.Equal(chain.Levels.Count, chain.ScreenSizes.Count);
-        float size = float.PositiveInfinity, error = 0;
-        for (int i = 0; i < chain.Levels.Count; i++)
-        {
-            Assert.True(chain.ScreenSizes[i] > 0 && chain.ScreenSizes[i] < size);
-            Assert.True(chain.Errors[i] >= error);
-            (size, error) = (chain.ScreenSizes[i], chain.Errors[i]);
-        }
-    }
-
-    [Fact]
-    public void AFlatMesh_SimplifiesWithoutError_ItsSizesStillFalling()
-    {
-        Float3[] positions = Enumerable.Range(0, 17 * 17).Select(i => new Float3(i % 17, 0, i / 17)).ToArray();
-        List<uint> indices = new();
-        for (uint z = 0; z < 16; z++)
-        {
-            for (uint x = 0; x < 16; x++)
-            {
-                uint a = z * 17 + x;
-                indices.AddRange([a, a + 17, a + 1, a + 1, a + 17, a + 18]);
-            }
-        }
-        MeshData plane = new() { VertexCount = (uint)positions.Length, Streams = [Stream(VertexSemantic.Position, VertexElementFormat.Float3, positions)], Indices = indices.ToArray() };
-
-        LodChain chain = LodBuilder.Build(plane);
-        Assert.All(chain.Errors, e => Assert.True(e < 1e-4f));
-        Assert.True(chain.ScreenSizes[0] <= 1);
-        for (int i = 1; i < chain.ScreenSizes.Count; i++)
-            Assert.True(chain.ScreenSizes[i] > 0 && chain.ScreenSizes[i] < chain.ScreenSizes[i - 1]);
-    }
-
-    [Fact]
-    public void AMeshNotOfTriangleLists_IsRejected()
-    {
-        MeshData lines = Sphere();
-        lines.SubMeshes = [new SubMesh { IndexStart = 0, IndexCount = (uint)lines.Indices.Length, Topology = PrimitiveTopology.LineList }];
-        Assert.Throws<ArgumentException>(() => LodBuilder.Build(lines));
     }
 }

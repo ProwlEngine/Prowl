@@ -1,35 +1,11 @@
+using Prowl.Graphite.Vk;
+
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
 public abstract class FrameLifecycleTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
-    [Fact]
-    public void RingSlot_DerivesFromMonotonicExecutionId()
-    {
-        ulong previousId = 0;
-        for (uint i = 0; i < GD.MaxExecutingTasks * 2; i++)
-        {
-            ExecutionTask task = GD.BeginExecution();
-            Assert.True(task.Id > previousId);
-            Assert.Equal((task.Id - 1) % GD.MaxExecutingTasks, task.RingSlot);
-            previousId = task.Id;
-            GD.CompleteExecution(task);
-            GD.WaitForExecution(task);
-        }
-    }
-
-    [Fact]
-    public void LastCompletedExecutionId_AdvancesToTheLastAfterWaitForIdle()
-    {
-        ExecutionTask task = GD.BeginExecution();
-        ulong id = task.Id;
-        GD.CompleteExecution(task);
-        GD.WaitForIdle();
-
-        Assert.Equal(id, GD.LastCompletedExecutionId);
-    }
-
     [Fact]
     public void BeginExecution_NeverExceedsMaxExecutingTasks()
     {
@@ -47,6 +23,43 @@ public abstract class FrameLifecycleTests<T> : GraphicsDeviceTestBase<T> where T
 
         GD.WaitForIdle();
         Assert.Equal(0u, GD.ExecutingTasks);
+    }
+
+    [Fact]
+    public void NativeCommandBuffers_AreReusedAcrossExecutions()
+    {
+        VkGraphicsDevice vk = (VkGraphicsDevice)GD;
+        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.VertexBuffer));
+
+        void Cycle()
+        {
+            GD.RunTestGraph((context, cl) => { });
+            RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget)).Dispose();
+            GD.Record(transfer => transfer.UpdateBuffer(buffer, 0, new uint[] { 1, 2, 3, 4 })).Wait();
+            GD.WaitForIdle();
+        }
+
+        for (int i = 0; i < GD.MaxExecutingTasks; i++)
+            Cycle();
+        int warm = vk.AllocatedCommandBufferCount;
+
+        for (int i = 0; i < 32; i++)
+            Cycle();
+
+        Assert.Equal(warm, vk.AllocatedCommandBufferCount);
+
+        // Each graph rents one command buffer, reclaimed and handed out again once its ring slot is reused
+        int graphs = (int)GD.MaxExecutingTasks * 8;
+        for (int i = 0; i < graphs; i++)
+        {
+            GD.RunTestGraph((context, cl) =>
+            {
+            });
+            GD.WaitForIdle();
+        }
+
+        Assert.True(vk.PooledGraphCommandBufferCount <= GD.MaxExecutingTasks + 1,
+            $"Expected graph command buffers to be recycled to ~{GD.MaxExecutingTasks}, but {vk.PooledGraphCommandBufferCount} were allocated over {graphs} graphs.");
     }
 }
 

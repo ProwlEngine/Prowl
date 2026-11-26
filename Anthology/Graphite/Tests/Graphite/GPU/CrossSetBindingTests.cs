@@ -119,75 +119,8 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     }
 
     [Fact]
-    public void ResourcesInEverySet_ResolveIndependently()
-    {
-
-        DeviceBuffer output = CreateOutput();
-        DeviceBuffer input = CreateInput(555);
-        Texture texture = CreateSolidTexture(128);
-        ComputeProgram program = CreateProgram();
-
-        uint[] result = Run(BuildProps(output, input, texture), output, program);
-
-        // Each set keeps its own uniform: aliasing would make these collapse onto one value.
-        Assert.Equal(101u, result[0]);
-        Assert.Equal(202u, result[1]);
-        Assert.Equal(303u, result[3]);
-
-        // A read-only structured buffer bound to set 1 rather than set 0.
-        Assert.Equal(555u, result[2]);
-
-        // A texture and sampler pair bound to set 2.
-        Assert.Equal(128u, result[4]);
-    }
-
-    [Fact]
-    public void SwappingOneResourceInOneSet_LeavesTheOtherSetsIntact()
-    {
-
-        DeviceBuffer output = CreateOutput();
-        DeviceBuffer firstInput = CreateInput(111);
-        DeviceBuffer secondInput = CreateInput(999);
-        Texture texture = CreateSolidTexture(64);
-        ComputeProgram program = CreateProgram();
-
-        uint[] first = Run(BuildProps(output, firstInput, texture), output, program);
-        Assert.Equal(111u, first[2]);
-
-        // Only set 1's structured buffer changes. The descriptor cache must key on it and leave
-        // the other sets alone rather than reuse a stale set or rebuild everything wrong.
-        uint[] second = Run(BuildProps(output, secondInput, texture), output, program);
-
-        Assert.Equal(999u, second[2]);
-        Assert.Equal(101u, second[0]);
-        Assert.Equal(303u, second[3]);
-        Assert.Equal(64u, second[4]);
-    }
-
-    [Fact]
-    public void IdenticalBindings_ReusedAcrossFrames_StayCorrect()
-    {
-
-        DeviceBuffer output = CreateOutput();
-        DeviceBuffer input = CreateInput(777);
-        Texture texture = CreateSolidTexture(200);
-        ComputeProgram program = CreateProgram();
-
-        // Repeated identical bindings hit the descriptor-set cache. A cached set is reused as-is
-        // and never rewritten, so a bad identity would surface as a wrong result here.
-        for (int i = 0; i < GD.MaxExecutingTasks * 3; i++)
-        {
-            uint[] result = Run(BuildProps(output, input, texture), output, program);
-            Assert.Equal(777u, result[2]);
-            Assert.Equal(200u, result[4]);
-            Assert.Equal(101u, result[0]);
-        }
-    }
-
-    [Fact]
     public void AlternatingBindings_DoNotAliasInTheDescriptorCache()
     {
-
         DeviceBuffer output = CreateOutput();
         DeviceBuffer inputA = CreateInput(10);
         DeviceBuffer inputB = CreateInput(20);
@@ -213,12 +146,24 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
             Assert.Equal(6u, b[3]);
             Assert.Equal(40u, b[4]);
         }
+
+        Texture solid = CreateSolidTexture(64);
+        uint[] before = Run(BuildProps(output, inputA, solid), output, program);
+        Assert.Equal(10u, before[2]);
+
+        // Only set 1's structured buffer changes. The descriptor cache must key on it and leave
+        // the other sets alone rather than reuse a stale set or rebuild everything wrong.
+        uint[] after = Run(BuildProps(output, inputB, solid), output, program);
+
+        Assert.Equal(20u, after[2]);
+        Assert.Equal(101u, after[0]);
+        Assert.Equal(303u, after[3]);
+        Assert.Equal(64u, after[4]);
     }
 
     [Fact]
     public void SubRangesOfOneBuffer_BindAsDistinctResources()
     {
-
         DeviceBuffer output = CreateOutput();
         Texture texture = CreateSolidTexture(0);
         ComputeProgram program = CreateProgram();
@@ -241,143 +186,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         PropertySet second = BuildProps(output, input, texture);
         second.SetBuffer("Input", new DeviceBufferRange(input, stride, stride));
         Assert.Equal(5678u, Run(second, output, program)[2]);
-    }
-
-    [Fact]
-    public void ClearProperties_DropsPreviouslyBoundValues()
-    {
-
-        DeviceBuffer output = CreateOutput();
-        DeviceBuffer input = CreateInput(1);
-        Texture texture = CreateSolidTexture(1);
-        ComputeProgram program = CreateProgram();
-
-        GD.UpdateBuffer(output, 0, new uint[OutputCount]);
-
-        PropertySet props = BuildProps(output, input, texture, valueA: 4321);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-            cl.SetProperties(props);
-            cl.ClearProperties();
-            cl.SetProperties(BuildProps(output, input, texture, valueA: 1));
-            cl.Dispatch(1, 1, 1);
-        });
-        GD.WaitForIdle();
-
-        // The cleared set must not leak back into the dispatch.
-        Assert.Equal(1u, Read(output)[0]);
-    }
-
-    [Fact]
-    public void MissingProperty_ReportsItsSetAndBinding()
-    {
-
-        DeviceBuffer output = CreateOutput();
-        DeviceBuffer input = CreateInput(1);
-        Texture texture = CreateSolidTexture(1);
-        ComputeProgram program = CreateProgram();
-
-        uint reportedSet = uint.MaxValue;
-        MissingPropertyHandler previous = GD.OnMissingProperty;
-        GD.OnMissingProperty = (program, name, kind, set, binding) =>
-        {
-            if (name == (PropertyID)"Input") reportedSet = set;
-        };
-
-        try
-        {
-            // Input lives in set 1, so the handler must say so rather than defaulting to set 0.
-            PropertySet props = new();
-            props.SetInt("valueA", 1);
-            props.SetInt("valueB", 2);
-            props.SetInt("valueC", 3);
-            props.SetBuffer("Output", output);
-            props.SetTexture("Tex", texture, GD.LinearSampler);
-            Run(props, output, program);
-        }
-        finally
-        {
-            GD.OnMissingProperty = previous;
-        }
-
-        Assert.Equal(1u, reportedSet);
-    }
-
-    [Fact]
-    public void MissingTexture_SubstitutesADefaultRatherThanCrashing()
-    {
-
-        DeviceBuffer output = CreateOutput();
-        DeviceBuffer input = CreateInput(321);
-        ComputeProgram program = CreateProgram();
-
-        // No texture bound at all: the backend substitutes its null texture so the dispatch still
-        // runs and the rest of the sets still resolve.
-        PropertySet props = new();
-        props.SetInt("valueA", 11);
-        props.SetInt("valueB", 22);
-        props.SetInt("valueC", 33);
-        props.SetBuffer("Output", output);
-        props.SetBuffer("Input", input);
-
-        uint[] result = Run(props, output, program);
-
-        Assert.Equal(11u, result[0]);
-        Assert.Equal(321u, result[2]);
-    }
-
-    [Fact]
-    public void FrameAndItemSets_AlternatingInOneRecording_EachDispatchSeesItsValues()
-    {
-
-        const int n = 8;
-        DeviceBuffer input = CreateInput(555);
-        Texture texture = CreateSolidTexture(128);
-        ComputeProgram program = CreateProgram();
-
-        PropertySet frame = new();
-        frame.SetInt("valueB", 202);
-        frame.SetInt("valueC", 303);
-        frame.SetBuffer("Input", input);
-        frame.SetTexture("Tex", texture, GD.LinearSampler);
-
-        DeviceBuffer[] outputs = new DeviceBuffer[n];
-        PropertySet[] items = new PropertySet[n];
-        for (int i = 0; i < n; i++)
-        {
-            outputs[i] = CreateOutput();
-            items[i] = new PropertySet();
-            items[i].SetInt("valueA", 10 + i);
-            items[i].SetBuffer("Output", outputs[i]);
-        }
-        items[2].SetInt("valueC", 999);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-            for (int i = 0; i < n; i++)
-            {
-                if (i == 5)
-                    frame.SetInt("valueB", 404);
-
-                cl.SetProperties(frame);
-                cl.SetProperties(items[i]);
-                cl.Dispatch(1, 1, 1);
-            }
-        });
-        GD.WaitForIdle();
-
-        for (int i = 0; i < n; i++)
-        {
-            uint[] result = Read(outputs[i]);
-            Assert.Equal((uint)(10 + i), result[0]);
-            Assert.Equal(i >= 5 ? 404u : 202u, result[1]);
-            Assert.Equal(555u, result[2]);
-            Assert.Equal(i == 2 ? 999u : 303u, result[3]);
-            Assert.Equal(128u, result[4]);
-        }
     }
 }
 

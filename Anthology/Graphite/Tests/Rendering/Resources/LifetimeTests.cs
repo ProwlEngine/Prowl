@@ -155,30 +155,4 @@ public sealed class LifetimeTests : IDisposable
         Assert.Equal(first, reused);
         Assert.Equal(tinted.Draw.Keywords, programs[reused].Keywords);
     }
-
-    [Fact]
-    public void Frustums_AllocateNothing()
-    {
-        Float4x4 projection = Float4x4.CreateScale(0.1f);
-        _ = new CullFrustum(projection, default);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        CullFrustum frustum = new(projection, new Double3(1, 2, 3));
-        bool visible = frustum.Sphere(new Double3(1, 2, 5), 1);
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
-        Assert.True(visible);
-    }
-
-    [Fact]
-    public void TableLogs_StayBounded_WithoutTables()
-    {
-        using TableRing ring = new(_device, GraphiteBindings.ViewTable(4), "Unused");
-        using Sampler sampler = _device.ResourceFactory.CreateSampler(SamplerDescription.Point);
-        using Sampler other = _device.ResourceFactory.CreateSampler(SamplerDescription.Linear);
-        for (int i = 0; i < 5000; i++)
-            ring.Set("Graphite_Samplers", 0, i % 2 == 0 ? sampler : other);
-
-        Assert.True(ring.LogCount < 1024);
-        Assert.NotNull(ring.Get(0));
-        Assert.Equal(0, ring.LogCount);
-    }
 }

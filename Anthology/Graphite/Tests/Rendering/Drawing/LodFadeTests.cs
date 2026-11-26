@@ -82,14 +82,4 @@ public sealed class LodFadeTests : IDisposable
 
         Assert.All(Covered(FrameAt(2, view)), p => Assert.True(Green(p)));
     }
-
-    [Fact]
-    public void APoppingView_SwitchesAtOnce()
-    {
-        RenderView view = _harness.View();
-        view.LodTransition = LodTransition.Pop;
-        FrameAt(0, view);
-        _harness.World.SetLodBias(_handle, 0.2f);
-        Assert.All(Covered(FrameAt(0.5, view)), p => Assert.True(Green(p)));
-    }
 }

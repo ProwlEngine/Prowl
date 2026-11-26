@@ -6,7 +6,6 @@ using Xunit;
 
 namespace Prowl.Graphite.ShaderDef.Tests;
 
-
 public class ProgramResolutionTests : IDisposable
 {
     private const string Source = """
@@ -37,7 +36,6 @@ public class ProgramResolutionTests : IDisposable
     private readonly GraphicsDevice _device;
     private readonly ShaderPass _pass;
 
-
     public ProgramResolutionTests()
     {
         _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(false));
@@ -52,19 +50,10 @@ public class ProgramResolutionTests : IDisposable
         definition.Create(_device, new ShaderSnapshot { Passes = [new PassSnapshot { Axes = [], Variants = [variant] }] });
     }
 
-
     public void Dispose()
     {
         _device.Dispose();
     }
-
-
-    [Fact]
-    public void ResolvedProgram_IsNamedAfterShaderAndPass()
-    {
-        Assert.Equal("Test/Resolution/0", _pass.ResolveProgram(0, s_blend, s_depth, s_raster).Name);
-    }
-
 
     [Fact]
     public void DifferentBaseState_ProducesDistinctProgram()
@@ -74,19 +63,13 @@ public class ProgramResolutionTests : IDisposable
 
         Assert.NotSame(lessEqual, disabled);
         Assert.Same(lessEqual, _pass.ResolveProgram(0, s_blend, s_depth, s_raster));
-    }
 
-
-    [Fact]
-    public void CullOverride_ProducesDistinctProgram()
-    {
         GraphicsProgram cullBack = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
         PassState cullOff = Parse.State("Cull Off").Apply(_pass.State);
         GraphicsProgram overridden = _pass.ResolveProgram(0, cullOff, s_blend, s_depth, s_raster);
 
         Assert.NotSame(cullBack, overridden);
     }
-
 
     [Fact]
     public void IdenticalOverride_HitsCache()
@@ -99,28 +82,18 @@ public class ProgramResolutionTests : IDisposable
 
         Assert.NotSame(first, second);
         Assert.Same(a, b);
-    }
 
-
-    [Fact]
-    public void OverrideMatchingPassState_SharesProgramWithPlainResolve()
-    {
         GraphicsProgram plain = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
         GraphicsProgram overridden = _pass.ResolveProgram(0, Parse.State("Cull Back").Apply(_pass.State), s_blend, s_depth, s_raster);
 
         Assert.Same(plain, overridden);
-    }
 
+        GraphicsProgram defaultFirst = _pass.ResolveDefaultProgram(0, Parse.State("Cull Off"));
+        GraphicsProgram defaultSecond = _pass.ResolveDefaultProgram(0, Parse.State("Cull Off"));
+        GraphicsProgram defaultPlain = _pass.ResolveDefaultProgram(0);
 
-    [Fact]
-    public void DefaultResolve_EqualOverrides_ReuseProgram()
-    {
-        GraphicsProgram first = _pass.ResolveDefaultProgram(0, Parse.State("Cull Off"));
-        GraphicsProgram second = _pass.ResolveDefaultProgram(0, Parse.State("Cull Off"));
-        GraphicsProgram plain = _pass.ResolveDefaultProgram(0);
-
-        Assert.Same(first, second);
-        Assert.NotSame(first, plain);
-        Assert.Same(plain, _pass.ResolveDefaultProgram(0, Parse.State("Cull Back")));
+        Assert.Same(defaultFirst, defaultSecond);
+        Assert.NotSame(defaultFirst, defaultPlain);
+        Assert.Same(defaultPlain, _pass.ResolveDefaultProgram(0, Parse.State("Cull Back")));
     }
 }

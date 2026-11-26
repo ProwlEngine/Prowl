@@ -121,19 +121,15 @@ public sealed class BucketTests : IDisposable
         Assert.Equal(2u, list.Commands[0].InstanceCount);
         Assert.Equal(new uint[] { (uint)a.Index, (uint)b.Index }, list.Instances[..2]);
         Assert.Single(list.Calls);
-    }
 
-    [Fact]
-    public void ChunksOfOnePageAndProgram_MergeIntoOneCall()
-    {
         Add(_triangle, Material());
         Add(_other, Material(), At(1));
 
-        DrawList list = Frame(Forward);
-        Assert.Equal(2, list.CommandCount);
-        Assert.Equal(new DrawCall(list.Calls[0].Program, 0, PrimitiveTopology.TriangleList, false, 0, 2), Assert.Single(list.Calls));
-        Assert.NotEqual(list.Records[0].Chunk, list.Records[1].Chunk);
-        Assert.Equal(1u, list.Commands[1].FirstInstance);
+        DrawList listPage = Frame(Forward);
+        Assert.Equal(2, listPage.CommandCount);
+        Assert.Equal(new DrawCall(listPage.Calls[0].Program, 0, PrimitiveTopology.TriangleList, false, 0, 2), Assert.Single(listPage.Calls));
+        Assert.NotEqual(listPage.Records[0].Chunk, listPage.Records[1].Chunk);
+        Assert.Equal(1u, listPage.Commands[1].FirstInstance);
     }
 
     [Fact]
@@ -152,142 +148,6 @@ public sealed class BucketTests : IDisposable
     }
 
     [Fact]
-    public void Culling_DropsObjectsOutsideTheFrustum_OnOtherLayers_OrHidden_AndEmptyCommands()
-    {
-        Material material = Material();
-        RenderableHandle inside = Add(_triangle, material);
-        Add(_triangle, material, At(50));
-        Add(_triangle, material, layer: 2);
-        Add(_triangle, material, flags: RenderableFlags.Hidden);
-        Add(_other, material, At(0, 0, -5));
-
-        DrawList list = Frame(Forward, mask: 1);
-        Assert.Equal(1, list.CommandCount);
-        Assert.Equal(1u, list.Commands[0].InstanceCount);
-        Assert.Equal((uint)inside.Index, list.Instances[0]);
-    }
-
-    [Fact]
-    public void MultiChunkMeshes_AreCulledPerChunk()
-    {
-        GpuMesh strip = Mesh(5000 * 3, 0.005f);
-        Add(strip, Material(), At(-8));
-
-        DrawList list = Frame(Forward);
-        Assert.Equal(2, list.CommandCount);
-        Assert.Equal([6144u, 6144u], list.Commands[..2].Select(c => c.IndexCount));
-    }
-
-    [Fact]
-    public void MovingObjects_KeepTheirBuckets_AndAreCulledWhereTheyAre()
-    {
-        RenderableHandle handle = Add(_triangle, Material());
-        Frame(Forward);
-        int buckets = _buckets.BucketCount;
-
-        _world.SetTransform(handle, At(50));
-        Assert.Equal(0, Frame(Forward).CommandCount);
-        Assert.Empty(_world.Render.DrawChanged);
-        Assert.Equal(buckets, _buckets.BucketCount);
-    }
-
-    [Fact]
-    public void MirroredObjects_DrawInTheirOwnCall()
-    {
-        Material material = Material();
-        Add(_triangle, material);
-        Add(_triangle, material, At(1) * Float4x4.CreateScale(-1, 1, 1));
-
-        DrawList list = Frame(Forward);
-        Assert.Equal(2, list.Calls.Count);
-        Assert.Contains(list.Calls, c => c.Mirrored);
-    }
-
-    [Fact]
-    public void ShadowCasters_FollowObjectFlags_MaterialShadows_AndTheShaderPasses()
-    {
-        Material casting = Material();
-        Material quiet = Material();
-        quiet.CastShadows = false;
-        RenderableHandle caster = Add(_triangle, casting);
-        Add(_triangle, casting, At(1), RenderableFlags.None);
-        Add(_triangle, quiet, At(2));
-        Add(_triangle, Material(_unlit), At(3));
-        RenderableHandle shadowOnly = Add(_other, casting, At(4), RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly);
-
-        DrawList shadows = Frame(Shadows);
-        Assert.Equal(new uint[] { (uint)caster.Index, (uint)shadowOnly.Index }, shadows.Instances[..shadows.InstanceCount].Order());
-
-        DrawList forward = Frame(Forward);
-        Assert.DoesNotContain((uint)shadowOnly.Index, forward.Instances[..forward.InstanceCount]);
-        Assert.Equal(4, forward.InstanceCount);
-    }
-
-    // A transparent material only casts from the buckets, its one bucket the shadow pass's
-    [Fact]
-    public void TransparentMaterials_StayOutOfTheOpaqueBuckets()
-    {
-        Material glass = Material();
-        glass.RenderQueue = 3000;
-        RenderableHandle handle = Add(_triangle, glass);
-
-        Assert.Equal(0, Frame(Forward).CommandCount);
-        Assert.Equal(0, Frame(Prepass).CommandCount);
-        DrawList shadows = Frame(Shadows);
-        Assert.Equal(new uint[] { (uint)handle.Index }, shadows.Instances[..shadows.InstanceCount]);
-        Assert.Equal(1, _buckets.BucketCount);
-    }
-
-    [Fact]
-    public void TransparentItems_DrawBackToFront()
-    {
-        Material glass = Glass();
-        RenderableHandle near = Add(_triangle, glass, At(0, 0, 2));
-        RenderableHandle far = Add(_other, glass, At(0, 0, 8));
-        RenderableHandle middle = Add(_triangle, glass, At(1, 0, 5));
-
-        DrawList list = Frame(Transparent);
-        Assert.Equal(new uint[] { (uint)far.Index, (uint)middle.Index, (uint)near.Index }, Instances(list));
-        Assert.Equal(3, _buckets.TransparentCount);
-    }
-
-    [Fact]
-    public void AdjacentTransparentItemsOfOneChunk_ShareACommand_OthersInBetweenSplitIt()
-    {
-        Material glass = Glass();
-        Add(_triangle, glass, At(0, 0, 8));
-        Add(_triangle, glass, At(1, 0, 7));
-        DrawList list = Frame(Transparent);
-        Assert.Equal(1, list.CommandCount);
-        Assert.Equal(2u, list.Commands[0].InstanceCount);
-
-        Add(_other, glass, At(2, 0, 7.5f));
-        list = Frame(Transparent);
-        Assert.Equal(3, list.CommandCount);
-        Assert.Single(list.Calls);
-    }
-
-    // A transparent surface drawn on both sides without depth writes draws its back faces, then its front faces, so the
-    // far side of a closed mesh never blends over its near side
-    [Fact]
-    public void TwoSidedTransparentItems_DrawBackFacesFirst()
-    {
-        Material glass = Material();
-        glass.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
-        RenderableHandle handle = Add(_triangle, glass);
-
-        DrawList list = Frame(Transparent);
-        Assert.Equal(2, list.CommandCount);
-        Assert.Equal(new uint[] { (uint)handle.Index, (uint)handle.Index }, Instances(list));
-        Assert.Equal(2, list.Calls.Count);
-        Assert.Equal(FaceCullMode.Front, _programs[list.Calls[0].Program].StateOverride!.Raster.CullMode);
-        Assert.Equal(FaceCullMode.Back, _programs[list.Calls[1].Program].StateOverride!.Raster.CullMode);
-
-        glass.Surface = new SurfaceSettings(SurfaceType.Transparent);
-        Assert.Equal(1, Frame(Transparent).CommandCount);
-    }
-
-    [Fact]
     public void SortOrderThenQueue_OrderTransparentItems_BeforeDepth()
     {
         Material late = Glass(3100);
@@ -298,17 +158,6 @@ public sealed class BucketTests : IDisposable
         _world.SetSort(orderedFar, new TransparentOrder(100000));
 
         Assert.Equal(new uint[] { (uint)earlyNear.Index, (uint)lateFar.Index, (uint)orderedFar.Index }, Instances(Frame(Transparent)));
-    }
-
-    [Fact]
-    public void NegativeSortOrder_DrawsBeforeTheDefault()
-    {
-        Material glass = Glass();
-        RenderableHandle near = Add(_triangle, glass, At(0, 0, 1));
-        RenderableHandle far = Add(_other, glass, At(1, 0, 9));
-        _world.SetSort(near, new TransparentOrder(-70000));
-
-        Assert.Equal(new uint[] { (uint)near.Index, (uint)far.Index }, Instances(Frame(Transparent)));
     }
 
     [Fact]
@@ -324,29 +173,6 @@ public sealed class BucketTests : IDisposable
         Assert.Equal(new uint[] { (uint)groupBack.Index, (uint)groupFront.Index, (uint)loose.Index }, Instances(Frame(Transparent)));
     }
 
-    [Fact]
-    public void SortGroupMembers_OrderByInnerOrder_BeforeTheirDepth()
-    {
-        Material glass = Glass();
-        RenderableHandle front = Add(_triangle, glass, At(0, 0, 2));
-        RenderableHandle back = Add(_other, glass, At(1, 0, 9));
-        _world.SetSort(front, new TransparentOrder(0, 3, new Double3(0, 0, 5), InnerOrder: -1));
-        _world.SetSort(back, new TransparentOrder(0, 3, new Double3(0, 0, 5), InnerOrder: 1));
-
-        Assert.Equal(new uint[] { (uint)front.Index, (uint)back.Index }, Instances(Frame(Transparent)));
-    }
-
-    [Fact]
-    public void SortGroup_RanksByItsOrder_LikeOneItem()
-    {
-        Material glass = Glass();
-        RenderableHandle member = Add(_triangle, glass, At(0, 0, 1));
-        RenderableHandle loose = Add(_other, glass, At(1, 0, 9));
-        _world.SetSort(member, new TransparentOrder(-1, 5, new Double3(0, 0, 1)));
-
-        Assert.Equal(new uint[] { (uint)member.Index, (uint)loose.Index }, Instances(Frame(Transparent)));
-    }
-
     // Looks along +Z from the origin, x and y from -10 to 10, z from 0 to 10
     private static CullFrustum Orthographic()
         => new(ViewCamera.Orthographic(Double3.Zero, new Float3(0, 0, 1), new Float3(0, 1, 0), 20, 0, 10, aspect: 1).Layers, 1);
@@ -359,111 +185,6 @@ public sealed class BucketTests : IDisposable
         RenderableHandle front = Add(_other, glass, At(8, 0, 3));
 
         Assert.Equal(new uint[] { (uint)back.Index, (uint)front.Index }, Instances(Frame(Transparent, frustum: Orthographic())));
-    }
-
-    [Fact]
-    public void OrthographicTransparentItems_LargeBackgroundDrawsBehindSmallerItems()
-    {
-        Material glass = Glass();
-        RenderableHandle background = Add(_triangle, glass, At(0, 0, 8) * Float4x4.CreateScale(20000));
-        RenderableHandle small = Add(_other, glass, At(0, 0, 4));
-
-        Assert.Equal(new uint[] { (uint)background.Index, (uint)small.Index }, Instances(Frame(Transparent, frustum: Orthographic())));
-    }
-
-    [Fact]
-    public void OrthographicTransparentItems_AtOneDepth_KeepAStableOrder()
-    {
-        Material glass = Glass();
-        List<uint> added = new();
-        for (int i = 0; i < 40; i++)
-            added.Add((uint)Add(i % 2 == 0 ? _triangle : _other, glass, At(9 - i * 0.45f, 0, 5)).Index);
-
-        Assert.Equal(added.Order().ToArray(), Instances(Frame(Transparent, frustum: Orthographic())));
-    }
-
-    [Fact]
-    public void TransparentItems_FollowCullingAndRemoval()
-    {
-        Material glass = Glass();
-        RenderableHandle visible = Add(_triangle, glass, At(0, 0, 5));
-        RenderableHandle outside = Add(_other, glass, At(50, 0, 5));
-        Assert.Equal(new uint[] { (uint)visible.Index }, Instances(Frame(Transparent)));
-
-        _world.Remove(visible);
-        _world.Remove(outside);
-        Assert.Equal(0, Frame(Transparent).CommandCount);
-        Assert.Equal(0, _buckets.TransparentCount);
-    }
-
-    [Fact]
-    public void PrepassCommands_DrawNearToFar()
-    {
-        Material material = Material();
-        Add(_triangle, material, At(0, 0, 9));
-        Add(_other, material, At(0, 0, 1));
-
-        DrawList list = Frame(Prepass);
-        Assert.Equal(2, list.CommandCount);
-        uint nearChunk = _other.Placement!.FirstChunk;
-        Assert.Equal(nearChunk, list.Records[0].Chunk);
-        Assert.Single(list.Calls);
-    }
-
-    [Fact]
-    public void MaterialsOfOneProgram_InDifferentQueues_DrawInTheirOwnQueue()
-    {
-        Material late = Material(_unlit);
-        Material early = Material(_unlit);
-        RenderableHandle lateObject = Add(_triangle, late);
-        RenderableHandle earlyObject = Add(_triangle, early, At(1));
-        early.RenderQueue = 1000;
-
-        DrawList list = Frame(Forward);
-        Assert.Equal(2, list.CommandCount);
-        Assert.Equal(new uint[] { (uint)earlyObject.Index, (uint)lateObject.Index }, Instances(list));
-
-        early.RenderQueue = 2400;
-        Assert.Equal(new uint[] { (uint)lateObject.Index, (uint)earlyObject.Index }, Instances(Frame(Forward)));
-    }
-
-    [Fact]
-    public void ProgramIds_OfEmptiedBuckets_AreFreedAtTheNextSweep()
-    {
-        Material material = Material();
-        Add(_triangle, material);
-        Frame(Forward);
-        int ids = _programs.Count;
-
-        // Each switch takes the new variant's ids and frees the old ones at the next sweep, and passes without the axis
-        // keep one id.
-        int reading = 0;
-        for (int p = 0; p < _lit.Definition.Passes!.Length; p++)
-            reading += _lit.PassHasAxis(p, "_NORMALMAP") ? 1 : 0;
-        for (int i = 0; i < 4; i++)
-        {
-            material.Set(material.Shader.Axis("_NORMALMAP"), i % 2 == 0);
-            _programs.Sweep();
-            Frame(Forward);
-        }
-        Assert.True(reading < ids);
-        Assert.Equal(ids + reading, _programs.Count);
-
-        _programs.Sweep();
-        Assert.Equal(ids, _programs.Count);
-    }
-
-    [Fact]
-    public void LowerRenderQueues_DrawFirst()
-    {
-        Material late = Material(_unlit);
-        Material early = Material(_unlit);
-        early.RenderQueue = 1000;
-        Add(_triangle, late);
-        Add(_other, early, At(1));
-
-        DrawList list = Frame(Forward);
-        Assert.Equal(_other.Placement!.FirstChunk, list.Records[0].Chunk);
     }
 
     [Fact]
@@ -497,6 +218,16 @@ public sealed class BucketTests : IDisposable
         Frame(Forward);
         Assert.True(_buckets.BucketCount < buckets);
         Assert.Equal(0, _buckets.BucketCount);
+
+        Material glass = Glass();
+        RenderableHandle visible = Add(_triangle, glass, At(0, 0, 5));
+        RenderableHandle outside = Add(_other, glass, At(50, 0, 5));
+        Assert.Equal(new uint[] { (uint)visible.Index }, Instances(Frame(Transparent)));
+
+        _world.Remove(visible);
+        _world.Remove(outside);
+        Assert.Equal(0, Frame(Transparent).CommandCount);
+        Assert.Equal(0, _buckets.TransparentCount);
     }
 
     [Fact]
@@ -547,5 +278,169 @@ public sealed class BucketTests : IDisposable
             Assert.NotEmpty(expected);
             Assert.Equal(expected.OrderBy(i => i), Instances(list).OrderBy(i => i));
         }
+    }
+
+    [Fact]
+    public void ProgramIds_OfEmptiedBuckets_AreFreedAtTheNextSweep()
+    {
+        Material material = Material();
+        Add(_triangle, material);
+        Frame(Forward);
+        int ids = _programs.Count;
+
+        // Each switch takes the new variant's ids and frees the old ones at the next sweep, and passes without the axis
+        // keep one id.
+        int reading = 0;
+        for (int p = 0; p < _lit.Definition.Passes!.Length; p++)
+            reading += _lit.PassHasAxis(p, "_NORMALMAP") ? 1 : 0;
+        for (int i = 0; i < 4; i++)
+        {
+            material.Set(material.Shader.Axis("_NORMALMAP"), i % 2 == 0);
+            _programs.Sweep();
+            Frame(Forward);
+        }
+        Assert.True(reading < ids);
+        Assert.Equal(ids + reading, _programs.Count);
+
+        _programs.Sweep();
+        Assert.Equal(ids, _programs.Count);
+    }
+
+    [Fact]
+    public void TransparentItems_DrawBackToFront()
+    {
+        Material glass = Glass();
+        RenderableHandle near = Add(_triangle, glass, At(0, 0, 2));
+        RenderableHandle far = Add(_other, glass, At(0, 0, 8));
+        RenderableHandle middle = Add(_triangle, glass, At(1, 0, 5));
+
+        DrawList list = Frame(Transparent);
+        Assert.Equal(new uint[] { (uint)far.Index, (uint)middle.Index, (uint)near.Index }, Instances(list));
+        Assert.Equal(3, _buckets.TransparentCount);
+    }
+
+    [Fact]
+    public void NegativeSortOrder_DrawsBeforeTheDefault()
+    {
+        Material glass = Glass();
+        RenderableHandle near = Add(_triangle, glass, At(0, 0, 1));
+        RenderableHandle far = Add(_other, glass, At(1, 0, 9));
+        _world.SetSort(near, new TransparentOrder(-70000));
+
+        Assert.Equal(new uint[] { (uint)near.Index, (uint)far.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void MaterialsOfOneProgram_InDifferentQueues_DrawInTheirOwnQueue()
+    {
+        Material late = Material(_unlit);
+        Material early = Material(_unlit);
+        RenderableHandle lateObject = Add(_triangle, late);
+        RenderableHandle earlyObject = Add(_triangle, early, At(1));
+        early.RenderQueue = 1000;
+
+        DrawList list = Frame(Forward);
+        Assert.Equal(2, list.CommandCount);
+        Assert.Equal(new uint[] { (uint)earlyObject.Index, (uint)lateObject.Index }, Instances(list));
+
+        early.RenderQueue = 2400;
+        Assert.Equal(new uint[] { (uint)lateObject.Index, (uint)earlyObject.Index }, Instances(Frame(Forward)));
+    }
+
+    [Fact]
+    public void LowerRenderQueues_DrawFirst()
+    {
+        Material late = Material(_unlit);
+        Material early = Material(_unlit);
+        early.RenderQueue = 1000;
+        Add(_triangle, late);
+        Add(_other, early, At(1));
+
+        DrawList list = Frame(Forward);
+        Assert.Equal(_other.Placement!.FirstChunk, list.Records[0].Chunk);
+    }
+
+    [Fact]
+    public void OrthographicTransparentItems_LargeBackgroundDrawsBehindSmallerItems()
+    {
+        Material glass = Glass();
+        RenderableHandle background = Add(_triangle, glass, At(0, 0, 8) * Float4x4.CreateScale(20000));
+        RenderableHandle small = Add(_other, glass, At(0, 0, 4));
+
+        Assert.Equal(new uint[] { (uint)background.Index, (uint)small.Index }, Instances(Frame(Transparent, frustum: Orthographic())));
+    }
+
+    [Fact]
+    public void OrthographicTransparentItems_AtOneDepth_KeepAStableOrder()
+    {
+        Material glass = Glass();
+        List<uint> added = new();
+        for (int i = 0; i < 40; i++)
+            added.Add((uint)Add(i % 2 == 0 ? _triangle : _other, glass, At(9 - i * 0.45f, 0, 5)).Index);
+
+        Assert.Equal(added.Order().ToArray(), Instances(Frame(Transparent, frustum: Orthographic())));
+    }
+
+    [Fact]
+    public void SortGroupMembers_OrderByInnerOrder_BeforeTheirDepth()
+    {
+        Material glass = Glass();
+        RenderableHandle front = Add(_triangle, glass, At(0, 0, 2));
+        RenderableHandle back = Add(_other, glass, At(1, 0, 9));
+        _world.SetSort(front, new TransparentOrder(0, 3, new Double3(0, 0, 5), InnerOrder: -1));
+        _world.SetSort(back, new TransparentOrder(0, 3, new Double3(0, 0, 5), InnerOrder: 1));
+
+        Assert.Equal(new uint[] { (uint)front.Index, (uint)back.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void SortGroup_RanksByItsOrder_LikeOneItem()
+    {
+        Material glass = Glass();
+        RenderableHandle member = Add(_triangle, glass, At(0, 0, 1));
+        RenderableHandle loose = Add(_other, glass, At(1, 0, 9));
+        _world.SetSort(member, new TransparentOrder(-1, 5, new Double3(0, 0, 1)));
+
+        Assert.Equal(new uint[] { (uint)member.Index, (uint)loose.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void Culling_DropsObjectsOutsideTheFrustum_OnOtherLayers_OrHidden_AndEmptyCommands()
+    {
+        Material material = Material();
+        RenderableHandle inside = Add(_triangle, material);
+        Add(_triangle, material, At(50));
+        Add(_triangle, material, layer: 2);
+        Add(_triangle, material, flags: RenderableFlags.Hidden);
+        Add(_other, material, At(0, 0, -5));
+
+        DrawList list = Frame(Forward, mask: 1);
+        Assert.Equal(1, list.CommandCount);
+        Assert.Equal(1u, list.Commands[0].InstanceCount);
+        Assert.Equal((uint)inside.Index, list.Instances[0]);
+    }
+
+    [Fact]
+    public void MultiChunkMeshes_AreCulledPerChunk()
+    {
+        GpuMesh strip = Mesh(5000 * 3, 0.005f);
+        Add(strip, Material(), At(-8));
+
+        DrawList list = Frame(Forward);
+        Assert.Equal(2, list.CommandCount);
+        Assert.Equal([6144u, 6144u], list.Commands[..2].Select(c => c.IndexCount));
+    }
+
+    [Fact]
+    public void MovingObjects_KeepTheirBuckets_AndAreCulledWhereTheyAre()
+    {
+        RenderableHandle handle = Add(_triangle, Material());
+        Frame(Forward);
+        int buckets = _buckets.BucketCount;
+
+        _world.SetTransform(handle, At(50));
+        Assert.Equal(0, Frame(Forward).CommandCount);
+        Assert.Empty(_world.Render.DrawChanged);
+        Assert.Equal(buckets, _buckets.BucketCount);
     }
 }

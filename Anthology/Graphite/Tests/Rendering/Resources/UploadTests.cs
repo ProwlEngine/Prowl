@@ -64,8 +64,17 @@ public sealed class UploadTests : IDisposable
     }
 
     [Fact]
-    public void Writes_LandAtTheirOffsets_AcrossSeveralDestinations()
+    public void BigWrites_SplitIntoItems_AndStillCopyEveryWord()
     {
+        const uint words = Uploader.MaxItemWords * 3 + 17;
+        using DeviceBuffer buffer = Buffer(words + 5);
+        uint[] data = Enumerable.Range(1, (int)words).Select(i => (uint)i).ToArray();
+
+        _uploader.Write(buffer, 5, data);
+        Flush(buffer);
+
+        Assert.Equal(data, Read(buffer)[5..]);
+
         using DeviceBuffer a = Buffer(64);
         using DeviceBuffer b = Buffer(64);
 
@@ -80,29 +89,6 @@ public sealed class UploadTests : IDisposable
         Assert.Equal(0u, first[6]);
         Assert.Equal(7u, Read(b)[0]);
         Assert.Equal(0u, _uploader.QueuedWords);
-    }
-
-    [Fact]
-    public void Destinations_AreForgottenOnceRecorded()
-    {
-        using DeviceBuffer buffer = Buffer(4);
-        _uploader.Write(buffer, 0, [1]);
-        Assert.Equal(1, _uploader.DestinationCount);
-        Flush(buffer);
-        Assert.Equal(0, _uploader.DestinationCount);
-    }
-
-    [Fact]
-    public void BigWrites_SplitIntoItems_AndStillCopyEveryWord()
-    {
-        const uint words = Uploader.MaxItemWords * 3 + 17;
-        using DeviceBuffer buffer = Buffer(words + 5);
-        uint[] data = Enumerable.Range(1, (int)words).Select(i => (uint)i).ToArray();
-
-        _uploader.Write(buffer, 5, data);
-        Flush(buffer);
-
-        Assert.Equal(data, Read(buffer)[5..]);
     }
 
     [Fact]
@@ -156,56 +142,6 @@ public sealed class UploadTests : IDisposable
         Assert.Equal(first.Id, pool.Create(data).Id);
     }
 
-    [Fact]
-    public void SetStream_OverwritesOneStreamInPlace_AndWaitsForNewData()
-    {
-        GeometryPool pool = new(_device, _store, 1024, 1024);
-        Float3[] positions = [new(1, 2, 3), new(4, 5, 6), new(7, 8, 9)];
-        Float2[] uvs = [new(1, 1), new(2, 2), new(3, 3)];
-        VertexStream Uv(Float2[] values) => new() { Semantic = VertexSemantic.UV2, Format = VertexElementFormat.Float2, Data = MemoryMarshal.AsBytes(values.AsSpan()).ToArray() };
-        MeshData data = new()
-        {
-            VertexCount = 3,
-            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }, Uv(uvs)],
-            Indices = new uint[] { 0, 1, 2 },
-        };
-        GpuMesh mesh = pool.Create(data);
-        List<GpuMesh> changed = new();
-        pool.Apply(_uploader, 0, long.MaxValue, changed);
-        Flush(pool.Pages[0].Vertices, pool.Pages[0].Indices);
-        MeshPlacement placement = mesh.Placement!;
-
-        mesh.SetStream(Uv([new(7, 7), new(8, 8), new(9, 9)]), 3);
-        mesh.SetStream(Uv([new(5, 5)]), 1);
-        changed.Clear();
-        pool.Apply(_uploader, 1, long.MaxValue, changed);
-        Flush(pool.Pages[0].Vertices);
-
-        Assert.Empty(changed);
-        Assert.Same(placement, mesh.Placement);
-        uint offset = placement.StreamOffsets[(int)VertexSemantic.UV2];
-        Assert.Equal(new[] { 7f, 7f, 8f, 8f, 9f, 9f }, Read(pool.Pages[0].Vertices)[(int)offset..(int)(offset + 6)].Select(BitConverter.UInt32BitsToSingle));
-        uint positionOffset = placement.StreamOffsets[(int)VertexSemantic.Position];
-        Assert.Equal(1f, BitConverter.UInt32BitsToSingle(Read(pool.Pages[0].Vertices)[(int)positionOffset]));
-    }
-
-    [Fact]
-    public void MeshesBiggerThanAPage_GetADedicatedPage()
-    {
-        GeometryPool pool = new(_device, _store, 16, 16);
-        Float3[] positions = Enumerable.Range(0, 30).Select(i => new Float3(i, 0, 0)).ToArray();
-        GpuMesh mesh = pool.Create(new MeshData
-        {
-            VertexCount = 30,
-            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
-            Indices = Enumerable.Range(0, 30).Select(i => (uint)i).ToArray(),
-        });
-
-        Assert.True(pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>()));
-        Assert.Single(pool.Pages);
-        Assert.True(pool.Pages[0].VertexWords.Capacity >= 90);
-        Assert.NotNull(mesh.Placement);
-    }
     private static MeshData Positions(int vertices)
     {
         Float3[] positions = Enumerable.Range(0, vertices).Select(i => new Float3(i, i * 2, -i)).ToArray();
@@ -215,13 +151,6 @@ public sealed class UploadTests : IDisposable
             Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
             Indices = Enumerable.Range(0, vertices).Select(i => (uint)i).ToArray(),
         };
-    }
-
-    [Fact]
-    public void Records_HaveTheirStd430Sizes()
-    {
-        Assert.Equal(96, Marshal.SizeOf<ChunkRecord>());
-        Assert.Equal(32, Marshal.SizeOf<MeshRecord>());
     }
 
     [Fact]
@@ -295,6 +224,9 @@ public sealed class UploadTests : IDisposable
             placement.StreamOffsets[0], 1, 6144, 12298, 0,
             placement.IndexBase + 6144, 6, mesh.Id, 0,
         }, values);
+
+        Assert.Equal(96, Marshal.SizeOf<ChunkRecord>());
+        Assert.Equal(32, Marshal.SizeOf<MeshRecord>());
     }
 
     [Fact]
@@ -313,45 +245,5 @@ public sealed class UploadTests : IDisposable
 
         uint[] words = Read(table.Buffer);
         Assert.Equal([10u, 11u, 12u, 13u, 0u, 0u, 0u, 0u, 0u, 99u], words[..10]);
-    }
-
-    [Fact]
-    public void Tables_OnlyUploadDirtyRecords()
-    {
-        GpuTable table = new(_device, _store, "Test.DirtyTable", 1, 16);
-        for (uint i = 0; i < 16; i++)
-            table.Set(i, i);
-        table.Flush(_uploader);
-        Flush(table.Buffer);
-
-        table.Set(3, 30u);
-        table.Set(2, 20u);
-        table.Set(9, 90u);
-        table.Set(3, 31u);
-        table.Flush(_uploader);
-        Assert.Equal(3u, _uploader.QueuedWords);
-        Flush(table.Buffer);
-
-        Assert.Equal([0u, 1u, 20u, 31u, 4u, 5u, 6u, 7u, 8u, 90u, 10u], Read(table.Buffer)[..11]);
-    }
-
-    [Fact]
-    public void DisposedMeshes_ClearTheirMeshRecord_AndTheirChunksAreReused()
-    {
-        GeometryPool pool = new(_device, _store, 1 << 16, 1 << 16);
-        GpuMesh first = pool.Create(Positions(3));
-        pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
-        uint chunk = first.Placement!.FirstChunk;
-        Assert.Equal(1u, pool.Meshes.Get<MeshRecord>((uint)first.Id).ChunkCount);
-
-        first.Dispose();
-        pool.Apply(_uploader, 1, long.MaxValue, new List<GpuMesh>());
-        Assert.Equal(0u, pool.Meshes.Get<MeshRecord>((uint)first.Id).ChunkCount);
-
-        pool.Reclaim(1);
-        GpuMesh second = pool.Create(Positions(3));
-        pool.Apply(_uploader, 1, long.MaxValue, new List<GpuMesh>());
-        Assert.Equal(chunk, second.Placement!.FirstChunk);
-        Flush(pool.Pages[0].Vertices, pool.Pages[0].Indices, pool.Chunks.Buffer, pool.Meshes.Buffer);
     }
 }

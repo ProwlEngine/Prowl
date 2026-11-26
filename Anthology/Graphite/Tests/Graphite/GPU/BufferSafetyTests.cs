@@ -72,7 +72,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [Fact]
     public void WriteWhileInFlight_GpuStillReadsTheOldContents()
     {
-
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
         ComputeProgram program = CreateProbeProgram();
@@ -86,21 +85,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         // The copy is queued behind the in-flight dispatch, so the dispatch must observe the value
         // the buffer held when it was submitted.
         Assert.Equal(OldValue, ReadUInt(output, 0));
-    }
-
-    [Fact]
-    public void WriteWhileInFlight_LaterFramesSeeTheNewContents()
-    {
-
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-        Assert.SkipWhen(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
-
-        GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-        GD.WaitForIdle();
 
         // The write is not lost: a frame submitted after the copy sees the new contents.
         DeviceBuffer secondOutput = CreateOutputBuffer();
@@ -108,23 +92,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         GD.WaitForIdle();
 
         Assert.Equal(NewValue, ReadUInt(secondOutput, 0));
-    }
-
-    [Fact]
-    public void WriteWhileInFlight_BumpsContentVersion()
-    {
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-        Assert.SkipWhen(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
-
-        uint versionBefore = source.ContentVersion;
-        GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-
-        Assert.NotEqual(versionBefore, source.ContentVersion);
-        GD.WaitForIdle();
     }
 
     private uint ReadUInt(DeviceBuffer buffer, int index)

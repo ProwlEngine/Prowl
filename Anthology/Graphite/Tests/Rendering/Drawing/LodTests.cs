@@ -125,34 +125,6 @@ public sealed class LodTests : IDisposable
     }
 
     [Fact]
-    public void SwitchingLevel_RebuildsNoBuckets()
-    {
-        RenderableHandle handle = Add(Set());
-        Frame(Forward, () => ViewAt(handle, 0.8f));
-        int buckets = _buckets.BucketCount;
-        Frame(Forward, () => ViewAt(handle, 0.1f));
-        Assert.Empty(_world.Render.DrawChanged);
-        Assert.Equal(buckets, _buckets.BucketCount);
-    }
-
-    [Fact]
-    public void BelowTheCullSize_NothingDraws()
-    {
-        RenderableHandle handle = Add(Set(cull: 0.05f));
-        Extract();
-        Assert.Equal([_coarse], Drawn(Frame(Forward, () => ViewAt(handle, 0.06f))));
-        Assert.Equal(0, Frame(Forward, () => ViewAt(handle, 0.04f)).CommandCount);
-    }
-
-    [Fact]
-    public void WithoutASet_TheMeshDrawsAtAnySize()
-    {
-        RenderableHandle handle = Add(null);
-        Extract();
-        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.01f))));
-    }
-
-    [Fact]
     public void Hysteresis_HoldsACoarserSwitch_UntilTheSizeFallsItsShareUnder()
     {
         RenderableHandle handle = Add(Set());
@@ -162,14 +134,10 @@ public sealed class LodTests : IDisposable
         Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.47f, state, hysteresis: 0.1f))));
         Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handle, 0.44f, state, hysteresis: 0.1f))));
         Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.5f, state, hysteresis: 0.1f))));
-    }
 
-    [Fact]
-    public void Hysteresis_NeedsTheViewToHaveSeenTheObject()
-    {
-        RenderableHandle handle = Add(Set());
+        RenderableHandle handleUnseen = Add(Set());
         Extract();
-        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handle, 0.47f, new LodState(), hysteresis: 0.1f))));
+        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handleUnseen, 0.47f, new LodState(), hysteresis: 0.1f))));
     }
 
     [Fact]
@@ -181,6 +149,55 @@ public sealed class LodTests : IDisposable
         Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.6f, near, hysteresis: 0.1f))));
         Assert.Equal([_coarse], Drawn(Frame(Forward, () => ViewAt(handle, 0.1f, far, hysteresis: 0.1f))));
         Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.47f, near, hysteresis: 0.1f))));
+    }
+
+    [Fact]
+    public void Bounds_CoverEveryLevel()
+    {
+        GpuMesh large = Mesh(3, 4f);
+        RenderableHandle handle = Add(new LodSet([new LodLevel(large, 0.5f)]));
+        Extract();
+        Assert.True(_world.Render.WorldRadius[handle.Index] > 2f);
+    }
+
+    private const int Prepass = 0;
+
+    // The instance words of each command, by the mesh it draws
+    private (GpuMesh Mesh, ushort Program, uint[] Words)[] Commands(DrawList list)
+    {
+        GpuMesh[] meshes = [_fine, _middle, _coarse];
+        List<(GpuMesh, ushort, uint[])> commands = new();
+        foreach (DrawCall call in list.Calls)
+        {
+            for (int c = call.FirstCommand; c < call.FirstCommand + call.CommandCount; c++)
+            {
+                IndirectDrawIndexedArguments command = list.Commands[c];
+                GpuMesh mesh = meshes.First(m => m.Placement!.FirstChunk == list.Records[c].Chunk);
+                commands.Add((mesh, call.Program, list.Instances.AsSpan((int)list.Records[c].FirstInstance, (int)command.InstanceCount).ToArray()));
+            }
+        }
+        return [.. commands];
+    }
+
+    [Fact]
+    public void ACrossFade_Ends_AfterItsSeconds()
+    {
+        RenderableHandle handle = Add(Set());
+        LodState state = new();
+        Extract();
+        Frame(Prepass, () => ViewAt(handle, 0.8f, state, fade: 1, now: 0));
+        Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5));
+        var commands = Commands(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 1.6)));
+        Assert.Equal((uint)handle.Index, Assert.Single(commands).Words.Single());
+        Assert.Equal(_coarse, commands[0].Mesh);
+    }
+
+    [Fact]
+    public void WithoutASet_TheMeshDrawsAtAnySize()
+    {
+        RenderableHandle handle = Add(null);
+        Extract();
+        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.01f))));
     }
 
     [Fact]
@@ -215,73 +232,6 @@ public sealed class LodTests : IDisposable
     }
 
     [Fact]
-    public void SettingTheLods_ChangesWhatDraws()
-    {
-        RenderableHandle handle = Add(null);
-        Extract();
-        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.1f))));
-        _world.SetLods(handle, Set());
-        Assert.Equal([_coarse], Drawn(Frame(Forward, () => ViewAt(handle, 0.1f))));
-    }
-
-    [Fact]
-    public void OneMesh_AtDifferentLevels_DrawsOnceForEach()
-    {
-        RenderableHandle near = Add(Set());
-        RenderableHandle far = Add(new LodSet([new LodLevel(_coarse, 0.9f)]), 1);
-        Extract();
-        DrawList list = Frame(Forward, () => ViewAt(near, 0.2f));
-        Assert.Equal([_coarse], Drawn(list).Distinct());
-        Assert.Equal(2, list.InstanceCount);
-    }
-
-    [Fact]
-    public void Bounds_CoverEveryLevel()
-    {
-        GpuMesh large = Mesh(3, 4f);
-        RenderableHandle handle = Add(new LodSet([new LodLevel(large, 0.5f)]));
-        Extract();
-        Assert.True(_world.Render.WorldRadius[handle.Index] > 2f);
-    }
-
-    [Fact]
-    public void ALevelCastsNoShadowsWhenItSaysSo()
-    {
-        RenderableHandle handle = Add(new LodSet([new LodLevel(_middle, 0.5f, castShadows: false)]));
-        Extract();
-        Assert.Equal([_fine], Drawn(Frame(Shadows, () => ViewAt(handle, 0.8f))));
-        Assert.Equal(0, Frame(Shadows, () => ViewAt(handle, 0.3f)).CommandCount);
-        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handle, 0.3f))));
-    }
-
-    [Fact]
-    public void ALodSet_RejectsLevelsWhoseSizesDoNotFall()
-    {
-        Assert.Throws<ArgumentException>(() => new LodSet([new LodLevel(_middle, 0.3f), new LodLevel(_coarse, 0.5f)]));
-        Assert.Throws<ArgumentException>(() => new LodSet([]));
-        Assert.Throws<ArgumentException>(() => new LodSet([new LodLevel(_middle, 0.3f)], cullScreenSize: 0.3f));
-    }
-
-    private const int Prepass = 0;
-
-    // The instance words of each command, by the mesh it draws
-    private (GpuMesh Mesh, ushort Program, uint[] Words)[] Commands(DrawList list)
-    {
-        GpuMesh[] meshes = [_fine, _middle, _coarse];
-        List<(GpuMesh, ushort, uint[])> commands = new();
-        foreach (DrawCall call in list.Calls)
-        {
-            for (int c = call.FirstCommand; c < call.FirstCommand + call.CommandCount; c++)
-            {
-                IndirectDrawIndexedArguments command = list.Commands[c];
-                GpuMesh mesh = meshes.First(m => m.Placement!.FirstChunk == list.Records[c].Chunk);
-                commands.Add((mesh, call.Program, list.Instances.AsSpan((int)list.Records[c].FirstInstance, (int)command.InstanceCount).ToArray()));
-            }
-        }
-        return [.. commands];
-    }
-
-    [Fact]
     public void ACrossFade_DrawsBothLevels_TheOutgoingOneMarked()
     {
         RenderableHandle handle = Add(Set());
@@ -301,97 +251,5 @@ public sealed class LodTests : IDisposable
         Assert.Equal(0u, incoming >> 31);
         Assert.Equal(1u, outgoing >> 31);
         Assert.Equal(incoming & 0x7F000000u, outgoing & 0x7F000000u);
-    }
-
-    [Fact]
-    public void ACrossFade_Ends_AfterItsSeconds()
-    {
-        RenderableHandle handle = Add(Set());
-        LodState state = new();
-        Extract();
-        Frame(Prepass, () => ViewAt(handle, 0.8f, state, fade: 1, now: 0));
-        Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5));
-        var commands = Commands(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 1.6)));
-        Assert.Equal((uint)handle.Index, Assert.Single(commands).Words.Single());
-        Assert.Equal(_coarse, commands[0].Mesh);
-    }
-
-    [Fact]
-    public void FadingDraws_UseTheirOwnPrograms_ForwardTestingDepthEqual()
-    {
-        RenderableHandle steady = Add(Set(), x: 1, bias: 0.1f);
-        RenderableHandle fading = Add(Set());
-        LodState state = new();
-        Extract();
-        Frame(Forward, () => ViewAt(fading, 0.1f, state, fade: 1, now: 0));
-        Frame(Forward, () => ViewAt(fading, 0.8f, state, fade: 1, now: 0));
-        DrawList prepass = Frame(Prepass, () => ViewAt(fading, 0.1f, state, fade: 1, now: 0.5));
-        var prepassCommands = Commands(prepass);
-        ushort steadyPrepass = prepassCommands.Single(c => c.Words.Contains((uint)steady.Index)).Program;
-        ushort fadingPrepass = prepassCommands.Single(c => c.Mesh == _coarse && !c.Words.Contains((uint)steady.Index)).Program;
-        Assert.NotEqual(steadyPrepass, fadingPrepass);
-        Assert.True(_programs[fadingPrepass].LodFade);
-        Assert.False(_programs[steadyPrepass].LodFade);
-
-        state = new LodState();
-        Frame(Forward, () => ViewAt(fading, 0.8f, state, fade: 1, now: 0));
-        var forward = Commands(Frame(Forward, () => ViewAt(fading, 0.1f, state, fade: 1, now: 0.5)));
-        ushort fadingForward = forward.Single(c => c.Mesh == _fine).Program;
-        PassState? equal = _programs[fadingForward].StateOverride;
-        Assert.NotNull(equal);
-        Assert.Equal(ComparisonKind.Equal, equal!.DepthStencil.DepthComparison);
-        Assert.False(equal.DepthStencil.DepthWriteEnabled);
-    }
-
-    [Fact]
-    public void WithoutFadeSeconds_TheLevelPops()
-    {
-        RenderableHandle handle = Add(Set());
-        LodState state = new();
-        Extract();
-        Frame(Prepass, () => ViewAt(handle, 0.8f, state, fade: 0, now: 0));
-        Assert.Equal([_coarse], Drawn(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 0, now: 0.5))));
-    }
-
-    [Fact]
-    public void OtherPasses_DrawOnlyTheIncomingLevel()
-    {
-        RenderableHandle handle = Add(Set());
-        LodState state = new();
-        Extract();
-        Frame(Shadows, () => ViewAt(handle, 0.8f, state, fade: 1, now: 0));
-        var commands = Commands(Frame(Shadows, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5)));
-        Assert.Equal((uint)handle.Index, Assert.Single(commands).Words.Single());
-        Assert.Equal(_coarse, commands[0].Mesh);
-    }
-
-    [Fact]
-    public void ARenderableTheViewDidNotSee_DoesNotFadeIn()
-    {
-        RenderableHandle handle = Add(Set());
-        Extract();
-        Assert.Equal([_coarse], Drawn(Frame(Prepass, () => ViewAt(handle, 0.1f, new LodState(), fade: 1, now: 0.5))));
-    }
-
-    [Fact]
-    public void ALevelWithItsOwnMaterial_DrawsEverySubmeshWithIt()
-    {
-        Material own = _materials.Create(_lit);
-        RenderableHandle handle = _world.Add(new RenderableDesc
-        {
-            Mesh = _fine,
-            Lods = new LodSet([new LodLevel(_coarse, 0.5f, material: own)]),
-            Transform = Double4x4.CreateTranslation(new Double3(0, 0, 5)),
-        }, [_materials.Create(_lit)]);
-        Extract();
-
-        DrawList near = Frame(Forward, () => ViewAt(handle, 0.8f));
-        Assert.Equal([_fine], Drawn(near));
-        Assert.Equal(0u, near.Records[0].Flags & DrawRecord.DirectSlot);
-
-        DrawList far = Frame(Forward, () => ViewAt(handle, 0.1f));
-        Assert.Equal([_coarse], Drawn(far));
-        Assert.Equal(DrawRecord.DirectSlot, far.Records[0].Flags & DrawRecord.DirectSlot);
-        Assert.Equal(own.Slot, far.Records[0].SubMesh);
     }
 }

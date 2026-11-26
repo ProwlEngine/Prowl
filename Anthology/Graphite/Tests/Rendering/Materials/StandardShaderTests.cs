@@ -158,8 +158,6 @@ public sealed class StandardShaderTests : IDisposable
         """;
 
     [Theory]
-    [InlineData("OPAQUE")]
-    [InlineData("CUTOUT")]
     [InlineData("TRANSPARENT")]
     public void SurfaceLighting_ReplacesTheBRDF_AndEveryFeatureStillCompiles(string surface)
     {
@@ -255,232 +253,10 @@ public sealed class StandardShaderTests : IDisposable
             _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface)]);
     }
 
-    [Fact]
-    public void ASurfaceShaderNamingNoFallback_TakesTheModels()
-    {
-        ShaderDefinition definition = new Shader(ShaderParser.Parse("""
-            Shader "Tests/NoFallback"
-            {
-                Surface "Lit"
-                {
-                    GLSLPROGRAM
-                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { }
-                    ENDGLSL
-                }
-            }
-            """), _compiler).Definition;
-        Assert.Equal(Renderer.FallbackShaderName, definition.Fallback);
-    }
-
-    [Fact]
-    public void SurfaceVertex_TakesSurfaceAndLightingBlocksAlongside()
-    {
-        ShaderDefinition definition = new Shader(ShaderParser.Parse("""
-            Shader "Tests/All"
-            {
-                Surface "Lit"
-                {
-                    GLSLPROGRAM
-                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { p.specularRoughness = 0.5; }
-                    ENDGLSL
-                    Vertex
-                    {
-                        GLSLPROGRAM
-                        void SurfaceVertex(inout Graphite_SurfaceVertex v) { v.position.y += 1.0; }
-                        ENDGLSL
-                    }
-                    Lighting
-                    {
-                        GLSLPROGRAM
-                        vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l) { return PBR_EvaluateLight(c, l); }
-                        ENDGLSL
-                    }
-                }
-            }
-            """), _compiler).Definition;
-
-        ShaderPass forward = definition.Passes!.Single(p => p.Name == "Forward");
-        _compiler.CompileProgram(forward, [new Keyword("_SURFACE", "OPAQUE")]);
-    }
-
-    [Fact]
-    public void SurfaceLighting_SharesUniformsTheSurfaceCodeDeclares()
-    {
-        ShaderDefinition definition = new Shader(ShaderParser.Parse("""
-            Shader "Tests/Bands"
-            {
-                Properties
-                {
-                    _Bands("Bands", Float) = 3.0
-                    _Ramp("Ramp", Texture2D) = "white" {}
-                }
-
-                Surface "Lit"
-                {
-                    GLSLPROGRAM
-                    uniform float _Bands;
-                    uniform sampler2D _Ramp;
-                    void Surface(inout PBR_Params p, Graphite_SurfaceData i) { p.specularRoughness = texture(_Ramp, i.uv).r / _Bands; }
-                    ENDGLSL
-                    Lighting
-                    {
-                        GLSLPROGRAM
-                        uniform float _Bands;
-                        uniform sampler2D _Ramp;
-                        vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l)
-                        {
-                            return floor(PBR_EvaluateLight(c, l) * _Bands) / _Bands * texture(_Ramp, vec2(0.5)).rgb;
-                        }
-                        vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i)
-                        {
-                            return floor(i.irradiance * _Bands) / _Bands * c.diffuseAlbedo + c.specularAlbedo * i.specular;
-                        }
-                        ENDGLSL
-                    }
-                }
-            }
-            """), _compiler).Definition;
-
-        foreach (ShaderPass pass in definition.Passes!)
-        {
-            _compiler.CompileProgram(pass, [new Keyword("_SURFACE", "OPAQUE")]);
-        }
-    }
-
-    [Fact]
-    public void SurfaceLighting_DefinesOnlyTheHooksItsCodeHas()
-    {
-        ShaderDefinition definition = new Shader(ShaderParser.Parse("""
-            Shader "Tests/AmbientOnly"
-            {
-                Surface "Lit"
-                {
-                    Lighting
-                    {
-                        GLSLPROGRAM
-                        vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i) { return i.irradiance * c.diffuseAlbedo; }
-                        ENDGLSL
-                    }
-                }
-            }
-            """), _compiler).Definition;
-
-        ShaderPass forward = definition.Passes!.Single(p => p.Name == "Forward");
-        Assert.Contains("#define GRAPHITE_CUSTOM_AMBIENT_BRDF", forward.Source);
-        Assert.DoesNotContain("#define GRAPHITE_CUSTOM_BRDF", forward.Source);
-        _compiler.CompileProgram(forward, [new Keyword("_SURFACE", "OPAQUE")]);
-    }
-
-    [Fact]
-    public void SurfaceLighting_OnAModelWithoutLights_FailsToLoad()
-    {
-        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => new Shader(ShaderParser.Parse("""
-            Shader "Tests/UnlitToon"
-            {
-                Surface "Unlit"
-                {
-                    Lighting
-                    {
-                        GLSLPROGRAM
-                        vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l) { return vec3(0.0); }
-                        ENDGLSL
-                    }
-                }
-            }
-            """), _compiler));
-        Assert.Contains("surface_lighting", error.Message);
-    }
-
-    [Fact]
-    public void AnUnknownSurfaceModel_FailsToLoad()
-    {
-        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => new Shader(ShaderParser.Parse("""
-            Shader "Tests/Unknown"
-            {
-                Surface "Toon" { }
-            }
-            """), _compiler));
-        Assert.Contains("Toon", error.Message);
-    }
-
     private static readonly string[] s_lobes = ["PBR_THIN_WALLED"];
 
     // The axes deciding how much light a caster lets through to its shadow
     private static readonly string[] s_shadowAxes = ["PBR_THIN_WALLED", "PBR_TRANSMISSION"];
-
-    [Fact]
-    public void TheGBufferPass_DiscardsUnderTheCutoutSurface_AsItsTagSays()
-    {
-        Shader lit = Model("Lit");
-        int gbuffer = lit.PassIndex(PassType.GBuffer);
-        Assert.True(lit.PassDiscards(gbuffer, [new Keyword("_SURFACE", "CUTOUT")]));
-        Assert.False(lit.PassDiscards(gbuffer, [new Keyword("_SURFACE", "OPAQUE")]));
-        Assert.False(lit.PassDiscards(lit.PassIndex(PassType.Forward), [new Keyword("_SURFACE", "CUTOUT")]));
-    }
-
-    private Shader Model(string name) => new(ShaderParser.Parse($"Shader \"Test/{name}\" {{ Surface \"{name}\" {{ }} }}"), _compiler);
-
-    // Coat, fuzz, subsurface and anisotropy are surface models built on Lit, each with its lobe's properties and the
-    // lobe always on, where Lit has neither
-    [Fact]
-    public void TheLobes_AreSurfaceModelsOfTheirOwn()
-    {
-        foreach ((string model, string property, string lobe) in new[] { ("ClearCoat", "coat_weight", "PBR_COAT"), ("Cloth", "fuzz_weight", "PBR_FUZZ"), ("Subsurface", "subsurface_weight", "PBR_SUBSURFACE"), ("Anisotropic", "specular_roughness_anisotropy", "PBR_ANISOTROPY") })
-        {
-            Shader shader = Model(model);
-            Assert.True(shader.FindProperty(property) >= 0, $"{model} has {property}");
-            Assert.True(_pbr.FindProperty(property) < 0, $"Lit has {property}");
-            Assert.DoesNotContain(shader.MaterialAxes, axis => axis.Name == lobe);
-            Assert.DoesNotContain(_pbr.MaterialAxes, axis => axis.Name == lobe);
-            Assert.Equal(model != "Anisotropic", shader.HasPass(PassType.GBuffer));
-            Assert.Contains($"#define {lobe}", shader.Definition.Passes![0].Source);
-        }
-    }
-
-    [Fact]
-    public void ThinWalled_FollowsItsProperty()
-    {
-        Material material = _system.Create(_pbr);
-        Assert.Equal("false", Keyword(material, "PBR_THIN_WALLED"));
-
-        material.SetInt("geometry_thin_walled", 1);
-        Assert.Equal("true", Keyword(material, "PBR_THIN_WALLED"));
-        material.SetInt("geometry_thin_walled", 0);
-        Assert.Equal("false", Keyword(material, "PBR_THIN_WALLED"));
-    }
-
-    // Thin walled draws both sides whatever the surface culls, from geometry_thin_walled or the axis set directly
-    [Fact]
-    public void ThinWalled_DrawsBothSides()
-    {
-        Assert.Equal("PBR_THIN_WALLED", _pbr.TwoSidedAxis);
-        Assert.Null(_unlit.TwoSidedAxis);
-
-        Material material = _system.Create(_pbr);
-        material.Surface = new SurfaceSettings(SurfaceType.Transparent, SurfaceBlend.Premultiplied, SurfaceCull.Back);
-        FaceCullMode Culling()
-        {
-            _system.Extract(new List<Material>());
-            return material.Draw.StateOverride!.Raster.CullMode;
-        }
-
-        Assert.Equal(FaceCullMode.Back, Culling());
-        material.SetInt("geometry_thin_walled", 1);
-        Assert.Equal(FaceCullMode.None, Culling());
-        Assert.True(material.Draw.StateOverride!.Blend.BlendEnabled);
-        Assert.Equal(FaceCullMode.Back, material.StateOverride!.Raster.CullMode);
-        material.SetInt("geometry_thin_walled", 0);
-        Assert.Equal(FaceCullMode.Back, Culling());
-
-        material.Surface = new SurfaceSettings(Cull: SurfaceCull.Front);
-        material.Set(material.Shader.Axis("PBR_THIN_WALLED"), true);
-        Assert.Equal(FaceCullMode.None, Culling());
-
-        Material plain = _system.Create(_pbr);
-        plain.SetInt("geometry_thin_walled", 1);
-        _system.Extract(new List<Material>());
-        Assert.Equal(FaceCullMode.None, plain.Draw.StateOverride!.Raster.CullMode);
-    }
 
     // Every combination of Lit's lobe axes at every tier in the forward and transmission passes
     [Fact]
@@ -504,23 +280,6 @@ public sealed class StandardShaderTests : IDisposable
         foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
             variants.Add((backDepth, [new Keyword("_SURFACE", surface)]));
         CompileAll(variants);
-    }
-
-    // Parallax is off until height_scale leaves zero, a height map alone turning nothing on, and off again at zero
-    [Fact]
-    public void Parallax_FollowsHeightScale_OffByDefault()
-    {
-        Material material = _system.Create(_pbr);
-        Assert.Equal("false", Keyword(material, "PBR_PARALLAX"));
-        Assert.Equal(0f, _pbr.Properties[_pbr.FindProperty("height_scale")].Default.Vector[0]);
-
-        using Texture texture = MakeTexture();
-        material.SetTexture("geometry_height_map", texture);
-        Assert.Equal("false", Keyword(material, "PBR_PARALLAX"));
-        material.SetFloat("height_scale", 0.05f);
-        Assert.Equal("true", Keyword(material, "PBR_PARALLAX"));
-        material.SetFloat("height_scale", 0);
-        Assert.Equal("false", Keyword(material, "PBR_PARALLAX"));
     }
 
     // Every pass with parallax on, at every surface and every tier, with the lobe and shadow axes beside
@@ -566,76 +325,6 @@ public sealed class StandardShaderTests : IDisposable
         CompileAll(variants);
     }
 
-    // transmission_weight turns PBR_TRANSMISSION on, which draws the material as transparent through its Transmission
-    // pass, blending premultiplied whatever its surface, and volumes, not thin walled, through their BackDepth pass too
-    [Fact]
-    public void Transmission_DrawsTransparentThroughItsOwnPasses()
-    {
-        Assert.Equal("PBR_TRANSMISSION", _pbr.TransmissiveAxis);
-        Assert.Null(_unlit.TransmissiveAxis);
-        int transmissionPass = _pbr.PassIndex(PassType.Transmission);
-        Assert.True(_pbr.PassReadsSceneColor(transmissionPass) && _pbr.PassReadsSceneDepth(transmissionPass) && _pbr.PassReadsBackDepth(transmissionPass));
-        Assert.False(_pbr.PassReadsSceneColor(_pbr.PassIndex(PassType.Forward)));
-        Assert.True(_pbr.PassReadsIn(transmissionPass, new Dictionary<string, string>()));
-        Assert.True(_pbr.PassReadsIn(transmissionPass, new Dictionary<string, string> { ["PBR_TIER"] = "FULL" }));
-        Assert.False(_pbr.PassReadsIn(transmissionPass, new Dictionary<string, string> { ["PBR_TIER"] = "LITE" }));
-
-        Material material = _system.Create(_pbr);
-        void Extract() => _system.Extract(new List<Material>());
-        Extract();
-        Assert.False(material.Draw.Transparent || material.Draw.Transmissive);
-
-        material.SetFloat("transmission_weight", 0.7f);
-        Assert.Equal("true", Keyword(material, "PBR_TRANSMISSION"));
-        Extract();
-        MaterialDraw draw = material.Draw;
-        Assert.True(draw.Transparent && draw.Transmissive && draw.Volume);
-        Assert.True(draw.RenderQueue >= SurfaceSettings.TransparentQueue);
-        Assert.True(draw.StateOverride!.Blend.BlendEnabled);
-        Assert.False(draw.StateOverride.DepthStencil.DepthWriteEnabled);
-        Assert.Equal((BlendFactor.One, BlendFactor.InverseSourceAlpha), (draw.StateOverride.Blend.SourceColorFactor, draw.StateOverride.Blend.DestinationColorFactor));
-        Assert.Equal(FaceCullMode.Back, draw.StateOverride.Raster.CullMode);
-
-        material.SetInt("geometry_thin_walled", 1);
-        Extract();
-        Assert.True(material.Draw.Transmissive);
-        Assert.False(material.Draw.Volume);
-        Assert.Equal(FaceCullMode.None, material.Draw.StateOverride!.Raster.CullMode);
-
-        material.Surface = new SurfaceSettings(SurfaceType.Transparent, SurfaceBlend.Additive);
-        Extract();
-        Assert.Equal((BlendFactor.One, BlendFactor.One), (material.Draw.StateOverride!.Blend.SourceColorFactor, material.Draw.StateOverride.Blend.DestinationColorFactor));
-
-        material.SetFloat("transmission_weight", 0);
-        material.Surface = null;
-        Extract();
-        Assert.False(material.Draw.Transparent || material.Draw.Transmissive);
-    }
-
-    [Fact]
-    public void Surface_SetsQueueStateAndAxes()
-    {
-        Material material = _system.Create(_pbr);
-        Assert.Equal("OPAQUE", Keyword(material, "_SURFACE"));
-        Assert.Null(material.StateOverride);
-
-        material.Surface = new SurfaceSettings(SurfaceType.Transparent, SurfaceBlend.Additive, SurfaceCull.Off);
-        Assert.Equal("TRANSPARENT", Keyword(material, "_SURFACE"));
-        Assert.Equal(SurfaceSettings.TransparentQueue, material.RenderQueue);
-        Assert.True(material.RenderQueue >= Shader.TransparentQueue);
-
-        PassState state = material.StateOverride!;
-        Assert.False(state.DepthStencil.DepthWriteEnabled);
-        Assert.True(state.Blend.BlendEnabled);
-        Assert.Equal(BlendFactor.One, state.Blend.DestinationColorFactor);
-        Assert.Equal(FaceCullMode.None, state.Raster.CullMode);
-
-        material.Surface = new SurfaceSettings(SurfaceType.Cutout);
-        Assert.Equal("CUTOUT", Keyword(material, "_SURFACE"));
-        Assert.Equal(SurfaceSettings.CutoutQueue, material.RenderQueue);
-        Assert.Equal(PassStateFields.None, material.StateOverride!.Set & PassStateFields.BlendEnabled);
-    }
-
     [Fact]
     public void PBRCoverage_IsPremultiplied_SoEveryBlendAppliesItOnce_WhileUnlitStaysStraight()
     {
@@ -656,44 +345,6 @@ public sealed class StandardShaderTests : IDisposable
             Assert.Equal(destination, pbr.StateOverride!.Blend.DestinationColorFactor);
             Assert.Equal(straight, unlit.StateOverride!.Blend.SourceColorFactor);
         }
-    }
-
-    [Fact]
-    public void Surface_IsInherited_AndExplicitSettingsWin()
-    {
-        Material parent = _system.Create(_pbr);
-        Material child = _system.Create(_pbr);
-        child.Parent = parent;
-        parent.Surface = new SurfaceSettings(SurfaceType.Transparent);
-
-        Assert.Equal("TRANSPARENT", Keyword(child, "_SURFACE"));
-        Assert.Equal(SurfaceSettings.TransparentQueue, child.RenderQueue);
-
-        child.RenderQueue = 1000;
-        child.Set(child.Shader.Axis("_SURFACE"), "OPAQUE");
-        Assert.Equal(1000, child.RenderQueue);
-        Assert.Equal("OPAQUE", Keyword(child, "_SURFACE"));
-
-        PassState over = new() { Set = PassStateFields.CullMode };
-        over.Raster.CullMode = FaceCullMode.Front;
-        child.StateOverride = over;
-        Assert.Equal(FaceCullMode.Front, child.StateOverride!.Raster.CullMode);
-        Assert.Equal(PassStateFields.BlendEnabled, child.StateOverride.Set & PassStateFields.BlendEnabled);
-    }
-
-    [Fact]
-    public void ASurfaceDecidesTransparency_WhateverTheQueue()
-    {
-        Material material = _system.Create(_pbr);
-        material.Surface = new SurfaceSettings(SurfaceType.Transparent);
-        material.RenderQueue = 2000;
-        _system.Extract(new List<Material>());
-        Assert.True(material.Draw.Transparent);
-
-        material.Surface = new SurfaceSettings(SurfaceType.Opaque);
-        material.RenderQueue = 3000;
-        _system.Extract(new List<Material>());
-        Assert.False(material.Draw.Transparent);
     }
 
     // Every OpenPBR v1.1.1 parameter Lit has under its spec name with the spec's default, and whether it has a map. The

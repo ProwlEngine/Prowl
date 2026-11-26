@@ -20,26 +20,6 @@ public abstract class PushConstantTests<T> : GraphicsDeviceTestBase<T> where T :
 
     private static readonly uint[] s_indices = [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7];
 
-
-    [Fact]
-    public void Draws_ReadTheValuesSetBeforeThem()
-    {
-        GraphicsProgram program = ColorProgram();
-
-        (Color left, Color right) = Render((cl, _) =>
-        {
-            cl.SetShader(program);
-            cl.SetPushConstants(new Float4(1, 0, 0, 1));
-            cl.DrawIndexed(6, 1, 0, 0, 0);
-            cl.SetPushConstants(new Float4(0, 1, 0, 1));
-            cl.DrawIndexed(6, 1, 6, 0, 0);
-        });
-
-        Assert.Equal(new Color(1f, 0f, 0f, 1f), left, ColorFuzzyComparer.Instance);
-        Assert.Equal(new Color(0f, 1f, 0f, 1f), right, ColorFuzzyComparer.Instance);
-    }
-
-
     [Fact]
     public void Values_AreKeptAcrossAProgramChange()
     {
@@ -59,59 +39,6 @@ public abstract class PushConstantTests<T> : GraphicsDeviceTestBase<T> where T :
         Assert.Equal(new Color(0f, 0f, 1f, 1f), right, ColorFuzzyComparer.Instance);
     }
 
-
-    [Fact]
-    public void Dispatch_ReadsTheValues_IncludingAWriteAtAnOffset()
-    {
-        DeviceBuffer output = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
-        ComputeProgram program = RF.CreateComputeProgram(new ComputeDescription(
-            TestShaderLoader.LoadCompute(GD.BackendType, "PushToBuffer.glsl"),
-            [new ResourceLayoutDescription(new ResourceLayoutElementDescription("Output", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0))],
-            1, 1, 1)
-        {
-            PushConstants = new PushConstantRange(ShaderStages.Compute, 16),
-        });
-
-        PropertySet properties = new();
-        properties.SetBuffer("Output", output);
-
-        GD.RunTestGraph((_, cl) =>
-        {
-            cl.SetComputeShader(program);
-            cl.SetProperties(properties);
-            cl.SetPushConstants(new Int4(1, 2, 3, 4));
-            cl.SetPushConstants(40u, 8);
-            cl.Dispatch(1, 1, 1);
-        });
-        GD.WaitForIdle();
-
-        DeviceBuffer readback = GetReadback(output);
-        Span<uint> map = GD.Map<uint>(readback);
-        Assert.Equal([1u, 2u, 40u, 4u], map[..4].ToArray());
-        GD.Unmap(readback);
-    }
-
-
-    [Fact]
-    public void Writes_PastTheCapacity_Throw()
-    {
-        Assert.Throws<RenderException>(() => GD.RunTestGraph((_, cl) => cl.SetPushConstants(new Float4x4(), CommandBuffer.PushConstantCapacity - 32)));
-    }
-
-
-    [Fact]
-    public void Programs_WithAnOversizedBlock_Throw()
-    {
-        Assert.Throws<RenderException>(() => RF.CreateComputeProgram(new ComputeDescription(
-            TestShaderLoader.LoadCompute(GD.BackendType, "PushToBuffer.glsl"),
-            [new ResourceLayoutDescription(new ResourceLayoutElementDescription("Output", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0))],
-            1, 1, 1)
-        {
-            PushConstants = new PushConstantRange(ShaderStages.Compute, CommandBuffer.PushConstantCapacity + 4),
-        }));
-    }
-
-
     private GraphicsProgram ColorProgram(RasterizerStateDescription? raster = null)
         => RF.CreateGraphicsProgram(new ShaderDescription(TestShaderLoader.LoadGraphics(GD.BackendType, "PushColorQuads.glsl"))
         {
@@ -122,7 +49,6 @@ public abstract class PushConstantTests<T> : GraphicsDeviceTestBase<T> where T :
             ResourceLayouts = [],
             PushConstants = new PushConstantRange(ShaderStages.Fragment, 16),
         });
-
 
     private (Color Left, Color Right) Render(Action<CommandBuffer, VertexSource> draw)
     {

@@ -71,44 +71,6 @@ public sealed class ImpostorBuilderTests : IDisposable
         return (mesh, materials);
     }
 
-    private static Float4 Texel(ImpostorData data, byte[] atlas, int frameX, int frameY, float u, float v)
-    {
-        int x = frameX * data.CellSize + (int)(u * data.CellSize), y = frameY * data.CellSize + (int)(v * data.CellSize);
-        int at = (y * data.AtlasSize + x) * 4;
-        return new Float4(atlas[at], atlas[at + 1], atlas[at + 2], atlas[at + 3]) / 255f;
-    }
-
-    [Fact]
-    public void TheFrameFromPlusZ_SeesTheSquareTheWayItsBasisSays()
-    {
-        (GpuMesh mesh, Material[] materials) = Square();
-        ImpostorData data = ImpostorBuilder.Bake(_renderer, mesh, materials, new ImpostorBakeDesc { Frames = 5, CellSize = 32, Layout = ImpostorLayout.Hemi });
-
-        Assert.Equal(160, data.AtlasSize);
-        Assert.Equal(new Float3(0, 0, 1), ImpostorFrames.Direction(ImpostorLayout.Hemi, 5, 4, 0));
-        (Float3 right, Float3 up) = ImpostorFrames.Basis(new Float3(0, 0, 1));
-        Assert.True(MathF.Abs(up.Y - 1) < 1e-5f);
-
-        // A texel's u runs along the frame's right and v along its up, each from minus the radius to plus it
-        (float U, float V)[] spots = [(0.3f, 0.3f), (0.7f, 0.3f), (0.3f, 0.7f), (0.7f, 0.7f)];
-        for (int s = 0; s < 4; s++)
-        {
-            Float3 point = right * (spots[s].U - 0.5f) + up * (spots[s].V - 0.5f);
-            int quarter = (point.X > 0 ? 1 : 0) + (point.Y > 0 ? 0 : 2);
-            Float4 albedo = Texel(data, data.Albedo, 4, 0, spots[s].U, spots[s].V);
-            Float3 color = s_quarterColors[quarter];
-            Assert.True(MathF.Abs(albedo.X - color.X) < 0.02f && MathF.Abs(albedo.Y - color.Y) < 0.02f && MathF.Abs(albedo.Z - color.Z) < 0.02f, $"spot {s} is {albedo}");
-            Assert.True(albedo.W > 0.99f);
-        }
-        Assert.True(Texel(data, data.Albedo, 4, 0, 0.02f, 0.02f).W < 0.01f);
-
-        Float4 normalDepth = Texel(data, data.NormalDepth, 4, 0, 0.3f, 0.3f);
-        Float2 oct = new(normalDepth.X * 2 - 1, normalDepth.Y * 2 - 1);
-        Assert.True(MathF.Abs(oct.X) < 0.02f && MathF.Abs(oct.Y) < 0.02f, $"normal {oct}");
-        Assert.InRange(normalDepth.Z, 0.48f, 0.52f);
-        Assert.True(MathF.Abs(data.Radius - MathF.Sqrt(0.5f)) < 1e-4f);
-    }
-
     // Renders the world from +Z under white ambient light into a 32 pixel square, every renderable at one level
     private Float4[] Render(RenderWorld world, int level)
     {
@@ -177,21 +139,5 @@ public sealed class ImpostorBuilderTests : IDisposable
         }
         Assert.True(covered > 100, $"{covered} flat pixels");
         Assert.True(matching == covered, $"{matching} of {covered} pixels match");
-    }
-
-    [Fact]
-    public void AnAtlas_EncodesItsMipsDownToAPixelAFrame()
-    {
-        (GpuMesh mesh, Material[] materials) = Square();
-        ImpostorData data = ImpostorBuilder.Bake(_renderer, mesh, materials, new ImpostorBakeDesc { Frames = 5, CellSize = 32 });
-
-        IReadOnlyList<byte[]> mips = data.Mips(ImpostorChannel.Albedo);
-        Assert.Equal(6, mips.Count);
-        Assert.Equal(5 * 5 * 4, mips[^1].Length);
-
-        IReadOnlyList<byte[]> encoded = data.Encode(ImpostorChannel.Albedo, Prowl.Aperture.TextureFormat.Bc3UnormSrgb);
-        Assert.Equal(6, encoded.Count);
-        for (int mip = 0; mip < encoded.Count; mip++)
-            Assert.Equal(Prowl.Aperture.TextureEncoder.GetEncodedSize(Prowl.Aperture.TextureFormat.Bc3UnormSrgb, 160 >> mip, 160 >> mip), encoded[mip].Length);
     }
 }

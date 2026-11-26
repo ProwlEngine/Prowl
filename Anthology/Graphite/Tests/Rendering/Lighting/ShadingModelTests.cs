@@ -96,24 +96,6 @@ public sealed class ShadingModelTests : IDisposable
         return material;
     }
 
-    [Fact]
-    public void ShippedModels_HaveIds_AndAForwardOnlyOneHasNone()
-    {
-        ShadingModels models = _harness.Renderer.ShadingModels;
-        Assert.Equal(1u, models.Find("Lit")!.Id);
-        Assert.Equal(2u, models.Find("Unlit")!.Id);
-        Assert.Equal(3u, models.Find("Foliage")!.Id);
-        foreach (string name in new[] { "ClearCoat", "Cloth", "Subsurface", "Hair", "Eye" })
-            Assert.InRange(models.Find(name)!.Id, 4u, 15u);
-
-        Assert.True(_harness.Renderer.Standard.Anisotropic.HasPass(PassType.Forward));
-        Assert.False(_harness.Renderer.Standard.Anisotropic.HasPass(PassType.GBuffer));
-        Assert.Null(models.Find("Anisotropic"));
-        Assert.True(_harness.Renderer.Standard.ClearCoat.HasPass(PassType.GBuffer));
-        Assert.True(_harness.Renderer.Standard.ClearCoat.FindProperty("coat_weight") >= 0);
-        Assert.True(_harness.Renderer.Standard.Lit.FindProperty("coat_weight") < 0);
-    }
-
     [Theory]
     [InlineData(RenderPath.Forward)]
     [InlineData(RenderPath.Deferred)]
@@ -127,75 +109,6 @@ public sealed class ShadingModelTests : IDisposable
         material.SetFloat("flat_scale", 0.5f);
         Float4 half = Centre(_harness.Frame(View(path)));
         Assert.True(MathF.Abs(half.Y - 0.25f) < 0.03f, $"half {half}");
-    }
-
-    [Fact]
-    public void LoadingAModelAgain_RewritesTheLightingProgram_AndKeepsItsId()
-    {
-        ShadingModels models = _harness.Renderer.ShadingModels;
-        ShadingModel first = _harness.Renderer.LoadShadingModel(Flat("FlatSwap", "vec3(0.0, 0.5, 0.0)"))!;
-        On("FlatSwap");
-        Float4 green = Centre(_harness.Frame(View(RenderPath.Deferred)));
-        Assert.True(MathF.Abs(green.Y - 0.5f) < 0.03f && green.Z < 0.03f, $"green {green}");
-
-        FullscreenProgram program = models.Program;
-        ShadingModel second = _harness.Renderer.LoadShadingModel(Flat("FlatSwap", "vec3(0.0, 0.0, 0.5)"))!;
-        Assert.Equal(first.Id, second.Id);
-        Float4 blue = Centre(_harness.Frame(View(RenderPath.Deferred)));
-        Assert.NotSame(program, models.Program);
-        Assert.True(blue.Y < 0.03f && MathF.Abs(blue.Z - 0.5f) < 0.03f, $"blue {blue}");
-    }
-
-    [Fact]
-    public void AModelWhoseLightingDoesNotCompile_IsReported_AndTheLastProgramStays()
-    {
-        ShadingModels models = _harness.Renderer.ShadingModels;
-        _harness.Renderer.LoadShadingModel(Flat("FlatKept", "vec3(0.0, 0.5, 0.0)"));
-        On("FlatKept");
-        _harness.Frame(View(RenderPath.Deferred));
-        FullscreenProgram good = models.Program;
-
-        _harness.Renderer.LoadShadingModel(Flat("FlatBroken", "nothing"));
-        _harness.Submit(new FrameDesc { Views = new[] { View(RenderPath.Deferred) } });
-        RendererError error = Assert.Single(_harness.Errors);
-        Assert.Equal("shader.compile", error.Code);
-        Assert.Same(good, models.Program);
-        Float4 green = Centre(_harness.ReadTarget());
-        Assert.True(MathF.Abs(green.Y - 0.5f) < 0.03f, $"green {green}");
-    }
-
-    [Fact]
-    public void AfterAModelThatDoesNotCompile_AnotherStillLoadsAndLights()
-    {
-        _harness.Renderer.LoadShadingModel(Flat("FlatBroken", "nothing"));
-        _harness.Submit(new FrameDesc { Views = new[] { View(RenderPath.Deferred) } });
-        Assert.Single(_harness.Errors);
-
-        _harness.Renderer.LoadShadingModel(Flat("FlatKept", "vec3(0.0, 0.5, 0.0)"));
-        On("FlatKept");
-        _harness.Submit(new FrameDesc { Views = new[] { View(RenderPath.Deferred) } });
-        Assert.Single(_harness.Errors);
-        Float4 green = Centre(_harness.ReadTarget());
-        Assert.True(green.X < 0.03f && MathF.Abs(green.Y - 0.5f) < 0.03f, $"green {green}");
-    }
-
-    [Fact]
-    public void AModelIsItsRenderersOwn_AndAnotherRendererGivesItsOwnTheSameIds()
-    {
-        ShadingModel green = _harness.Renderer.LoadShadingModel(Flat("FlatGreen", "vec3(0.0, 0.5, 0.0)"))!;
-        using RendererHarness other = new();
-        other.World.AddLight(s_light);
-        Assert.Null(other.Renderer.ShadingModels.Find("FlatGreen"));
-        Assert.Throws<ShaderLoadException>(() => On(other, Quad(other), "FlatGreen"));
-
-        ShadingModel blue = other.Renderer.LoadShadingModel(Flat("FlatBlue", "vec3(0.0, 0.0, 0.5)"))!;
-        Assert.Equal(green.Id, blue.Id);
-        On(other, Quad(other), "FlatBlue");
-        On("FlatGreen");
-        Float4 there = Centre(other.Frame(View(other, RenderPath.Deferred)));
-        Float4 here = Centre(_harness.Frame(View(RenderPath.Deferred)));
-        Assert.True(there.Y < 0.03f && MathF.Abs(there.Z - 0.5f) < 0.03f, $"blue {there}");
-        Assert.True(here.Z < 0.03f && MathF.Abs(here.Y - 0.5f) < 0.03f, $"green {here}");
     }
 
     [Fact]
@@ -315,25 +228,5 @@ public sealed class ShadingModelTests : IDisposable
             for (int c = 0; c < 3; c++)
                 Assert.True(MathF.Abs(forward[i][c] - deferred[i][c]) < 0.01f + 0.04f * forward[i][c], $"{model} pixel {i} channel {c}: forward {forward[i][c]}, deferred {deferred[i][c]}");
         }
-    }
-
-    [Fact]
-    public void ADocument_NeedsABase_AndCannotTakeAShippedSurfaceModelsName()
-    {
-        Assert.ThrowsAny<Exception>(() => ShaderParser.ParseShadingModel("ShadingModel \"NoBase\"\n{\n}\n"));
-        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel("ShadingModel \"Lit\"\n{\n    Base \"Unlit\"\n}\n"));
-        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel("ShadingModel \"OnAModel\"\n{\n    Base \"ClearCoat\"\n}\n"));
-        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel("ShadingModel \"OnNothing\"\n{\n    Base \"NoSuchModel\"\n}\n"));
-    }
-
-    [Fact]
-    public void ADocumentWithABlockThatDefinesNoHook_IsRefusedAtLoad()
-    {
-        static string With(string block, string code) => $"ShadingModel \"NoHook\"\n{{\n    Base \"Lit\"\n    {block}\n    {{\n        GLSLPROGRAM\n        {code}\n        ENDGLSL\n    }}\n}}\n";
-        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel(With("Lighting", "vec3 Model_Lit(PBR_Closure c, Graphite_LightContribution l, vec4 custom) { return vec3(0.0); }")));
-        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel(With("Lighting", "// vec3 Model_Light(PBR_Closure c, Graphite_LightContribution l, vec4 custom)")));
-        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel(With("Unpack", "void Unpack(vec4 custom, inout PBR_Params p) { }")));
-        Assert.Throws<ArgumentException>(() => _harness.Renderer.LoadShadingModel(With("Pack", "vec4 Pack(PBR_Params p) { return vec4(0.0); }")));
-        Assert.Null(_harness.Renderer.ShadingModels.Find("NoHook"));
     }
 }

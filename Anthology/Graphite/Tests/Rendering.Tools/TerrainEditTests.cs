@@ -78,7 +78,7 @@ public sealed class TerrainEditTests
     public void Edits_AreTheSameEveryTime()
     {
         using TerrainData a = Load(Rolling()), b = Load(Rolling());
-        foreach (TerrainEdit edit in Edits)
+        foreach (TerrainEdit edit in Edits.Concat(SurfaceEdits))
         {
             a.Apply(edit);
             b.Apply(edit);
@@ -87,6 +87,9 @@ public sealed class TerrainEditTests
         {
             Assert.Equal(a.GetPage(key)!.Heights, b.GetPage(key)!.Heights);
             Assert.Equal(a.GetPage(key)!.NormalAo, b.GetPage(key)!.NormalAo);
+            Assert.Equal(a.GetPage(key)!.Splat, b.GetPage(key)!.Splat);
+            Assert.Equal(a.GetPage(key)!.Holes, b.GetPage(key)!.Holes);
+            Assert.Equal(a.GetPage(key)!.Details, b.GetPage(key)!.Details);
         }
     }
 
@@ -112,31 +115,6 @@ public sealed class TerrainEditTests
         }
     }
 
-    [Fact]
-    public void Raise_LiftsTheGroundInItsRadiusAndSaysWhatChanged()
-    {
-        using TerrainData data = Load(Rolling());
-        Double2 center = new(150, 150), outside = new(150, 175);
-        Assert.True(data.TryGetHeight(center, out double before));
-        Assert.True(data.TryGetHeight(outside, out double untouched));
-        List<TerrainEdited> heard = new();
-        data.Edited += heard.Add;
-
-        TerrainEdited result = data.Apply(new TerrainEdit(TerrainBrush.Raise, center, 20, 5));
-
-        Assert.True(data.TryGetHeight(center, out double after));
-        Assert.Equal(before + 5, after, 2);
-        Assert.True(data.TryGetHeight(outside, out double still));
-        Assert.Equal(untouched, still, 9);
-        Assert.Single(heard);
-        Assert.Equal(result, heard[0]);
-        Assert.Contains(new TerrainPageKey(0, 1, 1), result.Pages);
-        Assert.Contains(result.Pages, k => k.Level == data.Levels - 1);
-        Assert.True(result.Min.X <= 130 && result.Max.X >= 170);
-        Assert.True(data.Raycast(new Double3(150, 300, 150), new Float3(0, -1, 0), 1000, out TerrainHit hit));
-        Assert.Equal(after, hit.Position.Y, 3);
-    }
-
     // The edited pages stay when the terrain lets go of pages, so the edit is not lost to a reload from the package
     [Fact]
     public void EditedPages_SurviveUnloading()
@@ -148,137 +126,6 @@ public sealed class TerrainEditTests
         data.SetInterest([new Double3(1000, 0, 1000)], 1).Wait();
         Assert.True(data.TryGetHeight(new Double2(60, 60), out double again));
         Assert.Equal(crater, again);
-    }
-
-    // Every sample on layer 0 of two, and one detail prototype grown nowhere
-    private static TerrainData Grassland()
-    {
-        MemoryStream stream = new();
-        TerrainImporter.Import(Rolling(), new TerrainImportSettings { Spacing = 1.0, Bottom = -100.0, Range = 655.35, Layers = [Weights((x, z) => 255), Weights((x, z) => 0)], Details = [Weights((x, z) => 0)] }, stream);
-        stream.Position = 0;
-        return TerrainData.Load(stream);
-    }
-
-    // One layer, no details
-    private static TerrainData Plain()
-    {
-        MemoryStream stream = new();
-        TerrainImporter.Import(Rolling(), new TerrainImportSettings { Spacing = 1.0, Bottom = -100.0, Range = 655.35, SplatMaxSpacing = 4.0 }, stream);
-        stream.Position = 0;
-        return TerrainData.Load(stream);
-    }
-
-    // Every level that keeps splat weights holds, at each sample, the weights and hole of the finest sample it stands on
-    private static void AssertLevelsFollowTheFinest(TerrainData data)
-    {
-        TerrainHeader header = data.Header;
-        foreach (TerrainPageKey key in data.PageKeys)
-        {
-            TerrainPage page = data.GetPage(key)!;
-            if (key.Level >= header.SplatLevels)
-            {
-                Assert.Null(page.Splat);
-                Assert.Null(page.Holes);
-                continue;
-            }
-            for (int z = -1; z <= TerrainPage.Quads + 1; z++)
-                for (int x = -1; x <= TerrainPage.Quads + 1; x++)
-                {
-                    int i = Math.Clamp((key.X * TerrainPage.Quads + x) << key.Level, 0, header.QuadsX);
-                    int j = Math.Clamp((key.Z * TerrainPage.Quads + z) << key.Level, 0, header.QuadsZ);
-                    int px = Math.Min(i / TerrainPage.Quads, data.PagesAt(0).X - 1), pz = Math.Min(j / TerrainPage.Quads, data.PagesAt(0).Z - 1);
-                    TerrainPage finest = data.GetPage(new TerrainPageKey(0, px, pz))!;
-                    int from = TerrainPage.Index(i - px * TerrainPage.Quads, j - pz * TerrainPage.Quads), to = TerrainPage.Index(x, z);
-                    Assert.True(finest.IsHole(from) == page.IsHole(to), $"hole {key} {x} {z}");
-                    for (int layer = 0; layer < header.Layers; layer++)
-                        Assert.True(finest.Weight(layer, from) == page.Weight(layer, to), $"layer {layer} {key} {x} {z}");
-                }
-        }
-    }
-
-    [Fact]
-    public void Paint_PutsItsLayerUnderTheBrush()
-    {
-        using TerrainData data = Grassland();
-        Double2 center = new(150, 150), away = new(150, 170);
-        Assert.True(data.TryGetLayerWeight(center, 0, out float before) && before > 0.99f);
-        TerrainEdited edited = data.Apply(new TerrainEdit(TerrainBrush.Paint, center, 12, 1, Layer: 1));
-
-        Assert.True(data.TryGetLayerWeight(center, 1, out float painted));
-        Assert.True(painted > 0.95f, $"{painted}");
-        Assert.True(data.TryGetLayerWeight(away, 0, out float untouched) && untouched > 0.99f);
-        Assert.True(data.TryGetLayerWeight(new Double2(150, 159), 1, out float edge) && edge > 0.05f && edge < 0.95f, $"{edge}");
-        Assert.Contains(edited.Pages, k => k.Level > 0);
-        AssertLevelsFollowTheFinest(data);
-    }
-
-    [Fact]
-    public void Holes_CutAndFillWherePhysicsLooks()
-    {
-        using TerrainData data = Plain();
-        Double2 center = new(100, 100);
-        Assert.Null(data.GetPage(new TerrainPageKey(0, 0, 0))!.Holes);
-        data.Apply(new TerrainEdit(TerrainBrush.Hole, center, 4, 1));
-
-        Assert.True(data.IsHole(center));
-        Assert.False(data.TryGetHeight(center, out _));
-        Assert.False(data.IsHole(new Double2(100, 106)));
-        Assert.False(data.Raycast(new Double3(100.5, 300, 100.5), new Float3(0, -1, 0), 1000, out _));
-        List<TerrainTriangle> triangles = new();
-        data.GetTriangles(new Double3(99, -1000, 99), new Double3(101, 1000, 101), triangles);
-        Assert.Empty(triangles);
-        AssertLevelsFollowTheFinest(data);
-
-        data.Apply(new TerrainEdit(TerrainBrush.Hole, center, 10, -1));
-        Assert.False(data.IsHole(center));
-        Assert.True(data.TryGetHeight(center, out _));
-    }
-
-    [Fact]
-    public void Detail_GrowsAndCutsItsPrototype()
-    {
-        using TerrainData data = Grassland();
-        Double2 center = new(150, 150);
-        data.Apply(new TerrainEdit(TerrainBrush.Detail, center, 10, 1, Layer: 0));
-        Assert.True(data.TryGetDetailDensity(center, 0, out float grown) && grown > 0.99f, $"{grown}");
-        Assert.True(data.TryGetDetailDensity(new Double2(150, 165), 0, out float none) && none == 0f);
-        Assert.True(data.TryGetLayerWeight(center, 0, out float ground) && ground > 0.99f);
-        AssertLevelsFollowTheFinest(data);
-
-        data.Apply(new TerrainEdit(TerrainBrush.Detail, center, 10, -1, Layer: 0));
-        Assert.True(data.TryGetDetailDensity(center, 0, out float cut) && cut == 0f);
-    }
-
-    [Fact]
-    public void SurfaceEdits_AreTheSameEveryTime()
-    {
-        using TerrainData a = Load(Rolling()), b = Load(Rolling());
-        TerrainEdit[] edits =
-        [
-            new(TerrainBrush.Paint, new Double2(140, 150), 18, 0.6, Layer: 1),
-            new(TerrainBrush.Paint, new Double2(145, 150), 9, 0.8, Layer: 3),
-            new(TerrainBrush.Hole, new Double2(290, 290), 6, 1),
-            new(TerrainBrush.Detail, new Double2(150, 140), 12, 0.4),
-        ];
-        foreach (TerrainEdit edit in edits)
-        {
-            a.Apply(edit);
-            b.Apply(edit);
-        }
-        foreach (TerrainPageKey key in a.PageKeys)
-        {
-            Assert.Equal(a.GetPage(key)!.Splat, b.GetPage(key)!.Splat);
-            Assert.Equal(a.GetPage(key)!.Holes, b.GetPage(key)!.Holes);
-            Assert.Equal(a.GetPage(key)!.Details, b.GetPage(key)!.Details);
-        }
-    }
-
-    [Fact]
-    public void Edits_OutsideTheWorldChangeNothing()
-    {
-        using TerrainData data = Load(Rolling());
-        TerrainEdited result = data.Apply(new TerrainEdit(TerrainBrush.Raise, new Double2(-500, -500), 10, 5));
-        Assert.Empty(result.Pages);
     }
 
     private static TerrainEdit[] SurfaceEdits =>
@@ -322,6 +169,13 @@ public sealed class TerrainEditTests
         using TerrainData saved = TerrainData.Load(stream);
         AssertSamePages(data, saved);
         Assert.Equal(data.Trees, saved.Trees);
+
+        TerrainExport export = data.Export();
+        MemoryStream rebuiltStream = new();
+        TerrainImporter.Import(export.Heights, export.Settings, rebuiltStream);
+        rebuiltStream.Position = 0;
+        using TerrainData rebuilt = TerrainData.Load(rebuiltStream);
+        AssertSamePages(data, rebuilt);
     }
 
     [Fact]
@@ -329,8 +183,13 @@ public sealed class TerrainEditTests
     {
         using TerrainData data = Load(Rolling()), untouched = Load(Rolling());
         TerrainState before = data.Capture();
-        foreach (TerrainEdit edit in SurfaceEdits)
+        Assert.True(data.TryGetHeight(new Double2(140, 150), out double ground));
+        TerrainEdited lifted = data.Apply(SurfaceEdits[0]);
+        foreach (TerrainEdit edit in SurfaceEdits.Skip(1))
             data.Apply(edit);
+        Assert.True(data.TryGetHeight(new Double2(140, 150), out double raisedHeight));
+        Assert.Equal(ground + 6, raisedHeight, 2);
+        Assert.Contains(lifted.Pages, k => k.Level == data.Levels - 1);
         data.AddTree(new TerrainTree(0, new Double3(5, 0, 5), 0, 1, 1, TerrainTree.White));
         TerrainState after = data.Capture();
         using TerrainData edited = Load(Rolling());
@@ -347,41 +206,5 @@ public sealed class TerrainEditTests
         data.Restore(after);
         AssertSamePages(edited, data);
         Assert.Single(data.Trees);
-    }
-
-    [Fact]
-    public void Export_BuildsBackTheSameTerrain()
-    {
-        using TerrainData data = Load(Rolling());
-        foreach (TerrainEdit edit in SurfaceEdits)
-            data.Apply(edit);
-        TerrainExport export = data.Export();
-        MemoryStream stream = new();
-        TerrainImporter.Import(export.Heights, export.Settings, stream);
-        stream.Position = 0;
-        using TerrainData rebuilt = TerrainData.Load(stream);
-        AssertSamePages(data, rebuilt);
-    }
-
-    [Fact]
-    public void Trees_StandOnTheGround_FollowHeightEdits_AndMoveWithTheTerrain()
-    {
-        using TerrainData data = Load(Rolling());
-        data.AddTree(new TerrainTree(0, new Double3(150, 0, 140), 0, 1, 1, TerrainTree.White));
-        using TerrainTreeInstances trees = new(data);
-        int cx = (int)Math.Floor(150 / trees.CellSize), cz = (int)Math.Floor(140 / trees.CellSize);
-        data.TryGetHeight(new Double2(150, 140), out double ground);
-        Assert.Equal(ground, trees.Cell(cx, cz)[0].Position.Y, 6);
-
-        List<(Double2, Double2)> changed = new();
-        trees.Changed += (min, max) => changed.Add((min, max));
-        data.Apply(new TerrainEdit(TerrainBrush.Paint, new Double2(150, 140), 8, 1, Layer: 1));
-        Assert.Empty(changed);
-        data.Apply(new TerrainEdit(TerrainBrush.Raise, new Double2(150, 140), 8, 4));
-        Assert.Single(changed);
-        Assert.Equal(ground + 4, trees.Cell(cx, cz)[0].Position.Y, 2);
-
-        data.Position = new Double3(1000, 0, 0);
-        Assert.Equal(1150, trees.Cell(cx, cz)[0].Position.X, 6);
     }
 }

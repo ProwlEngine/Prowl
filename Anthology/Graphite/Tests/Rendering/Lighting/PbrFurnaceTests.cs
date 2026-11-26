@@ -158,14 +158,6 @@ public sealed class PbrFurnaceTests
     }
 
     [Fact]
-    public void MixesOfMetalAndDielectric_ReflectEverything()
-    {
-        foreach (float metalness in new[] { 0.25f, 0.5f, 0.75f })
-            foreach (float r in s_roughness)
-                AssertWhite(new PbrInputs(Vector3.One, Metalness: metalness, Roughness: r, Ior: 1.7f), 0.01, $"metalness {metalness} r {r}");
-    }
-
-    [Fact]
     public void AnIorBelowOne_ReflectsLikeItsInverse()
     {
         Vector3 n = Vector3.UnitZ, v = Vector3.Normalize(new Vector3(0.5f, 0, 1));

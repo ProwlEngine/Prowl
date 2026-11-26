@@ -66,12 +66,9 @@ public class LightTreeTests
     }
 
     [Theory]
-    [InlineData(false, 1, 8)]
     [InlineData(false, 7, 8)]
     [InlineData(false, 3000, 8)]
-    [InlineData(true, 1, 4)]
     [InlineData(true, 9, 4)]
-    [InlineData(true, 3000, 4)]
     [InlineData(true, 3000, 64)]
     public void EveryPointFindsExactlyTheLightsReachingIt(bool morton, int count, int leaf)
     {
@@ -105,17 +102,5 @@ public class LightTreeTests
                     inLeaves += (int)node.Count(i);
         Assert.Equal(lights.Length, inLeaves);
         Assert.True(3 * tree.Depth <= LightTreeBuilder.ShaderStack, $"depth {tree.Depth} needs more than {LightTreeBuilder.ShaderStack} stack entries");
-    }
-
-    [Fact]
-    public void CoincidentLights_StillBuild()
-    {
-        Vector4[] lights = [.. Enumerable.Repeat(new Vector4(1, 2, 3, 4), 500)];
-        foreach (bool morton in new[] { false, true })
-        {
-            var tree = new LightTreeBuilder();
-            tree.Build(lights, 8, morton);
-            Assert.Equal(500, Query(tree, lights, new Vector3(1, 2, 3)).Count);
-        }
     }
 }

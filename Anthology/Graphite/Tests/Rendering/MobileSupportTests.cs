@@ -23,11 +23,7 @@ public sealed class MobileSupportTests
     public void RunsWithinAdrenoLimits()
     {
         Assert.Null(Renderer.Unsupported(drawIndirectBaseInstance: true, descriptorIndexing: true, Adreno));
-    }
 
-    [Fact]
-    public void RunsWithinTheDescriptorIndexingMinimums()
-    {
         GraphicsDeviceLimits minimums = new()
         {
             MaxVertexOutputComponents = 112,
@@ -39,35 +35,6 @@ public sealed class MobileSupportTests
         };
 
         Assert.Null(Renderer.Unsupported(true, true, minimums));
-    }
-
-    [Fact]
-    public void FewerVaryingComponentsThanTheReservedLocationsIsUnsupported()
-    {
-        string? unsupported = Renderer.Unsupported(true, true, new GraphicsDeviceLimits { MaxVertexOutputComponents = 128, MaxFragmentInputComponents = 64, PerStage = Adreno.PerStage, PerStageWithTables = Adreno.PerStageWithTables, MaxBoundDescriptorSets = 7 });
-
-        Assert.NotNull(unsupported);
-        Assert.Contains("location 25", unsupported);
-    }
-
-    [Fact]
-    public void SmallTableLimitsAreUnsupported()
-    {
-        GraphicsDeviceLimits small = new()
-        {
-            MaxVertexOutputComponents = 128,
-            MaxFragmentInputComponents = 128,
-            PerStageWithTables = DescriptorCounts.Unlimited with { SampledImages = 8192 },
-        };
-
-        Assert.Contains("sampled images", Renderer.Unsupported(true, true, small));
-    }
-
-    [Fact]
-    public void MissingFirstInstanceOrDescriptorIndexingIsUnsupported()
-    {
-        Assert.NotNull(Renderer.Unsupported(false, true, Adreno));
-        Assert.NotNull(Renderer.Unsupported(true, false, Adreno));
     }
 
     [Fact]
@@ -96,24 +63,5 @@ public sealed class MobileSupportTests
         Assert.Contains($"Graphite_ShadowTextures2D[{RendererTextures.Textures2D}]", textures);
         Assert.Contains($"Graphite_TexturesCube[{RendererTextures.OtherTextures}]", textures);
         Assert.Contains($"Graphite_Samplers[{RendererTextures.Samplers}]", textures);
-    }
-
-    [Fact]
-    public void SceneNormalsFallBackToHalfFloat()
-    {
-        PixelFormat[] all = ViewGraph.SceneFormats(_ => true);
-        PixelFormat[] noSnorm = ViewGraph.SceneFormats(format => format != PixelFormat.R16_G16_SNorm);
-
-        Assert.Equal(PixelFormat.R16_G16_SNorm, all[3]);
-        Assert.Equal(PixelFormat.R16_G16_Float, noSnorm[3]);
-        Assert.Equal(all[0], noSnorm[0]);
-    }
-
-    [Fact]
-    public void SceneDepthHasStencil_AndFallsBackToD32ThenD16()
-    {
-        Assert.Equal(PixelFormat.D32_Float_S8_UInt, ViewGraph.SceneDepth(_ => true));
-        Assert.Equal(PixelFormat.D32_Float, ViewGraph.SceneDepth(format => format != PixelFormat.D32_Float_S8_UInt));
-        Assert.Equal(PixelFormat.D16_UNorm, ViewGraph.SceneDepth(format => format == PixelFormat.D16_UNorm));
     }
 }

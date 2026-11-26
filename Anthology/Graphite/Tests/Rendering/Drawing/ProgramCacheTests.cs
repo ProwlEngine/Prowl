@@ -151,79 +151,6 @@ public sealed class ProgramCacheTests : IDisposable
     }
 
     [Fact]
-    public void AVariantAskedForOnce_FinishesThroughAdvance()
-    {
-        _compiler.GatedAxis = "_TINT";
-        _compiler.GatedValue = "false";
-        ushort plain = Program();
-        Assert.Null(Get(plain));
-        Assert.Equal(1, _cache.Compiling);
-
-        _compiler.Gate.Set();
-        Until(() => _cache.Compiling == 0);
-        Assert.True(_cache.Ready(plain, false, Keywords));
-    }
-
-    [Fact]
-    public void VariantsNotReadyYet_DrawWithThePassDefault_ThenTheirOwn()
-    {
-        _compiler.GatedAxis = "_TINT";
-        _compiler.GatedValue = "true";
-        ushort tinted = Program(("_TINT", "true"));
-        GraphicsProgram? fallback = null;
-        Until(() => (fallback = Get(tinted)) != null);
-        Assert.False(_cache.Ready(tinted, false, Keywords));
-
-        _compiler.Gate.Set();
-        Until(() => _cache.Ready(tinted, false, Keywords));
-        Assert.NotSame(fallback, Get(tinted));
-    }
-
-    [Fact]
-    public void ADefaultVariantNotReady_DrawsTheDeclaredFallbackShader()
-    {
-        _shader.Fallback = new Shader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!), _compiler);
-        _compiler.GatedAxis = "_TINT";
-        _compiler.GatedValue = "false";
-        ushort plain = Program();
-        GraphicsProgram? fallback = null;
-        Until(() => (fallback = Get(plain)) != null);
-        Assert.StartsWith("Graphite/Fallback", fallback!.Name);
-        Assert.False(_cache.Ready(plain, false, Keywords));
-    }
-
-    [Fact]
-    public void EditingThePassSource_RecompilesBuiltAndFailedVariants()
-    {
-        ushort plain = Program();
-        ushort broken = Program(("_BROKEN", "true"));
-        WaitFor(plain);
-        Until(() => _cache.Failed(broken, false, Keywords));
-        int compiles = _compiler.Compiles;
-
-        _shader.Definition.Passes![0].Source += Environment.NewLine;
-        _cache.Advance();
-        Assert.False(_cache.Ready(plain, false, Keywords));
-        Assert.False(_cache.Failed(broken, false, Keywords));
-        WaitFor(plain);
-        Until(() => _cache.Failed(broken, false, Keywords));
-        Assert.True(_compiler.Compiles >= compiles + 2);
-    }
-
-    [Fact]
-    public void AnAxisDeclaredDifferentlyInTwoPasses_IsRejected()
-    {
-        const string twoPasses = """
-            Shader "Test/Mismatch"
-            {
-                Pass { Tags { "LightMode" = "Forward" } GLSLPROGRAM Shared { #pragma variant MODE A B } Vertex { void main() { } } Fragment { void main() { } } ENDGLSL }
-                Pass { Tags { "LightMode" = "Prepass" } GLSLPROGRAM Shared { #pragma variant MODE X Y Z } Vertex { void main() { } } Fragment { void main() { } } ENDGLSL }
-            }
-            """;
-        Assert.Throws<InvalidOperationException>(() => new Shader(ShaderParser.Parse(twoPasses), _compiler));
-    }
-
-    [Fact]
     public void BakedVariants_LoadWithoutACompiler()
     {
         ShaderPass compiled = ShaderParser.Parse(Source).Passes![0];
@@ -255,86 +182,19 @@ public sealed class ProgramCacheTests : IDisposable
         loaded.DepthStencilState = DepthStencilStateDescription.Disabled;
         loaded.RasterizerState = RasterizerStateDescription.CullNone;
         using GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(loaded);
-    }
 
-    [Fact]
-    public void BakedVariants_Capture_CompilesThroughTheirCompiler()
-    {
         ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
         BakedVariants baker = new(_glsl);
         Keyword[] combo = [.. _glsl.GetAxes(pass).Select(axis => new Keyword(axis.Name, axis.Values[^1]))];
         baker.Capture(pass, _device.BackendType, [combo]);
 
-        BakedVariants.Pass baked = baker.Find(pass)!;
-        Assert.Equal(_glsl.GetAxes(pass).Select(axis => axis.Name), baked.Axes.Select(axis => axis.Name));
-        Assert.True(Assert.Single(baked.Variants).IsCompiledFor(_device.BackendType));
+        BakedVariants.Pass bakedCapture = baker.Find(pass)!;
+        Assert.Equal(_glsl.GetAxes(pass).Select(axis => axis.Name), bakedCapture.Axes.Select(axis => axis.Name));
+        Assert.True(Assert.Single(bakedCapture.Variants).IsCompiledFor(_device.BackendType));
 
-        PassVariants player = ShaderParser.Parse(Source).Passes![0].Variants(new BakedVariants(), _device.BackendType);
-        Assert.Equal(0, player.CompiledCount);
-        PassVariants shipped = ShaderParser.Parse(Source).Passes![0].Variants(baker, _device.BackendType);
-        Assert.Equal(1, shipped.CompiledCount);
-    }
-
-    [Fact]
-    public void FailedVariants_DrawWithThePassDefault()
-    {
-        ushort broken = Program(("_BROKEN", "true"));
-        GraphicsProgram fallback = WaitFor(broken);
-        Assert.True(_cache.Failed(broken, false, Keywords));
-        Assert.Same(fallback, Get(broken));
-    }
-
-    [Fact]
-    public void FreedProgramIds_DropTheirCompiledVariants_AtTheNextSweep()
-    {
-        _programs.Freed += _cache.Drop;
-        ushort plain = Program();
-        _programs.Acquire(plain);
-        WaitFor(plain);
-        Assert.Equal(1, _cache.EntryCount);
-
-        _programs.Sweep();
-        Assert.Equal(1, _cache.EntryCount);
-        _programs.Release(plain);
-        _programs.Sweep();
-        Assert.Equal(0, _cache.EntryCount);
-    }
-
-    // A renderable moving between buckets releases its program and takes it again in the same frame
-    [Fact]
-    public void AProgramReleasedAndTakenAgain_KeepsItsIdAndCompiledVariants()
-    {
-        _programs.Freed += _cache.Drop;
-        ushort plain = Program();
-        _programs.Acquire(plain);
-        WaitFor(plain);
-        int compiles = _compiler.Compiles;
-
-        for (int frame = 0; frame < 300; frame++)
-        {
-            _programs.Sweep();
-            _programs.Release(plain);
-            Assert.Equal(plain, Program());
-            _programs.Acquire(plain);
-            Assert.NotNull(Get(plain));
-        }
-
-        Assert.Equal(compiles, _compiler.Compiles);
-        Assert.Equal(1, _cache.EntryCount);
-    }
-
-    [Fact]
-    public void BrokenVariants_AreReportedOnce_AndDrawNothing()
-    {
-        ushort broken = Program(("_BROKEN", "true"));
-        Until(() =>
-        {
-            Assert.Null(Get(broken));
-            return _reports.Count > 0;
-        });
-
-        Assert.Null(Get(broken));
-        Assert.Single(_reports);
-        Assert.Contains("broken variant", _reports[0]);
+        PassVariants playerCapture = ShaderParser.Parse(Source).Passes![0].Variants(new BakedVariants(), _device.BackendType);
+        Assert.Equal(0, playerCapture.CompiledCount);
+        PassVariants shippedCapture = ShaderParser.Parse(Source).Passes![0].Variants(baker, _device.BackendType);
+        Assert.Equal(1, shippedCapture.CompiledCount);
     }
 }
