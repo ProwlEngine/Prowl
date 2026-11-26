@@ -7,6 +7,7 @@ using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.Modeling;
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
 using Prowl.Runtime.Resources;
@@ -369,6 +370,74 @@ public static class CSGSelection
         }
 
         MarkDirty();
+    }
+
+    /// <summary>
+    /// Bakes the rotation and/or scale of some objects and everything under them into their brushes' points, every pivot
+    /// staying where it is. Textures keep their density. False, with nothing changed, when anything but brushes has geometry.
+    /// </summary>
+    public static bool ApplyTransform(IEnumerable<GameObject> objects, ModelEditingMode.TransformParts parts)
+    {
+        List<GameObject> nodes = [.. GameObjectClipboard.FilterToRoots(objects).SelectMany(r => r.GetChildrenDeep().Prepend(r))];
+        if (nodes.Count == 0) return false;
+
+        foreach (GameObject go in nodes)
+        {
+            if (!HoldsGeometry(go)) continue;
+            Debug.LogWarning($"Apply Transform: {go.Name} has a mesh or collider that cannot take the transform, nothing was changed.");
+            return false;
+        }
+
+        var positions = nodes.Select(n => n.Transform.Position).ToList();
+        var rotations = nodes.Select(n => n.Transform.Rotation).ToList();
+        var brushes = nodes.Select(n => n.GetComponent<CSGBrush>()).Where(b => b.IsValid()).Select(b => (b, b.Transform.LocalToWorldMatrix)).ToList();
+        Record("Apply CSG Transform", nodes);
+
+        // Parents come before their children, so each child is placed against its parent's final transform
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            Transform t = nodes[i].Transform;
+            if (parts.HasFlag(ModelEditingMode.TransformParts.Rotation)) t.LocalRotation = Quaternion.Identity;
+            else t.Rotation = rotations[i];
+            if (parts.HasFlag(ModelEditingMode.TransformParts.Scale)) t.LocalScale = Float3.One;
+            t.Position = positions[i];
+        }
+
+        var models = new HashSet<CSGModel>();
+        foreach ((CSGBrush brush, Float4x4 before) in brushes)
+        {
+            Bake(brush, brush.Transform.WorldToLocalMatrix * before);
+            CSGModel? model = ModelOf(brush.GameObject);
+            if (model.IsValid()) models.Add(model!);
+        }
+        foreach (CSGModel model in models) model.SetDirty();
+        return true;
+    }
+
+    private static bool HoldsGeometry(GameObject go)
+    {
+        if (go.GetComponent<ModelObject>().IsValid()) return true;
+        if (go.GetComponent<CSGModel>().IsValid()) return false;
+        return go.GetComponents<Component>().Any(c => c is IMaterialRenderer or Collider);
+    }
+
+    private static void Bake(CSGBrush brush, Float4x4 change)
+    {
+        Float4x4 linear = change;
+        linear.c3 = new Float4(0, 0, 0, 1);
+        if (MathF.Abs(Float4x4.Determinant(linear)) < 1e-12f) return;
+
+        // The stretch goes in unrefitted so locked textures keep their density, the turn refitted so they turn with the faces
+        change.Decompose(out _, out Quaternion turn, out _);
+        Float4x4 rigid = Float4x4.CreateFromQuaternion(turn);
+        brush.ControlMesh.TransformPoints(rigid.Invert() * change);
+        brush.ApplyControlMesh();
+
+        CSGSurfaceSelection.KeepTextures(brush, (_, data) => !data.Flags.HasFlag(CSGSurfaceFlags.WorldSpaceTexture), () =>
+        {
+            brush.ControlMesh.TransformPoints(rigid);
+            brush.ApplyControlMesh();
+        });
     }
 
     /// <summary>A brush's solid as a box: its centre in the world and its size along its own axes in world units.</summary>

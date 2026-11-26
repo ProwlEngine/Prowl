@@ -337,6 +337,12 @@ public sealed class CSGOverlayTool : SceneTool
                 Command(sub, "csg.snap_to_grid", CSGSelection.SnapToGrid, "CSG/SnapToGrid");
                 Command(sub, "csg.centre_pivot", CSGSelection.CentrePivot);
             });
+            menu.Submenu(Loc.Get("model.menu.apply"), sub =>
+            {
+                ApplyItem(sub, "model.menu.apply_rotation", ModelEditingMode.TransformParts.Rotation);
+                ApplyItem(sub, "model.menu.apply_scale", ModelEditingMode.TransformParts.Scale);
+                ApplyItem(sub, "model.menu.apply_rotation_scale", ModelEditingMode.TransformParts.Rotation | ModelEditingMode.TransformParts.Scale);
+            });
             menu.Submenu(Loc.Get("csg.menu.order"), sub =>
             {
                 Command(sub, "csg.earlier", () => CSGSelection.MoveInOrder(-1), "CSG/Earlier");
@@ -354,6 +360,9 @@ public sealed class CSGOverlayTool : SceneTool
             sub.Item(Loc.Get("csg.unhide_all", new { count = CSGVisibility.HiddenCount }), CSGVisibility.UnhideAll, shortcut: Keys("CSG/UnhideAll"));
         });
     }
+
+    private static void ApplyItem(ContextBuilder menu, string label, ModelEditingMode.TransformParts parts)
+        => menu.Item(Loc.Get(label), () => CSGSelection.ApplyTransform(Selection.GetSelected<GameObject>(), parts));
 
     private static void OperationItem(ContextBuilder menu, string label, Operation operation, string shortcut, List<CSGBrush> brushes, List<CSGGroup> groups)
         => menu.Item(Loc.Get(label), () => SetOperation(operation), shortcut: Keys(shortcut),

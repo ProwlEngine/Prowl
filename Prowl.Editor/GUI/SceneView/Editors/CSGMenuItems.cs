@@ -45,6 +45,10 @@ public static class CSGMenuItems
         Selection.Select(go);
     }
 
+    [MenuItem("GameObject/CSG/Apply Rotation and Scale", priority: 69)]
+    private static void ApplyRotationScale()
+        => CSGSelection.ApplyTransform(Selection.GetSelected<GameObject>(), ModelEditingMode.TransformParts.Rotation | ModelEditingMode.TransformParts.Scale);
+
     /// <summary>Wraps the selected brushes in a group at their centre, so they can be subtracted or intersected as one solid.</summary>
     [MenuItem("GameObject/CSG/Group Selection", priority: 68, Icon = EditorIcons.ObjectGroup)]
     internal static void GroupSelection()
