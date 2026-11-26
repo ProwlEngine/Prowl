@@ -1302,6 +1302,7 @@ public sealed class CSGMeshTool : SceneTool
             if (handles.IsNearest(brushId) && handles.TryBeginDrag(brushId))
             {
                 Selection.Select(other.GameObject);
+                Selection.Ping(other.GameObject.Identifier);
                 return;
             }
         }
