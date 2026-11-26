@@ -2,6 +2,10 @@
 // Graphite/Internal/DeferredLighting.glsl: the closure and the lights, shaded through a Graphite_BRDF and a
 // Graphite_AmbientBRDF the program writes, which pick the functions of the pixel's shading model. See ShadingModels.
 #pragma once
+#pragma variant global PBR_TIER FULL LITE MAX
+
+// Local lights' cookies and profiles, which cost a flag test for the lights without them
+#define GRAPHITE_LIGHT_MASKS 1
 
 #define GRAPHITE_GBUFFER_READ
 #define PBR_NO_SPECULAR_AA

@@ -86,7 +86,7 @@ public abstract partial class CommandBuffer
         for (int i = 0; i < colors.Count; i++)
         {
             FramebufferAttachment attachment = colors[i];
-            TrackAttachment(attachment.Target, ops.Color.Load);
+            TrackAttachment(attachment.Target, ops.ColorLoadAt(i));
             _attachmentScratch[i] = new AttachmentUse(attachment.Target.CurrentVersion, attachment.MipLevel, attachment.ArrayLayer);
         }
 

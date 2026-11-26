@@ -13,17 +13,27 @@ internal enum FramebufferMode
     GraphDepthReadOnly,
 }
 
+/// <summary>ColorLoads holds the colour attachments loaded their own way, as <see cref="TargetLoadStoreOps.ColorLoads"/> does.</summary>
 internal readonly record struct RenderPassOps(
     AttachmentLoadOp ColorLoad,
     AttachmentLoadOp DepthLoad,
     AttachmentStoreOp ColorStore,
-    AttachmentStoreOp DepthStore)
+    AttachmentStoreOp DepthStore,
+    ushort ColorLoads = 0)
 {
-    public const int Count = 36;
-
     public static RenderPassOps Load => new(AttachmentLoadOp.Load, AttachmentLoadOp.Load, AttachmentStoreOp.Store, AttachmentStoreOp.Store);
 
-    public int Index => (int)ColorLoad * 12 + (int)DepthLoad * 4 + (int)ColorStore * 2 + (int)DepthStore;
+    public AttachmentLoadOp ColorLoadAt(int attachment)
+    {
+        int own = attachment < TargetLoadStoreOps.MaxColorLoads ? (ColorLoads >> (attachment * 2)) & 3 : 0;
+        return own switch
+        {
+            0 => ColorLoad,
+            (int)LoadAction.Clear + 1 => AttachmentLoadOp.Clear,
+            (int)LoadAction.DontCare + 1 => AttachmentLoadOp.DontCare,
+            _ => AttachmentLoadOp.Load,
+        };
+    }
 }
 
 internal abstract class VkFramebufferBase : Framebuffer

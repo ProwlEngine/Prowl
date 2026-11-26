@@ -153,12 +153,20 @@ public sealed class GBufferFeature : RenderFeature
         Texture[] own = context.Get(state.Target).ColorTextures;
         RenderTexture scene = context.Get(state.Scene);
         context.CopyBack(scene);
-        Texture normal = own.Length > GBufferRead.OwnNormal ? own[GBufferRead.OwnNormal] : scene.ColorTextures[SceneTarget.Normals];
+        bool ownNormal = own.Length > GBufferRead.OwnNormal, ownMotion = own.Length > GBufferRead.OwnMotion;
+        Texture normal = ownNormal ? own[GBufferRead.OwnNormal] : scene.ColorTextures[SceneTarget.Normals];
         Framebuffer framebuffer = state.Sets.Get(_resources.Factory, context.View.LayerCount, scene.DepthTexture,
             own[0], normal, own[1], own[2], own[3], own[4], GBufferRead.Motion(own, scene));
-        context.Command.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+
+        // The GBuffer's own targets start undefined but for Surface, whose clear says no surface. The scene's are kept.
+        TargetLoadStoreOps ops = new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded)
+            .WithColorLoad((int)GBufferTarget.Surface, LoadAction.Clear);
+        if (!ownNormal)
+            ops = ops.WithColorLoad((int)GBufferTarget.Normal, LoadAction.Load);
+        if (!ownMotion)
+            ops = ops.WithColorLoad((int)GBufferTarget.Motion, LoadAction.Load);
+        context.Command.SetFramebuffer(framebuffer, ops);
         context.Command.SetFullViewport();
-        context.Command.ClearColorTarget((uint)GBufferTarget.Surface, new Color(0f, 0f, 0f, 0f));
         context.DrawPass(PassType.GBuffer);
     }
 }
@@ -287,8 +295,13 @@ public sealed class GBufferDecalsFeature : RenderFeature
         RenderTexture scene = context.Get(state.Scene);
         context.CopyBack(scene);
         state.GBuffer.BindUndecaled(context, _properties, _resources.PointClamp, scene);
-        Texture normal = decaled.Length > GBufferRead.DecaledNormal ? decaled[GBufferRead.DecaledNormal] : scene.ColorTextures[SceneTarget.Normals];
+        bool ownNormal = decaled.Length > GBufferRead.DecaledNormal;
+        Texture normal = ownNormal ? decaled[GBufferRead.DecaledNormal] : scene.ColorTextures[SceneTarget.Normals];
         Framebuffer framebuffer = state.Sets.Get(_resources.Factory, context.View.LayerCount, null, decaled[0], normal, decaled[1]);
-        context.Fullscreen(_resources.GBufferDecalsProgram, framebuffer, _properties, clear: (int)GBufferTarget.Surface);
+        TargetLoadStoreOps ops = new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded)
+            .WithColorLoad((int)GBufferTarget.Surface, LoadAction.Clear);
+        if (!ownNormal)
+            ops = ops.WithColorLoad((int)GBufferTarget.Normal, LoadAction.Load);
+        context.Fullscreen(_resources.GBufferDecalsProgram, framebuffer, _properties, ops);
     }
 }

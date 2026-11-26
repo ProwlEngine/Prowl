@@ -5,7 +5,7 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>
 /// Lights a deferred view's GBuffer onto its scene before the forward passes, which then draw only the renderables the
 /// GBuffer does not hold, in one fullscreen draw of the program <see cref="ShadingModels"/> writes, which lights each
-/// pixel by its shading model. It writes the scene's colour and, where the scene has one, its material target, which
+/// pixel by its shading model, at the view's PBR tier. A view whose tier's program is still compiling is left out. It writes the scene's colour and, where the scene has one, its material target, which
 /// screen space reflections read, and reads the scene's depth beside the GBuffer.
 /// Group <see cref="FeatureGroup.DeferredLighting"/>.
 /// </summary>
@@ -22,22 +22,21 @@ public sealed class DeferredLightingFeature : RenderFeature
 
     private readonly RendererResources _resources;
     private readonly PropertySet _properties = new();
+    private readonly Action<FullscreenProgram, FullscreenProgram> _replaced;
 
     internal DeferredLightingFeature(RendererResources resources)
         : base(RenderSlot.Opaque, -100, FeatureGroup.DeferredLighting)
     {
         _resources = resources;
+        _replaced = ReplaceProgram;
         Paths = RenderPaths.Deferred;
-        Uses(resources.ShadingModels.Program);
     }
 
-    public override void PrepareFrame()
-    {
-        ShadingModels models = _resources.ShadingModels;
-        FullscreenProgram last = models.Program;
-        if (models.Update())
-            ReplaceProgram(last, models.Program);
-    }
+    public const string TierAxis = "PBR_TIER";
+
+    public override void PrepareFrame() => _resources.ShadingModels.Update(_replaced);
+
+    public override bool IsActive(in FeatureView view) => _resources.ShadingModels.For(view.Keyword(TierAxis), view.LayerCount) != null;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -59,6 +58,7 @@ public sealed class DeferredLightingFeature : RenderFeature
         Framebuffer framebuffer = targets.Length > SceneTarget.Material
             ? state.Sets.Get(_resources.Factory, context.View.LayerCount, null, targets[SceneTarget.Color], targets[SceneTarget.Material])
             : state.Sets.Get(_resources.Factory, context.View.LayerCount, null, targets[SceneTarget.Color]);
-        context.Fullscreen(_resources.ShadingModels.Program, framebuffer, _properties);
+        if (_resources.ShadingModels.For(context.View.Keyword(TierAxis), context.View.LayerCount) is { } program)
+            context.Fullscreen(program, framebuffer, _properties);
     }
 }

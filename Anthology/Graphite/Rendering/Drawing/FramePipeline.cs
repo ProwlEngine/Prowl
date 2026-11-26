@@ -390,7 +390,8 @@ internal sealed partial class FramePipeline : IDisposable
         camera.Cubes = world.World.Reflections.SampledCubes();
         uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
         uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
-        camera.Info = new FeatureView(view, width, height);
+        camera.ResolveKeywords();
+        camera.Info = new FeatureView(view, width, height) { Keywords = camera.Keywords };
         camera.SelectFeatures(world.World.FeatureSnapshot, features);
         camera.PruneStates(world.World.FeatureSnapshot, features);
         camera.WasAutoExposed = camera.AutoExposed;
@@ -400,7 +401,6 @@ internal sealed partial class FramePipeline : IDisposable
         (CascadeSlot[] _, string _) = CascadesOf(camera, view, camera.World);
         CameraShape shape = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, camera.Cubes.Length);
         camera.ShapeKey = shape;
-        camera.ResolveKeywords();
         ResolveScreenLighting(camera, shape, width, height);
         camera.ListSelectedPasses();
         Prepare(camera, view, world, time, width, height);

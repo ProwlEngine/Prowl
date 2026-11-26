@@ -193,7 +193,7 @@ internal unsafe partial class VkCommandBuffer
     }
 
     private bool ClearIsPending()
-        => (_currentFramebuffer.ColorTargets.Count > 0 && _pendingOps.Color.Load == LoadAction.Clear)
+        => _pendingOps.ClearsColor(_currentFramebuffer.ColorTargets.Count)
             || (_currentFramebuffer.DepthTarget != null && _pendingOps.Depth.Load == LoadAction.Clear);
 
     private bool DiscardsStores()
@@ -245,13 +245,16 @@ internal unsafe partial class VkCommandBuffer
             ToVk(_pendingOps.Color.Load),
             ToVk(_pendingOps.Depth.Load),
             ToVk(_pendingOps.Color.Store),
-            ToVk(_pendingOps.Depth.Store));
+            ToVk(_pendingOps.Depth.Store),
+            _pendingOps.ColorLoads);
 
         int colorCount = _currentFramebuffer.ColorTargets.Count;
         Span<ClearValue> clearValues = stackalloc ClearValue[(int)_currentFramebuffer.AttachmentCount + 1];
-        Color clearColor = _pendingOps.Color.ClearColor;
         for (int i = 0; i < colorCount; i++)
+        {
+            Color clearColor = _pendingOps.ColorClearAt(i);
             clearValues[i].Color = new ClearColorValue(clearColor.R, clearColor.G, clearColor.B, clearColor.A);
+        }
         if (hasDepth)
             clearValues[colorCount].DepthStencil = new ClearDepthStencilValue(_pendingOps.Depth.ClearDepth, _pendingOps.Depth.ClearStencil);
 
@@ -272,6 +275,7 @@ internal unsafe partial class VkCommandBuffer
         }
 
         _pendingOps.Color.Load = LoadAction.Load;
+        _pendingOps.ColorLoads = 0;
         _pendingOps.Depth.Load = LoadAction.Load;
     }
 

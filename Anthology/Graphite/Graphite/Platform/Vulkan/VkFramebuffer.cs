@@ -12,7 +12,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkFramebufferHandle _deviceFramebuffer;
-    private readonly RenderPass[] _renderPasses = new RenderPass[3 * RenderPassOps.Count];
+    private readonly Dictionary<(FramebufferMode Mode, RenderPassOps Ops), RenderPass> _renderPasses = new();
     private readonly uint _colorAttachmentCount;
     private readonly List<ImageView> _attachmentViews = [];
 
@@ -41,12 +41,11 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 
     public override RenderPass GetRenderPass(FramebufferMode mode, RenderPassOps ops)
     {
-        int index = (int)mode * RenderPassOps.Count + ops.Index;
         lock (_renderPasses)
         {
-            if (_renderPasses[index].Handle == default)
-                _renderPasses[index] = CreateRenderPass(_colorAttachmentCount, mode, ops);
-            return _renderPasses[index];
+            if (!_renderPasses.TryGetValue((mode, ops), out RenderPass pass))
+                _renderPasses[(mode, ops)] = pass = CreateRenderPass(_colorAttachmentCount, mode, ops);
+            return pass;
         }
     }
 
@@ -66,11 +65,11 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
             {
                 Format = vkColorTex.VkFormat,
                 Samples = vkColorTex.VkSampleCount,
-                LoadOp = ops.ColorLoad,
+                LoadOp = ops.ColorLoadAt(i),
                 StoreOp = ops.ColorStore,
                 StencilLoadOp = AttachmentLoadOp.DontCare,
                 StencilStoreOp = AttachmentStoreOp.DontCare,
-                InitialLayout = ops.ColorLoad == AttachmentLoadOp.Load ? outside : ImageLayout.Undefined,
+                InitialLayout = ops.ColorLoadAt(i) == AttachmentLoadOp.Load ? outside : ImageLayout.Undefined,
                 FinalLayout = outside,
             };
             colorAttachmentRefs[i] = new AttachmentReference((uint)i, ImageLayout.ColorAttachmentOptimal);
@@ -257,11 +256,8 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
     protected override void DestroyNative()
     {
         _gd.Vk.DestroyFramebuffer(_gd.Device, _deviceFramebuffer, null);
-        foreach (RenderPass renderPass in _renderPasses)
-        {
-            if (renderPass.Handle != default)
-                _gd.Vk.DestroyRenderPass(_gd.Device, renderPass, null);
-        }
+        foreach (RenderPass renderPass in _renderPasses.Values)
+            _gd.Vk.DestroyRenderPass(_gd.Device, renderPass, null);
         foreach (ImageView view in _attachmentViews)
         {
             _gd.Vk.DestroyImageView(_gd.Device, view, null);

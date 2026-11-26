@@ -1,3 +1,5 @@
+using System;
+
 using Prowl.Vector;
 
 namespace Prowl.Graphite;
@@ -83,11 +85,53 @@ public struct AttachmentOps
 /// <summary>Load/store ops for a target's color and depth attachments.</summary>
 public struct TargetLoadStoreOps
 {
-    /// <summary>Ops for every color attachment.</summary>
+    /// <summary>Ops for every color attachment, but for the load of the ones <see cref="WithColorLoad"/> set apart.</summary>
     public AttachmentOps Color;
 
     /// <summary>Ops for depth attachment, if any.</summary>
     public AttachmentOps Depth;
+
+    /// <summary>The colour attachments loaded their own way, two bits each for the first <see cref="MaxColorLoads"/>: 0 as <see cref="Color"/> says, else the action plus one.</summary>
+    public ushort ColorLoads;
+
+    /// <summary>How many colour attachments can take a load action of their own.</summary>
+    public const int MaxColorLoads = 8;
+
+    /// <summary>
+    /// The same ops with one colour attachment loaded its own way: kept, left undefined, or cleared to transparent
+    /// black, whatever <see cref="Color"/> says for the rest.
+    /// </summary>
+    public readonly TargetLoadStoreOps WithColorLoad(int attachment, LoadAction action)
+    {
+        if ((uint)attachment >= MaxColorLoads)
+            throw new ArgumentOutOfRangeException(nameof(attachment));
+        TargetLoadStoreOps ops = this;
+        int shift = attachment * 2;
+        ops.ColorLoads = (ushort)((ColorLoads & ~(3 << shift)) | (((int)action + 1) << shift));
+        return ops;
+    }
+
+    /// <summary>How a colour attachment is loaded.</summary>
+    public readonly LoadAction ColorLoadAt(int attachment)
+    {
+        int own = attachment < MaxColorLoads ? (ColorLoads >> (attachment * 2)) & 3 : 0;
+        return own == 0 ? Color.Load : (LoadAction)(own - 1);
+    }
+
+    /// <summary>The colour a colour attachment clears to when its load action is Clear.</summary>
+    public readonly Color ColorClearAt(int attachment)
+        => attachment < MaxColorLoads && ((ColorLoads >> (attachment * 2)) & 3) != 0 ? default : Color.ClearColor;
+
+    /// <summary>Whether any of the first colour attachments is cleared as it loads.</summary>
+    public readonly bool ClearsColor(int attachments)
+    {
+        for (int i = 0; i < attachments; i++)
+        {
+            if (ColorLoadAt(i) == LoadAction.Clear)
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>Load/store pair for color and depth.</summary>
     public TargetLoadStoreOps(AttachmentOps color, AttachmentOps depth)

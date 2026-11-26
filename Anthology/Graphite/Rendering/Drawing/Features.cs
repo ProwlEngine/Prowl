@@ -111,6 +111,11 @@ public readonly struct FeatureView
     public RenderWorld World { get; }
     public ViewKind Kind { get; }
 
+    internal IReadOnlyDictionary<string, string>? Keywords { get; init; }
+
+    /// <summary>The value of a global keyword axis as the view draws with it, the world's or the view's own, null when neither sets it.</summary>
+    public string? Keyword(string axis) => Keywords != null && Keywords.TryGetValue(axis, out string? value) ? value : null;
+
     /// <summary>How the view lights its opaque surfaces.</summary>
     public RenderPath Path { get; }
 
@@ -414,8 +419,13 @@ public abstract class RenderFeature : RenderExtension
             _programs = [.. _programs, program];
     }
 
-    /// <summary>Takes a program the feature draws with, added through <see cref="Uses"/>, out of what it waits for and puts another in its place.</summary>
-    internal void ReplaceProgram(FullscreenProgram last, FullscreenProgram next) => _programs[Array.IndexOf(_programs, last)] = next;
+    /// <summary>Puts a program in the place of one the feature drew with, in what it waits for.</summary>
+    internal void ReplaceProgram(FullscreenProgram last, FullscreenProgram next)
+    {
+        int index = Array.IndexOf(_programs, last);
+        if (index >= 0)
+            _programs[index] = next;
+    }
 
     /// <summary>Whether every fullscreen program the feature draws with is ready for a view of this many layers, asking for the ones that are not. Render thread.</summary>
     internal bool ProgramsReady(int layers)
@@ -1252,21 +1262,21 @@ public sealed class FeatureContext
     /// form on a layered view so the view sized textures it reads give their first layer.
     /// </summary>
     public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null, bool clear = false, bool shared = false)
-        => DrawFullscreen(program, target.Framebuffer, properties, shared ? 1 : View.LayerCount, clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store), null);
+        => DrawFullscreen(program, target.Framebuffer, properties, shared ? 1 : View.LayerCount, new TargetLoadStoreOps(clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded), null);
 
     /// <summary>
-    /// Draws a fullscreen program over a framebuffer of targets the feature declared, keeping what they hold, but for
-    /// one colour target cleared to transparent black first when asked.
+    /// Draws a fullscreen program over a framebuffer of targets the feature declared, keeping what they hold unless
+    /// the ops say how each is loaded.
     /// </summary>
-    internal void Fullscreen(FullscreenProgram program, Framebuffer framebuffer, PropertySet? properties = null, int clear = -1)
-        => DrawFullscreen(program, framebuffer, properties, View.LayerCount, AttachmentOps.Loaded, null, clear);
+    internal void Fullscreen(FullscreenProgram program, Framebuffer framebuffer, PropertySet? properties = null, TargetLoadStoreOps? ops = null)
+        => DrawFullscreen(program, framebuffer, properties, View.LayerCount, ops ?? new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded), null);
 
     /// <summary>
     /// Draws a fullscreen program over one region of a texture the feature declared, keeping the rest of what it holds,
     /// for a texture filled a region at a time. Shared as for <see cref="Fullscreen(FullscreenProgram, RenderTexture, PropertySet?, bool, bool)"/>.
     /// </summary>
     public void Fullscreen(FullscreenProgram program, RenderTexture target, int x, int y, int width, int height, PropertySet? properties = null, bool shared = false)
-        => DrawFullscreen(program, target.Framebuffer, properties, shared ? 1 : View.LayerCount, AttachmentOps.Loaded, (x, y, width, height));
+        => DrawFullscreen(program, target.Framebuffer, properties, shared ? 1 : View.LayerCount, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded), (x, y, width, height));
 
     /// <summary>
     /// Draws a procedural program's vertices over a texture the feature declared, for geometry made in the shader such as
@@ -1291,7 +1301,7 @@ public sealed class FeatureContext
         Command.Draw(vertexCount);
     }
 
-    private void DrawFullscreen(FullscreenProgram program, Framebuffer framebuffer, PropertySet? properties, int layers, AttachmentOps color, (int X, int Y, int Width, int Height)? region, int clear = -1)
+    private void DrawFullscreen(FullscreenProgram program, Framebuffer framebuffer, PropertySet? properties, int layers, TargetLoadStoreOps ops, (int X, int Y, int Width, int Height)? region)
     {
         if (program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a procedural program as a fullscreen one; draw it with DrawProcedural.");
@@ -1299,10 +1309,8 @@ public sealed class FeatureContext
             throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
         if (Program(program) is not { } shader)
             return;
-        Command.SetFramebuffer(framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
+        Command.SetFramebuffer(framebuffer, ops);
         Command.SetFullViewport();
-        if (clear >= 0)
-            Command.ClearColorTarget((uint)clear, new Color(0f, 0f, 0f, 0f));
         if (region is { } r)
         {
             int width = (int)framebuffer.Width, height = (int)framebuffer.Height;
@@ -1489,25 +1497,16 @@ public sealed class SceneClearFeature : RenderFeature
 {
     internal SceneClearFeature() : base(RenderSlot.Clear, group: FeatureGroup.SceneClear, runsOn: ViewKinds.All) { }
 
-    private sealed class State
-    {
-        public TextureHandle Scene;
-    }
-
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         Float4 clear = view.Overlay ? default : view.ClearColor with { W = 1 };
-        TextureHandle scene = builder.WriteScene(new TargetLoadStoreOps(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f)));
-        builder.GetViewState<State>().Scene = scene;
-        builder.Publish(RendererOutputs.Scene, scene);
+        TargetLoadStoreOps ops = new(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f));
+        for (int target = SceneTarget.Color + 1; target <= SceneTarget.Material; target++)
+            ops = ops.WithColorLoad(target, LoadAction.Clear);
+        builder.Publish(RendererOutputs.Scene, builder.WriteScene(ops));
     }
 
-    public override void Render(FeatureContext context)
-    {
-        Framebuffer framebuffer = context.Get(context.GetViewState<State>().Scene).Framebuffer;
-        for (uint target = 1; target < framebuffer.ColorTargets.Count; target++)
-            context.Command.ClearColorTarget(target, new Color(0f, 0f, 0f, 0f));
-    }
+    public override void Render(FeatureContext context) { }
 }
 
 /// <summary>

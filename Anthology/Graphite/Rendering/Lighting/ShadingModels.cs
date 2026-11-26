@@ -95,9 +95,11 @@ internal static class ShadingModelLibrary
 
 /// <summary>
 /// The shading models of a renderer, the library's and the ones its host loaded, which only its own shaders build
-/// on, and the one lighting program its deferred views draw, written from them: each pixel is lit as its own model says. It holds every model from the start, so nothing compiles as surfaces come into
-/// view. Only loading or replacing a model writes it anew, compiled as the renderer's <see cref="CompilePolicy"/> says,
-/// and views keep the last one until it is ready. A program that fails to compile is reported and leaves out the models
+/// on, and the lighting program its deferred views draw, written from them: each pixel is lit as its own model says.
+/// It holds every model from the start, so nothing compiles as surfaces come into view. The program has a form for
+/// each PBR tier, FULL made at the start and the others the first time a view draws at them. Only loading or
+/// replacing a model writes it anew, compiled as the renderer's <see cref="CompilePolicy"/> says, and views keep the
+/// last one until it is ready. A program that fails to compile is reported and leaves out the models
 /// new to it, whose pixels are lit as Lit until a document that compiles replaces them. The models' code shares one
 /// program, so a function a Lighting or Unpack block defines beside its hooks needs a name no other model uses.
 /// </summary>
@@ -113,10 +115,19 @@ public sealed class ShadingModels : IDisposable
     private readonly Dictionary<string, ShadingModelDefinition> _loaded = new(StringComparer.Ordinal);
     private readonly Dictionary<string, uint> _ids = new(StringComparer.Ordinal);
     private readonly Action<RendererError>? _report;
-    private FullscreenProgram? _pending;
-    private ShadingModel[] _lit, _pendingModels = [];
-    private string _source, _pendingSource = "";
+    private readonly Tier[] _tiers = [new(""), new("#define PBR_TIER_LITE 1\n"), new("#define PBR_TIER_MAX 1\n")];
+    private ShadingModel[] _lit, _wantedModels;
+    private string _wanted;
+    private string? _failed;
     private int _version, _built;
+
+    // The program of one PBR tier: the one in use with the source it was written from, and the one compiling to replace it
+    private sealed class Tier(string variant)
+    {
+        public readonly string Variant = variant;
+        public FullscreenProgram? Program, Pending;
+        public string Source = "", PendingSource = "";
+    }
 
     internal ShadingModels(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy, Action<RendererError>? report = null)
     {
@@ -136,15 +147,42 @@ public sealed class ShadingModels : IDisposable
             if (ShadingModelLibrary.Find(name) is { } shipped)
                 Add(shipped);
         }
-        _source = Source(out _lit);
-        Program = Create(_source, _report);
+        _wanted = Source(out _lit);
+        _wantedModels = _lit;
+        _tiers[0].Program = Create(_wanted, _tiers[0].Variant, _report);
+        _tiers[0].Source = _wanted;
     }
 
     /// <summary>Takes a program views drew with until now, to dispose once no frame in flight draws with it.</summary>
     internal Action<IDisposable>? Retire { get; set; }
 
-    /// <summary>The lighting program in use. Render thread.</summary>
-    internal FullscreenProgram Program { get; private set; }
+    /// <summary>The lighting program in use at the FULL tier. Render thread.</summary>
+    internal FullscreenProgram Program => _tiers[0].Program!;
+
+    /// <summary>
+    /// The lighting program for a view's PBR tier, the value of its PBR_TIER keyword, made the first time a tier is
+    /// asked for. Null while it is not ready for a view of this many layers, or failed. Render thread.
+    /// </summary>
+    internal FullscreenProgram? For(string? tier, int layers)
+    {
+        Tier slot = _tiers[tier switch { "LITE" => 1, "MAX" => 2, _ => 0 }];
+        if (slot.Program == null)
+        {
+            if (_wanted == _failed)
+                return null;
+            try
+            {
+                slot.Program = Create(_wanted, slot.Variant, _report);
+                slot.Source = _wanted;
+            }
+            catch (Exception e)
+            {
+                Fail(e.Message);
+                return null;
+            }
+        }
+        return slot.Program.Ready(layers) ? slot.Program : null;
+    }
 
     /// <summary>The models with an id as of this call. Host thread.</summary>
     public ShadingModel[] All
@@ -246,72 +284,78 @@ public sealed class ShadingModels : IDisposable
     }
 
     /// <summary>
-    /// Writes the program anew when the models changed, and takes it into use once it is compiled. True when
-    /// <see cref="Program"/> changed. Render thread, once a frame.
+    /// Writes the programs anew when the models changed, and takes each into use once it is compiled, telling of the
+    /// program it replaced. Render thread, once a frame.
     /// </summary>
-    internal bool Update()
+    internal void Update(Action<FullscreenProgram, FullscreenProgram> replaced)
     {
-        string? source = null;
-        ShadingModel[] models = [];
         lock (_lock)
         {
             if (_built != _version)
             {
                 _built = _version;
-                source = Source(out models);
+                _wanted = Source(out _wantedModels);
             }
         }
-        if (source != null)
+        foreach (Tier tier in _tiers)
         {
-            _pending?.Dispose();
-            _pending = null;
-            if (source != _source)
+            if (tier.Program == null)
+                continue;
+            if (tier.Pending != null && tier.PendingSource != _wanted)
             {
-                (_pendingSource, _pendingModels) = (source, models);
+                tier.Pending.Dispose();
+                tier.Pending = null;
+            }
+            if (tier.Source == _wanted || _wanted == _failed)
+                continue;
+            if (tier.Pending == null)
+            {
                 try
                 {
-                    _pending = Create(source, null);
+                    tier.Pending = Create(_wanted, tier.Variant, null);
+                    tier.PendingSource = _wanted;
                 }
                 catch (Exception e)
                 {
                     Fail(e.Message);
+                    return;
                 }
             }
-        }
-        if (_pending == null)
-            return false;
 
-        // Every form the program in use draws with, so no view loses its lighting to the swap
-        bool mono = Program.Built(1), layered = Program.Built(2);
-        bool ready = (layered && !mono) || _pending.Ready(1);
-        if (layered)
-            ready &= _pending.Ready(2);
-        if (_pending.Failed)
-        {
-            Fail(_pending.Error ?? "");
-            _pending.Dispose();
-            _pending = null;
-            return false;
+            // Every form the program in use draws with, so no view loses its lighting to the swap
+            bool mono = tier.Program.Built(1), layered = tier.Program.Built(2);
+            bool ready = (layered && !mono) || tier.Pending.Ready(1);
+            if (layered)
+                ready &= tier.Pending.Ready(2);
+            if (tier.Pending.Failed)
+            {
+                string error = tier.Pending.Error ?? "";
+                tier.Pending.Dispose();
+                tier.Pending = null;
+                Fail(error);
+                return;
+            }
+            if (!ready)
+                continue;
+            FullscreenProgram last = tier.Program;
+            (tier.Program, tier.Pending, tier.Source) = (tier.Pending, null, _wanted);
+            _lit = _wantedModels;
+            replaced(last, tier.Program);
+            if (Retire is { } retire)
+                retire(last);
+            else
+                last.Dispose();
         }
-        if (!ready)
-            return false;
-        if (Retire is { } retire)
-            retire(Program);
-        else
-            Program.Dispose();
-        Program = _pending;
-        (_source, _lit) = (_pendingSource, _pendingModels);
-        _pending = null;
-        return true;
     }
 
     // The models new to the program that failed are left out of the next one
     private void Fail(string message)
     {
+        _failed = _wanted;
         List<string> names = new();
         lock (_lock)
         {
-            foreach (ShadingModel model in _pendingModels)
+            foreach (ShadingModel model in _wantedModels)
             {
                 if (Array.IndexOf(_lit, model) < 0 && _broken.Add(model))
                     names.Add(model.Name);
@@ -323,8 +367,8 @@ public sealed class ShadingModels : IDisposable
         _report?.Invoke(new RendererError("shader.compile", $"Graphite/DeferredLighting: {message}{left}", RendererErrorSeverity.Error, this) { Key = $"shadingmodels.{_built}" });
     }
 
-    private FullscreenProgram Create(string source, Action<RendererError>? report)
-        => FullscreenProgram.Create(_device, _compiler, source, "Graphite/DeferredLighting", source: false, blend: _blend, lit: true, policy: _policy, report: report);
+    private FullscreenProgram Create(string source, string variant, Action<RendererError>? report)
+        => FullscreenProgram.Create(_device, _compiler, source, "Graphite/DeferredLighting", source: false, blend: _blend, lit: true, variant: variant, policy: _policy, report: report);
 
     // The head, each model's code under names of its own, the functions that pick by the pixel's model, then the pass
     // itself. No model adds to the closure, so a pixel pays for its own model's lighting alone.
@@ -368,7 +412,10 @@ public sealed class ShadingModels : IDisposable
 
     public void Dispose()
     {
-        Program.Dispose();
-        _pending?.Dispose();
+        foreach (Tier tier in _tiers)
+        {
+            tier.Program?.Dispose();
+            tier.Pending?.Dispose();
+        }
     }
 }
