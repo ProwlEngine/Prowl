@@ -149,7 +149,11 @@ public sealed class CSGClipTool : SceneTool
             if (model.IsValid() && CSGSelection.PickBrush(model!, CSGSelection.BrushesIn(model!), ctx.Handles.MouseRay, out CSGBrush brush, out _))
             {
                 if (Selection.IsSelected(brush.GameObject)) Selection.RemoveFromSelection(brush.GameObject);
-                else Selection.AddToSelection(brush.GameObject);
+                else
+                {
+                    Selection.AddToSelection(brush.GameObject);
+                    Selection.Ping(brush.GameObject.Identifier);
+                }
             }
             return;
         }
