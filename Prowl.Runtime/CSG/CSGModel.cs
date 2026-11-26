@@ -107,6 +107,9 @@ public sealed class CSGModel : Component
     /// <summary>Materials in submesh order, parallel to <see cref="GeneratedMesh"/>'s submeshes.</summary>
     public List<Material?> GeneratedMaterials { get; } = new();
 
+    /// <summary>Raised after a build applied new meshes, for work that places things around them rather than editing them.</summary>
+    public event Action<CSGModel>? Rebuilt;
+
     /// <summary>Request a rebuild on the next tick. Safe to call repeatedly.</summary>
     public void SetDirty() => _dirty = true;
 
@@ -291,8 +294,26 @@ public sealed class CSGModel : Component
 
         BuildCount++;
         CSGMeshes meshes = CSGMeshBuilder.Build(geometry, ResolveSurface, GameObject.Name);
+        ProcessMeshes(meshes);
         ApplyMeshes(meshes);
         TrackLightmapUVs();
+        Rebuilt?.Invoke(this);
+    }
+
+    private void ProcessMeshes(CSGMeshes meshes)
+    {
+        foreach (Component component in GameObject.GetComponents(typeof(ICSGMeshProcessor)))
+        {
+            if (!component.Enabled) continue;
+            try
+            {
+                ((ICSGMeshProcessor)component).ProcessMeshes(this, meshes);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+        }
     }
 
     /// <summary>
