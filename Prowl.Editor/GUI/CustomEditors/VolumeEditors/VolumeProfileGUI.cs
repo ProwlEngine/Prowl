@@ -201,9 +201,12 @@ public static class VolumeProfileGUI
     }
 
     private static object? Clamp(object? value, RangeAttribute range, Type type)
-        => type == typeof(float)
-            ? Math.Clamp((float)(value ?? 0f), range.Min, range.Max)
-            : Math.Clamp((int)(value ?? 0), (int)MathF.Round(range.Min), (int)MathF.Round(range.Max));
+    {
+        if (type == typeof(float))
+            return Math.Clamp((float)(value ?? 0f), range.Min, range.Max);
+        
+        return Math.Clamp((int)(value ?? 0), (int)MathF.Round(range.Min), (int)MathF.Round(range.Max));
+    }
 
     /// <summary>
     /// A profile field with New and Clone beside it, and Save As Asset for a profile embedded in the scene.
