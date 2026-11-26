@@ -304,8 +304,7 @@ public class EditorCamera
             FallbackTarget = _renderTarget,
             DisplayGizmos = ShowGizmos,
             Kind = Prowl.Graphite.Rendering.ViewKind.SceneView,
-            Features = ShowGrid ? GridFeature.SceneList : null,
-            Keywords = DebugViews.Keywords(DebugView),
+            Features = DebugViews.Features(DebugView, ShowGrid ? GridFeature.SceneList : null),
         });
 
         // Remove from scene if we added it
