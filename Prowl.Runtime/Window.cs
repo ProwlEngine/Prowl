@@ -22,6 +22,9 @@ public static class Window
     public static IWindow InternalWindow { get; internal set; }
     public static IInputContext InternalInput { get; internal set; }
 
+    /// <summary>Desktop app identifier (Wayland app_id, X11 class). Set before the window is created.</summary>
+    public static string? AppId { get; set; }
+
     // --- Per-monitor DPI awareness on Windows ----------------------------------------------
     // [DllImport("user32.dll")]
     // private static extern bool SetProcessDpiAwarenessContext(nint dpiContext);
@@ -235,6 +238,12 @@ public static class Window
         // Silk finds platforms by reflection, which NativeAOT cannot do, so name them up front.
         Silk.NET.Windowing.Glfw.GlfwWindowing.RegisterPlatform();
         Silk.NET.Input.Glfw.GlfwInput.RegisterPlatform();
+        if (!string.IsNullOrEmpty(AppId))
+        {
+            options.WindowClass = AppId;
+            // GLFW_WAYLAND_APP_ID, which Silk has no option for
+            Silk.NET.GLFW.GlfwProvider.GLFW.Value.WindowHintString(0x26001, AppId);
+        }
         InternalWindow = Silk.NET.Windowing.Window.Create(options);
         HookEvents();
     }

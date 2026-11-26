@@ -127,6 +127,9 @@ public static class Program
             return;
         }
 
+        Runtime.Window.AppId = DesktopEntry.AppId;
+        DesktopEntry.Install();
+
         var editor = new EditorApplication();
         editor.Run("Prowl Editor", 1920, 1080);
 
