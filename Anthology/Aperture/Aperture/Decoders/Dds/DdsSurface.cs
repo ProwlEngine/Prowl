@@ -130,6 +130,62 @@ internal struct DdsSurface
         ? ComponentCount == 4
         : HasAlpha;
 
+    /// <summary>The layout a decode produces without losing channels or, except for video, precision.</summary>
+    public readonly PixelFormat NearestFormat => Layout switch
+    {
+        DdsLayout.Bc4 or DdsLayout.Bilevel => PixelFormat.L8,
+        DdsLayout.Bc5 => PixelFormat.Rgb8,
+        DdsLayout.Bc6h or DdsLayout.PackedFloat or DdsLayout.SharedExponent => PixelFormat.RgbF16,
+        DdsLayout.ExtendedRange => PixelFormat.RgbaF16,
+        DdsLayout.Components => ComponentFormat,
+        DdsLayout.Packed => PackedFormat,
+        // The moved red channel leaves no alpha behind. Video is still decoded to eight bits.
+        _ => HasAlphaChannel && !RedInAlpha ? PixelFormat.Rgba8 : PixelFormat.Rgb8,
+    };
+
+    /// <summary>
+    /// Two channels widen to three, since a luminance and alpha pair would mean something else.
+    /// A single half widens to <see cref="PixelFormat.LF32"/> for want of a half luminance.
+    /// </summary>
+    private readonly PixelFormat ComponentFormat =>
+        (ComponentCount, Float || ComponentBits == 32, ComponentBits) switch
+        {
+            (1, true, _) => PixelFormat.LF32,
+            (1, _, 16) => PixelFormat.L16,
+            (1, _, _) => PixelFormat.L8,
+            (4, true, 32) => PixelFormat.RgbaF32,
+            (4, true, _) => PixelFormat.RgbaF16,
+            (4, _, 16) => PixelFormat.Rgba16,
+            (4, _, _) => PixelFormat.Rgba8,
+            (_, true, 32) => PixelFormat.RgbF32,
+            (_, true, _) => PixelFormat.RgbF16,
+            (_, _, 16) => PixelFormat.Rgb16,
+            _ => PixelFormat.Rgb8,
+        };
+
+    /// <summary>Grey where the three colour masks agree, wide where any field passes eight bits.</summary>
+    private readonly PixelFormat PackedFormat
+    {
+        get
+        {
+            bool grey = RedMask == GreenMask && GreenMask == BlueMask;
+            bool alpha = AlphaMask != 0;
+            bool wide =
+                System.Numerics.BitOperations.PopCount(RedMask) > 8 ||
+                System.Numerics.BitOperations.PopCount(GreenMask) > 8 ||
+                System.Numerics.BitOperations.PopCount(BlueMask) > 8 ||
+                System.Numerics.BitOperations.PopCount(AlphaMask) > 8;
+
+            return (grey, alpha) switch
+            {
+                (true, false) => wide ? PixelFormat.L16 : PixelFormat.L8,
+                (true, true) => wide ? PixelFormat.La16 : PixelFormat.La8,
+                (false, false) => wide ? PixelFormat.Rgb16 : PixelFormat.Rgb8,
+                (false, true) => wide ? PixelFormat.Rgba16 : PixelFormat.Rgba8,
+            };
+        }
+    }
+
     /// <summary>Bytes one block occupies, or zero where the layout is not block compressed.</summary>
     public readonly int BlockBytes => Layout switch
     {
@@ -326,7 +382,8 @@ internal struct DdsSurface
                 surface.BlueMask = surface.RedMask;
             }
 
-            if ((pixelFlags & AlphaPixels) == 0)
+            // An alpha only surface sets the alpha flag rather than the alpha pixels one.
+            if ((pixelFlags & (AlphaPixels | Alpha)) == 0)
                 surface.AlphaMask = 0;
 
             SwapTenBitRedAndBlue(ref surface);
@@ -511,23 +568,23 @@ internal struct DdsSurface
                 return;
 
             case >= 134 and <= 188 when ((dxgi - 134) & 3) < 3:
-            {
-                // The fourteen block sizes run in order, each taking four of the format numbers.
-                ReadOnlySpan<byte> sizes =
-                [
-                    4, 4, 5, 4, 5, 5, 6, 5, 6, 6, 8, 5, 8, 6,
+                {
+                    // The fourteen block sizes run in order, each taking four of the format numbers.
+                    ReadOnlySpan<byte> sizes =
+                    [
+                        4, 4, 5, 4, 5, 5, 6, 5, 6, 6, 8, 5, 8, 6,
                     8, 8, 10, 5, 10, 6, 10, 8, 10, 10, 12, 10, 12, 12,
                 ];
 
-                int index = (int)(dxgi - 134) / 4;
-                if (index >= 14)
-                    return;
+                    int index = (int)(dxgi - 134) / 4;
+                    if (index >= 14)
+                        return;
 
-                surface.Layout = DdsLayout.Astc;
-                surface.AstcWidth = sizes[index * 2];
-                surface.AstcHeight = sizes[(index * 2) + 1];
-                return;
-            }
+                    surface.Layout = DdsLayout.Astc;
+                    surface.AstcWidth = sizes[index * 2];
+                    surface.AstcHeight = sizes[(index * 2) + 1];
+                    return;
+                }
 
             case 68 or 69:
                 surface.Layout = DdsLayout.SharedChroma;

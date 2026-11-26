@@ -4,13 +4,14 @@
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Prowl.Aperture.Decoders.Dds;
 
 /// <summary>Turns the largest mip level of the first slice into pixels.</summary>
 internal static class DdsImageReader
 {
-    /// <summary>Pulls one channel out of a packed pixel and stretches it to a byte.</summary>
+    /// <summary>Pulls one channel out of a packed pixel and stretches it to full range.</summary>
     private readonly struct Channel
     {
         private readonly int _shift;
@@ -43,6 +44,11 @@ internal static class DdsImageReader
 
         public readonly bool IsPresent => _present;
 
+        /// <summary>The channel as a value where one means full intensity, at its stored precision.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly float Fraction(uint pixel) =>
+            _present ? ((pixel >> _shift) & _mask) / (float)_max : 0f;
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly byte Extract(uint pixel)
         {
@@ -56,22 +62,31 @@ internal static class DdsImageReader
     /// <summary>Whether the data present could hold the surface the header declares.</summary>
     public static bool CanDescribe(int available, in DdsSurface surface) => surface.SurfaceBytes <= available;
 
-    public static bool TryDecode(ReadOnlySpan<byte> data, in DdsSurface surface, int channels,
+    /// <summary>Decodes into <paramref name="format"/>, which must be the surface's nearest one.</summary>
+    public static bool TryDecode(ReadOnlySpan<byte> data, in DdsSurface surface, PixelFormat format,
                                  Span<byte> destination, int stride, bool flip, out ApertureError error)
     {
+        if (format != surface.NearestFormat)
+        {
+            error = ApertureError.UnsupportedFeature;
+            return false;
+        }
+
         error = ApertureError.None;
+        int channels = format.ChannelCount();
 
         return surface.Layout switch
         {
-            DdsLayout.Packed => DecodePacked(data, surface, channels, destination, stride, flip),
-            DdsLayout.Components => DecodeComponents(data, surface, channels, destination, stride, flip),
+            DdsLayout.Packed => DecodePacked(data, surface, format, destination, stride, flip),
+            DdsLayout.Components => DecodeComponents(data, surface, format, destination, stride, flip),
             DdsLayout.Video => DecodeVideo(data, surface, channels, destination, stride, flip),
-            DdsLayout.PackedFloat => DecodePackedFloat(data, surface, channels, destination, stride, flip),
-            DdsLayout.Bilevel => DecodeBilevel(data, surface, channels, destination, stride, flip),
-            DdsLayout.SharedExponent => DecodeSharedExponent(data, surface, channels, destination, stride, flip),
+            DdsLayout.PackedFloat => DecodePackedFloat(data, surface, format, destination, stride, flip),
+            DdsLayout.Bilevel => DecodeBilevel(data, surface, destination, stride, flip),
+            DdsLayout.SharedExponent => DecodeSharedExponent(data, surface, format, destination, stride, flip),
             DdsLayout.Astc => DecodeAstc(data, surface, channels, destination, stride, flip),
             DdsLayout.SharedChroma => DecodeShared(data, surface, channels, destination, stride, flip),
-            DdsLayout.ExtendedRange => DecodeExtended(data, surface, channels, destination, stride, flip),
+            DdsLayout.ExtendedRange => DecodeExtended(data, surface, format, destination, stride, flip),
+            DdsLayout.Bc6h => DecodeHalfBlocks(data, surface, destination, stride, flip),
             _ => DecodeBlocks(data, surface, channels, destination, stride, flip),
         };
     }
@@ -130,7 +145,7 @@ internal static class DdsImageReader
     /// Ten bit channels whose range runs a little below nought and a little above one, so that a
     /// picture can hold the values a display cannot show without clipping them away.
     /// </summary>
-    private static bool DecodeExtended(ReadOnlySpan<byte> data, in DdsSurface surface, int channels,
+    private static bool DecodeExtended(ReadOnlySpan<byte> data, in DdsSurface surface, PixelFormat format,
                                        Span<byte> destination, int stride, bool flip)
     {
         long rowBytes = (long)surface.Width * 4;
@@ -141,19 +156,17 @@ internal static class DdsImageReader
         {
             ReadOnlySpan<byte> source = data.Slice(surface.DataOffset + (int)(y * rowBytes), (int)rowBytes);
             int target = flip ? surface.Height - 1 - y : y;
-            Span<byte> row = destination.Slice(target * stride, surface.Width * channels);
+            Span<byte> row = destination.Slice(target * stride, surface.Width * format.BytesPerPixel());
 
             for (int x = 0; x < surface.Width; x++)
             {
                 uint packed = BinaryPrimitives.ReadUInt32LittleEndian(source[(x * 4)..]);
-                int at = x * channels;
 
-                row[at] = ToByte((((packed & 0x3FF) - 384f) / 510f));
-                row[at + 1] = ToByte(((((packed >> 10) & 0x3FF) - 384f) / 510f));
-                row[at + 2] = ToByte(((((packed >> 20) & 0x3FF) - 384f) / 510f));
-
-                if (channels == 4)
-                    row[at + 3] = (byte)((packed >> 30) * 85);
+                PutValues(row, x, format,
+                          ((packed & 0x3FF) - 384f) / 510f,
+                          (((packed >> 10) & 0x3FF) - 384f) / 510f,
+                          (((packed >> 20) & 0x3FF) - 384f) / 510f,
+                          (packed >> 30) / 3f);
             }
         }
 
@@ -253,7 +266,7 @@ internal static class DdsImageReader
     /// Three floating point channels in one word, with no sign and a shared layout of five
     /// exponent bits each. It is the cheapest way a file can hold values past one.
     /// </summary>
-    private static bool DecodePackedFloat(ReadOnlySpan<byte> data, in DdsSurface surface, int channels,
+    private static bool DecodePackedFloat(ReadOnlySpan<byte> data, in DdsSurface surface, PixelFormat format,
                                           Span<byte> destination, int stride, bool flip)
     {
         long rowBytes = (long)surface.Width * 4;
@@ -264,19 +277,17 @@ internal static class DdsImageReader
         {
             ReadOnlySpan<byte> source = data.Slice(surface.DataOffset + (int)(y * rowBytes), (int)rowBytes);
             int target = flip ? surface.Height - 1 - y : y;
-            Span<byte> row = destination.Slice(target * stride, surface.Width * channels);
+            Span<byte> row = destination.Slice(target * stride, surface.Width * format.BytesPerPixel());
 
             for (int x = 0; x < surface.Width; x++)
             {
                 uint packed = BinaryPrimitives.ReadUInt32LittleEndian(source[(x * 4)..]);
-                int at = x * channels;
 
-                row[at] = ToByte(Small(packed & 0x7FF, 6));
-                row[at + 1] = ToByte(Small((packed >> 11) & 0x7FF, 6));
-                row[at + 2] = ToByte(Small((packed >> 22) & 0x3FF, 5));
-
-                if (channels == 4)
-                    row[at + 3] = 255;
+                PutValues(row, x, format,
+                          Small(packed & 0x7FF, 6),
+                          Small((packed >> 11) & 0x7FF, 6),
+                          Small((packed >> 22) & 0x3FF, 5),
+                          1f);
             }
         }
 
@@ -288,7 +299,7 @@ internal static class DdsImageReader
     /// than its neighbours, but for a picture of light where the three move together it is the
     /// cheapest form that still runs past one.
     /// </summary>
-    private static bool DecodeSharedExponent(ReadOnlySpan<byte> data, in DdsSurface surface, int channels,
+    private static bool DecodeSharedExponent(ReadOnlySpan<byte> data, in DdsSurface surface, PixelFormat format,
                                              Span<byte> destination, int stride, bool flip)
     {
         long rowBytes = (long)surface.Width * 4;
@@ -299,20 +310,18 @@ internal static class DdsImageReader
         {
             ReadOnlySpan<byte> source = data.Slice(surface.DataOffset + (int)(y * rowBytes), (int)rowBytes);
             int target = flip ? surface.Height - 1 - y : y;
-            Span<byte> row = destination.Slice(target * stride, surface.Width * channels);
+            Span<byte> row = destination.Slice(target * stride, surface.Width * format.BytesPerPixel());
 
             for (int x = 0; x < surface.Width; x++)
             {
                 uint packed = BinaryPrimitives.ReadUInt32LittleEndian(source[(x * 4)..]);
                 float scale = MathF.Pow(2f, (int)(packed >> 27) - 24);
-                int at = x * channels;
 
-                row[at] = ToByte((packed & 0x1FF) * scale);
-                row[at + 1] = ToByte(((packed >> 9) & 0x1FF) * scale);
-                row[at + 2] = ToByte(((packed >> 18) & 0x1FF) * scale);
-
-                if (channels == 4)
-                    row[at + 3] = 255;
+                PutValues(row, x, format,
+                          (packed & 0x1FF) * scale,
+                          ((packed >> 9) & 0x1FF) * scale,
+                          ((packed >> 18) & 0x1FF) * scale,
+                          1f);
             }
         }
 
@@ -335,7 +344,7 @@ internal static class DdsImageReader
     }
 
     /// <summary>One bit a pixel, the most significant of each byte first.</summary>
-    private static bool DecodeBilevel(ReadOnlySpan<byte> data, in DdsSurface surface, int channels,
+    private static bool DecodeBilevel(ReadOnlySpan<byte> data, in DdsSurface surface,
                                       Span<byte> destination, int stride, bool flip)
     {
         long rowBytes = (surface.Width + 7) / 8;
@@ -346,16 +355,11 @@ internal static class DdsImageReader
         {
             ReadOnlySpan<byte> source = data.Slice(surface.DataOffset + (int)(y * rowBytes), (int)rowBytes);
             int target = flip ? surface.Height - 1 - y : y;
-            Span<byte> row = destination.Slice(target * stride, surface.Width * channels);
+            Span<byte> row = destination.Slice(target * stride, surface.Width);
 
             for (int x = 0; x < surface.Width; x++)
             {
-                byte value = (source[x >> 3] & (0x80 >> (x & 7))) != 0 ? (byte)255 : (byte)0;
-                int at = x * channels;
-
-                row[at] = row[at + 1] = row[at + 2] = value;
-                if (channels == 4)
-                    row[at + 3] = 255;
+                row[x] = (source[x >> 3] & (0x80 >> (x & 7))) != 0 ? (byte)255 : (byte)0;
             }
         }
 
@@ -386,7 +390,7 @@ internal static class DdsImageReader
         }
     }
 
-    private static bool DecodePacked(ReadOnlySpan<byte> data, in DdsSurface surface, int channels,
+    private static bool DecodePacked(ReadOnlySpan<byte> data, in DdsSurface surface, PixelFormat format,
                                      Span<byte> destination, int stride, bool flip)
     {
         Channel red = new(surface.RedMask);
@@ -394,6 +398,8 @@ internal static class DdsImageReader
         Channel blue = new(surface.BlueMask);
         Channel alpha = new(surface.AlphaMask);
 
+        int channels = format.ChannelCount();
+        bool narrow = format.BytesPerChannel() == 1;
         int bytesPerPixel = surface.BitCount / 8;
         long rowBytes = (long)surface.Width * bytesPerPixel;
 
@@ -405,10 +411,9 @@ internal static class DdsImageReader
         {
             ReadOnlySpan<byte> source = data.Slice(surface.DataOffset + (int)(y * rowBytes), (int)rowBytes);
             int target = flip ? surface.Height - 1 - y : y;
-            Span<byte> row = destination.Slice(target * stride, surface.Width * channels);
+            Span<byte> row = destination.Slice(target * stride, surface.Width * format.BytesPerPixel());
 
-            int at = 0;
-            for (int x = 0; x < surface.Width; x++, at += channels)
+            for (int x = 0; x < surface.Width; x++)
             {
                 int from = x * bytesPerPixel;
                 uint pixel = bytesPerPixel switch
@@ -419,11 +424,19 @@ internal static class DdsImageReader
                     _ => BinaryPrimitives.ReadUInt32LittleEndian(source[from..]),
                 };
 
-                row[at] = red.IsPresent ? red.Extract(pixel) : (byte)0;
-                row[at + 1] = green.IsPresent ? green.Extract(pixel) : (byte)0;
-                row[at + 2] = blue.IsPresent ? blue.Extract(pixel) : (byte)0;
-                if (channels == 4)
-                    row[at + 3] = alpha.IsPresent ? alpha.Extract(pixel) : (byte)255;
+                if (narrow)
+                {
+                    PutBytes(row, x, channels,
+                             red.IsPresent ? red.Extract(pixel) : (byte)0,
+                             green.IsPresent ? green.Extract(pixel) : (byte)0,
+                             blue.IsPresent ? blue.Extract(pixel) : (byte)0,
+                             alpha.IsPresent ? alpha.Extract(pixel) : (byte)255);
+                }
+                else
+                {
+                    PutValues(row, x, format, red.Fraction(pixel), green.Fraction(pixel),
+                              blue.Fraction(pixel), alpha.IsPresent ? alpha.Fraction(pixel) : 1f);
+                }
             }
         }
 
@@ -435,7 +448,7 @@ internal static class DdsImageReader
     /// missing the colour falls back to what a graphics pipeline would sample: red repeated for a
     /// single channel, and nothing for a blue that is not there.
     /// </summary>
-    private static bool DecodeComponents(ReadOnlySpan<byte> data, in DdsSurface surface, int channels,
+    private static bool DecodeComponents(ReadOnlySpan<byte> data, in DdsSurface surface, PixelFormat format,
                                          Span<byte> destination, int stride, bool flip)
     {
         int size = surface.ComponentBits / 8;
@@ -451,7 +464,7 @@ internal static class DdsImageReader
         {
             ReadOnlySpan<byte> source = data.Slice(surface.DataOffset + (int)(y * rowBytes), (int)rowBytes);
             int target = flip ? surface.Height - 1 - y : y;
-            Span<byte> row = destination.Slice(target * stride, surface.Width * channels);
+            Span<byte> row = destination.Slice(target * stride, surface.Width * format.BytesPerPixel());
 
             for (int x = 0; x < surface.Width; x++)
             {
@@ -466,12 +479,7 @@ internal static class DdsImageReader
                 if (count == 1)
                     pixel[1] = pixel[2] = pixel[0];
 
-                int at = x * channels;
-                row[at] = ToByte(pixel[0]);
-                row[at + 1] = ToByte(pixel[1]);
-                row[at + 2] = ToByte(pixel[2]);
-                if (channels == 4)
-                    row[at + 3] = ToByte(pixel[3]);
+                PutValues(row, x, format, pixel[0], pixel[1], pixel[2], pixel[3]);
             }
         }
 
@@ -513,6 +521,55 @@ internal static class DdsImageReader
 
     /// <summary>Maps a value where one means full intensity onto a byte, clipping outside it.</summary>
     private static byte ToByte(float value) => (byte)((Math.Clamp(value, 0f, 1f) * 255f) + 0.5f);
+
+    /// <summary>Writes one pixel of an eight bit layout: L8, La8, Rgb8 or Rgba8.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void PutBytes(Span<byte> row, int x, int channels, byte r, byte g, byte b, byte a)
+    {
+        int at = x * channels;
+        row[at] = r;
+
+        if (channels == 2)
+        {
+            row[at + 1] = a;
+        }
+        else if (channels >= 3)
+        {
+            row[at + 1] = g;
+            row[at + 2] = b;
+            if (channels == 4)
+                row[at + 3] = a;
+        }
+    }
+
+    /// <summary>
+    /// Writes one pixel of any layout from values where one means full intensity. Integer layouts
+    /// clip to that range and floating point ones keep what they are given.
+    /// </summary>
+    private static void PutValues(Span<byte> row, int x, PixelFormat format, float r, float g, float b, float a)
+    {
+        int channels = format.ChannelCount();
+        int size = format.BytesPerChannel();
+        bool floating = format.IsFloatingPoint();
+
+        // The second channel of a two channel layout is alpha rather than green.
+        ReadOnlySpan<float> values = [r, channels == 2 ? a : g, b, a];
+
+        for (int c = 0; c < channels; c++)
+        {
+            Span<byte> to = row[(((x * channels) + c) * size)..];
+            float value = values[c];
+
+            if (size == 4)
+                MemoryMarshal.Write(to, value);
+            else if (size == 1)
+                to[0] = ToByte(value);
+            else if (floating)
+                MemoryMarshal.Write(to, (Half)value);
+            else
+                MemoryMarshal.Write(to, (ushort)((Math.Clamp(value, 0f, 1f) * 65535f) + 0.5f));
+        }
+    }
 
     /// <summary>
     /// Walks the four by four grid a block layout stores. A block at the right or bottom edge is
@@ -557,13 +614,51 @@ internal static class DdsImageReader
                             break;
 
                         uint colour = colours[(y * 4) + x];
-                        int to = column * channels;
-                        line[to] = (byte)(colour >> 16);
-                        line[to + 1] = (byte)(colour >> 8);
-                        line[to + 2] = (byte)colour;
-                        if (channels == 4)
-                            line[to + 3] = (byte)(colour >> 24);
+                        PutBytes(line, column, channels, (byte)(colour >> 16), (byte)(colour >> 8),
+                                 (byte)colour, (byte)(colour >> 24));
                     }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Walks BC6H blocks, copying the half floats out whole so that values past one survive.
+    /// </summary>
+    private static bool DecodeHalfBlocks(ReadOnlySpan<byte> data, in DdsSurface surface,
+                                         Span<byte> destination, int stride, bool flip)
+    {
+        int across = (surface.Width + 3) / 4;
+        int down = (surface.Height + 3) / 4;
+
+        Span<ushort> halves = stackalloc ushort[48];
+
+        for (int blockY = 0; blockY < down; blockY++)
+        {
+            for (int blockX = 0; blockX < across; blockX++)
+            {
+                int at = surface.DataOffset + (((blockY * across) + blockX) * 16);
+                if (at + 16 > data.Length)
+                    return false;
+
+                Bc6h.Decode(data.Slice(at, 16), surface.Signed, halves);
+
+                int column = blockX * 4;
+                int count = Math.Min(4, surface.Width - column) * 3;
+
+                for (int y = 0; y < 4; y++)
+                {
+                    int row = (blockY * 4) + y;
+                    if (row >= surface.Height)
+                        break;
+
+                    int target = flip ? surface.Height - 1 - row : row;
+                    Span<ushort> line = MemoryMarshal.Cast<byte, ushort>(
+                        destination.Slice(target * stride, surface.Width * 6));
+
+                    halves.Slice(y * 12, count).CopyTo(line[(column * 3)..]);
                 }
             }
         }
@@ -612,23 +707,6 @@ internal static class DdsImageReader
             case DdsLayout.Bc7:
                 Bc7.Decode(block, colours);
                 return;
-
-            case DdsLayout.Bc6h:
-            {
-                // Clipped to what a byte holds rather than exposed for the caller.
-                Span<ushort> halves = stackalloc ushort[48];
-                Bc6h.Decode(block, surface.Signed, halves);
-
-                for (int i = 0; i < 16; i++)
-                {
-                    colours[i] = 0xFF000000u
-                        | ((uint)ToByte((float)BitConverter.UInt16BitsToHalf(halves[i * 3])) << 16)
-                        | ((uint)ToByte((float)BitConverter.UInt16BitsToHalf(halves[(i * 3) + 1])) << 8)
-                        | ToByte((float)BitConverter.UInt16BitsToHalf(halves[(i * 3) + 2]));
-                }
-
-                return;
-            }
 
             case DdsLayout.Bc5:
                 // A direction with its third component left to the renderer, so blue is zero.
