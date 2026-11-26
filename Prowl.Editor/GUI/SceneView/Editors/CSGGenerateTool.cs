@@ -47,6 +47,9 @@ public sealed class CSGGenerateTool : SceneTool
     private const string DrawControl = "csg_generate";
     private const float MinimumFootprint = 1e-3f;
 
+    // The height a shape takes when none can be pulled, such as drawn looking straight down in an orthographic view
+    private const float DefaultHeight = 1f;
+
     private static readonly Color32 GuideColor = new(140, 200, 255, 200);
 
     /// <summary>Whether drawing is the CSG mode in force.</summary>
@@ -96,6 +99,9 @@ public sealed class CSGGenerateTool : SceneTool
 
     /// <summary>The base keeps equal width and depth.</summary>
     public bool SquareBase { get; set; }
+
+    /// <summary>How high the floor is that shapes are drawn on away from any brush.</summary>
+    public float FloorHeight { get; set; }
 
     // Held keys for this frame: Shift makes the shape uniform, Alt draws it from the centre
     private bool _uniform, _centred;
@@ -281,7 +287,17 @@ public sealed class CSGGenerateTool : SceneTool
         if (_clickedBase && ctx.Handles.PrimaryDown && ctx.Handles.ViewportHovered && FootprintIsValid()) BeginHeight(ctx);
     }
 
-    private void BeginHeight(SceneToolContext ctx) => _stage = Stage.Extrude;
+    private void BeginHeight(SceneToolContext ctx)
+    {
+        _stage = Stage.Extrude;
+        if (!LooksDownPlane(ctx)) return;
+        _height = DefaultHeight;
+        Commit(ctx, OperationFor());
+    }
+
+    // An orthographic view straight down the work plane has no depth to pull a height from
+    private bool LooksDownPlane(SceneToolContext ctx)
+        => ctx.Camera.IsOrthographic && MathF.Abs(Float3.Dot(ctx.Camera.GameObject.Transform.Forward, _planeRotation * Float3.UnitY)) > 0.999f;
 
     private void TickExtrude(SceneToolContext ctx)
     {
@@ -305,22 +321,22 @@ public sealed class CSGGenerateTool : SceneTool
         if (Typed(2, out float typed)) return Side(height) * typed;
         if (_uniform && Generator != CSGGeneratorKind.Polygon)
             return Side(height) * MathF.Max(MathF.Abs(_cornerB.X - _cornerA.X), MathF.Abs(_cornerB.Z - _cornerA.Z));
-        return height;
+        return MathF.Abs(height) < 1e-4f || !float.IsFinite(height) ? DefaultHeight : height;
     }
 
-    /// <summary>Where a new brush would start: the surface under the cursor, or the grid plane.</summary>
-    private static bool TryHoverPoint(SceneToolContext ctx, out Float3 point, out Float3 normal, out bool onSurface)
+    /// <summary>Where a new brush would start: the surface under the cursor, or the floor.</summary>
+    private bool TryHoverPoint(SceneToolContext ctx, out Float3 point, out Float3 normal, out bool onSurface)
     {
         Ray ray = ctx.Handles.MouseRay;
 
         onSurface = TryHitBrush(ray, out point, out normal);
         if (onSurface) return true;
 
-        // Grid plane through the origin, a ray from below hits its back face.
+        // The floor, a ray from below hits its back face.
         float denom = ray.Direction.Y;
         if (MathF.Abs(denom) < 1e-6f) { normal = Float3.UnitY; return false; }
 
-        float t = -ray.Origin.Y / denom;
+        float t = (FloorHeight - ray.Origin.Y) / denom;
         if (t < 0f) { normal = Float3.UnitY; return false; }
 
         point = ray.Origin + ray.Direction * t;

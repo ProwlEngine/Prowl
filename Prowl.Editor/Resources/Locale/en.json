@@ -1315,6 +1315,8 @@
   "csg.from_centre": "From Centre",
   "csg.from_centre_tip": "The first click is the middle of the base rather than a corner. Hold Alt while drawing to do this once.",
   "csg.square_base": "Square Base",
+  "csg.floor_height": "Floor",
+  "csg.floor_height_tip": "How high the floor is that shapes are drawn on away from any brush.",
   "csg.import_mesh": "Import Mesh",
   "csg.import_mesh_tip": "Turns a mesh asset into a brush at the 3D cursor. The mesh must be closed.",
   "csg.import_mesh_failed": "Could not import mesh",
