@@ -106,7 +106,7 @@ public class DesktopBuildPipeline : BuildPipeline
             Packaging = settings.PackagingMode,
             DependenciesOnly = settings.AssetMode == AssetExportMode.DependenciesOnly,
             MaxPackSizeMB = settings.MaxPakSizeMB,
-            Profile = settings.GetOrCreateProfile(GetType()),
+            Profile = settings.GetOrCreateProfile<DesktopBuildProfile>()
         };
 
         var context = new BuildContext(request, (message, severity) => progress?.Log(message,
@@ -1048,7 +1048,7 @@ public class DesktopBuildPipeline : BuildPipeline
     /// </summary>
     public override string GetExecutablePath(string outputPath, BuildSettings settings)
     {
-        DesktopBuildProfile profile = settings.GetProfile<DesktopBuildProfile>(GetType());
+        DesktopBuildProfile profile = settings.GetOrCreateProfile<DesktopBuildProfile>();
         string platform = PlatformOf(profile.Target);
         string name = Project.Current!.Name;
 
@@ -1060,7 +1060,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
     public override bool CanRunOnHost(BuildSettings settings)
     {
-        string platform = PlatformOf(settings.GetProfile<DesktopBuildProfile>(GetType()).Target);
+        string platform = PlatformOf(settings.GetOrCreateProfile<DesktopBuildProfile>().Target);
 
         return platform switch
         {
