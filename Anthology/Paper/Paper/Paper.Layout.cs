@@ -398,8 +398,16 @@ public partial class Paper
         data.Y = hidden ? 0 : y + rect.Y;
         if (!hidden && data._clampToScreen)
         {
-            float clampedX = Math.Max(4, Math.Min(screenWidth - rect.Width - 4, data.X));
-            float clampedY = Math.Max(4, Math.Min(screenHeight - rect.Height - 4, data.Y));
+            // ClampToScreen is used by context menus and pop-ups. Instead of strictly clamping, if the element extends
+            // off screen, flip the alignment so that the element is right/bottom aligned. If an avoidance area exists,
+            // make sure the element doesn't overlap with it (this prevents submenus from overlapping with the parent
+            // menu item).
+            float clampedX = data.X;
+            if (data.X > screenWidth - rect.Width)
+                clampedX = Math.Max(0, (data._clampToScreenAvoidanceArea != default ? data._clampToScreenAvoidanceArea.Min.X : data.X) - rect.Width);
+            float clampedY = data.Y;
+            if (data.Y > screenHeight - rect.Height)
+                clampedY = Math.Max(0, (data._clampToScreenAvoidanceArea != default ? data._clampToScreenAvoidanceArea.Min.Y : data.Y) - rect.Height);
             data.RelativeX += clampedX - data.X;
             data.RelativeY += clampedY - data.Y;
             data.X = clampedX;

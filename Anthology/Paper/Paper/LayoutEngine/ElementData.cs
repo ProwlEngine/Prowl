@@ -125,6 +125,7 @@ public struct ElementData
     internal ElementStyle _elementStyle;
     internal bool _scissorEnabled;
     internal bool _clampToScreen;
+    internal Rect _clampToScreenAvoidanceArea;
     /// <summary>Raised layers inside this element stay inside it. See ElementBuilder.IsolateLayers.</summary>
     internal bool _isolateLayers;
 

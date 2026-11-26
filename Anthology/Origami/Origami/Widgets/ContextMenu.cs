@@ -382,21 +382,9 @@ public sealed class ContextBuilder
 
                 if (submenuIsOpen && Sub != null)
                 {
-                    // The submenu is a self-directed child of this row, so its X is measured from the
-                    // row's border box (offset by the row's left padding). It overlaps the row's edge by
-                    // 1px so the mouse can cross from row to submenu without passing a dead strip (which
-                    // would close it). SubOpenRightX opens it just past the row; SubOpenLeftX mirrors it
-                    // to the parent menu's left.
-                    //
-                    // Choose the side from the row's on-screen position (captured last frame): flip left
-                    // only when a right-opening submenu would run off the right edge AND there's room on
-                    // the left - otherwise keep right and let ClampToScreen handle it. Rendered one layer
-                    // above so the submenu sits on top of every row in this panel.
-                    var row = paper.GetElementStorage<Rect>(paper.CurrentParent, "srect", default);
-                    bool flipLeft = row.Max.X + ContextMenu.MenuWidth > paper.Width - 4f
-                                 && row.Min.X - ContextMenu.MenuWidth >= 4f;
-                    float subX = flipLeft ? ContextMenu.SubOpenLeftX : ContextMenu.SubOpenRightX;
-                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, subX, 0, close, layer + 1);
+                    // Use the menu item's bounds (captured last frame) to position the submenu.
+                    var parentRect = paper.GetElementStorage<Rect>(paper.CurrentParent, "srect", default);
+                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, parentRect, close, layer + 1);
 
                     // If the mouse is actually hovering over the context menu (or the submenu), continually
                     // refresh the remaining time so the submenu doesn't close.
@@ -435,12 +423,6 @@ public static class ContextMenu
     private static float MenuRadius => Origami.Current.Metrics.ContainerRounding;
     private const float MenuPad = 5f;
     internal const float MenuWidth = 200f;
-
-    // Submenu self-directed X offsets (relative to the parent row). Right is the default; left flips
-    // the submenu to the parent menu's left when a right-opening one would run off screen. See the
-    // positioning note in CtxSubmenu.Draw for the derivation.
-    internal const float SubOpenRightX = 180f;
-    internal const float SubOpenLeftX = 1f - MenuWidth - ContextBuilder.RowPadX; // = -208
 
     public static bool IsOpen => _isOpen;
 
@@ -577,26 +559,31 @@ public static class ContextMenu
         var builder = new ContextBuilder();
         _buildMenu(builder);
 
-        RenderMenu(paper, "octx", builder, _x, _y, Close, layer: layer);
+        RenderMenu(paper, "octx", builder, new Rect(_x, _y, _x, _y), Close, layer: layer);
     }
 
     /// <summary>Render a positioned menu panel at the given screen position. Used for popups and submenus.</summary>
-    internal static void RenderMenu(Paper paper, string id, ContextBuilder builder, float x, float y,
+    internal static void RenderMenu(Paper paper, string id, ContextBuilder builder, Rect parentRect,
         Action close, int layer = Layer.Topmost + 501)
     {
         var theme = Origami.Current;
         var font = theme.Font;
         if (font == null) return;
 
+        // For top-level context menus, parentRect is a zero-size rectangle: in which case just position the context
+        // menu at that position. For submenus, it's the bounds of the parent menu item that opened the submenu
+        // (not the parent menu!). We use this to set the clamp-to-screen avoidance area.
+
         var menuBox = paper.Box($"{id}_menu")
             .PositionType(PositionType.SelfDirected)
-            .Position(x, y)
+            .Left(parentRect.Size.X == 0 ? parentRect.Max.X : UnitValue.Percentage(100, ContextBuilder.RowPadX))
+            .Top(parentRect.Size.Y == 0 ? parentRect.Min.Y : 0)
             .Width(MenuWidth).Height(UnitValue.Auto)
             .BackgroundColor(theme.Popover)
             .BorderColor(theme.BorderStrong).BorderWidth(1)
             .Rounded(MenuRadius)
             .Layer(layer)
-            .ClampToScreen()
+            .ClampToScreen(parentRect)
             .DropShadow(0, 14, 40, 0, theme.Shadow)
             .StopEventPropagation();
 
@@ -640,7 +627,7 @@ public static class ContextMenu
     {
         var builder = new ContextBuilder();
         build(builder);
-        RenderMenu(paper, id, builder, x, y, close, layer);
+        RenderMenu(paper, id, builder, new Rect(x, y, x, y), close, layer);
     }
 
     /// <summary>Draw the padded item column shared by the popup and inline previews.</summary>
