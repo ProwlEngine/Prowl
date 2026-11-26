@@ -2,6 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
+
+using Prowl.Editor.GUI.Panels;
 
 using Prowl.Vector;
 
@@ -55,6 +58,10 @@ public static class CSGSnap
     public static float Value(HandleContext handles, float value) => Active(handles) ? Round(value) : value;
 
     public static Float3 Value(HandleContext handles, Float3 value) => Active(handles) ? Round(value) : value;
+
+    /// <summary>A move of points that lands their bounds on the world grid when snapping, along the handle's axes.</summary>
+    public static Float3 Move(HandleContext handles, IReadOnlyList<Float3> points, Float3 movement, Quaternion axes)
+        => Active(handles) ? SceneViewPanel.SnapBoundsToGrid(points, movement, Grid, axes) : movement;
 
     /// <summary>A point on a surface snapped to the grid, then slid back onto the surface so a slope keeps it.</summary>
     public static Float3 OnPlane(HandleContext handles, Float3 point, Float3 normal)

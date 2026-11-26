@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
+using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 using Prowl.Vector;
@@ -220,7 +221,7 @@ public sealed class TransformModal
         }
         else if (axis < 0)
         {
-            delta = snap ? SnapIn(inView, Quaternion.Identity) : inView;
+            delta = snap ? SnapMove(inView, Quaternion.Identity) : inView;
         }
         else if (!_plane || typed != null)
         {
@@ -229,13 +230,14 @@ public sealed class TransformModal
             Float3 seen = a - forward * Float3.Dot(a, forward);
             float length = Float3.Dot(seen, seen);
             float amount = typed ?? (length > 1e-6f ? Float3.Dot(inView, seen) / length : 0f);
-            delta = a * (snap && typed == null ? Round(amount, SceneTools.MoveSnap) : amount);
+            delta = a * amount;
+            if (snap && typed == null) delta = SnapMove(delta, Axes);
         }
         else
         {
             Float3 normal = Axis(axis);
             delta = OnPlane(ctx, _pointer.Position, normal) - OnPlane(ctx, _start, normal);
-            if (snap) delta = SnapIn(delta, Axes);
+            if (snap) delta = SnapMove(delta, Axes);
         }
 
         Moved = delta;
@@ -336,12 +338,8 @@ public sealed class TransformModal
         return distance > 0f ? ray.Origin + ray.Direction * distance : _session.Pivot;
     }
 
-    private static Float3 SnapIn(Float3 value, Quaternion axes)
-    {
-        Float3 inAxes = Quaternion.Inverse(axes) * value;
-        float step = SceneTools.MoveSnap;
-        return axes * new Float3(Round(inAxes.X, step), Round(inAxes.Y, step), Round(inAxes.Z, step));
-    }
+    // The moving points land on the grid by their bounds, along the axes
+    private Float3 SnapMove(Float3 value, Quaternion axes) => SceneViewPanel.SnapBoundsToGrid(_session.Points, value, SceneTools.MoveSnap, axes);
 
     private static float Round(float value, float step) => step > 0f ? MathF.Round(value / step) * step : value;
 

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Editor.Theming;
 using Prowl.PaperUI;
@@ -45,6 +46,9 @@ public abstract class SceneTool
     /// being edited. Tools that just want their handles to win the cursor should leave this alone.
     /// </summary>
     public virtual bool SuppressTransformGizmo => false;
+
+    /// <summary>World points a snapped move of these objects lands on the grid by their bounds, or null to snap their pivot.</summary>
+    public virtual IReadOnlyList<Float3>? SnapPoints(IReadOnlyList<GameObject> objects) => null;
 
     /// <summary>Replace the viewport's default transform tool strip with <see cref="OnToolStripGUI"/>.
     /// When false (the default) the tool's buttons are appended after the built-in ones.</summary>

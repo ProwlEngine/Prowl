@@ -499,7 +499,7 @@ public static class CSGSelection
         return roots.Count == 0 ? Float3.Zero : Centre(roots);
     }
 
-    /// <summary>Snaps the pivot of each selected brush and group onto the grid.</summary>
+    /// <summary>Moves each selected brush and group so its bounds land on the world grid.</summary>
     public static void SnapToGrid()
     {
         List<GameObject> roots = Roots();
@@ -508,9 +508,24 @@ public static class CSGSelection
         Record("Snap CSG to Grid", roots);
 
         foreach (GameObject go in roots)
-            go.Transform.Position = CSGSnap.Round(go.Transform.Position);
+            go.Transform.Position += SceneViewPanel.SnapBoundsToGrid(WorldPoints([go]), Float3.Zero, CSGSnap.Grid, Quaternion.Identity, everyAxis: true);
 
         MarkDirty();
+    }
+
+    /// <summary>The points of every brush in the objects and under them, in the world.</summary>
+    public static List<Float3> WorldPoints(IEnumerable<GameObject> objects)
+    {
+        var points = new List<Float3>();
+        foreach (GameObject root in objects)
+            foreach (GameObject go in root.GetChildrenDeep().Prepend(root))
+            {
+                CSGBrush brush = go.GetComponent<CSGBrush>();
+                if (brush.IsNotValid() || brush.Shape == null) continue;
+                Float4x4 toWorld = go.Transform.LocalToWorldMatrix;
+                foreach (GeometryData.Vertex vertex in brush.Shape.Vertices) points.Add(Float4x4.TransformPoint(vertex.Point, toWorld));
+            }
+        return points;
     }
 
     public static void Duplicate()

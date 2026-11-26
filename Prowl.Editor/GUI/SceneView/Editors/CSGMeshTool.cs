@@ -470,6 +470,17 @@ public sealed class CSGMeshTool : SceneTool
     // A gizmo drag that began with Shift on a whole face, extruding it rather than moving it
     private Float3 _gizmoStart;
     private Float3 _dragRaw, _dragApplied;
+
+    // The selected points in the world where a drag began, which a snapped move lands on the grid by their bounds
+    private List<Float3> _dragPoints = new();
+
+    private List<Float3> SelectedWorld()
+    {
+        Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix;
+        var points = new List<Float3>(_vertices.Count);
+        foreach (int i in _vertices) points.Add(Float4x4.TransformPoint(_mesh!.Points[i], toWorld));
+        return points;
+    }
     private Float3 _dragAnchor, _dragAnchorStart, _dragStartHit;
     private bool _dragStarted;
     private bool _passedThreshold;
@@ -1320,10 +1331,11 @@ public sealed class CSGMeshTool : SceneTool
             _dragStarted = true;
             _dragStartHit = hit;
             _dragAnchorStart = _dragAnchor;
+            _dragPoints = SelectedWorld();
         }
 
-        // The pressed point itself lands on the grid, so an off grid vertex is pulled onto it, or on what it snaps to
-        Float3 target = CSGSnap.Value(handles, _dragAnchorStart + (hit - _dragStartHit));
+        // The selection lands on the grid, so off grid points are pulled onto it, or the pressed point on what it snaps to
+        Float3 target = _dragAnchorStart + CSGSnap.Move(handles, _dragPoints, hit - _dragStartHit, Quaternion.Identity);
         if (SnapToBrushes && FindSnap(handles, handles.MousePosition) is { } snapped)
         {
             target = snapped;
@@ -2517,18 +2529,19 @@ public sealed class CSGMeshTool : SceneTool
         {
             _dragRaw = _dragApplied = Float3.Zero;
             _gizmoStart = before;
+            _dragPoints = SelectedWorld();
         }
         if (_dragging && !hot) CommitSession("Edit CSG Brush");
 
         _dragging = hot;
 
-        // Snapped over the whole drag, along the handle's own axes, so small per frame steps do not round away.
+        // Snapped over the whole drag so small per frame steps do not round away, the selection landing on the grid
         Float3 step = Float3.Zero;
         if (moved)
         {
             // Shift slows the drag for fine moves
             _dragRaw += (centre - before) * (handles.Shift ? 0.1f : 1f);
-            Float3 snapped = axes * CSGSnap.Value(handles, Quaternion.Inverse(axes) * _dragRaw);
+            Float3 snapped = CSGSnap.Move(handles, _dragPoints, _dragRaw, axes);
 
             // Snapping to a brush carries the gizmo's starting centre onto the target, along only the axes being dragged
             if (SnapToBrushes && FindSnap(handles, handles.MousePosition) is { } target)
@@ -2616,10 +2629,12 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (_vertices.Count == 0) return;
 
-        // Each point snaps on its own, which squares up a skewed brush
+        // Each point snaps on its own to the world grid, which squares up a skewed brush
+        Float4x4 toWorld = Target!.Transform.LocalToWorldMatrix, toLocal = Target.Transform.WorldToLocalMatrix;
         RunEdit("Snap CSG Vertices", selected =>
         {
-            foreach (GeometryData.Vertex vertex in selected.Vertices) vertex.Point = CSGSnap.Round(vertex.Point);
+            foreach (GeometryData.Vertex vertex in selected.Vertices)
+                vertex.Point = Float4x4.TransformPoint(CSGSnap.Round(Float4x4.TransformPoint(vertex.Point, toWorld)), toLocal);
         });
     }
 

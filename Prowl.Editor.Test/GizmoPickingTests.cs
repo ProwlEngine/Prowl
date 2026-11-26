@@ -221,6 +221,37 @@ public class GizmoPickingTests : EditorTestHarness
     }
 
     [Fact]
+    public void BoundsSnapLandsTheNearerSideOnTheGrid()
+    {
+        // A box 2.5 wide from 0.3: moved 1.1 along X its far side is nearer a grid line, so that side lands on 4
+        Float3[] box = [new(0.3f, 0.2f, 0f), new(2.8f, 1.2f, 1f)];
+        AssertNear(new Float3(1.2f, 0f, 0f), SceneViewPanel.SnapBoundsToGrid(box, new Float3(1.1f, 0f, 0f), 1f, Quaternion.Identity));
+
+        // A face lying across X lands its plane on the grid, wherever its points sit along the other axes
+        Float3[] face = [new(0.3f, 0.1f, 0.7f), new(0.3f, 2.6f, 3.3f)];
+        AssertNear(new Float3(0.7f, 0f, 0f), SceneViewPanel.SnapBoundsToGrid(face, new Float3(0.8f, 0f, 0f), 1f, Quaternion.Identity));
+
+        // With every axis, a move of nothing still squares the bounds up
+        AssertNear(new Float3(0.2f, -0.2f, 0f), SceneViewPanel.SnapBoundsToGrid(box, Float3.Zero, 1f, Quaternion.Identity, everyAxis: true));
+
+        // A handle turned by a right angle still uses the world grid
+        Quaternion quarter = Quaternion.AxisAngle(Float3.UnitY, MathF.PI / 2f);
+        AssertNear(new Float3(1.2f, 0f, 0f), SceneViewPanel.SnapBoundsToGrid(box, new Float3(1.1f, 0f, 0f), 1f, quarter));
+    }
+
+    [Fact]
+    public void BoundsSnapOnARotatedHandleStaysOnItsAxis()
+    {
+        Quaternion space = Quaternion.AxisAngle(Float3.UnitY, MathF.PI / 6f);
+        Float3 axis = space * Float3.UnitX;
+        Float3[] points = [new(0.3f, 0f, 0.2f), new(1.9f, 1f, 0.9f)];
+
+        Float3 offset = SceneViewPanel.SnapBoundsToGrid(points, axis * 1.3f, 1f, space);
+
+        AssertNear(axis * Float3.Dot(offset, axis), offset);
+    }
+
+    [Fact]
     public void GridSnapOnARotatedHandleStaysOnItsAxis()
     {
         // A local handle at 30 degrees snaps along its own axis, so the result never leaves the dragged line.

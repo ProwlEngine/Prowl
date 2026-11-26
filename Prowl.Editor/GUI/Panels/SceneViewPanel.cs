@@ -1415,6 +1415,9 @@ public class SceneViewPanel : DockPanel
     private Float3 _moveRaw;
     private bool _moveSnapped;
 
+    // What a snapped move lands on the grid by its bounds when a tool gives it, else the pivot snaps
+    private IReadOnlyList<Float3>? _snapPoints;
+
     /// <summary>
     /// Where a move of <paramref name="movement"/> from <paramref name="start"/> lands with grid snapping: every
     /// axis the move changed rounds to the nearest multiple of <paramref name="step"/>, and the axes it left alone
@@ -1431,6 +1434,40 @@ public class SceneViewPanel : DockPanel
         Float3 localMove = inverse * movement;
         Float3 snapped = SnapMovedAxes(localStart + localMove, localMove, step);
         return start + space * (snapped - localStart);
+    }
+
+    /// <summary>
+    /// The move that lands moved points on the grid: on every axis the move changed, whichever side of their bounds
+    /// lies nearer a grid line lands on it, and the axes it left alone stay put. With every axis, all three land. The
+    /// grid is the handle's own as in <see cref="SnapToGrid"/>, so a handle turned only by right angles snaps to the
+    /// world grid.
+    /// </summary>
+    internal static Float3 SnapBoundsToGrid(IReadOnlyList<Float3> points, Float3 movement, float step, Quaternion space, bool everyAxis = false)
+    {
+        if (step <= 0f || points.Count == 0) return movement;
+
+        bool world = IsAxisAligned(space);
+        Quaternion inverse = world ? Quaternion.Identity : Quaternion.Inverse(space);
+        Float3 min = new(float.MaxValue), max = new(float.MinValue);
+        foreach (Float3 point in points)
+        {
+            Float3 local = inverse * point;
+            min = Maths.Min(min, local);
+            max = Maths.Max(max, local);
+        }
+
+        Float3 move = inverse * movement, result = move;
+        Float3 far = Maths.Max(Maths.Abs(min), Maths.Abs(max));
+        float size = MathF.Max(far.X, MathF.Max(far.Y, far.Z));
+        float still = 2e-6f * (1f + size);
+        for (int i = 0; i < 3; i++)
+        {
+            if (!everyAxis && MathF.Abs(move[i]) <= still) continue;
+            float low = min[i] + move[i], high = max[i] + move[i];
+            float toLow = MathF.Round(low / step) * step - low, toHigh = MathF.Round(high / step) * step - high;
+            result[i] = move[i] + (MathF.Abs(toLow) <= MathF.Abs(toHigh) ? toLow : toHigh);
+        }
+        return world ? result : space * result;
     }
 
     private static Float3 SnapMovedAxes(Float3 p, Float3 movement, float step)
@@ -1633,6 +1670,7 @@ public class SceneViewPanel : DockPanel
             _gizmoTargets = [.. GameObjectClipboard.FilterToRoots(_gizmoSelection)];
             _moveStart = center;
             _moveApplied = _moveRaw = Float3.Zero;
+            _snapPoints = SceneToolManager.SnapPoints(_gizmoTargets);
             _moveSnapped = false;
         }
         _wasGizmoActive = dragging;
@@ -1687,7 +1725,9 @@ public class SceneViewPanel : DockPanel
                 _moveRaw = r.TotalTranslation ?? _moveRaw + delta;
                 _moveSnapped = GridSnapping;
                 if (_moveSnapped)
-                    step = SnapToGrid(_moveStart, _moveRaw, SceneTools.MoveSnap, handleSpace) - _moveStart - _moveApplied;
+                    step = (_snapPoints != null
+                        ? _moveStart + SnapBoundsToGrid(_snapPoints, _moveRaw, SceneTools.MoveSnap, handleSpace)
+                        : SnapToGrid(_moveStart, _moveRaw, SceneTools.MoveSnap, handleSpace)) - _moveStart - _moveApplied;
                 _moveApplied += step;
 
                 foreach (GameObject go in targets)

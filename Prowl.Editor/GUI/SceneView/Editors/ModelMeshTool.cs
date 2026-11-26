@@ -2910,7 +2910,7 @@ public sealed class ModelMeshTool : SceneTool
                 break;
             default:
                 _gizmoRaw += (position - before) * pace;
-                _gizmoApplied = SceneTools.GridSnap != handles.Ctrl ? Round(_gizmoRaw, SceneTools.MoveSnap) : _gizmoRaw;
+                _gizmoApplied = SceneTools.GridSnap != handles.Ctrl ? Panels.SceneViewPanel.SnapBoundsToGrid(session.Points, _gizmoRaw, SceneTools.MoveSnap, axes) : _gizmoRaw;
                 Float3 total = _gizmoApplied;
                 PreviewSession(() => session.Translate(total));
                 break;

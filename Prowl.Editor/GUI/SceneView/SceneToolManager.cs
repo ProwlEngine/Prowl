@@ -8,6 +8,7 @@ using System.Linq;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
+using Prowl.Vector;
 
 namespace Prowl.Editor.GUI.SceneView;
 
@@ -129,6 +130,14 @@ public static class SceneToolManager
     }
 
     /// <summary>True when any live tool wants the object transform gizmo hidden.</summary>
+    /// <summary>The first live tool's points for a snapped move of these objects, or null to snap their pivot.</summary>
+    internal static IReadOnlyList<Float3>? SnapPoints(IReadOnlyList<GameObject> objects)
+    {
+        foreach (SceneTool tool in _live)
+            if (tool.SnapPoints(objects) is { } points) return points;
+        return null;
+    }
+
     internal static bool AnySuppressesTransformGizmo()
     {
         foreach (SceneTool tool in _live)
