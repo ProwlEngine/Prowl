@@ -72,6 +72,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\**" />
+    <EmbeddedResource Include="prowl.png" LogicalName="prowl.png" />
     <!-- Named by their path inside a project, where AgentFiles writes them. -->
     <EmbeddedResource Update="Resources\Agent\**" LogicalName="$([System.String]::Copy('%(RecursiveDir)').Replace('\', '/'))%(Filename)%(Extension)" />
   </ItemGroup>
