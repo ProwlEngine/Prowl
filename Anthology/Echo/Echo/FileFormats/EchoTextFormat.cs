@@ -331,13 +331,13 @@ public sealed class EchoTextFormat : IFileFormat
     {
         var startPosition = parser.TokenPosition;
 
-        byte[] arr = null;
+        byte[] arr = [];
         while (parser.MoveNext())
         {
             switch (parser.TokenType)
             {
                 case TextTokenType.EndList:
-                    return new EchoObject(arr!);
+                    return new EchoObject(arr);
                 case TextTokenType.Separator:
                     continue;
                 case TextTokenType.Value:
