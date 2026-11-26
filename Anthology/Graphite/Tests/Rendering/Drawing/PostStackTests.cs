@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 
 using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
@@ -104,11 +103,10 @@ public sealed class PostStackTests : IDisposable
     private readonly Shader _unlit;
     private readonly GpuMesh _quad;
     private readonly List<RendererError> _errors;
-    private readonly List<IDisposable> _owned;
 
     public PostStackTests()
     {
-        (_device, _renderer, _world, _errors, _owned) = (_harness.Device, _harness.Renderer, _harness.World, _harness.Errors, _harness.Owned);
+        (_device, _renderer, _world, _errors) = (_harness.Device, _harness.Renderer, _harness.World, _harness.Errors);
         _unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource(exposed: true)));
         _quad = _harness.CreateQuad();
     }
@@ -225,25 +223,24 @@ public sealed class PostStackTests : IDisposable
     public void Tonemapper_ReachesAnSrgbTarget_EncodedOnce()
     {
         Float3 color = new(0.3f, 1.4f, 4.5f);
-        AddBackdrop(color);
-        Effect(new Tonemapper(_renderer));
-        using Texture srgb = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm_SRgb, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        using Framebuffer target = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, srgb));
-        RenderView view = View();
-        view.Target = target;
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
-        _device.WaitForIdle();
-        Assert.Empty(_errors);
-        using DeviceBuffer readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 4, BufferUsage.Staging));
-        _device.Record(cmd => cmd.CopyTextureToBuffer(srgb, readback, 0, TextureRegion.Whole(srgb, 0, 0))).Wait();
-        byte[] bytes = _device.Map<byte>(readback).ToArray();
-        _device.Unmap(readback);
+        RenderableHandle backdrop = AddBackdrop(color);
+        Tonemapper tonemapper = Effect(new Tonemapper(_renderer));
+        byte[] bytes = SrgbPixel();
 
         // The stored bytes are the tonemapper's display values, clamped by the target, its encode undone and the target's applied
         Float3 display = Map(CpuTonemap(TonemapOperator.Aces, color), x => Math.Clamp(x, 0, 1));
         Assert.InRange(bytes[0], display.X * 255 - 2, display.X * 255 + 2);
         Assert.InRange(bytes[1], display.Y * 255 - 2, display.Y * 255 + 2);
         Assert.InRange(bytes[2], display.Z * 255 - 2, display.Z * 255 + 2);
+
+        // Display effects without a tonemapper leave the colour linear, for the target to encode
+        _world.Remove(backdrop);
+        _world.Features.Remove(tonemapper);
+        AddBackdrop(new Float3(0.5f, 0.5f, 0.5f));
+        Effect(new Fxaa(_renderer));
+        byte[] pixel = SrgbPixel();
+        float encoded = 1.055f * MathF.Pow(0.5f, 1 / 2.4f) - 0.055f;
+        Assert.InRange(pixel[0], encoded * 255 - 2, encoded * 255 + 2);
     }
 
     [Fact]
@@ -251,13 +248,27 @@ public sealed class PostStackTests : IDisposable
     {
         // A near black quarter, as a night sky, sits below the low percentile, so the lit rest alone is metered
         Float3 color = new(20, 20, 20);
-        AddBackdrop(color);
-        AddBackdrop(new Float3(1e-5f), depth: 9, scale: 0.45);
+        RenderableHandle lit = AddBackdrop(color);
+        RenderableHandle dark = AddBackdrop(new Float3(1e-5f), depth: 9, scale: 0.45);
         Effect(new AutoExposure(_renderer) { ExposureCompensation = 0 });
         RenderView view = View();
         Frame(view: view);
         float expected = color.X * RenderView.ExposureOf(MathF.Log2(Luminance(color) * 100 / 12.5f));
         AssertAll(new Float3(expected), Frame(view: view), expected * 0.01f, i => i % Size < 4 || i / Size < 4);
+
+        // An infinite quarter of a new view meters as the largest half float, pre-exposure undone, beside the rest
+        _world.Remove(lit);
+        _world.Remove(dark);
+        Float3 rest = new(2, 2, 2);
+        AddBackdrop(rest);
+        AddBackdrop(new Float3(float.PositiveInfinity), depth: 9, scale: 0.45);
+        RenderView overflowed = View(2);
+        overflowed.EV100 = 0;
+        Frame(view: overflowed);
+        float saturated = 65504 / RenderView.ExposureOf(0);
+        float mean = MathF.Exp((0.05f * MathF.Log(2) + 0.23f * MathF.Log(saturated)) / 0.28f);
+        float overflowExpected = rest.X * RenderView.ExposureOf(MathF.Log2(mean * 100 / 12.5f));
+        AssertAll(new Float3(overflowExpected), Frame(view: overflowed), overflowExpected * 0.05f, i => i % Size < 4 || i / Size < 4);
     }
 
     // A white Lit surface without specular, lit by the ambient light alone, emitting a constant that stands in for
@@ -307,12 +318,6 @@ public sealed class PostStackTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = turn * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [mirror]);
     }
 
-    private sealed class Copy(FullscreenProgram program) : RenderFeature(RenderSlot.HdrPost)
-    {
-        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
-        public override void Render(FeatureContext context) => context.Fullscreen(program);
-    }
-
     // A sky of one colour, captured at the views' exposure so the probes hold it as it is
     private void SkyOf(Float3 color)
     {
@@ -333,6 +338,23 @@ public sealed class PostStackTests : IDisposable
     {
         SkyOf(s_sky);
         AddMirror(s_mirrorReflectance);
+        Frame();
+        Float4[] unhit = Frame();
+        for (int i = 0; i < unhit.Length; i++)
+        {
+            if (OnMirror(i))
+                Assert.True(unhit[i].Z > 0.6f, $"pixel {i} shows no probes: {unhit[i]}");
+        }
+
+        // With nothing for the trace to hit the probe shading stays
+        ScreenSpaceReflections missing = Effect(new ScreenSpaceReflections(_renderer));
+        Frame();
+        Frame();
+        Float4[] missed = Frame();
+        for (int i = 0; i < unhit.Length; i++)
+            Assert.True(Distance(unhit[i], missed[i]) < 2e-3f, $"pixel {i}: {unhit[i]} became {missed[i]}");
+        _world.Features.Remove(missing);
+
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 4, 9)) * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [Unlit(new Float3(1, 0, 0))]);
         Frame();
         Float4[] plain = Frame();
@@ -355,23 +377,6 @@ public sealed class PostStackTests : IDisposable
             Assert.True(MathF.Abs(keptGreen - keptBlue) < 0.05f, $"pixel {i}: green keeps {keptGreen}, blue {keptBlue}");
             Assert.True(after.X > 0.1f + 0.1f * R.X && after.X < 0.1f + R.X * confidence + 0.01f, $"pixel {i}: red {after.X} at confidence {confidence}");
         }
-    }
-
-    // The test quad wound to face the camera, its normal toward it
-    private GpuMesh FacingQuad()
-    {
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        Float3[] normals = [new(0, 0, -1), new(0, 0, -1), new(0, 0, -1), new(0, 0, -1)];
-        return _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 4,
-            Streams =
-            [
-                new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
-                new VertexStream { Semantic = VertexSemantic.Normal, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(normals.AsSpan()).ToArray() },
-            ],
-            Indices = new uint[] { 0, 2, 1, 0, 3, 2 },
-        });
     }
 
     [Fact]
@@ -417,53 +422,5 @@ public sealed class PostStackTests : IDisposable
             for (int i = 0; i < want.Length; i++)
                 Assert.True(MathF.Abs(want[i].X - got[i].X) < 2e-3f && MathF.Abs(want[i].Y - got[i].Y) < 2e-3f && MathF.Abs(want[i].Z - got[i].Z) < 2e-3f, $"layer {layer} pixel {i}: mono {want[i]}, layered {got[i]}");
         }
-    }
-
-    [Fact]
-    public void DisplayEffectsWithoutATonemapper_LeaveColourLinear()
-    {
-        AddBackdrop(new Float3(0.5f, 0.5f, 0.5f));
-        Effect(new Fxaa(_renderer));
-        byte[] pixel = SrgbPixel();
-        float encoded = 1.055f * MathF.Pow(0.5f, 1 / 2.4f) - 0.055f;
-        Assert.InRange(pixel[0], encoded * 255 - 2, encoded * 255 + 2);
-    }
-
-    [Fact]
-    public void AutoExposure_MetersAnOverflowedFrame_AsTheLargestHalfFloat()
-    {
-        // An infinite quarter of the view meters as the largest half float, pre-exposure undone, beside the rest
-        Float3 color = new(2, 2, 2);
-        AddBackdrop(color);
-        AddBackdrop(new Float3(float.PositiveInfinity), depth: 9, scale: 0.45);
-        Effect(new AutoExposure(_renderer) { ExposureCompensation = 0 });
-        RenderView view = View();
-        view.EV100 = 0;
-        Frame(view: view);
-        float saturated = 65504 / RenderView.ExposureOf(0);
-        float mean = MathF.Exp((0.05f * MathF.Log(2) + 0.23f * MathF.Log(saturated)) / 0.28f);
-        float expected = color.X * RenderView.ExposureOf(MathF.Log2(mean * 100 / 12.5f));
-        AssertAll(new Float3(expected), Frame(view: view), expected * 0.05f, i => i % Size < 4 || i / Size < 4);
-    }
-
-    [Fact]
-    public void Ssr_WithNoHits_LeavesTheProbeShading()
-    {
-        SkyOf(s_sky);
-        AddMirror(s_mirrorReflectance);
-        Frame();
-        Float4[] plain = Frame();
-        for (int i = 0; i < plain.Length; i++)
-        {
-            if (OnMirror(i))
-                Assert.True(plain[i].Z > 0.6f, $"pixel {i} shows no probes: {plain[i]}");
-        }
-
-        Effect(new ScreenSpaceReflections(_renderer));
-        Frame();
-        Frame();
-        Float4[] reflected = Frame();
-        for (int i = 0; i < plain.Length; i++)
-            Assert.True(Distance(plain[i], reflected[i]) < 2e-3f, $"pixel {i}: {plain[i]} became {reflected[i]}");
     }
 }

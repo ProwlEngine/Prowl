@@ -167,6 +167,20 @@ public sealed class MaterialTests : IDisposable
         _system.Extract(drawChanged);
         Assert.Equal([material], drawChanged);
         Assert.Equal(3000, material.RenderQueue);
+
+        // Setting a map of a standard surface changes its record, not its draw
+        ShaderLibrary.Register(typeof(Renderer).Assembly);
+        Shader lit = new(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/Lit.shader")!), _compiler);
+        Material mapped = _system.Create(lit);
+        _system.Extract(new List<Material>());
+        drawChanged.Clear();
+        List<Material> records = new();
+        using Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        mapped.SetTexture("base_color_map", texture);
+        mapped.SetFloat("specular_roughness", 0.25f);
+        _system.Extract(drawChanged, records);
+        Assert.DoesNotContain(mapped, drawChanged);
+        Assert.Contains(mapped, records);
     }
 
     [Fact]

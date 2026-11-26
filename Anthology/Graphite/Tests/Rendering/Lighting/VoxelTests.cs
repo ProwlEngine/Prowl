@@ -99,8 +99,24 @@ public sealed class VoxelTests : IDisposable
     public void PartialUpdates_ClearAndDrawTheSpaceTheBoxScrollsInto()
     {
         Box(Double3.Zero);
-        AddQuad(1.1, Lit(new Float3(1, 1, 1)));
+        RenderableHandle quad = World.Add(new RenderableDesc { Mesh = FacingMesh(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 1.1)) }, [Lit(new Float3(1, 1, 1))]);
         _harness.Frame(_harness.View());
+
+        // What moves is redrawn within the update frames, -1.1 m is voxel 11
+        World.SetTransform(quad, Double4x4.CreateTranslation(new Double3(0, 0, -1.1)));
+        int updateFrames = new VoxelVolumeDesc().UpdateFrames;
+        for (int frame = 0; frame < updateFrames; frame++)
+            _harness.Frame(_harness.View());
+        uint[] moved = ReadVoxels();
+        for (int x = 0; x < Resolution; x++)
+        {
+            Assert.True(Octants(moved, x, 16, 20) == 0, $"column {x} still holds the quad where it was");
+            Assert.True(Octants(moved, x, 16, 11) != 0, $"column {x} misses the quad where it is");
+        }
+
+        World.SetTransform(quad, Double4x4.CreateTranslation(new Double3(0, 0, 1.1)));
+        for (int frame = 0; frame < updateFrames; frame++)
+            _harness.Frame(_harness.View());
 
         // Eight voxels along x: the box keeps what it drew and its last 8 columns wrap onto the quad's voxels at -4 m to
         // -2 m, which must be cleared, as the space at 4 m to 6 m they now hold has no quad
@@ -157,24 +173,5 @@ public sealed class VoxelTests : IDisposable
         AddQuad(1.1, Lit(new Float3(1, 1, 1)));
         for (int frame = 0; frame < 10; frame++)
             RendererHarness.AssertAll(new Float3(0, 0, 0), _harness.Frame(_harness.View()));
-    }
-
-    [Fact]
-    public void PartialUpdates_RedrawWhatMoved_WithinTheirFrames()
-    {
-        Box(Double3.Zero);
-        RenderableHandle quad = World.Add(new RenderableDesc { Mesh = FacingMesh(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 1.1)) }, [Lit(new Float3(1, 1, 1))]);
-        _harness.Frame(_harness.View());
-        World.SetTransform(quad, Double4x4.CreateTranslation(new Double3(0, 0, -1.1)));
-        for (int frame = 0; frame < new VoxelVolumeDesc().UpdateFrames; frame++)
-            _harness.Frame(_harness.View());
-        uint[] words = ReadVoxels();
-
-        // -1.1 m is voxel 11
-        for (int x = 0; x < Resolution; x++)
-        {
-            Assert.True(Octants(words, x, 16, 20) == 0, $"column {x} still holds the quad where it was");
-            Assert.True(Octants(words, x, 16, 11) != 0, $"column {x} misses the quad where it is");
-        }
     }
 }

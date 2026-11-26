@@ -122,6 +122,29 @@ public sealed class LodTests : IDisposable
         Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.8f))));
         Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handle, 0.4f))));
         Assert.Equal([_coarse], Drawn(Frame(Forward, () => ViewAt(handle, 0.1f))));
+        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handle, 0.8f, offset: 1))));
+        Assert.Equal([_coarse], Drawn(Frame(Forward, () => ViewAt(handle, 0.4f, offset: 5))));
+        _world.Remove(handle);
+
+        RenderableHandle plain = Add(null);
+        Extract();
+        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(plain, 0.01f))));
+        _world.Remove(plain);
+
+        RenderableHandle forced = Add(Set(cull: 0.05f));
+        Extract();
+        _world.ForceLod(forced, 2);
+        Assert.Equal([_coarse], Drawn(Frame(Forward, () => ViewAt(forced, 0.8f))));
+        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(forced, 0.01f, forced: 1))));
+        _world.ForceLod(forced, -1);
+        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(forced, 0.8f))));
+        _world.Remove(forced);
+
+        RenderableHandle biased = Add(Set(), bias: 2);
+        Extract();
+        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(biased, 0.3f))));
+        _world.SetLodBias(biased, 1);
+        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(biased, 0.3f))));
     }
 
     [Fact]
@@ -184,72 +207,24 @@ public sealed class LodTests : IDisposable
     {
         RenderableHandle handle = Add(Set());
         LodState state = new();
-        Extract();
-        Frame(Prepass, () => ViewAt(handle, 0.8f, state, fade: 1, now: 0));
-        Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5));
-        var commands = Commands(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 1.6)));
-        Assert.Equal((uint)handle.Index, Assert.Single(commands).Words.Single());
-        Assert.Equal(_coarse, commands[0].Mesh);
-    }
-
-    [Fact]
-    public void WithoutASet_TheMeshDrawsAtAnySize()
-    {
-        RenderableHandle handle = Add(null);
-        Extract();
-        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.01f))));
-    }
-
-    [Fact]
-    public void Offsets_DrawCoarserLevels_NoFurtherThanTheLast()
-    {
-        RenderableHandle handle = Add(Set());
-        Extract();
-        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handle, 0.8f, offset: 1))));
-        Assert.Equal([_coarse], Drawn(Frame(Forward, () => ViewAt(handle, 0.4f, offset: 5))));
-    }
-
-    [Fact]
-    public void ForcedLevels_BeatTheSize_TheViewsBeforeTheRenderables()
-    {
-        RenderableHandle handle = Add(Set(cull: 0.05f));
-        Extract();
-        _world.ForceLod(handle, 2);
-        Assert.Equal([_coarse], Drawn(Frame(Forward, () => ViewAt(handle, 0.8f))));
-        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handle, 0.01f, forced: 1))));
-        _world.ForceLod(handle, -1);
-        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.8f))));
-    }
-
-    [Fact]
-    public void TheRenderablesBias_ScalesItsSize()
-    {
-        RenderableHandle handle = Add(Set(), bias: 2);
-        Extract();
-        Assert.Equal([_fine], Drawn(Frame(Forward, () => ViewAt(handle, 0.3f))));
-        _world.SetLodBias(handle, 1);
-        Assert.Equal([_middle], Drawn(Frame(Forward, () => ViewAt(handle, 0.3f))));
-    }
-
-    [Fact]
-    public void ACrossFade_DrawsBothLevels_TheOutgoingOneMarked()
-    {
-        RenderableHandle handle = Add(Set());
-        LodState state = new();
         uint index = (uint)handle.Index;
         Extract();
         Frame(Prepass, () => ViewAt(handle, 0.8f, state, fade: 1, now: 0));
         Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0));
-        var commands = Commands(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5)));
+        var fading = Commands(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 0.5)));
 
-        Assert.Equal(2, commands.Length);
-        uint incoming = commands.Single(c => c.Mesh == _coarse).Words.Single();
-        uint outgoing = commands.Single(c => c.Mesh == _fine).Words.Single();
+        Assert.Equal(2, fading.Length);
+        uint incoming = fading.Single(c => c.Mesh == _coarse).Words.Single();
+        uint outgoing = fading.Single(c => c.Mesh == _fine).Words.Single();
         Assert.Equal(index, incoming & DrawList.ObjectMask);
         Assert.Equal(index, outgoing & DrawList.ObjectMask);
         Assert.InRange((int)((incoming >> 24) & 0x7F), 60, 67);
         Assert.Equal(0u, incoming >> 31);
         Assert.Equal(1u, outgoing >> 31);
         Assert.Equal(incoming & 0x7F000000u, outgoing & 0x7F000000u);
+
+        var commands = Commands(Frame(Prepass, () => ViewAt(handle, 0.1f, state, fade: 1, now: 1.1)));
+        Assert.Equal(index, Assert.Single(commands).Words.Single());
+        Assert.Equal(_coarse, commands[0].Mesh);
     }
 }

@@ -125,13 +125,13 @@ public sealed class MaterialAbiTests : IDisposable
         return resource;
     }
 
-    private ShaderDescription Build(string source, out Shader shader)
+    private ShaderDescription Build(string source, out Shader shader, GlobalRegistry? registry = null)
     {
         ShaderDefinition definition = ShaderParser.Parse(source);
         shader = new Shader(definition, _compiler);
         ShaderPass pass = shader.Definition.Passes![0];
         ShaderDescription compiled = _compiler.Compile(pass, [], _device.BackendType);
-        compiled.Specializations = MaterialLayout.GlobalOffsets(_compiler.GetGlobals(pass), _registry);
+        compiled.Specializations = MaterialLayout.GlobalOffsets(_compiler.GetGlobals(pass), registry ?? _registry);
         compiled.ResourceLayouts = MaterialLayout.Layouts(shader.Name, compiled.ResourceLayouts, s_frameTable, s_viewTable);
         return compiled;
     }
@@ -279,6 +279,19 @@ public sealed class MaterialAbiTests : IDisposable
         Assert.Contains("_Wind_is_neither_a_property_nor_a_global", error.Message);
 
         Build(source.Replace(" + vec4(_Wind)", ""), out _);
+
+        // Properties declared with another type fail to compile, arrays of resources and globals the registry types otherwise fail to load
+        string retyped = Source.Replace("uniform float _Scale;", "uniform vec2 _Scale;").Replace("* _Scale", "* _Scale.x");
+        Assert.Contains("_Scale", Assert.Throws<ShaderCompileException>(() => Build(retyped, out _)).Message);
+
+        string arrays = Source
+            .Replace("uniform sampler2D _MainTex;", "uniform sampler2D _MainTex;\n                    layout(set = 3, binding = 0) uniform texture2D _Layers[2];")
+            .Replace("* _Scale + vec4(_Wind)", "* _Scale + vec4(_Wind) + texture(sampler2D(_Layers[1], _MainTex_Sampler), vec2(0.5))");
+        Assert.Contains("_Layers", Assert.Throws<ShaderLoadException>(() => Build(arrays, out _)).Message);
+
+        GlobalRegistry wider = new(_device, _store, _resources);
+        wider.Renderer.SetFloat4("_Wind", Float4.Zero);
+        Assert.Throws<ShaderLoadException>(() => Build(Source, out _, wider));
     }
 
     [Fact]
@@ -290,6 +303,12 @@ public sealed class MaterialAbiTests : IDisposable
             .Replace("gl_Position = vec4(x, y, 0.0, 1.0);", "gl_Position = vec4(x, y, 0.0, s);");
         ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
         Assert.Contains("graphite_MaterialSlot", error.Message);
+
+        // A fragment stage reading materials needs a vertex stage writing the slot
+        string unwritten = Source
+            .Replace("layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;", "")
+            .Replace("graphite_MaterialSlot = push.slot;", "float unused = float(push.slot);");
+        Assert.Contains("graphite_MaterialSlot", Assert.Throws<ShaderCompileException>(() => Build(unwritten, out _)).Message);
     }
 
     [Fact]
@@ -301,40 +320,5 @@ public sealed class MaterialAbiTests : IDisposable
         ResourceLayoutElementDescription materials = Assert.Single(description.ResourceLayouts[2].Elements);
         Assert.Equal(GraphiteBindings.MaterialsName, materials.Name.Text());
         Assert.Equal(ShaderStages.Fragment, materials.Stages);
-    }
-
-    [Fact]
-    public void PropertiesDeclaredWithAnotherType_FailToCompile()
-    {
-        string source = Source.Replace("uniform float _Scale;", "uniform vec2 _Scale;").Replace("* _Scale", "* _Scale.x");
-        ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
-        Assert.Contains("_Scale", error.Message);
-    }
-
-    [Fact]
-    public void ArraysOfResources_FailToLoad()
-    {
-        string source = Source
-            .Replace("uniform sampler2D _MainTex;", "uniform sampler2D _MainTex;\n                    layout(set = 3, binding = 0) uniform texture2D _Layers[2];")
-            .Replace("* _Scale + vec4(_Wind)", "* _Scale + vec4(_Wind) + texture(sampler2D(_Layers[1], _MainTex_Sampler), vec2(0.5))");
-        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Build(source, out _));
-        Assert.Contains("_Layers", error.Message);
-    }
-
-    [Fact]
-    public void GlobalsDeclaredWithAnotherTypeThanTheRegistryHas_FailToLoad()
-    {
-        _registry.Renderer.SetFloat4("_Wind", Float4.Zero);
-        Assert.Throws<ShaderLoadException>(() => Build(Source, out _));
-    }
-
-    [Fact]
-    public void FragmentStages_ReadingMaterials_NeedAVertexStageWritingTheSlot()
-    {
-        string source = Source
-            .Replace("layout(location = 25, component = 1) flat out uint graphite_MaterialSlot;", "")
-            .Replace("graphite_MaterialSlot = push.slot;", "float unused = float(push.slot);");
-        ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
-        Assert.Contains("graphite_MaterialSlot", error.Message);
     }
 }

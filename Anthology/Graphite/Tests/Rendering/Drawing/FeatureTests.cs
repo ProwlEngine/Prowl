@@ -76,11 +76,11 @@ public sealed class FeatureTests : IDisposable
 
     public void Dispose() => _harness.Dispose();
 
-    private void AddQuad(Float3 color, uint layer = ~0u, double scale = 1)
+    private RenderableHandle AddQuad(Float3 color, uint layer = ~0u, double scale = 1)
     {
         Material material = _renderer.CreateMaterial(_unlit);
         material.SetColor("_Color", new Float4(color.X, color.Y, color.Z, 1));
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(scale), LayerMask = layer }, [material]);
+        return _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(scale), LayerMask = layer }, [material]);
     }
 
     private static bool Centre(int i) => i % Size is >= 4 and < 12 && i / Size is >= 4 and < 12;
@@ -493,18 +493,18 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 0, 0), Frame(View()));
     }
 
-    private sealed class Failing() : RenderFeature(RenderSlot.Overlay)
+    private sealed class Failing(string message) : RenderFeature(RenderSlot.Overlay)
     {
-        public override void Setup(FeatureBuilder builder, in FeatureView view) => throw new InvalidOperationException("failing on purpose");
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => throw new InvalidOperationException(message);
 
         public override void Render(FeatureContext context) { }
     }
 
-    // A frame that fails, a feature of its view throwing as it is built, after its resources were applied
-    private void FailedFrame()
+    // A frame that fails, a feature of its view throwing as it is built, after its resources were applied. Each message is reported once.
+    private void FailedFrame(string message = "failing on purpose")
     {
         RenderView view = View();
-        view.Features = new ExtensionSet<RenderFeature> { new Failing() };
+        view.Features = new ExtensionSet<RenderFeature> { new Failing(message) };
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _device.WaitForIdle();
         Assert.Contains(_errors, e => e.Code == "frame.failed");
@@ -515,9 +515,20 @@ public sealed class FeatureTests : IDisposable
     public void AFailedFrame_KeepsTheUploadsItApplied()
     {
         Frame(View());
-        AddQuad(new Float3(0.25f, 0.5f, 1));
+        RenderableHandle quad = AddQuad(new Float3(0.25f, 0.5f, 1));
         FailedFrame();
         AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
+        _world.Remove(quad);
+
+        GpuMesh mesh = SkinnedQuad();
+        Frame(View());
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = mesh, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-16), new Float3(16)));
+        _world.SetBones(handle, [Translation(4, 0, 0)]);
+        FailedFrame("failing again");
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(1, 1, 1), pixels, i => i % Size is >= 8 and < 16 && i / Size is >= 4 and < 12);
+        AssertAll(new Float3(0, 0, 0), pixels, i => i % Size < 8);
     }
 
     [Fact]
@@ -851,6 +862,47 @@ public sealed class FeatureTests : IDisposable
         Named opaque = new("opaque", RenderSlot.Opaque, group: FeatureGroup.Opaque);
         Assert.DoesNotContain("OpaqueFeature", Select([opaque], []));
         Assert.Contains("opaque", Select([opaque], []));
+
+        AddQuad(new Float3(1, 0, 0));
+        (RenderSlot Slot, string Group)[] viewGroups = [(RenderSlot.Present, "Present"), (RenderSlot.Clear, "SceneClear"), (RenderSlot.Shadows, "Cascades")];
+        foreach ((RenderSlot slot, string group) in viewGroups)
+        {
+            ViewStand stand = new(slot, group, scene: slot == RenderSlot.Clear);
+            _world.Features.Add(stand);
+            Float4[] pixels = Frame(View());
+
+            Assert.True(stand.Setups > 0);
+            List<RenderFeature> selected = _renderer.Frame.Camera(_harness.ViewOf(1))!.Selected;
+            Assert.Contains(stand, selected);
+            Assert.DoesNotContain(selected, f => f.Group == Group(group) && f != stand);
+            if (slot == RenderSlot.Present)
+                AssertAll(new Float3(0, 0, 0), pixels);
+            else if (slot != RenderSlot.Clear)
+                AssertAll(new Float3(1, 0, 0), pixels, Centre);
+            _world.Features.Remove(stand);
+        }
+
+        (string Group, FrameSlot Slot, bool InWorld)[] frameGroups =
+        [
+            ("Deform", FrameSlot.Deform, false),
+            ("LightProbes", FrameSlot.LightProbes, true),
+            ("LocalShadows", FrameSlot.Shadows, true),
+            ("CaptureFill", FrameSlot.Captures, true),
+            ("Readback", FrameSlot.Readback, false),
+        ];
+        foreach ((string group, FrameSlot slot, bool inWorld) in frameGroups)
+        {
+            FrameStand stand = new(slot, group, ProvidedBy(group));
+            ExtensionSet<FrameFeature> features = inWorld ? _world.FrameFeatures : _renderer.FrameFeatures;
+            features.Add(stand);
+            AssertAll(new Float3(1, 0, 0), Frame(View()), Centre);
+
+            FrameFeature[] active = [.. _renderer.Frame.ActiveFrameFeatures];
+            Assert.Contains(stand, active);
+            Assert.DoesNotContain(active, f => f.IsBuiltIn && f.Group == Group(group));
+            Assert.Equal(1, stand.Runs);
+            features.Remove(stand);
+        }
     }
 
     // Takes a built in frame feature's group and provides what its consumers read
@@ -874,28 +926,6 @@ public sealed class FeatureTests : IDisposable
         public override void Render(FrameContext context) => Runs++;
     }
 
-    [Theory]
-    [InlineData("Deform", FrameSlot.Deform, false)]
-    [InlineData("LightProbes", FrameSlot.LightProbes, true)]
-    [InlineData("LocalShadows", FrameSlot.Shadows, true)]
-    [InlineData("CaptureFill", FrameSlot.Captures, true)]
-    [InlineData("Readback", FrameSlot.Readback, false)]
-    public void AFrameFeatureOfABuiltInsGroup_ReplacesIt(string group, FrameSlot slot, bool inWorld)
-    {
-        FrameStand stand = new(slot, group, ProvidedBy(group));
-        if (inWorld)
-            _world.FrameFeatures.Add(stand);
-        else
-            _renderer.FrameFeatures.Add(stand);
-        AddQuad(new Float3(1, 0, 0));
-        AssertAll(new Float3(1, 0, 0), Frame(View()), Centre);
-
-        FrameFeature[] active = [.. _renderer.Frame.ActiveFrameFeatures];
-        Assert.Contains(stand, active);
-        Assert.DoesNotContain(active, f => f.IsBuiltIn && f.Group == Group(group));
-        Assert.Equal(1, stand.Runs);
-    }
-
     private sealed class ViewStand(RenderSlot slot, string group, bool scene = false) : RenderFeature(slot, group: Group(group), runsOn: ViewKinds.All)
     {
         public int Setups;
@@ -915,40 +945,5 @@ public sealed class FeatureTests : IDisposable
         }
 
         public override void Render(FeatureContext context) { }
-    }
-
-    [Theory]
-    [InlineData(RenderSlot.Clear, "SceneClear")]
-    [InlineData(RenderSlot.Shadows, "Cascades")]
-    [InlineData(RenderSlot.Present, "Present")]
-    public void AViewFeatureOfABuiltInsGroup_ReplacesIt(RenderSlot slot, string group)
-    {
-        ViewStand stand = new(slot, group, scene: slot == RenderSlot.Clear);
-        _world.Features.Add(stand);
-        AddQuad(new Float3(1, 0, 0));
-        Float4[] pixels = Frame(View());
-
-        Assert.True(stand.Setups > 0);
-        List<RenderFeature> selected = _renderer.Frame.Camera(_harness.ViewOf(1))!.Selected;
-        Assert.Contains(stand, selected);
-        Assert.DoesNotContain(selected, f => f.Group == Group(group) && f != stand);
-        if (slot == RenderSlot.Present)
-            AssertAll(new Float3(0, 0, 0), pixels);
-        else if (slot != RenderSlot.Clear)
-            AssertAll(new Float3(1, 0, 0), pixels, Centre);
-    }
-
-    [Fact]
-    public void AFailedFrame_KeepsTheDeformedCopiesItMade()
-    {
-        GpuMesh mesh = SkinnedQuad();
-        Frame(View());
-        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = mesh, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [Unlit(new Float3(1, 1, 1))]);
-        _world.SetBounds(handle, new AABB(new Float3(-16), new Float3(16)));
-        _world.SetBones(handle, [Translation(4, 0, 0)]);
-        FailedFrame();
-        Float4[] pixels = Frame(View());
-        AssertAll(new Float3(1, 1, 1), pixels, i => i % Size is >= 8 and < 16 && i / Size is >= 4 and < 12);
-        AssertAll(new Float3(0, 0, 0), pixels, i => i % Size < 8);
     }
 }

@@ -42,6 +42,8 @@ public sealed class LifetimeTests : IDisposable
                 }
                 ENDGLSL
             }
+
+            Pass { Tags { "LightMode" = "ShadowCaster" } GLSLPROGRAM ENDGLSL }
         }
         """;
 
@@ -154,5 +156,51 @@ public sealed class LifetimeTests : IDisposable
         Assert.True(programs.TryGet(tinted.Draw, PassType.Forward, out ushort reused));
         Assert.Equal(first, reused);
         Assert.Equal(tinted.Draw.Keywords, programs[reused].Keywords);
+
+        using Uploader uploader = new(_device, InternalShaders.Compute(_device, _compiler, "Internal/Scatter.glsl"));
+        GeometryPool geometry = new(_device, _store, 1 << 16, 1 << 16);
+        using RenderWorld world = new(_device, _store);
+        DrawPrograms bucketPrograms = new();
+        BucketSet buckets = new(world.Render, bucketPrograms);
+        Float3[] positions = [new(0, 0, 0), new(0.001f, 0, 0), new(0, 0.001f, 0)];
+        GpuMesh mesh = geometry.Create(new MeshData
+        {
+            VertexCount = 3,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
+            Indices = new uint[] { 0, 1, 2 },
+        });
+        geometry.Apply(uploader, 0, long.MaxValue, new List<GpuMesh>());
+        Material bucketed = _materials.Create(_shader);
+        world.Add(new RenderableDesc { Mesh = mesh, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 5)), LayerMask = 1 }, [bucketed]);
+        CullFrustum frustum = new(Float4x4.CreateScale(0.1f), default);
+        DrawList list = new();
+        void Frame()
+        {
+            List<Material> changed = new();
+            _materials.Extract(changed);
+            world.Extract();
+            buckets.Update(world.Render.DrawChanged, world.Render.BoundsChanged, changed);
+            buckets.Cull(frustum, ~0u);
+            buckets.Build(0, frustum, list);
+        }
+
+        Frame();
+        int ids = bucketPrograms.Count;
+        int reading = 0;
+        for (int p = 0; p < _shader.Definition.Passes!.Length; p++)
+            reading += _shader.PassHasAxis(p, "_TINT") ? 1 : 0;
+
+        // Each switch takes the new variant's ids and frees the old ones at the next sweep, passes without the axis keep one id
+        for (int i = 0; i < 4; i++)
+        {
+            bucketed.Set(_shader.Axis("_TINT"), i % 2 == 0);
+            bucketPrograms.Sweep();
+            Frame();
+        }
+        Assert.True(reading < ids);
+        Assert.Equal(ids + reading, bucketPrograms.Count);
+
+        bucketPrograms.Sweep();
+        Assert.Equal(ids, bucketPrograms.Count);
     }
 }

@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 
-using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 using Xunit;
@@ -52,18 +51,6 @@ public sealed class TerrainSurfaceTests : IDisposable
         writer.Finish();
         stream.Position = 0;
         return TerrainData.Load(stream);
-    }
-
-    [Fact]
-    public void TerrainModel_Compiles()
-    {
-        ShaderLibrary.Register(typeof(Renderer).Assembly);
-        Shader shader = _harness.Renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Terrain/Default.shader")!));
-        foreach (ShaderPass pass in shader.Definition.Passes!)
-        {
-            foreach (string tier in (string[])["FULL", "LITE", "MAX"])
-                TestCompiler.Shared.CompileProgram(pass, [new Keyword(GlobalAxis.PbrTier.Name, tier)]);
-        }
     }
 
     // Renders until the finest level has pages in, as they load on worker threads
@@ -173,20 +160,6 @@ public sealed class TerrainSurfaceTests : IDisposable
         Assert.True(brightnessPerView / directPerView.Length > 0.05, $"brightnessPerView {brightnessPerView / directPerView.Length}");
         Assert.True(differencePerView / brightnessPerView < 0.1, $"differencePerView {differencePerView / brightnessPerView}");
     }
-
-    [Fact]
-    public void GrassShader_Compiles()
-    {
-        ShaderLibrary.Register(typeof(Renderer).Assembly);
-        Shader shader = _harness.Renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Terrain/Grass.shader")!));
-        foreach (ShaderPass pass in shader.Definition.Passes!)
-        {
-            foreach (string tier in (string[])["FULL", "LITE", "MAX"])
-                TestCompiler.Shared.CompileProgram(pass, [new Keyword(GlobalAxis.PbrTier.Name, tier)]);
-        }
-    }
-
-    private static TerrainDetailPrototype BrightGrass => new() { Density = 400, Range = 20, MinHeight = 0.3f, MaxHeight = 0.5f, MinWidth = 0.06f, MaxWidth = 0.06f, RootColor = new Float3(0.6f, 0.9f, 0.3f), TipColor = new Float3(0.6f, 0.9f, 0.3f) };
 
     // Far from the camera the walk draws coarser nodes, so a large world takes few draws
     [Fact]

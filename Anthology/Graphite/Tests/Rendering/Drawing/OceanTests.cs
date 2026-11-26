@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Numerics;
 
-using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 using Xunit;
@@ -18,18 +17,6 @@ public sealed class OceanTests : IDisposable
     private readonly RendererHarness _harness = new();
 
     public void Dispose() => _harness.Dispose();
-
-    [Fact]
-    public void WaterShader_Compiles()
-    {
-        ShaderLibrary.Register(typeof(Renderer).Assembly);
-        Shader water = _harness.Renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Ocean/Water.shader")!));
-        foreach (ShaderPass pass in water.Definition.Passes!)
-        {
-            foreach (string tier in (string[])["FULL", "LITE", "MAX"])
-                TestCompiler.Shared.CompileProgram(pass, [new Keyword(GlobalAxis.PbrTier.Name, tier)]);
-        }
-    }
 
     // Calm water answers its sea level less the planet's drop, facing up, with the depth under each point
     [Fact]

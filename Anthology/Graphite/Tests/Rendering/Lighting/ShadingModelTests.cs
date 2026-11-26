@@ -86,31 +86,6 @@ public sealed class ShadingModelTests : IDisposable
         }
         """;
 
-    private Material On(string model) => On(_harness, _quad, model);
-
-    private static Material On(RendererHarness harness, GpuMesh quad, string model)
-    {
-        Shader shader = harness.Renderer.LoadShader(ShaderParser.Parse($"Shader \"Test/{model}\"\n{{\n    Surface \"{model}\"\n    {{\n    }}\n}}\n"));
-        Material material = harness.Renderer.CreateMaterial(shader);
-        harness.World.Add(new RenderableDesc { Mesh = quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [material]);
-        return material;
-    }
-
-    [Theory]
-    [InlineData(RenderPath.Forward)]
-    [InlineData(RenderPath.Deferred)]
-    public void AModelsLighting_LightsItsSurfaces_ByWhatItsPackKeeps(RenderPath path)
-    {
-        _harness.Renderer.LoadShadingModel(Flat("FlatGreen", "vec3(0.0, 0.5, 0.0)"));
-        Material material = On("FlatGreen");
-        Float4 full = Centre(_harness.Frame(View(path)));
-        Assert.True(full.X < 0.03f && MathF.Abs(full.Y - 0.5f) < 0.03f && full.Z < 0.03f, $"full {full}");
-
-        material.SetFloat("flat_scale", 0.5f);
-        Float4 half = Centre(_harness.Frame(View(path)));
-        Assert.True(MathF.Abs(half.Y - 0.25f) < 0.03f, $"half {half}");
-    }
-
     [Fact]
     public void ASurfaceOnAHighLayer_IsLitTheSameOnBothPaths()
     {
@@ -180,21 +155,29 @@ public sealed class ShadingModelTests : IDisposable
         Float4 shared = Lit(model, path);
         Assert.True(own.X < 0.03f && MathF.Abs(own.Y - 0.5f) < 0.03f && own.Z < 0.03f, $"shader {own}");
         Assert.True(MathF.Abs(own.Y - shared.Y) < 0.02f && MathF.Abs(own.X - shared.X) < 0.02f, $"shader {own} model {shared}");
-    }
 
-    [Fact]
-    public void ASurfaceMarkedForward_TakesNoGBufferPass_AndLooksTheSameInADeferredView()
-    {
+        // A surface marked Forward takes no GBuffer pass and looks the same as one the view keeps
         Shader forward = _harness.Renderer.LoadShader(ShaderParser.Parse("Shader \"Test/ForwardLit\" { Surface \"Lit\" Forward { } }"));
         Assert.True(forward.HasPass(PassType.Forward));
         Assert.False(forward.HasPass(PassType.GBuffer));
         Assert.True(_harness.Renderer.Standard.Lit.HasPass(PassType.GBuffer));
 
-        Float4 drawn = Lit(forward, RenderPath.Deferred);
-        Float4 kept = Lit(_harness.Renderer.Standard.Lit, RenderPath.Deferred);
+        Float4 drawn = Lit(forward, path);
+        Float4 kept = Lit(_harness.Renderer.Standard.Lit, path);
         Assert.True(drawn.X > 0.01f, $"lit {drawn}");
         for (int c = 0; c < 3; c++)
-            Assert.True(MathF.Abs(drawn[c] - kept[c]) < 0.01f + 0.02f * kept[c], $"channel {c}: forward {drawn[c]}, deferred {kept[c]}");
+            Assert.True(MathF.Abs(drawn[c] - kept[c]) < 0.01f + 0.02f * kept[c], $"channel {c}: forward {drawn[c]}, kept {kept[c]}");
+
+        // A model's own lighting lights its surfaces by what its Pack keeps
+        _harness.Renderer.LoadShadingModel(Flat("FlatGreen", "vec3(0.0, 0.5, 0.0)"));
+        Material flat = _harness.Renderer.CreateMaterial(_harness.Renderer.LoadShader(ShaderParser.Parse("Shader \"Test/FlatGreen\" { Surface \"FlatGreen\" { } }")));
+        _harness.World.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [flat]);
+        Float4 full = Centre(_harness.Frame(View(path)));
+        Assert.True(full.X < 0.03f && MathF.Abs(full.Y - 0.5f) < 0.03f && full.Z < 0.03f, $"full {full}");
+
+        flat.SetFloat("flat_scale", 0.5f);
+        Float4 half = Centre(_harness.Frame(View(path)));
+        Assert.True(MathF.Abs(half.Y - 0.25f) < 0.03f, $"half {half}");
     }
 
     // Each shipped model lights its surface the same whether the view keeps it in a GBuffer or lights it as it draws

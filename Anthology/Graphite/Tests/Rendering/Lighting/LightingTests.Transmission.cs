@@ -10,8 +10,7 @@ using Vector3 = System.Numerics.Vector3;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-// The PBR model's transmission on the GPU: the white furnace through transmissive quads and volumes at both tiers, a
-// glass slab's absorption over a flat backdrop, dispersion's order, and which views copy their colour and depth.
+// The PBR model's transmission on the GPU: a glass slab's absorption over a flat backdrop.
 public sealed partial class LightingTests
 {
     // A slab of thickness d facing the camera: its front at z 0 and its back at z d, wider than the view
@@ -102,55 +101,4 @@ public sealed partial class LightingTests
         }
         Assert.True(checkedPixels > Size * Size / 2, $"only {checkedPixels} pixels refract onto the view");
     }
-
-    // Only views drawing a transmissive surface copy their colour and depth and draw back depth, volumes alone the
-    // latter, and LITE views none of it
-    [Fact]
-    public void ScreenCopies_RunOnlyForViewsDrawingTransmission()
-    {
-        DarkWorld();
-        CameraFrame Camera() => _renderer.Frame.Camera(_harness.ViewOf(1))!;
-        ViewStats Drawn() => _renderer.LastFrameStats.View(_harness.ViewOf(1))!;
-        Material material = Glass(m => m.Surface = new SurfaceSettings(SurfaceType.Transparent));
-        AddSlab(1, material);
-        Frame();
-        Assert.False(Drawn().SceneColorUsed || Drawn().SceneDepthUsed || Drawn().BackDepthUsed);
-        Assert.Null(Camera().SceneColor);
-        Assert.Null(Camera().BackDepth);
-
-        material.SetFloat("transmission_weight", 1);
-        Frame();
-        Assert.True(Drawn().SceneColorUsed && Drawn().SceneDepthUsed && Drawn().BackDepthUsed);
-        Assert.NotNull(Camera().SceneColor);
-        Assert.NotNull(Camera().BackDepth);
-
-        material.SetInt("geometry_thin_walled", 1);
-        Frame();
-        Assert.True(Drawn().SceneColorUsed);
-        Assert.False(Drawn().BackDepthUsed);
-
-        material.SetInt("geometry_thin_walled", 0);
-        _world.Globals.Set(GlobalAxis.PbrTier, "LITE");
-        Frame();
-        Assert.False(Drawn().SceneColorUsed || Drawn().SceneDepthUsed || Drawn().BackDepthUsed);
-    }
-
-    // Shows the scene's motion in red and green, read after the transparent surfaces
-    private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature(RenderSlot.AfterTransparents, sceneReads: SceneTargets.Motion)
-    {
-        private readonly PropertySet _properties = new();
-
-        public override void Setup(FeatureBuilder builder, in FeatureView view)
-        {
-            builder.ReadScene();
-            builder.WriteColor();
-        }
-
-        public override void Render(FeatureContext context)
-        {
-            _properties.SetTexture("_Motion", context.Motion!, sampler);
-            context.Fullscreen(program, _properties);
-        }
-    }
-
 }

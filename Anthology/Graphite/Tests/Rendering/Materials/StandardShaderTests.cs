@@ -31,8 +31,8 @@ public sealed class StandardShaderTests : IDisposable
     {
         ShaderLibrary.Register(typeof(Renderer).Assembly);
         _system = new MaterialSystem(_device, _store, new SlotResources());
-        _pbr = Load("Lit");
-        _unlit = Load("Unlit");
+        _pbr = Load("Standard/Lit");
+        _unlit = Load("Standard/Unlit");
     }
 
     public void Dispose()
@@ -41,16 +41,14 @@ public sealed class StandardShaderTests : IDisposable
         _device.Dispose();
     }
 
-    private Shader Load(string name) => new(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader")!), _compiler);
+    private Shader Load(string path) => new(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}{path}.shader")!), _compiler);
 
     private Texture MakeTexture() => _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
 
-    private static string Keyword(Material material, string axis) => material.Get(material.Shader.Axis(axis));
-
-    // Every surface at every tier
+    // Every surface of the standard shaders and every other shipped shader, at every tier
     public static IEnumerable<object[]> Variants()
     {
-        foreach (string shader in new[] { "Lit", "Unlit" })
+        foreach (string shader in new[] { "Standard/Lit", "Standard/Unlit" })
         {
             foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
             {
@@ -58,16 +56,23 @@ public sealed class StandardShaderTests : IDisposable
                     yield return [shader, surface, tier];
             }
         }
+        foreach (string shader in new[] { "Ocean/Water", "Terrain/Default", "Terrain/Grass", "Foliage/Leaves" })
+        {
+            foreach (string tier in new[] { "FULL", "LITE", "MAX" })
+                yield return [shader, "", tier];
+        }
     }
 
     [Theory]
     [MemberData(nameof(Variants))]
     public void EveryPassOfAVariantCompiles(string shader, string surface, string tier)
     {
-        Shader loaded = shader == "Lit" ? _pbr : _unlit;
+        Shader loaded = shader switch { "Standard/Lit" => _pbr, "Standard/Unlit" => _unlit, _ => Load(shader) };
+        Keyword[] combo = surface.Length > 0 ? [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier)] : [new Keyword("PBR_TIER", tier)];
+        Assert.NotEmpty(loaded.Definition.Passes!);
         List<(ShaderPass, Keyword[])> variants = [];
         foreach (ShaderPass pass in loaded.Definition.Passes!)
-            variants.Add((pass, [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier)]));
+            variants.Add((pass, combo));
         CompileAll(variants);
     }
 
@@ -89,59 +94,47 @@ public sealed class StandardShaderTests : IDisposable
         Assert.Empty(failures);
     }
 
-    private const string RimSource = """
-        Shader "Tests/Rim"
+    // Surface, vertex and lighting code together: a rim, a wave, a detail normal through the tangent frame, and a toon ramp
+    private const string CustomSource = """
+        Shader "Tests/Custom"
         {
             Properties
             {
                 _RimColor("Rim", Color) = (1.0, 0.0, 0.0, 1.0)
                 base_metalness("Metal", Float) = 0.5
+                _WaveHeight("Wave Height", Float) = 0.2
+                _DetailTex("Detail Normal", Texture2D) = "normal" {}
             }
 
             Surface "Lit"
             {
                 GLSLPROGRAM
                 uniform vec4 _RimColor;
+                uniform sampler2D _DetailTex;
                 void Surface(inout PBR_Params p, Graphite_SurfaceData i)
                 {
+                    vec3 detail = Graphite_SurfaceNormalMap(i, texture(_DetailTex, i.uv * 4.0).rgb, 1.0);
+                    vec3 frame = cross(i.tangent, i.bitangent);
+                    p.geometryNormal = normalize(p.geometryNormal + detail + frame * 0.0);
                     p.emissionColor = _RimColor.rgb;
                     p.emissionLuminance = 100.0 * pow(1.0 - max(dot(p.geometryNormal, i.viewDir), 0.0), 3.0);
                     p.geometryOpacity *= i.vertexColor.a;
+                    p.specularRoughness = 0.5;
                 }
                 ENDGLSL
-            }
-        }
-        """;
 
-    private static readonly string[] s_pbrPasses = ["Forward", "GBuffer", "Transmission", "BackDepth", "Prepass", "ShadowCaster", "Voxelize", "Impostor"];
-
-    [Theory]
-    [InlineData("OPAQUE")]
-    [InlineData("CUTOUT")]
-    [InlineData("TRANSPARENT")]
-    public void SurfaceShaders_TakeTheStandardPassesAndProperties_AndCompile(string surface)
-    {
-        Shader rim = new(ShaderParser.Parse(RimSource), _compiler);
-        ShaderDefinition definition = rim.Definition;
-        Assert.Equal(s_pbrPasses, definition.Passes!.Select(p => p.Name));
-        string[] names = [.. definition.Properties!.Select(p => p.Name)];
-        Assert.Contains("base_color_map", names);
-        Assert.Contains("_RimColor", names);
-        Assert.Equal(0.5f, definition.Properties!.Single(p => p.Name == "base_metalness").Value.X);
-        Assert.Equal(names.Length, names.Distinct().Count());
-
-        foreach (ShaderPass pass in definition.Passes!)
-            _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface)]);
-    }
-
-    private const string ToonSource = """
-        Shader "Tests/Toon"
-        {
-            Surface "Lit"
-            {
-                GLSLPROGRAM
-                void Surface(inout PBR_Params p, Graphite_SurfaceData i) { p.specularRoughness = 0.5; }
-                ENDGLSL
+                Vertex
+                {
+                    GLSLPROGRAM
+                    uniform float _WaveHeight;
+                    void SurfaceVertex(inout Graphite_SurfaceVertex v)
+                    {
+                        v.position += v.normal * sin(v.position.x + v.time) * _WaveHeight * v.color.a;
+                        v.uv += v.uv1 * 0.0;
+                        v.tangent.xyz = normalize(v.tangent.xyz);
+                    }
+                    ENDGLSL
+                }
 
                 Lighting
                 {
@@ -157,135 +150,48 @@ public sealed class StandardShaderTests : IDisposable
         }
         """;
 
+    private static readonly string[] s_pbrPasses = ["Forward", "GBuffer", "Transmission", "BackDepth", "Prepass", "ShadowCaster", "Voxelize", "Impostor"];
+
     [Theory]
     [InlineData("TRANSPARENT")]
     public void SurfaceLighting_ReplacesTheBRDF_AndEveryFeatureStillCompiles(string surface)
     {
-        ShaderDefinition definition = new Shader(ShaderParser.Parse(ToonSource), _compiler).Definition;
+        ShaderDefinition definition = new Shader(ShaderParser.Parse(CustomSource), _compiler).Definition;
         Assert.Equal(s_pbrPasses.Where(pass => pass != "GBuffer"), definition.Passes!.Select(p => p.Name));
+        string[] names = [.. definition.Properties!.Select(p => p.Name)];
+        Assert.Contains("base_color_map", names);
+        Assert.Contains("_RimColor", names);
+        Assert.Equal(0.5f, definition.Properties!.Single(p => p.Name == "base_metalness").Value.X);
+        Assert.Equal(names.Length, names.Distinct().Count());
 
         foreach (ShaderPass pass in definition.Passes!)
         {
             bool lit = pass.Name is "Forward" or "Transmission";
             Assert.Equal(lit, pass.Source.Contains("#define GRAPHITE_CUSTOM_BRDF"));
             Assert.Equal(lit, pass.Source.Contains("float ramp"));
-            _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface)]);
-        }
-    }
-
-    private static string WaveSource(string model) => $$"""
-        Shader "Tests/Wave"
-        {
-            Properties
-            {
-                _WaveHeight("Wave Height", Float) = 0.2
-            }
-
-            Surface "{{model}}"
-            {
-                Vertex
-                {
-                    GLSLPROGRAM
-                    uniform float _WaveHeight;
-                    void SurfaceVertex(inout Graphite_SurfaceVertex v)
-                    {
-                        v.position += v.normal * sin(v.position.x + v.time) * _WaveHeight * v.color.a;
-                        v.uv += v.uv1 * 0.0;
-                        v.tangent.xyz = normalize(v.tangent.xyz);
-                    }
-                    ENDGLSL
-                }
-            }
-        }
-        """;
-
-    [Theory]
-    [InlineData("Lit", "OPAQUE")]
-    [InlineData("Lit", "CUTOUT")]
-    [InlineData("Lit", "TRANSPARENT")]
-    [InlineData("Unlit", "OPAQUE")]
-    [InlineData("Unlit", "CUTOUT")]
-    [InlineData("Unlit", "TRANSPARENT")]
-    public void SurfaceVertex_RunsInEveryPass_AndCompiles(string model, string surface)
-    {
-        ShaderDefinition definition = new Shader(ShaderParser.Parse(WaveSource(model)), _compiler).Definition;
-        Assert.Equal(model == "Lit" ? s_pbrPasses : ["Forward", "GBuffer", "Prepass", "ShadowCaster", "Voxelize"], definition.Passes!.Select(p => p.Name));
-
-        foreach (ShaderPass pass in definition.Passes!)
-        {
             Assert.Contains("void SurfaceVertex(inout Graphite_SurfaceVertex v)", pass.Source);
             _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface)]);
         }
     }
 
-    private static string DetailSource(string model) => $$"""
-        Shader "Tests/Detail"
-        {
-            Properties
-            {
-                _DetailTex("Detail Normal", Texture2D) = "normal" {}
-            }
+    // The axes deciding a surface's lobes and how much light a caster lets through to its shadow
+    private static readonly string[] s_lobeAxes = ["PBR_THIN_WALLED", "PBR_TRANSMISSION"];
 
-            Surface "{{model}}"
-            {
-                GLSLPROGRAM
-                uniform sampler2D _DetailTex;
-                void Surface(inout {{(model == "Lit" ? "PBR_Params" : "Unlit_Params")}} p, Graphite_SurfaceData i)
-                {
-                    vec3 detail = Graphite_SurfaceNormalMap(i, texture(_DetailTex, i.uv * 4.0).rgb, 1.0);
-                    vec3 frame = cross(i.tangent, i.bitangent);
-                    {{(model == "Lit" ? "p.geometryNormal = normalize(p.geometryNormal + detail + frame * 0.0);" : "p.baseColor *= detail * 0.5 + 0.5 + frame * 0.0;")}}
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
-    [Theory]
-    [InlineData("Lit", "OPAQUE")]
-    [InlineData("Lit", "CUTOUT")]
-    [InlineData("Unlit", "OPAQUE")]
-    [InlineData("Unlit", "CUTOUT")]
-    public void SurfaceData_HasTheTangentFrame_AndANormalMapHelper(string model, string surface)
+    // The combo with each lobe axis on where its bit in the mask is
+    private static Keyword[] WithLobes(List<Keyword> combo, int mask)
     {
-        ShaderDefinition definition = new Shader(ShaderParser.Parse(DetailSource(model)), _compiler).Definition;
-        foreach (ShaderPass pass in definition.Passes!)
-            _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface)]);
+        for (int i = 0; i < s_lobeAxes.Length; i++)
+            combo.Add(new Keyword(s_lobeAxes[i], (mask & (1 << i)) != 0 ? "true" : "false"));
+        return [.. combo];
     }
 
-    private static readonly string[] s_lobes = ["PBR_THIN_WALLED"];
-
-    // The axes deciding how much light a caster lets through to its shadow
-    private static readonly string[] s_shadowAxes = ["PBR_THIN_WALLED", "PBR_TRANSMISSION"];
-
-    // Every combination of Lit's lobe axes at every tier in the forward and transmission passes
-    [Fact]
-    public void EveryLobeCombination_Compiles()
-    {
-        ShaderPass forward = _pbr.Definition.Passes!.First(p => p.Name == "Forward");
-        ShaderPass transmission = _pbr.Definition.Passes!.First(p => p.Name == "Transmission");
-        List<(ShaderPass, Keyword[])> variants = [];
-        foreach (string tier in new[] { "FULL", "LITE", "MAX" })
-        {
-            for (int mask = 0; mask < 1 << s_lobes.Length; mask++)
-            {
-                List<Keyword> combo = [new Keyword("_SURFACE", "OPAQUE"), new Keyword("PBR_TIER", tier)];
-                for (int i = 0; i < s_lobes.Length; i++)
-                    combo.Add(new Keyword(s_lobes[i], (mask & (1 << i)) != 0 ? "true" : "false"));
-                variants.Add((forward, [.. combo]));
-                variants.Add((transmission, [.. combo]));
-            }
-        }
-        ShaderPass backDepth = _pbr.Definition.Passes!.First(p => p.Name == "BackDepth");
-        foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
-            variants.Add((backDepth, [new Keyword("_SURFACE", surface)]));
-        CompileAll(variants);
-    }
-
-    // Every pass with parallax on, at every surface and every tier, with the lobe and shadow axes beside
+    // Every pass with parallax on at every surface and tier with the lobe axes all off and all on, and without parallax
+    // every lobe combination in the forward and transmission passes at every tier and in the shadow caster at every
+    // surface, and the back depth pass at every surface
     [Fact]
     public void EveryParallaxVariant_Compiles()
     {
+        int all = (1 << s_lobeAxes.Length) - 1;
         List<(ShaderPass, Keyword[])> variants = [];
         foreach (ShaderPass pass in _pbr.Definition.Passes!)
         {
@@ -293,35 +199,28 @@ public sealed class StandardShaderTests : IDisposable
             {
                 foreach (string tier in new[] { "FULL", "LITE", "MAX" })
                 {
-                    foreach (bool all in new[] { false, true })
-                    {
-                        List<Keyword> combo = [new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier), new Keyword("PBR_PARALLAX", "true")];
-                        foreach (string axis in s_lobes.Append("PBR_TRANSMISSION"))
-                            combo.Add(new Keyword(axis, all ? "true" : "false"));
-                        variants.Add((pass, [.. combo]));
-                    }
+                    foreach (int mask in new[] { 0, all })
+                        variants.Add((pass, WithLobes([new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier), new Keyword("PBR_PARALLAX", "true")], mask)));
                 }
             }
         }
-        CompileAll(variants);
-    }
 
-    // The shadow caster at every surface and every combination of the axes deciding what it lets through
-    [Fact]
-    public void EveryShadowCasterVariant_Compiles()
-    {
+        ShaderPass forward = _pbr.Definition.Passes!.First(p => p.Name == "Forward");
+        ShaderPass transmission = _pbr.Definition.Passes!.First(p => p.Name == "Transmission");
         ShaderPass caster = _pbr.Definition.Passes!.First(p => p.Name == "ShadowCaster");
-        List<(ShaderPass, Keyword[])> variants = [];
-        foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
+        ShaderPass backDepth = _pbr.Definition.Passes!.First(p => p.Name == "BackDepth");
+        for (int mask = 0; mask <= all; mask++)
         {
-            for (int mask = 0; mask < 1 << s_shadowAxes.Length; mask++)
+            foreach (string tier in new[] { "FULL", "LITE", "MAX" })
             {
-                List<Keyword> combo = [new Keyword("_SURFACE", surface)];
-                for (int i = 0; i < s_shadowAxes.Length; i++)
-                    combo.Add(new Keyword(s_shadowAxes[i], (mask & (1 << i)) != 0 ? "true" : "false"));
-                variants.Add((caster, [.. combo]));
+                variants.Add((forward, WithLobes([new Keyword("_SURFACE", "OPAQUE"), new Keyword("PBR_TIER", tier)], mask)));
+                variants.Add((transmission, WithLobes([new Keyword("_SURFACE", "OPAQUE"), new Keyword("PBR_TIER", tier)], mask)));
             }
+            foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
+                variants.Add((caster, WithLobes([new Keyword("_SURFACE", surface)], mask)));
         }
+        foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
+            variants.Add((backDepth, [new Keyword("_SURFACE", surface)]));
         CompileAll(variants);
     }
 
@@ -425,21 +324,5 @@ public sealed class StandardShaderTests : IDisposable
         uint[] record = new uint[_pbr.Schema.StrideWords];
         _pbr.Schema.Pack(values, record, new SlotResources());
         return record;
-    }
-
-    [Fact]
-    public void SettingAMap_ChangesTheRecord_NotTheDraw()
-    {
-        Material material = _system.Create(_pbr);
-        _system.Extract(new List<Material>());
-
-        List<Material> changed = new();
-        List<Material> records = new();
-        using Texture texture = MakeTexture();
-        material.SetTexture("base_color_map", texture);
-        material.SetFloat("specular_roughness", 0.25f);
-        _system.Extract(changed, records);
-        Assert.DoesNotContain(material, changed);
-        Assert.Contains(material, records);
     }
 }

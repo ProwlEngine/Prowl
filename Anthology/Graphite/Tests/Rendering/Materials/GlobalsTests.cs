@@ -61,6 +61,24 @@ public sealed class GlobalsTests : IDisposable
 
         _registry.Renderer.SetFloat("_A", 5);
         Assert.Equal(0u, _registry.Properties[0].Offset);
+
+        // Many globals grow the regions, keeping every value, and report the new buffer
+        (GlobalProperties world, int region) = _registry.AddWorld();
+        int first = _registry.Properties.Length;
+        world.SetFloat("_First", 7);
+        _registry.Extract();
+        Assert.False(_registry.Flush(_uploader, 0));
+        DeviceBuffer before = _registry.Buffer;
+
+        for (int i = 0; i < 40; i++)
+            _registry.Renderer.SetFloat4("_Grow" + i, new Float4(i, 0, 0, 0));
+        _registry.Extract();
+
+        Assert.True(_registry.RegionWords >= 161);
+        Assert.True(_registry.Flush(_uploader, 1));
+        Assert.NotSame(before, _registry.Buffer);
+        Assert.Equal(7f, F(Region(region)[(int)_registry.Properties[first].Offset]));
+        Assert.Equal(39f, F(Region(region)[(int)_registry.Properties[^1].Offset]));
     }
 
     [Fact]
@@ -151,25 +169,5 @@ public sealed class GlobalsTests : IDisposable
         float[] values = _device.Map<float>(readback).ToArray();
         _device.Unmap(readback);
         Assert.Equal(new[] { 0.4f, 4f, 6f }, values[..3]);
-    }
-
-    [Fact]
-    public void ManyGlobals_GrowTheRegions_KeepingEveryValue_AndReportTheNewBuffer()
-    {
-        (GlobalProperties world, int region) = _registry.AddWorld();
-        world.SetFloat("_First", 7);
-        _registry.Extract();
-        Assert.False(_registry.Flush(_uploader, 0));
-        DeviceBuffer before = _registry.Buffer;
-
-        for (int i = 0; i < 40; i++)
-            _registry.Renderer.SetFloat4("_Grow" + i, new Float4(i, 0, 0, 0));
-        _registry.Extract();
-
-        Assert.True(_registry.RegionWords >= 161);
-        Assert.True(_registry.Flush(_uploader, 1));
-        Assert.NotSame(before, _registry.Buffer);
-        Assert.Equal(7f, F(Region(region)[0]));
-        Assert.Equal(39f, F(Region(region)[(int)_registry.Properties[^1].Offset]));
     }
 }

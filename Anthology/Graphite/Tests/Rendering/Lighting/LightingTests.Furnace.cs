@@ -102,23 +102,6 @@ public sealed partial class LightingTests
         }
     }
 
-    // FacingQuad with tangents, UV0 running 0 to 1 across it and UV1 twice UV0
-    private GpuMesh TangentQuad => _tangentQuad ??= _renderer.CreateMesh(new MeshData
-    {
-        VertexCount = 4,
-        Streams =
-        [
-            new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(new Float3[] { new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0) }.AsSpan()).ToArray() },
-            new VertexStream { Semantic = VertexSemantic.Normal, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(new Float3[] { new(0, 0, -1), new(0, 0, -1), new(0, 0, -1), new(0, 0, -1) }.AsSpan()).ToArray() },
-            new VertexStream { Semantic = VertexSemantic.Tangent, Format = VertexElementFormat.Float4, Data = MemoryMarshal.AsBytes(new Float4[] { new(1, 0, 0, -1), new(1, 0, 0, -1), new(1, 0, 0, -1), new(1, 0, 0, -1) }.AsSpan()).ToArray() },
-            new VertexStream { Semantic = VertexSemantic.UV0, Format = VertexElementFormat.Float2, Data = MemoryMarshal.AsBytes(new Float2[] { new(0, 0), new(1, 0), new(1, 1), new(0, 1) }.AsSpan()).ToArray() },
-            new VertexStream { Semantic = VertexSemantic.UV1, Format = VertexElementFormat.Float2, Data = MemoryMarshal.AsBytes(new Float2[] { new(0, 0), new(2, 0), new(2, 2), new(0, 2) }.AsSpan()).ToArray() },
-        ],
-        Indices = new uint[] { 0, 2, 1, 0, 3, 2 },
-    });
-
-    private GpuMesh? _tangentQuad;
-
     // Standard Unlit glowing at one nit, so it shows its base colour as it is under the unit exposure
     private Material UnitUnlit()
     {

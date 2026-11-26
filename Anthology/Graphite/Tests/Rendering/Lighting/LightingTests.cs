@@ -301,7 +301,7 @@ public sealed partial class LightingTests : IDisposable
     private readonly GraphicsDevice _device;
     private readonly Framebuffer _framebuffer;
     private readonly Renderer _renderer;
-    private readonly RenderWorld _world;
+    private RenderWorld _world;
     private readonly Shader _shader;
     private readonly GpuMesh _quad;
     private readonly List<RendererError> _errors;
@@ -310,14 +310,30 @@ public sealed partial class LightingTests : IDisposable
     public LightingTests()
     {
         (_device, _framebuffer, _renderer, _world, _errors) = (_harness.Device, _harness.Framebuffer, _harness.Renderer, _harness.World, _harness.Errors);
-        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default };
-        // The MAX tier is the one these tests describe: energy compensated lobes, exact Fresnel, rough diffuse and the sun as a disk
-        _world.Globals.Set(GlobalAxis.PbrTier, "MAX");
+        Configure();
         _shader = _renderer.LoadShader(ShaderParser.Parse(Source));
         _quad = _harness.CreateQuad(normals: true);
     }
 
     public void Dispose() => _harness.Dispose();
+
+    private void Configure()
+    {
+        _world.Environment = new EnvironmentDesc { CaptureEV100 = UnitEV100, AmbientColor = default, Fog = default };
+        // The MAX tier is the one these tests describe: energy compensated lobes, exact Fresnel, rough diffuse and the sun as a disk
+        _world.Globals.Set(GlobalAxis.PbrTier, "MAX");
+    }
+
+    // Swaps the world for an empty one set up as the first, so the next part of a test starts from nothing, and draws a
+    // frame of it so the old world's resources are released before the test goes on
+    private void NewWorld()
+    {
+        _world.Dispose();
+        _world = _renderer.CreateWorld();
+        Configure();
+        _origin = default;
+        Frame();
+    }
 
     private Material Surface(Float3 albedo, float roughness = 0.5f, float metallic = 0)
     {
@@ -336,6 +352,7 @@ public sealed partial class LightingTests : IDisposable
     private Float4[] Frame(params IProfiler[] profilers)
     {
         RenderView view = _harness.BareView(1);
+        view.World = _world;
         view.EV100 = _ev100;
         view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = _origin });
         return _harness.Frame(new FrameDesc { Views = new[] { view }, Profilers = profilers });
@@ -383,6 +400,15 @@ public sealed partial class LightingTests : IDisposable
         _world.AddLight(light);
 
         AssertMatches(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), Frame());
+
+        NewWorld();
+        Vector3 grey = new(0.6f, 0.6f, 0.6f);
+        AddQuad(Surface(new Float3(grey.X, grey.Y, grey.Z), 0.4f));
+        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.3f, -0.2f, 1), Color = new Float3(1, 0.9f, 0.8f), Intensity = 0.05f };
+        LightDesc fill = new() { Type = LightType.Directional, Direction = new Float3(-0.5f, 0.5f, 1), Color = new Float3(0.2f, 0.3f, 1), Intensity = 0.02f };
+        _world.AddLight(sun);
+        _world.AddLight(fill);
+        AssertMatches(p => Reference.Directional(sun, p, s_normal, grey, 0, 0.4f) + Reference.Directional(fill, p, s_normal, grey, 0, 0.4f), Frame());
     }
 
     [Fact]
@@ -456,6 +482,61 @@ public sealed partial class LightingTests : IDisposable
                 sum += Reference.Local(Relative(light), p, s_normal, albedo, 0, 0.7f);
             return sum;
         }, Frame());
+
+        // Static lights moving between regions, emptying and refilling them
+        NewWorld();
+        Vector3 grey = new(0.6f, 0.6f, 0.6f);
+        double region = StaticRegions<LightRecord>.RegionSize;
+        AddQuad(Surface(new Float3(grey.X, grey.Y, grey.Z), 0.5f));
+        LightDesc near = Point(new Double3(0.5, 0.5, 8.5), 5, 0.03f, new Float3(1, 0.9f, 0.8f));
+        LightDesc far = Point(new Double3(region * 3.5, 0, 0), 5, 1, new Float3(1, 1, 1));
+        LightHandle moving = _world.AddLight(far);
+        LightHandle other = _world.AddLight(Point(new Double3(-region * 2.5, 0, 0), 5, 1, new Float3(1, 1, 1)));
+        AssertMatches(_ => Vector3.Zero, Frame());
+
+        _world.SetLight(moving, near);
+        AssertMatches(p => Reference.Local(near, p, s_normal, grey, 0, 0.5f), Frame());
+
+        _world.RemoveLight(other);
+        LightDesc second = Point(new Double3(-0.5, -1, 9), 4, 0.02f, new Float3(0.3f, 0.6f, 1));
+        _world.RemoveLight(moving);
+        _world.AddLight(second);
+        AssertMatches(p => Reference.Local(second, p, s_normal, grey, 0, 0.5f), Frame());
+
+        LightHandle back = _world.AddLight(far);
+        AssertMatches(p => Reference.Local(second, p, s_normal, grey, 0, 0.5f), Frame());
+        _world.SetLight(back, near);
+        AssertMatches(p => Reference.Local(second, p, s_normal, grey, 0, 0.5f) + Reference.Local(near, p, s_normal, grey, 0, 0.5f), Frame());
+
+        // A view seeing thousands of regions still finds the lights near it
+        NewWorld();
+        AddQuad(Surface(new Float3(0.7f, 0.7f, 0.7f), 0.5f));
+        _world.AddLight(Point(new Double3(0.5, -0.5, 8), 6, 0.4f, new Float3(1, 1, 1)));
+        _world.AddLight(Point(new Double3(-1, 1, 9), 3, 0.16f, new Float3(1, 0.5f, 0.2f), isStatic: false));
+
+        Float4[] Perspective()
+        {
+            RenderView view = _harness.BareView(9);
+            view.World = _world;
+            view.EV100 = UnitEV100;
+            view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
+            _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+            _device.WaitForIdle();
+            Assert.Empty(_errors);
+            return _harness.ReadTarget();
+        }
+
+        Float4[] alone = Perspective();
+        for (int x = -19; x <= 19; x++)
+        {
+            for (int y = -19; y <= 19; y++)
+                _world.AddLight(Point(new Double3(x * region, y * region, 20 * region), 100, 1, new Float3(1, 1, 1)));
+        }
+        Float4[] crowded = Perspective();
+
+        Assert.True(alone.Any(p => p.X > 0.01f));
+        for (int i = 0; i < alone.Length; i++)
+            Assert.True(MathF.Abs(alone[i].X - crowded[i].X) <= 1e-5f + 1e-4f * alone[i].X, $"pixel {i}: {alone[i].X} alone, {crowded[i].X} among 1521 regions");
     }
 
     [Fact]
@@ -686,6 +767,23 @@ public sealed partial class LightingTests : IDisposable
         Float4[] profiled = Frame();
         for (int i = 0; i < plain.Length; i++)
             Assert.True(MathF.Abs(profiled[i].X - plain[i].X * 128 / 255f) <= 1e-4f + 0.01f * plain[i].X, $"profile pixel {i}: {profiled[i].X} against {plain[i].X}");
+
+        // V's first half covers from up round to down through right, the second back through left: full, then dark
+        byte[] texels = [.. Enumerable.Repeat((byte)255, 8), .. Enumerable.Repeat((byte)0, 8)];
+        Texture turning = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(2, 2, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        _device.UpdateTexture<byte>(turning, texels, new TextureRegion(0, 0, 0, 2, 2, 1, 0, 0));
+        _harness.Owned.Add(turning);
+        spot.IesProfile = turning;
+        spot.CookieSampler = SamplerDescription.Point;
+        _world.SetLight(handle, spot);
+        Float4[] turned = Frame();
+        for (int i = 0; i < plain.Length; i++)
+        {
+            Vector3 p = PixelPosition(i % Size, i / Size);
+            if (MathF.Abs(p.X) < 0.4f)
+                continue;
+            Assert.True(MathF.Abs(turned[i].X - (p.X > 0 ? plain[i].X : 0)) <= 1e-4f + 0.01f * plain[i].X, $"turned profile pixel {i}: {turned[i].X} against {plain[i].X} at x {p.X}");
+        }
     }
 
     private DecalDesc Decal(Double3 center, Double3 size, Float4 color, int priority = 0, bool isStatic = false, uint layer = ~0u) => new()
@@ -909,6 +1007,77 @@ public sealed partial class LightingTests : IDisposable
         _world.SetLight(handle, light with { Direction = Normalize(new Float3(0.05f, 0, 1)) });
         Frame();
         Assert.Equal(1, Stats.ShadowViewsDrawn);
+
+        // A skinned caster draws its light again only when its bones change
+        NewWorld();
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        _world.AddLight(light);
+        RenderableHandle skinnedCaster = AddCaster(1, 0.5, 6);
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        ushort[] bones = new ushort[24], weights = new ushort[24];
+        for (int v = 0; v < 6; v++)
+            (bones[v * 4], weights[v * 4]) = (1, 65535);
+        using GpuMesh skinned = _renderer.CreateMesh(new MeshData
+        {
+            VertexCount = 6,
+            Streams =
+            [
+                new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
+                new VertexStream { Semantic = VertexSemantic.BoneIndices, Format = VertexElementFormat.UShort4, Data = MemoryMarshal.AsBytes(bones.AsSpan()).ToArray() },
+                new VertexStream { Semantic = VertexSemantic.BoneWeights, Format = VertexElementFormat.UShort4_Norm, Data = MemoryMarshal.AsBytes(weights.AsSpan()).ToArray() },
+            ],
+            Indices = new uint[] { 0, 1, 2, 3, 4, 5 },
+        });
+        _world.SetMesh(skinnedCaster, skinned);
+        _world.SetBounds(skinnedCaster, new AABB(new Float3(-16, -16, -1), new Float3(16, 16, 1)));
+        Float4x4 identity = Float4x4.Identity;
+        _world.SetBones(skinnedCaster, [identity]);
+        Frame();
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
+        _world.SetBones(skinnedCaster, [identity]);
+        Frame();
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
+
+        // Eight object units left and four down at a quarter scale puts the caster where the moved caster above is
+        _world.SetBones(skinnedCaster, [new Float4x4(new Float4(1, 0, 0, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 1, 0), new Float4(-8, -4, 0, 1))]);
+        pixels = Frame();
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, -2, -1, 2), pixels, 0.6f);
+
+        // Casters tagged to update every frame keep their light drawing, static ones too beside moving ones
+        NewWorld();
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        _world.AddLight(ShadowSpot());
+        string everyFrame = CasterSource.Replace("Test/Caster", "Test/AnimatedCaster").Replace("\"LightMode\" = \"ShadowCaster\"", "\"LightMode\" = \"ShadowCaster\" \"ShadowUpdate\" = \"EveryFrame\"");
+        Material animated = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(everyFrame)));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [animated]);
+        Frame();
+        Frame();
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
+
+        NewWorld();
+        AddReceiver(albedo);
+        _world.AddLight(ShadowSpot());
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly | RenderableFlags.Static }, [animated]);
+        AddCaster(-1.5, -1.5, 6, half: 0.5);
+        Frame();
+        Frame();
+        Assert.Equal(2, Stats.ShadowViewsDrawn);
+        Frame();
+        Assert.Equal(2, Stats.ShadowViewsDrawn);
+
+        // A provider casting into a cached light draws it again
+        NewWorld();
+        AddReceiver(albedo);
+        _world.AddLight(ShadowSpot());
+        AddCaster(-1.5, -1.5, 6, half: 0.5);
+        Frame();
+        Frame();
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
+
+        _world.Providers.Add(new ShadowItem(_quad, Surface(new Float3(1, 1, 1))));
+        Frame();
+        Assert.True(Stats.ShadowViewsDrawn > 0);
     }
 
     [Fact]
@@ -935,19 +1104,22 @@ public sealed partial class LightingTests : IDisposable
 
         Frame();
         Assert.Equal(0, Stats.ShadowViewsDrawn);
-    }
 
-    private sealed class IndirectCount() : FrameFeature(FrameSlot.BeforeViews)
-    {
-        private BufferHandle _count;
+        // A moving caster reaching a light that only static ones cast into splits it
+        NewWorld();
+        AddReceiver(albedo);
+        _world.AddLight(ShadowSpot());
+        AddCaster(1, 0.5, 6, isStatic: true);
+        Frame();
+        Frame();
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
 
-        public override void Setup(FrameBuilder builder)
-        {
-            _count = builder.Buffer(RenderResourceID.Intern("Test.IndirectCount"), GraphBufferDesc.Structured(4, 4), usage: BufferAccess.TransferWrite);
-            builder.Export(_count);
-        }
-
-        public override void Render(FrameContext context) => context.Command.UpdateBuffer<uint>(context.Get(_count), 0, [0, 0, 0, 0]);
+        RenderableHandle arriving = AddCaster(-1.5, -1.5, 6, half: 0.5);
+        Frame();
+        _world.SetTransform(arriving, Double4x4.CreateTranslation(new Double3(-1.5, 1.5, 6)) * Double4x4.CreateScale(0.5 / 4));
+        Frame();
+        Assert.Equal(1, Stats.ShadowViewsDrawn);
+        Assert.Equal(1, Stats.ShadowCopiesMade);
     }
 
     // A square only shadows see, from a provider
@@ -1008,6 +1180,38 @@ public sealed partial class LightingTests : IDisposable
         _world.Globals.Set(GlobalAxis.Toggle("CASTER_WIND"), true);
         Frame();
         Assert.Equal(1, Stats.ShadowViewsDrawn);
+
+        // A keyword no caster reads leaves the cached shadow alone
+        NewWorld();
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        AddCaster(1, 0.5, 6);
+        Frame();
+        Frame();
+        _world.Globals.Set(GlobalAxis.Toggle("UNUSED_BY_CASTERS"), true);
+        Frame();
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
+
+        NewWorld();
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        _world.Add(new RenderableDesc
+        {
+            Mesh = FacingQuad,
+            Transform = Double4x4.CreateTranslation(_origin + new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.5),
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        }, [PBR(_ => { })]);
+        Frame();
+        Frame();
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
+
+        // A light with an IES profile turns GRAPHITE_LIGHT_MASKS on, which the caster's lit passes read and its ShadowCaster pass does not
+        Texture profile = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        _harness.Owned.Add(profile);
+        _world.AddLight(new LightDesc { Type = LightType.Spot, Position = new Double3(0, 0, -50), Direction = new Float3(0, 0, -1), Range = 1, Intensity = 0.1f, InnerAngle = 10, OuterAngle = 20, IesProfile = profile });
+        Frame();
+        Assert.Equal(VariantSpace.ToggleValues[1], _world.Globals.KeywordSnapshot.GetValueOrDefault(GlobalAxis.LightMasks.Name));
+        Assert.Equal(0, Stats.ShadowViewsDrawn);
     }
 
     [Fact]
@@ -1116,9 +1320,6 @@ public sealed partial class LightingTests : IDisposable
         sky.SetFloat("_Gradient", gradient);
         return sky;
     }
-
-    // The clip position of a pixel's centre, the first row at the top
-    private static (float X, float Y) PixelClip(int i) => ((i % Size + 0.5f) / Size * 2 - 1, (i / Size + 0.5f) / Size * 2 - 1);
 
     [Fact]
     public void SkyProbe_HoldsTheSkyInEveryDirection()
@@ -1884,230 +2085,5 @@ public sealed partial class LightingTests : IDisposable
 
             return Shade(ld, diffuse, ls, specular, v, n, albedo, metallic, roughness, share) * (V(light.Color) * light.Intensity);
         }
-    }
-
-    [Fact]
-    public void KeywordsNoCasterReads_LeaveCachedShadowsAlone()
-    {
-        AddReceiver(new Vector3(0.8f));
-        _world.AddLight(ShadowSpot());
-        AddCaster(1, 0.5, 6);
-        Frame();
-        Frame();
-        _world.Globals.Set(GlobalAxis.Toggle("UNUSED_BY_CASTERS"), true);
-        Frame();
-        Assert.Equal(0, Stats.ShadowViewsDrawn);
-    }
-
-    [Fact]
-    public void DirectionalLights_MatchProwlsLighting()
-    {
-        Vector3 albedo = new(0.6f, 0.6f, 0.6f);
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.4f));
-        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.3f, -0.2f, 1), Color = new Float3(1, 0.9f, 0.8f), Intensity = 0.05f };
-        LightDesc fill = new() { Type = LightType.Directional, Direction = new Float3(-0.5f, 0.5f, 1), Color = new Float3(0.2f, 0.3f, 1), Intensity = 0.02f };
-        _world.AddLight(sun);
-        _world.AddLight(fill);
-
-        AssertMatches(p => Reference.Directional(sun, p, s_normal, albedo, 0, 0.4f) + Reference.Directional(fill, p, s_normal, albedo, 0, 0.4f), Frame());
-    }
-
-    [Fact]
-    public void SkinnedCasters_DrawTheirLightAgainOnlyWhenTheirBonesChange()
-    {
-        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
-        LightDesc light = ShadowSpot();
-        _world.AddLight(light);
-        RenderableHandle caster = AddCaster(1, 0.5, 6);
-        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
-        ushort[] bones = new ushort[24], weights = new ushort[24];
-        for (int v = 0; v < 6; v++)
-            (bones[v * 4], weights[v * 4]) = (1, 65535);
-        using GpuMesh skinned = _renderer.CreateMesh(new MeshData
-        {
-            VertexCount = 6,
-            Streams =
-            [
-                new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
-                new VertexStream { Semantic = VertexSemantic.BoneIndices, Format = VertexElementFormat.UShort4, Data = MemoryMarshal.AsBytes(bones.AsSpan()).ToArray() },
-                new VertexStream { Semantic = VertexSemantic.BoneWeights, Format = VertexElementFormat.UShort4_Norm, Data = MemoryMarshal.AsBytes(weights.AsSpan()).ToArray() },
-            ],
-            Indices = new uint[] { 0, 1, 2, 3, 4, 5 },
-        });
-        _world.SetMesh(caster, skinned);
-        _world.SetBounds(caster, new AABB(new Float3(-16, -16, -1), new Float3(16, 16, 1)));
-        Float4x4 identity = Float4x4.Identity;
-        _world.SetBones(caster, [identity]);
-        Frame();
-        Assert.Equal(1, Stats.ShadowViewsDrawn);
-        _world.SetBones(caster, [identity]);
-        Frame();
-        Assert.Equal(0, Stats.ShadowViewsDrawn);
-
-        // Eight object units left and four down at a quarter scale puts the caster where the moved caster test does
-        _world.SetBones(caster, [new Float4x4(new Float4(1, 0, 0, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 1, 0), new Float4(-8, -4, 0, 1))]);
-        Float4[] pixels = Frame();
-        Assert.Equal(1, Stats.ShadowViewsDrawn);
-        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, -2, -1, 2), pixels, 0.6f);
-    }
-
-    [Fact]
-    public void CastersTaggedToUpdateEveryFrame_KeepTheirLightDrawing()
-    {
-        AddQuad(Surface(new Float3(0.8f, 0.8f, 0.8f)));
-        _world.AddLight(ShadowSpot());
-        string source = CasterSource.Replace("Test/Caster", "Test/AnimatedCaster").Replace("\"LightMode\" = \"ShadowCaster\"", "\"LightMode\" = \"ShadowCaster\" \"ShadowUpdate\" = \"EveryFrame\"");
-        Material animated = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(source)));
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [animated]);
-        Frame();
-        Frame();
-        Assert.Equal(1, Stats.ShadowViewsDrawn);
-    }
-
-    [Fact]
-    public void StaticCastersTaggedToUpdateEveryFrame_KeepDrawingBesideMovingOnes()
-    {
-        AddReceiver(new Vector3(0.8f));
-        _world.AddLight(ShadowSpot());
-        string source = CasterSource.Replace("Test/Caster", "Test/AnimatedStatic").Replace("\"LightMode\" = \"ShadowCaster\"", "\"LightMode\" = \"ShadowCaster\" \"ShadowUpdate\" = \"EveryFrame\"");
-        Material animated = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(source)));
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly | RenderableFlags.Static }, [animated]);
-        AddCaster(-1.5, -1.5, 6, half: 0.5);
-        Frame();
-        Frame();
-        Assert.Equal(2, Stats.ShadowViewsDrawn);
-        Frame();
-        Assert.Equal(2, Stats.ShadowViewsDrawn);
-    }
-
-    [Fact]
-    public void AProviderCastingIntoACachedLight_RedrawsIt()
-    {
-        AddReceiver(new Vector3(0.8f));
-        _world.AddLight(ShadowSpot());
-        AddCaster(-1.5, -1.5, 6, half: 0.5);
-        Frame();
-        Frame();
-        Assert.Equal(0, Stats.ShadowViewsDrawn);
-
-        _world.Providers.Add(new ShadowItem(_quad, Surface(new Float3(1, 1, 1))));
-        Frame();
-        Assert.True(Stats.ShadowViewsDrawn > 0);
-    }
-
-    [Fact]
-    public void AMovingCasterReachingAStaticOnlyLight_SplitsIt()
-    {
-        AddReceiver(new Vector3(0.8f));
-        _world.AddLight(ShadowSpot());
-        AddCaster(1, 0.5, 6, isStatic: true);
-        Frame();
-        Frame();
-        Assert.Equal(0, Stats.ShadowViewsDrawn);
-
-        RenderableHandle moving = AddCaster(-1.5, -1.5, 6, half: 0.5);
-        Frame();
-        _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(-1.5, 1.5, 6)) * Double4x4.CreateScale(0.5 / 4));
-        Frame();
-        Assert.Equal(1, Stats.ShadowViewsDrawn);
-        Assert.Equal(1, Stats.ShadowCopiesMade);
-    }
-
-    [Fact]
-    public void IesProfiles_TurnAroundTheirDirectionFromUp()
-    {
-        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
-        LightDesc spot = new()
-        {
-            Type = LightType.Spot,
-            Position = new Double3(0, 0, 6),
-            Direction = new Float3(0, 0, 1),
-            Up = new Float3(0, 1, 0),
-            Range = 10,
-            Intensity = 0.1f,
-            InnerAngle = 40,
-            OuterAngle = 50,
-            Static = true,
-        };
-        LightHandle handle = _world.AddLight(spot);
-        Float4[] plain = Frame();
-
-        // V's first half covers from up round to down through right, the second back through left: full, then dark
-        byte[] texels = [.. Enumerable.Repeat((byte)255, 8), .. Enumerable.Repeat((byte)0, 8)];
-        Texture profile = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(2, 2, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
-        _device.UpdateTexture<byte>(profile, texels, new TextureRegion(0, 0, 0, 2, 2, 1, 0, 0));
-        _harness.Owned.Add(profile);
-        spot.IesProfile = profile;
-        spot.CookieSampler = SamplerDescription.Point;
-        _world.SetLight(handle, spot);
-        Float4[] profiled = Frame();
-        for (int i = 0; i < plain.Length; i++)
-        {
-            Vector3 p = PixelPosition(i % Size, i / Size);
-            if (MathF.Abs(p.X) < 0.4f)
-                continue;
-            Assert.True(MathF.Abs(profiled[i].X - (p.X > 0 ? plain[i].X : 0)) <= 1e-4f + 0.01f * plain[i].X, $"pixel {i}: {profiled[i].X} against {plain[i].X} at x {p.X}");
-        }
-    }
-
-    [Fact]
-    public void StaticLights_MovingBetweenRegions_EmptyingAndRefillingThem_LightCorrectly()
-    {
-        Vector3 albedo = new(0.6f, 0.6f, 0.6f);
-        double region = StaticRegions<LightRecord>.RegionSize;
-        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
-        LightDesc near = Point(new Double3(0.5, 0.5, 8.5), 5, 0.03f, new Float3(1, 0.9f, 0.8f));
-        LightDesc far = Point(new Double3(region * 3.5, 0, 0), 5, 1, new Float3(1, 1, 1));
-        LightHandle moving = _world.AddLight(far);
-        LightHandle other = _world.AddLight(Point(new Double3(-region * 2.5, 0, 0), 5, 1, new Float3(1, 1, 1)));
-        AssertMatches(_ => Vector3.Zero, Frame());
-
-        _world.SetLight(moving, near);
-        AssertMatches(p => Reference.Local(near, p, s_normal, albedo, 0, 0.5f), Frame());
-
-        _world.RemoveLight(other);
-        LightDesc second = Point(new Double3(-0.5, -1, 9), 4, 0.02f, new Float3(0.3f, 0.6f, 1));
-        _world.RemoveLight(moving);
-        _world.AddLight(second);
-        AssertMatches(p => Reference.Local(second, p, s_normal, albedo, 0, 0.5f), Frame());
-
-        LightHandle back = _world.AddLight(far);
-        AssertMatches(p => Reference.Local(second, p, s_normal, albedo, 0, 0.5f), Frame());
-        _world.SetLight(back, near);
-        AssertMatches(p => Reference.Local(second, p, s_normal, albedo, 0, 0.5f) + Reference.Local(near, p, s_normal, albedo, 0, 0.5f), Frame());
-    }
-
-    [Fact]
-    public void AViewSeeingThousandsOfRegions_StillFindsTheLightsNearIt()
-    {
-        AddQuad(Surface(new Float3(0.7f, 0.7f, 0.7f), 0.5f));
-        _world.AddLight(Point(new Double3(0.5, -0.5, 8), 6, 0.4f, new Float3(1, 1, 1)));
-        _world.AddLight(Point(new Double3(-1, 1, 9), 3, 0.16f, new Float3(1, 0.5f, 0.2f), isStatic: false));
-
-        Float4[] Perspective()
-        {
-            RenderView view = _harness.BareView(9);
-            view.EV100 = UnitEV100;
-            view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin });
-            _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
-            _device.WaitForIdle();
-            Assert.Empty(_errors);
-            return _harness.ReadTarget();
-        }
-
-        Float4[] alone = Perspective();
-        double region = StaticRegions<LightRecord>.RegionSize;
-        for (int x = -19; x <= 19; x++)
-        {
-            for (int y = -19; y <= 19; y++)
-                _world.AddLight(Point(new Double3(x * region, y * region, 20 * region), 100, 1, new Float3(1, 1, 1)));
-        }
-        Float4[] crowded = Perspective();
-
-        Assert.True(alone.Any(p => p.X > 0.01f));
-        for (int i = 0; i < alone.Length; i++)
-            Assert.True(MathF.Abs(alone[i].X - crowded[i].X) <= 1e-5f + 1e-4f * alone[i].X, $"pixel {i}: {alone[i].X} alone, {crowded[i].X} among 1521 regions");
     }
 }
