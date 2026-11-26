@@ -61,50 +61,31 @@ public sealed class BuildSettings : ProjectSettingsBase
     /// </summary>
     public List<PlatformBuildProfile> PlatformProfiles = [];
 
-    /// <summary>
-    /// Returns (or lazily creates) the profile for the given target.
-    /// </summary>
-    public T GetProfile<T>(Type pipelineType) where T : PlatformBuildProfile
+    public T GetOrCreateProfile<T>() where T : PlatformBuildProfile, new()
     {
-        PlatformBuildProfile? profile = PlatformProfiles.FirstOrDefault(profile => pipelineType == profile.GetPipelineType());
-        if (profile == null)
-        {
-            profile = System.Activator.CreateInstance<T>();
-            PlatformProfiles.Add(profile);
-        }
-        return (T)profile;
+        T? profile = PlatformProfiles.OfType<T>().FirstOrDefault();
+        return profile != null ? profile : AddProfile(new T());
     }
 
-    /// <summary>
-    /// Returns or creates the profile for the given target.
-    /// If not present, returns null.
-    /// </summary>
-    public PlatformBuildProfile GetOrCreateProfile(Type pipelineType)
+    public PlatformBuildProfile? GetOrCreateProfile(Type pipelineType)
     {
-        PlatformBuildProfile? profile = PlatformProfiles.FirstOrDefault(profile => pipelineType == profile.GetPipelineType());
+        PlatformBuildProfile? profile = PlatformProfiles.FirstOrDefault(p => p.GetPipelineType() == pipelineType);
+        if (profile != null) return profile;
 
-        // If the profile is null, create the profile
-        if (profile == null)
+        foreach (Type type in EditorUtils.GetAllTypes())
         {
-            Type targetType = null;
-            foreach (Type type in EditorUtils.GetAllTypes())
-            {
-                if (!type.IsSubclassOf(typeof(PlatformBuildProfile)) || type == typeof(PlatformBuildProfile)) continue;
-                var check = Activator.CreateInstance(type) as PlatformBuildProfile;
-                if (check?.GetPipelineType() == pipelineType)
-                {
-                    targetType = type;
-                    break;
-                }
-            }
-
-            if (targetType != null)
-            {
-                profile = (PlatformBuildProfile)System.Activator.CreateInstance(targetType);
-                PlatformProfiles.Add(profile);
-                EditorRegistries.SaveSettings();
-            }
+            if (type.IsAbstract || !type.IsSubclassOf(typeof(PlatformBuildProfile))) continue;
+            PlatformBuildProfile candidate = (PlatformBuildProfile)Activator.CreateInstance(type)!;
+            if (candidate.GetPipelineType() == pipelineType)
+                return AddProfile(candidate);
         }
+        return null;
+    }
+
+    T AddProfile<T>(T profile) where T : PlatformBuildProfile
+    {
+        PlatformProfiles.Add(profile);
+        EditorRegistries.SaveSettings();
         return profile;
     }
 

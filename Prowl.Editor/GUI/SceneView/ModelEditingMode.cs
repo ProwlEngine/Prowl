@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI.SceneView.Editors;
 using Prowl.Editor.Modeling;
 using Prowl.Editor.Projects;
 using Prowl.Rosetta;
@@ -647,6 +648,8 @@ public static class ModelEditingMode
         public bool WriteRecovery()
         {
             if (!IsDirty || IsolatedWorld.World is not { } world || RecoveryPath(Guid) is not { } recovery) return false;
+            // A transform or operator part way through shows its preview in the meshes, so the next auto save writes instead
+            if (SceneToolManager.Get<ModelMeshTool>() is { InProgress: true }) return false;
             try
             {
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(recovery)!);
@@ -680,6 +683,7 @@ public static class ModelEditingMode
         {
             if (IsolatedWorld.World is not { } world || Project.Current == null) return false;
 
+            SceneToolManager.Get<ModelMeshTool>()?.CancelPending();
             PMeshDocument document = Gather(world);
             string absolutePath = System.IO.Path.Combine(Project.Current.AssetsPath, relativePath);
             try
@@ -731,6 +735,7 @@ public static class ModelEditingMode
         {
             Unwatch();
             DeleteRecovery(Guid);
+            SceneToolManager.Get<ModelMeshTool>()?.Leave();
             IsolatedWorld.CloseWorld(this);
             IsolatedWorld.End(this);
             Debug.Log("[Model] Exited editing mode.");

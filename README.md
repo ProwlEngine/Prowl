@@ -327,17 +327,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 		</tr>
 		<tr>
             <td align="center">
-                <a href="https://github.com/ZeppelinGames">
-                    <img src="https://avatars.githubusercontent.com/u/31507417?v=4" width="100;" alt="ZeppelinGames"/>
-                    <br />
-                    <sub><b>Mark Saba</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/10xJosh">
                     <img src="https://avatars.githubusercontent.com/u/55113224?v=4" width="100;" alt="10xJosh"/>
                     <br />
                     <sub><b>Josh Davis</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/ZeppelinGames">
+                    <img src="https://avatars.githubusercontent.com/u/31507417?v=4" width="100;" alt="ZeppelinGames"/>
+                    <br />
+                    <sub><b>Mark Saba</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -348,17 +348,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/ArtemkaKun">
-                    <img src="https://avatars.githubusercontent.com/u/36485221?v=4" width="100;" alt="ArtemkaKun"/>
-                    <br />
-                    <sub><b>Artem Yurchenko</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/keithwill">
                     <img src="https://avatars.githubusercontent.com/u/33398353?v=4" width="100;" alt="keithwill"/>
                     <br />
                     <sub><b>Keith Williams</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/ArtemkaKun">
+                    <img src="https://avatars.githubusercontent.com/u/36485221?v=4" width="100;" alt="ArtemkaKun"/>
+                    <br />
+                    <sub><b>Artem Yurchenko</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -399,40 +399,26 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/treviasxk">
-                    <img src="https://avatars.githubusercontent.com/u/24716901?v=4" width="100;" alt="treviasxk"/>
+                <a href="https://github.com/CodyDream">
+                    <img src="https://avatars.githubusercontent.com/u/153939536?v=4" width="100;" alt="CodyDream"/>
                     <br />
-                    <sub><b>Trevias Xk</b></sub>
+                    <sub><b>Cody Dream</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/recore67">
-                    <img src="https://avatars.githubusercontent.com/u/29689492?v=4" width="100;" alt="recore67"/>
+                <a href="https://github.com/japsuu">
+                    <img src="https://avatars.githubusercontent.com/u/55388432?v=4" width="100;" alt="japsuu"/>
                     <br />
-                    <sub><b>salman ameeri</b></sub>
+                    <sub><b>Jasper Honkasalo</b></sub>
                 </a>
             </td>
 		</tr>
 		<tr>
             <td align="center">
-                <a href="https://github.com/notgiven688">
-                    <img src="https://avatars.githubusercontent.com/u/37874600?v=4" width="100;" alt="notgiven688"/>
+                <a href="https://github.com/UBTL">
+                    <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
                     <br />
-                    <sub><b>notgiven688</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/Ywingpilot2">
-                    <img src="https://avatars.githubusercontent.com/u/136618828?v=4" width="100;" alt="Ywingpilot2"/>
-                    <br />
-                    <sub><b>Y wingpilot2</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/JothamR">
-                    <img src="https://avatars.githubusercontent.com/u/5410231?v=4" width="100;" alt="JothamR"/>
-                    <br />
-                    <sub><b>Jotham</b></sub>
+                    <sub><b>Uncle Bane</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -443,17 +429,24 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/UBTL">
-                    <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
+                <a href="https://github.com/JothamR">
+                    <img src="https://avatars.githubusercontent.com/u/5410231?v=4" width="100;" alt="JothamR"/>
                     <br />
-                    <sub><b>Uncle Bane</b></sub>
+                    <sub><b>Jotham</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/japsuu">
-                    <img src="https://avatars.githubusercontent.com/u/55388432?v=4" width="100;" alt="japsuu"/>
+                <a href="https://github.com/Ywingpilot2">
+                    <img src="https://avatars.githubusercontent.com/u/136618828?v=4" width="100;" alt="Ywingpilot2"/>
                     <br />
-                    <sub><b>Jasper Honkasalo</b></sub>
+                    <sub><b>Y wingpilot2</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/notgiven688">
+                    <img src="https://avatars.githubusercontent.com/u/37874600?v=4" width="100;" alt="notgiven688"/>
+                    <br />
+                    <sub><b>notgiven688</b></sub>
                 </a>
             </td>
 		</tr>

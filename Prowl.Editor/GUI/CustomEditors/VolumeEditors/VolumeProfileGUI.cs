@@ -168,8 +168,8 @@ public static class VolumeProfileGUI
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight).Padding(m.PaddingLarge, 0, 0, 0).Gap(2).Enter())
         {
             using (paper.Box($"{id}_ov_wrap").Width(UnitValue.Auto).Height(m.RowHeight).Enter())
-                using (paper.Box($"{id}_ov_c").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
-                    Origami.Checkbox(paper, $"{id}_ov", parameter.Override, v => { record("Toggle Parameter Override"); parameter.Override = v; }).NoLabel().Show();
+            using (paper.Box($"{id}_ov_c").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+                Origami.Checkbox(paper, $"{id}_ov", parameter.Override, v => { record("Toggle Parameter Override"); parameter.Override = v; }).NoLabel().Show();
 
             using (paper.Column($"{id}_v").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
             {
@@ -202,7 +202,7 @@ public static class VolumeProfileGUI
 
     private static object? Clamp(object? value, RangeAttribute range, Type type)
         => type == typeof(float)
-            ? Math.Clamp((float)(value ?? 0f), range.Min, range.Max)
+            ? (object?)Math.Clamp((float)(value ?? 0f), range.Min, range.Max)
             : Math.Clamp((int)(value ?? 0), (int)MathF.Round(range.Min), (int)MathF.Round(range.Max));
 
     /// <summary>

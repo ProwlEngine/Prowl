@@ -1241,6 +1241,8 @@
   "csg.rebuild_tip": "Regenerates this model's meshes from its brushes.",
   "csg.centre_all_pivots": "Centre All Pivots",
   "csg.centre_all_pivots_tip": "Moves the pivot of every brush and group in this model to its centre, leaving the shapes where they are.",
+  "csg.apply_rotation_scale": "Apply Rotation & Scale",
+  "csg.apply_rotation_scale_tip": "Bakes the rotation and scale of this model and everything in it into the brushes' points, keeping every pivot and texture density.",
   "csg.invert_brushes": "Invert Brushes",
   "csg.invert_brushes_tip": "Turns every additive brush and group subtractive and every subtractive one additive, for moving between the additive and subtractive workflows. Intersecting ones are left alone.",
   "csg.clip_selected": "Cutting {{count}} selected brushes.",

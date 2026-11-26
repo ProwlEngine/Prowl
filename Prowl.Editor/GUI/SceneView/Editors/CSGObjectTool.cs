@@ -114,7 +114,7 @@ public sealed class CSGObjectTool : SceneTool
             else Selection.AddToSelection(target);
         }
         else Selection.Select(target);
-        Selection.Ping(target.Identifier);
+        if (Selection.IsSelected(target)) Selection.Ping(target.Identifier);
     }
 
     // Brushes under the last click, nearest first, and which of them that click took

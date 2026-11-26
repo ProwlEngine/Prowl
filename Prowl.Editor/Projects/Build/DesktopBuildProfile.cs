@@ -173,7 +173,6 @@ public sealed class DesktopBuildProfileDrawer : IBuildProfileDrawer
     // Found again through the build settings, which a settings reload refills with new profiles.
     private static void Record(DesktopBuildProfile desktop, string name)
     {
-        Type pipeline = desktop.GetPipelineType();
-        Undo.RecordObject(() => EditorRegistries.GetSettings<BuildSettings>().GetProfile<DesktopBuildProfile>(pipeline), UndoOwner.OfSettings(typeof(BuildSettings)), name);
+        Undo.RecordObject(() => EditorRegistries.GetSettings<BuildSettings>().GetOrCreateProfile<DesktopBuildProfile>(), UndoOwner.OfSettings(typeof(BuildSettings)), name);
     }
 }

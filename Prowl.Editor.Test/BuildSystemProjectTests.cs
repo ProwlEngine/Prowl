@@ -879,7 +879,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     // ---------------------------------------------------------------- DesktopTargetValidationTests
 
     private static DesktopBuildProfile Profile()
-        => EditorRegistries.GetSettings<BuildSettings>().GetProfile<DesktopBuildProfile>(typeof(DesktopBuildPipeline));
+        => EditorRegistries.GetSettings<BuildSettings>().GetOrCreateProfile<DesktopBuildProfile>();
 
     private BuildSettings SettingsFor(PlatformTarget target)
     {
