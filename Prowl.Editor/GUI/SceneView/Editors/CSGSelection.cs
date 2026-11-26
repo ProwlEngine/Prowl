@@ -326,15 +326,24 @@ public static class CSGSelection
         }
     }
 
-    /// <summary>Moves each pivot onto its solid's centre without moving the geometry.</summary>
-    public static void CentrePivot()
+    /// <summary>Moves each selected pivot onto its solid's centre without moving the geometry.</summary>
+    public static void CentrePivot() => CentrePivots(Brushes(), Groups().Where(g => g.GetComponent<CSGBrush>().IsNotValid()).ToList(), "Centre CSG Pivot");
+
+    /// <summary>Moves the pivot of every brush and group in a model onto its solid's centre without moving the geometry.</summary>
+    public static void CentreAllPivots(CSGModel model)
     {
-        List<CSGBrush> brushes = Brushes();
-        List<CSGGroup> groups = Groups().Where(g => g.GetComponent<CSGBrush>().IsNotValid()).ToList();
+        var groups = new List<CSGGroup>();
+        CollectGroups(model.GameObject, groups);
+        CentrePivots(BrushesIn(model), [.. groups.Where(g => g.GetComponent<CSGBrush>().IsNotValid())], "Centre All CSG Pivots");
+    }
+
+    private static void CentrePivots(List<CSGBrush> brushes, List<CSGGroup> groups, string name)
+    {
+        brushes.RemoveAll(b => b.Shape == null);
         if (brushes.Count == 0 && groups.Count == 0) return;
 
-        Record("Centre CSG Pivot", brushes.Select(b => b.GameObject).Concat(groups.Select(g => g.GameObject))
-            .SelectMany(go => go.Children.Prepend(go)));
+        Record(name, brushes.Select(b => b.GameObject).Concat(groups.Select(g => g.GameObject))
+            .SelectMany(go => go.Children.Prepend(go)).Distinct());
 
         foreach (CSGBrush brush in brushes)
             MovePivot(brush, CSGBrushGeometry.Centroid(brush.Shape));
