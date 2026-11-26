@@ -196,8 +196,23 @@ public sealed class ModelMeshTool : SceneTool
         }
     }
 
-    private void Leave()
+    /// <summary>Whether a transform or operator is part way through, the meshes showing its preview rather than a committed edit.</summary>
+    internal bool InProgress => _modal != null || _objectModal != null || _operator != null || _loopCut;
+
+    /// <summary>Leaves edit mode, putting back whatever was part way through.</summary>
+    internal void Leave()
     {
+        CancelPending();
+        _edited.Clear();
+        _selection.Clear();
+        _hidden.Clear();
+        _meshes.Clear();
+    }
+
+    /// <summary>Cancels whatever transform or operator is part way through, staying in edit mode.</summary>
+    internal void CancelPending()
+    {
+        _edited.RemoveAll(m => m.IsNotValid());
         CancelModal();
         EndObjectModal(cancel: true);
         if (_loopCut)
@@ -211,18 +226,9 @@ public sealed class ModelMeshTool : SceneTool
         if (_operator != null)
         {
             EndOperator();
-            foreach ((ModelObject model, (GeometrySnapshot mesh, _)) in _start)
-                if (model.IsValid())
-                {
-                    model.Mesh.Restore(mesh);
-                    model.RefreshPreview();
-                }
+            RestoreStart();
             _start.Clear();
         }
-        _edited.Clear();
-        _selection.Clear();
-        _hidden.Clear();
-        _meshes.Clear();
     }
 
     public override void OnSceneInput(SceneToolContext ctx)
@@ -2141,6 +2147,7 @@ public sealed class ModelMeshTool : SceneTool
     {
         foreach ((ModelObject model, (GeometrySnapshot mesh, ModelEditPart selection)) in _start)
         {
+            if (model.IsNotValid()) continue;
             model.Mesh.Restore(mesh);
             _selection[model] = FromIndices(model.Mesh, selection);
             model.RefreshPreview();
