@@ -137,7 +137,59 @@ public sealed class AmbientOcclusion : VolumeComponent<G.Gtao>
     }
 }
 
-/// <summary>Stochastic screen space reflections over the opaque scene.</summary>
+/// <summary>
+/// Realtime global illumination on a deferred camera: bounced light and sky occlusion traced on screen and through
+/// voxels of the scene in a box around the camera. Past the box the baked light stands. The box belongs to the scene,
+/// so where several cameras ask for one the last to draw places it.
+/// </summary>
+[VolumeComponentMenu("Lighting/Global Illumination")]
+public sealed class GlobalIllumination : VolumeComponent<G.WorldGI>
+{
+    public VolumeParameter<bool> Enabled = new(false);
+    public VolumeParameter<EffectResolution> Resolution = new(EffectResolution.Quarter);
+    [Range(0f, 4f)] public VolumeParameter<int> SpatialPasses = new(4);
+    [Range(1f, 64f)] public VolumeParameter<int> MaxHistory = new(32);
+    public VolumeParameter<bool> ScreenTrace = new(true);
+    public VolumeParameter<bool> DirectionalOcclusion = new(true);
+    public VolumeParameter<float> OcclusionRadius = new(1f);
+    public VolumeParameter<float> OcclusionThickness = new(0.3f);
+
+    /// <summary>The edge of one voxel in metres.</summary>
+    public VolumeParameter<float> VoxelSize = new(0.2f);
+
+    /// <summary>Voxels along each side of the box, taken down to a multiple of 32.</summary>
+    [Range(32f, 512f)] public VolumeParameter<int> VoxelResolution = new(352);
+
+    /// <summary>The frames a full update of the voxels is spread over.</summary>
+    [Range(1f, 64f)] public VolumeParameter<int> VoxelUpdateFrames = new(8);
+
+    public override bool IsActive => Enabled.Value;
+
+    protected override G.WorldGI CreateFeature(G.Renderer renderer) => new(renderer);
+
+    protected override void Apply(G.WorldGI feature, Camera camera)
+    {
+        feature.Resolution = (G.EffectResolution)Resolution.Value;
+        feature.SpatialPasses = SpatialPasses;
+        feature.MaxHistory = MaxHistory;
+        feature.ScreenTrace = ScreenTrace;
+        feature.DirectionalOcclusion = DirectionalOcclusion;
+        feature.OcclusionRadius = OcclusionRadius;
+        feature.OcclusionThickness = OcclusionThickness;
+
+        Float3 position = camera.Transform.Position;
+        int side = Maths.Clamp(VoxelResolution.Value / 32 * 32, 32, 512);
+        camera.GameObject.Scene.Rendering.RequestVoxels(new G.VoxelVolumeDesc
+        {
+            Center = new Double3(position.X, position.Y, position.Z),
+            VoxelSize = Maths.Max(VoxelSize.Value, 0.01f),
+            Resolution = new Int3(side),
+            UpdateFrames = Maths.Max(VoxelUpdateFrames.Value, 1),
+        });
+    }
+}
+
+/// <summary>Stochastic screen space reflections on a deferred camera's GBuffer surfaces.</summary>
 [VolumeComponentMenu("Lighting/Screen Space Reflections")]
 public sealed class ScreenSpaceReflections : VolumeComponent<G.ScreenSpaceReflections>
 {

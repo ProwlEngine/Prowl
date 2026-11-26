@@ -37,6 +37,37 @@ public sealed class SmaaSettings
     [Range(0.05f, 0.2f)] public float EdgeThreshold = 0.1f;
 }
 
+/// <summary>Short shadows marched against a deferred camera's depth, for the small gaps shadow maps miss.</summary>
+[Serializable]
+public sealed class ContactShadowSettings
+{
+    /// <summary>How far a ray reaches, as a part of the pixel's distance from the camera. 0 turns them off.</summary>
+    [Range(0f, 0.2f)] public float Length = 0f;
+
+    /// <summary>Depth samples a ray takes.</summary>
+    [Range(1f, 64f)] public int Steps = 8;
+
+    /// <summary>How thick what the depth shows is taken to be, as a part of the pixel's distance from the camera.</summary>
+    [Range(0f, 0.2f)] public float Thickness = 0.02f;
+
+    /// <summary>Whether the point and spot lights that cast shadows march too, each at the cost of the steps.</summary>
+    public bool LocalLights = false;
+}
+
+/// <summary>
+/// Screen space displacement on a deferred camera: surfaces whose material has a height scale are pushed out along
+/// their normals by its height map.
+/// </summary>
+[Serializable]
+public sealed class DisplacementSettings
+{
+    /// <summary>The pixels between the corners of the grid that lifts the surfaces. Smaller follows finer relief and costs more. 0 turns it off.</summary>
+    [Range(0f, 16f)] public int Cell = 2;
+
+    /// <summary>The pixels over which the faces at a hard edge lean toward each other, so they stay joined as they lift.</summary>
+    [Range(0f, 8f)] public int CreaseBlend = 3;
+}
+
 /// <summary>Temporal anti aliasing: jittered frames blended over time.</summary>
 [Serializable]
 public sealed class TaaSettings

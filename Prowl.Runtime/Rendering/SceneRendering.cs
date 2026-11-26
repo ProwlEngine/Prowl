@@ -90,6 +90,27 @@ public sealed class SceneRendering : IDisposable
     /// <summary>The world if it was made, without making one.</summary>
     public RenderWorld? WorldIfMade => _world;
 
+    private VoxelVolumeDesc _voxels;
+    private ulong _voxelsFrame = ulong.MaxValue;
+    private bool _hasVoxels;
+
+    /// <summary>Asks for the scene's voxel volume this frame. The world keeps one while something asks every frame.</summary>
+    internal void RequestVoxels(in VoxelVolumeDesc desc)
+    {
+        _voxels = desc;
+        _voxelsFrame = Graphics.FrameIndex;
+    }
+
+    private void SyncVoxels(RenderWorld world)
+    {
+        bool wanted = _voxelsFrame != ulong.MaxValue && Graphics.FrameIndex - _voxelsFrame <= 1;
+        if (wanted)
+            world.SetVoxelVolume(_voxels);
+        else if (_hasVoxels)
+            world.SetVoxelVolume(null);
+        _hasVoxels = wanted;
+    }
+
     /// <summary>Adds a component to its scene's rendering, for OnEnable.</summary>
     public static void Join(IRenderSync member, GameObject gameObject)
     {
@@ -230,6 +251,7 @@ public sealed class SceneRendering : IDisposable
 
         SyncEnvironment(world);
         SyncProbes(world);
+        SyncVoxels(world);
         Epoch++;
         RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }

@@ -121,6 +121,10 @@ public class Camera : Component
     /// <summary>Which surfaces a deferred camera draws depth for before its GBuffer, so hidden pixels are never kept.</summary>
     [ShowIf(nameof(IsDeferred))] public EarlyDepth EarlyDepth = EarlyDepth.All;
 
+    [ShowIf(nameof(IsDeferred))] public ContactShadowSettings ContactShadows = new();
+
+    [ShowIf(nameof(IsDeferred))] public DisplacementSettings Displacement = new();
+
     private bool UsesFxaa => AntiAliasing == AntiAliasingMode.FXAA;
     private bool UsesSmaa => AntiAliasing == AntiAliasingMode.SMAA;
     private bool UsesTaa => AntiAliasing == AntiAliasingMode.TAA;
@@ -487,6 +491,11 @@ public class Camera : Component
         view.Ldr = !HDR;
         view.Path = RenderingPath;
         view.EarlyDepth = EarlyDepth;
+        ContactShadowSettings contact = ContactShadows ?? new();
+        view.ContactShadows = new(contact.Length, contact.Steps, contact.Thickness, contact.LocalLights);
+        DisplacementSettings displacement = Displacement ?? new();
+        view.DisplacementCell = displacement.Cell;
+        view.DisplacementCreaseBlend = displacement.CreaseBlend;
         view.Order = Depth;
         view.Features = null;
         view.Keywords = null;
