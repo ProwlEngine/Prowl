@@ -176,6 +176,41 @@ public static class CSGSelection
         if (ReferenceEquals(created.Parent, source.Parent)) created.SiblingIndex = source.SiblingIndex + 1;
     }
 
+    /// <summary>
+    /// Swaps every additive brush and group under a model for subtractive and back, intersecting ones left alone, so a
+    /// model can move between the additive and subtractive workflows.
+    /// </summary>
+    public static void InvertOperations(CSGModel model)
+    {
+        var changed = new List<EngineObject>();
+        var groups = new List<CSGGroup>();
+        CollectGroups(model.GameObject, groups);
+        foreach (CSGBrush brush in BrushesIn(model)) if (brush.Operation != Operation.Intersect) changed.Add(brush);
+        foreach (CSGGroup group in groups) if (group.Operation != Operation.Intersect) changed.Add(group);
+        if (changed.Count == 0) return;
+
+        Undo.RecordObjects(changed, "Invert CSG Brushes");
+        foreach (EngineObject item in changed)
+        {
+            if (item is CSGBrush brush) brush.Operation = Inverted(brush.Operation);
+            else if (item is CSGGroup group) group.Operation = Inverted(group.Operation);
+        }
+        model.SetDirty();
+    }
+
+    private static Operation Inverted(Operation operation) => operation == Operation.Additive ? Operation.Subtractive : Operation.Additive;
+
+    private static void CollectGroups(GameObject parent, List<CSGGroup> result)
+    {
+        foreach (GameObject child in parent.Children)
+        {
+            if (child.GetComponent<CSGModel>().IsValid()) continue;
+            CSGGroup group = child.GetComponent<CSGGroup>();
+            if (group.IsValid()) result.Add(group);
+            CollectGroups(child, result);
+        }
+    }
+
     /// <summary>Every brush under a model, nested models excluded.</summary>
     public static List<CSGBrush> BrushesIn(CSGModel model)
     {

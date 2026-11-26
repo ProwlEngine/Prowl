@@ -1239,6 +1239,8 @@
   "csg.rebuild": "Rebuild",
   "csg.lightmap_rebuild_uvs": "Rebuild Lightmap UVs",
   "csg.rebuild_tip": "Regenerates this model's meshes from its brushes.",
+  "csg.invert_brushes": "Invert Brushes",
+  "csg.invert_brushes_tip": "Turns every additive brush and group subtractive and every subtractive one additive, for moving between the additive and subtractive workflows. Intersecting ones are left alone.",
   "csg.clip_selected": "Cutting {{count}} selected brushes.",
   "csg.clip_all": "Nothing selected, so the cut applies to every brush in the model.",
   "csg.clip_front": "Behind",

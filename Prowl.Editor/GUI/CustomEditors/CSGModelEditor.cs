@@ -31,6 +31,10 @@ public class CSGModelEditor : CustomEditor
         paper.Box($"{id}_sp2").Height(4);
         Origami.Button(paper, $"{id}_rebuild", Loc.Get("csg.rebuild"), model.Rebuild).Tooltip(Loc.Get("csg.rebuild_tip")).Show();
 
+        paper.Box($"{id}_sp_inv").Height(4);
+        Origami.Button(paper, $"{id}_invert", Loc.Get("csg.invert_brushes"), () => GUI.SceneView.Editors.CSGSelection.InvertOperations(model))
+            .Tooltip(Loc.Get("csg.invert_brushes_tip")).Show();
+
         if (!model.GenerateLightmapUVs || !model.LightmapUVsStale) return;
 
         paper.Box($"{id}_sp3").Height(4);
