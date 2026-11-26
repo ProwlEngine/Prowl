@@ -46,6 +46,12 @@ public static class RendererOutputs
     /// </summary>
     public const string GBufferOffset = "Graphite.GBuffer.Offset";
 
+    /// <summary>
+    /// A deferred view's screen space reflections: in rgb the light its top specular lobe reflects, in a how far the
+    /// trace is trusted over the reflection probes. See <see cref="ScreenSpaceReflections"/>.
+    /// </summary>
+    public const string Reflections = "Graphite.Reflections";
+
     /// <summary>A texture of the view's cascade depth, once its cascades are drawn.</summary>
     public const string Cascades = "Graphite.Cascades";
 

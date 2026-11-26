@@ -1,13 +1,12 @@
-#pragma variant SSR COPY RAYCAST BLUR RESOLVE TEMPORAL REPROJECT COMBINE
-// Stochastic screen space reflections. RayCast traces a GGX importance sampled ray per pixel against the depth,
-// SceneBlur builds the convolved scene pyramid, Resolve gathers neighbouring rays weighted by BRDF over pdf and picks a
-// pyramid level by a roughness cone, Temporal reprojects and clamps against history, Reproject moves last frame's
-// result by motion for one bounce of feedback, and Combine swaps the probes' share of the top specular lobe for the
-// trace. Depth is reversed, normals are the G-buffer's world normals turned into the view matrix's space, and the top
-// lobe's reflectance and roughness come from the material target.
+#pragma variant SSR RAYCAST BLUR RESOLVE TEMPORAL REPROJECT
+// Stochastic screen space reflections of a deferred view, traced before its lighting. Reproject moves last frame's
+// opaque scene by motion, which is what the rays reflect, RayCast traces a GGX importance sampled ray per pixel
+// against the depth, Blur builds the convolved scene pyramid, Resolve gathers neighbouring rays weighted by BRDF over
+// pdf and picks a pyramid level by a roughness cone, and Temporal reprojects and clamps against history. The lighting
+// then swaps the probes' share of the top specular lobe for the trace. Depth is reversed, normals are the scene's
+// world normals turned into the view matrix's space, and the roughness is the GBuffer's.
 
 #include "Graphite/Internal/PostView.glsl"
-
 
 
 vec3 SsrViewNormal(Graphite_ViewData view, vec2 encoded) { return normalize(mat3(view.view) * Graphite_OctDecode(encoded)); }
@@ -20,11 +19,27 @@ vec3 SsrCameraToSurface(Graphite_ViewData view, vec2 uv, vec3 viewPos)
     return normalize(viewPos);
 }
 
+#if defined(SSR_RAYCAST) || defined(SSR_RESOLVE)
+#include "Graphite/GBuffer.glsl"
+
+uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferSurface;
+uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferOffset;
+uniform float Graphite_GBufferDisplaced;
+
+// The roughness the GBuffer holds at a pixel of the view, under 0 where it holds no surface
+float SsrRoughness(ivec2 pixel)
+{
+    if (Graphite_GBufferDisplaced > 0.5)
+        pixel += ivec2(round(Graphite_Fetch(Graphite_GBufferOffset, pixel, 0).rg));
+    vec4 surface = Graphite_Fetch(Graphite_GBufferSurface, pixel, 0);
+    return (uint(surface.a * 255.0 + 0.5) & 15u) == GRAPHITE_MODEL_NONE ? -1.0 : surface.r;
+}
+#endif
+
 #if defined(SSR_RAYCAST)
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _HiZ;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraNormalsTexture;
-uniform GRAPHITE_SCREEN_TEXTURE _MaterialTexture;
 uniform sampler2D _Noise;
 uniform vec4 _JitterSizeAndOffset;
 uniform float _NumSteps;
@@ -94,13 +109,13 @@ void main()
 {
     ssr_View = Graphite_PostView();
     float depth = Graphite_Sample(_CameraDepthTexture, vUV).r;
-    if (depth <= 0.0)
+    float roughness = SsrRoughness(ivec2(vUV * _ScreenSize));
+    if (depth <= 0.0 || roughness < 0.0)
     {
         outColor = vec4(0.0);
         return;
     }
     vec3 viewNormal = SsrViewNormal(ssr_View, Graphite_Sample(_CameraNormalsTexture, vUV).xy);
-    float roughness = Graphite_Sample(_MaterialTexture, vUV).a;
     vec3 viewPos = Graphite_PostViewPosition(ssr_View, vUV, depth);
     vec3 V = SsrCameraToSurface(ssr_View, vUV, viewPos);
 
@@ -135,7 +150,6 @@ void main()
 uniform GRAPHITE_SCREEN_TEXTURE _RayCast;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
 uniform GRAPHITE_SCREEN_TEXTURE _CameraNormalsTexture;
-uniform GRAPHITE_SCREEN_TEXTURE _MaterialTexture;
 uniform sampler2D _Noise;
 uniform vec2 _NoiseSize;
 uniform vec4 _JitterSizeAndOffset;
@@ -147,6 +161,8 @@ uniform float _MaxMipMap;
 uniform int _RayReuse;
 uniform int _UseNormalization;
 uniform int _Fireflies;
+// 0 while the view has no last frame to reflect
+uniform float _SourceValid;
 uniform GRAPHITE_SCREEN_TEXTURE _Scene0;
 uniform GRAPHITE_SCREEN_TEXTURE _Scene1;
 uniform GRAPHITE_SCREEN_TEXTURE _Scene2;
@@ -193,8 +209,13 @@ float EdgeFade(vec2 pos, float value)
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
+    float roughness = SsrRoughness(ivec2(vUV * _ScreenSize));
+    if (roughness < 0.0)
+    {
+        outColor = vec4(0.0);
+        return;
+    }
     vec3 viewNormal = SsrViewNormal(view, Graphite_Sample(_CameraNormalsTexture, vUV).xy);
-    float roughness = Graphite_Sample(_MaterialTexture, vUV).a;
     float depth = max(Graphite_Sample(_CameraDepthTexture, vUV).r, 1e-7);
     vec3 viewPos = Graphite_PostViewPosition(view, vUV, depth);
     vec3 V = -SsrCameraToSurface(view, vUV, viewPos);
@@ -226,7 +247,7 @@ void main()
         float mip = clamp(log2(max(1e-5, coneRadius) * max(_ResolveSize.x, _ResolveSize.y)), 0.0, maxMip);
         vec4 s;
         s.rgb = SamplePyramid(hitUV, mip);
-        s.a = EdgeFade(hitUV, _EdgeFactor) * mask;
+        s.a = EdgeFade(hitUV, _EdgeFactor) * mask * _SourceValid;
         if (_Fireflies == 1)
             s.rgb /= 1.0 + Graphite_Luminance(s.rgb);
         result += s * weight;
@@ -290,48 +311,6 @@ void main()
     vec4 previous = Graphite_Sample(_MainTex, vUV - Graphite_Sample(_CameraMotionVectorsTexture, vUV).rg);
     outColor = vec4(previous.rgb * Graphite_PostExposureRatio(Graphite_PostView()), previous.a);
 }
-#elif defined(SSR_COMBINE)
-// A fullscreen pass, whose pixels need not be the view's, so it finds probes through the trees rather than the bins
-#define GRAPHITE_SPATIAL_TREES 1
-#include "Graphite/Probes.glsl"
-#include "Graphite/Ambient.glsl"
-
-uniform GRAPHITE_SCREEN_TEXTURE _ReflectionBuffer;
-uniform GRAPHITE_SCREEN_TEXTURE _CameraDepthTexture;
-uniform GRAPHITE_SCREEN_TEXTURE _CameraNormalsTexture;
-uniform GRAPHITE_SCREEN_TEXTURE _MaterialTexture;
-
-// The scene shaded the top lobe with reflectance times the probes, its sky dimmed by the screen occlusion, so the trace
-// takes the probes' place by its confidence
-void main()
-{
-    Graphite_ViewData view = Graphite_PostView();
-    vec4 scene = Graphite_SampleSource(vUV);
-    vec4 reflection = Graphite_Sample(_ReflectionBuffer, vUV);
-    vec4 material = Graphite_Sample(_MaterialTexture, vUV);
-    float confidence = reflection.a * reflection.a;
-    if (confidence <= 0.0 || all(equal(material.rgb, vec3(0.0))))
-    {
-        outColor = scene;
-        return;
-    }
-
-    vec3 probes = vec3(0.0);
-    if (Graphite_ReflectionProbesReady())
-    {
-        float depth = max(Graphite_Sample(_CameraDepthTexture, vUV).r, 1e-7);
-        vec3 relative = Graphite_RelativeFromDepth(view, vUV, depth);
-        vec3 N = Graphite_OctDecode(Graphite_Sample(_CameraNormalsTexture, vUV).xy);
-        vec3 V = Graphite_ViewDir(relative);
-        float alpha = material.a * material.a;
-        Graphite_ProbeSet set = Graphite_FindProbes(relative);
-        set.sky *= Graphite_SkyReflectionOcclusion(clamp(dot(N, V), 0.0, 1.0), 1.0, Graphite_ScreenOcclusion(), alpha);
-        probes = Graphite_ProbeRadiance(set, N, V, alpha);
-    }
-    outColor = vec4(max(scene.rgb + material.rgb * (reflection.rgb - probes) * confidence, vec3(0.0)), scene.a);
-}
 #else
-uniform GRAPHITE_SCREEN_TEXTURE _MainTex;
-
-void main() { outColor = Graphite_Sample(_MainTex, vUV); }
+void main() { outColor = vec4(0.0); }
 #endif

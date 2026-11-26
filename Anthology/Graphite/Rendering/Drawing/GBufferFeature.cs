@@ -224,6 +224,15 @@ internal struct GBufferRead
         properties.SetFloat(s_displaced, _offset != null ? 1 : 0);
     }
 
+    /// <summary>Binds only the GBuffer's Surface target, decals applied, and where a displaced view reads it.</summary>
+    public readonly void BindSurface(FeatureContext context, PropertySet properties, Sampler point)
+    {
+        Texture[] own = context.Get(_gbuffer).ColorTextures;
+        properties.SetTexture(s_surface, _decals is { } decals ? context.Get(decals).ColorTextures[1] : own[1], point);
+        properties.SetTexture(s_offset, _offset is { } offset ? context.Get(offset).ColorTextures[0] : own[1], point);
+        properties.SetFloat(s_displaced, _offset != null ? 1 : 0);
+    }
+
     /// <summary>Binds the GBuffer as its pass left it, for the decals to read.</summary>
     public readonly void BindUndecaled(FeatureContext context, PropertySet properties, Sampler point, RenderTexture scene)
     {

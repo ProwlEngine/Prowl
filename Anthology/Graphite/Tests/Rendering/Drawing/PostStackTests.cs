@@ -17,52 +17,6 @@ public sealed class PostStackTests : IDisposable
 {
     // A nearly smooth surface writing its turned normal and _Reflectance into the G-buffer, shaded grey plus _Reflectance
     // times the probes, as a lit surface's top lobe is
-    private const string MirrorSource = """
-        Shader "Test/Mirror"
-        {
-            Properties
-            {
-                _Reflectance("Reflectance", Color) = (1, 1, 1, 1)
-            }
-
-            Pass
-            {
-                Tags { "LightMode" = "Forward" }
-                Cull Off
-                GLSLPROGRAM
-                Vertex
-                {
-                    #include "Graphite/Vertex.glsl"
-                    layout(location = 0) out vec3 vNormal;
-                    layout(location = 1) out vec3 vRelative;
-                    void main()
-                    {
-                        vNormal = Graphite_ObjectToWorldNormal(vec3(0.0, 0.0, -1.0));
-                        vRelative = Graphite_ObjectToRelative(vertexPosition);
-                        gl_Position = Graphite_RelativeToClip(vRelative);
-                    }
-                }
-                Fragment
-                {
-                    #include "Graphite/Passes.glsl"
-                    #include "Graphite/Lighting.glsl"
-                    uniform vec4 _Reflectance;
-                    layout(location = 0) in vec3 vNormal;
-                    layout(location = 1) in vec3 vRelative;
-                    layout(location = 0) out vec4 outColor;
-                    void main()
-                    {
-                        vec3 n = normalize(vNormal);
-                        vec3 probes = Graphite_ReflectionProbesReady() ? Graphite_ProbeRadiance(Graphite_FindProbes(vRelative), n, Graphite_ViewDir(vRelative), 0.01) : vec3(0.0);
-                        Graphite_WriteGBuffer(n, _Reflectance.rgb, 0.1);
-                        outColor = vec4(vec3(0.1) + _Reflectance.rgb * probes, 1.0);
-                    }
-                }
-                ENDGLSL
-            }
-        }
-        """;
-
     // The same colour in every direction
     private const string SkySource = """
         Shader "Test/Sky"
@@ -306,15 +260,18 @@ public sealed class PostStackTests : IDisposable
         AssertAll(new Float3(0.25f), Frame(), 2e-3f);
     }
 
-    // A mirror over the lower half turned 45 degrees about x, so it faces the camera and up, and reflects up the view.
-    // The test projection does not flip y, so the view's bottom is the image's first rows.
+    // A metal mirror over the lower half turned 45 degrees about x, so it faces the camera and up, and reflects up the
+    // view. The test projection does not flip y, so the view's bottom is the image's first rows.
     private void AddMirror(Float3? reflectance = null)
     {
         double c = Math.Cos(Math.PI / 4), s = Math.Sin(Math.PI / 4);
         Double4x4 turn = new(new Double4(1, 0, 0, 0), new Double4(0, c, s, 0), new Double4(0, -s, c, 0), new Double4(0, -2, 10, 1));
-        Material mirror = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(MirrorSource)));
+        Material mirror = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/Lit.shader")!)));
         Float3 r = reflectance ?? new Float3(1, 1, 1);
-        mirror.SetColor("_Reflectance", new Float4(r.X, r.Y, r.Z, 1));
+        mirror.SetColor("base_color", new Float4(r.X, r.Y, r.Z, 1));
+        mirror.SetFloat("base_metalness", 1);
+        mirror.SetFloat("specular_roughness", 0.05f);
+        mirror.SetInt("geometry_thin_walled", 1);
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = turn * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [mirror]);
     }
 
@@ -334,7 +291,7 @@ public sealed class PostStackTests : IDisposable
     private static float Distance(Float4 a, Float4 b) => MathF.Max(MathF.Max(MathF.Abs(a.X - b.X), MathF.Abs(a.Y - b.Y)), MathF.Max(MathF.Abs(a.Z - b.Z), MathF.Abs(a.W - b.W)));
 
     [Fact]
-    public void Ssr_SwapsTheProbesForTheTrace_ByTheStoredReflectance()
+    public void Ssr_SwapsTheProbesForTheTrace_ByTheMirrorsReflectance()
     {
         SkyOf(s_sky);
         AddMirror(s_mirrorReflectance);
@@ -355,10 +312,21 @@ public sealed class PostStackTests : IDisposable
             Assert.True(Distance(unhit[i], missed[i]) < 2e-3f, $"pixel {i}: {unhit[i]} became {missed[i]}");
         _world.Features.Remove(missing);
 
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 4, 9)) * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [Unlit(new Float3(1, 0, 0))]);
+        // A red glow over the mirror, in the GBuffer so the trace has its depth to hit
+        Material glow = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/Lit.shader")!)));
+        glow.SetColor("base_color", new Float4(0, 0, 0, 1));
+        glow.SetFloat("specular_weight", 0);
+        glow.SetColor("emission_color", new Float4(1, 0, 0, 1));
+        glow.SetFloat("emission_luminance", 1);
+        glow.SetInt("geometry_thin_walled", 1);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 4, 9)) * Double4x4.CreateScale(new Double3(1, 0.5, 1)) }, [glow]);
         Frame();
         Float4[] plain = Frame();
         Effect(new ScreenSpaceReflections(_renderer) { UseTemporal = false, Normalization = false });
+
+        // The trace reflects the frame before, so the first frames have nothing to show
+        Frame();
+        Frame();
         Float4[] reflected = Frame();
         Float3 R = s_mirrorReflectance;
         for (int i = 0; i < plain.Length; i++)
@@ -366,16 +334,15 @@ public sealed class PostStackTests : IDisposable
             if (!OnMirror(i))
                 continue;
             Float4 before = plain[i], after = reflected[i];
-            Float3 probes = new(0, (before.Y - 0.1f) / R.Y, (before.Z - 0.1f) / R.Z);
-            Assert.True(MathF.Abs(before.X - 0.1f) < 1e-3f && probes.Z > 0.5f, $"pixel {i} is not the probe lit mirror: {before}");
+            Assert.True(before.X < 0.05f && before.Z > 0.5f, $"pixel {i} is not the probe lit mirror: {before}");
 
             // The trace holds only red, so green and blue keep the probes' share the trace left, the same in both, and red
             // gains at most the reflectance times that confidence
-            float keptGreen = (after.Y - 0.1f) / (R.Y * probes.Y), keptBlue = (after.Z - 0.1f) / (R.Z * probes.Z);
+            float keptGreen = after.Y / before.Y, keptBlue = after.Z / before.Z;
             float confidence = 1 - keptBlue;
             Assert.True(confidence > 0.25f && confidence < 1.01f, $"pixel {i} reflects {after}");
             Assert.True(MathF.Abs(keptGreen - keptBlue) < 0.05f, $"pixel {i}: green keeps {keptGreen}, blue {keptBlue}");
-            Assert.True(after.X > 0.1f + 0.1f * R.X && after.X < 0.1f + R.X * confidence + 0.01f, $"pixel {i}: red {after.X} at confidence {confidence}");
+            Assert.True(after.X > before.X + 0.1f * R.X && after.X < before.X + R.X * confidence + 0.1f, $"pixel {i}: red {after.X} at confidence {confidence}");
         }
     }
 

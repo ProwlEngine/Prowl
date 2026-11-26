@@ -51,6 +51,7 @@ internal sealed class DemoWindow
     private bool _contactShadows;
     private int _displacementCell = 2;
     private bool _gi;
+    private bool _reflections;
     private bool _giScreenTrace = true;
     private bool _giOcclusion = true;
     private int _giSpatialPasses = -1;
@@ -101,6 +102,8 @@ internal sealed class DemoWindow
                 _deferred = false;
             else if (args[i] == "--decal")
                 _decal = true;
+            else if (args[i] == "--ssr")
+                _reflections = true;
             else if (args[i] == "--contact")
                 _contactShadows = true;
             else if (args[i] == "--displace" && i + 1 < args.Length)
@@ -256,6 +259,7 @@ internal sealed class DemoWindow
                 break;
             case Key.G: _voxelView = _voxelView + 1 < Enum.GetValues<VoxelDebugMode>().Length ? _voxelView + 1 : -1; break;
             case Key.I: _gi = !_gi; break;
+            case Key.R: _reflections = !_reflections; break;
             case Key.Comma: _contactShadows = !_contactShadows; break;
             case Key.H: _giScreenTrace = !_giScreenTrace; break;
             case Key.Space: _paused = !_paused; break;
@@ -301,6 +305,7 @@ internal sealed class DemoWindow
         _demo.Voxels.Enabled = _voxelView >= 0;
         _demo.Voxels.Mode = (VoxelDebugMode)Math.Max(_voxelView, 0);
         _demo.Gi.Enabled = _gi;
+        _demo.Reflections.Enabled = _reflections;
         _demo.Gi.ScreenTrace = _giScreenTrace;
         _demo.Gi.DirectionalOcclusion = _giOcclusion;
         if (_giSpatialPasses >= 0)

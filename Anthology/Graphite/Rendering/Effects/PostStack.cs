@@ -76,6 +76,7 @@ public abstract class PostEffect(Renderer renderer, RenderSlot slot, FeatureGrou
     protected Sampler LinearClamp => _shared.LinearClamp;
     protected Sampler PointClamp => _shared.PointClamp;
     protected Sampler LinearRepeat => _shared.LinearRepeat;
+    private protected Texture NoSceneColor => _shared.NoSceneColor;
 
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
     protected FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
@@ -543,25 +544,27 @@ public sealed class Gtao : ScreenLightingFeature
 }
 
 /// <summary>
-/// Stochastic screen space reflections over the opaque scene: a GGX sampled ray per pixel at a part of the
-/// resolution, resolved by reusing neighbouring rays with a pyramid level from a roughness cone, accumulated over frames
-/// with last frame's result fed back for a bounce. It takes the place of the reflection probes in the top specular lobe,
-/// weighted by the reflectance the material target holds.
+/// Stochastic screen space reflections of a deferred view: a GGX sampled ray per pixel of the GBuffer at a part of the
+/// resolution, resolved by reusing neighbouring rays with a pyramid level from a roughness cone, accumulated over
+/// frames. It runs before the lighting and reflects the opaque scene of the frame before, moved to where it is now,
+/// which holds that frame's reflections for a bounce. It publishes the result as
+/// <see cref="RendererOutputs.Reflections"/>, which the lighting takes in place of the reflection probes in the top
+/// specular lobe.
 /// </summary>
 public sealed class ScreenSpaceReflections : PostEffect
 {
     private static readonly PropertyID s_hiZ = "_HiZ";
     private static readonly PropertyID s_cameraDepthTexture = "_CameraDepthTexture", s_cameraNormalsTexture = "_CameraNormalsTexture",
-        s_materialTexture = "_MaterialTexture", s_cameraMotionVectorsTexture = "_CameraMotionVectorsTexture", s_noise = "_Noise",
+        s_sourceValid = "_SourceValid", s_cameraMotionVectorsTexture = "_CameraMotionVectorsTexture", s_noise = "_Noise",
         s_noiseSize = "_NoiseSize", s_jitterSizeAndOffset = "_JitterSizeAndOffset", s_resolveSize = "_ResolveSize", s_screenSize = "_ScreenSize",
         s_numSteps = "_NumSteps", s_brdfBias = "_BRDFBias", s_edgeFactor = "_EdgeFactor", s_maxMipMap = "_MaxMipMap", s_rayReuse = "_RayReuse",
         s_useNormalization = "_UseNormalization", s_fireflies = "_Fireflies", s_reflectionVelocity = "_ReflectionVelocity", s_mainTex = "_MainTex",
         s_blurDir = "_BlurDir", s_rayCast = "_RayCast", s_previousBuffer = "_PreviousBuffer", s_tScale = "_TScale",
-        s_tResponse = "_TResponse", s_reflectionBuffer = "_ReflectionBuffer";
+        s_tResponse = "_TResponse";
     private static readonly PropertyID[] s_scenes = ["_Scene0", "_Scene1", "_Scene2", "_Scene3", "_Scene4"];
 
     private const int MaxMip = 5;
-    private readonly FullscreenProgram _rayCast, _blur, _resolve, _temporal, _reproject, _combine, _copy;
+    private readonly FullscreenProgram _rayCast, _blur, _resolve, _temporal, _reproject;
     private readonly PropertySet _properties = new();
     private Settings _settings;
     private (bool MipMap, bool Temporal, float Scale) _declared = (true, true, 0.5f);
@@ -570,12 +573,14 @@ public sealed class ScreenSpaceReflections : PostEffect
 
     private sealed class ViewState
     {
-        public TextureHandle Source, Combined, ReflectionHistory, RayData, Reflection, HiZ;
+        public TextureHandle Source, ReflectionHistory, RayData, Reflection, HiZ;
+        public GBufferRead GBuffer;
+        public Texture? Copied;
         public readonly TextureHandle[] Pyramid = new TextureHandle[4];
         public readonly TextureHandle[] Scratch = new TextureHandle[4];
     }
 
-    public ScreenSpaceReflections(Renderer renderer) : base(renderer, RenderSlot.AfterOpaques, sceneReads: SceneTargets.Motion | SceneTargets.Normals | SceneTargets.Material)
+    public ScreenSpaceReflections(Renderer renderer) : base(renderer, RenderSlot.AfterPrepass, sceneReads: SceneTargets.Motion | SceneTargets.Normals)
     {
         Paths = RenderPaths.Deferred;
         _rayCast = Program("Ssr", "#define SSR_RAYCAST 1\n", source: false);
@@ -583,11 +588,11 @@ public sealed class ScreenSpaceReflections : PostEffect
         _resolve = Program("Ssr", "#define SSR_RESOLVE 1\n", source: false);
         _temporal = Program("Ssr", "#define SSR_TEMPORAL 1\n", source: false);
         _reproject = Program("Ssr", "#define SSR_REPROJECT 1\n", source: false);
-        _combine = Program("Ssr", lit: true, defines: "#define SSR_COMBINE 1\n");
-        _copy = Program("Ssr", "", source: false);
     }
 
     public override bool ReadsHiZ => true;
+
+    internal override bool KeepsSceneColor => true;
 
     /// <summary>The resolution rays are traced at.</summary>
     public EffectResolution RayResolution { get; set; } = EffectResolution.Half;
@@ -610,7 +615,7 @@ public sealed class ScreenSpaceReflections : PostEffect
     /// <summary>Blurs rough reflections through a convolved pyramid of the scene.</summary>
     public bool UseMipMap { get; set; } = true;
 
-    /// <summary>Accumulates over frames and feeds the last result back for a bounce.</summary>
+    /// <summary>Accumulates over frames.</summary>
     public bool UseTemporal { get; set; } = true;
 
     /// <summary>The neighbourhood clamp box scale for the history.</summary>
@@ -638,15 +643,12 @@ public sealed class ScreenSpaceReflections : PostEffect
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
         builder.ReadScene();
-        builder.WriteColor();
         builder.DrawsRenderables();
         ViewState state = builder.GetViewState<ViewState>();
+        state.GBuffer = GBufferRead.Declare(builder);
+        state.Source = builder.Temporary("Source", view.Texture(Hdr));
         if (_declared.Temporal)
-        {
-            state.Source = builder.Temporary("Source", view.Texture(Hdr));
-            state.Combined = builder.History("Combined", view.Texture(Hdr), usage: TextureState.Attachment | TextureState.Sampled);
             state.ReflectionHistory = builder.History("Reflection", view.Texture(Hdr), usage: TextureState.Attachment | TextureState.Sampled);
-        }
         if (_declared.MipMap)
         {
             for (int level = 0; level < 4; level++)
@@ -658,6 +660,7 @@ public sealed class ScreenSpaceReflections : PostEffect
         state.RayData = builder.Temporary("Rays", view.Texture(Hdr, _declared.Scale));
         state.HiZ = builder.Read(RendererOutputs.HiZ);
         state.Reflection = builder.Temporary("Reflection", view.Texture(Hdr));
+        builder.Publish(RendererOutputs.Reflections, _declared.Temporal ? state.ReflectionHistory : state.Reflection);
     }
 
     public override void Render(FeatureContext context)
@@ -673,7 +676,7 @@ public sealed class ScreenSpaceReflections : PostEffect
         _properties.SetTexture(s_cameraDepthTexture, context.Depth!, PointClamp);
         _properties.SetTexture(s_hiZ, context.Get(state.HiZ).ColorTextures[0], PointClamp);
         _properties.SetTexture(s_cameraNormalsTexture, context.Normals!, PointClamp);
-        _properties.SetTexture(s_materialTexture, context.Material!, PointClamp);
+        state.GBuffer.BindSurface(context, _properties, PointClamp);
         _properties.SetTexture(s_cameraMotionVectorsTexture, context.Motion!, PointClamp);
         _properties.SetTexture(s_noise, context.Noise, LinearRepeat);
         _properties.SetFloat2(s_noiseSize, new Float2(256, 256));
@@ -689,16 +692,15 @@ public sealed class ScreenSpaceReflections : PostEffect
         _properties.SetInt(s_fireflies, _settings.Fireflies ? 1 : 0);
         _properties.SetInt(s_reflectionVelocity, _settings.ReflectionVelocity ? 1 : 0);
 
-        // The reflected scene: the last result moved by motion for a bounce, else these opaques
-        RenderTexture? previousCombined = _declared.Temporal ? context.History(state.Combined) : null;
-        Texture source = context.Color!;
-        if (previousCombined != null && context.HasPreviousFrame)
-        {
-            RenderTexture reprojected = context.Get(state.Source);
-            _properties.SetTexture(s_mainTex, previousCombined.ColorTextures[0], LinearClamp);
-            context.Fullscreen(_reproject, reprojected, _properties);
-            source = reprojected.ColorTextures[0];
-        }
+        // The reflected scene: last frame's opaques moved by motion, nothing before the view has kept a frame
+        Texture? copy = context.SceneColorCopy;
+        bool kept = copy != null && copy == state.Copied && context.HasPreviousFrame;
+        state.Copied = copy;
+        RenderTexture reprojected = context.Get(state.Source);
+        _properties.SetTexture(s_mainTex, copy ?? NoSceneColor, LinearClamp);
+        _properties.SetFloat(s_sourceValid, kept ? 1 : 0);
+        context.Fullscreen(_reproject, reprojected, _properties);
+        Texture source = reprojected.ColorTextures[0];
 
         _properties.SetTexture(s_scenes[0], source, LinearClamp);
         Texture level = source;
@@ -723,7 +725,6 @@ public sealed class ScreenSpaceReflections : PostEffect
         RenderTexture reflection = context.Get(state.Reflection);
         context.Fullscreen(_resolve, reflection, _properties);
 
-        Texture final = reflection.ColorTextures[0];
         if (_declared.Temporal)
         {
             RenderTexture history = context.Get(state.ReflectionHistory);
@@ -734,19 +735,7 @@ public sealed class ScreenSpaceReflections : PostEffect
             _properties.SetFloat(s_tScale, _settings.TemporalScale);
             _properties.SetFloat(s_tResponse, valid ? _settings.TemporalResponse : 0);
             context.Fullscreen(_temporal, history, _properties);
-            final = history.ColorTextures[0];
         }
-
-        _properties.SetTexture(s_reflectionBuffer, final, LinearClamp);
-        if (!_declared.Temporal)
-        {
-            context.Fullscreen(_combine, _properties);
-            return;
-        }
-        RenderTexture combined = context.Get(state.Combined);
-        context.Fullscreen(_combine, combined, _properties);
-        _properties.SetTexture(s_mainTex, combined.ColorTextures[0], LinearClamp);
-        context.Fullscreen(_copy, _properties);
     }
 }
 

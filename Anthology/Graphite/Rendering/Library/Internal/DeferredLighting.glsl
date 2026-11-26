@@ -12,6 +12,10 @@ layout(location = 1) out vec4 outMaterial;
 uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferOffset;
 uniform float Graphite_GBufferDisplaced;
 
+// The view's screen space reflections, in a how far the trace is trusted, while Graphite_HasReflections is 1
+uniform GRAPHITE_SCREEN_TEXTURE Graphite_Reflections;
+uniform float Graphite_HasReflections;
+
 void main()
 {
     ivec2 pixel = ivec2(gl_FragCoord.xy);
@@ -53,6 +57,27 @@ void main()
         color += direct + Graphite_AmbientBRDF(c, indirect);
         vec3 topNormal;
         reflectance = PBR_TopReflectance(c, topNormal, roughness);
+
+        // The ambient shaded the top lobe with reflectance times the probes, its sky dimmed by the screen occlusion,
+        // so the trace takes the probes' place by its confidence
+        if (Graphite_HasReflections > 0.5)
+        {
+            vec4 traced = Graphite_Fetch(Graphite_Reflections, pixel, 0);
+            float confidence = traced.a * traced.a;
+            if (confidence > 0.0 && any(greaterThan(reflectance, vec3(0.0))))
+            {
+                vec3 held = vec3(0.0);
+                if (Graphite_ReflectionProbesReady())
+                {
+                    vec3 V = Graphite_ViewDir(relative);
+                    float alpha = roughness * roughness;
+                    Graphite_ProbeSet top = probes;
+                    top.sky *= Graphite_SkyReflectionOcclusion(clamp(dot(topNormal, V), 0.0, 1.0), 1.0, Graphite_ScreenOcclusion(), alpha);
+                    held = Graphite_ProbeRadiance(top, topNormal, V, alpha);
+                }
+                color = max(color + reflectance * (traced.rgb - held) * confidence, vec3(0.0));
+            }
+        }
     }
 
     outColor = vec4(Graphite_SaturateHalf(Graphite_ApplyFog(color, relative)), 1.0);
