@@ -6,20 +6,34 @@
 // Graphite_AmbientBRDF and graphite_DeferredUnlit.
 layout(location = 1) out vec4 outMaterial;
 
+// A displaced view's offsets: how far away, in pixels, the pixel each pixel now shows came from, which the GBuffer's
+// own targets are read at while the scene's depth and normal are read in place. Graphite_GBufferDisplaced is 1 on
+// such a view. See DisplacementFeature.
+uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferOffset;
+uniform float Graphite_GBufferDisplaced;
+
 void main()
 {
     ivec2 pixel = ivec2(gl_FragCoord.xy);
-    vec4 surface = Graphite_GBufferSurfaceAt(pixel);
+    ivec2 source = pixel;
+    if (Graphite_GBufferDisplaced > 0.5)
+        source += ivec2(round(Graphite_Fetch(Graphite_GBufferOffset, pixel, 0).rg));
+    vec4 surface = Graphite_GBufferSurfaceAt(source);
     if (Graphite_GBufferModelOf(surface) == GRAPHITE_MODEL_NONE)
         discard;
 
     float depth = Graphite_GBufferDepthAt(pixel);
-    Graphite_GBuffer g = Graphite_ReadGBuffer(pixel, surface);
+    Graphite_ViewData view = Graphite_View();
+    vec3 relative = Graphite_RelativeFromDepth(view, gl_FragCoord.xy * view.screen.zw, depth);
+#ifdef GRAPHITE_CONTACT_SHADOWS
+    graphite_FindSunContact(relative, Graphite_OctDecode(Graphite_Fetch(Graphite_GBufferNormal, pixel, 0).rg), (uint(surface.a * 255.0 + 0.5) & 128u) != 0u);
+#endif
+    Graphite_GBuffer g = Graphite_ReadGBuffer(source, surface);
+    if (source != pixel)
+        g.normal = Graphite_OctDecode(Graphite_Fetch(Graphite_GBufferNormal, pixel, 0).rg);
     uint model = g.model;
     graphite_DeferredModel = model;
     graphite_DeferredCustom = g.custom;
-    Graphite_ViewData view = Graphite_View();
-    vec3 relative = Graphite_RelativeFromDepth(view, gl_FragCoord.xy * view.screen.zw, depth);
     graphite_DeferredShadows = g.receivesShadows;
     graphite_DeferredLayers = g.lightLayers;
 

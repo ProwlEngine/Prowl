@@ -48,6 +48,8 @@ internal sealed class DemoWindow
     private int _gbufferView = -1;
     private bool _deferred = true;
     private bool _decal;
+    private bool _contactShadows;
+    private int _displacementCell = 2;
     private bool _gi;
     private bool _giScreenTrace = true;
     private bool _giOcclusion = true;
@@ -99,6 +101,10 @@ internal sealed class DemoWindow
                 _deferred = false;
             else if (args[i] == "--decal")
                 _decal = true;
+            else if (args[i] == "--contact")
+                _contactShadows = true;
+            else if (args[i] == "--displace" && i + 1 < args.Length)
+                _displacementCell = int.Parse(args[++i]);
             else if (args[i] == "--gbuffer" && i + 1 < args.Length)
             {
                 _deferred = true;
@@ -250,6 +256,7 @@ internal sealed class DemoWindow
                 break;
             case Key.G: _voxelView = _voxelView + 1 < Enum.GetValues<VoxelDebugMode>().Length ? _voxelView + 1 : -1; break;
             case Key.I: _gi = !_gi; break;
+            case Key.Comma: _contactShadows = !_contactShadows; break;
             case Key.H: _giScreenTrace = !_giScreenTrace; break;
             case Key.Space: _paused = !_paused; break;
             case Key.B: _demo.Bloom.Enabled = !_demo.Bloom.Enabled; break;
@@ -287,6 +294,8 @@ internal sealed class DemoWindow
             keywords.Add(GlobalAxis.PbrTier[_tier]);
         view.Keywords = keywords.Count == 0 ? null : [.. keywords];
         view.Path = _deferred ? RenderPath.Deferred : RenderPath.Forward;
+        view.ContactShadows = _contactShadows ? new ContactShadows(0.05f, LocalLights: true) : default;
+        view.DisplacementCell = _displacementCell;
         _demo.GBuffer.Enabled = _gbufferView >= 0;
         _demo.GBuffer.Mode = (GBufferDebugMode)Math.Max(_gbufferView, 0);
         _demo.Voxels.Enabled = _voxelView >= 0;

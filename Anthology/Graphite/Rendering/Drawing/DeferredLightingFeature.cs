@@ -1,5 +1,7 @@
 using System;
 
+using Prowl.Vector;
+
 namespace Prowl.Graphite.Rendering;
 
 /// <summary>
@@ -21,6 +23,8 @@ public sealed class DeferredLightingFeature : RenderFeature
     }
 
     private readonly RendererResources _resources;
+    private static readonly PropertyID s_contactShadows = "Graphite_ContactShadows";
+
     private readonly PropertySet _properties = new();
     private readonly Action<FullscreenProgram, FullscreenProgram> _replaced;
 
@@ -36,7 +40,10 @@ public sealed class DeferredLightingFeature : RenderFeature
 
     public override void PrepareFrame() => _resources.ShadingModels.Update(_replaced);
 
-    public override bool IsActive(in FeatureView view) => _resources.ShadingModels.For(view.Keyword(TierAxis), view.LayerCount) != null;
+    public override bool IsActive(in FeatureView view) => Program(view) != null;
+
+    private FullscreenProgram? Program(in FeatureView view)
+        => _resources.ShadingModels.For(view.Keyword(TierAxis), view.ContactShadows.Length > 0, view.LayerCount);
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -54,11 +61,13 @@ public sealed class DeferredLightingFeature : RenderFeature
         RenderTexture scene = context.Get(state.Scene);
         context.CopyBack(scene);
         state.GBuffer.Bind(context, _properties, _resources.PointClamp, scene);
+        ContactShadows contact = context.View.ContactShadows;
+        _properties.SetFloat4(s_contactShadows, new Float4(MathF.Max(contact.Length, 0), Math.Clamp(contact.Steps, 1, 64), MathF.Max(contact.Thickness, 0), contact.LocalLights ? 1 : 0));
         Texture[] targets = scene.ColorTextures;
         Framebuffer framebuffer = targets.Length > SceneTarget.Material
             ? state.Sets.Get(_resources.Factory, context.View.LayerCount, null, targets[SceneTarget.Color], targets[SceneTarget.Material])
             : state.Sets.Get(_resources.Factory, context.View.LayerCount, null, targets[SceneTarget.Color]);
-        if (_resources.ShadingModels.For(context.View.Keyword(TierAxis), context.View.LayerCount) is { } program)
+        if (Program(context.View) is { } program)
             context.Fullscreen(program, framebuffer, _properties);
     }
 }

@@ -67,9 +67,8 @@
     #define GRAPHITE_STANDARD_VERTEX_DATA
 #endif
 
-// Passes whose fragments read the tangent frame: lit ones, and under PBR parallax the depth
-// passes reading the material
-#if defined(GRAPHITE_STANDARD_LIT) || defined(GRAPHITE_STANDARD_IMPOSTOR) || (defined(PBR_PARALLAX) && !defined(GRAPHITE_STANDARD_UNLIT) && (defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_SHADOW_DITHER)))
+// Passes whose fragments read the tangent frame: the lit ones
+#if defined(GRAPHITE_STANDARD_LIT) || defined(GRAPHITE_STANDARD_IMPOSTOR)
     #define GRAPHITE_STANDARD_FRAME
 #endif
 
@@ -155,11 +154,11 @@ struct Graphite_SurfaceVertex
 #ifdef GRAPHITE_FRAGMENT
 
 // What a Surface function reads about the point it shades. Depth passes run it only for cutout surfaces, with the UVs,
-// vertex colour and relative position filled in, the frame too under PBR parallax, and the rest at defaults.
+// vertex colour and relative position filled in, and the rest at defaults.
 struct Graphite_SurfaceData
 {
-    vec2 uv;                // UV0, moved by parallax, before any texture's scale and offset
-    vec2 uv1;               // UV1, moved by parallax, before any texture's scale and offset
+    vec2 uv;                // UV0, before any texture's scale and offset
+    vec2 uv1;               // UV1, before any texture's scale and offset
     vec4 vertexColor;       // the vertex colour times the object's colour
     vec3 relativePos;       // relative to the camera, Graphite_RelativeToWorld for world space
     vec3 viewDir;           // from the surface toward the camera

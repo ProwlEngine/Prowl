@@ -124,6 +124,17 @@ public enum EarlyDepth : byte
     None,
 }
 
+/// <summary>
+/// Short shadows a deferred view marches through its own depth, from each lit pixel toward the sun and the other
+/// directional lights that cast shadows, for the small gaps and contact points a shadow map misses. A ray starts at a
+/// different place each pixel and frame, so temporal anti aliasing smooths it.
+/// </summary>
+/// <param name="Length">How far a ray reaches, as a part of the pixel's distance from the camera. 0 for none, about 0.05 as a start.</param>
+/// <param name="Steps">Depth samples a ray takes.</param>
+/// <param name="Thickness">How thick what the depth shows is taken to be, as a part of the pixel's distance from the camera.</param>
+/// <param name="LocalLights">Whether the point and spot lights that cast shadows march too, each at the cost of the steps.</param>
+public readonly record struct ContactShadows(float Length = 0, int Steps = 8, float Thickness = 0.02f, bool LocalLights = false);
+
 /// <summary>The paths a feature works in.</summary>
 [Flags]
 public enum RenderPaths : byte
@@ -140,6 +151,23 @@ public sealed class RenderView : IDisposable
 
     /// <summary>Which GBuffer surfaces a deferred view's prepass draws first.</summary>
     public EarlyDepth EarlyDepth { get; set; }
+
+    /// <summary>The view's contact shadows, none by default. Deferred views only.</summary>
+    public ContactShadows ContactShadows { get; set; }
+
+    /// <summary>
+    /// The pixels a cell of the view's screen space displacement spans, 2 by default, 0 for none: surfaces that keep a
+    /// height are pushed out by a grid with a corner every this many pixels, so a smaller cell follows finer relief
+    /// and costs more. Deferred views only. See <see cref="DisplacementFeature"/>.
+    /// </summary>
+    public int DisplacementCell { get; set; } = 2;
+
+    /// <summary>
+    /// The pixels over which the way the view's displacement lifts a surface blends across the hard creases in it, 3
+    /// by default, so the faces at a crease lift along the same line where they meet and stay joined. 0 lifts each
+    /// straight along its own normal, which opens a gap at every crease.
+    /// </summary>
+    public int DisplacementCreaseBlend { get; set; } = 3;
 
     private readonly Renderer _renderer;
     private bool _cut;
@@ -296,6 +324,9 @@ public sealed class RenderView : IDisposable
             LodTransition = LodTransition,
             Path = Path,
             EarlyDepth = EarlyDepth,
+            ContactShadows = ContactShadows,
+            DisplacementCell = DisplacementCell,
+            DisplacementCreaseBlend = DisplacementCreaseBlend,
             ClearColor = ClearColor,
             Sky = Sky,
             Near = camera.Near,
@@ -338,6 +369,9 @@ internal struct ViewDesc
     public LodTransition? LodTransition;
     public RenderPath Path;
     public EarlyDepth EarlyDepth;
+    public ContactShadows ContactShadows;
+    public int DisplacementCell;
+    public int DisplacementCreaseBlend;
     public Float4 ClearColor;
     public bool Sky;
     public float Near;

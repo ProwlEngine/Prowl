@@ -92,7 +92,8 @@ internal sealed class TargetSets : IDisposable
 /// the scene as they do in a forward view. The GBuffer itself holds the rest, with a normal and a motion target of its
 /// own only where the scene has none. Renderables whose shader has no such pass are left to the forward passes. The
 /// surfaces the prepass drew test depth equal, see <see cref="EarlyDepth"/>. While the view lays decals over its
-/// GBuffer the normals go to a target of the GBuffer's own, which the decals then write onto the scene's. Group
+/// GBuffer the normals go to a target of the GBuffer's own, which the decals then write onto the scene's, and while
+/// it displaces its GBuffer both normals and motion do, for <see cref="DisplacementFeature"/> to put on the scene. Group
 /// <see cref="FeatureGroup.GBuffer"/>.
 /// </summary>
 public sealed class GBufferFeature : RenderFeature
@@ -130,9 +131,9 @@ public sealed class GBufferFeature : RenderFeature
             formats[(int)GBufferTarget.Base], formats[(int)GBufferTarget.Surface], formats[(int)GBufferTarget.Custom],
             formats[(int)GBufferTarget.Baked], formats[(int)GBufferTarget.Emission],
         ];
-        if (scene <= SceneTarget.Normals || (view.HasDecals && builder.Runs(FeatureGroup.GBufferDecals)))
+        if (scene <= SceneTarget.Normals || view.HasDisplacement || (view.HasDecals && builder.Runs(FeatureGroup.GBufferDecals)))
             own.Add(formats[(int)GBufferTarget.Normal]);
-        if (scene <= SceneTarget.Motion)
+        if (scene <= SceneTarget.Motion || view.HasDisplacement)
             own.Add(formats[(int)GBufferTarget.Motion]);
         GraphTextureDesc desc = new()
         {
@@ -156,7 +157,7 @@ public sealed class GBufferFeature : RenderFeature
         bool ownNormal = own.Length > GBufferRead.OwnNormal, ownMotion = own.Length > GBufferRead.OwnMotion;
         Texture normal = ownNormal ? own[GBufferRead.OwnNormal] : scene.ColorTextures[SceneTarget.Normals];
         Framebuffer framebuffer = state.Sets.Get(_resources.Factory, context.View.LayerCount, scene.DepthTexture,
-            own[0], normal, own[1], own[2], own[3], own[4], GBufferRead.Motion(own, scene));
+            own[0], normal, own[1], own[2], own[3], own[4], ownMotion ? own[GBufferRead.OwnMotion] : scene.ColorTextures[SceneTarget.Motion]);
 
         // The GBuffer's own targets start undefined but for Surface, whose clear says no surface. The scene's are kept.
         TargetLoadStoreOps ops = new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded)
@@ -188,14 +189,18 @@ internal struct GBufferRead
         s_custom = "Graphite_GBufferCustom", s_baked = "Graphite_GBufferBaked", s_emission = "Graphite_GBufferEmission",
         s_motion = "Graphite_GBufferMotion", s_depth = "Graphite_GBufferDepth";
 
+    private static readonly PropertyID s_offset = "Graphite_GBufferOffset", s_displaced = "Graphite_GBufferDisplaced";
+
     private TextureHandle _gbuffer;
     private TextureHandle? _decals;
+    private TextureHandle? _offset;
 
     /// <summary>Declares the read in Setup. With decals false it reads the GBuffer as its pass left it.</summary>
     public static GBufferRead Declare(FeatureBuilder builder, bool decals = true) => new()
     {
         _gbuffer = builder.Read(RendererOutputs.GBuffer),
         _decals = decals && builder.Has(RendererOutputs.GBufferDecals) ? builder.Read(RendererOutputs.GBufferDecals) : null,
+        _offset = decals && builder.Has(RendererOutputs.GBufferOffset) ? builder.Read(RendererOutputs.GBufferOffset) : null,
     };
 
     /// <summary>The GBuffer's own targets: Base, Surface, Custom, Baked, Emission, then a normal and a motion where it has them.</summary>
@@ -213,6 +218,10 @@ internal struct GBufferRead
         Texture normal = scene.ColorTextures.Length > SceneTarget.Normals ? scene.ColorTextures[SceneTarget.Normals]
             : decaled is { Length: > DecaledNormal } ? decaled[DecaledNormal] : own[OwnNormal];
         Bind(properties, point, own, decaled, scene, normal);
+
+        // A displaced view's own targets are read at the pixel each pixel came from
+        properties.SetTexture(s_offset, _offset is { } offset ? context.Get(offset).ColorTextures[0] : own[1], point);
+        properties.SetFloat(s_displaced, _offset != null ? 1 : 0);
     }
 
     /// <summary>Binds the GBuffer as its pass left it, for the decals to read.</summary>
@@ -238,7 +247,7 @@ internal struct GBufferRead
 /// <summary>
 /// Lays the world's decals over a deferred view's GBuffer once its pass has drawn: base colour, metalness, roughness and
 /// occlusion into the targets it publishes as <see cref="RendererOutputs.GBufferDecals"/>, and the normal onto the
-/// scene's, or beside them where the scene has no normal target. Adds its pass on the frames a decal of the world
+/// scene's, or beside them where the scene has no normal target or the view goes on to displace its GBuffer. Adds its pass on the frames a decal of the world
 /// reaches into the view. Group
 /// <see cref="FeatureGroup.GBufferDecals"/>.
 /// </summary>
@@ -279,7 +288,7 @@ public sealed class GBufferDecalsFeature : RenderFeature
         {
             Width = (int)view.Width,
             Height = (int)view.Height,
-            ColorFormats = builder.SceneTargetCount > SceneTarget.Normals ? own : [.. own, formats[(int)GBufferTarget.Normal]],
+            ColorFormats = builder.SceneTargetCount > SceneTarget.Normals && !view.HasDisplacement ? own : [.. own, formats[(int)GBufferTarget.Normal]],
             ArrayLayers = view.LayerCount > 1 ? (uint)view.LayerCount : 0,
         };
         state.Target = builder.Temporary("Decaled", desc);

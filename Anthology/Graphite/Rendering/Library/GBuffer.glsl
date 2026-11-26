@@ -4,7 +4,7 @@
 //   Base      rgb base colour, a metalness
 //   Normal    world normal, octahedral
 //   Surface   r roughness, g specular, b occlusion, a the shading model, light layers and shadow flag in one byte
-//   Custom    four values the shading model reads its own way
+//   Custom    four values the shading model reads its own way, the first two the Lit model's height
 //   Baked     the diffuse light that is not realtime, pre-exposed
 //   Emission  pre-exposed
 //   Motion    as Graphite/Passes.glsl writes it
@@ -22,6 +22,23 @@
 #define GRAPHITE_MODEL_FOLIAGE 3u
 
 #define GRAPHITE_GBUFFER_SPECULAR_RANGE 0.08
+
+// The Lit model's first two Custom values are how high its height map lifts the point above the surface, over this
+// many metres, as the high and low bytes of sixteen bits
+#define GRAPHITE_GBUFFER_HEIGHT_RANGE 0.25
+
+vec2 Graphite_PackHeight(float metres)
+{
+    float steps = floor(clamp(metres / GRAPHITE_GBUFFER_HEIGHT_RANGE, 0.0, 1.0) * 65535.0 + 0.5);
+    float high = floor(steps / 256.0);
+    return vec2(high, steps - high * 256.0) / 255.0;
+}
+
+float Graphite_UnpackHeight(vec2 packed)
+{
+    vec2 bytes = floor(packed * 255.0 + 0.5);
+    return (bytes.x * 256.0 + bytes.y) / 65535.0 * GRAPHITE_GBUFFER_HEIGHT_RANGE;
+}
 
 struct Graphite_GBuffer
 {

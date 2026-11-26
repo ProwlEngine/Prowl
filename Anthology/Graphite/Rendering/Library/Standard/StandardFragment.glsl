@@ -7,8 +7,7 @@
 #ifdef GRAPHITE_FRAGMENT
 
 #if defined(GRAPHITE_STANDARD_FORWARD) || defined(GRAPHITE_STANDARD_VOXEL) || defined(GRAPHITE_STANDARD_SHADOW_DITHER) || defined(_SURFACE_CUTOUT) || defined(GRAPHITE_STANDARD_IMPOSTOR)
-// The inputs from the varyings, the frame flipped on back faces, the UVs moved by PBR parallax. Depth passes keep the
-// frame at its defaults unless parallax needs it.
+// The inputs from the varyings, the frame flipped on back faces. Depth passes keep the frame at its defaults.
 Graphite_SurfaceData graphite_StandardInputs()
 {
     Graphite_SurfaceData i = Graphite_NewSurfaceData(vUV, vUV1);
@@ -28,16 +27,6 @@ Graphite_SurfaceData graphite_StandardInputs()
 #ifdef GRAPHITE_STANDARD_INPUTS
     GRAPHITE_STANDARD_INPUTS(i);
 #endif
-#endif
-#if defined(PBR_PARALLAX) && defined(GRAPHITE_STANDARD_FRAME)
-#ifdef GRAPHITE_STANDARD_SHADOW
-    vec4 clip = Graphite_View().viewProjection * vec4(vRelativePos, 1.0);
-    vec3 toViewer = -Graphite_ViewRay(clip.xy / clip.w);
-#else
-    vec3 toViewer = i.viewDir;
-#endif
-    if (vHasTangents > 0.5)
-        PBR_Parallax(i, toViewer);
 #endif
     return i;
 }
@@ -123,6 +112,9 @@ void Graphite_StandardFragment()
     g.receivesShadows = Graphite_ReceivesShadows();
     g.baked = Graphite_IndirectDiffuse(vLightmapUV, vAmbient);
     g.emission = p.emissionColor * p.emissionLuminance * Graphite_Exposure();
+#if defined(PBR_HEIGHT) && !defined(GRAPHITE_STANDARD_GBUFFER_MODEL)
+    g.custom.xy = Graphite_PackHeight(PBR_Height(i));
+#endif
 #ifdef GRAPHITE_STANDARD_GBUFFER_MODEL
     GRAPHITE_STANDARD_GBUFFER_MODEL(g, p);
 #endif

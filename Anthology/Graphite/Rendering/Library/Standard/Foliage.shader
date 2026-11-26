@@ -46,7 +46,6 @@ Shader "Graphite/Foliage"
         ambient_occlusion_map_strength("Ambient Occlusion Map Strength", Float) = 1.0 [Range(0, 1)]
         normal_scale("Normal Scale", Float) = 1.0
         coat_normal_scale("Coat Normal Scale", Float) = 1.0
-        height_scale("Height Scale", Float) = 0.0 [Range(0, 0.2)] [Toggle(PBR_PARALLAX)]
         alpha_cutoff("Alpha Cutoff", Float) = 0.5 [Range(0, 1)] [ShowIf(_SURFACE, CUTOUT)]
         tangent_rotation("Tangent Rotation", Float) = 0.0
 
@@ -78,7 +77,6 @@ Shader "Graphite/Foliage"
         geometry_normal_map("Geometry Normal Map", Texture2D) = "normal" {} [Map] [Normal]
         geometry_coat_normal_map("Geometry Coat Normal Map", Texture2D) = "normal" {} [Map] [Normal]
         geometry_tangent_map("Geometry Tangent Map", Texture2D) = "normal" {} [Map]
-        geometry_height_map("Geometry Height Map", Texture2D) = "white" {} [Map]
         translucency("Translucency", Float) = 0.6 [Range(0, 2)] [Header("Foliage")]
         translucency_color("Translucency Color", Color) = (1.0, 1.0, 0.8, 1.0)
         foliage_normal_lean("Normal Lean", Float) = 0.4 [Range(0, 1)]

@@ -88,6 +88,9 @@ public readonly struct FeatureView
         Width = width;
         Height = height;
         RenderScale = desc.RenderScale;
+        ContactShadows = desc.ContactShadows;
+        DisplacementCell = desc.DisplacementCell;
+        DisplacementCreaseBlend = desc.DisplacementCreaseBlend;
         Position = desc.Layers[0].Position;
         OutputWidth = desc.Target is { } target ? Math.Max(1u, (uint)MathF.Round(target.Width * desc.Viewport.Z)) : width;
         OutputHeight = desc.Target is { } output ? Math.Max(1u, (uint)MathF.Round(output.Height * desc.Viewport.W)) : height;
@@ -101,10 +104,11 @@ public readonly struct FeatureView
     internal FeatureView AtOutput() => this with { Width = OutputWidth, Height = OutputHeight, RenderScale = 1, Upscaled = true };
 
     /// <summary>The view once it is culled, with what its draws read this frame.</summary>
-    internal FeatureView Culled(bool sceneColor, bool sceneDepth, bool backDepth, bool cascades, bool decals, bool hiZBeforeOpaques, bool hiZAfterOpaques)
+    internal FeatureView Culled(bool sceneColor, bool sceneDepth, bool backDepth, bool cascades, bool decals, bool displacement, bool hiZBeforeOpaques, bool hiZAfterOpaques)
         => this with
         {
             ReadsSceneColor = sceneColor, ReadsSceneDepth = sceneDepth, ReadsBackDepth = backDepth, HasCascades = cascades, HasDecals = decals,
+            HasDisplacement = displacement,
             ReadsHiZBeforeOpaques = hiZBeforeOpaques, ReadsHiZAfterOpaques = hiZAfterOpaques,
         };
 
@@ -112,6 +116,15 @@ public readonly struct FeatureView
     public ViewKind Kind { get; }
 
     internal IReadOnlyDictionary<string, string>? Keywords { get; init; }
+
+    /// <summary>The view's contact shadows.</summary>
+    public ContactShadows ContactShadows { get; }
+
+    /// <summary>The pixels a cell of the view's screen space displacement spans, 0 for none.</summary>
+    public int DisplacementCell { get; }
+
+    /// <summary>The pixels over which the way the view's displacement lifts blends across a surface's hard creases.</summary>
+    public int DisplacementCreaseBlend { get; }
 
     /// <summary>The value of a global keyword axis as the view draws with it, the world's or the view's own, null when neither sets it.</summary>
     public string? Keyword(string axis) => Keywords != null && Keywords.TryGetValue(axis, out string? value) ? value : null;
@@ -170,6 +183,12 @@ public readonly struct FeatureView
     /// <summary>Whether a decal of the world reaches into the view this frame. Known from HasWork on, not in IsActive.</summary>
     public bool HasDecals { get; private init; }
 
+    /// <summary>
+    /// Whether the view displaces its GBuffer this frame: it has a <see cref="DisplacementCell"/> and draws a surface
+    /// that keeps a height. Known from HasWork on, not in IsActive.
+    /// </summary>
+    public bool HasDisplacement { get; private init; }
+
     /// <summary>Whether a feature of the view reads its depth pyramid this frame. Known from HasWork on, not in IsActive.</summary>
     public bool ReadsHiZ => ReadsHiZBeforeOpaques || ReadsHiZAfterOpaques;
 
@@ -224,7 +243,7 @@ public sealed class FeatureGroup(string name)
         Opaque = new("Opaque"), Sky = new("Sky"), SceneColor = new("SceneColor"), SceneDepth = new("SceneDepth"),
         BackDepth = new("BackDepth"), Transparent = new("Transparent"), Present = new("Present"), VolumetricFog = new("VolumetricFog"),
         VolumetricFogSky = new("VolumetricFogSky"), HiZ = new("HiZ"), HiZAfterOpaques = new("HiZAfterOpaques"), GBuffer = new("GBuffer"),
-        GBufferDecals = new("GBufferDecals"), DeferredLighting = new("DeferredLighting");
+        GBufferDecals = new("GBufferDecals"), Displacement = new("Displacement"), DeferredLighting = new("DeferredLighting");
 
     /// <summary>The stock effects' groups, of which a view runs one each.</summary>
     public static readonly FeatureGroup ScreenLighting = new("ScreenLighting"), Tonemap = new("Tonemap"), AntiAliasing = new("AntiAliasing");
@@ -1283,13 +1302,17 @@ public sealed class FeatureContext
     /// particles, blending over what the texture holds unless cleared to transparent black first.
     /// </summary>
     public void DrawProcedural(FullscreenProgram program, RenderTexture target, uint vertexCount, PropertySet? properties = null, bool clear = false)
+        => DrawProcedural(program, target.Framebuffer, vertexCount, properties,
+            new TargetLoadStoreOps(clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : AttachmentOps.Loaded, AttachmentOps.Loaded));
+
+    /// <summary>Draws a procedural program's vertices over a framebuffer of targets the feature declared, each loaded as the ops say.</summary>
+    internal void DrawProcedural(FullscreenProgram program, Framebuffer framebuffer, uint vertexCount, PropertySet? properties, TargetLoadStoreOps ops)
     {
         if (!program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program procedurally; create it with CreateProceduralProgram.");
         if (Program(program) is not { } shader)
             return;
-        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : AttachmentOps.Loaded;
-        Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
+        Command.SetFramebuffer(framebuffer, ops);
         Command.SetFullViewport();
         Command.SetShader(shader);
         Command.SetVertexSource(VertexSource.None);
@@ -1768,6 +1791,7 @@ internal static class FeatureSelection
             new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
             new GBufferFeature(resources),
             new GBufferDecalsFeature(resources),
+            new DisplacementFeature(resources),
             new HiZFeature(resources, afterOpaques: false),
             new DeferredLightingFeature(resources),
             new DrawPassFeature(PassType.Forward, RenderSlot.Opaque, group: FeatureGroup.Opaque, runsOn: ViewKinds.All),

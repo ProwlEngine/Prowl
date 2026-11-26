@@ -24,6 +24,47 @@ internal sealed class ShadowsScene : DemoScene
     private float _lastNight = -1f;
     private bool _running = true;
 
+    // A wall of bricks as heights: white on a brick, falling to black in the mortar between
+    private static Texture BrickHeights(Renderer renderer)
+    {
+        const int Size = 256, Across = 4, Down = 8;
+        byte[] pixels = new byte[Size * Size * 4];
+        for (int y = 0; y < Size; y++)
+        {
+            for (int x = 0; x < Size; x++)
+            {
+                float v = y * Down / (float)Size;
+                float u = x * Across / (float)Size + ((int)v % 2) * 0.5f;
+                float du = MathF.Abs(u - MathF.Floor(u) - 0.5f) * 2f, dv = MathF.Abs(v - MathF.Floor(v) - 0.5f) * 2f;
+                float height = Math.Clamp(MathF.Min((0.94f - du) * 8f, (0.86f - dv) * 4f), 0f, 1f);
+                int o = (y * Size + x) * 4;
+                pixels[o] = pixels[o + 1] = pixels[o + 2] = (byte)MathF.Round(height * 255f);
+                pixels[o + 3] = 255;
+            }
+        }
+        uint mips = (uint)Math.Log2(Size) + 1;
+        Texture texture = renderer.Device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, mips, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        renderer.Device.UpdateTexture<byte>(texture, pixels, TextureRegion.Whole(texture, 0, 0));
+        for (uint mip = 1; mip < mips; mip++)
+        {
+            int side = Size >> (int)mip, above = side * 2;
+            byte[] smaller = new byte[side * side * 4];
+            for (int y = 0; y < side; y++)
+            {
+                for (int x = 0; x < side; x++)
+                {
+                    int from = (y * 2 * above + x * 2) * 4, o = (y * side + x) * 4;
+                    byte value = (byte)((pixels[from] + pixels[from + 4] + pixels[from + above * 4] + pixels[from + above * 4 + 4] + 2) / 4);
+                    smaller[o] = smaller[o + 1] = smaller[o + 2] = value;
+                    smaller[o + 3] = 255;
+                }
+            }
+            renderer.Device.UpdateTexture<byte>(texture, smaller, TextureRegion.Whole(texture, mip, 0));
+            pixels = smaller;
+        }
+        return texture;
+    }
+
     public ShadowsScene(Demo demo) : base(demo)
     {
         Random random = new(11);
@@ -54,6 +95,14 @@ internal sealed class ShadowsScene : DemoScene
             bool metal = i < 4;
             Add(Demo.Sphere, Pbr(colors[i], metal ? 1f : 0f, metal ? 0.02f + t * 0.5f : 0.12f), new Double3(-9 + i * 3, 1.3, 80), new Double3(2.6, 2.6, 2.6));
         }
+
+        // Bricks standing out of their mortar by a height map, which deferred views push out of the surface
+        Material bricks = Pbr(new Float3(0.62f, 0.3f, 0.22f), 0f, 0.85f);
+        bricks.SetTexture("geometry_height_map", BrickHeights(demo.Renderer));
+        bricks.SetFloat("height_scale", 0.08f);
+        Add(Demo.Cube, bricks, new Double3(-3.2, 1.5, 86), new Double3(3, 3, 3), Quaternion.AxisAngle(Float3.UnitY, 0.5f));
+        Add(Demo.Sphere, bricks, new Double3(3.2, 1.6, 86), new Double3(3.2, 3.2, 3.2));
+        Add(Demo.Cube, bricks, new Double3(0, 0.2, 92), new Double3(5, 0.4, 5));
 
         _bulbMaterial = Pbr(new Float3(0, 0, 0), 0f, 1f, new Float3(187500f, 135400f, 72900f));
         Material pole = Pbr(new Float3(0.08f, 0.08f, 0.09f), 0.5f, 0.4f);

@@ -46,6 +46,13 @@ internal sealed class RendererResources : IDisposable
         ShadingModels = new ShadingModels(device, compiler, policy, report);
         GBufferDecalsProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDecals"), "Graphite/GBufferDecals", source: false,
             blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written] }, lit: true, variant: "#define GRAPHITE_DECALS 1\n", policy: policy);
+        BlendAttachmentDescription unwritten = written with { ColorWriteMask = ColorWriteMask.None };
+        DisplacementFillProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("Displacement"), "Graphite/DisplacementFill", source: false,
+            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written, written] }, variant: "#define DISPLACE_FILL 1\n", policy: policy);
+        DisplacementDepthProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("Displacement"), "Graphite/DisplacementDepth", source: false,
+            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [unwritten] }, variant: "#define DISPLACE_DEPTH 1\n", depth: true, policy: policy);
+        DisplacementGridProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("DisplacementGrid"), "Graphite/DisplacementGrid", source: false,
+            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written] }, procedural: true, depth: true, policy: policy);
         HiZProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, policy: policy);
         HiZPackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, variant: "#define HIZ_PACK 1\n", policy: policy);
 
@@ -224,6 +231,11 @@ internal sealed class RendererResources : IDisposable
     /// <summary>Applies the world's decals to a GBuffer, see Graphite/Internal/GBufferDecals.glsl.</summary>
     public FullscreenProgram GBufferDecalsProgram { get; }
 
+    /// <summary>The parts of a view's screen space displacement, see Graphite/Internal/Displacement.glsl and DisplacementGrid.glsl.</summary>
+    public FullscreenProgram DisplacementFillProgram { get; }
+    public FullscreenProgram DisplacementGridProgram { get; }
+    public FullscreenProgram DisplacementDepthProgram { get; }
+
     public ResourceFactory Factory => _device.ResourceFactory;
     public FullscreenProgram HiZPackProgram { get; }
 
@@ -302,6 +314,9 @@ internal sealed class RendererResources : IDisposable
         HiZProgram.Dispose();
         ShadingModels.Dispose();
         GBufferDecalsProgram.Dispose();
+        DisplacementFillProgram.Dispose();
+        DisplacementGridProgram.Dispose();
+        DisplacementDepthProgram.Dispose();
         HiZPackProgram.Dispose();
         Textures.Dispose();
         Noise.Dispose();

@@ -185,11 +185,11 @@ public sealed class StandardShaderTests : IDisposable
         return [.. combo];
     }
 
-    // Every pass with parallax on at every surface and tier with the lobe axes all off and all on, and without parallax
-    // every lobe combination in the forward and transmission passes at every tier and in the shadow caster at every
-    // surface, and the back depth pass at every surface
+    // Every pass at every surface and tier with the lobe axes all off and all on, every lobe combination in the forward
+    // and transmission passes at every tier and in the shadow caster at every surface, and the back depth pass at
+    // every surface
     [Fact]
-    public void EveryParallaxVariant_Compiles()
+    public void EveryLobeVariant_Compiles()
     {
         int all = (1 << s_lobeAxes.Length) - 1;
         List<(ShaderPass, Keyword[])> variants = [];
@@ -200,7 +200,7 @@ public sealed class StandardShaderTests : IDisposable
                 foreach (string tier in new[] { "FULL", "LITE", "MAX" })
                 {
                     foreach (int mask in new[] { 0, all })
-                        variants.Add((pass, WithLobes([new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier), new Keyword("PBR_PARALLAX", "true")], mask)));
+                        variants.Add((pass, WithLobes([new Keyword("_SURFACE", surface), new Keyword("PBR_TIER", tier)], mask)));
                 }
             }
         }

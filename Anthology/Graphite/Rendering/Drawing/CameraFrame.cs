@@ -41,6 +41,9 @@ internal sealed class CameraFrame : IDisposable
     /// </summary>
     public Texture? SceneColor;
     public bool SceneColorUsed;
+
+    /// <summary>Whether the view's GBuffer list draws a surface that keeps a height this frame.</summary>
+    public bool Displaces;
     private TextureView? _sceneColorView;
 
     /// <summary>

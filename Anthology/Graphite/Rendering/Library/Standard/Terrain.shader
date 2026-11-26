@@ -47,7 +47,7 @@ Shader "Graphite/Terrain"
         ambient_occlusion_map_strength("Ambient Occlusion Map Strength", Float) = 1.0 [Range(0, 1)]
         normal_scale("Normal Scale", Float) = 1.0
         coat_normal_scale("Coat Normal Scale", Float) = 1.0
-        height_scale("Height Scale", Float) = 0.0 [Range(0, 0.2)] [Toggle(PBR_PARALLAX)]
+        height_scale("Height Scale", Float) = 0.0 [Range(0, 0.25)] [Toggle(PBR_HEIGHT)]
         alpha_cutoff("Alpha Cutoff", Float) = 0.5 [Range(0, 1)] [ShowIf(_SURFACE, CUTOUT)]
         tangent_rotation("Tangent Rotation", Float) = 0.0
 
@@ -142,6 +142,7 @@ Shader "Graphite/Terrain"
         {
             #define GRAPHITE_STANDARD_FORWARD
             #define GRAPHITE_STANDARD_GBUFFER
+            #pragma variant PBR_HEIGHT
             #define GRAPHITE_STANDARD_INPUTS Terrain_Inputs
             #define GRAPHITE_STANDARD_FINISH Terrain_Brush
             #pragma variant TERRAIN_HOLES

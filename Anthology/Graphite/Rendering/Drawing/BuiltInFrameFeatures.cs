@@ -40,6 +40,12 @@ public static class RendererOutputs
     /// </summary>
     public const string GBufferDecals = "Graphite.GBuffer.Decals";
 
+    /// <summary>
+    /// A displaced deferred view's source offsets: in rg how far away, in pixels, the pixel each pixel now shows came
+    /// from, which the GBuffer's own targets are read at. See <see cref="DisplacementFeature"/>.
+    /// </summary>
+    public const string GBufferOffset = "Graphite.GBuffer.Offset";
+
     /// <summary>A texture of the view's cascade depth, once its cascades are drawn.</summary>
     public const string Cascades = "Graphite.Cascades";
 

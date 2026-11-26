@@ -410,6 +410,10 @@ internal sealed partial class FramePipeline : IDisposable
         camera.FogWritten = false;
         if ((shape.Targets & SceneTargets.Reactive) != 0 && !DrawsTransmission(camera))
             camera.ShapeKey = shape with { Targets = shape.Targets & ~SceneTargets.Reactive };
+
+        // A view that displaces its GBuffer this frame puts the lifted normals and motion on the scene
+        if (camera.Displaces && camera.Info.DisplacementCell > 0 && FeatureSelection.Has(camera.Selected, FeatureGroup.Displacement))
+            camera.ShapeKey = camera.ShapeKey with { Targets = camera.ShapeKey.Targets | SceneTargets.Normals | SceneTargets.Motion };
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
         bool capture = view.Kind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
@@ -917,6 +921,20 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
+    // Whether a GBuffer list draws a material whose pass keeps a height for the view's displacement
+    private bool KeepsHeight(DrawList gbuffer)
+    {
+        foreach (DrawCall call in gbuffer.Calls)
+        {
+            foreach (Keyword keyword in DrawPrograms[call.Program].Keywords)
+            {
+                if (keyword.Name == "PBR_HEIGHT" && keyword.Value == "true")
+                    return true;
+            }
+        }
+        return false;
+    }
+
     // GBuffer draws whose surfaces the prepass already drew test depth equal, so only the visible pixel is kept
     private void DepthEqualAfterEarlyDepth(DrawList gbuffer, EarlyDepth mode)
     {
@@ -979,10 +997,14 @@ internal sealed partial class FramePipeline : IDisposable
             world.Buckets.Build(1, frustum, camera.Forward, sink.For(camera.Forward), lit);
             if (drawsPrepass)
                 DepthEqualAfterPrepass(camera.Forward);
+            camera.Displaces = false;
             foreach ((PassType type, DrawList list) in camera.PassLists)
             {
                 world.Buckets.Build(world.Buckets.Pass(type), frustum, list, sink.For(list));
-                if (type == PassType.GBuffer && drawsPrepass)
+                if (type != PassType.GBuffer)
+                    continue;
+                camera.Displaces = KeepsHeight(list);
+                if (drawsPrepass)
                     DepthEqualAfterEarlyDepth(list, view.EarlyDepth);
             }
             world.Buckets.BuildTransparent(frustum, camera.Transparent, sink.For(camera.Transparent)?.Sorted);

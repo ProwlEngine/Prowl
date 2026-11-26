@@ -8,8 +8,9 @@
 // PBR_TRANSMISSION follows transmission_weight. While it is on the material draws as transparent whatever its surface,
 // through the Transmission pass in place of Forward, which reads the opaque colour and depth behind it and, for volumes,
 // the back depth the BackDepth pass draws. LITE views read none of them. See Graphite/PBR/Transmission.glsl.
-// PBR_PARALLAX follows height_scale. While it is on, geometry_height_map moves both UV sets of every pass before any map
-// is read, the depth passes included, so cutouts match. See PBR_Parallax in Graphite/Standard/PBRSurface.glsl.
+// PBR_HEIGHT follows height_scale. While it is on, the GBuffer pass keeps how high geometry_height_map lifts each
+// point, as far as height_scale metres where it is white, which a deferred view's screen space displacement pushes
+// the surface out by. Forward views show the surface flat.
 // Transparent, transmissive and thin walled subsurface casters dither their shadow by the grey share of light they let
 // through, see Graphite/PBR/Shadow.glsl. Materials with CastShadows off cast none.
 // Also the "Lit" surface model: a shader with Surface "Lit" takes these passes and properties, its code in place of each
@@ -43,7 +44,7 @@ Shader "Graphite/Lit"
         ambient_occlusion("Ambient Occlusion", Float) = 1.0 [Range(0, 1)]
         ambient_occlusion_map_strength("Ambient Occlusion Map Strength", Float) = 1.0 [Range(0, 1)]
         normal_scale("Normal Scale", Float) = 1.0
-        height_scale("Height Scale", Float) = 0.0 [Range(0, 0.2)] [Toggle(PBR_PARALLAX)]
+        height_scale("Height Scale", Float) = 0.0 [Range(0, 0.25)] [Toggle(PBR_HEIGHT)]
         alpha_cutoff("Alpha Cutoff", Float) = 0.5 [Range(0, 1)] [ShowIf(_SURFACE, CUTOUT)]
 
         base_weight_map("Base Weight Map", Texture2D) = "white" {} [Map] [Header("Maps")]
@@ -73,7 +74,6 @@ Shader "Graphite/Lit"
             #define GRAPHITE_STANDARD_FORWARD
             #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_THIN_WALLED
-            #pragma variant PBR_PARALLAX
             #pragma surface_lighting
             #include "Graphite/Standard/PBRSurface.glsl"
         }
@@ -101,8 +101,8 @@ Shader "Graphite/Lit"
         {
             #define GRAPHITE_STANDARD_FORWARD
             #define GRAPHITE_STANDARD_GBUFFER
+            #pragma variant PBR_HEIGHT
             #pragma variant global GRAPHITE_LOD_FADE
-            #pragma variant PBR_PARALLAX
             #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
@@ -131,7 +131,6 @@ Shader "Graphite/Lit"
             #define PBR_TRANSMISSION
             #pragma variant global PBR_TIER FULL LITE MAX
             #pragma variant PBR_THIN_WALLED
-            #pragma variant PBR_PARALLAX
             #pragma surface_lighting
             #include "Graphite/Standard/PBRSurface.glsl"
         }
@@ -159,7 +158,6 @@ Shader "Graphite/Lit"
         {
             #define GRAPHITE_STANDARD_DEPTH
             #define GRAPHITE_STANDARD_BACK_DEPTH
-            #pragma variant PBR_PARALLAX
             #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
@@ -186,7 +184,6 @@ Shader "Graphite/Lit"
         {
             #define GRAPHITE_STANDARD_DEPTH
             #pragma variant global GRAPHITE_LOD_FADE
-            #pragma variant PBR_PARALLAX
             #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
@@ -215,7 +212,6 @@ Shader "Graphite/Lit"
             #define GRAPHITE_STANDARD_SHADOW
             #pragma variant PBR_THIN_WALLED
             #pragma variant PBR_TRANSMISSION
-            #pragma variant PBR_PARALLAX
             #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
@@ -266,7 +262,6 @@ Shader "Graphite/Lit"
         Shared
         {
             #define GRAPHITE_STANDARD_IMPOSTOR
-            #pragma variant PBR_PARALLAX
             #include "Graphite/Standard/PBRSurface.glsl"
         }
         Vertex
