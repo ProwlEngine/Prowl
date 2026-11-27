@@ -4,8 +4,6 @@ Shader "Default/Sprite"
     {
         _MainTex("Sprite Texture", Texture2D) = "white"
         _MainColor("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-        _Tiling("Tiling", Vector2) = (1.0, 1.0)
-        _Offset("Offset", Vector2) = (0.0, 0.0)
     }
 
     Pass
@@ -20,9 +18,6 @@ Shader "Default/Sprite"
         {
             #include "Graphite/Vertex.glsl"
 
-            uniform vec2 _Tiling;
-            uniform vec2 _Offset;
-
             out vec2 vUV;
             out vec3 vRelativePos;
             out vec4 vColor;
@@ -31,7 +26,7 @@ Shader "Default/Sprite"
             {
                 vec3 relative = Graphite_ObjectToRelative(vertexPosition);
                 gl_Position = Graphite_RelativeToClip(relative);
-                vUV = vertexUV0 * _Tiling + _Offset;
+                vUV = vertexUV0;
                 vRelativePos = relative;
                 vColor = vertexColor * Graphite_Object().color;
             }
