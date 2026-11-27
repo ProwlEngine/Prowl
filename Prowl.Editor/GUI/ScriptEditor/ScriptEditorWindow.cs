@@ -449,8 +449,6 @@ public class ScriptEditorWindow : DockPanel
         Preferences.Changed(Preferences.SectionOf(prefs));
     }
 
-    // Undo, redo and save stay on the code editor's own keys, which already match the global ones.
-    private static readonly CodeEditorCommand[] s_notRebindable = [CodeEditorCommand.Undo, CodeEditorCommand.Redo, CodeEditorCommand.Save];
     private const string ShortcutCategory = "CodeEditor/";
 
     private static CodeEditorKeymap? s_keymap;
@@ -461,7 +459,6 @@ public class ScriptEditorWindow : DockPanel
     {
         foreach (CodeEditorCommand command in Enum.GetValues<CodeEditorCommand>())
         {
-            if (s_notRebindable.Contains(command)) continue;
             CodeKeyBinding? binding = CodeEditorKeymap.Default.PrimaryBinding(command);
             KeyCode key = binding is { } b && Runtime.GUI.PaperInputBridge.TryGetKeyCode(b.Key, out KeyCode k) ? k : KeyCode.Unknown;
             ShortcutManager.Register(ShortcutCategory + command, PropertyGridUtils.NicifyName(command.ToString()), key,
