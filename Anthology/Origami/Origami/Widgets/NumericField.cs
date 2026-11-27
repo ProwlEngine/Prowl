@@ -422,7 +422,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     private bool TryParse(string s, out T result)
     {
-        if (string.IsNullOrWhiteSpace(s)) { result = default; return false; }
+        if (string.IsNullOrWhiteSpace(s)) { result = default; return s == string.Empty; };
 
         var styles = s_isFloatingPoint
             ? NumberStyles.Float | NumberStyles.AllowThousands
