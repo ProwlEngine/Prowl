@@ -604,6 +604,20 @@ public class Mesh : Asset, ISerializable
         Tangents = ComputeTangents(vertices, normals, uv, indices);
     }
 
+    /// <summary>A new mesh holding these arrays as they are, for a builder handing over arrays nothing else holds.</summary>
+    internal static Mesh FromOwned(string name, Float3[] vertices, Float3[] normals, Float2[] uv, Float4[] tangents, uint[] indices)
+    {
+        var mesh = new Mesh { Name = name };
+        mesh.IndexFormat = vertices.Length > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
+        mesh.vertices = vertices;
+        mesh.normals = normals;
+        mesh.uv = uv;
+        mesh.tangents = tangents;
+        mesh.indices = indices;
+        mesh.changed = true;
+        return mesh;
+    }
+
     /// <summary>Per vertex tangents from positions, texture coordinates and triangles, the handedness in W.</summary>
     public static Float4[] ComputeTangents(Float3[] vertices, Float3[]? normals, Float2[] uv, uint[] indices)
     {

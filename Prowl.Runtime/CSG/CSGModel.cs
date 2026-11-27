@@ -302,6 +302,7 @@ public sealed class CSGModel : Component
         _geometryVersion = geometry.Version;
 
         BuildCount++;
+        if (force) _meshCache.Clear();
         CSGMeshes meshes = CSGMeshBuilder.Build(geometry, ResolveSurface, GameObject.Name, _meshCache, collision: !DefersCollider);
         ProcessMeshes(meshes);
         ApplyMeshes(meshes);
@@ -346,6 +347,7 @@ public sealed class CSGModel : Component
             info.Collide = false;
             return info;
         }, GameObject.Name);
+        _meshCache.FlagsStale = true;
         _previewMaterials.Clear();
         _previewMaterials.AddRange(preview.Materials);
         hidesAll = preview.Visible.IsNotValid();

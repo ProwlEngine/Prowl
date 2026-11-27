@@ -860,6 +860,31 @@ public class CSGModelTests : RuntimeTestBase
     }
 
     [Fact]
+    public void EditingNextToAHiddenBrushKeepsItInTheSavedMesh()
+    {
+        CreateModel();
+        CSGBrush hidden = AddBrush(Float3.One * 2f, new Float3(1f, 1f, 1f));
+        CSGBrush moved = AddBrush(Float3.One * 2f, new Float3(5f, 1f, 1f));
+        Update(_scene);
+
+        try
+        {
+            CSGModel.EditorHidden = b => ReferenceEquals(b, hidden);
+            _model.RefreshHidden();
+
+            moved.Transform.Position += new Float3(0.5f, 0f, 0f);
+            Update(_scene);
+
+            Assert.Equal(16f, VolumeOf(_model.GeneratedMesh!), 2);
+            Assert.Equal(8f, VolumeOf(_model.GetComponent<MeshRenderer>().DrawOverride!), 2);
+        }
+        finally
+        {
+            CSGModel.EditorHidden = null;
+        }
+    }
+
+    [Fact]
     public void ABrushAcrossManyChunksBuildsWhole()
     {
         CreateModel();

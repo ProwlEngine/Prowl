@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -44,8 +43,8 @@ public sealed class CSGMeshes
 }
 
 /// <summary>
-/// The visible mesh of a model kept in pieces, one per cube of space, so a rebuild only redoes the cubes whose faces
-/// changed and joins the rest as they were.
+/// The visible mesh of a model kept in pieces, one per cube of space. The scene keeps every face it did not redo, so
+/// each face is resolved once and a rebuild only redoes the cubes that gained or lost faces, joining the rest as they were.
 /// </summary>
 public sealed class CSGMeshCache
 {
@@ -53,13 +52,35 @@ public sealed class CSGMeshCache
     public const float ChunkSize = 16f;
 
     internal readonly Dictionary<Int3, Piece> Pieces = new();
+    internal readonly Dictionary<GeometryData.Face, Entry> Faces = new(ReferenceEqualityComparer.Instance);
+    internal GeometryData? Source;
+    internal int Stamp;
+
+    /// <summary>Something else wrote the face flags of the mesh, so the next build writes them all again.</summary>
+    internal bool FlagsStale;
 
     /// <summary>How many cubes the last build redid, for tests.</summary>
     public int LastRebuilt { get; internal set; }
 
+    /// <summary>Forgets every face, so the next build resolves and draws the whole model again.</summary>
+    public void Clear()
+    {
+        Pieces.Clear();
+        Faces.Clear();
+        Source = null;
+    }
+
+    internal sealed class Entry
+    {
+        public CSGSurfaceInfo Info;
+        public Int3 Cell;
+        public bool Drawn;
+        public int Slot = -1;
+        public int Seen;
+    }
+
     internal sealed class Piece
     {
-        public ulong Key;
         public Float3[] Positions = [];
         public Float3[] Normals = [];
         public Float2[] UVs = [];
@@ -86,6 +107,7 @@ public static class CSGMeshBuilder
     {
         ArgumentNullException.ThrowIfNull(geometry);
         ArgumentNullException.ThrowIfNull(resolve);
+        if (cache != null) return BuildCached(geometry, resolve, name, cache, collision);
 
         var result = new CSGMeshes();
         if (geometry.Faces.Count == 0) return result;
@@ -108,12 +130,9 @@ public static class CSGMeshBuilder
                 result.Materials.Add(info.Material);
             }
 
-            // Written only when they change, since the scene hands back the same faces build after build
             int slot = Math.Max(material, 0);
             if (face.Material != slot) face.Material = slot;
-            if (face.Hide == info.Render) face.Hide = !info.Render;
-            bool smooth = info.SmoothingGroup != 0;
-            if (face.IsSmooth != smooth) face.IsSmooth = smooth;
+            WriteFlags(face, info);
 
             anyRender |= info.Render;
             anyCollide |= info.Collide;
@@ -121,9 +140,105 @@ public static class CSGMeshBuilder
 
         MarkSmoothingBreaks(geometry, infos);
 
-        if (anyRender) result.Visible = cache != null ? BuildVisible(geometry, infos, result.Materials, name, cache) : BuildVisible(geometry, result.Materials, name);
+        if (anyRender) result.Visible = BuildVisible(geometry, result.Materials, name);
         if (anyCollide && collision) result.Collision = BuildCollision(geometry, infos, name);
         return result;
+    }
+
+    // Written only when they change, since the scene hands back the same faces build after build
+    private static void WriteFlags(GeometryData.Face face, in CSGSurfaceInfo info)
+    {
+        if (face.Hide == info.Render) face.Hide = !info.Render;
+        bool smooth = info.SmoothingGroup != 0;
+        if (face.IsSmooth != smooth) face.IsSmooth = smooth;
+    }
+
+    // Resolves only the faces the scene added since the last build and redraws only the cubes that gained or lost one
+    private static CSGMeshes BuildCached(GeometryData geometry, SurfaceResolver resolve, string? name, CSGMeshCache cache, bool collision)
+    {
+        var result = new CSGMeshes();
+        if (!ReferenceEquals(cache.Source, geometry))
+        {
+            cache.Clear();
+            cache.Source = geometry;
+        }
+
+        geometry.AddFaceAttribute(GeometryData.MaterialAttribute, GeometryData.AttributeBaseType.Int, 1);
+
+        bool rewrite = cache.FlagsStale;
+        cache.FlagsStale = false;
+        int stamp = ++cache.Stamp;
+        int count = geometry.Faces.Count;
+        var infos = new CSGSurfaceInfo[count];
+        var entries = new CSGMeshCache.Entry[count];
+        var added = new List<GeometryData.Face>();
+        var dirty = new HashSet<Int3>();
+        bool anyRender = false, anyCollide = false;
+
+        for (int f = 0; f < count; f++)
+        {
+            GeometryData.Face face = geometry.Faces[f];
+            if (!cache.Faces.TryGetValue(face, out CSGMeshCache.Entry? entry))
+            {
+                CSGSurfaceInfo resolved = resolve(CSGScene.GetBrushId(face), CSGScene.GetSourceFaceIndex(face));
+                entry = new CSGMeshCache.Entry { Info = resolved, Drawn = resolved.Render && face.VertCount >= 3 };
+                if (entry.Drawn) dirty.Add(entry.Cell = CellOf(face));
+                cache.Faces[face] = entry;
+                WriteFlags(face, resolved);
+                added.Add(face);
+            }
+            else if (rewrite) WriteFlags(face, entry.Info);
+
+            entry.Seen = stamp;
+            entries[f] = entry;
+            CSGSurfaceInfo info = infos[f] = entry.Info;
+
+            int material = result.Materials.IndexOf(info.Material);
+            if (info.Render && material < 0)
+            {
+                material = result.Materials.Count;
+                result.Materials.Add(info.Material);
+            }
+
+            int slot = Math.Max(material, 0);
+            if (entry.Slot != slot || rewrite)
+            {
+                if (face.Material != slot) face.Material = slot;
+                entry.Slot = slot;
+            }
+
+            anyRender |= info.Render;
+            anyCollide |= info.Collide;
+        }
+
+        // Every face kept was seen, so anything more in the cache left the mesh
+        if (cache.Faces.Count > count)
+        {
+            var gone = new List<GeometryData.Face>();
+            foreach ((GeometryData.Face face, CSGMeshCache.Entry entry) in cache.Faces)
+            {
+                if (entry.Seen == stamp) continue;
+                gone.Add(face);
+                if (entry.Drawn) dirty.Add(entry.Cell);
+            }
+            foreach (GeometryData.Face face in gone) cache.Faces.Remove(face);
+        }
+
+        MarkSmoothingBreaks(added, infos, entries, dirty);
+
+        if (anyRender) result.Visible = BuildVisible(geometry, entries, result.Materials, name, cache, dirty);
+        else cache.Pieces.Clear();
+        if (anyCollide && collision) result.Collision = BuildCollision(geometry, infos, name);
+        return result;
+    }
+
+    private static Int3 CellOf(GeometryData.Face face)
+    {
+        Float3 middle = Float3.Zero;
+        GeometryData.Loop loop = face.Loop!;
+        do { middle += loop.Vert.Point; loop = loop.Next!; } while (loop != face.Loop);
+        middle /= face.VertCount * CSGMeshCache.ChunkSize;
+        return new Int3((int)MathF.Floor(middle.X), (int)MathF.Floor(middle.Y), (int)MathF.Floor(middle.Z));
     }
 
     /// <summary>The collision mesh alone, for when it was left out of <see cref="Build"/>.</summary>
@@ -138,64 +253,47 @@ public static class CSGMeshBuilder
         return BuildCollision(geometry, infos, name);
     }
 
-    /// <summary>The visible mesh from cached pieces, redoing only the pieces whose faces changed.</summary>
-    private static Mesh? BuildVisible(GeometryData geometry, CSGSurfaceInfo[] infos, List<Material?> materials, string? name, CSGMeshCache cache)
+    /// <summary>The visible mesh from cached pieces, redoing the pieces of the dirty cells.</summary>
+    private static Mesh? BuildVisible(GeometryData geometry, CSGMeshCache.Entry[] entries, List<Material?> materials, string? name, CSGMeshCache cache, HashSet<Int3> dirty)
     {
-        // Faces grouped by the cube their middle lies in, each group keyed by everything that shows of its faces
-        var chunkOf = new int[geometry.Faces.Count];
-        var cells = new List<Int3>();
-        var keys = new List<ulong>();
-        var index = new Dictionary<Int3, int>();
-        for (int f = 0; f < geometry.Faces.Count; f++)
-        {
-            GeometryData.Face face = geometry.Faces[f];
-            if (!infos[f].Render || face.VertCount < 3)
-            {
-                chunkOf[f] = -1;
-                continue;
-            }
-
-            Float3 middle = Float3.Zero;
-            GeometryData.Loop loop = face.Loop!;
-            do { middle += loop.Vert.Point; loop = loop.Next!; } while (loop != face.Loop);
-            middle /= face.VertCount;
-            var cell = new Int3((int)MathF.Floor(middle.X / CSGMeshCache.ChunkSize), (int)MathF.Floor(middle.Y / CSGMeshCache.ChunkSize), (int)MathF.Floor(middle.Z / CSGMeshCache.ChunkSize));
-            if (!index.TryGetValue(cell, out int chunk))
-            {
-                chunk = cells.Count;
-                index[cell] = chunk;
-                cells.Add(cell);
-                keys.Add(14695981039346656037UL);
-            }
-            chunkOf[f] = chunk;
-            keys[chunk] = Mix(keys[chunk], face, infos[f]);
-        }
-
         cache.LastRebuilt = 0;
-        var kept = new HashSet<Int3>(cells);
-        foreach (Int3 cell in new List<Int3>(cache.Pieces.Keys))
-            if (!kept.Contains(cell)) cache.Pieces.Remove(cell);
-
-        for (int chunk = 0; chunk < cells.Count; chunk++)
+        if (dirty.Count > 0)
         {
-            if (cache.Pieces.TryGetValue(cells[chunk], out CSGMeshCache.Piece? piece) && piece.Key == keys[chunk]) continue;
-            int only = chunk;
-            RenderMesh render = geometry.ToRenderMesh(new RenderMeshOptions { SkipHidden = true, Emit = face => chunkOf[face.Index] == only });
-            piece = new CSGMeshCache.Piece
+            var faces = new Dictionary<Int3, List<GeometryData.Face>>();
+            foreach (Int3 cell in dirty) faces[cell] = new List<GeometryData.Face>();
+            for (int f = 0; f < entries.Length; f++)
+                if (entries[f].Drawn && faces.TryGetValue(entries[f].Cell, out List<GeometryData.Face>? list)) list.Add(geometry.Faces[f]);
+
+            foreach ((Int3 cell, List<GeometryData.Face> list) in faces)
             {
-                Key = keys[chunk],
-                Positions = render.Positions,
-                Normals = render.Normals,
-                UVs = render.UVs ?? new Float2[render.Positions.Length],
-            };
-            piece.Tangents = Mesh.ComputeTangents(piece.Positions, piece.Normals, piece.UVs, render.Indices);
-            foreach (var subMesh in render.SubMeshes)
-                piece.Parts.Add((materials[subMesh.Material], render.Indices[subMesh.IndexStart..(subMesh.IndexStart + subMesh.IndexCount)]));
-            cache.Pieces[cells[chunk]] = piece;
-            cache.LastRebuilt++;
+                if (list.Count == 0)
+                {
+                    cache.Pieces.Remove(cell);
+                    continue;
+                }
+                cache.Pieces[cell] = BuildPiece(geometry, list, materials);
+                cache.LastRebuilt++;
+            }
         }
 
+        var cells = new List<Int3>(cache.Pieces.Keys);
+        cells.Sort((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.Z.CompareTo(b.Z));
         return Join(cells, cache, materials, name);
+    }
+
+    private static CSGMeshCache.Piece BuildPiece(GeometryData geometry, List<GeometryData.Face> faces, List<Material?> materials)
+    {
+        RenderMesh render = geometry.ToRenderMesh(new RenderMeshOptions { SkipHidden = true, Faces = faces });
+        var piece = new CSGMeshCache.Piece
+        {
+            Positions = render.Positions,
+            Normals = render.Normals,
+            UVs = render.UVs ?? new Float2[render.Positions.Length],
+        };
+        piece.Tangents = Mesh.ComputeTangents(piece.Positions, piece.Normals, piece.UVs, render.Indices);
+        foreach (var subMesh in render.SubMeshes)
+            piece.Parts.Add((materials[subMesh.Material], render.Indices[subMesh.IndexStart..(subMesh.IndexStart + subMesh.IndexCount)]));
+        return piece;
     }
 
     // The pieces of the cells, in their order, as one mesh with a submesh per material
@@ -253,58 +351,54 @@ public static class CSGMeshBuilder
             subMeshes.Add((start, written - start));
         }
 
-        var mesh = new Mesh { Name = name ?? "CSG Mesh" };
-        mesh.IndexFormat = vertexCount > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
-        mesh.Vertices = positions;
-        mesh.Normals = normals;
-        mesh.UV = uvs;
-        mesh.Tangents = tangents;
-        mesh.Indices = allIndices;
+        Mesh mesh = Mesh.FromOwned(name ?? "CSG Mesh", positions, normals, uvs, tangents, allIndices);
         mesh.RecalculateBounds();
         mesh.SetSubMeshCount(subMeshes.Count);
         for (int i = 0; i < subMeshes.Count; i++) mesh.SetSubMesh(i, new SubMeshDescriptor(subMeshes[i].Start, subMeshes[i].Count));
         return mesh;
     }
 
-    // Folds what shows of a face into a running hash: where its corners are, their texture coordinates, which edges
-    // break its shading, and how its surface draws
-    private static ulong Mix(ulong hash, GeometryData.Face face, in CSGSurfaceInfo info)
-    {
-        hash = Mix(hash, info.Material.IsValid() ? RuntimeHelpers.GetHashCode(info.Material) : 0);
-        hash = Mix(hash, (face.IsSmooth ? 1 : 0) | (info.SmoothingGroup << 1));
-        GeometryData.Loop loop = face.Loop!;
-        do
-        {
-            Float3 p = loop.Vert.Point;
-            hash = Mix(hash, BitConverter.SingleToInt32Bits(p.X));
-            hash = Mix(hash, BitConverter.SingleToInt32Bits(p.Y));
-            hash = Mix(hash, BitConverter.SingleToInt32Bits(p.Z));
-            if (loop.TryGetAttribute(GeometryData.UvAttribute, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue { Data.Length: >= 2 } uv)
-            {
-                hash = Mix(hash, BitConverter.SingleToInt32Bits(uv.Data[0]));
-                hash = Mix(hash, BitConverter.SingleToInt32Bits(uv.Data[1]));
-            }
-            hash = Mix(hash, loop.Edge.IsSharp ? 1 : 0);
-            loop = loop.Next!;
-        } while (loop != face.Loop);
-        return Mix(hash, -1);
-    }
-
-    private static ulong Mix(ulong hash, int value) => (hash ^ (uint)value) * 1099511628211UL;
-
     /// <summary>Smooth shading stops where two smooth faces from different groups meet.</summary>
     private static void MarkSmoothingBreaks(GeometryData geometry, CSGSurfaceInfo[] infos)
     {
         foreach (GeometryData.Edge edge in geometry.Edges)
         {
-            bool sharp = false;
-            GeometryData.Loop? first = edge.Loop;
-            if (first != null && first.RadialNext != first && first.RadialNext!.RadialNext == first)
+            bool sharp = Breaks(edge, infos);
+            if (edge.IsSharp != sharp) edge.IsSharp = sharp;
+        }
+    }
+
+    private static bool Breaks(GeometryData.Edge edge, CSGSurfaceInfo[] infos)
+    {
+        GeometryData.Loop? first = edge.Loop;
+        if (first == null || first.RadialNext == first || first.RadialNext!.RadialNext != first) return false;
+        int a = infos[first.Face.Index].SmoothingGroup, b = infos[first.RadialNext.Face.Index].SmoothingGroup;
+        return a != 0 && b != 0 && a != b;
+    }
+
+    // Only the edges of added faces can change, and a cube drawing the other side of a changed edge is redone too
+    private static void MarkSmoothingBreaks(List<GeometryData.Face> added, CSGSurfaceInfo[] infos, CSGMeshCache.Entry[] entries, HashSet<Int3> dirty)
+    {
+        foreach (GeometryData.Face face in added)
+        {
+            GeometryData.Loop loop = face.Loop!;
+            do
             {
-                int a = infos[first.Face.Index].SmoothingGroup, b = infos[first.RadialNext.Face.Index].SmoothingGroup;
-                sharp = a != 0 && b != 0 && a != b;
-            }
-            edge.IsSharp = sharp;
+                GeometryData.Edge edge = loop.Edge;
+                bool sharp = Breaks(edge, infos);
+                if (edge.IsSharp != sharp)
+                {
+                    edge.IsSharp = sharp;
+                    GeometryData.Loop radial = loop;
+                    do
+                    {
+                        CSGMeshCache.Entry other = entries[radial.Face.Index];
+                        if (other.Drawn) dirty.Add(other.Cell);
+                        radial = radial.RadialNext!;
+                    } while (radial != loop);
+                }
+                loop = loop.Next!;
+            } while (loop != face.Loop);
         }
     }
 
