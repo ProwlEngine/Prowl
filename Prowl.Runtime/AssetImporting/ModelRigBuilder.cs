@@ -280,7 +280,7 @@ internal static class ModelRigBuilder
         int[] valid = Array.FindAll(feet, b => b >= 0 && b < skeleton.BoneCount);
         if (valid.Length == 0) return null;
 
-        var ground = new float[poses.Length];
+        float[] ground = new float[poses.Length];
         for (int f = 0; f < poses.Length; f++)
         {
             float lowest = float.MaxValue;

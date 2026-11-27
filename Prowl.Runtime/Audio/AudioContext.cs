@@ -227,11 +227,13 @@ public static class AudioContext
         if (audioContext != IntPtr.Zero)
             return;
 
-        ma_ex_device_info pDeviceInfo = new ma_ex_device_info();
-        pDeviceInfo.index = deviceInfo == null ? -1 : deviceInfo.Index;
-        pDeviceInfo.pName = IntPtr.Zero;
-        pDeviceInfo.nativeDataFormatCount = 0;
-        pDeviceInfo.nativeDataFormats = IntPtr.Zero;
+        ma_ex_device_info pDeviceInfo = new ma_ex_device_info
+        {
+            index = deviceInfo == null ? -1 : deviceInfo.Index,
+            pName = IntPtr.Zero,
+            nativeDataFormatCount = 0,
+            nativeDataFormats = IntPtr.Zero
+        };
 
         AudioContext.sampleRate = sampleRate;
         AudioContext.channels = channels;
@@ -646,10 +648,7 @@ public static class AudioContext
         {
             NativeArray<float> buffer = new NativeArray<float>(pOutput, (Int32)(frameCount * channels));
 
-            if (DataProcess != null)
-            {
-                DataProcess.Invoke(buffer, frameCount);
-            }
+            DataProcess?.Invoke(buffer, frameCount);
 
             outputBuffer.Write(buffer);
         }
@@ -756,11 +755,13 @@ public sealed class DeviceInfo
             {
                 IntPtr elementPtr = IntPtr.Add(pFormats, i * Marshal.SizeOf<ma_ex_native_data_format>());
                 ma_ex_native_data_format f = Marshal.PtrToStructure<ma_ex_native_data_format>(elementPtr);
-                formats[i] = new DeviceDataFormat();
-                formats[i].channels = f.channels;
-                formats[i].flags = f.flags;
-                formats[i].format = (AudioSampleFormat)f.format;
-                formats[i].sampleRate = f.sampleRate;
+                formats[i] = new DeviceDataFormat
+                {
+                    channels = f.channels,
+                    flags = f.flags,
+                    format = (AudioSampleFormat)f.format,
+                    sampleRate = f.sampleRate
+                };
             }
         }
     }

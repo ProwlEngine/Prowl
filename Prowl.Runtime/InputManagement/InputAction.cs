@@ -585,7 +585,7 @@ public class InputAction
         };
     }
 
-    private bool IsValueActuated(object value)
+    private static bool IsValueActuated(object value)
     {
         if (value is float floatValue)
             return Maths.Abs(floatValue) > 0.0001;

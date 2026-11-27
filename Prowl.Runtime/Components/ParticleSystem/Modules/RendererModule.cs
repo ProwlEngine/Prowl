@@ -163,10 +163,10 @@ public class RendererModule : ParticleSystemModule
             {
                 Name = "Particle Quad",
                 Vertices = [new(-0.5f, -0.5f, 0f), new(0.5f, -0.5f, 0f), new(0.5f, 0.5f, 0f), new(-0.5f, 0.5f, 0f)],
+                UV = [new(0f, 1f), new(1f, 1f), new(1f, 0f), new(0f, 0f)],
+                Normals = [Float3.UnitZ, Float3.UnitZ, Float3.UnitZ, Float3.UnitZ],
+                Indices = [0, 1, 2, 0, 2, 3]
             };
-            s_quad.UV = [new(0f, 1f), new(1f, 1f), new(1f, 0f), new(0f, 0f)];
-            s_quad.Normals = [Float3.UnitZ, Float3.UnitZ, Float3.UnitZ, Float3.UnitZ];
-            s_quad.Indices = [0, 1, 2, 0, 2, 3];
             s_quad.RecalculateBounds();
             return s_quad;
         }
@@ -591,7 +591,7 @@ internal sealed class ParticleBuffers
     private const string OrderName = "ProwlParticleOrder";
     private const int RecordBytes = ParticleRenderProvider.RecordRows * 16;
 
-    private static readonly ConditionalWeakTable<RenderWorld, ParticleBuffers> s_worlds = new();
+    private static readonly ConditionalWeakTable<RenderWorld, ParticleBuffers> s_worlds = [];
 
     private readonly RenderWorld _world;
     private int _users;

@@ -200,7 +200,7 @@ public sealed class SubGraphNode : AnimationGraphNode
     }
 
     /// <summary>The graph the node plays as an asset, or null while it plays its own nodes.</summary>
-    private AnimationGraph? GraphAsset(GraphNodeRecord r)
+    private static AnimationGraph? GraphAsset(GraphNodeRecord r)
     {
         if (r.Get(Embedded)) return null;
         AnimationGraph? asset = r.Get(GraphAssetSetting)?.Graph;

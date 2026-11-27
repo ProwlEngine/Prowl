@@ -7,13 +7,12 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 
 using Prowl.Echo;
+using Prowl.Ember;
 using Prowl.PaperUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
-
-using Prowl.Ember;
 
 namespace Prowl.Runtime;
 

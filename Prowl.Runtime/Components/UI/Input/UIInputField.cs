@@ -444,7 +444,7 @@ public class UIInputField : Selectable,
     private string Sanitize(string? value)
     {
         string v = value ?? string.Empty;
-        if (v.IndexOf('\n') >= 0 || v.IndexOf('\r') >= 0)
+        if (v.Contains('\n') || v.Contains('\r'))
             v = v.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
         if (_characterLimit > 0 && v.Length > _characterLimit)
             v = v.Substring(0, _characterLimit);

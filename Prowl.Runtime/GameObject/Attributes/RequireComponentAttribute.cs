@@ -3,6 +3,8 @@
 
 using System;
 
+namespace Prowl.Runtime;
+
 /// <summary>
 /// Specifies that a GameObject must have certain components in addition to the one where this attribute is applied.
 /// </summary>

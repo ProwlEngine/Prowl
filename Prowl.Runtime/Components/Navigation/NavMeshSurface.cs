@@ -2,8 +2,8 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -222,7 +222,7 @@ public class NavMeshSurface : Component
         int defaultArea = DefaultArea;
         AABB? worldBounds = ExplicitWorldBounds();
         int threads = Math.Max(1, Environment.ProcessorCount - 1);
-        return cancellation => NavMeshBuilder.Build(settings, sources, defaultArea, threads, cancellation, worldBounds, volumes, links);
+        return cancellation => NavMeshBuilder.Build(settings, sources, defaultArea, threads, worldBounds, volumes, links, cancellation);
     }
 
     /// <summary>
@@ -416,8 +416,8 @@ public class NavMeshSurface : Component
     /// apply assumes it is unchanged since dispatch.
     /// </summary>
     public Task<List<NavMeshTileRebuild>> RebuildTilesAsync(
-        AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources, CancellationToken cancellation = default,
-        IReadOnlyList<NavMeshAreaVolume>? volumes = null)
+        AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources,
+        IReadOnlyList<NavMeshAreaVolume>? volumes = null, CancellationToken cancellation = default)
     {
         Func<CancellationToken, List<NavMeshTileRebuild>>? rebuild = PrepareRebuild(worldBounds, sources, volumes);
         if (rebuild == null) return Task.FromResult(new List<NavMeshTileRebuild>());
@@ -435,7 +435,7 @@ public class NavMeshSurface : Component
 
         volumes ??= CollectVolumes(RebuildCollectionBounds(worldBounds));
         int defaultArea = DefaultArea;
-        return cancellation => NavMeshBuilder.BuildTilesInBounds(data!, sources, worldBounds.Min, worldBounds.Max, defaultArea, cancellation, volumes);
+        return cancellation => NavMeshBuilder.BuildTilesInBounds(data!, sources, worldBounds.Min, worldBounds.Max, defaultArea, volumes, cancellation);
     }
 
     /// <summary>

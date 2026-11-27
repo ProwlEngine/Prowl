@@ -135,7 +135,7 @@ public class DualAxisCompositeBinding : InputCompositeBinding
         return value;
     }
 
-    private float ReadSingleAxisValue(IInputHandler inputHandler, InputBinding binding)
+    private static float ReadSingleAxisValue(IInputHandler inputHandler, InputBinding binding)
     {
         return binding.BindingType switch
         {

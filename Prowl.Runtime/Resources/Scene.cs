@@ -2,9 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -749,7 +749,7 @@ public class Scene : EngineObject, ISerializable
     [SerializeIgnore]
     private List<GameObject> _allObj = [];
     [SerializeIgnore]
-    private HashSet<GameObject> _allObjSet = new(ReferenceEqualityComparer.Instance);
+    private HashSet<GameObject> _allObjSet = [with(ReferenceEqualityComparer.Instance)];
 
     // Set when one of this scene's GameObjects is disposed, so Flush only scans when there is something to drop.
     [SerializeIgnore]
@@ -1150,7 +1150,7 @@ public class Scene : EngineObject, ISerializable
         // In join order, with a null where a component was dropped. Readers skip the nulls: closing a gap moves
         // everything after it, which would cost the list's length on every flush or query that follows a destroy.
         public readonly List<Component?> Items = [];
-        private readonly Dictionary<Component, int> _slots = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<Component, int> _slots = [with(ReferenceEqualityComparer.Instance)];
 
         public void Add(Component component)
         {
@@ -1344,7 +1344,7 @@ public class Scene : EngineObject, ISerializable
     }
 
     // One walk of the section's live objects and components. The caller owns both sets, so nothing is allocated here.
-    internal void FindIdentifiersIn(SceneSection section, HashSet<Guid> wanted, HashSet<Guid> found)
+    internal static void FindIdentifiersIn(SceneSection section, HashSet<Guid> wanted, HashSet<Guid> found)
     {
         foreach (GameObject root in section.LiveRoots)
             Gather(root);

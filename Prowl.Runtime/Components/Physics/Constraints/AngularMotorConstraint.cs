@@ -161,5 +161,5 @@ public class AngularMotorConstraint : PhysicsConstraint
     private static float DriveSweep(float velocity)
         => (velocity < 0.0f ? -1.0f : 1.0f) * Maths.Min(0.7f + Maths.Abs(velocity) * 0.3f, Maths.PI * 1.4f);
 
-    private Color DriveColor(float force) => force > 0.0f ? MotorColor : InactiveColor;
+    private static Color DriveColor(float force) => force > 0.0f ? MotorColor : InactiveColor;
 }

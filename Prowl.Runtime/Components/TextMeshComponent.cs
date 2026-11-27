@@ -13,8 +13,8 @@ using Prowl.Vector;
 
 using GMaterial = Prowl.Graphite.Rendering.Material;
 using Material = Prowl.Runtime.Resources.Material;
-using Shader = Prowl.Runtime.Resources.Shader;
 using ScribeAlign = Prowl.Scribe.TextAlignment;
+using Shader = Prowl.Runtime.Resources.Shader;
 using TAlignment = Prowl.Runtime.UI.TextAlignment;
 
 namespace Prowl.Runtime;

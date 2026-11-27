@@ -36,7 +36,7 @@ public sealed class CSGMeshes
     public Mesh? Visible;
 
     /// <summary>Materials in submesh order. Same length as <see cref="Visible"/>'s submesh count.</summary>
-    public List<Material?> Materials = new();
+    public List<Material?> Materials = [];
 
     /// <summary>Collision mesh, a single untextured submesh, or null when nothing collides.</summary>
     public Mesh? Collision;
@@ -51,8 +51,8 @@ public sealed class CSGMeshCache
     /// <summary>The edge length of the cubes the faces are grouped by, from the middle of each face.</summary>
     public const float ChunkSize = 16f;
 
-    internal readonly Dictionary<Int3, Piece> Pieces = new();
-    internal readonly Dictionary<GeometryData.Face, Entry> Faces = new(ReferenceEqualityComparer.Instance);
+    internal readonly Dictionary<Int3, Piece> Pieces = [];
+    internal readonly Dictionary<GeometryData.Face, Entry> Faces = [with(ReferenceEqualityComparer.Instance)];
     internal GeometryData? Source;
     internal int Stamp;
 
@@ -85,7 +85,7 @@ public sealed class CSGMeshCache
         public Float3[] Normals = [];
         public Float2[] UVs = [];
         public Float4[] Tangents = [];
-        public List<(Material? Material, uint[] Indices)> Parts = new();
+        public List<(Material? Material, uint[] Indices)> Parts = [];
     }
 }
 
@@ -260,7 +260,7 @@ public static class CSGMeshBuilder
         if (dirty.Count > 0)
         {
             var faces = new Dictionary<Int3, List<GeometryData.Face>>();
-            foreach (Int3 cell in dirty) faces[cell] = new List<GeometryData.Face>();
+            foreach (Int3 cell in dirty) faces[cell] = [];
             for (int f = 0; f < entries.Length; f++)
                 if (entries[f].Drawn && faces.TryGetValue(entries[f].Cell, out List<GeometryData.Face>? list)) list.Add(geometry.Faces[f]);
 
@@ -291,7 +291,7 @@ public static class CSGMeshBuilder
             UVs = render.UVs ?? new Float2[render.Positions.Length],
         };
         piece.Tangents = Mesh.ComputeTangents(piece.Positions, piece.Normals, piece.UVs, render.Indices);
-        foreach (var subMesh in render.SubMeshes)
+        foreach ((int Material, int IndexStart, int IndexCount) subMesh in render.SubMeshes)
             piece.Parts.Add((materials[subMesh.Material], render.Indices[subMesh.IndexStart..(subMesh.IndexStart + subMesh.IndexCount)]));
         return piece;
     }
@@ -312,7 +312,7 @@ public static class CSGMeshBuilder
                 {
                     slot = used.Count;
                     used.Add(material);
-                    byMaterial.Add(new List<(uint[], uint)>());
+                    byMaterial.Add([]);
                 }
                 byMaterial[slot].Add((indices, (uint)vertexCount));
             }
@@ -339,11 +339,11 @@ public static class CSGMeshBuilder
         }
 
         int indexCount = 0;
-        foreach (var parts in byMaterial) foreach ((uint[] indices, _) in parts) indexCount += indices.Length;
-        var allIndices = new uint[indexCount];
+        foreach (List<(uint[] Indices, uint Offset)> parts in byMaterial) foreach ((uint[] indices, _) in parts) indexCount += indices.Length;
+        uint[] allIndices = new uint[indexCount];
         var subMeshes = new List<(int Start, int Count)>();
         int written = 0;
-        foreach (var parts in byMaterial)
+        foreach (List<(uint[] Indices, uint Offset)> parts in byMaterial)
         {
             int start = written;
             foreach ((uint[] indices, uint offset) in parts)
@@ -413,16 +413,19 @@ public static class CSGMeshBuilder
 
         // A material with no faces left produces no submesh
         var used = new List<Material?>(render.SubMeshes.Length);
-        foreach (var subMesh in render.SubMeshes) used.Add(materials[subMesh.Material]);
+        foreach ((int Material, int IndexStart, int IndexCount) subMesh in render.SubMeshes) used.Add(materials[subMesh.Material]);
         materials.Clear();
         materials.AddRange(used);
 
-        var mesh = new Mesh { Name = name ?? "CSG Mesh" };
-        mesh.IndexFormat = render.Positions.Length > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
-        mesh.Vertices = render.Positions;
-        mesh.Normals = render.Normals;
-        mesh.UV = render.UVs ?? new Float2[render.Positions.Length];
-        mesh.Indices = render.Indices;
+        var mesh = new Mesh
+        {
+            Name = name ?? "CSG Mesh",
+            IndexFormat = render.Positions.Length > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16,
+            Vertices = render.Positions,
+            Normals = render.Normals,
+            UV = render.UVs ?? new Float2[render.Positions.Length],
+            Indices = render.Indices
+        };
         mesh.RecalculateBounds();
         mesh.RecalculateTangents();
 
@@ -438,7 +441,7 @@ public static class CSGMeshBuilder
     {
         var positions = new List<Float3>();
         var indices = new List<uint>();
-        var welded = new int[geometry.Vertices.Count];
+        int[] welded = new int[geometry.Vertices.Count];
         Array.Fill(welded, -1);
 
         uint IndexOf(GeometryData.Vertex v)
@@ -469,10 +472,13 @@ public static class CSGMeshBuilder
 
         if (indices.Count == 0) return null;
 
-        var mesh = new Mesh { Name = name != null ? name + " Collision" : "CSG Collision" };
-        mesh.IndexFormat = positions.Count > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
-        mesh.Vertices = positions.ToArray();
-        mesh.Indices = indices.ToArray();
+        var mesh = new Mesh
+        {
+            Name = name != null ? name + " Collision" : "CSG Collision",
+            IndexFormat = positions.Count > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16,
+            Vertices = positions.ToArray(),
+            Indices = indices.ToArray()
+        };
         mesh.RecalculateBounds();
         return mesh;
     }

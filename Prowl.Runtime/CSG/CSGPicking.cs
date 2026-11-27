@@ -120,7 +120,7 @@ public static class CSGPicking
         point = Float3.Zero;
         normal = Float3.UnitY;
 
-        var ring = face.NeighborVertices();
+        List<GeometryData.Vertex> ring = face.NeighborVertices();
         if (ring.Count < 3) return false;
 
         normal = face.Normal();

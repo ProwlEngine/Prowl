@@ -62,7 +62,7 @@ public sealed class DistortionEffect : AudioEffect
     // The blend crossfades the shaped signal against the untouched one, so the dry end of it has to
     // come out at the level it went in.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private float Distort(float x, float drive, float range, float blend, float volume)
+    private static float Distort(float x, float drive, float range, float blend, float volume)
     {
         float xClean = x;
         x *= drive * range;

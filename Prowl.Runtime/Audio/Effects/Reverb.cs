@@ -11,6 +11,7 @@
 
 using System;
 using System.Runtime.CompilerServices;
+
 using Prowl.Runtime.Audio.Native;
 using Prowl.Vector;
 
@@ -452,7 +453,7 @@ public class Reverb
         }
     }
 
-    private int GetScaledBufferSize(UInt32 sampleRate, UInt32 value)
+    private static int GetScaledBufferSize(UInt32 sampleRate, UInt32 value)
     {
         float result = (float)sampleRate;
         result /= 44100.0f;
@@ -499,7 +500,7 @@ public class Reverb
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private float Undenormalize(float sample)
+        private static float Undenormalize(float sample)
         {
             sample += 1.0f;
             sample -= 1.0f;
@@ -571,7 +572,7 @@ public class Reverb
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private float Undenormalize(float sample)
+        private static float Undenormalize(float sample)
         {
             sample += 1.0f;
             sample -= 1.0f;

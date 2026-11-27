@@ -680,8 +680,12 @@ public sealed class AudioMixer : Asset, ISerializationCallbackReceiver
 
         int parentIndex = parent.IsValid() ? _groups.IndexOf(parent) : (_groups.Count > 0 ? 0 : -1);
 
-        var group = new AudioMixerGroup { GroupName = groupName, Name = groupName };
-        group.ParentIndex = parentIndex;
+        var group = new AudioMixerGroup
+        {
+            GroupName = groupName,
+            Name = groupName,
+            ParentIndex = parentIndex
+        };
         group.Bind(this);
         _groups.Add(group);
         return group;

@@ -380,10 +380,10 @@ public sealed class ScriptingShowcaseGame : StationGame
         AddStation("Layers and tags", "Pickups and enemies sit on their own layers, so the camera's culling mask can hide a whole layer at once. Enemies are also tagged, and finding them by tag makes them jump.", c, new Float3(0f, 4f, -10f), 1f);
 
         // Layers 8 and up are free for games to name.
-        TagLayerManager.layers[8] = "Pickups";
-        TagLayerManager.layers[9] = "Enemies";
-        if (!TagLayerManager.tags.Contains("Enemy"))
-            TagLayerManager.tags.Add("Enemy");
+        TagLayerManager.Layers[8] = "Pickups";
+        TagLayerManager.Layers[9] = "Enemies";
+        if (!TagLayerManager.Tags.Contains("Enemy"))
+            TagLayerManager.Tags.Add("Enemy");
 
         Material gold = Lit(new Color(1f, 0.7f, 0.2f, 1f), 1f, 0.25f);
         Material red = Lit(new Color(0.5f, 0.01f, 0.01f, 1f), 0f, 0.5f);

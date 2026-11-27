@@ -241,8 +241,8 @@ public class Camera : Component
     [SerializeIgnore, NonSerialized, NotHeld] private RenderView? _stereoView;
     [SerializeIgnore, NonSerialized, NotHeld] private ulong _viewsFrame = ulong.MaxValue;
     [SerializeIgnore, NonSerialized, NotHeld] private int _viewsUsed;
-    [SerializeIgnore, NonSerialized, NotHeld] private readonly ExtensionSet<RenderFeature> _features = new();
-    [SerializeIgnore, NonSerialized, NotHeld] private readonly ExtensionSet<RenderFeature> _previewFeatures = new();
+    [SerializeIgnore, NonSerialized, NotHeld] private readonly ExtensionSet<RenderFeature> _features = [];
+    [SerializeIgnore, NonSerialized, NotHeld] private readonly ExtensionSet<RenderFeature> _previewFeatures = [];
     [SerializeIgnore, NonSerialized, NotHeld] private readonly List<RenderFeature> _activeFeatures = [];
     [SerializeIgnore, NonSerialized, NotHeld] private VolumeStack? _volumes;
     [SerializeIgnore, NonSerialized, NotHeld] private AntiAliasingFeatures? _antiAliasing;

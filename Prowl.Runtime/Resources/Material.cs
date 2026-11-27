@@ -139,8 +139,8 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         _parent = source._parent;
         _surface = source._surface;
         _properties = new MaterialProperties(source._properties);
-        _overrides = new HashSet<string>(source._overrides);
-        _keywords = new Dictionary<string, string>(source._keywords);
+        _overrides = [with(source._overrides)];
+        _keywords = [with(source._keywords)];
         _renderQueue = source._renderQueue;
         _castShadows = source._castShadows;
     }
@@ -293,9 +293,6 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
 
     /// <summary>True if this material sets the property rather than reading the shader's default.</summary>
     public bool IsOverridden(string name) { EnsureLoaded(); return _overrides.Contains(name); }
-
-    /// <summary>Kept for callers from before defaults were read live from the shader. Does nothing.</summary>
-    public void SyncShaderDefaults() { }
 
     #endregion
 

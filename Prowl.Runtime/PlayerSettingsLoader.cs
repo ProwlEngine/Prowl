@@ -224,10 +224,10 @@ public static class PlayerSettingsLoader
         try
         {
             if (settings.TryGet("Tags", out EchoObject? tagsProp) && Serializer.Deserialize<List<string>>(tagsProp) is { Count: > 0 } tags)
-                TagLayerManager.tags = tags;
+                TagLayerManager.Tags = tags;
 
             if (settings.TryGet("Layers", out EchoObject? layersProp) && Serializer.Deserialize<string[]>(layersProp) is { } layers)
-                Array.Copy(layers, TagLayerManager.layers, Math.Min(layers.Length, TagLayerManager.layers.Length));
+                Array.Copy(layers, TagLayerManager.Layers, Math.Min(layers.Length, TagLayerManager.Layers.Length));
 
             if (settings.TryGet("SortingLayers", out EchoObject? sortingProp) && Serializer.Deserialize<List<SortingLayerInfo>>(sortingProp) is { } sorting)
                 TagLayerManager.SetSortingLayers(sorting);

@@ -8,9 +8,9 @@ using Prowl.Echo;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.UI;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
-using Prowl.Runtime.UI;
 
 using RenderWorld = Prowl.Graphite.Rendering.RenderWorld;
 
@@ -645,12 +645,12 @@ public class GameCanvas : Component, IRenderSync
 
     private float ComputeScaleFactor()
     {
-        switch (UIScaleMode)
+        return UIScaleMode switch
         {
-            case ScaleMode.ConstantPixelSize:    return Maths.Max(ScaleFactor, 0.001f);
-            case ScaleMode.ScaleWithScreenSize:  return ComputeScreenSizeScale();
-            default:                              return 1f;
-        }
+            ScaleMode.ConstantPixelSize => Maths.Max(ScaleFactor, 0.001f),
+            ScaleMode.ScaleWithScreenSize => ComputeScreenSizeScale(),
+            _ => 1f,
+        };
     }
 
     // ============================================================

@@ -381,14 +381,14 @@ public class Selectable : UIBehaviour,
 
     private Selectable? FindForDirection(Float2 dir, Selectable? explicitTarget, bool horizontal)
     {
-        switch (_navigation.Mode)
+        return _navigation.Mode switch
         {
-            case NavigationMode.None: return null;
-            case NavigationMode.Explicit: return explicitTarget.IsValid() ? explicitTarget : null;
-            case NavigationMode.Horizontal when !horizontal: return null;
-            case NavigationMode.Vertical when horizontal: return null;
-        }
-        return FindSelectable(dir);
+            NavigationMode.None => null,
+            NavigationMode.Explicit => explicitTarget.IsValid() ? explicitTarget : null,
+            NavigationMode.Horizontal when !horizontal => null,
+            NavigationMode.Vertical when horizontal => null,
+            _ => FindSelectable(dir),
+        };
     }
 
     /// <summary>

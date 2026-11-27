@@ -487,7 +487,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         var spaces = new ReferenceSpaceType[count];
         fixed (ReferenceSpaceType* ptr = spaces)
             Check(_xr.EnumerateReferenceSpaces(_session, count, &count, ptr), "xrEnumerateReferenceSpaces");
-        return new List<ReferenceSpaceType>(spaces);
+        return [with(spaces)];
     }
 
     private Space CreateReferenceSpace(ReferenceSpaceType type, Posef pose)

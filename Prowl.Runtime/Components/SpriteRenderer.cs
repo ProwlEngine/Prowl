@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
-
+using Prowl.Graphite;
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -413,7 +413,7 @@ internal sealed class OwnedMaterial
         GTexture? gpu = texture.IsValid() ? texture.GpuIfLoaded : null;
         if (texture.IsValid() && gpu == null && texture.State == AssetState.Unloaded) _ = texture.LoadAsync();
         Prowl.Graphite.SamplerDescription sampler = texture.IsValid() ? texture.SamplerUnchecked : Prowl.Graphite.SamplerDescription.Linear;
-        if (_textures.TryGetValue(name, out var bound) && bound.Texture == gpu && bound.Sampler.Equals(sampler)) return;
+        if (_textures.TryGetValue(name, out (GTexture? Texture, SamplerDescription Sampler) bound) && bound.Texture == gpu && bound.Sampler.Equals(sampler)) return;
         _textures[name] = (gpu, sampler);
         if (_child.Shader.FindProperty(name) >= 0) _child.SetTexture(name, gpu, sampler);
     }

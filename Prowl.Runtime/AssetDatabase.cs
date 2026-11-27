@@ -46,7 +46,7 @@ public static class AssetDatabase
     public static AssetBackend? Backend { get; set; }
 
     private static AssetBackend[] s_mounts = [];
-    private static readonly object s_mountLock = new();
+    private static readonly Lock s_mountLock = new();
 
     /// <summary>Extra sources of assets, newest first: content packs, mods, files on disk or on a web server.</summary>
     public static IReadOnlyList<AssetBackend> Mounts => s_mounts;
@@ -304,7 +304,7 @@ public static class AssetDatabase
         if (asset.State != AssetState.Loaded) return;
 
         // Reading may import first, and the import refills this asset too. The read here already has the result.
-        if (!(t_refilling ??= new(ReferenceEqualityComparer.Instance)).Add(asset)) return;
+        if (!(t_refilling ??= [with(ReferenceEqualityComparer.Instance)]).Add(asset)) return;
         try
         {
             Asset staging = CreateShell(asset.GetType());
@@ -444,7 +444,7 @@ public static class AssetDatabase
     private const char SubAssetSeparator = '#';
 
     private static IReadOnlyList<ResourceEntry>? s_indexedResources;
-    private static Dictionary<string, List<ResourceEntry>> s_resourcesByPath = new(StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string, List<ResourceEntry>> s_resourcesByPath = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     /// The asset at a load path, loaded. A load path is the asset's path below its nearest Resources folder without
@@ -634,7 +634,7 @@ public static class AssetDatabase
 
     private static readonly ConditionalWeakTable<object, HashSet<Asset>> s_holds = [];
     private static readonly List<WeakReference<object>> s_roots = [];
-    private static readonly object s_holdLock = new();
+    private static readonly Lock s_holdLock = new();
 
     /// <summary>Keeps an asset loaded while <paramref name="owner"/> is alive, or until released. Holding twice is one hold.</summary>
     public static void Hold(Asset asset, object owner)
@@ -1007,9 +1007,9 @@ public sealed class AssetWalker
     // Never reset, so a stamp an earlier walk left on an engine object can never match a later walk
     private static int s_stamp;
 
-    private readonly HashSet<object> _visited = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<object> _visited = [with(ReferenceEqualityComparer.Instance)];
     private readonly Stack<object> _pending = new();
-    private readonly Dictionary<object, object> _parents = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<object, object> _parents = [with(ReferenceEqualityComparer.Instance)];
     private int _epoch;
     private int _walkStamp;
     private long _now;

@@ -5,8 +5,8 @@ using System;
 
 using GFilter = Prowl.Graphite.FilterMode;
 using GPixelFormat = Prowl.Graphite.PixelFormat;
-using GSamplerAddress = Prowl.Graphite.SamplerAddressMode;
 using GSampler = Prowl.Graphite.SamplerDescription;
+using GSamplerAddress = Prowl.Graphite.SamplerAddressMode;
 
 namespace Prowl.Runtime;
 

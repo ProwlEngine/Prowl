@@ -15,17 +15,17 @@ namespace Prowl.Editor.Projects.Settings;
 public class TagsAndLayersSettings : ProjectSettingsBase
 {
     /// <summary> The list of tags defined for the project. </summary>
-    public List<string> Tags = new(TagLayerManager.tags);
+    public List<string> Tags = new(TagLayerManager.Tags);
     /// <summary> The array of layers defined for the project. </summary>
-    public string[] Layers = (string[])TagLayerManager.layers.Clone();
+    public string[] Layers = (string[])TagLayerManager.Layers.Clone();
     /// <summary> Sorting layers back to front. </summary>
     public List<SortingLayerInfo> SortingLayers = CopyOf(TagLayerManager.SortingLayers);
 
     /// <summary> Applies the current tag and layer settings to TagLayerManager. </summary>
     public override void Apply()
     {
-        TagLayerManager.tags = new List<string>(Tags);
-        Array.Copy(Layers, TagLayerManager.layers, Math.Min(Layers.Length, TagLayerManager.layers.Length));
+        TagLayerManager.Tags = new List<string>(Tags);
+        Array.Copy(Layers, TagLayerManager.Layers, Math.Min(Layers.Length, TagLayerManager.Layers.Length));
         TagLayerManager.SetSortingLayers(SortingLayers);
     }
 
@@ -33,8 +33,8 @@ public class TagsAndLayersSettings : ProjectSettingsBase
     public override void ResetToDefaults()
     {
         TagLayerManager.ResetDefault();
-        Tags = new List<string>(TagLayerManager.tags);
-        Layers = (string[])TagLayerManager.layers.Clone();
+        Tags = new List<string>(TagLayerManager.Tags);
+        Layers = (string[])TagLayerManager.Layers.Clone();
         SortingLayers = CopyOf(TagLayerManager.SortingLayers);
     }
 

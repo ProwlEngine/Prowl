@@ -9,8 +9,8 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
-using Prowl.Runtime.Tasks;
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;

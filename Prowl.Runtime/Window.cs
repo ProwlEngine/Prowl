@@ -55,7 +55,7 @@ public static class Window
     public static event Action? Closing;
 
     /// <summary>Asked when the window is about to close. Returning false keeps it open.</summary>
-    public static Func<bool>? CloseRequested;
+    public static Func<bool>? CloseRequested { get; set; }
 
     private static bool s_closeConfirmed;
 

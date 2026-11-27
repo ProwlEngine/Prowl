@@ -240,7 +240,7 @@ public class LineRenderer : Component, IMaterialRenderer, IRenderSync, IRaycastR
     // Line shader pushes each one out by, sideways to the view.
     private void BuildMesh()
     {
-        List<Float3> points = new(Points);
+        List<Float3> points = [with(Points)];
         if (Loop && points.Count > 2)
             points.Add(points[0]);
 

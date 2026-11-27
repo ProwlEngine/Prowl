@@ -189,7 +189,7 @@ public sealed class RuntimeImportContext
 {
     private readonly Func<string?, Guid> _guidOf;
     private readonly Func<string, Type, Guid> _find;
-    private readonly HashSet<string> _subNames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _subNames = [with(StringComparer.OrdinalIgnoreCase)];
 
     internal RuntimeImportContext(AssetFileSource source, string path, Func<string?, Guid> guidOf, Func<string, Type, Guid> find)
     {
@@ -325,15 +325,14 @@ internal sealed class ModelRuntimeImporter : RuntimeImporter
 
     public override void Import(RuntimeImportContext context)
     {
-        var importer = new ModelImporter();
         var settings = new ModelImporterSettings { MaterialResolver = new MaterialFiles(context) };
         string? local = context.LocalPath;
         ModelImportResult result;
-        if (local != null) result = importer.Import(new FileInfo(local), settings);
+        if (local != null) result = ModelImporter.Import(new FileInfo(local), settings);
         else
         {
             using Stream stream = context.Open();
-            result = importer.Import(stream, context.Path, settings);
+            result = ModelImporter.Import(stream, context.Path, settings);
         }
 
         foreach (Mesh mesh in result.Meshes) context.AddSubAsset(mesh.Name, mesh);
@@ -527,7 +526,7 @@ public sealed class SourceAssetBackend : AssetBackend
         }
 
         AssetContent.Move(built, staging);
-        GC.SuppressFinalize(built);
+        AssetContent.Emptied(built);
         return true;
     }
 

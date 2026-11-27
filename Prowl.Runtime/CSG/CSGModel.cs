@@ -72,13 +72,13 @@ public sealed class CSGModel : Component
     [SerializeIgnore] private double _geometryChangedAt = double.NegativeInfinity;
 
     [SerializeIgnore] private readonly CSGScene _scene = new();
-    [SerializeIgnore] private readonly Dictionary<CSGBrush, BrushLink> _brushes = new();
-    [SerializeIgnore] private readonly Dictionary<CSGGroup, GroupLink> _groups = new();
-    [SerializeIgnore] private readonly Dictionary<int, BrushLink> _byBrushId = new();
+    [SerializeIgnore] private readonly Dictionary<CSGBrush, BrushLink> _brushes = [];
+    [SerializeIgnore] private readonly Dictionary<CSGGroup, GroupLink> _groups = [];
+    [SerializeIgnore] private readonly Dictionary<int, BrushLink> _byBrushId = [];
 
-    [SerializeIgnore] private readonly HashSet<CSGBrush> _seenBrushes = new();
-    [SerializeIgnore] private readonly HashSet<CSGGroup> _seenGroups = new();
-    [SerializeIgnore] private readonly Dictionary<CSGGroup, int> _childCounter = new();
+    [SerializeIgnore] private readonly HashSet<CSGBrush> _seenBrushes = [];
+    [SerializeIgnore] private readonly HashSet<CSGGroup> _seenGroups = [];
+    [SerializeIgnore] private readonly Dictionary<CSGGroup, int> _childCounter = [];
     [SerializeIgnore] private int _rootChildCount;
 
     [SerializeIgnore] private readonly CSGMeshCache _meshCache = new();
@@ -109,7 +109,7 @@ public sealed class CSGModel : Component
     public Mesh? GeneratedCollisionMesh => _collision;
 
     /// <summary>Materials in submesh order, parallel to <see cref="GeneratedMesh"/>'s submeshes.</summary>
-    public List<Material?> GeneratedMaterials { get; } = new();
+    public List<Material?> GeneratedMaterials { get; } = [];
 
     /// <summary>Raised after a build applied new meshes, for work that places things around them rather than editing them.</summary>
     public event Action<CSGModel>? Rebuilt;
@@ -215,7 +215,7 @@ public sealed class CSGModel : Component
             int source = CSGScene.GetSourceFaceIndex(face);
             if (source < 0 || source >= link.FaceToPlane.Length || link.FaceToPlane[source] < 0) continue;
 
-            var ring = face.NeighborVertices();
+            List<GeometryData.Vertex> ring = face.NeighborVertices();
             if (ring.Count < 3) continue;
 
             var corners = new Float3[ring.Count];
@@ -357,7 +357,7 @@ public sealed class CSGModel : Component
         return preview.Visible;
     }
 
-    [SerializeIgnore] private readonly List<Material?> _previewMaterials = new();
+    [SerializeIgnore] private readonly List<Material?> _previewMaterials = [];
 
     /// <summary>Editor only: builds what the viewport draws again after <see cref="EditorHidden"/> changed. The model itself is not rebuilt.</summary>
     internal void RefreshHidden()

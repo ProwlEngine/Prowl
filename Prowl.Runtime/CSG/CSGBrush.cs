@@ -241,7 +241,7 @@ public sealed class CSGBrush : Component
     // For each polygon of another shape, the control mesh polygon nearest it by facing and place, whose surface it shows
     private int[] NearestPolygons(CSGControlMesh other)
     {
-        var result = new int[other.Polygons.Count];
+        int[] result = new int[other.Polygons.Count];
         int count = controlMesh.Polygons.Count;
         for (int p = 0; p < result.Length; p++)
         {

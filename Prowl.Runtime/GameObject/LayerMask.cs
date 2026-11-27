@@ -15,8 +15,8 @@ namespace Prowl.Runtime;
 /// </summary>
 public struct LayerMask : ISerializable
 {
-    public readonly static LayerMask Everything = default;
-    public readonly static LayerMask Nothing = FromMask(0);
+    public static readonly LayerMask Everything = default;
+    public static readonly LayerMask Nothing = FromMask(0);
 
     // Bits set here are the layers NOT matched, so all-zero (the default) matches everything.
     [SerializeField] private uint excluded;

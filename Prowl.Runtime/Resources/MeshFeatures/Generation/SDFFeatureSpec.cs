@@ -17,10 +17,10 @@ public sealed class SDFFeatureSpec : MeshFeatureSpec
     private const int GeneratorVersion = 2;
 
     /// <summary>Whether meshes get an SDF. Set from the project's asset settings.</summary>
-    public static bool Enabled = false;
+    public static bool Enabled { get; set; }
 
     /// <summary>How every mesh's SDF is built. Set from the project's asset settings.</summary>
-    public static SDFGenerator.Options Options = SDFGenerator.Options.Default;
+    public static SDFGenerator.Options Options { get; set; } = SDFGenerator.Options.Default;
 
     public override string Key => "sdf";
     public override string DisplayName => "Signed Distance Field";

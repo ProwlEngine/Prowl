@@ -5,22 +5,21 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Prowl.Runtime.Audio.Native;
-
+using ma_bool32 = System.UInt32;
+using ma_bool8 = System.Byte;
 // ma_typedefs
-using ma_channel = Byte;
-using ma_bool8 = Byte;
-using ma_bool32 = UInt32;
-using ma_uint8 = Byte;
-using ma_uint16 = UInt16;
-using ma_int32 = UInt32;
-using ma_uint32 = UInt32;
-using ma_int64 = Int64;
-using ma_uint64 = UInt64;
-using ma_handle = IntPtr;
-using ma_vfs_file = IntPtr;
-using ma_spinlock = UInt32;
+using ma_channel = System.Byte;
+using ma_handle = System.IntPtr;
+using ma_int32 = System.UInt32;
+using ma_int64 = System.Int64;
+using ma_spinlock = System.UInt32;
+using ma_uint16 = System.UInt16;
+using ma_uint32 = System.UInt32;
+using ma_uint64 = System.UInt64;
+using ma_uint8 = System.Byte;
+using ma_vfs_file = System.IntPtr;
 
+namespace Prowl.Runtime.Audio.Native;
 // ma_callbacks
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 internal delegate void ma_sound_end_proc(IntPtr pUserData, ma_sound_ptr pSound);
@@ -488,7 +487,7 @@ internal enum ma_thread_priority
     high = -1,
     highest = 0,
     realtime = 1,
-    standard = 0
+    standard = highest
 }
 
 internal enum ma_ios_session_category
@@ -1945,44 +1944,44 @@ internal unsafe struct size_t
 
     public static implicit operator size_t(int value)
     {
-        return new size_t((UIntPtr)(uint)value);
+        return new size_t(checked((UIntPtr)unchecked((uint)value)));
     }
 
     public static implicit operator size_t(uint value)
     {
-        return new size_t((UIntPtr)value);
+        return new size_t(checked((UIntPtr)value));
     }
 
     public static implicit operator size_t(long value)
     {
-        return new size_t((UIntPtr)(ulong)value);
+        return new size_t(checked((UIntPtr)unchecked((ulong)value)));
     }
 
     public static implicit operator size_t(ulong value)
     {
-        return new size_t((UIntPtr)value);
+        return new size_t(checked((UIntPtr)value));
     }
 
     public static size_t operator +(size_t a, size_t b)
     {
-        return new size_t((UIntPtr)(a.ToUInt64() + b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a.ToUInt64() + b.ToUInt64())));
     }
 
     public static size_t operator -(size_t a, size_t b)
     {
-        return new size_t((UIntPtr)(a.ToUInt64() - b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a.ToUInt64() - b.ToUInt64())));
     }
 
     public static size_t operator *(size_t a, size_t b)
     {
-        return new size_t((UIntPtr)(a.ToUInt64() * b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a.ToUInt64() * b.ToUInt64())));
     }
 
     public static size_t operator /(size_t a, size_t b)
     {
         if (b.value == UIntPtr.Zero)
             throw new DivideByZeroException();
-        return new size_t((UIntPtr)(a.ToUInt64() / b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a.ToUInt64() / b.ToUInt64())));
     }
 
     public static bool operator ==(size_t a, size_t b)
@@ -2017,90 +2016,90 @@ internal unsafe struct size_t
 
     public static size_t operator +(size_t a, ulong b)
     {
-        return new size_t((UIntPtr)(a.value.ToUInt64() + b));
+        return new size_t(checked((UIntPtr)unchecked(a.value.ToUInt64() + b)));
     }
 
     public static size_t operator -(size_t a, ulong b)
     {
-        return new size_t((UIntPtr)(a.value.ToUInt64() - b));
+        return new size_t(checked((UIntPtr)unchecked(a.value.ToUInt64() - b)));
     }
 
     public static size_t operator *(size_t a, ulong b)
     {
-        return new size_t((UIntPtr)(a.ToUInt64() * b));
+        return new size_t(checked((UIntPtr)unchecked(a.ToUInt64() * b)));
     }
 
     public static size_t operator /(size_t a, ulong b)
     {
         if (b == 0)
             throw new DivideByZeroException();
-        return new size_t((UIntPtr)(a.ToUInt64() / b));
+        return new size_t(checked((UIntPtr)unchecked(a.ToUInt64() / b)));
     }
 
     public static size_t operator +(ulong a, size_t b)
     {
-        return new size_t((UIntPtr)(a + b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a + b.ToUInt64())));
     }
 
     public static size_t operator -(ulong a, size_t b)
     {
-        return new size_t((UIntPtr)(a - b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a - b.ToUInt64())));
     }
 
     public static size_t operator *(ulong a, size_t b)
     {
-        return new size_t((UIntPtr)(a * b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a * b.ToUInt64())));
     }
 
     public static size_t operator /(ulong a, size_t b)
     {
         if (b.value == UIntPtr.Zero)
             throw new DivideByZeroException();
-        return new size_t((UIntPtr)(a / b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a / b.ToUInt64())));
     }
 
     public static size_t operator +(size_t a, uint b)
     {
-        return new size_t((UIntPtr)(a.value.ToUInt64() + b));
+        return new size_t(checked((UIntPtr)unchecked(a.value.ToUInt64() + b)));
     }
 
     public static size_t operator -(size_t a, uint b)
     {
-        return new size_t((UIntPtr)(a.value.ToUInt64() - b));
+        return new size_t(checked((UIntPtr)unchecked(a.value.ToUInt64() - b)));
     }
 
     public static size_t operator *(size_t a, uint b)
     {
-        return new size_t((UIntPtr)(a.ToUInt64() * b));
+        return new size_t(checked((UIntPtr)unchecked(a.ToUInt64() * b)));
     }
 
     public static size_t operator /(size_t a, uint b)
     {
         if (b == 0)
             throw new DivideByZeroException();
-        return new size_t((UIntPtr)(a.ToUInt64() / b));
+        return new size_t(checked((UIntPtr)unchecked(a.ToUInt64() / b)));
     }
 
     public static size_t operator +(uint a, size_t b)
     {
-        return new size_t((UIntPtr)(a + b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a + b.ToUInt64())));
     }
 
     public static size_t operator -(uint a, size_t b)
     {
-        return new size_t((UIntPtr)(a - b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a - b.ToUInt64())));
     }
 
     public static size_t operator *(uint a, size_t b)
     {
-        return new size_t((UIntPtr)(a * b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a * b.ToUInt64())));
     }
 
     public static size_t operator /(uint a, size_t b)
     {
         if (b.value == UIntPtr.Zero)
             throw new DivideByZeroException();
-        return new size_t((UIntPtr)(a / b.ToUInt64()));
+        return new size_t(checked((UIntPtr)unchecked(a / b.ToUInt64())));
     }
 
     internal ulong ToUInt64()
@@ -3894,8 +3893,9 @@ internal static partial class MiniAudioNative
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ma_context_config ma_context_config_init();
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe ma_result ma_context_init(ma_backend* backends, ma_uint32 backendCount, ma_context_config* pConfig, ma_context_ptr pContext);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial ma_result ma_context_init(ma_backend* backends, ma_uint32 backendCount, ma_context_config* pConfig, ma_context_ptr pContext);
 
     internal static unsafe ma_result ma_context_init(ma_backend[] backends, ref ma_context_config config, ma_context_ptr pContext)
     {
@@ -3942,16 +3942,18 @@ internal static partial class MiniAudioNative
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ma_log_ptr ma_context_get_log(ma_context_ptr pContext);
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern ma_result ma_context_enumerate_devices(ma_context_ptr pContext, IntPtr callback, IntPtr pUserData);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_enumerate_devices")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial ma_result ma_context_enumerate_devices(ma_context_ptr pContext, IntPtr callback, IntPtr pUserData);
 
     internal static ma_result ma_context_enumerate_devices(ma_context_ptr pContext, ma_enum_devices_callback_proc callback, IntPtr pUserData)
     {
         return ma_context_enumerate_devices(pContext, MarshalHelper.GetFunctionPointerForDelegate(callback), pUserData);
     }
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe ma_result ma_context_get_devices(ma_context_ptr pContext, ma_device_info** ppPlaybackDeviceInfos, ma_uint32* pPlaybackDeviceCount, ma_device_info** ppCaptureDeviceInfos, ma_uint32* pCaptureDeviceCount);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_context_get_devices")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial ma_result ma_context_get_devices(ma_context_ptr pContext, ma_device_info** ppPlaybackDeviceInfos, ma_uint32* pPlaybackDeviceCount, ma_device_info** ppCaptureDeviceInfos, ma_uint32* pCaptureDeviceCount);
 
     internal static unsafe ma_result ma_context_get_devices(ma_context_ptr pContext, out ma_device_info_ex[] ppPlaybackDeviceInfos, out ma_device_info_ex[] ppCaptureDeviceInfos)
     {
@@ -4015,8 +4017,9 @@ internal static partial class MiniAudioNative
         return ma_engine_init(ref config, pEngine);
     }
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe ma_result ma_engine_read_pcm_frames(ma_engine_ptr pEngine, IntPtr pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_engine_read_pcm_frames")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial ma_result ma_engine_read_pcm_frames(ma_engine_ptr pEngine, IntPtr pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
 
     internal static unsafe ma_result ma_engine_read_pcm_frames(ma_engine_ptr pEngine, IntPtr pFramesOut, ma_uint64 frameCount, ref ma_uint64 framesRead)
     {
@@ -4707,8 +4710,9 @@ internal static partial class MiniAudioNative
     internal static partial ma_uint64 ma_sound_group_get_time_in_pcm_frames(ma_sound_group_ptr pGroup);
 
     // ma_procedural_data_source
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern ma_procedural_data_source_config ma_procedural_data_source_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate, IntPtr pProceduralSoundProc, IntPtr pUserData);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_procedural_data_source_config_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial ma_procedural_data_source_config ma_procedural_data_source_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate, IntPtr pProceduralSoundProc, IntPtr pUserData);
 
     internal static ma_procedural_data_source_config ma_procedural_data_source_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate, ma_procedural_data_source_proc pProceduralSoundProc, IntPtr pUserData)
     {
@@ -4962,8 +4966,9 @@ internal static partial class MiniAudioNative
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ma_decoder_config ma_decoder_config_init_default();
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern ma_result ma_decoder_init(IntPtr onRead, IntPtr onSeek, IntPtr pUserData, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial ma_result ma_decoder_init(IntPtr onRead, IntPtr onSeek, IntPtr pUserData, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder);
 
     internal static ma_result ma_decoder_init(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, IntPtr pUserData, ref ma_decoder_config pConfig, ma_decoder_ptr pDecoder)
     {
@@ -5006,8 +5011,9 @@ internal static partial class MiniAudioNative
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ma_result ma_decoder_uninit(ma_decoder_ptr pDecoder);
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe ma_result ma_decoder_read_pcm_frames(ma_decoder_ptr pDecoder, IntPtr pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_decoder_read_pcm_frames")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial ma_result ma_decoder_read_pcm_frames(ma_decoder_ptr pDecoder, IntPtr pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
 
     internal static ma_result ma_decoder_read_pcm_frames(ma_decoder_ptr pDecoder, IntPtr pFramesOut, ma_uint64 frameCount, IntPtr pFramesRead)
     {
@@ -5116,8 +5122,9 @@ internal static partial class MiniAudioNative
     internal static partial ma_result ma_gainer_get_master_volume(ma_gainer_ptr pGainer, out float pVolume);
 
     // ma_libvorbis
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    internal static unsafe extern ma_decoding_backend_vtable* ma_libvorbis_get_decoding_backend();
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_libvorbis_get_decoding_backend")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    internal static unsafe partial ma_decoding_backend_vtable* ma_libvorbis_get_decoding_backend();
 
     internal static ma_decoding_backend_vtable_ptr ma_libvorbis_get_decoding_backend_ptr()
     {
@@ -5128,16 +5135,18 @@ internal static partial class MiniAudioNative
     }
 
     // ma_log
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern ma_log_callback ma_log_callback_init(IntPtr onLog, IntPtr pUserData);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_log_callback_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static partial ma_log_callback ma_log_callback_init(IntPtr onLog, IntPtr pUserData);
 
     internal static ma_log_callback ma_log_callback_init(ma_log_callback_proc onLog, IntPtr pUserData)
     {
         return ma_log_callback_init(MarshalHelper.GetFunctionPointerForDelegate(onLog), pUserData);
     }
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe ma_result ma_log_init(ma_allocation_callbacks* pAllocationCallbacks, ma_log_ptr pLog);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_log_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial ma_result ma_log_init(ma_allocation_callbacks* pAllocationCallbacks, ma_log_ptr pLog);
 
     internal static ma_result ma_log_init(ma_log_ptr pLog)
     {
@@ -5183,8 +5192,9 @@ internal static partial class MiniAudioNative
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ma_node_graph_config ma_node_graph_config_init(ma_uint32 channels);
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe ma_result ma_node_graph_init(ref ma_node_graph_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_node_graph_ptr pNodeGraph);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_graph_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial ma_result ma_node_graph_init(ref ma_node_graph_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_node_graph_ptr pNodeGraph);
 
     internal static ma_result ma_node_graph_init(ref ma_node_graph_config pConfig, ref ma_allocation_callbacks pAllocationCallbacks, ma_node_graph_ptr pNodeGraph)
     {
@@ -5205,8 +5215,9 @@ internal static partial class MiniAudioNative
         }
     }
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe void ma_node_graph_uninit(ma_node_graph_ptr pNodeGraph, ma_allocation_callbacks* pAllocationCallbacks);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_graph_uninit")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial void ma_node_graph_uninit(ma_node_graph_ptr pNodeGraph, ma_allocation_callbacks* pAllocationCallbacks);
 
     internal static void ma_node_graph_uninit(ma_node_graph_ptr pNodeGraph, ref ma_allocation_callbacks pAllocationCallbacks)
     {
@@ -5260,8 +5271,9 @@ internal static partial class MiniAudioNative
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ma_result ma_node_init_preallocated(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, IntPtr pHeap, ma_node_ptr pNode);
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe ma_result ma_node_init(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_node_ptr pNode);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial ma_result ma_node_init(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_node_ptr pNode);
 
     internal static ma_result ma_node_init(ma_node_graph_ptr pNodeGraph, ref ma_node_config pConfig, ref ma_allocation_callbacks pAllocationCallbacks, ma_node_ptr pNode)
     {
@@ -5282,8 +5294,9 @@ internal static partial class MiniAudioNative
         }
     }
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe void ma_node_uninit(ma_node_ptr pNode, ma_allocation_callbacks* pAllocationCallbacks);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_node_uninit")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial void ma_node_uninit(ma_node_ptr pNode, ma_allocation_callbacks* pAllocationCallbacks);
 
     internal static void ma_node_uninit(ma_node_ptr pNode, ref ma_allocation_callbacks pAllocationCallbacks)
     {
@@ -5515,8 +5528,9 @@ internal static partial class MiniAudioNative
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ma_data_source_node_config ma_data_source_node_config_init(ma_data_source_ptr pDataSource);
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe ma_result ma_data_source_node_init(ma_node_graph_ptr pNodeGraph, ref ma_data_source_node_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_data_source_node_ptr pDataSourceNode);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_node_init")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial ma_result ma_data_source_node_init(ma_node_graph_ptr pNodeGraph, ref ma_data_source_node_config pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_data_source_node_ptr pDataSourceNode);
 
     internal static ma_result ma_data_source_node_init(ma_node_graph_ptr pNodeGraph, ref ma_data_source_node_config pConfig, ref ma_allocation_callbacks pAllocationCallbacks, ma_data_source_node_ptr pDataSourceNode)
     {
@@ -5537,8 +5551,9 @@ internal static partial class MiniAudioNative
         }
     }
 
-    [DllImport(LIB_MINIAUDIO_EX, CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe void ma_data_source_node_uninit(ma_data_source_node_ptr pDataSourceNode, ma_allocation_callbacks* pAllocationCallbacks);
+    [LibraryImport(LIB_MINIAUDIO_EX, EntryPoint = "ma_data_source_node_uninit")]
+    [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe partial void ma_data_source_node_uninit(ma_data_source_node_ptr pDataSourceNode, ma_allocation_callbacks* pAllocationCallbacks);
 
     internal static void ma_data_source_node_uninit(ma_data_source_node_ptr pDataSourceNode, ref ma_allocation_callbacks pAllocationCallbacks)
     {

@@ -94,10 +94,13 @@ public class MissingComponent : Component, ISerializable
         SourceIdentifier = Read(fields, "_prefabTemplateIdentity", Guid.Empty, ctx);
     }
 
+    // The generic overload casts and throws on a mismatch, this falls back instead
+#pragma warning disable CA2263
     private static T Read<T>(EchoObject compound, string key, T fallback, SerializationContext ctx)
         => compound.TryGet(key, out EchoObject? tag) && tag!.TagType != EchoType.Null && Serializer.Deserialize(tag, typeof(T), ctx) is T value
             ? value
             : fallback;
+#pragma warning restore CA2263
 
     private void CaptureReferences(SerializationContext ctx)
     {
@@ -136,7 +139,7 @@ public class MissingComponent : Component, ISerializable
             {
                 try
                 {
-                    if (Serializer.Deserialize(node, typeof(object), ctx) is { } resolved)
+                    if (Serializer.Deserialize<object>(node, ctx) is { } resolved)
                         _references[key] = resolved;
                 }
                 catch (Exception e)

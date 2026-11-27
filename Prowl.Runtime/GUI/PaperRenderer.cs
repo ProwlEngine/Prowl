@@ -13,8 +13,8 @@ using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using GTexture = Prowl.Graphite.Texture;
-using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
 using IndexFormat = Prowl.Graphite.IndexFormat;
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
 
 namespace Prowl.Runtime.GUI;
 
@@ -23,7 +23,7 @@ namespace Prowl.Runtime.GUI;
 /// and drawn by a host pass after the frame's views, into <see cref="Target"/> or the window, so the UI can show
 /// what the views drew. Backdrop blur captures what is under a frosted shape and blurs it with dual Kawase.
 /// </summary>
-public class PaperRenderer : ICanvasRenderer
+public sealed class PaperRenderer : ICanvasRenderer
 {
     // How far below the target the blur pyramid starts: 1 is half resolution, 2 a quarter
     private const int BlurBaseShift = 2;

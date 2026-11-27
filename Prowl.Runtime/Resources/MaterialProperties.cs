@@ -26,16 +26,16 @@ public sealed class MaterialProperties
 
     public MaterialProperties(MaterialProperties clone)
     {
-        _colors = new(clone._colors);
-        _vectors2 = new(clone._vectors2);
-        _vectors3 = new(clone._vectors3);
-        _vectors4 = new(clone._vectors4);
-        _floats = new(clone._floats);
-        _ints = new(clone._ints);
-        _matrices = new(clone._matrices);
-        _textures = new(clone._textures);
-        _textures3D = new(clone._textures3D);
-        _texturesCube = new(clone._texturesCube);
+        _colors = [with(clone._colors)];
+        _vectors2 = [with(clone._vectors2)];
+        _vectors3 = [with(clone._vectors3)];
+        _vectors4 = [with(clone._vectors4)];
+        _floats = [with(clone._floats)];
+        _ints = [with(clone._ints)];
+        _matrices = [with(clone._matrices)];
+        _textures = [with(clone._textures)];
+        _textures3D = [with(clone._textures3D)];
+        _texturesCube = [with(clone._texturesCube)];
     }
 
     public bool IsEmpty => _colors.Count == 0 && _vectors2.Count == 0 && _vectors3.Count == 0 && _vectors4.Count == 0 && _floats.Count == 0

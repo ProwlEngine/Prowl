@@ -220,15 +220,15 @@ public enum ModelRigType
 /// Prowl.Clay library (the previous in-tree GltfImporter / ObjImporter were retired in favor of
 /// this single unified path).
 /// </summary>
-public class ModelImporter
+public static class ModelImporter
 {
-    public ModelImportResult Import(FileInfo assetPath, ModelImporterSettings? settings = null)
+    public static ModelImportResult Import(FileInfo assetPath, ModelImporterSettings? settings = null)
     {
         ModelImporterSettings s = settings ?? new ModelImporterSettings();
         return PostProcess(ClayBackedImporter.Import(assetPath, s), s);
     }
 
-    public ModelImportResult Import(Stream stream, string virtualPath, ModelImporterSettings? settings = null)
+    public static ModelImportResult Import(Stream stream, string virtualPath, ModelImporterSettings? settings = null)
     {
         ModelImporterSettings s = settings ?? new ModelImporterSettings();
         return PostProcess(ClayBackedImporter.Import(stream, virtualPath, s), s);

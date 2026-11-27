@@ -8,8 +8,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-using Prowl.Ember;
 using Prowl.Echo;
+using Prowl.Ember;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
@@ -295,7 +295,7 @@ public partial class GameObject : EngineObject, ISerializable
         t_arriving = t_taken = null;
 
         Gather(this);
-        section.Instance.FindIdentifiersIn(section, arriving, taken);
+        Scene.FindIdentifiersIn(section, arriving, taken);
         if (taken.Count > 0) Renew(this);
 
         if (arriving.Count > MostIdentifiersKept) return;
@@ -643,7 +643,7 @@ public partial class GameObject : EngineObject, ISerializable
         if (Children == null) return [];
 
         int startCapacity = Maths.Max(Children.Count * 2, 8);
-        List<GameObject> result = new(startCapacity);
+        List<GameObject> result = [with(startCapacity)];
         GetChildrenDeep(result);
         return result;
     }

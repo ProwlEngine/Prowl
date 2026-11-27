@@ -14,8 +14,8 @@ namespace Prowl.Runtime;
 /// </summary>
 public sealed class CopyMap
 {
-    internal readonly Dictionary<object, object> Fills = new(ReferenceEqualityComparer.Instance);
-    internal readonly Dictionary<object, object> Links = new(ReferenceEqualityComparer.Instance);
+    internal readonly Dictionary<object, object> Fills = [with(ReferenceEqualityComparer.Instance)];
+    internal readonly Dictionary<object, object> Links = [with(ReferenceEqualityComparer.Instance)];
     private SerializationContext? _written, _read;
 
     /// <summary>The copy of <paramref name="source"/> is read into <paramref name="target"/>.</summary>
@@ -102,7 +102,7 @@ public static class ObjectCopy
 
         var copies = new List<object>(roots.Count);
         foreach (EchoObject echo in echoes)
-            copies.Add(Serializer.Deserialize(echo, typeof(object), read)!);
+            copies.Add(Serializer.Deserialize<object>(echo, read)!);
 
         map.Ran(written, read);
         return copies;
@@ -172,7 +172,7 @@ public static class ObjectCopy
     private sealed class SharedLinks(HashSet<object> owned, CopyMap map) : IExternalReferenceResolver
     {
         private readonly List<object> _linked = [];
-        private readonly Dictionary<object, int> _keys = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<object, int> _keys = [with(ReferenceEqualityComparer.Instance)];
 
         public object? GetReferenceKey(object value)
         {

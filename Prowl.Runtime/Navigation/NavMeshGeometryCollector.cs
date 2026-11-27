@@ -405,7 +405,7 @@ public static class NavMeshGeometryCollector
             }
         }
 
-        List<int> indices = new(6 * (nx - 1) * (nz - 1));
+        List<int> indices = [with(6 * (nx - 1) * (nz - 1))];
         for (int zi = 0; zi < nz - 1; zi++)
         {
             for (int xi = 0; xi < nx - 1; xi++)

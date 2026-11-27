@@ -91,14 +91,14 @@ public static class LightmapUVGenerator
         // that are continuous within a chart weld, while corners across a seam stay split.
         var map = new Dictionary<(int orig, int qu, int qv), uint>(verts.Length * 2);
         var newVerts = new List<Float3>(verts.Length);
-        List<Float3>? newNormals = normals != null ? new List<Float3>(verts.Length) : null;
-        List<Float2>? newUV = uv != null ? new List<Float2>(verts.Length) : null;
+        List<Float3>? newNormals = normals != null ? [with(verts.Length)] : null;
+        List<Float2>? newUV = uv != null ? [with(verts.Length)] : null;
         var newUV2 = new List<Float2>(verts.Length);
-        List<Float4>? newTangents = tangents != null ? new List<Float4>(verts.Length) : null;
-        List<Color>? newColors = colors != null ? new List<Color>(verts.Length) : null;
-        List<Color32>? newColors32 = colors32 != null ? new List<Color32>(verts.Length) : null;
-        List<Float4>? newBoneIdx = boneIdx != null ? new List<Float4>(verts.Length) : null;
-        List<Float4>? newBoneW = boneW != null ? new List<Float4>(verts.Length) : null;
+        List<Float4>? newTangents = tangents != null ? [with(verts.Length)] : null;
+        List<Color>? newColors = colors != null ? [with(verts.Length)] : null;
+        List<Color32>? newColors32 = colors32 != null ? [with(verts.Length)] : null;
+        List<Float4>? newBoneIdx = boneIdx != null ? [with(verts.Length)] : null;
+        List<Float4>? newBoneW = boneW != null ? [with(verts.Length)] : null;
         uint[] newIndices = new uint[indices.Length];
 
         const double Q = 65536.0;

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+
 using Prowl.Runtime.Audio.Native;
 using Prowl.Vector;
 
@@ -118,7 +119,7 @@ public sealed class Filter
     // approaches Nyquist, so the top of the range keeps a margin below it.
     private float ClampFrequency(float value) => Maths.Clamp(value, 1.0f, sampleRate * 0.49f);
 
-    private float ClampQ(float value) => Maths.Max(value, 0.01f);
+    private static float ClampQ(float value) => Maths.Max(value, 0.01f);
 
     /// <summary>Filters one sample of a single stream, using the first channel's state.</summary>
     public float Process(float input)

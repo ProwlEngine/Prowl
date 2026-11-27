@@ -16,7 +16,7 @@ public static class TagLayerManager
     /// <summary>
     /// List of available tags for GameObjects.
     /// </summary>
-    public static List<string> tags =
+    public static List<string> Tags { get; set; } =
     [
         "Untagged",
         "Main Camera",
@@ -30,7 +30,7 @@ public static class TagLayerManager
     /// <summary>
     /// Array of available layers for GameObjects.
     /// </summary>
-    public static string[] layers =
+    public static string[] Layers { get; set; } =
     [
         "Default",
         "TransparentFX",
@@ -52,9 +52,9 @@ public static class TagLayerManager
     /// <returns>The tag name at the specified index, or "Untagged" if the index is out of range.</returns>
     public static string GetTag(int index)
     {
-        if (index < 0 || index >= tags.Count)
+        if (index < 0 || index >= Tags.Count)
             return "Untagged";
-        return tags[index];
+        return Tags[index];
     }
 
     /// <summary>
@@ -64,9 +64,9 @@ public static class TagLayerManager
     /// <returns>The layer name at the specified index, "Default" If index is out of range.</returns>
     public static string GetLayer(int index)
     {
-        if (index < 0 || index >= layers.Length)
+        if (index < 0 || index >= Layers.Length)
             return "Default";
-        return layers[index];
+        return Layers[index];
     }
 
     /// <summary>
@@ -76,8 +76,8 @@ public static class TagLayerManager
     /// <returns>The index of the tag, or -1 if the tag is not found.</returns>
     public static int GetTagIndex(string tag)
     {
-        for (int i = 0; i < tags.Count; i++)
-            if (tags[i].Equals(tag, StringComparison.OrdinalIgnoreCase))
+        for (int i = 0; i < Tags.Count; i++)
+            if (Tags[i].Equals(tag, StringComparison.OrdinalIgnoreCase))
                 return i;
         return -1;
     }
@@ -89,8 +89,8 @@ public static class TagLayerManager
     /// <returns>The index of the layer, or -1 if the layer is not found.</returns>
     public static int GetLayerIndex(string layer)
     {
-        for (int i = 0; i < layers.Length; i++)
-            if (layers[i].Equals(layer, StringComparison.OrdinalIgnoreCase))
+        for (int i = 0; i < Layers.Length; i++)
+            if (Layers[i].Equals(layer, StringComparison.OrdinalIgnoreCase))
                 return i;
         return -1;
     }
@@ -99,7 +99,7 @@ public static class TagLayerManager
     /// Retrieves a copy of the layers array.
     /// </summary>
     /// <returns>A new array containing all layer names.</returns>
-    public static IReadOnlyList<string> GetLayers() => layers;
+    public static IReadOnlyList<string> GetLayers() => Layers;
 
     private static List<SortingLayerInfo> s_sortingLayers = DefaultSortingLayers();
 
@@ -149,7 +149,7 @@ public static class TagLayerManager
         s_sortingLayers = DefaultSortingLayers();
         SortingLayersVersion++;
 
-        tags =
+        Tags =
         [
             "Untagged",
             "Main Camera",
@@ -161,7 +161,7 @@ public static class TagLayerManager
         ];
 
         // Array of available layers for GameObjects.
-        layers =
+        Layers =
         [
             "Default",
             "TransparentFX",

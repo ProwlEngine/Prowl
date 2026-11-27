@@ -150,10 +150,8 @@ public class CollisionModule : ParticleSystemModule
         Float3 to = system.SimPointToWorld(p.Position);
         float radius = MathF.Max(1e-4f, (MathF.Abs(p.Size.X) + MathF.Abs(p.Size.Y)) * 0.25f * RadiusScale * system.SizeScale);
 
-        Float3 center;
-        bool touching;
         bool hit = IsPlanes
-            ? SweepPlanes(from, to, radius, ref collision, out center, out touching)
+            ? SweepPlanes(from, to, radius, ref collision, out Float3 center, out bool touching)
             : Quality == ParticleCollisionQuality.High
                 ? SweepWorld(physics, from, to, radius, ref collision, out center, out touching)
                 : SweepCached(physics, from, to, radius, ref collision, out center, out touching);

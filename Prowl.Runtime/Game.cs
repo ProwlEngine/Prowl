@@ -5,9 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-using Prowl.Runtime.Audio;
-
 using Prowl.PaperUI;
+using Prowl.Runtime.Audio;
 using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Resources;

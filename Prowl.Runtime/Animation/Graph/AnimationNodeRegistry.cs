@@ -97,6 +97,7 @@ public static class AnimationNodeRegistry
 }
 
 /// <summary>One graph compile: the Motion graph being filled in, and the lookups node builders use.</summary>
+[SuppressMessage("Performance", "CA1822", Justification = "Node builders reach every lookup through the context")]
 public sealed class GraphCompileContext
 {
     private static readonly char[] s_listSeparators = [',', ';'];
@@ -118,7 +119,7 @@ public sealed class GraphCompileContext
         Skeleton = skeleton;
         Avatar = avatar;
 
-        _records = new Dictionary<string, GraphNodeRecord>(asset.Nodes.Count);
+        _records = [with(asset.Nodes.Count)];
         foreach (GraphNodeRecord node in asset.Nodes)
         {
             _records.TryAdd(node.Id, node);

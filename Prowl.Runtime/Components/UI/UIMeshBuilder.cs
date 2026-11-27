@@ -3,18 +3,19 @@
 
 using System;
 using System.Collections.Generic;
-using Prowl.Vector;
+
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.UI;
 
 public sealed class UIMeshBuilder
 {
     // ---------- Storage ----------
-    private readonly List<Float3>  _verts   = new(64);
-    private readonly List<Float2>  _uvs     = new(64);
-    private readonly List<Color32> _colors  = new(64);
-    private readonly List<uint>    _indices = new(96);
+    private readonly List<Float3>  _verts   = [with(64)];
+    private readonly List<Float2>  _uvs     = [with(64)];
+    private readonly List<Color32> _colors  = [with(64)];
+    private readonly List<uint>    _indices = [with(96)];
 
     public int  VertexCount => _verts.Count;
     public int  IndexCount  => _indices.Count;
@@ -410,10 +411,10 @@ public sealed class UIMeshBuilder
     // ---------- Rounded-corner clipping ----------
 
     // Reusable buffers for the source snapshot taken by ClipToRoundedRect. Cleared on each call.
-    private static readonly List<Float3>  s_clipSrcVerts   = new(64);
-    private static readonly List<Float2>  s_clipSrcUVs     = new(64);
-    private static readonly List<Color32> s_clipSrcColors  = new(64);
-    private static readonly List<uint>    s_clipSrcIndices = new(96);
+    private static readonly List<Float3>  s_clipSrcVerts   = [with(64)];
+    private static readonly List<Float2>  s_clipSrcUVs     = [with(64)];
+    private static readonly List<Color32> s_clipSrcColors  = [with(64)];
+    private static readonly List<uint>    s_clipSrcIndices = [with(96)];
 
     /// <summary>
     /// Intersects the currently-accumulated geometry with a rounded rectangle (Sutherland-Hodgman

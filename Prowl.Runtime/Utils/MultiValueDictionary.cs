@@ -80,7 +80,7 @@ public class MultiValueDictionary<TKey, TValue> :
     public MultiValueDictionary(int capacity)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(capacity);
-        _dictionary = new Dictionary<TKey, InnerCollectionView>(capacity);
+        _dictionary = [with(capacity)];
     }
 
     /// <summary>
@@ -92,7 +92,7 @@ public class MultiValueDictionary<TKey, TValue> :
     /// <remarks>If <paramref name="comparer"/> is set to null, then the default <see cref="IEqualityComparer" /> for <typeparamref name="TKey"/> is used.</remarks>
     public MultiValueDictionary(IEqualityComparer<TKey> comparer)
     {
-        _dictionary = new Dictionary<TKey, InnerCollectionView>(comparer);
+        _dictionary = [with(comparer)];
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ public class MultiValueDictionary<TKey, TValue> :
     {
         ArgumentNullException.ThrowIfNull(enumerable);
 
-        _dictionary = new Dictionary<TKey, InnerCollectionView>(comparer);
+        _dictionary = [with(comparer)];
         foreach (KeyValuePair<TKey, IReadOnlyCollection<TValue>> pair in enumerable)
             AddRange(pair.Key, pair.Value);
     }

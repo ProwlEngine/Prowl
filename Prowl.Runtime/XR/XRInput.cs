@@ -562,7 +562,7 @@ internal sealed unsafe class OpenXRInput
         return new XRHandJointPose { Pose = pose, Radius = joint.Radius };
     }
 
-    private ActionStateGetInfo GetInfo(XrAction action, ulong subactionPath)
+    private static ActionStateGetInfo GetInfo(XrAction action, ulong subactionPath)
         => new() { Type = StructureType.ActionStateGetInfo, Action = action, SubactionPath = subactionPath };
 
     private float ReadFloat(XrAction action, int hand)

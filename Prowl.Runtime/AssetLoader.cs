@@ -30,15 +30,15 @@ internal static class AssetLoader
         public readonly TaskCompletionSource Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private static readonly object s_lock = new();
-    private static readonly Dictionary<Asset, Job> s_jobs = new(ReferenceEqualityComparer.Instance);
+    private static readonly Lock s_lock = new();
+    private static readonly Dictionary<Asset, Job> s_jobs = [with(ReferenceEqualityComparer.Instance)];
     private static readonly Queue<Job> s_high = new();
     private static readonly Queue<Job> s_normal = new();
     private static readonly ConcurrentQueue<Job> s_completed = new();
     private static readonly ConcurrentQueue<Job> s_mainThread = new();
     private static readonly SemaphoreSlim s_signal = new(0);
 
-    private static readonly object s_startLock = new();
+    private static readonly Lock s_startLock = new();
     private static Thread? s_thread;
     private static volatile bool s_running;
 

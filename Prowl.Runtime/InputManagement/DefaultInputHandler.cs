@@ -14,7 +14,7 @@ using Silk.NET.Input;
 
 namespace Prowl.Runtime;
 
-public class DefaultInputHandler : IInputHandler, IDisposable
+public sealed class DefaultInputHandler : IInputHandler, IDisposable
 {
     public IInputContext Context { get; internal set; }
 
@@ -361,24 +361,24 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     public bool GetGamepadButton(int gamepadIndex, GamepadButton button)
     {
-        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.ContainsKey(gamepadIndex))
+        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.TryGetValue(gamepadIndex, out Dictionary<GamepadButton, bool>? pressed))
             return false;
-        return isGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false);
+        return pressed.GetValueOrDefault(button, false);
     }
 
     public bool GetGamepadButtonDown(int gamepadIndex, GamepadButton button)
     {
-        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.ContainsKey(gamepadIndex))
+        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.TryGetValue(gamepadIndex, out Dictionary<GamepadButton, bool>? pressed))
             return false;
-        return isGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false) &&
+        return pressed.GetValueOrDefault(button, false) &&
                !wasGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false);
     }
 
     public bool GetGamepadButtonUp(int gamepadIndex, GamepadButton button)
     {
-        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.ContainsKey(gamepadIndex))
+        if (!IsGamepadConnected(gamepadIndex) || !isGamepadButtonPressed.TryGetValue(gamepadIndex, out Dictionary<GamepadButton, bool>? pressed))
             return false;
-        return !isGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false) &&
+        return !pressed.GetValueOrDefault(button, false) &&
                wasGamepadButtonPressed[gamepadIndex].GetValueOrDefault(button, false);
     }
 

@@ -602,7 +602,7 @@ public sealed class AudioClip : Asset, ISerializable
             compound.Add("StreamFromDisk", new EchoObject(streamFromDisk));
 
             // Write empty data for consistency
-            compound.Add("AudioData", new EchoObject(new byte[0]));
+            compound.Add("AudioData", new EchoObject(Array.Empty<byte>()));
             compound.Add("DataSize", new EchoObject(0L));
             compound.Add("HashCode", new EchoObject(0L));
         }
@@ -628,7 +628,7 @@ public sealed class AudioClip : Asset, ISerializable
             // Invalid state - no file path and no data
             compound.Add("FilePath", new EchoObject(string.Empty));
             compound.Add("StreamFromDisk", new EchoObject(false));
-            compound.Add("AudioData", new EchoObject(new byte[0]));
+            compound.Add("AudioData", new EchoObject(Array.Empty<byte>()));
             compound.Add("DataSize", new EchoObject(0L));
             compound.Add("HashCode", new EchoObject(0L));
         }

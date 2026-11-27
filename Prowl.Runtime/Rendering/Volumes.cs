@@ -443,7 +443,7 @@ public sealed class VolumeStack : IDisposable
             MarkPresent(baseProfile);
 
         _contributing.Clear();
-        IReadOnlyList<Volume> volumes = scene.IsValid() ? scene.VolumeList : [];
+        List<Volume> volumes = scene.IsValid() ? scene.VolumeList : [];
         for (int i = 0; i < volumes.Count; i++)
         {
             Volume volume = volumes[i];

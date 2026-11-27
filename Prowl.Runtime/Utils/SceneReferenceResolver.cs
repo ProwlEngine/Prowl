@@ -136,7 +136,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
 
     private sealed class CaptureReferences : IExternalReferenceResolver
     {
-        private readonly HashSet<object> _captured = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<object> _captured = [with(ReferenceEqualityComparer.Instance)];
 
         public CaptureReferences(IEnumerable<GameObject> objects)
         {

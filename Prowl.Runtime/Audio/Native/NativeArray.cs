@@ -74,7 +74,7 @@ public unsafe ref struct NativeArray<T> where T : unmanaged
         }
         else
         {
-            throw new ArgumentException("Destination is too short.", "destination");
+            throw new ArgumentException("Destination is too short.", nameof(destination));
         }
     }
 }

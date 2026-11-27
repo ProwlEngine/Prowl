@@ -70,8 +70,7 @@ public class EditorModelImporter : AssetImporter
             }
 
             // 1. Import creates live meshes, materials, animations, GO hierarchy (+ UV2 if enabled).
-            var importer = new ModelImporter();
-            ModelImportResult data = importer.Import(new FileInfo(ctx.AbsolutePath), importSettings);
+            ModelImportResult data = ModelImporter.Import(new FileInfo(ctx.AbsolutePath), importSettings);
 
             // 2. Register sub-assets assigns deterministic GUIDs immediately
             // Order: the model file has no stable per-mesh key of its own, and it is read front to back.
@@ -90,7 +89,7 @@ public class EditorModelImporter : AssetImporter
 
             // Model-referenced textures are already resolved by this point: an external one is the database's
             // texture, and an embedded one is registered as a sub-asset, both by EditorModelTextureResolver
-            // while importer.Import() ran above.
+            // while ModelImporter.Import() ran above.
 
             // 2b. Generate mesh features (SDF, BVH, Prism, ...) per mesh, registered as sub-assets.
             MeshFeatureImporter.GenerateAll(data.Meshes, ctx.Settings, ctx, meshIdentities);

@@ -47,7 +47,7 @@ internal sealed class PrefabLink
     {
         AssetId = AssetId,
         SourceIdentifier = SourceIdentifier,
-        Overrides = new List<PropertyOverride>(Overrides)
+        Overrides = [with(Overrides)]
     };
 
     /// <summary>
@@ -57,6 +57,6 @@ internal sealed class PrefabLink
     {
         AssetId = other.AssetId;
         SourceIdentifier = other.SourceIdentifier;
-        Overrides = new List<PropertyOverride>(other.Overrides);
+        Overrides = [with(other.Overrides)];
     }
 }

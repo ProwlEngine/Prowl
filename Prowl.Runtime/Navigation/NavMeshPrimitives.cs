@@ -1131,13 +1131,13 @@ public static class NavMeshDebugDisplay
     /// <summary>Draw every surface's walkable overlay, not only the selected one's. The only way to
     /// watch obstacles carve while playing, since entering play mode clears the selection. Each
     /// overlay re-triangulates whenever its navmesh settles, so leave it off while profiling.</summary>
-    public static bool AlwaysShow;
+    public static bool AlwaysShow { get; set; }
 
     /// <summary>Add the height detail wireframe, the triangles Recast fits inside each polygon.</summary>
-    public static bool ShowDetail;
+    public static bool ShowDetail { get; set; }
 
     /// <summary>Add a marker per navmesh vertex, polygon corners picked out from detail vertices.</summary>
-    public static bool ShowVertices;
+    public static bool ShowVertices { get; set; }
 
     /// <summary>Endpoint marker size, shared so a link's own gizmo matches the overlay.</summary>
     internal const float EndpointGizmoRadius = 0.15f;

@@ -20,7 +20,7 @@ public class LayerMaskPropertyEditor : PropertyEditor
 
         // Pull the named layers out of the tag/layer manager. Empty slots are skipped so
         // the popover only shows assignable layers (matches the legacy widget's behaviour).
-        string[] layers = TagLayerManager.layers;
+        string[] layers = TagLayerManager.Layers;
         var validIndices = new List<int>(layers.Length);
         for (int i = 0; i < layers.Length; i++)
             if (!string.IsNullOrEmpty(layers[i])) validIndices.Add(i);

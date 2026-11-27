@@ -161,17 +161,17 @@ public static class Time
     public static float SmoothUnscaledDeltaTime { get; private set; }
     public static long FrameCount { get; private set; }
 
-    public static float TimeSmoothFactor = .25f;
+    public static float TimeSmoothFactor { get; set; } = .25f;
 
     /// <summary>The fixed step, unscaled.</summary>
-    public static float FixedDeltaTime = 1.0f / 60.0f;
+    public static float FixedDeltaTime { get; set; } = 1.0f / 60.0f;
 
     /// <summary>
     /// When above zero, every frame advances time by exactly this many seconds instead of the measured time, so a run
     /// plays out the same way every time, for reference captures and recordings.
     /// </summary>
-    public static float LockedDeltaTime = 0f;
-    public static int MaxFixedIterations = 3;
+    public static float LockedDeltaTime { get; set; }
+    public static int MaxFixedIterations { get; set; } = 3;
 
     /// <summary>Starts a frame: measures the unscaled time since the last one.</summary>
     internal static void AdvanceFrame()

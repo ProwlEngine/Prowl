@@ -21,7 +21,7 @@ namespace Prowl.Runtime.Resources;
 /// with, which declares the material's properties and keyword axes. A source that fails to parse leaves the shader
 /// without a Graphite shader, and its materials draw with the Invalid shader.
 /// </summary>
-public sealed class Shader : Asset, ISerializable
+public sealed partial class Shader : Asset, ISerializable
 {
     private static readonly ConcurrentDictionary<string, string> s_sourcePaths = new(StringComparer.Ordinal);
 
@@ -109,7 +109,8 @@ public sealed class Shader : Asset, ISerializable
         }
     }
 
-    private static readonly System.Text.RegularExpressions.Regex s_include = new(@"^[ \t]*#include[ \t]+""([^""]+)""[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[ \t]*#include[ \t]+""([^""]+)""[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex IncludeDirective();
 
     /// <summary>
     /// Inlines the includes of a source that are neither Graphite's nor Prowl's library through <paramref name="resolve"/>,
@@ -277,9 +278,9 @@ public sealed class Shader : Asset, ISerializable
     private sealed class IncludeExpander(Func<string, string?> resolve)
     {
         private readonly Func<string, string?> _resolve = resolve;
-        private readonly Dictionary<string, string?> _read = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, int> _pastes = new(StringComparer.Ordinal);
-        private readonly HashSet<string> _open = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string?> _read = [with(StringComparer.Ordinal)];
+        private readonly Dictionary<string, int> _pastes = [with(StringComparer.Ordinal)];
+        private readonly HashSet<string> _open = [with(StringComparer.Ordinal)];
 
         public string Expand(string source, string rootFile, bool isShaderDef)
         {
@@ -441,7 +442,7 @@ public sealed class Shader : Asset, ISerializable
                         lineEnd++;
                     int nextStart = NextLineStart(text, lineEnd);
 
-                    Match match = s_include.Match(text, lineStart, lineEnd - lineStart);
+                    Match match = IncludeDirective().Match(text, lineStart, lineEnd - lineStart);
                     if (match.Success)
                     {
                         string name = match.Groups[1].Value;
@@ -584,7 +585,7 @@ public sealed class Shader : Asset, ISerializable
                         lineEnd++;
                     int nextStart = NextLineStart(text, lineEnd);
 
-                    Match match = s_include.Match(text, lineStart, lineEnd - lineStart);
+                    Match match = IncludeDirective().Match(text, lineStart, lineEnd - lineStart);
                     if (match.Success)
                     {
                         string name = match.Groups[1].Value;
@@ -723,7 +724,7 @@ public sealed class Shader : Asset, ISerializable
 
                         if (directive is "include")
                         {
-                            Match match = s_include.Match(text, lineStart, lineEnd - lineStart);
+                            Match match = IncludeDirective().Match(text, lineStart, lineEnd - lineStart);
                             if (match.Success)
                             {
                                 string name = match.Groups[1].Value;

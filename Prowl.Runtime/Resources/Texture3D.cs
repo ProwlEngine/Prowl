@@ -130,7 +130,7 @@ public sealed class Texture3D : Texture, ISerializable
         Resize(width, height, depth, MipCount > 1 ? FullChain(width, height, depth) : 1);
     }
 
-    private void ValidateTextureSize(uint width, uint height, uint depth)
+    private static void ValidateTextureSize(uint width, uint height, uint depth)
     {
         if (width <= 0 || width > Graphics.MaxTextureSize)
             throw new ArgumentOutOfRangeException(nameof(width), width, nameof(width) + " must be in the range (0, " + nameof(Graphics.MaxTextureSize) + "]");
@@ -175,7 +175,7 @@ public sealed class Texture3D : Texture, ISerializable
             throw new ArgumentOutOfRangeException(nameof(boxDepth), boxDepth, nameof(boxDepth) + " must be greater than 0");
 
         if (boxWidth > Width - boxX || boxHeight > Height - boxY || boxDepth > Depth - boxZ)
-            throw new ArgumentOutOfRangeException("Specified box is outside of the texture's storage");
+            throw new ArgumentOutOfRangeException(null, "Specified box is outside of the texture's storage");
     }
 
     protected internal override long EstimateBytes()

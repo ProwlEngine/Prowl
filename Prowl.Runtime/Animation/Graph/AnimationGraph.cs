@@ -5,12 +5,11 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Motion;
+using Prowl.Runtime.AnimationNodes;
 
 using MotionAvatar = Prowl.Motion.Avatar;
 using MotionGraph = Prowl.Motion.AnimationGraph;
 using MotionSkeleton = Prowl.Motion.Skeleton;
-
-using Prowl.Runtime.AnimationNodes;
 
 namespace Prowl.Runtime;
 
@@ -191,8 +190,8 @@ public sealed class AnimationGraph : Asset
             var compile = new RigCompile
             {
                 Graph = graph,
-                Nodes = new Dictionary<string, int>(context.Compiled),
-                States = new Dictionary<string, int[]>(context.States),
+                Nodes = [with(context.Compiled)],
+                States = [with(context.States)],
                 DeepVersion = deepVersion,
             };
             _compiles[skeleton] = compile;

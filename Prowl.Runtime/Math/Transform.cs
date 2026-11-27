@@ -332,9 +332,9 @@ public class Transform : ISerializationCallbackReceiver
         Changed();
     }
 
-    private float MakeSafe(float v) => float.IsNaN(v) ? 0 : v;
-    private Float3 MakeSafe(Float3 v) => new(MakeSafe(v.X), MakeSafe(v.Y), MakeSafe(v.Z));
-    private Quaternion MakeSafe(Quaternion v) => new(MakeSafe(v.X), MakeSafe(v.Y), MakeSafe(v.Z), MakeSafe(v.W));
+    private static float MakeSafe(float v) => float.IsNaN(v) ? 0 : v;
+    private static Float3 MakeSafe(Float3 v) => new(MakeSafe(v.X), MakeSafe(v.Y), MakeSafe(v.Z));
+    private static Quaternion MakeSafe(Quaternion v) => new(MakeSafe(v.X), MakeSafe(v.Y), MakeSafe(v.Z), MakeSafe(v.W));
 
     public Transform? Find(string path)
     {
@@ -357,7 +357,7 @@ public class Transform : ISerializationCallbackReceiver
         return currentTransform;
     }
 
-    private Transform? FindImmediateChild(Transform parent, string name)
+    private static Transform? FindImmediateChild(Transform parent, string name)
     {
         foreach (GameObject child in parent.GameObject.Children)
             if (child.Name == name)

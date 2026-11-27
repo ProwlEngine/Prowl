@@ -568,9 +568,11 @@ public sealed class AudioSource : Component
         if (_soundGroup.pointer != IntPtr.Zero)
         {
             // Create main audio source
-            _mainSource = new SourceInfo();
-            _mainSource.handle = MiniAudioExNative.ma_ex_audio_source_init(AudioContext.NativeContext);
-            _mainSource.atEnd = false;
+            _mainSource = new SourceInfo
+            {
+                handle = MiniAudioExNative.ma_ex_audio_source_init(AudioContext.NativeContext),
+                atEnd = false
+            };
             MiniAudioExNative.ma_ex_audio_source_set_group(_mainSource.handle, _soundGroup.pointer);
 
             RouteToOutputGroup();

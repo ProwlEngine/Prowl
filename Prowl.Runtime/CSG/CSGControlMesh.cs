@@ -37,10 +37,10 @@ public enum CSGMeshProblem
 /// </summary>
 public sealed class CSGControlMesh
 {
-    [SerializeField] private List<Float3> points = new();
+    [SerializeField] private List<Float3> points = [];
 
     /// <summary>Each polygon as indices into <see cref="Points"/>, wound so its normal points out.</summary>
-    [SerializeField] private List<int[]> polygons = new();
+    [SerializeField] private List<int[]> polygons = [];
 
     public IReadOnlyList<Float3> Points => points;
     public IReadOnlyList<int[]> Polygons => polygons;
@@ -97,10 +97,10 @@ public sealed class CSGControlMesh
         var polys = new List<int[]>(solid.Faces.Count);
         foreach (GeometryData.Face face in solid.Faces)
         {
-            var ring = face.NeighborVertices();
+            List<GeometryData.Vertex> ring = face.NeighborVertices();
             if (ring.Count < 3) continue;
 
-            var indices = new int[ring.Count];
+            int[] indices = new int[ring.Count];
             for (int i = 0; i < ring.Count; i++) indices[i] = index[ring[i]];
             polys.Add(indices);
         }
@@ -128,8 +128,8 @@ public sealed class CSGControlMesh
         foreach (Float3 p in corners) points.Add(p + offset);
 
         var polygons = new List<int[]>(n + 2);
-        var start = new int[n];
-        var end = new int[n];
+        int[] start = new int[n];
+        int[] end = new int[n];
         for (int i = 0; i < n; i++)
         {
             start[i] = n - 1 - i;
@@ -206,7 +206,7 @@ public sealed class CSGControlMesh
     }
 
     public CSGControlMesh Clone()
-        => new(new List<Float3>(points), polygons.ConvertAll(p => (int[])p.Clone()));
+        => new([with(points)], polygons.ConvertAll(p => (int[])p.Clone()));
 
     /// <summary>
     /// The solid as a mesh, one face per polygon. <paramref name="faceToPolygon"/> says which polygon each face came
@@ -322,7 +322,7 @@ public sealed class CSGControlMesh
         {
             for (int i = 0; i < ring.Length; i++)
             {
-                var edge = (ring[i], ring[(i + 1) % ring.Length]);
+                (int, int) edge = (ring[i], ring[(i + 1) % ring.Length]);
                 directed[edge] = directed.TryGetValue(edge, out int n) ? n + 1 : 1;
             }
         }
@@ -363,7 +363,7 @@ public sealed class CSGControlMesh
         for (int p = 0; p < polygons.Count; p++) triangles[p] = Triangles(p);
 
         float volume = 0f;
-        foreach (var list in triangles)
+        foreach (List<(Float3 A, Float3 B, Float3 C)> list in triangles)
             foreach ((Float3 a, Float3 b, Float3 c) in list)
                 volume += Float3.Dot(a, Float3.Cross(b, c)) / 6f;
         if (!HasRoom(volume)) return CSGMeshProblem.InsideOut;
@@ -402,8 +402,8 @@ public sealed class CSGControlMesh
                             if (Float3.DistanceSquared(point, points[other]) < Same * Same) return true;
                     }
 
-            var key = (At(point.X), At(point.Y), At(point.Z));
-            if (!cells.TryGetValue(key, out List<int>? cell)) cells[key] = cell = new List<int>();
+            (long, long, long) key = (At(point.X), At(point.Y), At(point.Z));
+            if (!cells.TryGetValue(key, out List<int>? cell)) cells[key] = cell = [];
             cell.Add(index);
         }
         return false;
@@ -419,12 +419,12 @@ public sealed class CSGControlMesh
             for (int i = 0; i < ring.Length; i++)
             {
                 int point = ring[i];
-                if (!around.TryGetValue(point, out var corners)) around[point] = corners = new List<(int, int)>();
+                if (!around.TryGetValue(point, out List<(int Next, int Previous)>? corners)) around[point] = corners = [];
                 corners.Add((ring[(i + 1) % ring.Length], ring[(i + ring.Length - 1) % ring.Length]));
             }
         }
 
-        foreach (var corners in around.Values)
+        foreach (List<(int Next, int Previous)> corners in around.Values)
         {
             // The polygon after one round the point is the one arriving from where this one leaves to
             int walked = 0, at = 0;
@@ -480,7 +480,7 @@ public sealed class CSGControlMesh
                 for (int y = range.Item2; y <= range.Item5; y++)
                     for (int z = range.Item3; z <= range.Item6; z++)
                     {
-                        if (!grid.TryGetValue((x, y, z), out List<int>? list)) grid[(x, y, z)] = list = new List<int>();
+                        if (!grid.TryGetValue((x, y, z), out List<int>? list)) grid[(x, y, z)] = list = [];
                         list.Add(p);
                     }
         }
@@ -494,8 +494,8 @@ public sealed class CSGControlMesh
                 for (int j = i + 1; j < list.Count; j++)
                 {
                     int q = list[j];
-                    var a = ranges[p];
-                    var b = ranges[q];
+                    (int X0, int Y0, int Z0, int X1, int Y1, int Z1) a = ranges[p];
+                    (int X0, int Y0, int Z0, int X1, int Y1, int Z1) b = ranges[q];
                     if (Math.Max(a.X0, b.X0) != x || Math.Max(a.Y0, b.Y0) != y || Math.Max(a.Z0, b.Z0) != z) continue;
                     if (!bounds[p].Intersects(bounds[q]) || ShareCorner(p, q, cornerSets)) continue;
                     if (TrianglesCross(triangles[p], triangles[q], bounds[q])) return true;
@@ -518,7 +518,7 @@ public sealed class CSGControlMesh
             return false;
         }
 
-        HashSet<int> corners = sets[p] ??= new HashSet<int>(large);
+        HashSet<int> corners = sets[p] ??= [with(large)];
         foreach (int i in small)
             if (corners.Contains(i)) return true;
         return false;
@@ -577,7 +577,7 @@ public sealed class CSGControlMesh
         var compact = new List<int[]>(rings.Count);
         foreach (int[] ring in rings)
         {
-            var mapped = new int[ring.Length];
+            int[] mapped = new int[ring.Length];
             for (int i = 0; i < ring.Length; i++)
             {
                 if (!renumber.TryGetValue(ring[i], out int index))
@@ -684,7 +684,7 @@ public sealed class CSGControlMesh
         private readonly float[] _area;
         private readonly int[] _polygon;
         private readonly int[] _order;
-        private readonly List<Node> _nodes = new();
+        private readonly List<Node> _nodes = [];
 
         private struct Node
         {
@@ -696,7 +696,7 @@ public sealed class CSGControlMesh
         public WindingTree(List<(Float3 A, Float3 B, Float3 C)>[] triangles)
         {
             int count = 0;
-            foreach (var list in triangles) count += list.Count;
+            foreach (List<(Float3 A, Float3 B, Float3 C)> list in triangles) count += list.Count;
             _a = new Float3[count];
             _b = new Float3[count];
             _c = new Float3[count];
@@ -818,7 +818,7 @@ public sealed class CSGControlMesh
         foreach ((int a, int b) in directed)
         {
             if (directed.Contains((b, a))) continue;
-            if (!onward.TryGetValue(b, out List<int>? list)) onward[b] = list = new List<int>();
+            if (!onward.TryGetValue(b, out List<int>? list)) onward[b] = list = [];
             list.Add(a);
         }
 
@@ -916,7 +916,7 @@ public sealed class CSGControlMesh
             for (int i = 0; i < ring.Length; i++)
             {
                 int a = ring[i], b = ring[(i + 1) % ring.Length];
-                var key = a < b ? (a, b) : (b, a);
+                (int, int) key = a < b ? (a, b) : (b, a);
 
                 if (seen.Add(key)) result.Add(key);
             }

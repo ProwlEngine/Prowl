@@ -13,7 +13,7 @@ namespace Prowl.Runtime;
 /// Asset content for built standalone players, from loose files, ProwlPak archives or embedded resources. The
 /// manifest names every shipped asset's file, type, size and dependencies, so nothing is opened until it loads.
 /// </summary>
-public class PlayerAssetBackend : AssetBackend, IDisposable
+public sealed class PlayerAssetBackend : AssetBackend, IDisposable
 {
     /// <summary>The manifest layout this build writes and reads.</summary>
     public const int ManifestFormat = 2;

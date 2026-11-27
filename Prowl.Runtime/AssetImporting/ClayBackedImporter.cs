@@ -10,16 +10,16 @@ using Prowl.Clay.Importer;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-using ClayMesh = Prowl.Clay.Mesh;
-using ClayMaterial = Prowl.Clay.Material;
 using ClayAnim = Prowl.Clay.AnimationClip;
-using ClayTexture = Prowl.Clay.Texture;
+using ClayMaterial = Prowl.Clay.Material;
+using ClayMesh = Prowl.Clay.Mesh;
 using ClaySettings = Prowl.Clay.Importer.ModelImporterSettings;
-using PMesh = Prowl.Runtime.Resources.Mesh;
-using PMaterial = Prowl.Runtime.Resources.Material;
+using ClayTexture = Prowl.Clay.Texture;
 using PAnim = Prowl.Runtime.AnimationClip;
 using PBlendShape = Prowl.Runtime.Resources.BlendShape;
 using PBlendShapeFrame = Prowl.Runtime.Resources.BlendShapeFrame;
+using PMaterial = Prowl.Runtime.Resources.Material;
+using PMesh = Prowl.Runtime.Resources.Mesh;
 
 namespace Prowl.Runtime.AssetImporting;
 

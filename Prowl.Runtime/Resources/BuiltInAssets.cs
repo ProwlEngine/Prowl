@@ -144,7 +144,7 @@ public static class BuiltInAssets
                 return false;
             }
             AssetContent.Move(built, staging);
-            GC.SuppressFinalize(built);
+            AssetContent.Emptied(built);
             return true;
         }
         catch (Exception ex)

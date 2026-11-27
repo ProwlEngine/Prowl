@@ -33,7 +33,7 @@ public struct ComputeKernel
 /// A dispatch runs at once, ahead of anything submitted later, so a buffer read afterwards sees its results. For work
 /// inside the frame, write a Graphite RenderFeature or RenderProvider instead.
 /// </summary>
-public sealed class ComputeShader : Asset
+public sealed partial class ComputeShader : Asset
 {
     [SerializeField] private string _source = "";
     [SerializeField] private ComputeKernel[] _kernels = [];
@@ -44,7 +44,8 @@ public sealed class ComputeShader : Asset
     [SerializeIgnore] private Dictionary<string, Action<PropertySet>> _shared = [];
     [SerializeIgnore] private Dictionary<string, ComputeBuffer>[] _kernelBuffers = [];
 
-    private static readonly Regex s_kernelPragma = new(@"^[ \t]*#pragma[ \t]+kernel[ \t]+(\w+)(?:[ \t]+(\d+))?(?:[ \t]+(\d+))?(?:[ \t]+(\d+))?[ \t]*\r?$", RegexOptions.Multiline);
+    [GeneratedRegex(@"^[ \t]*#pragma[ \t]+kernel[ \t]+(\w+)(?:[ \t]+(\d+))?(?:[ \t]+(\d+))?(?:[ \t]+(\d+))?[ \t]*\r?$", RegexOptions.Multiline)]
+    private static partial Regex KernelPragma();
 
     internal ComputeShader() : base("New Compute Shader") { }
 
@@ -62,7 +63,7 @@ public sealed class ComputeShader : Asset
     private void Parse(string source)
     {
         var kernels = new List<ComputeKernel>();
-        foreach (Match match in s_kernelPragma.Matches(source))
+        foreach (Match match in KernelPragma().Matches(source))
         {
             kernels.Add(new ComputeKernel
             {
@@ -75,7 +76,7 @@ public sealed class ComputeShader : Asset
         if (kernels.Count == 0)
             throw new ArgumentException($"Compute shader '{Name}' declares no kernels. Add a line such as '#pragma kernel Main 64'.");
 
-        _source = s_kernelPragma.Replace(source, "");
+        _source = KernelPragma().Replace(source, "");
         _kernels = [.. kernels];
         ResetKernels();
     }
@@ -311,7 +312,7 @@ public sealed class ComputeBuffer : IDisposable
 
     private long CheckRange(int byteCount, int startIndex)
     {
-        if (IsDisposed) throw new ObjectDisposedException(nameof(ComputeBuffer));
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         long offset = (long)startIndex * Stride;
         if (startIndex < 0 || offset + byteCount > (long)Count * Stride)
             throw new ArgumentException($"{byteCount} bytes from element {startIndex} do not fit a buffer of {Count} x {Stride} bytes.");

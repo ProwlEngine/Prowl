@@ -5,14 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
+using Prowl.Recast;
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
 using Prowl.Recast.Detour.TileCache;
 using Prowl.Recast.Detour.TileCache.Io.Compress;
-using Prowl.Recast;
 using Prowl.Recast.Geom;
-
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 

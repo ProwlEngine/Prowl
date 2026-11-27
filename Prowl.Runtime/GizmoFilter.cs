@@ -14,7 +14,7 @@ namespace Prowl.Runtime;
 /// </summary>
 public static class GizmoFilter
 {
-    private static readonly HashSet<string> s_disabled = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> s_disabled = [with(StringComparer.Ordinal)];
     private static readonly ReloadCache<Type, bool> s_enabled = new(type => !s_disabled.Contains(Key(type)));
 
     /// <summary>The full names of the types that are turned off.</summary>

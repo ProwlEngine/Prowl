@@ -4,6 +4,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -814,6 +815,7 @@ public sealed class NavMeshWorld
     }
 
     /// <summary>Triangulate one registered navmesh. Empty once it has been unregistered.</summary>
+    [SuppressMessage("Performance", "CA1822", Justification = "Pairs with the agent type overload on the world")]
     public NavMeshTriangulation CalculateTriangulation(NavMeshInstance instance)
     {
         ArgumentNullException.ThrowIfNull(instance);

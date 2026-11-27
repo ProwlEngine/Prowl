@@ -72,7 +72,7 @@ public class TerrainComponent : Component, IRenderSync
     [NonSerialized] private Double3? _viewer;
     [NonSerialized] private bool _warnedShared;
     [NonSerialized, NotHeld] private TerrainData? _owned;
-    [NonSerialized, NotHeld] private readonly Dictionary<object, (int Key, TerrainPropKind? Kind)> _kinds = new(ReferenceEqualityComparer.Instance);
+    [NonSerialized, NotHeld] private readonly Dictionary<object, (int Key, TerrainPropKind? Kind)> _kinds = [with(ReferenceEqualityComparer.Instance)];
 
     public float TerrainSize { get { TerrainData? d = Data; return d.IsValid() ? d.Size : 1024f; } }
     public float TerrainHeight { get { TerrainData? d = Data; return d.IsValid() ? d.Height : 100f; } }
@@ -196,7 +196,7 @@ public class TerrainComponent : Component, IRenderSync
         int size = 4;
         foreach (TerrainLayer layer in data.Layers)
             size = Math.Max(size, TerrainTextures.SizeFor(1024, layer.Albedo, layer.NormalMap));
-        List<TerrainLayerDesc> descs = new(data.Layers.Count);
+        List<TerrainLayerDesc> descs = [with(data.Layers.Count)];
         foreach (TerrainLayer layer in data.Layers)
         {
             byte rough = (byte)Math.Clamp(MathF.Round(layer.Roughness * 255f), 0, 255);

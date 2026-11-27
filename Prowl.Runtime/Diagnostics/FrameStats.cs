@@ -28,7 +28,7 @@ public static class FrameStats
     // Declared ahead of the built-in categories below: static initializers run in order, and each
     // category registers itself as it is created.
     private static readonly object s_registryLock = new();
-    private static readonly Dictionary<string, FrameStat> s_byName = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, FrameStat> s_byName = [with(StringComparer.OrdinalIgnoreCase)];
     // Copy-on-write so readers on any thread can enumerate without a lock.
     private static FrameStat[] s_categories = [];
 

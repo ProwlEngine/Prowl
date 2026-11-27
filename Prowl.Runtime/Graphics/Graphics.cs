@@ -14,10 +14,10 @@ using Prowl.Vector;
 
 using Silk.NET.Windowing;
 
-using GTexture = Prowl.Graphite.Texture;
-using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
-using Material = Prowl.Runtime.Resources.Material;
 using GShader = Prowl.Graphite.Rendering.Shader;
+using GTexture = Prowl.Graphite.Texture;
+using Material = Prowl.Runtime.Resources.Material;
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
 
 namespace Prowl.Runtime;
 
@@ -32,7 +32,7 @@ public static class Graphics
 {
     private static GlslShaderCompiler? s_compiler;
     private static IShaderCompiler? s_shaderCompiler;
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<RenderView, object> s_viewIds = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<RenderView, object> s_viewIds = [];
     private static int s_nextViewId;
     private static readonly List<RenderView> s_views = [];
     private static readonly List<Action<FrameGraph>> s_hostPasses = [];
@@ -71,7 +71,7 @@ public static class Graphics
     /// Resolves a shader include that is not part of Graphite's library: (name, including file) to its source, or null.
     /// Prowl's own includes resolve first, then this.
     /// </summary>
-    public static Func<string, string, string?>? ResolveInclude;
+    public static Func<string, string, string?>? ResolveInclude { get; set; }
 
     /// <summary>How cameras become views of a frame, Prowl's forward pipeline unless replaced.</summary>
     public static CameraPipeline CameraPipeline { get; set; } = new ForwardCameraPipeline();
@@ -79,7 +79,7 @@ public static class Graphics
     /// <summary>
     /// Asked on the main thread as each frame is submitted for the profilers its execution reports to, or null for none.
     /// </summary>
-    public static Func<IProfiler[]?>? FrameProfilers;
+    public static Func<IProfiler[]?>? FrameProfilers { get; set; }
 
     /// <summary>Raised on the main thread just before each frame is submitted, for work that pushes state into worlds.</summary>
     public static event Action? BeforeSubmit;
@@ -97,7 +97,7 @@ public static class Graphics
     /// Where compiled shader stages are kept between runs, keyed by their source, so each variant compiles once per
     /// machine. Set before anything compiles; null keeps them in memory only.
     /// </summary>
-    public static string? ShaderCacheDirectory = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Prowl", "ShaderCache");
+    public static string? ShaderCacheDirectory { get; set; } = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Prowl", "ShaderCache");
 
     // Graphite's library is registered here too, so shaders parse and list their axes headless
     private static GlslShaderCompiler CreateCompiler()
@@ -106,7 +106,7 @@ public static class Graphics
         return new GlslShaderCompiler(new GlslCompilerOptions { ResolveInclude = Resolve, CacheDirectory = ShaderCacheDirectory });
     }
 
-    private static readonly Dictionary<string, GShader> s_libraryShaders = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, GShader> s_libraryShaders = [with(StringComparer.Ordinal)];
 
     /// <summary>
     /// The renderer's one instance of a shader from Graphite's library, such as "Graphite/Standard/Lit.shader", so

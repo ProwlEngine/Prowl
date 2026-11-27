@@ -8,11 +8,10 @@ using System.IO;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
-
-using Prowl.Graphite.Rendering;
 
 using GBlendShapeData = Prowl.Graphite.Rendering.BlendShapeData;
 using GBlendShapeFrame = Prowl.Graphite.Rendering.BlendShapeFrame;
@@ -442,7 +441,7 @@ public class Mesh : Asset, ISerializable
         if (boneIndices is { Length: > 0 } && boneIndices.Length == count) streams.Add(Stream(GVertexSemantic.BoneIndices, Graphite.VertexElementFormat.Float4, boneIndices));
         if (boneWeights is { Length: > 0 } && boneWeights.Length == count) streams.Add(Stream(GVertexSemantic.BoneWeights, Graphite.VertexElementFormat.Float4, boneWeights));
 
-        List<uint> outIndices = new(indices!.Length);
+        List<uint> outIndices = [with(indices!.Length)];
         List<SubMesh> subMeshes = [];
         int subCount = _subMeshes.Count > 0 ? _subMeshes.Count : 1;
         for (int s = 0; s < subCount; s++)
@@ -607,14 +606,17 @@ public class Mesh : Asset, ISerializable
     /// <summary>A new mesh holding these arrays as they are, for a builder handing over arrays nothing else holds.</summary>
     internal static Mesh FromOwned(string name, Float3[] vertices, Float3[] normals, Float2[] uv, Float4[] tangents, uint[] indices)
     {
-        var mesh = new Mesh { Name = name };
-        mesh.IndexFormat = vertices.Length > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
-        mesh.vertices = vertices;
-        mesh.normals = normals;
-        mesh.uv = uv;
-        mesh.tangents = tangents;
-        mesh.indices = indices;
-        mesh.changed = true;
+        var mesh = new Mesh
+        {
+            Name = name,
+            IndexFormat = vertices.Length > ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16,
+            vertices = vertices,
+            normals = normals,
+            uv = uv,
+            tangents = tangents,
+            indices = indices,
+            changed = true
+        };
         return mesh;
     }
 
@@ -795,8 +797,10 @@ public class Mesh : Asset, ISerializable
     public static Mesh GetFullscreenQuad()
     {
         if (fullScreenQuad.IsValid()) return fullScreenQuad;
-        Mesh mesh = new();
-        mesh.vertices = new Float3[4];
+        Mesh mesh = new()
+        {
+            vertices = new Float3[4]
+        };
         mesh.vertices[0] = new Float3(-1, -1, 0);
         mesh.vertices[1] = new Float3(1, -1, 0);
         mesh.vertices[2] = new Float3(-1, 1, 0);
@@ -1079,9 +1083,11 @@ public class Mesh : Asset, ISerializable
 
     public static Mesh CreateTriangle(Float3 a, Float3 b, Float3 c)
     {
-        Mesh mesh = new();
-        mesh.vertices = [a, b, c];
-        mesh.indices = [0, 1, 2];
+        Mesh mesh = new()
+        {
+            vertices = [a, b, c],
+            indices = [0, 1, 2]
+        };
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
         mesh.RecalculateTangents();
@@ -1845,7 +1851,7 @@ public static class MeshGeometry
         {
             GeometryData.Vertex vertex = loop.Vert;
             if (!emitted.TryGetValue(vertex, out List<(GeometryData.Loop Loop, int Index)>? list))
-                emitted[vertex] = list = new List<(GeometryData.Loop, int)>(1);
+                emitted[vertex] = list = [with(1)];
             foreach ((GeometryData.Loop? other, int index) in list)
                 if (SameValues(other, loop, loopNames)) return index;
 

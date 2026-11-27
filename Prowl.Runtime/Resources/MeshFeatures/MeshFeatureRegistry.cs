@@ -16,7 +16,7 @@ namespace Prowl.Runtime.MeshFeatures;
 /// </summary>
 public static class MeshFeatureRegistry
 {
-    private static readonly Dictionary<string, MeshFeatureSpec> _specs = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, MeshFeatureSpec> _specs = [with(StringComparer.Ordinal)];
     private static bool _initialized;
 
     /// <summary>All registered feature specs, in insertion order.</summary>

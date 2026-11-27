@@ -13,7 +13,7 @@ namespace Prowl.Runtime.UI;
 internal sealed class UIRenderTree
 {
     // -------- Active items, in DFS order --------
-    private readonly List<UIRenderItem> _items = new(32);
+    private readonly List<UIRenderItem> _items = [with(32)];
 
     // -------- Free list: reusable UIRenderItem instances ----
     private readonly Stack<UIRenderItem> _freeItems = new(32);

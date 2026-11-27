@@ -322,7 +322,7 @@ public abstract class PhysicsConstraint : Component
     /// <summary>
     /// Converts a local position to world space.
     /// </summary>
-    protected Jitter2.LinearMath.JVector LocalToWorld(Float3 localPos, Transform transform)
+    protected static Jitter2.LinearMath.JVector LocalToWorld(Float3 localPos, Transform transform)
     {
         // A moving body's Transform is interpolated and can trail where the solver has it, so a joint made while
         // it moves would be built off to one side and snap. The pose the solver uses is what the joint must match.
@@ -334,7 +334,7 @@ public abstract class PhysicsConstraint : Component
     /// <summary>
     /// Converts a local direction to world space.
     /// </summary>
-    protected Jitter2.LinearMath.JVector LocalDirToWorld(Float3 localDir, Transform transform)
+    protected static Jitter2.LinearMath.JVector LocalDirToWorld(Float3 localDir, Transform transform)
     {
         if (TryGetJointPose(transform, out _, out Quaternion rotation))
             return (rotation * localDir).ToJitter();

@@ -169,9 +169,9 @@ public static class GameObjectInspector
 
         using (paper.Row("gim_tag_layer").Height(22).Gap(6).Enter())
         {
-            string[] tagNames = [.. TagLayerManager.tags];
+            string[] tagNames = [.. TagLayerManager.Tags];
             bool tagMixed = gos.Select(g => g.Tag).Distinct().Count() > 1;
-            int tagIdx = tagMixed ? -1 : Math.Max(0, TagLayerManager.tags.IndexOf(gos[0].Tag));
+            int tagIdx = tagMixed ? -1 : Math.Max(0, TagLayerManager.Tags.IndexOf(gos[0].Tag));
 
             DrawInlineLabeled(paper, "gim_tag_row", MixLabel(Loc.Get("inspector.tag"), tagMixed), font, () =>
                 Origami.Dropdown(paper, "gim_tag", tagIdx,
@@ -182,7 +182,7 @@ public static class GameObjectInspector
                         foreach (GameObject g in gos) g.Tag = tagNames[v];
                     }, tagNames).Show());
 
-            string[] allLayers = TagLayerManager.layers;
+            string[] allLayers = TagLayerManager.Layers;
             var layerNames = new List<string>();
             var layerIndices = new List<int>();
             for (int i = 0; i < allLayers.Length; i++)
@@ -353,8 +353,8 @@ public static class GameObjectInspector
             .Gap(7)
             .Enter())
         {
-            string[] tagNames = [.. TagLayerManager.tags];
-            int tagIdx = TagLayerManager.tags.IndexOf(go.Tag);
+            string[] tagNames = [.. TagLayerManager.Tags];
+            int tagIdx = TagLayerManager.Tags.IndexOf(go.Tag);
             if (tagIdx < 0) tagIdx = 0;
             Origami.Dropdown(paper, "gi_tag", tagIdx,
                 v =>
@@ -367,7 +367,7 @@ public static class GameObjectInspector
                     }
                 }, tagNames).Inline(Loc.Get("inspector.tag")).Width(UnitValue.Stretch()).Height(26).Show();
 
-            string[] allLayers = TagLayerManager.layers;
+            string[] allLayers = TagLayerManager.Layers;
             var layerNames = new List<string>();
             var layerIndices = new List<int>();
             for (int i = 0; i < allLayers.Length; i++)

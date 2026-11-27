@@ -216,8 +216,11 @@ public class InputActionMap : Asset, ISerializable
                 var type = (InputActionType)actionTag.Get("type").IntValue;
                 string valueTypeStr = actionTag.TryGet("valueType", out EchoObject? vt) ? vt.StringValue : "float";
 
-                var action = new InputAction(name, type) { ActionMap = this };
-                action.ExpectedValueType = valueTypeStr == "Float2" ? typeof(Float2) : typeof(float);
+                var action = new InputAction(name, type)
+                {
+                    ActionMap = this,
+                    ExpectedValueType = valueTypeStr == "Float2" ? typeof(Float2) : typeof(float)
+                };
 
                 // Deserialize bindings
                 if (actionTag.TryGet("bindings", out EchoObject? bindingsList) && bindingsList.TagType == EchoType.List)

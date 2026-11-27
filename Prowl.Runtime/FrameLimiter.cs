@@ -12,7 +12,7 @@ namespace Prowl.Runtime;
 /// Paces a loop to a target frame rate. <see cref="NextWait"/> is the whole schedule and takes the
 /// time as an argument, so it can be reasoned about and tested without a clock.
 /// </summary>
-internal sealed class FrameLimiter
+internal sealed partial class FrameLimiter
 {
     private double _deadline;
     private int _targetFrameRate;
@@ -85,11 +85,11 @@ internal sealed class FrameLimiter
         return _deadline - now;
     }
 
-    [DllImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
-    private static extern uint TimeBeginPeriod(uint milliseconds);
+    [LibraryImport("winmm.dll", EntryPoint = "timeBeginPeriod")]
+    private static partial uint TimeBeginPeriod(uint milliseconds);
 
-    [DllImport("winmm.dll", EntryPoint = "timeEndPeriod")]
-    private static extern uint TimeEndPeriod(uint milliseconds);
+    [LibraryImport("winmm.dll", EntryPoint = "timeEndPeriod")]
+    private static partial uint TimeEndPeriod(uint milliseconds);
 
     private bool _timerRaised;
 
@@ -105,8 +105,8 @@ internal sealed class FrameLimiter
 
         try
         {
-            if (raised) TimeBeginPeriod(1);
-            else TimeEndPeriod(1);
+            if (raised) _ = TimeBeginPeriod(1);
+            else _ = TimeEndPeriod(1);
             _timerRaised = raised;
         }
         catch { /* winmm is not there, so the spin carries the whole wait */ }

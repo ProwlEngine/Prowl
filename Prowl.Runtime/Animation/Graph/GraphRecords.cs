@@ -133,10 +133,10 @@ public sealed class GraphNodeRecord
     {
         var copy = (GraphNodeRecord)MemberwiseClone();
         copy.Inputs = Inputs.ConvertAll(input => input.Clone());
-        copy.Properties = new Dictionary<string, NodeValue>(Properties.Count);
+        copy.Properties = [with(Properties.Count)];
         foreach (KeyValuePair<string, NodeValue> property in Properties)
             copy.Properties[property.Key] = property.Value.Clone();
-        copy.PropertyInputs = new Dictionary<string, string>(PropertyInputs);
+        copy.PropertyInputs = [with(PropertyInputs)];
         copy.States = States.ConvertAll(state => state.Clone());
         return copy;
     }

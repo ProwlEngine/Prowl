@@ -467,7 +467,7 @@ public sealed class TerrainData : Asset, ISerializable
     };
 
     // The layer weights an export holds, every sample on layer 0 when the package keeps none
-    private IReadOnlyList<TerrainWeightMap> Weights(TerrainExport export)
+    private TerrainWeightMap[] Weights(TerrainExport export)
     {
         if (export.Settings.Layers.Count > 0)
             return export.Settings.Layers.Take(_layers.Count).ToArray();

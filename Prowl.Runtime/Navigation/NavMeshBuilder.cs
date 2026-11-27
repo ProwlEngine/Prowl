@@ -6,10 +6,9 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Prowl.Recast;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour.TileCache;
-using Prowl.Recast;
-
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -40,9 +39,9 @@ public static class NavMeshBuilder
     /// <param name="links">Off-mesh connections, placed in the tile containing their start point and
     /// re-injected as each tile is contoured — runtime tiles rebuild from geometry-only layers.</param>
     public static NavMeshData? Build(NavMeshBuildSettings settings, IReadOnlyList<NavMeshGeometrySource> sources,
-        int defaultArea = NavMeshAreas.Walkable, int threads = 0, CancellationToken cancellation = default,
+        int defaultArea = NavMeshAreas.Walkable, int threads = 0,
         AABB? worldBounds = null, IReadOnlyList<NavMeshAreaVolume>? volumes = null,
-        IReadOnlyList<NavMeshLinkSource>? links = null)
+        IReadOnlyList<NavMeshLinkSource>? links = null, CancellationToken cancellation = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(sources);
@@ -160,8 +159,8 @@ public static class NavMeshBuilder
     /// </summary>
     public static List<NavMeshTileRebuild> BuildTilesInBounds(NavMeshData data,
         IReadOnlyList<NavMeshGeometrySource> sources, Float3 worldMin, Float3 worldMax,
-        int defaultArea = NavMeshAreas.Walkable, CancellationToken cancellation = default,
-        IReadOnlyList<NavMeshAreaVolume>? volumes = null)
+        int defaultArea = NavMeshAreas.Walkable,
+        IReadOnlyList<NavMeshAreaVolume>? volumes = null, CancellationToken cancellation = default)
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(sources);

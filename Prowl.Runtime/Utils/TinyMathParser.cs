@@ -20,16 +20,22 @@ namespace Prowl.Runtime.Utils;
 /// Variables are case-sensitive.
 /// Variables must be defined in the Variables dictionary before parsing.
 /// </summary>
-public static class TinyMathParser
+public static partial class TinyMathParser
 {
     public static readonly Dictionary<string, float> Variables = [];
 
-    public static float Parse(string expression) => EvaluatePostfix(ShuntingYard(Tokenize(Regex.Replace(expression, @"\s+", ""))));
+    public static float Parse(string expression) => EvaluatePostfix(ShuntingYard(Tokenize(Whitespace().Replace(expression, ""))));
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Whitespace();
+
+    [GeneratedRegex(@"(\+|-|\*|/|\^|\(|\))|(\d+(\.\d+)?)|([a-zA-Z]+)")]
+    private static partial Regex Token();
 
     private static List<string> Tokenize(string expression)
     {
         List<string> tokens = [];
-        MatchCollection matches = Regex.Matches(expression, @"(\+|-|\*|/|\^|\(|\))|(\d+(\.\d+)?)|([a-zA-Z]+)");
+        MatchCollection matches = Token().Matches(expression);
         for (int i = 0; i < matches.Count; i++)
         {
             if (matches[i].Value == "-" && (i == 0 || "^*/(-+".Contains(matches[i - 1].Value)))

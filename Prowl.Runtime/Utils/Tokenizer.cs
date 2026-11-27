@@ -214,7 +214,7 @@ public class Tokenizer<TTokenType> : Tokenizer
         Func<char, Tokenizer, bool>? isQuote = null) :
         base(input, isWhitespace, isQuote)
     {
-        _symbolHandlers = new(symbolHandlers.Select((x) => new KeyValuePair<char, Func<Tokenizer, TTokenType>>(x.Key, (y) => x.Value())));
+        _symbolHandlers = [with(symbolHandlers.Select((x) => new KeyValuePair<char, Func<Tokenizer, TTokenType>>(x.Key, (y) => x.Value())))];
         _isSymbol = isSymbol;
         _defaultTokenType = defaultTokenType;
         _noneTokenType = noneTokenType;

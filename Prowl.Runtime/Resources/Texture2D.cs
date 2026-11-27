@@ -239,10 +239,10 @@ public sealed class Texture2D : Texture, ISerializable
             throw new ArgumentOutOfRangeException(nameof(rectWidth), rectWidth, nameof(rectWidth) + " must be greater than 0");
 
         if (rectHeight <= 0)
-            throw new ArgumentOutOfRangeException(nameof(rectHeight), rectHeight, nameof(rectHeight) + "must be greater than 0");
+            throw new ArgumentOutOfRangeException(nameof(rectHeight), rectHeight, nameof(rectHeight) + " must be greater than 0");
 
         if (rectWidth > Width - rectX || rectHeight > Height - rectY)
-            throw new ArgumentOutOfRangeException("Specified area is outside of the texture's storage");
+            throw new ArgumentOutOfRangeException(null, "Specified area is outside of the texture's storage");
     }
 
     protected internal override long EstimateBytes()

@@ -157,7 +157,7 @@ public abstract class Asset : EngineObject
     {
         FreeNative();
         TakeContent(staging);
-        GC.SuppressFinalize(staging);
+        AssetContent.Emptied(staging);
         _contentVersion++;
         LoadCount++;
         ReportedEmpty = false;
@@ -218,8 +218,12 @@ internal static class AssetContent
     {
         Asset shell = AssetDatabase.CreateShell(asset.GetType());
         Move(shell, asset);
-        GC.SuppressFinalize(shell);
+        Emptied(shell);
     }
+
+    /// <summary>Stops the finalizer of an asset whose content moved out, so it never frees what it no longer owns.</summary>
+    [SuppressMessage("Usage", "CA1816", Justification = "The asset is not disposed, only emptied")]
+    public static void Emptied(Asset asset) => GC.SuppressFinalize(asset);
 
     public static FieldInfo[] FieldsOf(Type type) => s_fields[type];
 
