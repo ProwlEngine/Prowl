@@ -563,7 +563,7 @@ namespace Prowl.Quill
         /// </summary>
         public Float2 CurrentPoint => _currentSubPath != null && _currentSubPath.Points.Count > 0 ? CurrentPointInternal : Float2.Zero;
 
-        internal Float2 CurrentPointInternal => _currentSubPath.Points[_currentSubPath.Points.Count - 1];
+        internal Float2 CurrentPointInternal => _currentSubPath!.Points[_currentSubPath.Points.Count - 1];
         internal ICanvasRenderer _renderer;
 
         internal bool _isNewDrawCallRequested = false;
@@ -1873,7 +1873,7 @@ namespace Prowl.Quill
             d3 = d3 >= 0 ? d3 : -d3;
             if ((d2 + d3) * (d2 + d3) < tess_tol * (dx * dx + dy * dy))
             {
-                _currentSubPath.Points.Add(new Float2(x4, y4));
+                _currentSubPath!.Points.Add(new Float2(x4, y4));
             }
             else if (level < 10)
             {

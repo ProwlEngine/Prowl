@@ -34,6 +34,8 @@
 ** LibTessDotNet: Remi Gillig, https://github.com/speps/LibTessDotNet
 */
 
+#nullable disable
+
 using System;
 using System.Diagnostics;
 

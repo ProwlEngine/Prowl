@@ -83,12 +83,12 @@ namespace Prowl.Quill
         private const float MiterAngleLimitCos = -0.9999619f; // cos(179.5 degrees)
 
         // Per-call scratch state (one set per thread).
-        [ThreadStatic] private static List<Float2> _points;
-        [ThreadStatic] private static List<Float2> _normals;
-        [ThreadStatic] private static List<float> _segLenSqr;
-        [ThreadStatic] private static List<Arc> _arcs;
-        [ThreadStatic] private static List<Vertex> _vtx;
-        [ThreadStatic] private static List<uint> _idx;
+        [ThreadStatic] private static List<Float2>? _points;
+        [ThreadStatic] private static List<Float2>? _normals;
+        [ThreadStatic] private static List<float>? _segLenSqr;
+        [ThreadStatic] private static List<Arc>? _arcs;
+        [ThreadStatic] private static List<Vertex>? _vtx;
+        [ThreadStatic] private static List<uint>? _idx;
 
         [ThreadStatic] private static Color32 _color;
         [ThreadStatic] private static float _covCore; // peak coverage of the solid core (1, or < 1 for sub-pixel lines)

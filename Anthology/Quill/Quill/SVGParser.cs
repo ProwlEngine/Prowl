@@ -1,6 +1,7 @@
 using Prowl.Vector;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -60,7 +61,7 @@ namespace Prowl.Quill
         /// <summary>
         /// The draw commands for path elements.
         /// </summary>
-        public DrawCommand[] drawCommands;
+        public DrawCommand[] drawCommands = Array.Empty<DrawCommand>();
 
         /// <summary>
         /// The stroke color of this element, with opacity already applied.
@@ -93,7 +94,7 @@ namespace Prowl.Quill
         public float opacity = 1f;
 
         // Parsed inline "style" declarations, which take precedence over presentation attributes.
-        private Dictionary<string, string> _style;
+        private Dictionary<string, string>? _style;
 
         // Fill/stroke before opacity is applied, propagated to children so opacity isn't compounded twice.
         private Color32 _rawFill;
@@ -143,7 +144,7 @@ namespace Prowl.Quill
             if (Attributes.TryGetValue("style", out var styleText))
                 _style = ParseStyle(styleText);
 
-            string fillProp = GetProperty("fill");
+            string? fillProp = GetProperty("fill");
             if (fillProp == null)
             {
                 fillType = inherited.fillType;
@@ -155,7 +156,7 @@ namespace Prowl.Quill
                 _rawFill = fillType == ColorType.specific ? ColorParser.Parse(fillProp.Trim()) : default;
             }
 
-            string strokeProp = GetProperty("stroke");
+            string? strokeProp = GetProperty("stroke");
             if (strokeProp == null)
             {
                 strokeType = inherited.strokeType;
@@ -167,7 +168,7 @@ namespace Prowl.Quill
                 _rawStroke = strokeType == ColorType.specific ? ColorParser.Parse(strokeProp.Trim()) : default;
             }
 
-            string widthProp = GetProperty("stroke-width");
+            string? widthProp = GetProperty("stroke-width");
             strokeWidth = widthProp != null && TryParseLeadingNumber(widthProp, out var sw) ? sw : inherited.strokeWidth;
 
             // Element opacity accumulates down the tree; fill/stroke-opacity modulate only their own channel.
@@ -193,7 +194,7 @@ namespace Prowl.Quill
         };
 
         /// <summary>Gets a presentation property, preferring an inline style declaration over an attribute.</summary>
-        protected string GetProperty(string key)
+        protected string? GetProperty(string key)
         {
             if (_style != null && _style.TryGetValue(key, out var v))
                 return v;
@@ -743,7 +744,7 @@ namespace Prowl.Quill
             return TryReadNumber(out x) && TryReadNumber(out y);
         }
 
-        public bool TryReadNumbers(int count, out float[] values)
+        public bool TryReadNumbers(int count, [NotNullWhen(true)] out float[]? values)
         {
             var arr = new float[count];
             for (int i = 0; i < count; i++)
@@ -758,7 +759,7 @@ namespace Prowl.Quill
             return true;
         }
 
-        public bool TryReadArc(out float[] values)
+        public bool TryReadArc([NotNullWhen(true)] out float[]? values)
         {
             var arr = new float[7];
             if (TryReadNumber(out arr[0]) && TryReadNumber(out arr[1]) && TryReadNumber(out arr[2])
@@ -811,12 +812,12 @@ namespace Prowl.Quill
             xmlDoc.Load(filePath);
 
             if (xmlDoc.DocumentElement != null && xmlDoc.DocumentElement.Name.Equals("svg", StringComparison.OrdinalIgnoreCase))
-                return ParseXmlElement(xmlDoc.DocumentElement, 0, SvgPaintContext.Root);
+                return ParseXmlElement(xmlDoc.DocumentElement, 0, SvgPaintContext.Root)!;
             else
                 throw new InvalidOperationException("Invalid SVG document: Missing root <svg> element.");
         }
 
-        private static SvgElement ParseXmlElement(XmlElement xmlElement, int depth, SvgPaintContext inherited)
+        private static SvgElement? ParseXmlElement(XmlElement xmlElement, int depth, SvgPaintContext inherited)
         {
             if (!Enum.TryParse<SvgElement.TagType>(xmlElement.Name, true, out var tag))
                 return null;

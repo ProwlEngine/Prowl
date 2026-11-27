@@ -31,6 +31,8 @@
 ** LibTessDotNet: Remi Gillig, https://github.com/speps/LibTessDotNet
 */
 
+#nullable disable
+
 namespace Prowl.Quill.External
 {
 

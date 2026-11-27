@@ -46,7 +46,7 @@ const string ReleaseTag = "v2026.12";
 
 string[] binariesToKeep = binaryMappings.Select((x, y) => x.Item1).ToArray();
 
-string GetScriptPath([CallerFilePath] string filePath = null) => Directory.GetParent(filePath).FullName;
+string GetScriptPath([CallerFilePath] string filePath = "") => Directory.GetParent(filePath)!.FullName;
 
 string s_targetPath = Path.Join(GetScriptPath(), "lib");
 
@@ -63,7 +63,7 @@ try
     int id = 0;
     foreach (ReleaseAsset asset in release.Assets)
     {
-        (string, string)? target = s_targets.FirstOrDefault(x => asset.Name.EndsWith(x.Value.Item1));
+        (string, string)? target = s_targets.FirstOrDefault(x => asset.Name.EndsWith(x!.Value.Item1));
 
         if (target == null)
             continue;
@@ -121,7 +121,7 @@ async Task DownloadRelease(ReleaseAsset asset, string targetPathName, int ID)
     File.Delete(tempPath);
 
     string text = $"\rFile saved to {outputPath}";
-    int padding = Math.Max(0, Console.WindowWidth - text.Length);
+    int padding = Console.IsOutputRedirected ? 0 : Math.Max(0, Console.WindowWidth - text.Length);
     Console.WriteLine(text + new string(' ', padding));
 }
 
@@ -183,7 +183,7 @@ public class ProgressBar : IDisposable, IProgress<double>
         Interlocked.Exchange(ref currentProgress, value);
     }
 
-    private void TimerHandler(object state)
+    private void TimerHandler(object? state)
     {
         lock (timer)
         {

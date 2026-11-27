@@ -44,7 +44,7 @@ internal static class GraphiteGlsl
         Stage fs = Rewrite(program, fragment, globals);
         Stage? alt = toggle is { } t ? Rewrite(program, t.Fragment, globals) : null;
 
-        foreach (Stage stage in (Stage?[])[fs, alt])
+        foreach (Stage? stage in (Stage?[])[fs, alt])
         {
             if (stage == null)
                 continue;
