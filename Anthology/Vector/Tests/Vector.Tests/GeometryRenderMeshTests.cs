@@ -160,13 +160,13 @@ public class GeometryRenderMeshTests
     }
 
     [Fact]
-    public void ToRenderMesh_EmitDrawsSomeFacesShadedAsTheWhole()
+    public void ToRenderMesh_FacesDrawsSomeFacesShadedAsTheWhole()
     {
         GeometryData mesh = GeometryGenerator.Plane(new Float2(2, 1), segments: new Int2(2, 1));
         GeometryData.Face first = mesh.Faces[0];
 
         RenderMesh whole = mesh.ToRenderMesh(new RenderMeshOptions { ForceSmooth = true });
-        RenderMesh piece = mesh.ToRenderMesh(new RenderMeshOptions { ForceSmooth = true, Emit = f => f == first });
+        RenderMesh piece = mesh.ToRenderMesh(new RenderMeshOptions { ForceSmooth = true, Faces = [first] });
 
         Assert.Equal(6, piece.Indices.Length);
         Assert.Equal(4, piece.Positions.Length);

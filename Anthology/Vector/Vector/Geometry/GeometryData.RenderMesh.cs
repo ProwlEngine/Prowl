@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 
 namespace Prowl.Vector.Geometry;
@@ -21,8 +22,8 @@ public struct RenderMeshOptions
     /// <summary>Winds triangles against their face, as <see cref="GeometryData.ToTriangleMesh"/> does, for renderers whose front faces turn that way.</summary>
     public bool ReverseWinding;
 
-    /// <summary>Only the faces it accepts are drawn. The others still shade their smooth neighbours, so a piece matches the whole.</summary>
-    public Predicate<GeometryData.Face>? Emit;
+    /// <summary>Only these faces are drawn, in this order. The others still shade their smooth neighbours, so a piece matches the whole.</summary>
+    public IReadOnlyList<GeometryData.Face>? Faces;
 }
 
 /// <summary>
@@ -134,7 +135,13 @@ public partial class GeometryData
         bool hasUv = HasLoopAttribute(UvAttribute);
         bool hasMaterial = HasFaceAttribute(MaterialAttribute);
 
-        int capacity = options.Emit == null ? Loops.Count : 0;
+        int capacity = Loops.Count;
+        if (options.Faces != null)
+        {
+            capacity = 0;
+            foreach (Face face in options.Faces) capacity += face.VertCount;
+        }
+
         var positions = new List<Float3>(capacity);
         var normals = new List<Float3>(capacity);
         var uvs = hasUv ? new List<Float2>(capacity) : null;
@@ -146,10 +153,11 @@ public partial class GeometryData
         var corners = new List<int>(8);
         var polygon = new List<Float2>(8);
 
-        for (int f = 0; f < Faces.Count; f++)
+        IReadOnlyList<Face> drawn = options.Faces ?? Faces;
+        for (int d = 0; d < drawn.Count; d++)
         {
-            Face face = Faces[f];
-            if (options.Emit != null && !options.Emit(face)) continue;
+            Face face = drawn[d];
+            int f = face.Slot;
             if (!shading.Drawn(f)) continue;
             int material = hasMaterial ? face.Material : 0;
             if (!byMaterial.TryGetValue(material, out var target))
@@ -228,6 +236,7 @@ public partial class GeometryData
             triangleFaces.AddRange(materialFaces);
         }
 
+        shading.Release();
         return new RenderMesh
         {
             Positions = positions.ToArray(),
@@ -271,8 +280,15 @@ public partial class GeometryData
         {
             _mesh = mesh;
             _options = options;
-            _normals = new Float3[mesh.Faces.Count];
-            _state = new byte[mesh.Faces.Count];
+            _normals = ArrayPool<Float3>.Shared.Rent(mesh.Faces.Count);
+            _state = ArrayPool<byte>.Shared.Rent(mesh.Faces.Count);
+            Array.Clear(_state, 0, mesh.Faces.Count);
+        }
+
+        public void Release()
+        {
+            ArrayPool<Float3>.Shared.Return(_normals);
+            ArrayPool<byte>.Shared.Return(_state);
         }
 
         public Float3 Normal(int face)
