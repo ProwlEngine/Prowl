@@ -56,12 +56,12 @@ public class Animator_Tests
         var player = new Player(skeleton);
         player.Play(TestClips.Const(skeleton, 0f));
         player.Update(0.1f);
-        player.CrossFade(TestClips.Const(skeleton, 10f), 1f);
+        player.CrossFade(TestClips.Const(skeleton, 10f), fadeDuration: 1f);
         for (int i = 0; i < 9; i++)
             player.Update(0.1f);
         float before = player.Pose.GetTransform(0).position.Z;
 
-        player.CrossFade(TestClips.Const(skeleton, 0f), 1f);
+        player.CrossFade(TestClips.Const(skeleton, 0f), fadeDuration: 1f);
         player.Update(0.1f);
         float after = player.Pose.GetTransform(0).position.Z;
 
@@ -95,7 +95,7 @@ public class Animator_Tests
 
         player.Play(clipA);
         player.Update(0.1f);
-        player.CrossFade(clipB, 1f);
+        player.CrossFade(clipB, fadeDuration: 1f);
         player.Update(0.1f);
 
         Assert.Same(clipB, player.CurrentClip);
@@ -169,7 +169,7 @@ public class Animator_Tests
         var player = new Player(skeleton);
         player.Play(TestClips.Const(skeleton, 0f));
         player.Update(0.1f);
-        player.CrossFade(TestClips.Const(skeleton, 2f), 0.5f);
+        player.CrossFade(TestClips.Const(skeleton, 2f), fadeDuration: 0.5f);
         player.Update(0.1f);
         player.Update(float.NaN);
         for (int i = 0; i < 10; i++)
