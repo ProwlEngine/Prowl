@@ -58,7 +58,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <summary>
     /// Main swapchain for this device, or null if none.
     /// </summary>
-    public abstract Swapchain MainSwapchain { get; }
+    public abstract Swapchain? MainSwapchain { get; }
 
     /// <summary>
     /// Optional features this device supports.
@@ -79,7 +79,7 @@ public abstract partial class GraphicsDevice : IDisposable
         set
         {
             VSync_CheckMainSwapchain();
-            MainSwapchain.VSync = value;
+            MainSwapchain!.VSync = value;
         }
     }
 
@@ -244,17 +244,17 @@ public abstract partial class GraphicsDevice : IDisposable
 
 #if !EXCLUDE_VULKAN_BACKEND
     /// <summary>
-    /// Tries to get Vulkan backend info. Only works on a Vulkan device.
-    /// </summary>
-    /// <param name="info">Vulkan backend info if successful.</param>
-    /// <returns>True if this is a Vulkan device and it worked.</returns>
-    /// <summary>
     /// Contents of the driver pipeline cache, to save and pass back through <see cref="GraphicsDeviceOptions.PipelineCacheData"/>
     /// on the next run.
     /// </summary>
     /// <returns>Opaque cache bytes, empty when the backend keeps none.</returns>
     public virtual byte[] GetPipelineCacheData() => [];
 
+    /// <summary>
+    /// Tries to get Vulkan backend info. Only works on a Vulkan device.
+    /// </summary>
+    /// <param name="info">Vulkan backend info if successful.</param>
+    /// <returns>True if this is a Vulkan device and it worked.</returns>
     public virtual bool GetVulkanInfo([NotNullWhen(true)] out BackendInfoVulkan? info)
     {
         info = null;

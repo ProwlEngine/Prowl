@@ -294,7 +294,7 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.RenderPass = renderPass;
 
         if (gd.PipelineStatistics != null)
-            pipelineCI.Flags |= PipelineCreateFlags.PipelineCreateCaptureStatisticsBitKhr;
+            pipelineCI.Flags |= PipelineCreateFlags.CreateCaptureStatisticsBitKhr;
         Result created = gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline);
 
         if (created != Result.Success || pipeline.Handle == 0)

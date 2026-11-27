@@ -146,16 +146,17 @@ internal unsafe partial class VkGraphicsDevice
             PipelineExecutableInfoKHR executable = new(sType: StructureType.PipelineExecutableInfoKhr, pipeline: pipeline, executableIndex: i);
             uint count = 0;
             PipelineStatistics.GetPipelineExecutableStatistic(Device, &executable, &count, null);
-            PipelineExecutableStatisticKHR* statistics = stackalloc PipelineExecutableStatisticKHR[(int)count];
+            var statistics = new PipelineExecutableStatisticKHR[count];
             for (uint s = 0; s < count; s++)
                 statistics[s] = new PipelineExecutableStatisticKHR(sType: StructureType.PipelineExecutableStatisticKhr);
-            PipelineStatistics.GetPipelineExecutableStatistic(Device, &executable, &count, statistics);
+            fixed (PipelineExecutableStatisticKHR* statisticsPtr = statistics)
+                PipelineStatistics.GetPipelineExecutableStatistic(Device, &executable, &count, statisticsPtr);
 
             System.Text.StringBuilder line = new($"[Graphite stats] {name} {Util.GetString(properties[i].Name)}:");
             for (uint s = 0; s < count; s++)
             {
                 PipelineExecutableStatisticKHR stat = statistics[s];
-                string value = stat.Format switch
+                string? value = stat.Format switch
                 {
                     PipelineExecutableStatisticFormatKHR.Bool32Khr => stat.Value.B32.ToString(),
                     PipelineExecutableStatisticFormatKHR.Int64Khr => stat.Value.I64.ToString(),

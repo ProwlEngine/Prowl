@@ -2,13 +2,13 @@ namespace Prowl.Graphite;
 
 public abstract partial class GraphicsDevice
 {
-    private DeviceBuffer _nullStructuredReadWrite;
+    private DeviceBuffer _nullStructuredReadWrite = null!;
 
-    internal Sampler LinearSampler { get; private set; }
+    internal Sampler LinearSampler { get; private set; } = null!;
 
-    internal Texture NullTexture2D { get; private set; }
+    internal Texture NullTexture2D { get; private set; } = null!;
 
-    internal Texture NullTextureRW2D { get; private set; }
+    internal Texture NullTextureRW2D { get; private set; } = null!;
 
     internal DeviceBuffer NullStructuredRW => _nullStructuredReadWrite;
 

@@ -19,7 +19,7 @@ internal unsafe partial class VkGraphicsDevice
         public ulong CurrentExecutionId;
     }
 
-    private SlotState[] _slots;
+    private SlotState[] _slots = null!;
     private readonly List<VkBuffer> _transientFreePool = [];
     private readonly object _transientFreePoolLock = new();
 

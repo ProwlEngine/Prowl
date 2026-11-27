@@ -9,14 +9,14 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkCommandBuffer
 {
-    private VkFramebufferBase _currentFramebuffer;
+    private VkFramebufferBase _currentFramebuffer = null!;
     private readonly List<VkSwapchain> _usedSwapchains = [];
     private bool _currentFramebufferEverActive;
     private RenderPass _activeRenderPass;
     private FramebufferMode _currentFramebufferMode;
 
-    private VkGraphicsProgram _currentShaderProgram;
-    private VkComputeProgram _currentComputeProgram;
+    private VkGraphicsProgram _currentShaderProgram = null!;
+    private VkComputeProgram _currentComputeProgram = null!;
     private ShaderProgram? _pushedGraphics;
     private ShaderProgram? _pushedCompute;
     private uint _pushedGraphicsVersion;
@@ -54,10 +54,10 @@ internal unsafe partial class VkCommandBuffer
 
     private void ClearGraphicsState()
     {
-        _currentFramebuffer = null;
+        _currentFramebuffer = null!;
         _temporaryStorageImages.Clear();
-        _currentShaderProgram = null;
-        _currentComputeProgram = null;
+        _currentShaderProgram = null!;
+        _currentComputeProgram = null!;
         _pushedGraphics = null;
         _pushedCompute = null;
         _currentResolvedPipeline = default;

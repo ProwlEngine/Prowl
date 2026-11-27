@@ -77,10 +77,10 @@ internal unsafe sealed partial class VkDescriptorBinder
     private readonly ulong[] _identityScratch = new ulong[1 + MaxSetElements * 3];
 
     private SetBindState[] _setBindStates = Array.Empty<SetBindState>();
-    private ShaderProgram _bindCacheProgram;
+    private ShaderProgram? _bindCacheProgram;
     private SetBindState? _trackState;
-    private UniformBindingPlan _plan;
-    private UniformShadows _shadows;
+    private UniformBindingPlan _plan = null!;
+    private UniformShadows _shadows = null!;
 
     // Set count and first-changed-set index from the most recent Prepare() call that returned true;
     // EmitBind() reads them back so callers don't have to re-derive them from the program.

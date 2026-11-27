@@ -18,7 +18,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     private static readonly Lazy<bool> s_isSupported = new(CheckIsSupported, isThreadSafe: true);
 
     private readonly BackendInfoVulkan _vulkanInfo;
-    private readonly VkSwapchain _mainSwapchain;
+    private readonly VkSwapchain? _mainSwapchain;
     private readonly VkDescriptorSetCacheRegistry _descriptorSetCaches = new();
     private VkShaderCache? _shaderCache;
 
@@ -73,7 +73,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         if (scDesc != null)
         {
             SwapchainDescription desc = scDesc.Value;
-            _mainSwapchain = new VkSwapchain(this, ref desc, surface);
+            _mainSwapchain = new VkSwapchain(this, in desc, surface);
         }
 
         fixed (byte* initialData = options.PipelineCacheData)

@@ -9,8 +9,8 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkCommandBuffer
 {
-    private IVertexSource _vbCacheSource;
-    private VkGraphicsProgram _vbCacheProgram;
+    private IVertexSource? _vbCacheSource;
+    private VkGraphicsProgram? _vbCacheProgram;
     private int _vbCacheCount;
     private uint _vbCacheVersion;
     private VertexBinding[] _vbCacheBindings = Array.Empty<VertexBinding>();

@@ -6,8 +6,8 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkGraphicsDevice
 {
-    internal KhrSurface KhrSurface;
-    internal KhrSwapchain KhrSwapchain;
+    internal KhrSurface KhrSurface = null!;
+    internal KhrSwapchain KhrSwapchain = null!;
     internal ExtDebugUtils? DebugUtils;
 
     /// <summary>Set when GRAPHITE_SHADER_STATS is 1 and the driver reports pipeline statistics, which are then printed per pipeline.</summary>

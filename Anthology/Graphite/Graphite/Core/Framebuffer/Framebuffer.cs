@@ -10,7 +10,7 @@ public abstract class Framebuffer : GraphicsResource
     public virtual FramebufferAttachment? DepthTarget { get; }
 
     /// <summary>Color attachments, may be empty.</summary>
-    public virtual IReadOnlyList<FramebufferAttachment> ColorTargets { get; }
+    public virtual IReadOnlyList<FramebufferAttachment> ColorTargets { get; } = [];
 
     /// <summary>Describes depth and color target formats.</summary>
     public virtual OutputDescription OutputDescription { get; }

@@ -161,7 +161,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
                 TextureSampleCount.Count1,
                 _scImages[i]);
             FramebufferDescription desc = new(_depthAttachment?.Target, colorTex);
-            VkFramebuffer fb = new(_gd, ref desc);
+            VkFramebuffer fb = new(_gd, in desc);
             _scFramebuffers[i] = fb;
             _scColorTextures[i] = [new FramebufferAttachment(colorTex, 0)];
         }

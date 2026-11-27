@@ -15,8 +15,8 @@ internal unsafe partial class VkGraphicsDevice
     internal uint GraphicsQueueIndex;
     internal uint PresentQueueIndex;
     internal PhysicalDeviceMemoryProperties PhysicalDeviceMemProperties;
-    internal string DriverName;
-    internal string DriverInfo;
+    internal string DriverName = "";
+    internal string DriverInfo = "";
     internal VkDeviceMemoryManager MemoryManager;
 
     /// <summary>
@@ -34,8 +34,8 @@ internal unsafe partial class VkGraphicsDevice
     private PhysicalDeviceVulkan12Properties _vulkan12Properties;
     private bool _timelineSupported;
     private uint _timestampValidBits;
-    private string _deviceName;
-    private string _vendorName;
+    private string _deviceName = "";
+    private string _vendorName = "";
     private GraphicsApiVersion _apiVersion;
 
     public override string DeviceName => _deviceName;
@@ -52,7 +52,7 @@ internal unsafe partial class VkGraphicsDevice
 
     public override bool IsDepthRangeZeroToOne => true;
 
-    public override Swapchain MainSwapchain => _mainSwapchain;
+    public override Swapchain? MainSwapchain => _mainSwapchain;
 
     public override GraphicsDeviceFeatures Features { get; }
 

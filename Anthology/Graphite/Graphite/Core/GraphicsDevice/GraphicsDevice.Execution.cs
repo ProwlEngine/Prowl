@@ -23,7 +23,7 @@ public abstract partial class GraphicsDevice
 
     private readonly object _executionLock = new();
     private readonly List<ExecutionTask> _activeTasks = [];
-    private Queue<uint> _freeSlots;
+    private Queue<uint> _freeSlots = null!;
 
     /// <summary>
     /// Latest GPU-completed execution id. Advances on reclaim. 0 = nothing done yet.
