@@ -17,6 +17,8 @@ public enum TransformTool
     Rotate,
     Scale,
     Universal,
+    /// <summary>A rectangle over the object in its own XY plane, see <see cref="RectTool"/>.</summary>
+    Rect,
 }
 
 /// <summary>Where a multi-object manipulation pivots.</summary>

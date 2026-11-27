@@ -293,6 +293,9 @@ public static class SceneViewMenu
     [MenuItem("SceneView/Tool/Universal", priority: 83, SelectionWide = true)]
     private static void ToolUniversal() => SceneTools.Transform = TransformTool.Universal;
 
+    [MenuItem("SceneView/Tool/Rect", priority: 84, SelectionWide = true)]
+    private static void ToolRect() => SceneTools.Transform = TransformTool.Rect;
+
     [MenuItem("SceneView/Tool/Grid Snap", priority: 84, Separator = true, SelectionWide = true)]
     private static void ToggleGridSnap() => SceneTools.GridSnap = !SceneTools.GridSnap;
 

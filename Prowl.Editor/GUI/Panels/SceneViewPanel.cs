@@ -471,6 +471,7 @@ public class SceneViewPanel : DockPanel
         bool isRotate = SceneTools.Transform == TransformTool.Rotate;
         bool isScale = SceneTools.Transform == TransformTool.Scale;
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
+        bool isRect = SceneTools.Transform == TransformTool.Rect;
 
         using IDisposable group = EditorGUI.ToolStripGroup(paper, "sv_transform_grp");
         EditorGUI.ToolStripButton(paper, "sv_move_btn", EditorIcons.ArrowsUpDownLeftRight_I,
@@ -485,6 +486,9 @@ public class SceneViewPanel : DockPanel
         EditorGUI.ToolStripButton(paper, "sv_universal_btn", EditorIcons.Expand_I,
             ShortcutManager.GetTooltip(Loc.Get("scene.tool_universal"), "Scene/ToolUniversal"), isUniversal,
             () => SetGizmoMode(TransformTool.Universal));
+        EditorGUI.ToolStripButton(paper, "sv_rect_btn", EditorIcons.VectorSquare_I,
+            ShortcutManager.GetTooltip(Loc.Get("scene.tool_rect"), "Scene/ToolRect"), isRect,
+            () => SetGizmoMode(TransformTool.Rect));
     }
 
     private void DrawViewport(Paper paper, Scribe.FontFile font, float width, float height)
@@ -703,6 +707,8 @@ public class SceneViewPanel : DockPanel
                     SetGizmoMode(TransformTool.Scale);
                 else if (ShortcutManager.IsPressed("Scene/ToolUniversal"))
                     SetGizmoMode(TransformTool.Universal);
+                else if (ShortcutManager.IsPressed("Scene/ToolRect"))
+                    SetGizmoMode(TransformTool.Rect);
 
                 if (ShortcutManager.IsPressed("Scene/ToggleMaximize"))
                     EditorApplication.Instance?.Maximizer.RequestToggle(this);

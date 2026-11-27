@@ -68,4 +68,51 @@ public class EditorCameraTests : EditorTestHarness
         Assert.Equal(5f, camera.ViewFocusPoint.X, 3);
         Assert.Equal(6f, camera.ViewFocusPoint.Y, 3);
     }
+
+    [Fact]
+    public void RectTool_DraggingAnEdge_ScalesWhileTheOppositeEdgeStays()
+    {
+        Float4x4 frame = Float4x4.Identity;
+
+        (Float3 scale, Float3 position) = RectTool.Resized(frame, Float3.Zero, Float3.One, Float2.Zero, new Float2(2, 1), 1, 0, new Float2(1, 0), false);
+        AssertNear(new Float3(1.5f, 1, 1), scale);
+        AssertNear(Float3.Zero, position);
+
+        (scale, position) = RectTool.Resized(frame, Float3.Zero, Float3.One, Float2.Zero, new Float2(2, 1), -1, 0, new Float2(-1, 0), false);
+        AssertNear(new Float3(1.5f, 1, 1), scale);
+        AssertNear(new Float3(-1, 0, 0), position);
+    }
+
+    [Fact]
+    public void RectTool_ShiftOnACorner_KeepsProportions()
+    {
+        (Float3 scale, _) = RectTool.Resized(Float4x4.Identity, Float3.Zero, Float3.One, Float2.Zero, new Float2(2, 2), 1, 1, new Float2(2, 0.5f), true);
+
+        AssertNear(new Float3(2, 2, 1), scale);
+    }
+
+    [Fact]
+    public void RectTool_OnATurnedObject_MovesAlongItsOwnAxes()
+    {
+        Float4x4 turned = Float4x4.CreateFromQuaternion(Quaternion.AxisAngle(Float3.UnitZ, System.MathF.PI / 2));
+
+        (_, Float3 position) = RectTool.Resized(turned, Float3.Zero, Float3.One, new Float2(-1, -1), new Float2(1, 1), -1, 0, new Float2(-2, 0), false);
+
+        AssertNear(new Float3(0, -1, 0), position);
+    }
+
+    [Fact]
+    public void RectTool_CoversAFlippedSprite()
+    {
+        var go = new Runtime.GameObject("Sprite");
+        Runtime.SpriteRenderer renderer = go.AddComponent<Runtime.SpriteRenderer>();
+        var sprite = new Runtime.Resources.Sprite { Rect = new Runtime.Resources.SpriteRect(0, 0, 200, 100), PixelsPerUnit = 100, Pivot = new Float2(0, 0) };
+        sprite.BuildQuadGeometry(200, 100);
+        renderer.Sprite = sprite;
+        renderer.FlipX = true;
+
+        Assert.True(RectTool.LocalRect(go, out Float2 min, out Float2 max));
+        Assert.Equal(new Float2(-2, 0), min);
+        Assert.Equal(new Float2(0, 1), max);
+    }
 }

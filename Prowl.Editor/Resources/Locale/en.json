@@ -295,6 +295,7 @@
   "scene.tool_rotate": "Rotate",
   "scene.tool_scale": "Scale",
   "scene.tool_universal": "Universal",
+  "scene.tool_rect": "Rect Tool",
   "scene.pivot_center": "Pivot: Selection Center",
   "scene.pivot_active": "Pivot: Active Object",
   "scene.pivot_individual": "Pivot: Individual Origins",
