@@ -1,0 +1,66 @@
+name: Build
+
+# Every pull request builds the engine together with the libraries it is made of, so a library
+# change that breaks the engine fails here. Library tests run only when the libraries change.
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '11.0.x'
+
+      - name: Build
+        run: dotnet build Prowl.slnx -c Debug
+
+  libraries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect library changes
+        id: changes
+        run: |
+          base=${{ github.event.pull_request.base.sha || github.event.before }}
+          if git diff --quiet "$base" HEAD -- Anthology Directory.Build.props Directory.Build.targets; then
+            echo "libraries=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "libraries=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.changes.outputs.libraries == 'true'
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+            11.0.x
+
+      # Samples are left out, and so are the Graphite test projects, which need a GPU.
+      - name: Trim solution
+        if: steps.changes.outputs.libraries == 'true'
+        working-directory: Anthology
+        run: |
+          cp Anthology.slnx Tested.slnx
+          excluded=$(dotnet sln Tested.slnx list | tr '\\' '/' | grep -Ei '^Graphite/Tests/|(^|/)Samples?/|Sample[^/]*\.csproj$')
+          dotnet sln Tested.slnx remove $excluded
+
+      - name: Build
+        if: steps.changes.outputs.libraries == 'true'
+        run: dotnet build Anthology/Tested.slnx -c Release
+
+      # Clay needs model assets that are not committed and Slang needs native binaries that are
+      # fetched separately, so neither suite can run here.
+      - name: Test
+        if: steps.changes.outputs.libraries == 'true'
+        run: dotnet test Anthology/Tested.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Test"
