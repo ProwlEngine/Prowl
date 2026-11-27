@@ -57,5 +57,42 @@ Shader "Default/Sprite"
         ENDGLSL
     }
 
+    Pass
+    {
+        Name "ShadowCaster"
+        Tags { "LightMode" = "ShadowCaster" }
+        Cull Off
+        GLSLPROGRAM
+        Vertex
+        {
+            #include "Graphite/Vertex.glsl"
+
+            out vec2 vUV;
+            out float vAlpha;
+
+            void main()
+            {
+                gl_Position = Graphite_ObjectToClip(vertexPosition);
+                vUV = vertexUV0;
+                vAlpha = vertexColor.a * Graphite_Object().color.a;
+            }
+        }
+        Fragment
+        {
+            uniform sampler2D _MainTex;
+            uniform vec4 _MainColor;
+
+            in vec2 vUV;
+            in float vAlpha;
+
+            void main()
+            {
+                if (texture(_MainTex, vUV).a * vAlpha * _MainColor.a < 0.5)
+                    discard;
+            }
+        }
+        ENDGLSL
+    }
+
     Fallback "Graphite/Fallback"
 }
