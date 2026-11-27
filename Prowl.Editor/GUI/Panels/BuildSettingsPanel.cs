@@ -54,9 +54,9 @@ public class BuildSettingsPanel : DockPanel
         public Type BuildPipelineType;
     }
 
-    public static string BuildState = "";
+    public static string BuildState { get; set; } = "";
 
-    public static float BuildProgress = 0f;
+    public static float BuildProgress { get; set; }
 
     public static bool IsBuildRunning => _activeProgress != null && !_activeProgress.IsComplete;
 
@@ -287,7 +287,7 @@ public class BuildSettingsPanel : DockPanel
             return;
         }
 
-        if (_buildSettings.Scenes.Count(s => s.Enabled) == 0)
+        if (!_buildSettings.Scenes.Any(s => s.Enabled))
         {
             Toasts.Warning(Loc.Get("build.toast_no_scenes"), Loc.Get("build.toast_no_scenes_msg"));
             return;

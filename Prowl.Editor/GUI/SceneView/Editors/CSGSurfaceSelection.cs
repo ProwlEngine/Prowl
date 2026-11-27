@@ -58,6 +58,8 @@ public readonly struct CSGSurfaceRef : IEquatable<CSGSurfaceRef>
         => ReferenceEquals(Brush, other.Brush) && PlaneIndex == other.PlaneIndex;
 
     public override bool Equals(object? obj) => obj is CSGSurfaceRef o && Equals(o);
+    public static bool operator ==(CSGSurfaceRef a, CSGSurfaceRef b) => a.Equals(b);
+    public static bool operator !=(CSGSurfaceRef a, CSGSurfaceRef b) => !a.Equals(b);
 
     // Hashed on reference identity so a destroyed brush still hashes the same.
     public override int GetHashCode()
@@ -67,7 +69,7 @@ public readonly struct CSGSurfaceRef : IEquatable<CSGSurfaceRef>
 /// <summary>The selected surfaces and the edits on them, shared by the surface tool and the CSG panel.</summary>
 public static class CSGSurfaceSelection
 {
-    private static readonly List<CSGSurfaceRef> _selected = new();
+    private static readonly List<CSGSurfaceRef> _selected = [];
 
     public static IReadOnlyList<CSGSurfaceRef> Selected => _selected;
 
@@ -256,7 +258,7 @@ public static class CSGSurfaceSelection
         model.SetDirty();
     }
 
-    private static readonly List<Material> _recent = new();
+    private static readonly List<Material> _recent = [];
 
     /// <summary>Materials to paint with: the ones last assigned, then every other one the model already uses.</summary>
     public static List<Material> Palette()
@@ -617,7 +619,7 @@ public static class CSGSurfaceSelection
     /// <summary>A selected surface as a texture drag began: its data, and the space and normal its UVs project in.</summary>
     private readonly record struct DragStart(CSGSurfaceRef Surface, SurfaceData Data, Float4x4 ToProjection, Float3 Normal);
 
-    private static readonly List<DragStart> _drag = new();
+    private static readonly List<DragStart> _drag = [];
     private static float _dragTexel = 1f;
 
     // The model shows its faces from inside, which mirrors U, so a turn on screen is the other way in texture space

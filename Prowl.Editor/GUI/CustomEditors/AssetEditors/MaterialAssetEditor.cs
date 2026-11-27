@@ -8,17 +8,17 @@ using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
+using Prowl.Graphite.Rendering;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
-using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 
+using Material = Prowl.Runtime.Resources.Material;
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Shader = Prowl.Runtime.Resources.Shader;
-using Material = Prowl.Runtime.Resources.Material;
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Material))]
@@ -70,7 +70,7 @@ public class MaterialAssetEditor : AssetImporterEditor
     private static readonly MenuTreeState _shaderMenu = new();
     private static List<MenuTreeEntry> _shaderEntries = [];
 
-    private void DrawShaderPicker(Paper paper, string id, Material material, AssetEntry entry)
+    private static void DrawShaderPicker(Paper paper, string id, Material material, AssetEntry entry)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         Guid ownerGuid = entry.Guid;

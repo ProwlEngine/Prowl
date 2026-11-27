@@ -101,7 +101,7 @@ public static class ChunkPlanner
     /// Everything the roots reach, following both references and sub-assets. Repeated until nothing new
     /// turns up, since a sub-asset can reference an asset that is itself a parent.
     /// </summary>
-    private static IEnumerable<Guid> ClosureOf(
+    private static HashSet<Guid> ClosureOf(
         DependencyGraph dependencies,
         IReadOnlyCollection<Guid> roots,
         IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> subAssets)

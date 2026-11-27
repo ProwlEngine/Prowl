@@ -1,9 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Linq;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
@@ -19,10 +19,10 @@ using Prowl.Runtime.Terrain;
 using Prowl.Vector;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
+using SColor = System.Drawing.Color;
 using TerrainBrush = Prowl.Graphite.Rendering.TerrainBrush;
 using TerrainEdited = Prowl.Graphite.Rendering.TerrainEdited;
 using TerrainLayers = Prowl.Graphite.Rendering.TerrainLayers;
-using SColor = System.Drawing.Color;
 namespace Prowl.Editor.Inspector;
 
 public enum TerrainTab { Height, Paint, Holes, Details, Trees, Settings }
@@ -54,9 +54,9 @@ public class TerrainEditor : CustomEditor
     public static float TreeBrushSize { get => Brush.TreeBrushSize; set => Brush.TreeBrushSize = value; }
     public static int TreesPerStroke { get => Brush.TreesPerStroke; set => Brush.TreesPerStroke = value; }
 
-    public static int PaintLayer = 0;
-    public static int ActiveDetailIndex = 0;
-    public static int ActiveTreePrototype = 0;
+    public static int PaintLayer { get; set; }
+    public static int ActiveDetailIndex { get; set; }
+    public static int ActiveTreePrototype { get; set; }
 
     // Instance state
     private TerrainComponent? _terrain;
@@ -171,7 +171,7 @@ public class TerrainEditor : CustomEditor
     }
 
     /// <summary>Amber "Unsaved edits" banner with an inline save-to-asset button (design .tr-dirty).</summary>
-    private void DrawDirtyBanner(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
+    private static void DrawDirtyBanner(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
     {
         OrigamiMetrics m = Origami.Current.Metrics;
         using (paper.Row(id).Width(UnitValue.StretchOne).Height(UnitValue.Auto).MinHeight(34)
@@ -213,7 +213,7 @@ public class TerrainEditor : CustomEditor
         }
     }
 
-    private void DrawSculpt(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
+    private static void DrawSculpt(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", "Sculpt Tool", first: true);
         EditorGUI.Row(paper, $"{id}_toolrow", "", () =>
@@ -322,7 +322,7 @@ public class TerrainEditor : CustomEditor
         DrawBrushBlock(paper, $"{id}_brush", font);
     }
 
-    private void DrawHoles(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
+    private static void DrawHoles(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
     {
         HintPill(paper, $"{id}_hint", font, "Click to paint holes, Shift+click to fill");
         DrawBrushBlock(paper, $"{id}_brush", font);
@@ -592,7 +592,7 @@ public class TerrainEditor : CustomEditor
 
     /// <summary>Auto-fill thumbnail grid of prototypes with a trailing "+" add tile (design .tr-protogrid).
     /// Draws the asset's real thumbnail when available, falling back to the vector icon.</summary>
-    private void DrawProtoGrid(Paper paper, string id, Prowl.Scribe.FontFile font, int count,
+    private static void DrawProtoGrid(Paper paper, string id, Prowl.Scribe.FontFile font, int count,
         int selected, Action<int> onSelect, Func<int, string> getName, Func<int, IOrigamiIcon> getIcon,
         Action onAdd, Func<int, Guid> getThumbGuid)
     {
@@ -763,7 +763,7 @@ public class TerrainEditor : CustomEditor
 
     #region Save
 
-    private void SaveToAsset(TerrainData data)
+    private static void SaveToAsset(TerrainData data)
     {
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db != null && data.AssetID != Guid.Empty)

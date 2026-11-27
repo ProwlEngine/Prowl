@@ -6,8 +6,8 @@ using System.Text.Json.Nodes;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.GUI.Registries;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
@@ -30,7 +30,7 @@ public class ProjectPanel : DockPanel
     [MenuItem("Window/General/Project", priority: 4)]
     static void Open() => EditorApplication.Instance?.OpenPanel<ProjectPanel>();
 
-    public static ProjectPanel Instance;
+    public static ProjectPanel Instance { get; set; }
     public override string Title => Loc.Get("panel.project");
     public override string Icon => EditorIcons.Folder;
 
@@ -1404,7 +1404,7 @@ public class ProjectPanel : DockPanel
 
         string names = selected.Count == 1 ? selected[0].Name : Loc.Get("project.item_count", new { count = selected.Count });
 
-        Origami.Confirm(Loc.Get("dialog.delete_assets"), Loc.Get("project.delete_confirm_body", new { names = names }), () =>
+        Origami.Confirm(Loc.Get("dialog.delete_assets"), Loc.Get("project.delete_confirm_body", new { names }), () =>
         {
             EditorAssetBackend? db = EditorAssetBackend.Instance;
             if (db == null) return;

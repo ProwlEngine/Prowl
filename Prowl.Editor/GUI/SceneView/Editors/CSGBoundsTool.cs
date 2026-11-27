@@ -54,7 +54,7 @@ public sealed class CSGBoundsTool : SceneTool
     /// <summary>A brush as the drag found it, and how its space relates to the bounds' frame.</summary>
     private readonly record struct Start(CSGBrush Brush, SurfaceData[] Surfaces, CSGControlMesh Mesh, Float4x4 ToFrame);
 
-    private readonly List<Start> _start = new();
+    private readonly List<Start> _start = [];
     private string _dragControl = "";
     private int _dragging = -1;
     private AABB _startBounds;

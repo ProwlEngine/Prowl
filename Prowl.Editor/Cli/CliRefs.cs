@@ -30,10 +30,20 @@ namespace Prowl.Editor;
 /// to address one of its components, and a <c>scene:Name:</c> prefix to look in one open scene, like
 /// <c>scene:Level2:#guid</c> or <c>scene:Level2:/Player</c>.
 /// </summary>
-public static class CliRefs
+public static partial class CliRefs
 {
-    private static readonly Regex s_componentSuffix = new(@":(?<type>[A-Za-z_][A-Za-z0-9_.]*)(\[(?<index>\d+)\])?$", RegexOptions.Compiled);
-    private static readonly Regex s_indexedName = new(@"^(?<name>.*)\[(?<index>\d+)\]$", RegexOptions.Compiled);
+    [GeneratedRegex(@":(?<type>[A-Za-z_][A-Za-z0-9_.]*)(\[(?<index>\d+)\])?$")]
+    private static partial Regex ComponentSuffix();
+
+    [GeneratedRegex(@"^(?<name>.*)\[(?<index>\d+)\]$")]
+    private static partial Regex IndexedName();
+
+    [GeneratedRegex(@"^(?<name>[^\[]+)(?<indices>(\[\d+\])*)$")]
+    private static partial Regex IndexedPath();
+
+    [GeneratedRegex(@"\d+")]
+    private static partial Regex Digits();
+
 
     public static Scene Scene => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld : throw new CliException("No scene is open.");
 
@@ -85,7 +95,7 @@ public static class CliRefs
             finally { t_section = previous; }
         }
 
-        Match suffix = s_componentSuffix.Match(text);
+        Match suffix = ComponentSuffix().Match(text);
         if (suffix.Success && LooksLikeSceneRef(text[..suffix.Index]))
         {
             GameObject go = ResolveGameObject(text[..suffix.Index]);
@@ -95,7 +105,7 @@ public static class CliRefs
 
         if (text is "@selection" or "@active")
         {
-            object? selected = text == "@active" ? Selection.ActiveObject : Selection.Selected.FirstOrDefault();
+            object? selected = text == "@active" ? Selection.ActiveObject : Selection.Selected.Count > 0 ? Selection.Selected[0] : null;
             return selected is GameObject go && go.IsValid() ? go : throw new CliException($"{text} is not a GameObject. Select one, or use 'select'.");
         }
 
@@ -153,7 +163,7 @@ public static class CliRefs
         {
             string name = segment;
             int? index = null;
-            Match indexed = s_indexedName.Match(segment);
+            Match indexed = IndexedName().Match(segment);
             if (indexed.Success)
             {
                 name = indexed.Groups["name"].Value;
@@ -453,9 +463,9 @@ public static class CliRefs
         var segments = new List<Segment>();
         foreach (string part in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
         {
-            Match match = Regex.Match(part, @"^(?<name>[^\[]+)(?<indices>(\[\d+\])*)$");
+            Match match = IndexedPath().Match(part);
             if (!match.Success) throw new CliException($"Bad field path '{path}'.");
-            var indices = Regex.Matches(match.Groups["indices"].Value, @"\d+").Select(m => int.Parse(m.Value)).ToList();
+            var indices = Digits().Matches(match.Groups["indices"].Value).Select(m => int.Parse(m.Value)).ToList();
             segments.Add(new Segment(match.Groups["name"].Value, indices.Count > 0 ? indices[0] : null));
             foreach (int extra in indices.Skip(1)) segments.Add(new Segment("", extra));
         }
@@ -722,9 +732,9 @@ public static class CliRefs
         }
     }
 
-    private static JsonNode? SceneLink(EchoObject key)
+    private static JsonObject? SceneLink(EchoObject key)
     {
-        if (Serializer.Deserialize(key, typeof(object)) is not Guid id || id == Guid.Empty) return null;
+        if (Serializer.Deserialize<object>(key) is not Guid id || id == Guid.Empty) return null;
         return FindInScene(id) switch
         {
             GameObject go => new JsonObject { ["ref"] = PathOf(go), ["id"] = "#" + id },
@@ -733,7 +743,7 @@ public static class CliRefs
         };
     }
 
-    private static JsonNode AssetLink(Guid id)
+    private static JsonObject AssetLink(Guid id)
     {
         JsonObject summary = AssetSummary(id, AssetDatabase.GetAssetType(id));
         return new JsonObject { ["ref"] = summary["path"]?.GetValue<string>() ?? "#" + id, ["guid"] = id.ToString(), ["type"] = summary["type"]?.DeepClone() };

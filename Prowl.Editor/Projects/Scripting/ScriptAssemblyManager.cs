@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Editor.Core;
@@ -26,7 +27,7 @@ public static class ScriptAssemblyManager
     private static DateTime _lastScriptChange;
     private static bool _isCompiling;
     private static bool _startupCompilePending;
-    private static readonly object _pendingLock = new();
+    private static readonly Lock _pendingLock = new();
     private static ScriptCompiler.CompileResult? _pendingResult; // published cross-thread under _pendingLock
     private static DateTime _compileStartedUtc; // when the in-flight compile began, for the summary timing
     private static TimeSpan DebounceDelay = TimeSpan.FromSeconds(1);
@@ -43,7 +44,7 @@ public static class ScriptAssemblyManager
     internal static byte[]? GetAssemblyBytes(Assembly asm) => s_assemblyBytes.TryGetValue(asm, out byte[]? bytes) ? bytes : null;
 
     // Plugin resolution state, refreshed each time assemblies are (re)loaded.
-    private static readonly Dictionary<string, string> s_managedPlugins = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> s_managedPlugins = [with(StringComparer.OrdinalIgnoreCase)];
     private static readonly List<PluginInfo> s_nativePlugins = [];
     private static DllImportResolver? s_nativeResolver;
     private static string s_pluginLoadDir = "";

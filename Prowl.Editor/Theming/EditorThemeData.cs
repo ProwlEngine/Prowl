@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Prowl.OrigamiUI;
+
 using Float4 = Prowl.Vector.Float4;
 
 using VColor = Prowl.Vector.Color;
@@ -105,6 +106,8 @@ public class ColorRamp
 /// </summary>
 public class EditorThemeData
 {
+    private static readonly JsonSerializerOptions s_indented = new() { WriteIndented = true };
+
     /// <summary> Display name of this theme. </summary>
     public string Name { get; set; } = "Indigo";
 
@@ -350,7 +353,7 @@ public class EditorThemeData
     /// <summary> Serializes this theme to a JSON file at the given path. </summary>
     public void ExportToFile(string path)
     {
-        string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+        string json = JsonSerializer.Serialize(this, s_indented);
         File.WriteAllText(path, json);
     }
 

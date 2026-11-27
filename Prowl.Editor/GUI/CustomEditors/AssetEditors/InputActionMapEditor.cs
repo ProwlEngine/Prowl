@@ -224,7 +224,7 @@ public class InputActionMapEditor : AssetImporterEditor
         }
     }
 
-    private void DrawCodeLine(Paper paper, string id, InputAction action)
+    private static void DrawCodeLine(Paper paper, string id, InputAction action)
     {
         OrigamiMetrics m = Origami.Current.Metrics;
         string code = InputBindingDisplay.CodeLine(action);

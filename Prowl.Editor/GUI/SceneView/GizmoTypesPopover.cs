@@ -90,7 +90,7 @@ public static class GizmoTypesPopover
                 .Padding(0)
                 .Body(() =>
                 {
-                    using var body = paper.Column($"{id}_body").Height(UnitValue.Auto).PaddingRight(ScrollbarGutter).Enter();
+                    using IDisposable body = paper.Column($"{id}_body").Height(UnitValue.Auto).PaddingRight(ScrollbarGutter).Enter();
                     // IDs come from names, not list positions, so a row keeps its hover and checkbox state while
                     // the search adds and removes rows around it.
                     for (int index = 0; index < groups.Count; index++)

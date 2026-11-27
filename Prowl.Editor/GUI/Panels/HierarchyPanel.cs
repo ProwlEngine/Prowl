@@ -633,7 +633,7 @@ public class HierarchyPanel : DockPanel
     private static bool IsActiveHeader(SceneHeader header)
         => header.Open?.IsActive ?? header.Section is { } s && ReferenceEquals(s, s.Instance.ActiveSection);
 
-    private void DrawSceneHeader(Paper paper, Scribe.FontFile font, SceneHeader header)
+    private static void DrawSceneHeader(Paper paper, Scribe.FontFile font, SceneHeader header)
     {
         bool loaded = header.Section != null;
         bool active = IsActiveHeader(header);
@@ -912,7 +912,7 @@ public class HierarchyPanel : DockPanel
         => _rowCache.TryGetValue(target, out Row? row) && row.Node is { HasChildren: true } node
             && (node.OverrideExpanded ?? (_expandState.TryGetValue(targetId, out bool e) ? e : node.DefaultExpanded));
 
-    private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
+    private static void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
     {
         // Captured into a list first: the drag is over by the time the answer comes back.
         List<GameObject> dragged = [.. ExcludeNestedSelections(goDrop.GameObjects)];
@@ -927,7 +927,7 @@ public class HierarchyPanel : DockPanel
         ProcessGODropCore(dragged, target, targetId, dropPos, insertIndex);
     }
 
-    private void ProcessGODropCore(List<GameObject> draggedObjects, GameObject target, string targetId, DropPosition dropPos, int insertIndex)
+    private static void ProcessGODropCore(List<GameObject> draggedObjects, GameObject target, string targetId, DropPosition dropPos, int insertIndex)
     {
         GameObject? targetParent = target.Parent;
         bool targetIsRoot = targetParent.IsNotValid();
@@ -1033,7 +1033,7 @@ public class HierarchyPanel : DockPanel
     //  Context Menus
     // ================================================================
 
-    private void BuildBackgroundContextMenu(Paper paper)
+    private static void BuildBackgroundContextMenu(Paper paper)
     {
         Origami.RightClickMenu(paper, "hier_bg_ctx", builder =>
         {
@@ -1060,7 +1060,7 @@ public class HierarchyPanel : DockPanel
     }
 
     // Called when the user right-clicks a game object in the tree.
-    Action<ContextBuilder> BuildGameObjectContextMenu(GameObject clickedItem) => builder =>
+    static Action<ContextBuilder> BuildGameObjectContextMenu(GameObject clickedItem) => builder =>
     {
         // Note: the Selection may contain a SceneHeader.
         // This menu was designed to support GameObjects only, so filter out non-GameObjects.
@@ -1284,7 +1284,7 @@ public class HierarchyPanel : DockPanel
         {
             // Only objects the user asked for; side-effect ones (auto Canvas, Event System) stay at the origin.
             // On the surface at the centre of the scene view, else its pivot; not the far-off world origin.
-            var centerRay = cam.ScreenPointToRay(new Float2(1f, 1f), new Float2(2f, 2f));
+            Ray centerRay = cam.ScreenPointToRay(new Float2(1f, 1f), new Float2(2f, 2f));
             go.Transform.Position = SceneViewPanel.RaycastSurface(scene, centerRay) ?? cam.ViewFocusPoint;
         }
         if (select)

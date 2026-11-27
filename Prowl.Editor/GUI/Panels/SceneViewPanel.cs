@@ -1325,7 +1325,7 @@ public class SceneViewPanel : DockPanel
         s_ghostOwners.Remove(this);
     }
 
-    private void DrawSelectionGizmos()
+    private static void DrawSelectionGizmos()
     {
         using FrameStatScope stats = EditorFrameStats.Gizmos.Scope();
         foreach (object obj in Selection.Selected)

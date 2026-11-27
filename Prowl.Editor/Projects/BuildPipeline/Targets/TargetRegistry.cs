@@ -17,7 +17,7 @@ namespace Prowl.Editor.Build;
 /// </remarks>
 public sealed class TargetRegistry
 {
-    private readonly Dictionary<string, PlatformTarget> _targets = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, PlatformTarget> _targets = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>The registry the editor and tooling share.</summary>
     public static TargetRegistry Shared { get; } = CreateWithBuiltIns();

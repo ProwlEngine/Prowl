@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
@@ -25,8 +25,11 @@ namespace Prowl.Editor.Inspector;
 /// <summary>
 /// Draws the inspector for a selected GameObject: header, transform, components, add component button.
 /// </summary>
-public static class GameObjectInspector
+public static partial class GameObjectInspector
 {
+    [System.Text.RegularExpressions.GeneratedRegex("[^A-Za-z0-9_]+")]
+    private static partial System.Text.RegularExpressions.Regex NonIdentifierChars();
+
     public static void Draw(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
         => Draw(paper, font, go, null, null);
 
@@ -1191,7 +1194,7 @@ public static class GameObjectInspector
 
             string label = btnAttr.Label ?? PropertyGridUtils.NicifyName(method.Name);
             // The same room around it as the PropertyGrid gives its buttons
-            using var margin = paper.Row($"{id}_row_{btnIdx}").Height(UnitValue.Auto)
+            using IDisposable margin = paper.Row($"{id}_row_{btnIdx}").Height(UnitValue.Auto)
                 .PaddingLeft(6).PaddingTop(6).PaddingBottom(6).Enter();
             Origami.Button(paper, $"{id}_{btnIdx++}", label, () =>
             {
@@ -1713,7 +1716,7 @@ public static class GameObjectInspector
     private static void CreateNewComponent(GameObject target, string search)
     {
         // "my cool thing!" -> "MyCoolThing"; the dialog still validates whatever is left.
-        string name = string.Concat(System.Text.RegularExpressions.Regex.Split(search, "[^A-Za-z0-9_]+")
+        string name = string.Concat(NonIdentifierChars().Split(search)
             .Where(w => w.Length > 0).Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
         if (name.Length > 0 && char.IsDigit(name[0])) name = "_" + name;
         Guid targetId = target.Identifier;

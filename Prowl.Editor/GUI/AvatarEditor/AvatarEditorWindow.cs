@@ -139,7 +139,7 @@ public class AvatarEditorWindow : DockPanel
         }
 
         ReadMapping(entry);
-        _saved = new Dictionary<HumanBodyBone, string>(_map);
+        _saved = [with(_map)];
     }
 
     /// <summary>Starts from the rig's current mapping.</summary>
@@ -272,7 +272,7 @@ public class AvatarEditorWindow : DockPanel
         var before = new Dictionary<HumanBodyBone, string>(_map);
         change();
         if (SameMap(before, _map)) return;
-        Undo.RegisterOperation(new MapEdit(name, _modelGuid, before, new Dictionary<HumanBodyBone, string>(_map)));
+        Undo.RegisterOperation(new MapEdit(name, _modelGuid, before, [with(_map)]));
     }
 
     private static bool SameMap(Dictionary<HumanBodyBone, string> a, Dictionary<HumanBodyBone, string> b)
@@ -321,7 +321,7 @@ public class AvatarEditorWindow : DockPanel
         ModelImportOverrides.WriteHumanoidMap(settings, map);
         if (!SaveSettings(entry, settings)) return false;
 
-        _saved = new Dictionary<HumanBodyBone, string>(_map);
+        _saved = [with(_map)];
         // The map is on disk now: the inspector's pending settings and clean baseline take it, other unapplied edits stay.
         if (ImportSettingsEditor.Pending(_modelGuid) is EchoObject pending) ModelImportOverrides.WriteHumanoidMap(pending, map);
         AssetImporterEditor.PatchBaseline(_modelGuid, baseline => ModelImportOverrides.WriteHumanoidMap(baseline, map));

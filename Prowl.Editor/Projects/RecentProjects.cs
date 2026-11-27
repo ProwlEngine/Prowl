@@ -20,6 +20,8 @@ public class RecentProjectEntry
 /// </summary>
 public static class RecentProjects
 {
+    private static readonly JsonSerializerOptions s_indented = new() { WriteIndented = true };
+
     private const int MaxRecent = 20;
 
     private static readonly string _filePath = System.IO.Path.Combine(
@@ -122,7 +124,7 @@ public static class RecentProjects
         {
             string dir = System.IO.Path.GetDirectoryName(_filePath)!;
             Directory.CreateDirectory(dir);
-            string json = JsonSerializer.Serialize(_entries, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(_entries, s_indented);
             File.WriteAllText(_filePath, json);
         }
         catch (Exception ex)

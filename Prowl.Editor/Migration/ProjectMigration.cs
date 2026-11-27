@@ -137,7 +137,7 @@ public sealed class MigrationContext
     private static readonly HashSet<string> s_echoBinaryImporters = ["NavMeshDataImporter"];
 
     public Project Project { get; }
-    public HashSet<string> ChangedFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> ChangedFiles { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     public MigrationContext(Project project) => Project = project;
 
@@ -240,10 +240,14 @@ public sealed class MigrationContext
 /// An engine release like "1.0-preview.5", "1.0", "1.1" or the hotfix "1.1a". Previews sort before their release,
 /// hotfixes after it. The default value is the unknown version of a project saved before versions were written.
 /// </summary>
-public readonly record struct EngineVersion : IComparable<EngineVersion>
+public readonly partial record struct EngineVersion : IComparable<EngineVersion>
 {
-    private static readonly Regex s_pattern = new(@"^(\d+)\.(\d+)([a-z]*)(?:-preview\.([1-9]\d*))?$");
-    private static readonly Regex s_legacyPreview = new(@"^preview-([1-9]\d*)$");
+    [GeneratedRegex(@"^(\d+)\.(\d+)([a-z]*)(?:-preview\.([1-9]\d*))?$")]
+    private static partial Regex VersionPattern();
+
+    [GeneratedRegex(@"^preview-([1-9]\d*)$")]
+    private static partial Regex LegacyPreview();
+
 
     private readonly string? _hotfix;
 
@@ -273,13 +277,13 @@ public readonly record struct EngineVersion : IComparable<EngineVersion>
         version = default;
         if (string.IsNullOrEmpty(text) || text == "0.0.1") return true;
 
-        if (s_legacyPreview.Match(text) is { Success: true } legacy)
+        if (LegacyPreview().Match(text) is { Success: true } legacy)
         {
             version = new EngineVersion(1, 0, "", int.Parse(legacy.Groups[1].Value));
             return true;
         }
 
-        Match match = s_pattern.Match(text);
+        Match match = VersionPattern().Match(text);
         if (!match.Success) return false;
         version = new EngineVersion(int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), match.Groups[3].Value,
             match.Groups[4].Success ? int.Parse(match.Groups[4].Value) : 0);

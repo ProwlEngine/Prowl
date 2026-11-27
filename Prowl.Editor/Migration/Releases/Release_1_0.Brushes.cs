@@ -80,7 +80,7 @@ internal sealed partial class Release_1_0
         var planeOfFace = new List<int>();
         foreach (GeometryData.Face face in solid.Faces)
         {
-            var ring = face.NeighborVertices();
+            List<GeometryData.Vertex> ring = face.NeighborVertices();
             if (ring.Count < 3) continue;
 
             EchoObject corners = EchoObject.NewList();

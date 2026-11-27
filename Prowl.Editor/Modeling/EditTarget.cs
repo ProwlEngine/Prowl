@@ -33,9 +33,9 @@ public sealed class EditTarget
 /// <summary>Selected elements of one mesh, held by reference while the mesh is edited.</summary>
 public sealed class ElementSelection
 {
-    public readonly HashSet<GeometryData.Vertex> Vertices = new();
-    public readonly HashSet<GeometryData.Edge> Edges = new();
-    public readonly HashSet<GeometryData.Face> Faces = new();
+    public readonly HashSet<GeometryData.Vertex> Vertices = [];
+    public readonly HashSet<GeometryData.Edge> Edges = [];
+    public readonly HashSet<GeometryData.Face> Faces = [];
 
     public bool IsEmpty => Vertices.Count == 0 && Edges.Count == 0 && Faces.Count == 0;
 

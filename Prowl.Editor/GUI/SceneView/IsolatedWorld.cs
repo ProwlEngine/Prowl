@@ -145,9 +145,11 @@ public static class IsolatedWorld
     /// </summary>
     internal static void AddViewingRig(Scene world, GameObject? framed, string prefix)
     {
-        var camGo = new GameObject($"{prefix} Camera");
-        camGo.Tag = "Main Camera";
-        camGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        var camGo = new GameObject($"{prefix} Camera")
+        {
+            Tag = "Main Camera",
+            HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos
+        };
         camGo.Transform.Position = FramingPositionFor(framed);
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         Camera cam = camGo.AddComponent<Camera>();
@@ -155,8 +157,10 @@ public static class IsolatedWorld
         cam.Profile = VolumeProfile.CreateCameraDefault($"{prefix} Camera Profile");
         world.Add(camGo);
 
-        var lightGo = new GameObject($"{prefix} Light");
-        lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        var lightGo = new GameObject($"{prefix} Light")
+        {
+            HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos
+        };
         lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
         lightGo.AddComponent<DirectionalLight>();
         world.Add(lightGo);

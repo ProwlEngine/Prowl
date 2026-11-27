@@ -6,8 +6,8 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.Theming;
 using Prowl.Editor.Modeling;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Rosetta;
@@ -330,7 +330,7 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (!CanSeparate || Target.IsNotValid()) return;
         CSGBrush brush = Target!;
-        if (!CSGBrushTarget.Separate(brush.ControlMesh, brush.Surfaces, _faces, out var kept, out var separated)) return;
+        if (!CSGBrushTarget.Separate(brush.ControlMesh, brush.Surfaces, _faces, out (CSGControlMesh Mesh, SurfaceData[] Surfaces) kept, out (CSGControlMesh Mesh, SurfaceData[] Surfaces) separated)) return;
 
         Undo.RecordObject(brush, "Separate CSG Faces");
         brush.SetShape(kept.Mesh, kept.Surfaces);
@@ -454,9 +454,9 @@ public sealed class CSGMeshTool : SceneTool
 
     // The selection by index: points, edges as point pairs with the lower first, and polygons. All three are kept in
     // step through Selecting, led by the mode's own set
-    private readonly HashSet<int> _vertices = new();
-    private readonly HashSet<(int A, int B)> _selectedEdges = new();
-    private readonly List<int> _faces = new();
+    private readonly HashSet<int> _vertices = [];
+    private readonly HashSet<(int A, int B)> _selectedEdges = [];
+    private readonly List<int> _faces = [];
 
     /// <summary>What a drag in progress is doing.</summary>
     private enum Action { None, Marquee, Chamfer, Extrude, Inset, ExtrudeRegion, Subdivide, LimitedDissolve, TrisToQuads, MergeByDistance, Smooth, Relax, Bridge, LoopCut, EdgeSlide, Knife, Drag }
@@ -470,7 +470,7 @@ public sealed class CSGMeshTool : SceneTool
     // The brush as an edit target, loaded again whenever its points change, and the selection as undo keeps it
     private CSGBrushTarget? _target;
     private readonly CSGEditSelection _held = new();
-    private List<(int a, int b)> _edges = new();
+    private List<(int a, int b)> _edges = [];
     private bool _dragging;
 
     // A gizmo drag that began with Shift on a whole face, extruding it rather than moving it
@@ -478,7 +478,7 @@ public sealed class CSGMeshTool : SceneTool
     private Float3 _dragRaw, _dragApplied;
 
     // The selected points in the world where a drag began, which a snapped move lands on the grid by their bounds
-    private List<Float3> _dragPoints = new();
+    private List<Float3> _dragPoints = [];
 
     private List<Float3> SelectedWorld()
     {
@@ -492,9 +492,9 @@ public sealed class CSGMeshTool : SceneTool
     private bool _passedThreshold;
 
     // Hidden parts of the brush, for this session only, by index as the selection is
-    private readonly HashSet<int> _hiddenPoints = new();
-    private readonly HashSet<(int A, int B)> _hiddenEdges = new();
-    private readonly HashSet<int> _hiddenFaces = new();
+    private readonly HashSet<int> _hiddenPoints = [];
+    private readonly HashSet<(int A, int B)> _hiddenEdges = [];
+    private readonly HashSet<int> _hiddenFaces = [];
     private readonly Func<int, bool> _isHiddenFace;
 
     // The last press, for telling a double click
@@ -543,11 +543,11 @@ public sealed class CSGMeshTool : SceneTool
     // modal, holding the viewport it started in until it ends
     private bool _fromMenu;
     private HandleContext? _modalHandles;
-    private readonly HashSet<int> _actionPoints = new();
-    private readonly List<(int A, int B)> _actionEdges = new();
-    private readonly List<int> _actionFaces = new();
-    private readonly HashSet<int> _actionAfterPoints = new();
-    private readonly List<int> _actionAfterFaces = new();
+    private readonly HashSet<int> _actionPoints = [];
+    private readonly List<(int A, int B)> _actionEdges = [];
+    private readonly List<int> _actionFaces = [];
+    private readonly HashSet<int> _actionAfterPoints = [];
+    private readonly List<int> _actionAfterFaces = [];
     private SelectMode _actionAfterLead;
     private int _actionCount;
     private (float Amount, int Count)? _previewKey;
@@ -560,16 +560,16 @@ public sealed class CSGMeshTool : SceneTool
     // A loop cut's edge in the start shape's numbering, whether a click has picked it, and where the slide starts
     private (int A, int B)? _loopEdge;
     private bool _loopPicked;
-    private List<(int a, int b)> _startEdges = new();
+    private List<(int a, int b)> _startEdges = [];
 
     // An edge slide's +1 direction on screen
     private Float2 _slideDirection;
 
     // The knife's points, where each was clicked and what of the brush it sits on
-    private readonly List<(Float2 Pixel, KnifePoint Point)> _knife = new();
+    private readonly List<(Float2 Pixel, KnifePoint Point)> _knife = [];
 
     // Points in the order they were clicked, for merging at the first
-    private readonly List<int> _pickOrder = new();
+    private readonly List<int> _pickOrder = [];
 
     // What a chamfer or extrude started on, captured when it began so later renumbering cannot move it
     private CSGBrush? _actionBrush;
@@ -577,8 +577,8 @@ public sealed class CSGMeshTool : SceneTool
     private SurfaceData[]? _startSurfaces;
     private CSGControlMesh? _startMesh;
     private Float3 _actionCorner;
-    private readonly List<Float3> _actionNormals = new();
-    private readonly List<Float3> _actionRing = new();
+    private readonly List<Float3> _actionNormals = [];
+    private readonly List<Float3> _actionRing = [];
     private SurfaceData _actionSurface;
 
     public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
@@ -1222,7 +1222,7 @@ public sealed class CSGMeshTool : SceneTool
         return -1;
     }
 
-    private readonly List<(int Index, float Distance, float T)> _near = new();
+    private readonly List<(int Index, float Distance, float T)> _near = [];
 
     private void PickElements(SceneToolContext ctx)
     {
@@ -1531,7 +1531,7 @@ public sealed class CSGMeshTool : SceneTool
         _sessionMove = move;
 
         CSGControlMesh preview = _sessionStart!.Clone();
-        var vertices = _target!.Target.Mesh.Vertices;
+        List<GeometryData.Vertex> vertices = _target!.Target.Mesh.Vertices;
         for (int i = 0; i < vertices.Count && i < preview.Points.Count; i++) preview.SetPoint(i, vertices[i].Point);
         ShowShape(preview);
     }
@@ -2057,7 +2057,7 @@ public sealed class CSGMeshTool : SceneTool
 
     private static List<GeometryData.Vertex> PointsOf(CSGBrushTarget target, IEnumerable<int> points)
     {
-        var vertices = target.Target.Mesh.Vertices;
+        List<GeometryData.Vertex> vertices = target.Target.Mesh.Vertices;
         var result = new List<GeometryData.Vertex>();
         foreach (int i in points)
             if (i >= 0 && i < vertices.Count) result.Add(vertices[i]);

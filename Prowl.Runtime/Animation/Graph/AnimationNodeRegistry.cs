@@ -97,7 +97,6 @@ public static class AnimationNodeRegistry
 }
 
 /// <summary>One graph compile: the Motion graph being filled in, and the lookups node builders use.</summary>
-[SuppressMessage("Performance", "CA1822", Justification = "Node builders reach every lookup through the context")]
 public sealed class GraphCompileContext
 {
     private static readonly char[] s_listSeparators = [',', ';'];

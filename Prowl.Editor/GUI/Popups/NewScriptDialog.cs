@@ -21,11 +21,14 @@ namespace Prowl.Editor.GUI.Popups;
 /// file name and the class name, so we validate it against C# identifier rules before
 /// enabling Create.
 /// </summary>
-public static class NewScriptDialog
+public static partial class NewScriptDialog
 {
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*$")]
+    private static partial Regex Identifier();
+
     // Templates come from ScriptTemplateRegistry; snapshotted when the dialog opens so the
     // selection index stays stable across a single session (a reload between opens is fine).
-    private static IReadOnlyList<ScriptTemplate> s_templates = Array.Empty<ScriptTemplate>();
+    private static ScriptTemplate[] s_templates = [];
 
     // Per-open state reset each time Open() is called
     private static string s_folder = "";
@@ -46,8 +49,8 @@ public static class NewScriptDialog
         s_selectedIndex = 0;
         s_onCreated = onCreated;
 
-        s_templates = new List<ScriptTemplate>(EditorRegistries.ScriptTemplates);
-        if (s_templates.Count == 0)
+        s_templates = [.. EditorRegistries.ScriptTemplates];
+        if (s_templates.Length == 0)
         {
             Runtime.Debug.LogWarning("NewScriptDialog: no script templates registered.");
             return;
@@ -80,7 +83,7 @@ public static class NewScriptDialog
                     .ColSpacing(2)
                     .Body(() =>
                     {
-                        for (int i = 0; i < s_templates.Count; i++)
+                        for (int i = 0; i < s_templates.Length; i++)
                         {
                             int captured = i;
                             ScriptTemplate tpl = s_templates[i];
@@ -244,10 +247,10 @@ public static class NewScriptDialog
 
     // --- Validation -----------------------------------------------------------------
 
-    private static readonly Regex s_identifier = new(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
-    private static readonly HashSet<string> s_reserved = new(StringComparer.Ordinal)
-    {
+    private static readonly HashSet<string> s_reserved =
+    [
+        with(StringComparer.Ordinal),
         "abstract",
         "as",
         "base",
@@ -325,24 +328,24 @@ public static class NewScriptDialog
         "void",
         "volatile",
         "while"
-    };
+    ];
 
     private static (bool ok, string? error) Validate(string name, string folder)
     {
         if (string.IsNullOrWhiteSpace(name))
             return (false, Loc.Get("newscript.err_required"));
-        if (!s_identifier.IsMatch(name))
+        if (!Identifier().IsMatch(name))
             return (false, Loc.Get("newscript.err_invalid"));
         if (s_reserved.Contains(name))
-            return (false, Loc.Get("newscript.err_reserved", new { name = name }));
+            return (false, Loc.Get("newscript.err_reserved", new { name }));
 
         string abs = AssetCreateMenu.GetAbsoluteFolder(folder);
         if (File.Exists(Path.Combine(abs, name + ".cs")))
-            return (false, Loc.Get("newscript.err_exists", new { name = name }));
+            return (false, Loc.Get("newscript.err_exists", new { name }));
 
         // The templates declare global classes, so one with this name anywhere in the scripts would not compile.
         if (ClassExists(name))
-            return (false, Loc.Get("newscript.err_type_exists", new { name = name }));
+            return (false, Loc.Get("newscript.err_type_exists", new { name }));
 
         return (true, null);
     }

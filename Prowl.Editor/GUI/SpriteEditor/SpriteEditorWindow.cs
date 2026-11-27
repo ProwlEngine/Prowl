@@ -470,7 +470,7 @@ public class SpriteEditorWindow : DockPanel
     private static Float2 ClampContent(Float2 c, int texW, int texH)
         => new(Math.Clamp(c.X, 0, texW), Math.Clamp(c.Y, 0, texH));
 
-    private Float2 NormalizedPivot(SpriteSliceData s)
+    private static Float2 NormalizedPivot(SpriteSliceData s)
     {
         if (s.Alignment != SpriteAlignment.Custom)
             return Sprite.PivotFromAlignment(s.Alignment);
@@ -479,7 +479,7 @@ public class SpriteEditorWindow : DockPanel
         return s.CustomPivot;
     }
 
-    private Float2 PivotContent(SpriteSliceData s, int texH)
+    private static Float2 PivotContent(SpriteSliceData s, int texH)
     {
         Float2 n = NormalizedPivot(s);
         return new Float2(s.Rect.X + n.X * s.Rect.Width, texH - (s.Rect.Y + n.Y * s.Rect.Height));

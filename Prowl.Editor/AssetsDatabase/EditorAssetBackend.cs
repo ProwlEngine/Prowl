@@ -34,7 +34,7 @@ public class EditorAssetBackend : AssetBackend
     // as _pathToGuid every UI that shows asset thumbnails shares this instead of keeping its own.
     private readonly Dictionary<Guid, Runtime.Resources.Texture2D?> _thumbnailTextures = [];
     // Held only around reading or replacing a cache file, so the loader never reads one mid-replace.
-    private readonly object _cacheFileLock = new();
+    private readonly Lock _cacheFileLock = new();
     private IReadOnlyList<ResourceEntry> _resources = [];
     private readonly DependencyGraph _dependencies = new();
     private AssetWatcher? _watcher;
@@ -49,7 +49,7 @@ public class EditorAssetBackend : AssetBackend
         public readonly List<FolderRecord> SubFolders = [];
         public readonly List<FileRecord> Files = [];
     }
-    private readonly Dictionary<string, FolderContents> _folderIndex = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, FolderContents> _folderIndex = [with(StringComparer.OrdinalIgnoreCase)];
     private bool _folderIndexDirty = true;
 
     // Events
@@ -182,7 +182,7 @@ public class EditorAssetBackend : AssetBackend
             IncludeSubdirectories = false,
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
         };
-        void OnPropsChanged(object? _, FileSystemEventArgs __)
+        static void OnPropsChanged(object? _, FileSystemEventArgs __)
             => ScriptAssemblyManager.RequestRecompile();
 
         _buildPropsWatcher.Changed += OnPropsChanged;
@@ -494,9 +494,9 @@ public class EditorAssetBackend : AssetBackend
                 entry.NeedsReimport = true;
             }
         }
-        else if (_guidToEntry.ContainsKey(meta.Guid))
+        else if (_guidToEntry.TryGetValue(meta.Guid, out AssetEntry? moved))
         {
-            AssetEntry entry = _guidToEntry[meta.Guid];
+            AssetEntry entry = moved;
             string oldPath = entry.Path;
             bool originalStillExists = File.Exists(Path.Combine(assetsPath, oldPath))
                 && !oldPath.Equals(relativePath, StringComparison.OrdinalIgnoreCase);
@@ -1036,7 +1036,7 @@ public class EditorAssetBackend : AssetBackend
 
     // Written from the import path and read from the inspector, so this carries its own lock.
     private readonly Dictionary<Guid, string> _projectShaderPaths = [];
-    private readonly object _shaderMenuLock = new();
+    private readonly Lock _shaderMenuLock = new();
 
     /// <summary>One assignable shader and the menu path it declares.</summary>
     public readonly struct ShaderMenuEntry
@@ -1637,11 +1637,11 @@ public class EditorAssetBackend : AssetBackend
 
     private void RemoveCacheFile(string relativePath)
     {
-        if (_pathToGuid.TryGetValue(relativePath, out var guid))
+        if (_pathToGuid.TryGetValue(relativePath, out Guid guid))
         {
             // Missing rather than gone, so everything referencing them keeps the GUID and comes back
             // in place if the file is restored.
-            var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
+            AssetEntry? entry = _guidToEntry.TryGetValue(guid, out AssetEntry? e) ? e : null;
             AssetDatabase.MarkMissing(guid);
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
             InvalidateThumbnailTexture(guid);
@@ -1672,8 +1672,8 @@ public class EditorAssetBackend : AssetBackend
                         || p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        var affectsCompilation = false;
-        foreach (var path in toDelete)
+        bool affectsCompilation = false;
+        foreach (string? path in toDelete)
         {
             if (!affectsCompilation && AffectsCompilation(path))
                 affectsCompilation = true;
@@ -2129,24 +2129,23 @@ public class EditorAssetBackend : AssetBackend
         string importerName = EditorRegistries.GetImporterTypeName(ext);
         MetaFileData meta = MetaFile.EnsureMeta(absolutePath, importerName);
 
-        if (!_guidToEntry.ContainsKey(meta.Guid))
+        if (_guidToEntry.TryGetValue(meta.Guid, out AssetEntry? existingEntry))
         {
-            var entry = new AssetEntry
+            existingEntry.NeedsReimport = true;
+        }
+        else
+        {
+            existingEntry = new AssetEntry
             {
                 Guid = meta.Guid,
                 Path = relativePath,
                 ImporterType = importerName,
                 NeedsReimport = true
             };
-            _guidToEntry[meta.Guid] = entry;
+            _guidToEntry[meta.Guid] = existingEntry;
             _pathToGuid[relativePath] = meta.Guid;
         }
-        else
-        {
-            _guidToEntry[meta.Guid].NeedsReimport = true;
-        }
 
-        AssetEntry existingEntry = _guidToEntry[meta.Guid];
         if (!toImport.Contains(existingEntry))
             toImport.Add(existingEntry);
     }

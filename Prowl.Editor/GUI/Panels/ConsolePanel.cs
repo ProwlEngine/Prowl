@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
@@ -35,8 +36,11 @@ public sealed class ConsolePreferences : EditorPreferences
     public float TextSize => FontSize > 0f ? FontSize : EditorTheme.FontSizeSmall;
 }
 
-public class ConsolePanel : DockPanel
+public partial class ConsolePanel : DockPanel
 {
+    [GeneratedRegex(@"^(?<path>[^\r\n]+?\.cs)\((?<line>\d+),(?<column>\d+)\)")]
+    private static partial Regex CompilerLocation();
+
     [MenuItem("Window/General/Console", priority: 0)]
     static void Open() => EditorApplication.Instance?.OpenPanel<ConsolePanel>();
 
@@ -58,7 +62,7 @@ public class ConsolePanel : DockPanel
 
     // Every log waits here until a reader drains it into _messages, so logging from any thread never touches the list.
     private static readonly ConcurrentQueue<(string Message, DebugStackTrace? StackTrace, LogSeverity Severity, DateTime Time)> s_pending = new();
-    private static readonly object s_messagesLock = new();
+    private static readonly Lock s_messagesLock = new();
 
     // Settings
     private bool _showTime = true;
@@ -308,7 +312,7 @@ public class ConsolePanel : DockPanel
     }
 
     // cs-lvl chip: icon + optional label + optional count; "on" gets a glass inset, "off" dims.
-    private void LevelChip(Paper p, FontFile font, string id, IOrigamiIcon icon, Color iconColor, string? label, string? count, bool on, bool dim, Action onClick)
+    private static void LevelChip(Paper p, FontFile font, string id, IOrigamiIcon icon, Color iconColor, string? label, string? count, bool on, bool dim, Action onClick)
     {
         FontFile mono = EditorTheme.FontMono ?? font;
         Color ic = dim ? Color.FromArgb(115, iconColor.R, iconColor.G, iconColor.B) : iconColor;
@@ -421,12 +425,11 @@ public class ConsolePanel : DockPanel
         return index >= 0 && index < _messages.Count ? _messages[index] : null;
     }
 
-    private static readonly Regex s_compilerLocation = new(@"^(?<path>[^\r\n]+?\.cs)\((?<line>\d+),(?<column>\d+)\)", RegexOptions.Compiled);
 
     /// <summary>The script a log points at: a compiler message's "path(line,col)" prefix, else the first stack frame inside the project's Assets.</summary>
     internal static (string Path, int Line, int Column)? SourceLocationOf(LogEntry entry)
     {
-        Match match = s_compilerLocation.Match(entry.FullMessage);
+        Match match = CompilerLocation().Match(entry.FullMessage);
         if (match.Success && File.Exists(match.Groups["path"].Value))
             return (match.Groups["path"].Value, int.Parse(match.Groups["line"].Value), int.Parse(match.Groups["column"].Value));
 
@@ -459,7 +462,7 @@ public class ConsolePanel : DockPanel
         FontFile bold = EditorTheme.FontBold ?? font;
         float textSize = TextSize;
 
-        var key = (textSize, EditorTheme.FontMono, EditorTheme.FontSemiBold, EditorTheme.FontBold);
+        (float textSize, FontFile? FontMono, FontFile? FontSemiBold, FontFile? FontBold) key = (textSize, EditorTheme.FontMono, EditorTheme.FontSemiBold, EditorTheme.FontBold);
         if (key != _layoutKey)
         {
             _layoutKey = key;

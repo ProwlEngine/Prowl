@@ -48,7 +48,7 @@ public static class RenameOverlay
     public static void Cancel()
     {
         if (!_active) return;
-        var onCancel = _onCancel;
+        Action? onCancel = _onCancel;
         Reset();
         onCancel?.Invoke();
     }
@@ -56,8 +56,8 @@ public static class RenameOverlay
     private static void Confirm()
     {
         if (!_active) return;
-        var onConfirm = _onConfirm;
-        var onCancel = _onCancel;
+        Action<string>? onConfirm = _onConfirm;
+        Action? onCancel = _onCancel;
         string text = _text.Trim();
         Reset();
         if (text.Length > 0) onConfirm?.Invoke(text);

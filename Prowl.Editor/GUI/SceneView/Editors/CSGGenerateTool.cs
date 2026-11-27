@@ -37,7 +37,7 @@ public sealed class CSGGenerateTool : SceneTool
     }
 
     // The corners of a polygon being drawn, in the work plane's frame
-    private readonly List<Float2> _outline = new();
+    private readonly List<Float2> _outline = [];
 
     public override string Name => "CSG Generate";
     public override string Icon => EditorIcons.Plus;
@@ -237,7 +237,7 @@ public sealed class CSGGenerateTool : SceneTool
         Float3 first = ToWorld(new Float3(_outline[0].X, 0f, _outline[0].Y));
         bool nearFirst = _outline.Count >= 3 && handles.WorldToScreen(first) is Float2 screen && Float2.Distance(screen, handles.MousePosition) < 10f;
 
-        var tint = Tint();
+        (Color32 Color, string Label) tint = Tint();
         DrawWorkGrid(ctx, ToWorld(new Float3(cursor.X, 0f, cursor.Y)));
         var ring = new List<Float3>(_outline.Count + 1);
         foreach (Float2 p in _outline) ring.Add(ToWorld(new Float3(p.X, 0f, p.Y)));
@@ -600,7 +600,7 @@ public sealed class CSGGenerateTool : SceneTool
 
     private void UpdateGhost(Operation operation)
     {
-        var key = (_cornerA, _cornerB, _height, Generator, Settings, operation);
+        (Float3 _cornerA, Float3 _cornerB, float _height, CSGGeneratorKind Generator, CSGGeneratorSettings Settings, Operation operation) key = (_cornerA, _cornerB, _height, Generator, Settings, operation);
         if (_ghost.IsValid() && key.Equals(_ghostKey)) return;
 
         ClearGhost();

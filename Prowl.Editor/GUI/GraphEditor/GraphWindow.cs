@@ -254,7 +254,7 @@ public abstract class GraphWindow<TWindow, TRecord> : DockPanel, IGraphWindow
         if (_assetGuid == Guid.Empty) return;
         if (_asset is { IsLoaded: true } current && current.ContentVersion == _seenContent) return;
 
-        List<string> selected = keepPlace ? new List<string>(Controller.SelectedNodes) : [];
+        List<string> selected = keepPlace ? [with(Controller.SelectedNodes)] : [];
 
         _asset = LoadAsset(_assetGuid);
         if (_asset is not { IsLoaded: true }) _asset = null;

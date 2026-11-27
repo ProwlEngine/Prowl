@@ -49,7 +49,7 @@ public sealed class CSGSurfaceTool : SceneTool
     private Paint _paint;
 
     // What the model shows this frame, by the surface each piece came from
-    private readonly Dictionary<CSGSurfaceRef, List<Float3[]>> _pieces = new();
+    private readonly Dictionary<CSGSurfaceRef, List<Float3[]>> _pieces = [];
 
     public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
 
@@ -89,7 +89,7 @@ public sealed class CSGSurfaceTool : SceneTool
         foreach (CSGModelFace face in model.Faces())
         {
             var surface = new CSGSurfaceRef(face.Brush, face.PlaneIndex);
-            if (!_pieces.TryGetValue(surface, out List<Float3[]>? list)) _pieces[surface] = list = new List<Float3[]>();
+            if (!_pieces.TryGetValue(surface, out List<Float3[]>? list)) _pieces[surface] = list = [];
             list.Add(face.Corners);
         }
     }

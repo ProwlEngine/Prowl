@@ -22,7 +22,7 @@ public sealed class NodeEditorAttribute(Type nodeType) : Attribute
 /// <summary>One editor instance per node type for a tool, created from the registry or the tool's default.</summary>
 public sealed class NodeEditorCache<TNode, TEditor> where TNode : class where TEditor : class
 {
-    private readonly Dictionary<TNode, TEditor> _editors = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TNode, TEditor> _editors = [with(ReferenceEqualityComparer.Instance)];
     private readonly Func<TEditor> _fallback;
     private readonly Action<TEditor, TNode> _bind;
 

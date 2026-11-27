@@ -56,8 +56,11 @@ public enum ImportAction
     Skip     // GUID exists and content is identical
 }
 
-public static class ProwlPackage
+public static partial class ProwlPackage
 {
+    [GeneratedRegex(@"""uri""\s*:\s*""([^""]+)""")]
+    private static partial Regex UriField();
+
     [AssetDoubleClickHandler(".prowlpackage")]
     private static bool OnDoubleClickPackage(string relativePath, Guid guid)
     {
@@ -80,10 +83,8 @@ public static class ProwlPackage
     /// </summary>
     public static void Export(string outputPath, IEnumerable<string> assetRelativePaths, bool includeProjectSettings, bool includeDependencies)
     {
-        Project? project = Project.Current;
-        if (project == null) throw new InvalidOperationException("No project is open.");
-        EditorAssetBackend? db = EditorAssetBackend.Instance;
-        if (db == null) throw new InvalidOperationException("Asset database not initialized.");
+        Project? project = Project.Current ?? throw new InvalidOperationException("No project is open.");
+        EditorAssetBackend? db = EditorAssetBackend.Instance ?? throw new InvalidOperationException("Asset database not initialized.");
 
         // Collect all asset paths (including dependencies if requested)
         var allPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -404,7 +405,7 @@ public static class ProwlPackage
     private static IEnumerable<string> ExtractUriReferences(string gltfJson, string baseDir)
     {
         // Simple regex to find "uri": "filename.ext" patterns (not data: URIs)
-        MatchCollection matches = System.Text.RegularExpressions.Regex.Matches(gltfJson, @"""uri""\s*:\s*""([^""]+)""");
+        MatchCollection matches = UriField().Matches(gltfJson);
         foreach (System.Text.RegularExpressions.Match match in matches)
         {
             string uri = match.Groups[1].Value;

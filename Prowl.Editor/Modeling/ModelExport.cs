@@ -14,11 +14,11 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-using ClayMaterialAlphaMode = Prowl.Clay.MaterialAlphaMode;
-using Mesh = Prowl.Runtime.Resources.Mesh;
-using Material = Prowl.Runtime.Resources.Material;
 using BlendShape = Prowl.Runtime.Resources.BlendShape;
 using BlendShapeFrame = Prowl.Runtime.Resources.BlendShapeFrame;
+using ClayMaterialAlphaMode = Prowl.Clay.MaterialAlphaMode;
+using Material = Prowl.Runtime.Resources.Material;
+using Mesh = Prowl.Runtime.Resources.Mesh;
 
 namespace Prowl.Editor.Modeling;
 
@@ -173,7 +173,7 @@ public static class ModelExport
             int sx = x * image.Info.Width / width, sy = y * image.Info.Height / height;
             return image.Pixels[(sy * image.Info.Width + sx) * 4 + channel];
         }
-        var pixels = new byte[width * height * 4];
+        byte[] pixels = new byte[width * height * 4];
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {

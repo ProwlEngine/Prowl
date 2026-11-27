@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Prowl.Editor;
 
@@ -12,7 +13,7 @@ public class DependencyGraph
 {
     private readonly Dictionary<Guid, HashSet<Guid>> _forward = [];
     private readonly Dictionary<Guid, HashSet<Guid>> _reverse = [];
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     /// <summary> Sets the dependencies for the specified asset, replacing any existing dependencies. </summary>
     public void SetDependencies(Guid asset, IEnumerable<Guid> dependencies)

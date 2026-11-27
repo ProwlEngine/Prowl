@@ -77,8 +77,10 @@ public sealed class PreviewWidget : IDisposable
         _drawn = true;
         if (_renderer == null)
         {
-            _renderer = new PreviewRenderer(_width, _height);
-            _renderer.ShowGrid = _showGrid;
+            _renderer = new PreviewRenderer(_width, _height)
+            {
+                ShowGrid = _showGrid
+            };
         }
         if (_last != subject)
         {

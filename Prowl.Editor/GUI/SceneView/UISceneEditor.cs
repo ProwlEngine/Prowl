@@ -275,7 +275,7 @@ public sealed class UISceneEditor : SceneTool
     /// same terms. Registration order sets tie-breaking (last wins): body, then anchors and pivot,
     /// then edge mid-points, then corners - so a corner still beats an anchor sitting on top of it.
     /// </summary>
-    private Handle RegisterControls(HandleContext ctx, RectTransform rt, Rect cr, Rect parentRect,
+    private static Handle RegisterControls(HandleContext ctx, RectTransform rt, Rect cr, Rect parentRect,
                                     Float4x4 frameToWorld, Float2 pivotCanvasPos, out ControlID nearestId)
     {
         Float3 ToWorld(Float2 d) => Float4x4.TransformPoint(

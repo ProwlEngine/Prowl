@@ -8,9 +8,11 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 using Prowl.Editor.GUI;
 using Prowl.Runtime;
 
@@ -34,7 +36,7 @@ public static class ScriptComponentResolver
 
     private static int s_typeVersion = 1;
     private static ComponentTypeIndex? s_typeIndex;
-    private static readonly object s_typeIndexLock = new();
+    private static readonly Lock s_typeIndexLock = new();
     private static readonly ConcurrentDictionary<string, ParsedFileCacheEntry> s_parsedFileCache = new(StringComparer.Ordinal);
 
     static ScriptComponentResolver()

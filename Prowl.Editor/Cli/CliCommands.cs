@@ -68,7 +68,7 @@ public static class CliCommands
 
     private sealed record Command(string Name, string Description, MethodInfo Method, Arg[] Args);
 
-    private static readonly Dictionary<string, Command> s_commands = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Command> s_commands = [with(StringComparer.OrdinalIgnoreCase)];
 
     public const int MaxResultDepth = 6;
     public const int MaxResultItems = 1000;

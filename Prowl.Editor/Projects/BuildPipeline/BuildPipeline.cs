@@ -105,7 +105,7 @@ public abstract class BuildPipeline
         string path = Path.Combine(Project.Current!.CachePath, $"{guid}.asset");
         if (!File.Exists(path)) return null;
 
-        return TryStripEditorOnlyPrefabData(guid, path) ?? File.OpenRead(path);
+        return (Stream?)TryStripEditorOnlyPrefabData(guid, path) ?? File.OpenRead(path);
     }
 
     /// <summary>
@@ -180,7 +180,7 @@ public abstract class BuildPipeline
     /// Rewrites a scene or prefab payload without its editor-only prefab data, or null to ship the
     /// cached bytes untouched.
     /// </summary>
-    private static Stream? TryStripEditorOnlyPrefabData(Guid guid, string cachePath)
+    private static MemoryStream? TryStripEditorOnlyPrefabData(Guid guid, string cachePath)
     {
         AssetEntry? entry = EditorAssetBackend.Instance?.GetEntry(guid);
         if (entry == null) return null;
@@ -510,9 +510,9 @@ public abstract class BuildPipeline
     protected static async Task<(int exitCode, string stdout, string stderr)> RunDotnetAsync(
         string arguments,
         BuildProgress? progress = null,
-        CancellationToken cancellation = default,
         Action<BuildIssue>? onDiagnostic = null,
-        BuildStage stage = default)
+        BuildStage stage = default,
+        CancellationToken cancellation = default)
     {
         var psi = new ProcessStartInfo
         {

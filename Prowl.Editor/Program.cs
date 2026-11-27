@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
+using Prowl.Editor.Build;
 using Prowl.Editor.Core;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
-using Prowl.Editor.Build;
-using System.Linq;
 
 
 namespace Prowl.Editor;

@@ -9,26 +9,28 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
+using Prowl.Echo;
+using Prowl.Editor.Build;
 using Prowl.Editor.Core;
 using Prowl.Editor.GraphEditor;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.Inspector;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
-using Prowl.Runtime;
 using Prowl.Graphite.Rendering;
+using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
-using Prowl.Echo;
-using Prowl.Editor.Build;
-using Shader = Prowl.Runtime.Resources.Shader;
+
 using Material = Prowl.Runtime.Resources.Material;
+using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Editor;
 
@@ -40,7 +42,7 @@ public static class LogHistory
     private const int Capacity = 4000;
     private static readonly Entry[] s_ring = new Entry[Capacity];
     private static long s_next = 1;
-    private static readonly object s_lock = new();
+    private static readonly Lock s_lock = new();
 
     /// <summary> The sequence number the next log will get. </summary>
     public static long NextSeq { get { lock (s_lock) return s_next; } }
@@ -89,8 +91,11 @@ public static class LogHistory
 }
 
 /// <summary> The built in commands an agent uses to drive the editor. </summary>
-public static class CliEditorCommands
+public static partial class CliEditorCommands
 {
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*$")]
+    private static partial Regex Identifier();
+
     public enum LogFilter { All, Warning, Error }
     public enum GoAction { Create, Delete, Duplicate, Rename, Parent, Active, Transform }
     public enum ComponentAction { Add, Remove, List }
@@ -899,7 +904,7 @@ public static class CliEditorCommands
             ?? throw new CliException($"No script template '{template}'. Templates: {string.Join(", ", EditorRegistries.ScriptTemplates.Select(t => t.Name))}.");
 
         string className = Path.GetFileNameWithoutExtension(relative);
-        if (!System.Text.RegularExpressions.Regex.IsMatch(className, @"^[A-Za-z_][A-Za-z0-9_]*$"))
+        if (!Identifier().IsMatch(className))
             throw new CliException($"'{className}' is not a valid class name.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
@@ -1550,7 +1555,7 @@ internal static class CliGraph
         _ => null,
     };
 
-    private static JsonNode? AssetJson(Asset? asset)
+    private static JsonObject? AssetJson(Asset? asset)
         => asset.IsValid() && asset!.IsFromDatabase ? CliRefs.AssetSummary(asset.AssetID, asset.GetType()) : null;
 
     public static JsonNode? Apply(AnimationGraph graph, JsonObject op, Dictionary<string, string> ids)
@@ -1838,8 +1843,11 @@ internal static class CliGraph
 /// Looks up types and members by reflection over everything loaded, with summaries from the XML doc file next to each
 /// assembly, so an agent can find the real API instead of guessing it.
 /// </summary>
-internal static class CliApi
+internal static partial class CliApi
 {
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Whitespace();
+
     private const BindingFlags Members = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
     private static readonly string[] s_skippedPrefixes = ["System", "Microsoft", "netstandard", "mscorlib", "WindowsBase", "Mono.", "xunit", "testhost", "ProwlEval"];
     private static readonly Dictionary<Assembly, Dictionary<string, XElement>?> s_docs = [];
@@ -2099,7 +2107,7 @@ internal static class CliApi
                 else sb.Append(Text(e));
             }
         }
-        string collapsed = Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+        string collapsed = Whitespace().Replace(sb.ToString(), " ").Trim();
         return collapsed.Length == 0 ? null : collapsed;
     }
 

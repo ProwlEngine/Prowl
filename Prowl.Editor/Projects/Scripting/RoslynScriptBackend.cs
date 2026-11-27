@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -43,23 +44,23 @@ internal static class RoslynScriptBackend
 
     private sealed class UnitState
     {
-        public Dictionary<string, (ulong Hash, SyntaxTree Tree)> Trees = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, (ulong Hash, SyntaxTree Tree)> Trees = [with(StringComparer.OrdinalIgnoreCase)];
         public CSharpCompilation? Compilation;
         public MetadataReference[] References = Array.Empty<MetadataReference>();
         public bool AllowUnsafe;
         public OptimizationLevel Optimization;
 
         // Snapshot of the last SUCCESSFUL compile, used to decide the whole unit skip.
-        public Dictionary<string, ulong> SuccessHashes = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, ulong> SuccessHashes = [with(StringComparer.OrdinalIgnoreCase)];
         public MetadataReference[] SuccessReferences = Array.Empty<MetadataReference>();
         public byte[]? Image;
         public MetadataReference? SelfReference;
         public IReadOnlyList<Diagnostic> Diagnostics = Array.Empty<Diagnostic>();
     }
 
-    private static readonly Dictionary<string, MetadataReference> s_refCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, MetadataReference> s_refCache = [with(StringComparer.OrdinalIgnoreCase)];
     private static readonly Dictionary<string, UnitState> s_states = [];
-    private static readonly object s_lock = new();
+    private static readonly Lock s_lock = new();
 
     internal static readonly CSharpParseOptions EditorParseOptions = ParseOptions(ScriptCompiler.EditorDefines);
 
@@ -77,10 +78,10 @@ internal static class RoslynScriptBackend
         string prefix = projectRoot + "::";
         lock (s_lock)
         {
-            foreach (var (key, state) in s_states)
+            foreach ((string? key, UnitState? state) in s_states)
             {
                 // Player builds share the cache under a "::player:" suffix and are not what the editor runs.
-                if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || key.IndexOf("::player:", StringComparison.Ordinal) >= 0)
+                if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || key.Contains("::player:", StringComparison.Ordinal))
                     continue;
                 string[] scripts = state.Trees.Keys.Select(Path.GetFullPath).ToArray();
                 if (!scripts.Contains(scriptPath, StringComparer.OrdinalIgnoreCase)) continue;
@@ -389,6 +390,8 @@ internal static class RoslynScriptBackend
 /// </summary>
 internal static class NuGetReferenceResolver
 {
+    private static readonly JsonSerializerOptions s_indented = new() { WriteIndented = true };
+
     /// <summary>Per unit list of absolute package assembly paths. Empty when the project has no packages.</summary>
     public static Dictionary<string, List<string>> Resolve(Project project, List<CompilationUnit> units)
     {
@@ -498,7 +501,7 @@ internal static class NuGetReferenceResolver
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(path, JsonSerializer.Serialize(data, s_indented));
         }
         catch (Exception ex)
         {

@@ -936,7 +936,7 @@ public class UndoTests : EditorTestHarness
     {
         Scene scene = OpenScene();
         UndoComp comp = Add(scene, "GO").AddComponent<UndoComp>();
-        Undo.postprocessModifications = mods => [.. mods.Where(m => m.PropertyPath != nameof(UndoComp.Label))];
+        Undo.PostprocessModifications = mods => [.. mods.Where(m => m.PropertyPath != nameof(UndoComp.Label))];
         try
         {
             Undo.RecordObject(comp, "Edit");
@@ -953,7 +953,7 @@ public class UndoTests : EditorTestHarness
             Undo.FlushUndoRecordObjects();
             Assert.False(Undo.CanUndo);
         }
-        finally { Undo.postprocessModifications = null; }
+        finally { Undo.PostprocessModifications = null; }
     }
 
     [Fact]

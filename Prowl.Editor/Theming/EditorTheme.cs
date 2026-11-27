@@ -152,7 +152,7 @@ public static class EditorTheme
     {
         // EditorGlyphIcon resolves the font at draw time, so chrome icons never flash blank before the
         // editor font finishes loading.
-        Prowl.Editor.GUI.EditorGlyphIcon I(string glyph) => new(glyph, scale: 0.82f);
+        static Prowl.Editor.GUI.EditorGlyphIcon I(string glyph) => new(glyph, scale: 0.82f);
         return new OrigamiIcons
         {
             ChevronDown = I(EditorIcons.ChevronDown), ChevronRight = I(EditorIcons.ChevronRight),
@@ -178,23 +178,23 @@ public static class EditorTheme
     // -- Fonts ---------------------------------------------------------
 
     /// <summary>Regular (400) weight the editor's primary UI face.</summary>
-    public static FontFile? DefaultFont;
+    public static FontFile? DefaultFont { get; set; }
     /// <summary>Bold (700) weight.</summary>
-    public static FontFile? DefaultBoldFont;
+    public static FontFile? DefaultBoldFont { get; set; }
     /// <summary> Medium (500) weight font. </summary>
-    public static FontFile? FontMedium;
+    public static FontFile? FontMedium { get; set; }
     /// <summary> Semi-bold (600) weight font. </summary>
-    public static FontFile? FontSemiBold;
+    public static FontFile? FontSemiBold { get; set; }
     /// <summary> Monospace font for code and terminal displays. </summary>
-    public static FontFile? FontMono;
+    public static FontFile? FontMono { get; set; }
     /// <summary>Display face for wordmarks / big headings (Space Grotesk).</summary>
-    public static FontFile? FontDisplay;
+    public static FontFile? FontDisplay { get; set; }
     /// <summary>Logo face for the PROWL wordmark (Audiowide).</summary>
-    public static FontFile? FontLogo;
+    public static FontFile? FontLogo { get; set; }
     /// <summary>Font Awesome solid (filled) glyphs, for drawing an icon directly in the filled style.</summary>
-    public static FontFile? FontIconSolid;
+    public static FontFile? FontIconSolid { get; set; }
     /// <summary>Font Awesome regular (outline) glyphs, for drawing an icon directly in the outline style.</summary>
-    public static FontFile? FontIconOutline;
+    public static FontFile? FontIconOutline { get; set; }
 
     /// <summary> Primary UI font, delegates to DefaultFont. </summary>
     public static FontFile? Font => DefaultFont;
@@ -202,17 +202,19 @@ public static class EditorTheme
     public static FontFile? FontBold => DefaultBoldFont ?? FontSemiBold ?? DefaultFont;
 
     /// <summary> Font family name for the primary UI face. </summary>
-    public static string DefaultFontName = "Geist";
+    public static string DefaultFontName { get; set; } = "Geist";
 
     /// <summary> Multiplier for UI animation lengths, 0 for none. </summary>
-    public static float AnimationScale = 1f;
+    public static float AnimationScale { get; set; } = 1f;
 
     /// <summary> Font family name for the bold UI face. </summary>
-    public static string DefaultBoldFontName = "Geist";
+    public static string DefaultBoldFontName { get; set; } = "Geist";
     /// <summary> Font family name or font file path for the monospace face. </summary>
-    public static string MonoFontName = "JetBrains Mono";
+    public static string MonoFontName { get; set; } = "JetBrains Mono";
     /// <summary> Bold, italic and bold italic faces of the monospace font, null when it has none. </summary>
-    public static FontFile? FontMonoBold, FontMonoItalic, FontMonoBoldItalic;
+    public static FontFile? FontMonoBold { get; set; }
+    public static FontFile? FontMonoItalic { get; set; }
+    public static FontFile? FontMonoBoldItalic { get; set; }
 
     // DPI Scaling value
     /// <summary> DPI scaling factor applied to all UI measurements. </summary>
@@ -220,67 +222,67 @@ public static class EditorTheme
 
     // -- Sizing (mutable so the Preferences panel can tweak) -----------
     /// <summary> Height of the main menu bar. </summary>
-    public static float MenuBarHeight = 40f;
+    public static float MenuBarHeight { get; set; } = 40f;
     /// <summary> Height of the status bar. </summary>
-    public static float StatusBarHeight = 26f;
+    public static float StatusBarHeight { get; set; } = 26f;
     /// <summary> Standard row height for lists, trees and property grids. </summary>
-    public static float RowHeight = 24f;
+    public static float RowHeight { get; set; } = 24f;
     // Base spacing/padding the full Origami metric scale (SpacingSmall..PaddingLarge) is derived from
     // these in BuildOrigamiTheme, so tweaking them retunes gaps/padding everywhere (property grid, etc.).
     /// <summary> Base spacing unit from which the full Origami spacing scale is derived. </summary>
-    public static float Spacing = 2f;
+    public static float Spacing { get; set; } = 2f;
     /// <summary> Base padding unit from which the full Origami padding scale is derived. </summary>
-    public static float Padding = 6f;
+    public static float Padding { get; set; } = 6f;
     /// <summary> Base font size for UI text. </summary>
-    public static float FontSize = 17f;
+    public static float FontSize { get; set; } = 17f;
     /// <summary> How many points smaller secondary text is than <see cref="FontSize"/>. </summary>
-    public static float SmallFontDelta = 2f;
+    public static float SmallFontDelta { get; set; } = 2f;
     /// <summary> Smaller font size for secondary labels and captions. </summary>
     public static float FontSizeSmall => FontSize - SmallFontDelta;
     /// <summary> Larger font size for headings and emphasis. </summary>
     public static float FontSizeLarge => FontSize + 2f;
     /// <summary> Font size for the PROWL logo wordmark. </summary>
-    public static float FontSizeLogo = 72f;
+    public static float FontSizeLogo { get; set; } = 72f;
     /// <summary> Default width for property labels in the inspector. </summary>
-    public static float LabelWidth = 150f;
+    public static float LabelWidth { get; set; } = 150f;
     /// <summary> Corner rounding radius for panels, buttons and containers. </summary>
-    public static float Roundness = 6f;
+    public static float Roundness { get; set; } = 6f;
 
     // -- Effects (mirrored from EditorThemeData; applied globally) -----
     /// <summary> Enables glass-morphism blur on backdrop surfaces. </summary>
-    public static bool GlassBlur = true;
+    public static bool GlassBlur { get; set; } = true;
     /// <summary> Opacity of dock window fills, from 0 to 1. </summary>
-    public static float WindowOpacity = 0.8f;
+    public static float WindowOpacity { get; set; } = 0.8f;
     /// <summary> Blur radius in pixels when GlassBlur is enabled. </summary>
-    public static float BlurAmount = 22f;
+    public static float BlurAmount { get; set; } = 22f;
     /// <summary> Enables drop shadows on popovers, dropdowns and modals. </summary>
-    public static bool DropShadows = true;
+    public static bool DropShadows { get; set; } = true;
     /// <summary> Enables glow effect on accent-colored elements. </summary>
-    public static bool AccentGlow = true;
+    public static bool AccentGlow { get; set; } = true;
     /// <summary> Enables anti-aliasing for UI rendering. </summary>
-    public static bool AntiAliasing = true;
+    public static bool AntiAliasing { get; set; } = true;
     /// <summary> Enables animated background effects (nebula, comets, stars). </summary>
-    public static bool AnimatedBackground = true;
+    public static bool AnimatedBackground { get; set; } = true;
     /// <summary> Speed multiplier for background animations. </summary>
-    public static float BackgroundSpeed = 1f;
+    public static float BackgroundSpeed { get; set; } = 1f;
     /// <summary> Style of the editor background (Nebula, Gradient, Solid). </summary>
-    public static EditorBackgroundStyle BackgroundStyle = EditorBackgroundStyle.Nebula;
+    public static EditorBackgroundStyle BackgroundStyle { get; set; } = EditorBackgroundStyle.Nebula;
     /// <summary> First gradient color for the background. </summary>
-    public static Color BackgroundColorA = Color.FromArgb(27, 17, 48);
+    public static Color BackgroundColorA { get; set; } = Color.FromArgb(27, 17, 48);
     /// <summary> Second gradient color for the background. </summary>
-    public static Color BackgroundColorB = Color.FromArgb(8, 6, 12);
+    public static Color BackgroundColorB { get; set; } = Color.FromArgb(8, 6, 12);
     /// <summary> Shows gradient layers in the nebula background. </summary>
-    public static bool BgShowGradients = true;
+    public static bool BgShowGradients { get; set; } = true;
     /// <summary> Deepest void color behind all background layers. </summary>
-    public static Color BackgroundVoidColor = Color.FromArgb(6, 4, 9);
+    public static Color BackgroundVoidColor { get; set; } = Color.FromArgb(6, 4, 9);
     /// <summary> Absolute path of the background image, used by the Image style. </summary>
-    public static string BackgroundImagePath = "";
+    public static string BackgroundImagePath { get; set; } = "";
     /// <summary> How the background image is fitted to the window. </summary>
-    public static BackgroundImageFit BackgroundImageFit = BackgroundImageFit.Fill;
+    public static BackgroundImageFit BackgroundImageFit { get; set; } = BackgroundImageFit.Fill;
     /// <summary> How much the background image is darkened, from 0 to 1. </summary>
-    public static float BackgroundImageDim = 0.3f;
+    public static float BackgroundImageDim { get; set; } = 0.3f;
     /// <summary> Blur radius over the background image in pixels. </summary>
-    public static float BackgroundImageBlur;
+    public static float BackgroundImageBlur { get; set; }
 
     /// <summary>True when the (animated or static) nebula should be drawn rather than a gradient/solid.</summary>
     public static bool UsesNebulaBackground => AnimatedBackground || BackgroundStyle == EditorBackgroundStyle.Nebula;
@@ -295,27 +297,27 @@ public static class EditorTheme
     public static float EffectiveBlur => GlassBlur ? BlurAmount : 0f;
 
     /// <summary> Size of dock zone indicators. </summary>
-    public static float IndicatorSize = 28f;
+    public static float IndicatorSize { get; set; } = 28f;
     /// <summary> Gap between dock zone indicators. </summary>
-    public static float IndicatorGap = 4f;
+    public static float IndicatorGap { get; set; } = 4f;
     /// <summary> Width of dock splitters. </summary>
-    public static float SplitterSize = 6f;
+    public static float SplitterSize { get; set; } = 6f;
     /// <summary> Padding inside dock panels. </summary>
-    public static float DockPadding = 6f;
+    public static float DockPadding { get; set; } = 6f;
 
     /// <summary> Horizontal padding at the edges of panels and windows. </summary>
-    public static float SidePixelPadding = 10f;
+    public static float SidePixelPadding { get; set; } = 10f;
     /// <summary> Spacing between items in the vertical navbar. </summary>
-    public static float VerticalNavbarSpacing = 4f;
+    public static float VerticalNavbarSpacing { get; set; } = 4f;
 
     /// <summary> Height of the tab bar. </summary>
-    public static float TabBarHeight = 32f;
+    public static float TabBarHeight { get; set; } = 32f;
     /// <summary> Horizontal padding inside each tab. </summary>
-    public static float TabPadding = 12f;
+    public static float TabPadding { get; set; } = 12f;
     /// <summary> Size of the tab close button. </summary>
-    public static float TabCloseSize = 14f;
+    public static float TabCloseSize { get; set; } = 14f;
     /// <summary> Gap between adjacent tabs. </summary>
-    public static float TabGap = 0f;
+    public static float TabGap { get; set; }
 
     // ==================================================================
     //  Colour tokens
@@ -330,7 +332,7 @@ public static class EditorTheme
 
     /// <summary>User customization overlaid onto Origami's defaults when building the live theme.
     /// Null = pure Origami defaults. Set by <see cref="EditorSettings.ApplyTheme"/>.</summary>
-    public static EditorThemeData? Customization;
+    public static EditorThemeData? Customization { get; set; }
 
     private static OrigamiTheme T => OrigamiTheme;
 

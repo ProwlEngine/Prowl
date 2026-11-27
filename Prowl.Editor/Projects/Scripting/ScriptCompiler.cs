@@ -19,8 +19,11 @@ namespace Prowl.Editor.Projects.Scripting;
 /// <c>{Project}.Editor</c> (editor-only). Managed plugins under <c>Plugins/</c> folders are
 /// referenced automatically (or explicitly via an asmdef's precompiled references).
 /// </summary>
-public static class ScriptCompiler
+public static partial class ScriptCompiler
 {
+    [System.Text.RegularExpressions.GeneratedRegex("<!--.*?-->", System.Text.RegularExpressions.RegexOptions.Singleline)]
+    private static partial System.Text.RegularExpressions.Regex XmlComment();
+
     /// <summary> The result of a script compilation operation, indicating success, build output, errors, and whether a hot-reload is needed. </summary>
     public struct CompileResult
     {
@@ -589,18 +592,11 @@ public static class ScriptCompiler
         if (name.StartsWith("System.", StringComparison.OrdinalIgnoreCase)) return true;
         if (name.StartsWith("Microsoft.VisualBasic", StringComparison.OrdinalIgnoreCase)) return true;
         if (name.StartsWith("Microsoft.Win32.", StringComparison.OrdinalIgnoreCase)) return true;
-        switch (name.ToLowerInvariant())
+        return name.ToLowerInvariant() switch
         {
-            case "system":
-            case "mscorlib":
-            case "netstandard":
-            case "windowsbase":
-            case "microsoft.csharp":
-            case "microsoft.diasymreader.native":
-                return true;
-            default:
-                return false;
-        }
+            "system" or "mscorlib" or "netstandard" or "windowsbase" or "microsoft.csharp" or "microsoft.diasymreader.native" => true,
+            _ => false,
+        };
     }
 
     /// <summary>True if the file is a managed .NET assembly. Native libraries (coreclr.dll, clrjit.dll,
@@ -682,8 +678,7 @@ public static class ScriptCompiler
         try { text = File.ReadAllText(props); }
         catch { return false; }
 
-        text = System.Text.RegularExpressions.Regex.Replace(text, "<!--.*?-->", "",
-            System.Text.RegularExpressions.RegexOptions.Singleline);
+        text = XmlComment().Replace(text, "");
         return text.Contains("<PackageReference", StringComparison.OrdinalIgnoreCase);
     }
 

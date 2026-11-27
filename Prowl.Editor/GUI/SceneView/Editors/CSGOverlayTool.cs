@@ -448,9 +448,9 @@ public sealed class CSGOverlayTool : SceneTool
         => CSGSelection.RotateBy(new Float3(0f, SceneTools.RotateSnap * sign, 0f), CSGSelection.SelectionCentre(), clone: false);
 
     /// <summary>The options of the tool in use, opening beside the tool buttons.</summary>
-    private void DrawOptions(SceneToolContext ctx, Paper paper, string id)
+    private static void DrawOptions(SceneToolContext ctx, Paper paper, string id)
     {
-        var font = EditorTheme.DefaultFont;
+        Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
         List<CSGSections.Column> columns = CSGSections.Columns();

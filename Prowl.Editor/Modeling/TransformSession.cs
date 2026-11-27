@@ -40,8 +40,8 @@ public interface ITransformSession
 public sealed class TransformSession : ITransformSession
 {
     private readonly IReadOnlyList<(EditTarget Target, ElementSelection Selection)> _parts;
-    private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight, Float4x4 ToLocal, (int Axis, float Offset)? Clip)> _points = new();
-    private readonly List<Float3> _selected = new();
+    private readonly List<(GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight, Float4x4 ToLocal, (int Axis, float Offset)? Clip)> _points = [];
+    private readonly List<Float3> _selected = [];
     private float _falloff;
     private Func<Float3, Float3, Float3>? _last;
 
@@ -108,7 +108,7 @@ public sealed class TransformSession : ITransformSession
 
     public void Restore()
     {
-        foreach (var point in _points) point.Vertex.Point = point.Local;
+        foreach ((GeometryData.Vertex Vertex, Float3 Local, Float3 World, Float3 Origin, float Weight, Float4x4 ToLocal, (int Axis, float Offset)? Clip) point in _points) point.Vertex.Point = point.Local;
     }
 
     private void Apply(Func<Float3, Float3, Float3> move)
@@ -181,8 +181,8 @@ public sealed class TransformSession : ITransformSession
 /// <summary>Whole objects moved, turned and scaled in the world about the middle of where they stand.</summary>
 public sealed class ObjectTransformSession : ITransformSession
 {
-    private readonly List<(Transform Transform, Float3 Position, Quaternion Rotation, Float3 Scale)> _start = new();
-    private readonly List<Float3> _points = new();
+    private readonly List<(Transform Transform, Float3 Position, Quaternion Rotation, Float3 Scale)> _start = [];
+    private readonly List<Float3> _points = [];
 
     public ObjectTransformSession(IEnumerable<GameObject> objects)
     {
@@ -208,14 +208,14 @@ public sealed class ObjectTransformSession : ITransformSession
     public void Translate(Float3 delta)
     {
         Restore();
-        foreach (var start in _start) start.Transform.Position = start.Position + delta;
+        foreach ((Transform Transform, Float3 Position, Quaternion Rotation, Float3 Scale) start in _start) start.Transform.Position = start.Position + delta;
     }
 
     public void Rotate(Float3 axis, float angle)
     {
         Quaternion turn = Quaternion.AxisAngle(Float3.Normalize(axis), angle);
         Restore();
-        foreach (var start in _start)
+        foreach ((Transform Transform, Float3 Position, Quaternion Rotation, Float3 Scale) start in _start)
         {
             start.Transform.Position = Pivot + turn * (start.Position - Pivot);
             start.Transform.Rotation = turn * start.Rotation;
@@ -226,7 +226,7 @@ public sealed class ObjectTransformSession : ITransformSession
     {
         Quaternion back = Quaternion.Inverse(axes);
         Restore();
-        foreach (var start in _start)
+        foreach ((Transform Transform, Float3 Position, Quaternion Rotation, Float3 Scale) start in _start)
         {
             start.Transform.Position = Pivot + axes * ((back * (start.Position - Pivot)) * factors);
             // Each local axis grows by how much the scale stretches its direction
@@ -239,7 +239,7 @@ public sealed class ObjectTransformSession : ITransformSession
 
     public void Restore()
     {
-        foreach (var start in _start)
+        foreach ((Transform Transform, Float3 Position, Quaternion Rotation, Float3 Scale) start in _start)
         {
             start.Transform.Position = start.Position;
             start.Transform.Rotation = start.Rotation;

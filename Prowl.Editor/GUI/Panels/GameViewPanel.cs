@@ -206,7 +206,7 @@ public class GameViewPanel : DockPanel
             Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
             {
                 b.Header(Loc.Get("panel.game"));
-                var resolutions = Resolutions;
+                (string name, int w, int h)[] resolutions = Resolutions;
                 b.Submenu(Loc.Get("game.resolution"), sub =>
                 {
                     for (int i = 0; i < resolutions.Length; i++)

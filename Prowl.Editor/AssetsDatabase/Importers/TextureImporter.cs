@@ -1114,7 +1114,7 @@ public static class SpriteBuilder
             Pivot = ResolvePivot(slice, source),
             PixelsPerUnit = s.PixelsPerUnit * sx,
             Border = new Float4(border.X * sx, border.Y * sy, border.Z * sx, border.W * sy),
-            SecondaryTextures = new Dictionary<string, Texture2D>(s.SecondaryTextures),
+            SecondaryTextures = [with(s.SecondaryTextures)],
         };
 
         if (s.GenerateTightMesh && alpha != null && rect.Width > 0 && rect.Height > 0)

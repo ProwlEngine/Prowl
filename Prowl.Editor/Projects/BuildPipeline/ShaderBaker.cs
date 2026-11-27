@@ -29,7 +29,7 @@ internal static class ShaderBaker
     {
         GraphicsBackend backend = Graphics.Device?.BackendType ?? GraphicsBackend.Vulkan;
         IShaderCompiler compiler = Graphics.Compiler;
-        Dictionary<ShaderPass, Dictionary<string, Keyword[]>> wanted = new();
+        Dictionary<ShaderPass, Dictionary<string, Keyword[]>> wanted = [];
 
         foreach (Guid asset in assets)
         {
@@ -39,7 +39,7 @@ internal static class ShaderBaker
             if (source.IsNotValid() || source.GpuShader is not GShader shader)
                 continue;
 
-            Dictionary<string, string> values = new(StringComparer.Ordinal);
+            Dictionary<string, string> values = [with(StringComparer.Ordinal)];
             foreach (VariantSpace axis in shader.MaterialAxes)
                 values[axis.Name] = material.GetKeyword(axis.Name) is { Length: > 0 } value ? value : axis.Values[0];
             Keyword[][] globals = VariantCombos.Generate(shader.GlobalAxes);
@@ -47,7 +47,7 @@ internal static class ShaderBaker
             foreach (ShaderPass pass in shader.Definition.Passes ?? [])
             {
                 if (!wanted.TryGetValue(pass, out Dictionary<string, Keyword[]>? combos))
-                    wanted[pass] = combos = new Dictionary<string, Keyword[]>(StringComparer.Ordinal);
+                    wanted[pass] = combos = [with(StringComparer.Ordinal)];
                 IReadOnlyList<VariantSpace> axes = pass.AxesWith(compiler);
                 foreach (Keyword[] global in globals)
                 {

@@ -64,8 +64,8 @@ public sealed class CSGBrushTarget
         CSGControlMesh mesh = ToControlMesh(Target.Mesh, out List<GeometryData.Face> sources, out Dictionary<GeometryData.Vertex, int> pointOf,
             out Dictionary<GeometryData.Face, int> polygonOf);
 
-        points = new HashSet<int>();
-        faces = new List<int>();
+        points = [];
+        faces = [];
         if (carry != null)
         {
             foreach (GeometryData.Vertex vertex in carry.Vertices)
@@ -91,7 +91,7 @@ public sealed class CSGBrushTarget
     private static CSGControlMesh ToControlMesh(GeometryData geometry, out List<GeometryData.Face> sources,
                                                 out Dictionary<GeometryData.Vertex, int> index, out Dictionary<GeometryData.Face, int> polygonOf)
     {
-        index = new Dictionary<GeometryData.Vertex, int>();
+        index = [];
         var points = new List<Float3>();
         var used = new HashSet<GeometryData.Vertex>();
         foreach (GeometryData.Face face in geometry.Faces)
@@ -107,7 +107,7 @@ public sealed class CSGBrushTarget
         var polygons = new List<int[]>();
         var from = new List<GeometryData.Face>();
         var done = new HashSet<GeometryData.Face>();
-        polygonOf = new Dictionary<GeometryData.Face, int>();
+        polygonOf = [];
         Dictionary<GeometryData.Face, int> owners = polygonOf;
         Dictionary<GeometryData.Vertex, int> pointIndex = index;
 
@@ -136,7 +136,7 @@ public sealed class CSGBrushTarget
         bool Emit(List<GeometryData.Vertex> ring, GeometryData.Face source)
         {
             if (ring.Count < 3) return false;
-            var polygon = new int[ring.Count];
+            int[] polygon = new int[ring.Count];
             for (int i = 0; i < ring.Count; i++) polygon[i] = pointIndex[ring[i]];
             polygons.Add(polygon);
             from.Add(source);
@@ -211,7 +211,7 @@ public sealed class CSGBrushTarget
     }
 
     // Some of a brush's polygons as a brush, the gaps filled where they can be, each polygon keeping its surface
-    private static (CSGControlMesh Mesh, SurfaceData[] Surfaces) Closed(CSGControlMesh mesh, SurfaceData[] surfaces, IReadOnlyList<int> polygons)
+    private static (CSGControlMesh Mesh, SurfaceData[] Surfaces) Closed(CSGControlMesh mesh, SurfaceData[] surfaces, List<int> polygons)
     {
         var rings = new List<int[]>(polygons.Count);
         foreach (int p in polygons) rings.Add((int[])mesh.Polygons[p].Clone());
@@ -235,7 +235,7 @@ public sealed class CSGBrushTarget
     public static int PolygonOf(GeometryData.Face face) => Tag(face) - 1;
 
     private static int Tag(GeometryData.Face face)
-        => face.Attributes.TryGetValue(SurfaceAttribute, out var value) && value is GeometryData.IntAttributeValue tag && tag.Data.Length > 0 ? tag.Data[0] : 0;
+        => face.Attributes.TryGetValue(SurfaceAttribute, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue tag && tag.Data.Length > 0 ? tag.Data[0] : 0;
 
     private SurfaceData Nearest(Float3 normal)
     {

@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Graphite;
 using Prowl.Graphite.Rendering;
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;

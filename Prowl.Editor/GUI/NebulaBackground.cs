@@ -32,8 +32,8 @@ public sealed class NebulaBackground
 
     // Theme tint (primary/secondary); the whole nebula is coloured from these.
     private System.Drawing.Color _primary;
-    private Color ColC(System.Drawing.Color c, float a) => Col(c.R, c.G, c.B, a);
-    private Color Lighten(System.Drawing.Color c, float t, float a) =>
+    private static Color ColC(System.Drawing.Color c, float a) => Col(c.R, c.G, c.B, a);
+    private static Color Lighten(System.Drawing.Color c, float t, float a) =>
         Col((int)(c.R + (255 - c.R) * t), (int)(c.G + (255 - c.G) * t), (int)(c.B + (255 - c.B) * t), a);
 
     // Each cloud glides at constant speed while its heading eases toward a slowly-changing target.

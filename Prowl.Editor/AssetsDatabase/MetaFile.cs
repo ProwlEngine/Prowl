@@ -40,7 +40,7 @@ public static class MetaFile
         var data = new MetaFileData();
 
         if (echo.TryGet("guid", out EchoObject? guidTag))
-            Guid.TryParse(guidTag.StringValue, out data.Guid);
+            _ = Guid.TryParse(guidTag.StringValue, out data.Guid);
 
         if (echo.TryGet("importer", out EchoObject? importerTag))
             data.ImporterType = importerTag.StringValue;

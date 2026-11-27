@@ -105,7 +105,7 @@ public class ModelObjectEditor : CustomEditor
     }
 
     /// <summary>The modifier stack the objects share, as far as theirs hold the same kinds in the same order. Every change goes to all of them.</summary>
-    private static void DrawModifiers(Paper paper, string id, IReadOnlyList<ModelObject> models)
+    private static void DrawModifiers(Paper paper, string id, List<ModelObject> models)
     {
         string[] kinds = [Loc.Get("model.add_modifier"), .. ModelModifier.Kinds.Select(k => k().Name)];
         Origami.Dropdown(paper, $"{id}_mod_add", 0, i =>

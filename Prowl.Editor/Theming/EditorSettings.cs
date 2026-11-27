@@ -14,6 +14,8 @@ namespace Prowl.Editor.Theming;
 /// </summary>
 public class EditorSettings
 {
+    private static readonly JsonSerializerOptions s_indented = new() { WriteIndented = true };
+
     private static EditorSettings? _instance;
     public static EditorSettings Instance
     {
@@ -174,7 +176,7 @@ public class EditorSettings
         {
             string dir = Path.GetDirectoryName(_filePath)!;
             Directory.CreateDirectory(dir);
-            string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(this, s_indented);
             File.WriteAllText(_filePath, json);
             s_knownJson = json;
         }

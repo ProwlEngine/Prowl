@@ -32,10 +32,10 @@ public static class EditorGUI
     /// empty <paramref name="label"/> gives the control the full width.
     /// </summary>
     /// <summary>While set, rows whose label does not contain it are skipped, and section headers and dividers are hidden. Used by the Preferences search.</summary>
-    public static string? RowFilter;
+    public static string? RowFilter { get; set; }
 
     /// <summary>How many rows have passed <see cref="RowFilter"/> since it was last reset.</summary>
-    public static int RowFilterMatches;
+    public static int RowFilterMatches { get; set; }
 
     public static void Row(Paper paper, string id, string label, Action drawControl,
         bool separator = false, float? labelWidth = null, bool compact = false, float minHeight = 0f)

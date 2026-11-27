@@ -54,7 +54,7 @@ internal static class ScriptRenames
 
     private static BaseTypeDeclarationSyntax? Declaration(string text, string name)
     {
-        var root = CSharpSyntaxTree.ParseText(text).GetRoot();
+        Microsoft.CodeAnalysis.SyntaxNode root = CSharpSyntaxTree.ParseText(text).GetRoot();
         return root.DescendantNodes(n => n is not BlockSyntax).OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.ValueText == name);
     }
 
@@ -65,7 +65,7 @@ internal static class ScriptRenames
     // keeps answering to its old name.
     private static CodeTextEdit? FormerNameAttribute(string text, string oldName)
     {
-        var type = Declaration(text, oldName);
+        BaseTypeDeclarationSyntax? type = Declaration(text, oldName);
         if (type is not (ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax)) return null;
         if (type.Modifiers.Any(m => m.RawKind == (int)SyntaxKind.StaticKeyword)) return null;
 
@@ -82,7 +82,7 @@ internal static class ScriptRenames
         try
         {
             // An open script renames through its tab's session, any other through one of its own in the script's unit.
-            var open = ScriptEditorWindow.EditorFor(newPath);
+            CodeEditor? open = ScriptEditorWindow.EditorFor(newPath);
             CodeLanguageSession? session = open?.Session;
             RoslynCSharpSession? own = null;
             string? text;
@@ -91,7 +91,7 @@ internal static class ScriptRenames
             {
                 text = Read(newPath);
                 if (text == null) return;
-                var workspace = ScriptWorkspaces.Get(newPath, out bool fallback);
+                CSharpWorkspace workspace = ScriptWorkspaces.Get(newPath, out bool fallback);
                 if (fallback) workspace = ScriptWorkspaces.Get(oldPath, out _);
                 workspace.RemoveDocument(oldPath);
                 session = own = new RoslynCSharpSession(workspace, newPath, text);

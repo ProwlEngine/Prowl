@@ -122,7 +122,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
         DrawApplyRevertBar(paper, id, entry, asset);
     }
 
-    private bool Save(AssetEntry entry)
+    private static bool Save(AssetEntry entry)
     {
         try
         {

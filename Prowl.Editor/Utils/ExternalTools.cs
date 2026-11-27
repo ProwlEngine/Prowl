@@ -124,7 +124,7 @@ public static class ExternalTools
     public static void Diff(string left, string right)
     {
         ExternalToolsPreferences prefs = Prefs;
-        var values = Values(left, 1, 1);
+        Dictionary<string, string> values = Values(left, 1, 1);
         values["left"] = left;
         values["right"] = right;
         Run(prefs.DiffToolPath, prefs.DiffToolArguments, values);

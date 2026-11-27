@@ -32,7 +32,7 @@ public sealed class BuildProgress
     private const int StateCancelling = 1;
     private const int StateComplete = 2;
 
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly List<BuildLogEntry> _entries = [];
     private readonly CancellationTokenSource _cancellation = new();
     private float _progressValue;

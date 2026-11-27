@@ -64,7 +64,7 @@ internal sealed class RenderProfilerSource : IRenderProfilerSource
         Graphics.FrameProfilers = FrameProfilers;
     }
 
-    private bool PanelsOpen
+    private static bool PanelsOpen
     {
         get
         {

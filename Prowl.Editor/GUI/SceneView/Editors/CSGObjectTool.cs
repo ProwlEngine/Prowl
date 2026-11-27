@@ -38,7 +38,7 @@ public sealed class CSGObjectTool : SceneTool
     private static readonly Color32 SelectedColor = new(255, 220, 90, 255);
     private static readonly Color32 InvalidColor = new(255, 80, 70, 255);
 
-    private readonly List<CSGBrush> _brushes = new();
+    private readonly List<CSGBrush> _brushes = [];
 
     public override bool IsAvailable(SceneToolContext ctx) => CSGSelection.ActiveModel().IsValid();
 
@@ -118,7 +118,7 @@ public sealed class CSGObjectTool : SceneTool
     }
 
     // Brushes under the last click, nearest first, and which of them that click took
-    private readonly List<CSGBrush> _underClick = new();
+    private readonly List<CSGBrush> _underClick = [];
     private int _cycle;
     private Float2 _lastClick = new(float.NaN);
 
@@ -269,11 +269,11 @@ public sealed class CSGObjectTool : SceneTool
 
     private static void DrawBrushEdges(SceneToolContext ctx, CSGBrush brush, Color32 color, float thickness)
     {
-        var shape = brush.Shape;
+        GeometryData? shape = brush.Shape;
         if (shape == null) return;
 
         Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
-        foreach (var edge in shape.Edges)
+        foreach (GeometryData.Edge edge in shape.Edges)
         {
             Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld);
             Float3 b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);

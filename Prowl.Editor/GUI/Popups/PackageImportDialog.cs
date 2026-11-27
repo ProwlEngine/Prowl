@@ -621,7 +621,7 @@ public static class PackageImportDialog
         freshDb.Initialize();
 
         string message = failed > 0
-            ? Loc.Get("package.imported_msg_failed", new { count = imported, failed = failed })
+            ? Loc.Get("package.imported_msg_failed", new { count = imported, failed })
             : Loc.Get("package.imported_msg", new { count = imported });
         Toasts.Success(Loc.Get("package.imported_title"), message);
         Debug.Log($"[ProwlPackage] {message}");

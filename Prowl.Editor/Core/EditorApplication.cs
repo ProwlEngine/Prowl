@@ -17,8 +17,8 @@ using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Thumbnails;
-using Prowl.Graphite.Debugger.Viewer;
 using Prowl.Editor.Utils;
+using Prowl.Graphite.Debugger.Viewer;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -34,7 +34,7 @@ using Silk.NET.Maths;
 namespace Prowl.Editor.Core;
 
 /// <summary> The editor application, the main entry point for the Prowl editor. Extends Game and manages the editor window, panels, play mode, asset pipeline, and UI lifecycle. </summary>
-public class EditorApplication : Game
+public partial class EditorApplication : Game
 {
     /// <summary> Gets the singleton EditorApplication instance. Set during Initialize(). </summary>
     public static EditorApplication? Instance { get; private set; }
@@ -241,7 +241,7 @@ public class EditorApplication : Game
         PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
         RangeSliderDrawer.Register(PropertyGridConfig.Drawers); // wraps the built-in float/int drawers
-        PropertyGridConfig.Drawers.Register(typeof(SortingLayer), new Projects.Settings.SortingLayerDrawer());
+        PropertyGridConfig.Drawers.Register<SortingLayer>(new Projects.Settings.SortingLayerDrawer());
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
         PropertyGridConfig.OnBeginRoot = Undo.InspectorBaseline;
         PropertyGridConfig.OnFieldChanged = target =>
@@ -380,8 +380,8 @@ public class EditorApplication : Game
         Window.FileDrop += ExternalAssetDrop.Enqueue;
     }
 
-    [DllImport("dwmapi.dll", PreserveSig = true)]
-    private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
 
     /// <summary>The family name of the bundled UI font. Any other font name is a system font family or a font file path.</summary>
     public const string BundledFontName = "Geist";
@@ -394,7 +394,7 @@ public class EditorApplication : Game
 
     private Scribe.FontFile? _geistRegular, _geistMedium, _geistSemiBold, _geistBold, _jetBrainsMono, _jetBrainsMonoMedium;
     private Scribe.FontFile[]? _systemFonts;
-    private readonly Dictionary<string, Scribe.FontFile?> _fileFonts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Scribe.FontFile?> _fileFonts = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>Every font installed on this machine, read once on first use.</summary>
     public IReadOnlyList<Scribe.FontFile> SystemFonts => _systemFonts ??= [.. PaperInstance.EnumerateSystemFonts()];
@@ -528,7 +528,7 @@ public class EditorApplication : Game
         return new Float2(p.X * csFbWin / (cs * us), p.Y * csFbWin / (cs * us));
     }
 
-    private void ApplyDarkTitleBar()
+    private static void ApplyDarkTitleBar()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
@@ -538,7 +538,7 @@ public class EditorApplication : Game
 
         // DWMWA_USE_IMMERSIVE_DARK_MODE = 20
         int darkMode = 1;
-        DwmSetWindowAttribute(hwnd, 20, ref darkMode, sizeof(int));
+        _ = DwmSetWindowAttribute(hwnd, 20, ref darkMode, sizeof(int));
     }
 
     // Panels act inside the world they edit, so Camera.Main, Physics and Debug.Draw reach it rather than Main.
@@ -805,14 +805,14 @@ public class EditorApplication : Game
         }
     }
 
-    private void HandlePlayModeShortcuts()
+    private static void HandlePlayModeShortcuts()
     {
         if (ShortcutManager.TryConsume("Global/TogglePlay")) RequestTogglePlayMode();
         else if (ShortcutManager.TryConsume("Global/TogglePause")) TogglePause();
     }
 
     /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
-    private void DrawPlayPill(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
+    private static void DrawPlayPill(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
     {
         using (paper.Row("play_pill").PositionType(PositionType.SelfDirected)
             .Size(UnitValue.Auto).Rounded(EditorTheme.Roundness)
@@ -1078,7 +1078,7 @@ public class EditorApplication : Game
     private static void InitializeStatusBar() => ConsolePanel.EnsureSubscribed();
 
 
-    private void DrawStatusBar(Paper paper, float w, float h)
+    private static void DrawStatusBar(Paper paper, float w, float h)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
@@ -1590,7 +1590,7 @@ public class EditorApplication : Game
         }
 
         // Create new instance
-        var newPanel = Activator.CreateInstance<TPanel>();
+        TPanel newPanel = Activator.CreateInstance<TPanel>();
         OpenPanelInstance(newPanel);
         return newPanel;
     }

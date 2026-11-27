@@ -85,7 +85,7 @@ public static class EditorSceneManager
     }
 
     // Each edit section and the play world section copied from it.
-    private static readonly Dictionary<SceneSection, SceneSection> s_playCopies = new(ReferenceEqualityComparer.Instance);
+    private static readonly Dictionary<SceneSection, SceneSection> s_playCopies = [with(ReferenceEqualityComparer.Instance)];
 
     /// <summary>The section of the edited world that shows <paramref name="scene"/>: its own, or in play the copy made of it.</summary>
     internal static SceneSection? SectionShowing(OpenScene scene)
@@ -127,7 +127,7 @@ public static class EditorSceneManager
     private static void TrackPlayWorld(Scene play)
     {
         s_playWorld = play;
-        s_worldsBeforePlay = new();
+        s_worldsBeforePlay = [];
         foreach (Scene world in Scene.Live)
             if (!ReferenceEquals(world, play)) s_worldsBeforePlay.Add(world, null);
     }
@@ -146,7 +146,7 @@ public static class EditorSceneManager
     }
 
     // The worlds that existed when play started. Every other world is play's own and goes when it stops.
-    private static ConditionalWeakTable<Scene, object?> s_worldsBeforePlay = new();
+    private static ConditionalWeakTable<Scene, object?> s_worldsBeforePlay = [];
 
     /// <summary>Destroys the play world and every world play opened, inside the session they ran in, and restarts the session.</summary>
     internal static void DestroyPlayWorld()
@@ -164,7 +164,7 @@ public static class EditorSceneManager
             try { world.Dispose(); }
             catch (Exception e) { Debug.LogException($"[Play] Destroying '{world.Name}' threw", e); }
         }
-        s_worldsBeforePlay = new();
+        s_worldsBeforePlay = [];
         s_playCopies.Clear();
         Runtime.Tasks.MainThreadContext.Restart();
     }
@@ -831,15 +831,19 @@ public static class EditorSceneManager
     /// </summary>
     public static Scene CreateDefaultScene()
     {
-        var scene = new Scene(SceneMode.Edit);
-        scene.Name = "Untitled Scene";
+        var scene = new Scene(SceneMode.Edit)
+        {
+            Name = "Untitled Scene"
+        };
 
         Material? defaultMat = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
         Mesh? cubeMesh = AssetDatabase.Get<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Cube));
         Mesh? planeMesh = AssetDatabase.Get<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Plane));
 
-        var camGo = new GameObject("Main Camera");
-        camGo.Tag = "Main Camera";
+        var camGo = new GameObject("Main Camera")
+        {
+            Tag = "Main Camera"
+        };
         camGo.Transform.Position = new Float3(0, 5, -15);
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         Camera cam = camGo.AddComponent<Camera>();

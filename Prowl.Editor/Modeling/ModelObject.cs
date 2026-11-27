@@ -43,19 +43,19 @@ public sealed class ModelObject : Component
     [NonSerialized] private bool _previewStale = true;
 
     /// <summary>The material asset of each slot, empty for a slot with none.</summary>
-    public List<Guid> Materials = new();
+    public List<Guid> Materials = [];
 
     /// <summary>Edges whose faces meet at less than this many degrees are smooth when normals are worked out.</summary>
     public float SmoothingAngle = 30f;
 
     /// <summary>Run in order on a copy of the mesh for what is shown and imported, the mesh underneath left as edited.</summary>
-    public List<ModelModifier> Modifiers = new();
+    public List<ModelModifier> Modifiers = [];
 
     /// <summary>The skeleton the mesh is skinned to, kept for the import. The model world shows the mesh at rest.</summary>
-    public List<PMeshBone> Bones = new();
+    public List<PMeshBone> Bones = [];
 
     /// <summary>The blend shapes the mesh's shape attributes hold.</summary>
-    public List<PMeshShape> Shapes = new();
+    public List<PMeshShape> Shapes = [];
 
     [NonSerialized] private Mesh? _preview;
     [NonSerialized] private bool _hidden;
@@ -162,7 +162,7 @@ public sealed class ModelObject : Component
         if (_previewSources is not { } sources || _preview.IsNotValid() || !ReferenceEquals(renderer.Mesh, _preview)) return false;
         if (!ReferenceEquals(_previewFrom, Mesh) || Mesh.Version != _previewVersion || Modifiers.Exists(m => m.Enabled)) return false;
         var positions = new Float3[sources.Length];
-        var vertices = Mesh.Vertices;
+        List<GeometryData.Vertex> vertices = Mesh.Vertices;
         for (int i = 0; i < sources.Length; i++)
         {
             if (sources[i] >= vertices.Count) return false;
@@ -187,7 +187,7 @@ public sealed class ModelObject : Component
         {
             if (s_checker.IsValid()) return s_checker!;
             const int Size = 256, Cells = 8;
-            var pixels = new byte[Size * Size * 4];
+            byte[] pixels = new byte[Size * Size * 4];
             for (int y = 0; y < Size; y++)
                 for (int x = 0; x < Size; x++)
                 {
@@ -219,11 +219,11 @@ public sealed class ModelObject : Component
             Rotation = transform.LocalRotation,
             Scale = transform.LocalScale,
             Mesh = Mesh,
-            Materials = new List<Guid>(Materials),
+            Materials = [with(Materials)],
             SmoothingAngle = SmoothingAngle,
-            Modifiers = new List<ModelModifier>(Modifiers),
-            Bones = new List<PMeshBone>(Bones),
-            Shapes = new List<PMeshShape>(Shapes),
+            Modifiers = [with(Modifiers)],
+            Bones = [with(Bones)],
+            Shapes = [with(Shapes)],
         };
     }
 

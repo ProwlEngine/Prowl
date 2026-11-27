@@ -80,7 +80,7 @@ public static class CSGVisibility
         Changed();
     }
 
-    private static IEnumerable<CSGBrush> ActiveBrushes()
+    private static List<CSGBrush> ActiveBrushes()
     {
         CSGModel? model = CSGSelection.ActiveModel();
         return model.IsValid() ? CSGSelection.BrushesIn(model!) : [];

@@ -15,7 +15,7 @@ namespace Prowl.Editor.Projects.Settings;
 public class TagsAndLayersSettings : ProjectSettingsBase
 {
     /// <summary> The list of tags defined for the project. </summary>
-    public List<string> Tags = new(TagLayerManager.Tags);
+    public List<string> Tags = [with(TagLayerManager.Tags)];
     /// <summary> The array of layers defined for the project. </summary>
     public string[] Layers = (string[])TagLayerManager.Layers.Clone();
     /// <summary> Sorting layers back to front. </summary>
@@ -24,7 +24,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
     /// <summary> Applies the current tag and layer settings to TagLayerManager. </summary>
     public override void Apply()
     {
-        TagLayerManager.Tags = new List<string>(Tags);
+        TagLayerManager.Tags = [with(Tags)];
         Array.Copy(Layers, TagLayerManager.Layers, Math.Min(Layers.Length, TagLayerManager.Layers.Length));
         TagLayerManager.SetSortingLayers(SortingLayers);
     }
@@ -33,14 +33,14 @@ public class TagsAndLayersSettings : ProjectSettingsBase
     public override void ResetToDefaults()
     {
         TagLayerManager.ResetDefault();
-        Tags = new List<string>(TagLayerManager.Tags);
+        Tags = [with(TagLayerManager.Tags)];
         Layers = (string[])TagLayerManager.Layers.Clone();
         SortingLayers = CopyOf(TagLayerManager.SortingLayers);
     }
 
     private static List<SortingLayerInfo> CopyOf(IReadOnlyList<SortingLayerInfo> layers)
     {
-        List<SortingLayerInfo> copy = new(layers.Count);
+        List<SortingLayerInfo> copy = [with(layers.Count)];
         foreach (SortingLayerInfo layer in layers)
             copy.Add(new SortingLayerInfo { Id = layer.Id, Name = layer.Name });
         return copy;

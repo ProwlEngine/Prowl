@@ -78,8 +78,8 @@ public static class EditorRegistries
     private static readonly Dictionary<string, Type> _assetEditorTypesByImporter = [];
     private static readonly Dictionary<string, AssetImporterEditor> _assetEditorByImporterCache = [];
 
-    private static readonly Dictionary<string, Type> _importersByExt = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, Type> _importersByName = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Type> _importersByExt = [with(StringComparer.OrdinalIgnoreCase)];
+    private static readonly Dictionary<string, Type> _importersByName = [with(StringComparer.OrdinalIgnoreCase)];
     public static IEnumerable<string> RegisteredImporterExtensions => _importersByExt.Keys;
 
     private static readonly Dictionary<Type, string> _componentIcons = [];
@@ -94,10 +94,10 @@ public static class EditorRegistries
     private static readonly List<ScriptTemplate> _scriptTemplates = [];
     public static IReadOnlyList<ScriptTemplate> ScriptTemplates => _scriptTemplates;
 
-    private static readonly Dictionary<string, string> _fileIcons = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> _fileIcons = [with(StringComparer.OrdinalIgnoreCase)];
     private static string _defaultFileIcon = EditorIcons.File;
 
-    private static readonly Dictionary<string, AssetDoubleClickHandler> _doubleClickHandlers = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, AssetDoubleClickHandler> _doubleClickHandlers = [with(StringComparer.OrdinalIgnoreCase)];
 
     private static readonly List<Action<OpenScene>> _sceneSavedCallbacks = [];
     private static readonly List<Action> _undoRedoCallbacks = [];
@@ -673,7 +673,7 @@ public static class EditorRegistries
         }
 
         Debug.LogWarning($"Settings type {typeof(T).Name} not registered; returning a transient default.");
-        return (T)Activator.CreateInstance(typeof(T))!;
+        return Activator.CreateInstance<T>();
     }
 
     /// <summary> Saves all registered project settings entries to YAML files in the project settings directory. </summary>

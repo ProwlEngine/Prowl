@@ -343,8 +343,7 @@ public class AssetDatabasePanel : DockPanel
                 (FamilyGroup? g, Row _, bool isSub) = visible[i];
                 if (!isSub && g.Subs.Count > 0)
                 {
-                    if (_expandedFamilies.Contains(g.Root.Guid)) _expandedFamilies.Remove(g.Root.Guid);
-                    else _expandedFamilies.Add(g.Root.Guid);
+                    if (!_expandedFamilies.Remove(g.Root.Guid)) _expandedFamilies.Add(g.Root.Guid);
                 }
             })
             .OnRowContext(i =>
@@ -399,8 +398,7 @@ public class AssetDatabasePanel : DockPanel
                         .StopEventPropagation()
                         .OnClick(group.Root.Guid, (g, _) =>
                         {
-                            if (_expandedFamilies.Contains(g)) _expandedFamilies.Remove(g);
-                            else _expandedFamilies.Add(g);
+                            if (!_expandedFamilies.Remove(g)) _expandedFamilies.Add(g);
                         })
                         .Icon(paper, expanded ? EditorIcons.ChevronDown_I : EditorIcons.ChevronRight_I, EditorTheme.InkDim, size: 11f);
                 else

@@ -241,7 +241,7 @@ public class PreferencesPanel : DockPanel
     private static readonly int[] UnfocusedFrameRates = [0, 5, 10, 15, 30, 60];
     private static readonly string[] UnfocusedFrameRateNames = ["Same as Focused", "5", "10", "15", "30", "60"];
 
-    private void DrawGeneral(Paper paper, EditorSettings s)
+    private static void DrawGeneral(Paper paper, EditorSettings s)
     {
         EditorGUI.SectionHeader(paper, "pref_gen_hdr", Loc.Get("pref.general"), first: true);
 
@@ -430,7 +430,7 @@ public class PreferencesPanel : DockPanel
     }
 
     // Footer shown on every category: Reset (left), Import / Export / Apply (right).
-    private void DrawThemeFooter(Paper paper, EditorSettings s, EditorThemeData theme, float h)
+    private static void DrawThemeFooter(Paper paper, EditorSettings s, EditorThemeData theme, float h)
     {
         using (paper.Row("pref_theme_footer").Height(h).Padding(PAD * 2, PAD * 2, 0, 0).Gap(SP * 2).Enter())
         {
@@ -641,7 +641,7 @@ public class PreferencesPanel : DockPanel
     }
 
     // ---- Colors ----
-    private void DrawThemeColors(Paper paper, EditorSettings s, EditorThemeData theme)
+    private static void DrawThemeColors(Paper paper, EditorSettings s, EditorThemeData theme)
     {
         EditorGUI.SectionHeader(paper, "pref_cl_accent", Loc.Get("pref.accent"), first: true, compact: true);
         EditorGUI.SwatchRow(paper, s, "accent_primary", Loc.Get("pref.primary"), theme.Purple, _accentPalette);
@@ -728,7 +728,7 @@ public class PreferencesPanel : DockPanel
     }
 
     // ---- Typography ----
-    private void DrawThemeType(Paper paper, EditorSettings s, EditorThemeData theme)
+    private static void DrawThemeType(Paper paper, EditorSettings s, EditorThemeData theme)
     {
         EditorGUI.SectionHeader(paper, "pref_ty_fonts", Loc.Get("pref.fonts"), first: true, compact: true);
         FontRow(paper, s, "pref_ty_ui", Loc.Get("pref.ui_font"), EditorApplication.BundledFontName, theme.DefaultFontName, v => theme.DefaultFontName = v);
@@ -791,7 +791,7 @@ public class PreferencesPanel : DockPanel
     }
 
     // ---- Effects ----
-    private void DrawThemeEffects(Paper paper, EditorSettings s, EditorThemeData theme)
+    private static void DrawThemeEffects(Paper paper, EditorSettings s, EditorThemeData theme)
     {
         EditorGUI.SectionHeader(paper, "pref_fx_depth", Loc.Get("pref.depth"), first: true, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_fx_opacity", Loc.Get("pref.window_opacity"), theme.WindowOpacity, 0.3f, 1f, v => { theme.WindowOpacity = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
@@ -870,7 +870,7 @@ public class PreferencesPanel : DockPanel
     }
 
     // ---- Live preview (mini editor chrome drawn with live EditorTheme tokens) ----
-    private void DrawThemePreview(Paper paper, Scribe.FontFile font, float w)
+    private static void DrawThemePreview(Paper paper, Scribe.FontFile font, float w)
     {
         float radius = EditorTheme.Roundness;
         Color surface = EditorTheme.Neutral300;

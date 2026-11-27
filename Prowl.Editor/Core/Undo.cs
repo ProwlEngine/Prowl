@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI.SceneView;
@@ -76,6 +77,8 @@ public readonly struct UndoOwner : IEquatable<UndoOwner>
 
     public bool Equals(UndoOwner other) => Kind == other.Kind && AssetId == other.AssetId && SettingsType == other.SettingsType && ReferenceEquals(Scene, other.Scene);
     public override bool Equals(object? obj) => obj is UndoOwner o && Equals(o);
+    public static bool operator ==(UndoOwner a, UndoOwner b) => a.Equals(b);
+    public static bool operator !=(UndoOwner a, UndoOwner b) => !a.Equals(b);
     public override int GetHashCode() => HashCode.Combine(Kind, AssetId, SettingsType, Scene);
 }
 
@@ -106,7 +109,7 @@ public readonly struct UndoRedoInfo
     public bool IsRedo { get; init; }
 }
 
-/// <summary>One changed field of a recorded object, passed to <see cref="Undo.postprocessModifications"/>.</summary>
+/// <summary>One changed field of a recorded object, passed to <see cref="Undo.PostprocessModifications"/>.</summary>
 public readonly struct UndoPropertyModification
 {
     public object Target { get; init; }
@@ -213,7 +216,7 @@ public static class Undo
     private static bool _interactionRecorded;
     private static int _frame;
 
-    private static readonly Dictionary<object, (Capture Capture, int Frame)> _inspectorBaselines = new(ReferenceEqualityComparer.Instance);
+    private static readonly Dictionary<object, (Capture Capture, int Frame)> _inspectorBaselines = [with(ReferenceEqualityComparer.Instance)];
     private static readonly HashSet<Type> _warnedTypes = [];
 
     /// <summary> Maximum number of undo steps kept in the undo stack. Defaults to 100. </summary>
@@ -231,7 +234,7 @@ public static class Undo
     public static event Action? historyChanged;
 
     /// <summary>Filters the field changes of each flush. Only the returned modifications are recorded.</summary>
-    public static PostprocessModifications? postprocessModifications;
+    public static PostprocessModifications? PostprocessModifications { get; set; }
 
     // ================================================================
     //  Queries
@@ -276,7 +279,7 @@ public static class Undo
     }
 
     /// <summary>Records a plain object that is found again through <paramref name="resolve"/> when applied.</summary>
-    public static void RecordObject<T>(Func<T> resolve, UndoOwner owner, string name) where T : class
+    public static void RecordObject<T>(Func<T?> resolve, UndoOwner owner, string name) where T : class
     {
         T? target = resolve();
         if (target == null) return;
@@ -702,7 +705,7 @@ public static class Undo
                 if (crosses(value)) found = true;
                 return value;
             }
-            ReferenceRebinder.RewriteMembers(holder, Probe, new HashSet<object>(ReferenceEqualityComparer.Instance) { holder });
+            ReferenceRebinder.RewriteMembers(holder, Probe, [with(ReferenceEqualityComparer.Instance), holder]);
             if (!found) return;
 
             RecordObject(holder, name);
@@ -712,7 +715,7 @@ public static class Undo
                 Runtime.Debug.LogWarning($"[Scene] '{holder.GameObject.Name}/{holder.GetType().Name}' lost its reference to '{(OwnerOf(value) is { } lost ? lost.Name : value)}', which is in another scene now.");
                 return null;
             }
-            ReferenceRebinder.RewriteMembers(holder, Null, new HashSet<object>(ReferenceEqualityComparer.Instance) { holder });
+            ReferenceRebinder.RewriteMembers(holder, Null, [with(ReferenceEqualityComparer.Instance), holder]);
         }
 
         bool OutOfTarget(object value)
@@ -845,7 +848,7 @@ public static class Undo
             records.Add(record);
         }
 
-        if (postprocessModifications != null) records = Postprocess(records);
+        if (PostprocessModifications != null) records = Postprocess(records);
 
         bool changed = false;
         foreach (Record record in records)
@@ -866,7 +869,7 @@ public static class Undo
         }
         if (modifications.Count == 0) return records;
 
-        UndoPropertyModification[] kept = postprocessModifications!([.. modifications]) ?? [];
+        UndoPropertyModification[] kept = PostprocessModifications!([.. modifications]) ?? [];
         var keep = new HashSet<(object, string)>(kept.Select(m => (m.Target, m.PropertyPath)));
 
         var result = new List<Record>(records.Count);
@@ -1054,7 +1057,7 @@ public static class Undo
     // ================================================================
 
     private static EngineObject? _inspectorHolder;
-    private static readonly Dictionary<object, EngineObject> _inspectorRedirects = new(ReferenceEqualityComparer.Instance);
+    private static readonly Dictionary<object, EngineObject> _inspectorRedirects = [with(ReferenceEqualityComparer.Instance)];
 
     /// <summary>
     /// While open, a plain object the inspector draws as its own root is recorded as part of <paramref name="holder"/>,
@@ -1479,7 +1482,7 @@ public static class Undo
         public override Record? Finish(List<Entry> flushing)
         {
             if (Target is EngineObject eo && eo.IsDisposed) return null;
-            return ObjectRecord.Diff(Target, Key, owner, before, Capture.Of(Target));
+            return ObjectRecord.Diff(Target, Key, Owner, before, Capture.Of(Target));
         }
 
         public override bool Touches(Guid id) => Key.ObjectId == id;
@@ -2122,7 +2125,7 @@ public static class Undo
 
         private readonly Dictionary<Guid, EngineObject> _built = [];
         private readonly List<EngineObject> _builtRoots = [];
-        private readonly HashSet<EngineObject> _attached = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<EngineObject> _attached = [with(ReferenceEqualityComparer.Instance)];
         private readonly List<(EchoObject Data, Type Type, Dictionary<int, object> Ids)> _fills = [];
         private readonly HashSet<Guid> _recreated = [];
 
@@ -2167,7 +2170,7 @@ public static class Undo
         /// <summary>Builds and fills one tree at once, for a record that only knows what it needs at its turn.</summary>
         public void BuildNow(EchoObject data, Type type)
         {
-            if (_built.ContainsKey(Guid.Empty)) _built.Remove(Guid.Empty);
+            _built.Remove(Guid.Empty);
             SerializationContext ctx = LinkContext();
             EngineObject? built = GameObject.PreservingIdentifiersWhile(() => Serializer.Deserialize(data, type, ctx) as EngineObject);
             if (ReferenceEquals(built, null)) throw new InvalidOperationException("A recorded object could not be rebuilt.");
@@ -2292,7 +2295,7 @@ public static class Undo
             _builtRoots.Clear();
         }
 
-        private bool IsInsideAttached(EngineObject obj)
+        private static bool IsInsideAttached(EngineObject obj)
             => obj is GameObject go && go.Scene.IsValid() || obj is Component c && c.GameObject.IsValid() && c.GameObject.Scene.IsValid();
 
         object? IExternalReferenceResolver.GetReferenceKey(object value) => null;
@@ -2328,15 +2331,14 @@ public static class Undo
 
             object? Map(object value)
             {
-                switch (value)
+                return value switch
                 {
-                    case GameObject go when live.TryGetValue(go.Identifier, out EngineObject? l) && !ReferenceEquals(l, go): return l;
-                    case Component c when live.TryGetValue(c.Identifier, out EngineObject? l) && !ReferenceEquals(l, c): return l;
-                    case Transform t when t.GameObject is GameObject owner && live.TryGetValue(owner.Identifier, out EngineObject? l)
-                                          && l is GameObject lg && !ReferenceEquals(lg, owner):
-                        return lg.Transform;
-                    default: return value;
-                }
+                    GameObject go when live.TryGetValue(go.Identifier, out EngineObject? l) && !ReferenceEquals(l, go) => l,
+                    Component c when live.TryGetValue(c.Identifier, out EngineObject? l) && !ReferenceEquals(l, c) => l,
+                    Transform t when t.GameObject is GameObject owner && live.TryGetValue(owner.Identifier, out EngineObject? l)
+                                                              && l is GameObject lg && !ReferenceEquals(lg, owner) => lg.Transform,
+                    _ => value,
+                };
             }
 
             foreach (GameObject go in scene.Objects.ToList())
@@ -2450,7 +2452,7 @@ public static class Undo
                 if (any)
                 {
                     type.GetMethod("Clear")!.Invoke(value, null);
-                    var add = type.GetMethod("Add")!;
+                    MethodInfo add = type.GetMethod("Add")!;
                     foreach (object? item in items) add.Invoke(value, [item]);
                 }
                 return value;

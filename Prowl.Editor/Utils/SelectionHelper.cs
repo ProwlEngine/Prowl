@@ -33,7 +33,7 @@ internal static class SelectionHelper
     /// <returns>The <paramref name="builder"/> instance.</returns>
     public static ElementBuilder HandleMultiSelect(this ElementBuilder builder, Paper paper, object item, IReadOnlyList<object> items, int index, Func<object, Action<ContextBuilder>> buildContextMenu)
     {
-        var state = (paper, item, index, items, buildContextMenu);
+        (Paper paper, object item, int index, IReadOnlyList<object> items, Func<object, Action<ContextBuilder>> buildContextMenu) state = (paper, item, index, items, buildContextMenu);
         return builder.OnPress(state, static (state, e) =>
             {
                 e.StopPropagation();

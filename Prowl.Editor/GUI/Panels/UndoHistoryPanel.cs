@@ -77,7 +77,7 @@ public class UndoHistoryPanel : DockPanel
 
     private static void Row(Paper paper, string id, string name, string detail, Scribe.FontFile font, bool dim, bool current, System.Action? onClick)
     {
-        var row = paper.Row(id).Height(RowHeight).Padding(8, 8, 0, 0).Gap(8)
+        ElementBuilder row = paper.Row(id).Height(RowHeight).Padding(8, 8, 0, 0).Gap(8)
             .BackgroundColor(current ? EditorTheme.Glass : System.Drawing.Color.Transparent);
         if (onClick != null)
             row.Hovered.BackgroundColor(System.Drawing.Color.FromArgb(13, EditorTheme.Purple400)).End()

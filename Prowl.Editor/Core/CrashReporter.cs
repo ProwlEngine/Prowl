@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Editor.Projects;
@@ -19,7 +20,7 @@ namespace Prowl.Editor.Core;
 public static class CrashReporter
 {
     private static bool s_installed;
-    private static readonly object s_gate = new();
+    private static readonly Lock s_gate = new();
 
     /// <summary>Installs the handlers. Call this first, before anything that can fail.</summary>
     public static void Install()

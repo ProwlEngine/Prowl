@@ -18,10 +18,10 @@ using Prowl.Quill;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Scribe;
+using Prowl.Unwrapper;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
-using Prowl.Unwrapper;
-
 namespace Prowl.Editor.GUI.Panels;
 
 /// <summary>
@@ -58,14 +58,14 @@ public class UVEditorPanel : DockPanel
     private Float2 _anchor;
     private readonly SlowPointer _slow = new();
     private int _axis = -1;
-    private readonly List<(ModelObject Model, GeometryData.Loop Corner, Float2 UV)> _moving = new();
+    private readonly List<(ModelObject Model, GeometryData.Loop Corner, Float2 UV)> _moving = [];
 
     // Corners picked in this view, so the two sides of a seam can be told apart. Dropped once the points selected in the scene change
-    private readonly HashSet<GeometryData.Loop> _corners = new();
+    private readonly HashSet<GeometryData.Loop> _corners = [];
 
     // With a pinned point moving, every shown corner as it started and the faces unwrapped again around the pins
-    private readonly List<(GeometryData.Loop Corner, Float2 UV)> _before = new();
-    private readonly List<Shown> _unwrapped = new();
+    private readonly List<(GeometryData.Loop Corner, Float2 UV)> _before = [];
+    private readonly List<Shown> _unwrapped = [];
 
     private readonly struct Shown(ModelObject model, GeometryData.Face face)
     {
@@ -75,7 +75,7 @@ public class UVEditorPanel : DockPanel
 
     public override void OnGUI(Paper paper, float width, float height)
     {
-        var font = EditorTheme.DefaultFont;
+        FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
         ModelMeshTool? tool = SceneToolManager.Get<ModelMeshTool>();
@@ -163,7 +163,7 @@ public class UVEditorPanel : DockPanel
     }
 
     /// <summary>Every shown corner of the UV island the corner is on.</summary>
-    private static IEnumerable<(ModelObject, GeometryData.Loop)> IslandOf(List<Shown> faces, ModelObject model, GeometryData.Loop corner)
+    private static List<(ModelObject, GeometryData.Loop)> IslandOf(List<Shown> faces, ModelObject model, GeometryData.Loop corner)
     {
         List<GeometryData.Face> mine = [.. faces.Where(f => ReferenceEquals(f.Model, model)).Select(f => f.Face)];
         foreach (List<GeometryData.Face> island in GeometryUVs.Islands(model.Mesh, mine))

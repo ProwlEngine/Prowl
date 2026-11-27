@@ -67,7 +67,7 @@ public sealed class RectTool : SceneTool
         Float4x4 toWorld = dragging ? _startToWorld : go.Transform.LocalToWorldMatrix;
         Float3 ToWorld(Float2 p) => Float4x4.TransformPoint(new Float3(p.X, p.Y, 0f), toWorld);
 
-        Draw(min, max, ToWorld);
+        DrawHandles(min, max, ToWorld);
         if (ctx.Blocked && !dragging)
         {
             _hover = Handle.None;
@@ -238,7 +238,7 @@ public sealed class RectTool : SceneTool
     }
 
     // One control per handle, ties going to the last registered: body, rotation zones, edges, then corners
-    private Handle Register(HandleContext ctx, Float2 min, Float2 max, Func<Float2, Float3> toWorld, out ControlID nearestId)
+    private static Handle Register(HandleContext ctx, Float2 min, Float2 max, Func<Float2, Float3> toWorld, out ControlID nearestId)
     {
         Handle nearest = Handle.None;
         ControlID nearestControl = ControlID.None;
@@ -284,7 +284,7 @@ public sealed class RectTool : SceneTool
         return nearest;
     }
 
-    private void Draw(Float2 min, Float2 max, Func<Float2, Float3> toWorld)
+    private void DrawHandles(Float2 min, Float2 max, Func<Float2, Float3> toWorld)
     {
         bool moving = _active == Handle.Move || (_active == Handle.None && _hover == Handle.Move);
         Color outline = moving ? MoveColor : OutlineColor;

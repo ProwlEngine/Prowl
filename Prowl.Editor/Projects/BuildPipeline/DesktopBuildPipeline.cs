@@ -244,7 +244,7 @@ public class DesktopBuildPipeline : BuildPipeline
         else if (stage == BuildStage.Finalize) yield return Step("finalize", FinalizeBuild);
     }
 
-    private static BuildOperation Step(string what, Func<IBuildContext, CancellationToken, Task> body)
+    private static BuildOperation.Custom Step(string what, Func<IBuildContext, CancellationToken, Task> body)
         => new BuildOperation.Custom(new StepHandler(body), what);
 
     private sealed class StepHandler(Func<IBuildContext, CancellationToken, Task> body) : IOperationHandler
@@ -531,7 +531,7 @@ public class DesktopBuildPipeline : BuildPipeline
             context.Log($"Asset variants: {processed} processed, {reused} reused from cache.");
 
         // After resolving, so everything this build touched is the most recently used and survives.
-        int pruned = cache.PruneAsync().GetAwaiter().GetResult();
+        int pruned = cache.PruneAsync(ct).AsTask().GetAwaiter().GetResult();
         if (pruned > 0)
             context.Log($"Variant cache: discarded {pruned} entry(s) no build has asked for.");
     }
@@ -622,7 +622,7 @@ public class DesktopBuildPipeline : BuildPipeline
         // Diagnostics land in the report with their code, file and line, so a caller can group and
         // navigate them instead of re-reading the log.
         int errors = 0;
-        (int exitCode, string? stdout, string? stderr) = await RunDotnetAsync(args.ToString(), _progress, ct,
+        (int exitCode, string? stdout, string? stderr) = await RunDotnetAsync(args.ToString(), _progress, cancellation: ct,
             onDiagnostic: diagnostic =>
             {
                 if (diagnostic.Severity == BuildSeverity.Error) errors++;
@@ -833,7 +833,7 @@ public class DesktopBuildPipeline : BuildPipeline
     /// here as text lives in Prowl.Player, and everything that varies per build travels in the manifest
     /// instead of being interpolated into source.
     /// </remarks>
-    private void GeneratePlayerSource(string outputDir)
+    private static void GeneratePlayerSource(string outputDir)
     {
         File.WriteAllText(Path.Combine(outputDir, "Program.cs"),
             "return Prowl.Player.PlayerEntryPoint.Main(System.Environment.GetCommandLineArgs()[1..]);" + Environment.NewLine);

@@ -36,9 +36,11 @@ public class PrefabImporter : AssetImporter
             // link in a prefab file is nested by definition: the asset's own root carries none.
             ImportHelper.FlattenNestedPrefabLinks(goEcho, insideInstance: true);
 
-            var prefab = new PrefabAsset();
-            prefab.GameObjectData = goEcho;
-            prefab.Name = ctx.FileName;
+            var prefab = new PrefabAsset
+            {
+                GameObjectData = goEcho,
+                Name = ctx.FileName
+            };
 
             ctx.SetMainAsset(prefab);
             ImportHelper.CollectAssetDependencies(goEcho, ctx);

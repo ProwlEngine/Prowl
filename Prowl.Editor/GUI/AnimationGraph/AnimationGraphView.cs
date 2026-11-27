@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Echo;
 using Prowl.Editor.GraphEditor;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;

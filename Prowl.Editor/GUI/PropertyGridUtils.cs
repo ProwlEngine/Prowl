@@ -109,7 +109,7 @@ public static class PropertyGridUtils
     /// Set by the inspector before drawing a prefab instance's component.
     /// </summary>
     [ThreadStatic]
-    public static HashSet<string>? OverriddenFields;
+    internal static HashSet<string>? OverriddenFields;
 
     /// <summary>Draw a full property grid for an object.</summary>
     public static void Draw(Paper paper, string id, object target, Action<object>? onChanged = null, int depth = 0)

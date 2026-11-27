@@ -155,7 +155,7 @@ public static class ModelEditingMode
             ModelObject model = go.AddComponent<ModelObject>();
             model.Id = item.Id;
             model.Mesh = item.Mesh;
-            model.Materials = new List<Guid>(item.Materials);
+            model.Materials = [with(item.Materials)];
             model.SmoothingAngle = item.SmoothingAngle;
             model.Modifiers = item.Modifiers;
             model.Bones = item.Bones;

@@ -19,7 +19,7 @@ public sealed class RangeSliderDrawer : OrigamiUI.FieldDrawer
     /// <summary>The [Range] of the field being drawn right now, published by
     /// <see cref="RangeAttributeHandler"/> around its one <c>DrawField</c> call. The grid draws
     /// fields one at a time on the UI thread, so at most one is ever in flight.</summary>
-    [ThreadStatic] public static RangeAttribute? Pending;
+    [ThreadStatic] internal static RangeAttribute? Pending;
 
     private readonly OrigamiUI.FieldDrawer _inner;
 

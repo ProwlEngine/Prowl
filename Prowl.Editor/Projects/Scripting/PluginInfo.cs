@@ -46,7 +46,7 @@ public sealed class PluginInfo
     public bool AnyPlatform { get; init; } = true;
 
     /// <summary>Explicit player platforms (only consulted when <see cref="AnyPlatform"/> is false).</summary>
-    public HashSet<string> Platforms { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> Platforms { get; init; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>Native CPU architecture: "x64", "arm64", or "AnyCPU".</summary>
     public string Cpu { get; init; } = "x64";

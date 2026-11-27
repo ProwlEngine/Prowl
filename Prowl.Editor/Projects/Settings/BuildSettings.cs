@@ -64,7 +64,7 @@ public sealed class BuildSettings : ProjectSettingsBase
     public T GetOrCreateProfile<T>() where T : PlatformBuildProfile, new()
     {
         T? profile = PlatformProfiles.OfType<T>().FirstOrDefault();
-        return profile != null ? profile : AddProfile(new T());
+        return profile ?? AddProfile(new T());
     }
 
     public PlatformBuildProfile? GetOrCreateProfile(Type pipelineType)

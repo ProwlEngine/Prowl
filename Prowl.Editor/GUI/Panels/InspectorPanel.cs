@@ -5,9 +5,9 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Echo;
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Projects;
@@ -384,7 +384,7 @@ public class InspectorPanel : DockPanel
         }
     }
 
-    private void DrawEmpty(Paper paper, Scribe.FontFile font)
+    private static void DrawEmpty(Paper paper, Scribe.FontFile font)
     {
         paper.Box("insp_empty").Height(80)
             .Text(Loc.Get("inspector.nothing_selected"), font)
@@ -399,7 +399,7 @@ public class InspectorPanel : DockPanel
             .Alignment(TextAlignment.MiddleCenter);
     }
 
-    private void DrawAssetHeader(Paper paper, Scribe.FontFile font, ContentItem ci)
+    private static void DrawAssetHeader(Paper paper, Scribe.FontFile font, ContentItem ci)
     {
         string icon = ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant());
         string name = ci.Name;
@@ -624,7 +624,7 @@ public class InspectorPanel : DockPanel
 
 
 
-    private void DrawFolderInfo(Paper paper, Scribe.FontFile font, ContentItem item)
+    private static void DrawFolderInfo(Paper paper, Scribe.FontFile font, ContentItem item)
     {
         Origami.Header(paper, "insp_h_folder", Loc.Get("inspector.folder")).Show();
         Origami.Label(paper, "insp_folder_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
@@ -668,7 +668,7 @@ public class InspectorPanel : DockPanel
         catch { return null; }
     }
 
-    private void DrawSubAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item, EditorAssetBackend db)
+    private static void DrawSubAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item, EditorAssetBackend db)
     {
         // Find the parent entry
         AssetEntry? parentEntry = null;
@@ -773,7 +773,7 @@ public class InspectorPanel : DockPanel
         Origami.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  {Loc.Get("inspector.extract_as_asset")}", () => ExtractSubAsset(db, item, parentEntry)).Show();
     }
 
-    private void ExtractSubAsset(EditorAssetBackend db, ContentItem item, AssetEntry? parentEntry)
+    private static void ExtractSubAsset(EditorAssetBackend db, ContentItem item, AssetEntry? parentEntry)
     {
         if (parentEntry == null) return;
 
@@ -786,7 +786,7 @@ public class InspectorPanel : DockPanel
     /// Draws an asset's own serialized fields for types that have no editor of their own, which is
     /// what makes a custom <see cref="EngineObject"/> asset editable without writing one.
     /// </summary>
-    private void DrawAssetFieldsFallback(Paper paper, ContentItem item, AssetEntry? entry)
+    private static void DrawAssetFieldsFallback(Paper paper, ContentItem item, AssetEntry? entry)
     {
         if (entry?.MainAssetType == null) return;
         if (!typeof(EngineObject).IsAssignableFrom(entry.MainAssetType)) return;
@@ -826,7 +826,7 @@ public class InspectorPanel : DockPanel
         }
     }
 
-    private void DrawEngineObjectInspector(Paper paper, Scribe.FontFile font, EngineObject obj)
+    private static void DrawEngineObjectInspector(Paper paper, Scribe.FontFile font, EngineObject obj)
     {
         Origami.Header(paper, "insp_h_eo", obj.GetType().Name).Show();
 
@@ -844,7 +844,7 @@ public class InspectorPanel : DockPanel
         PropertyGridUtils.Draw(paper, "insp_pg", obj);
     }
 
-    private void DrawConsoleLogInspector(Paper paper, Scribe.FontFile font, ConsoleLogSelection log)
+    private static void DrawConsoleLogInspector(Paper paper, Scribe.FontFile font, ConsoleLogSelection log)
     {
         float fs = EditorTheme.FontSize;
 
@@ -910,7 +910,7 @@ public class InspectorPanel : DockPanel
         }
     }
 
-    private void DrawGenericInspector(Paper paper, Scribe.FontFile font, object obj)
+    private static void DrawGenericInspector(Paper paper, Scribe.FontFile font, object obj)
     {
         // An editor registered for the type draws it, the same as it would for a component.
         if (EditorRegistries.GetCustomEditor(obj.GetType()) is { } editor)

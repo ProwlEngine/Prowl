@@ -20,12 +20,12 @@ internal static class ScriptWorkspaces
     private sealed class Entry
     {
         public required CSharpWorkspace Workspace;
-        public HashSet<string> Scripts = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> Scripts = [with(StringComparer.OrdinalIgnoreCase)];
     }
 
     private const string FallbackKey = "";
 
-    private static readonly Dictionary<string, Entry> s_entries = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Entry> s_entries = [with(StringComparer.OrdinalIgnoreCase)];
     private static Func<Microsoft.CodeAnalysis.Options.OptionSet, Microsoft.CodeAnalysis.Options.OptionSet>? s_style;
 
     /// <summary>Sets the formatting style every workspace formats with, now and when created later.</summary>
@@ -44,14 +44,14 @@ internal static class ScriptWorkspaces
     {
         Hook();
         if (!ScriptAssemblyManager.IsCompiling && Project.Current is { } project
-            && RoslynScriptBackend.TryGetScriptContext(project.RootPath, scriptPath, out var context) && context != null)
+            && RoslynScriptBackend.TryGetScriptContext(project.RootPath, scriptPath, out RoslynScriptBackend.ScriptContext? context) && context != null)
         {
             isFallback = false;
             return Sync(context).Workspace;
         }
 
         isFallback = true;
-        if (!s_entries.TryGetValue(FallbackKey, out var fallback))
+        if (!s_entries.TryGetValue(FallbackKey, out Entry? fallback))
         {
             fallback = new Entry { Workspace = new CSharpWorkspace(assemblyName: "Scripts") { Analyzers = RoslynScriptBackend.ScriptAnalyzers } };
             if (s_style != null) fallback.Workspace.SetOptions(s_style);
@@ -72,11 +72,11 @@ internal static class ScriptWorkspaces
     {
         if (Project.Current is not { } project) return;
 
-        foreach (var (key, entry) in s_entries.ToArray())
+        foreach ((string? key, Entry? entry) in s_entries.ToArray())
         {
             if (key == FallbackKey) continue;
             string? any = entry.Scripts.FirstOrDefault(File.Exists);
-            if (any != null && RoslynScriptBackend.TryGetScriptContext(project.RootPath, any, out var context) && context != null)
+            if (any != null && RoslynScriptBackend.TryGetScriptContext(project.RootPath, any, out RoslynScriptBackend.ScriptContext? context) && context != null)
                 Sync(context);
         }
         Refreshed?.Invoke();
@@ -84,7 +84,7 @@ internal static class ScriptWorkspaces
 
     private static Entry Sync(RoslynScriptBackend.ScriptContext context)
     {
-        if (!s_entries.TryGetValue(context.UnitName, out var entry))
+        if (!s_entries.TryGetValue(context.UnitName, out Entry? entry))
         {
             entry = new Entry { Workspace = new CSharpWorkspace(context.References, context.UnitName) { Analyzers = RoslynScriptBackend.ScriptAnalyzers } };
             if (s_style != null) entry.Workspace.SetOptions(s_style);
@@ -92,7 +92,7 @@ internal static class ScriptWorkspaces
         }
         else entry.Workspace.SetReferences(context.References);
 
-        var ws = entry.Workspace;
+        CSharpWorkspace ws = entry.Workspace;
         ws.SetCompilationOptions(context.Options);
         ws.SetPreprocessorSymbols(context.ParseOptions.PreprocessorSymbolNames);
         ws.LanguageVersion = context.ParseOptions.LanguageVersion;

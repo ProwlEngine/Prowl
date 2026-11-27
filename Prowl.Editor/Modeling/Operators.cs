@@ -493,7 +493,7 @@ public static class Operators
                 {
                     if (pair.Key.StartsWith(prefix, StringComparison.Ordinal) && pair.Value is GeometryData.FloatAttributeValue delta && axis < delta.Data.Length)
                     {
-                        var turned = (float[])delta.Data.Clone();
+                        float[] turned = (float[])delta.Data.Clone();
                         turned[axis] = -turned[axis];
                         loop.SetAttribute(pair.Key, new GeometryData.FloatAttributeValue(turned));
                     }
@@ -591,7 +591,7 @@ public static class Operators
                 }
         if (Float4x4.Determinant(otherToTarget) < 0f) GeometryOperators.FlipFaces(copy, [.. copy.Faces]);
 
-        var slotOf = new int[Math.Max(1, otherSlots.Count)];
+        int[] slotOf = new int[Math.Max(1, otherSlots.Count)];
         for (int i = 0; i < otherSlots.Count; i++)
         {
             int at = targetSlots.IndexOf(otherSlots[i]);
@@ -694,7 +694,7 @@ public static class Operators
     public static void MergeSkins(GeometryData target, List<PMeshBone> targetBones, List<PMeshShape> targetShapes,
                                   GeometryData other, IReadOnlyList<PMeshBone> otherBones, IReadOnlyList<PMeshShape> otherShapes, Float4x4 otherToTarget)
     {
-        const string Indices = Prowl.Runtime.Resources.MeshGeometry.BoneIndices, Weights = Prowl.Runtime.Resources.MeshGeometry.BoneWeights;
+        const string Indices = Prowl.Runtime.Resources.MeshGeometry.BoneIndices;
         bool targetHadBones = targetBones.Count > 0;
 
         int[] boneOf = new int[otherBones.Count];
@@ -726,7 +726,7 @@ public static class Operators
                 foreach (GeometryData.Loop loop in other.Loops)
                     if (loop.TryGetAttribute(Indices, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue ids)
                     {
-                        var renumbered = new int[ids.Data.Length];
+                        int[] renumbered = new int[ids.Data.Length];
                         for (int k = 0; k < renumbered.Length; k++)
                             renumbered[k] = ids.Data[k] >= 0 && ids.Data[k] < boneOf.Length ? boneOf[ids.Data[k]] : 0;
                         loop.SetAttribute(Indices, new GeometryData.IntAttributeValue(renumbered));

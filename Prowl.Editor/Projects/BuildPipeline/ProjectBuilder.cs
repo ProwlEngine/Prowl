@@ -9,10 +9,10 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;

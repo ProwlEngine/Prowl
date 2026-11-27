@@ -20,9 +20,8 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-using static Prowl.Graphite.Rendering.PropertyIDText;
-
 using static Prowl.Editor.GUI.EditorGUI;
+using static Prowl.Graphite.Rendering.PropertyIDText;
 
 using Color = System.Drawing.Color;
 using Material = Prowl.Runtime.Resources.Material;
@@ -96,7 +95,7 @@ public class EnvironmentPanel : DockPanel
         (BuiltInSky.Panorama, "env.sky_panorama"),
     ];
 
-    private void DrawSkySection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private static void DrawSkySection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
         SceneEnvironment env = scene.Environment;
 
@@ -162,7 +161,7 @@ public class EnvironmentPanel : DockPanel
                 Origami.IntSlider(paper, $"{id}_cap_int_v", capture.Interval, v => { capture.Interval = v; Capture(); }, 1, 30).Show());
     }
 
-    private void DrawFogSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private static void DrawFogSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.fog"), first: true);
 
@@ -197,7 +196,7 @@ public class EnvironmentPanel : DockPanel
         }
     }
 
-    private void DrawCloudsSection(Paper paper, string id, Scene scene)
+    private static void DrawCloudsSection(Paper paper, string id, Scene scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.volumetric_clouds"));
 
@@ -229,7 +228,7 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SettingsToggle(paper, $"{id}_high", Loc.Get("env.high_layer"), clouds.HighLayer, v => { Record(); clouds.HighLayer = v; });
     }
 
-    private void DrawVolumetricFogSection(Paper paper, string id, Scene scene)
+    private static void DrawVolumetricFogSection(Paper paper, string id, Scene scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.volumetric_fog"));
 
@@ -259,7 +258,7 @@ public class EnvironmentPanel : DockPanel
             Origami.Slider(paper, $"{id}_temporal_v", fog.TemporalBlend, v => { fog.TemporalBlend = v; Apply(); }, 0f, 0.98f).Show());
     }
 
-    private void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private static void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.ambient_lighting"), first: true);
 

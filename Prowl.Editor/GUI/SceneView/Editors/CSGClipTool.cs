@@ -401,7 +401,7 @@ public sealed class CSGClipTool : SceneTool
         var corners = new List<Float3>();
         if (brush.Shape == null) return corners;
 
-        foreach (var v in brush.Shape.Vertices) corners.Add(v.Point);
+        foreach (GeometryData.Vertex v in brush.Shape.Vertices) corners.Add(v.Point);
         return corners;
     }
 
@@ -432,7 +432,7 @@ public sealed class CSGClipTool : SceneTool
     private static void DrawCutOutline(SceneToolContext ctx, CSGBrush brush, Float4x4 toWorld, Plane plane)
     {
         var points = new List<Float3>();
-        foreach (var edge in brush.Shape!.Edges)
+        foreach (GeometryData.Edge edge in brush.Shape!.Edges)
         {
             Float3 a = Float4x4.TransformPoint(edge.Vert1.Point, toWorld);
             Float3 b = Float4x4.TransformPoint(edge.Vert2.Point, toWorld);
@@ -490,7 +490,7 @@ public sealed class CSGClipTool : SceneTool
 
             Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
             DrawCutOutline(ctx, brush, toWorld, worldPlane);
-            foreach (var v in brush.Shape.Vertices)
+            foreach (GeometryData.Vertex v in brush.Shape.Vertices)
             {
                 Float3 world = Float4x4.TransformPoint(v.Point, toWorld);
                 bool front = worldPlane.GetSignedDistanceToPoint(world) > 0f;

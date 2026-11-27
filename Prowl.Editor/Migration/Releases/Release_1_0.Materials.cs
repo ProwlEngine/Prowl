@@ -81,7 +81,7 @@ internal sealed partial class Release_1_0
     /// </summary>
     internal static bool AdoptLegacyShader(RawMaterial m)
     {
-        if (m.Shader is not { } shader || !LegacyShaders.TryGetValue(shader, out var legacy)) return false;
+        if (m.Shader is not { } shader || !LegacyShaders.TryGetValue(shader, out (string Name, LegacyShader Shader) legacy)) return false;
         m.Shader = legacy.Shader.Lit ? LitShader : UnlitShader;
         if (!m.HasSurface) m.SetSurface(legacy.Shader.Type, legacy.Shader.Cull);
 

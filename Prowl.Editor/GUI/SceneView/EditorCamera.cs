@@ -311,9 +311,11 @@ public class EditorCamera
     {
         // Disabled, so joining the scene for each render does not count as enabling the camera, which would forget
         // its motion history every frame and break every temporal effect in the scene view
-        _cameraObject = new GameObject("EditorCamera");
-        _cameraObject.Enabled = false;
-        _cameraObject.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        _cameraObject = new GameObject("EditorCamera")
+        {
+            Enabled = false,
+            HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos
+        };
 
         _camera = _cameraObject.AddComponent<Camera>();
         _camera.FieldOfView = 60f;

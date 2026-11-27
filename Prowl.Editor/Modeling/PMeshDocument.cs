@@ -33,19 +33,19 @@ public sealed class PMeshObject
     public GeometryData Mesh = new();
 
     /// <summary>The material asset of each slot, empty for a slot with none.</summary>
-    public List<Guid> Materials = new();
+    public List<Guid> Materials = [];
 
     /// <summary>Edges whose faces meet at less than this many degrees are smooth when normals are worked out.</summary>
     public float SmoothingAngle = 30f;
 
     /// <summary>Run in order on a copy of the mesh, whose end is what the import builds.</summary>
-    public List<ModelModifier> Modifiers = new();
+    public List<ModelModifier> Modifiers = [];
 
     /// <summary>The bones the mesh is skinned to, in the order its bone indices count them. Empty for a mesh with no skin.</summary>
-    public List<PMeshBone> Bones = new();
+    public List<PMeshBone> Bones = [];
 
     /// <summary>The names and weights of the blend shapes the mesh's shape attributes hold, in their order.</summary>
-    public List<PMeshShape> Shapes = new();
+    public List<PMeshShape> Shapes = [];
 
     /// <summary>A mesh holding what the geometry does not: bone names, bind poses, blend shape names and frame weights.</summary>
     public Mesh SkinTemplate() => new()
@@ -106,7 +106,7 @@ public sealed class PMeshDocument
     public const string Extension = ".pmesh";
     private const int FormatVersion = 1;
 
-    public List<PMeshObject> Objects { get; } = new();
+    public List<PMeshObject> Objects { get; } = [];
 
     /// <summary>What an object's modifiers see: its bones, and the document's other objects placed into its space.</summary>
     public ModifierContext ContextFor(PMeshObject item)
@@ -373,7 +373,7 @@ public sealed class PMeshDocument
             } while (loop != face.Loop);
         }
 
-        var points = new float[mesh.Vertices.Count * 3];
+        float[] points = new float[mesh.Vertices.Count * 3];
         for (int i = 0; i < mesh.Vertices.Count; i++)
         {
             Float3 p = mesh.Vertices[i].Point;
@@ -381,15 +381,15 @@ public sealed class PMeshDocument
             points[i * 3 + 1] = p.Y;
             points[i * 3 + 2] = p.Z;
         }
-        var edges = new int[mesh.Edges.Count * 2];
+        int[] edges = new int[mesh.Edges.Count * 2];
         for (int i = 0; i < mesh.Edges.Count; i++)
         {
             edges[i * 2] = index[mesh.Edges[i].Vert1];
             edges[i * 2 + 1] = index[mesh.Edges[i].Vert2];
         }
-        var sizes = new int[mesh.Faces.Count];
+        int[] sizes = new int[mesh.Faces.Count];
         for (int i = 0; i < mesh.Faces.Count; i++) sizes[i] = mesh.Faces[i].VertCount;
-        var corners = new int[loops.Count];
+        int[] corners = new int[loops.Count];
         for (int i = 0; i < loops.Count; i++) corners[i] = index[loops[i].Vert];
 
         EchoObject m = EchoObject.NewCompound();
@@ -485,7 +485,7 @@ public sealed class PMeshDocument
             }
             else if (isFloat)
             {
-                var values = new float[elements.Count * size];
+                float[] values = new float[elements.Count * size];
                 for (int i = 0; i < elements.Count; i++)
                     if (elements[i].TryGetAttribute(definition.Name, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue f && f.Data.Length == size)
                         f.Data.CopyTo(values, i * size);
@@ -493,7 +493,7 @@ public sealed class PMeshDocument
             }
             else
             {
-                var values = new int[elements.Count * size];
+                int[] values = new int[elements.Count * size];
                 for (int i = 0; i < elements.Count; i++)
                     if (elements[i].TryGetAttribute(definition.Name, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue n && n.Data.Length == size)
                         n.Data.CopyTo(values, i * size);

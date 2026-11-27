@@ -337,8 +337,11 @@ public static class AnimationNodeRows
 }
 
 /// <summary>The widgets that edit an animation node's settings, on its card and in the inspector.</summary>
-public static class AnimationNodeFields
+public static partial class AnimationNodeFields
 {
+    [System.Text.RegularExpressions.GeneratedRegex("(?<=[a-z])(?=[A-Z])")]
+    private static partial System.Text.RegularExpressions.Regex CamelBoundary();
+
     /// <summary>Gives a setting its own port, or takes it away and leaves the value that was typed.</summary>
     public static void Expose(GraphNodeRecord record, NodeSetting property, bool exposed)
     {
@@ -460,7 +463,7 @@ public static class AnimationNodeFields
         HumanBodyBone[] bones = Enum.GetValues<HumanBodyBone>();
         string[] choices = new string[bones.Length + 1];
         for (int i = 0; i < bones.Length; i++)
-            choices[i] = System.Text.RegularExpressions.Regex.Replace(bones[i].ToString(), "(?<=[a-z])(?=[A-Z])", " ");
+            choices[i] = CamelBoundary().Replace(bones[i].ToString(), " ");
         choices[^1] = "Custom";
         return choices;
     }

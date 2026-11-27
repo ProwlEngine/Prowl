@@ -187,6 +187,9 @@ dotnet_diagnostic.IDE0044.severity = none
 # No primary constructor suggestions
 dotnet_diagnostic.IDE0290.severity = none
 
+# Only suggest static for members outside the public API, so instance APIs stay as they are
+dotnet_code_quality.CA1822.api_surface = private, internal
+
 # License header
 file_header_template = This file is part of the Prowl Game Engine\nLicensed under the MIT License. See the LICENSE file in the project root for details.
 

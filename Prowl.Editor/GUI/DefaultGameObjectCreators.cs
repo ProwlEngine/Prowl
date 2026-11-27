@@ -1,8 +1,8 @@
 using System.Linq;
 
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;

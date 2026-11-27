@@ -8,12 +8,12 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Editor.Core;
-using Prowl.Ember;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
+using Prowl.Ember;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

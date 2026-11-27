@@ -13,6 +13,9 @@ namespace Prowl.Editor.Migration.Releases;
 
 internal sealed partial class Release_1_0 : MigrationRelease
 {
+    [GeneratedRegex(@"Prowl\.Runtime\.Resources\.Scene(?=[,\]]|$)")]
+    private static partial Regex LegacySceneType();
+
     public override string Name => "1.0";
 
     public override MigrationStep[] Steps =>
@@ -81,7 +84,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
     internal static void CameraTonemappingToProfile(MigrationContext ctx)
     {
         Dictionary<Guid, long> sharedProfiles = [];
-        HashSet<string> cameras = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> cameras = [with(StringComparer.OrdinalIgnoreCase)];
         ctx.RewriteEchoAssets(echo => MoveCameraTonemapping(echo, sharedProfiles, cameras));
         ctx.RewriteEchoAssets((guid, echo) =>
             sharedProfiles.TryGetValue(guid, out long mode) && TypeName(echo) == VolumeProfileType && AddTonemapping(echo, mode) ? echo : null);
@@ -269,7 +272,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
     // Every component of the renamed types is found first, so prefab overrides on them in other files can be renamed too
     internal static void RenameSettings(MigrationContext ctx, IReadOnlyDictionary<string, (string From, string To)[]> renames)
     {
-        Dictionary<string, string> components = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> components = [with(StringComparer.OrdinalIgnoreCase)];
         ctx.RewriteEchoAssets(echo => { CollectComponents(echo, renames, components); return null; });
         ctx.RewriteEchoAssets(echo => RenameSettings(echo, renames, components));
     }
@@ -821,7 +824,7 @@ internal sealed partial class Release_1_0 : MigrationRelease
         ForEachCompound(echo, tag =>
         {
             if (!tag.TryGet("$type", out EchoObject? type) || type!.TagType != EchoType.String) return;
-            string renamed = Regex.Replace(type.StringValue, @"Prowl\.Runtime\.Resources\.Scene(?=[,\]]|$)", "Prowl.Runtime.Resources.SceneAsset");
+            string renamed = LegacySceneType().Replace(type.StringValue, "Prowl.Runtime.Resources.SceneAsset");
             if (renamed == type.StringValue) return;
             tag["$type"] = new EchoObject(renamed);
             changed = true;

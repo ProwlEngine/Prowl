@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -68,7 +69,7 @@ public class GameViewInputHandler : IInputHandler
         }
     }
 
-    private bool ShouldFilter => Runtime.Application.IsGameplayExecuting && !IsGameViewFocused;
+    private static bool ShouldFilter => Runtime.Application.IsGameplayExecuting && !IsGameViewFocused;
 
     private static bool TryGetViewport(out GameViewport vp)
     {
@@ -207,7 +208,7 @@ public static class SimulatedInput
     private static readonly Dictionary<KeyCode, Hold> s_keys = [];
     private static readonly Dictionary<int, Hold> s_buttons = [];
     private static readonly Stopwatch s_clock = Stopwatch.StartNew();
-    private static readonly object s_lock = new();
+    private static readonly Lock s_lock = new();
     private static Float2 s_look;
     private static TimeSpan s_lookUntil;
     private static Int2 s_pointer;

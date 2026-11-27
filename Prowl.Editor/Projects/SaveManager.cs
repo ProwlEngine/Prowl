@@ -34,7 +34,7 @@ public static class SaveManager
     public static event SaveHandler? OnSave;
 
     /// <summary>Auto-save interval in seconds. Set to 0 to disable. Default 300 (5 minutes).</summary>
-    public static float AutoSaveInterval = 300f;
+    public static float AutoSaveInterval { get; set; } = 300f;
 
     /// <summary>Whether auto-save is enabled, from the editor preferences.</summary>
     public static bool AutoSaveEnabled => EditorSettings.Instance.AutoSave;

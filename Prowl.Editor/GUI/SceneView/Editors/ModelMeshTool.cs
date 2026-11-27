@@ -8,16 +8,16 @@ using System.Linq;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Modeling;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Editor.Theming;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Unwrapper;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
-using Prowl.Unwrapper;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
@@ -48,12 +48,12 @@ public sealed class ModelMeshTool : SceneTool
     private static readonly Color32 FaceFill = new(255, 200, 90, 60);
 
     /// <summary>The objects being edited, empty outside edit mode.</summary>
-    private readonly List<ModelObject> _edited = new();
+    private readonly List<ModelObject> _edited = [];
 
     // The mesh each object had when last looked at, so a mesh put back by undo is noticed
-    private readonly Dictionary<ModelObject, GeometryData> _meshes = new();
-    private readonly Dictionary<ModelObject, ElementSelection> _selection = new();
-    private readonly Dictionary<ModelObject, ElementSelection> _hidden = new();
+    private readonly Dictionary<ModelObject, GeometryData> _meshes = [];
+    private readonly Dictionary<ModelObject, ElementSelection> _selection = [];
+    private readonly Dictionary<ModelObject, ElementSelection> _hidden = [];
     private readonly ModelEditSelection _held = new();
 
     // A modal grab, rotate or scale, or a gizmo or box drag in progress
@@ -75,7 +75,7 @@ public sealed class ModelMeshTool : SceneTool
 
     // An operator whose amount follows the mouse: the meshes and selections it started from, what it runs, and its count
     private AmountOperator? _operator;
-    private readonly Dictionary<ModelObject, (GeometrySnapshot Mesh, ModelEditPart Selection)> _start = new();
+    private readonly Dictionary<ModelObject, (GeometrySnapshot Mesh, ModelEditPart Selection)> _start = [];
     private Float2 _operatorFrom;
     private readonly SlowPointer _operatorPointer = new();
     private Float3 _operatorPivot, _operatorNormal;
@@ -92,7 +92,7 @@ public sealed class ModelMeshTool : SceneTool
 
     // The knife: the object it cuts, and where each point was clicked and what of the mesh it sits on
     private ModelObject? _knifeModel;
-    private readonly List<(Float2 Pixel, KnifePoint Point)> _knife = new();
+    private readonly List<(Float2 Pixel, KnifePoint Point)> _knife = [];
 
     /// <summary>How the mouse sets a distance operator's amount.</summary>
     private enum OperatorDrag
@@ -486,11 +486,11 @@ public sealed class ModelMeshTool : SceneTool
             go.Transform.LocalScale = source.Transform.LocalScale;
             ModelObject split = go.AddComponent<ModelObject>();
             split.Mesh = part;
-            split.Materials = new List<Guid>(model.Materials);
+            split.Materials = [with(model.Materials)];
             split.SmoothingAngle = model.SmoothingAngle;
             split.Modifiers = [.. model.Modifiers.Select(m => m.Clone())];
-            split.Bones = new List<PMeshBone>(model.Bones);
-            split.Shapes = new List<PMeshShape>(model.Shapes);
+            split.Bones = [with(model.Bones)];
+            split.Shapes = [with(model.Shapes)];
             split.RefreshPreview();
             Undo.RegisterCreatedObjectUndo(go, Name);
         }
@@ -1619,7 +1619,7 @@ public sealed class ModelMeshTool : SceneTool
         foreach (ModelObject model in _edited)
         {
             Undo.RecordObject(model, name);
-            var (points, faces) = Before(model.Mesh);
+            (Dictionary<GeometryData.Vertex, Float3>? points, HashSet<GeometryData.Face>? faces) = Before(model.Mesh);
             bool skinned = Operators.SkinToWeights(model.Mesh);
             try
             {
@@ -2580,7 +2580,7 @@ public sealed class ModelMeshTool : SceneTool
     private const float QuadLift = 0.002f;
 
     private ModelObject? _quadModel;
-    private readonly List<(Float3 World, GeometryData.Vertex? Existing)> _quadCorners = new();
+    private readonly List<(Float3 World, GeometryData.Vertex? Existing)> _quadCorners = [];
     private GeometryData.Vertex? _quadHeld;
     private Float2 _quadPress;
     private Float3 _quadHeldStart;
@@ -2941,7 +2941,7 @@ public sealed class ModelMeshTool : SceneTool
 
     /// <summary>The nearest distance along a ray to a shown face of any edited object.</summary>
     // The picking tree of each mesh looked at this frame, found again next frame in case points moved
-    private readonly Dictionary<GeometryData, MeshBvh> _trees = new();
+    private readonly Dictionary<GeometryData, MeshBvh> _trees = [];
 
     private MeshBvh Tree(GeometryData mesh)
     {
@@ -3209,7 +3209,7 @@ public sealed class ModelMeshTool : SceneTool
 /// <summary>Model edit mode's selection by index, recorded with each edit so undo brings it back.</summary>
 internal sealed class ModelEditSelection
 {
-    public List<ModelEditPart> Parts = new();
+    public List<ModelEditPart> Parts = [];
 }
 
 internal sealed class ModelEditPart

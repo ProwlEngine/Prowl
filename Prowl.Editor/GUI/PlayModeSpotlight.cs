@@ -47,7 +47,7 @@ public static class PlayModeSpotlight
 
         float W = (float)paper.ScreenRect.Size.X, H = (float)paper.ScreenRect.Size.Y;
         float appear = 1f - MathF.Pow(1f - s_alpha, 3f);
-        var (hx, hy, hw, hh) = s_rect;
+        (float hx, float hy, float hw, float hh) = s_rect;
 
         // Four rects around the hole. The header stays undimmed so Stop / Pause stay easy to find.
         Color back = Color.FromArgb((int)(Math.Clamp(prefs.SpotlightDim, 0f, 1f) * 255 * appear), 4, 3, 9);

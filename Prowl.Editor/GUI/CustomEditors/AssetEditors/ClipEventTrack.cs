@@ -25,8 +25,11 @@ namespace Prowl.Editor.Inspector;
 /// The events of one clip on a strip the length of the clip: moments as markers, stretches as bars.
 /// Events are stored in the model's import settings, timed in seconds of the take.
 /// </summary>
-internal sealed class ClipEventTrack
+internal sealed partial class ClipEventTrack
 {
+    [GeneratedRegex("(?<=[a-z])(?=[A-Z])")]
+    private static partial Regex CamelBoundary();
+
     private const float LaneHeight = 18f;
     private const float Pad = 4f;
     private const float EdgeGrab = 5f;
@@ -360,5 +363,5 @@ internal sealed class ClipEventTrack
         };
     }
 
-    private static string Words(string name) => Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", " ");
+    private static string Words(string name) => CamelBoundary().Replace(name, " ");
 }

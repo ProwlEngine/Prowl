@@ -9,9 +9,9 @@ using Prowl.Vector;
 
 using Canvas = Prowl.Quill.Canvas;
 using MotionAvatar = Prowl.Motion.Avatar;
-using MotionSkeleton = Prowl.Motion.Skeleton;
 using MotionClip = Prowl.Motion.AnimationClipBase;
 using MotionPose = Prowl.Motion.Pose;
+using MotionSkeleton = Prowl.Motion.Skeleton;
 
 namespace Prowl.Editor.GUI;
 
@@ -20,7 +20,7 @@ namespace Prowl.Editor.GUI;
 /// Creates an isolated Scene with camera + light for clean rendering.
 /// Supports orbit camera for interactive previews.
 /// </summary>
-public class PreviewRenderer : IDisposable
+public sealed class PreviewRenderer : IDisposable
 {
     private Scene _scene;
     private GameObject _cameraGo;
@@ -70,12 +70,16 @@ public class PreviewRenderer : IDisposable
         Width = width;
         Height = height;
 
-        _scene = new Scene(SceneMode.Preview);
-        _scene.Name = "Preview";
+        _scene = new Scene(SceneMode.Preview)
+        {
+            Name = "Preview"
+        };
 
         // Camera
-        _cameraGo = new GameObject("PreviewCamera");
-        _cameraGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        _cameraGo = new GameObject("PreviewCamera")
+        {
+            HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos
+        };
         _camera = _cameraGo.AddComponent<Camera>();
         _camera.FieldOfView = 35f;
         _camera.NearClipPlane = 0.01f;
@@ -87,8 +91,10 @@ public class PreviewRenderer : IDisposable
         _scene.Add(_cameraGo);
 
         // Light
-        _lightGo = new GameObject("PreviewLight");
-        _lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        _lightGo = new GameObject("PreviewLight")
+        {
+            HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos
+        };
         _lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
         _lightGo.AddComponent<DirectionalLight>().CastShadows = false;
         _scene.Add(_lightGo);
@@ -228,8 +234,10 @@ public class PreviewRenderer : IDisposable
         ClearSubject();
         if (material.IsNotValid()) return;
 
-        _subjectGo = new GameObject("PreviewSubject");
-        _subjectGo.HideFlags = HideFlags.HideAndDontSave;
+        _subjectGo = new GameObject("PreviewSubject")
+        {
+            HideFlags = HideFlags.HideAndDontSave
+        };
         MeshRenderer renderer = _subjectGo.AddComponent<MeshRenderer>();
         renderer.Mesh = Mesh.CreateSphere(0.5f, 32, 32);
 
@@ -346,7 +354,7 @@ public class PreviewRenderer : IDisposable
     /// saved non-identity transform (e.g. prefabs) the reset ensures the bounds we measure
     /// are in the same frame we then apply the normalization into.
     /// </summary>
-    private void NormalizeSubjectToUnitCube(GameObject subject)
+    private static void NormalizeSubjectToUnitCube(GameObject subject)
     {
         // Reset the root so computed world-space bounds are relative to a clean frame.
         // Translating/scaling the root afterwards then produces the expected centering.

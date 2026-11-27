@@ -56,10 +56,10 @@ public class FrameStatsPanel : DockPanel
     private readonly History _history = new(ColumnCapacity);
     // Rows switched on or off by the user, by category path; any other row follows its category's HiddenByDefault.
     // Kept by path, so a saved choice also reaches a category game code makes later.
-    private readonly Dictionary<string, bool> _shown = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, bool> _shown = [with(StringComparer.OrdinalIgnoreCase)];
     // Groups whose own time, the Other row under them, is switched off.
-    private readonly HashSet<string> _otherHidden = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _otherHidden = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly HashSet<string> _expanded = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly HashSet<FrameStat> _effectiveHidden = [];
     private readonly List<Row> _rows = [];
     // The hovered row: a category, or with _hoveredOther the Other row under it.
@@ -601,7 +601,7 @@ public class FrameStatsPanel : DockPanel
     // Scanning every column only when a column arrives or what is shown changes, not every frame.
     private float TallestStackMs(IReadOnlyList<FrameStat> categories)
     {
-        var of = (Content, _stackMax);
+        (ContentKey Content, bool _stackMax) of = (Content, _stackMax);
         if (of != _tallestOf)
         {
             _tallestOf = of;
@@ -710,7 +710,7 @@ public class FrameStatsPanel : DockPanel
         IReadOnlyList<FrameStat> categories = FrameStats.Categories;
         History.Totals totals = _history.Summarise(categories.Count, _visibleColumns);
 
-        var rowsOf = (Content, _hideUnselected);
+        (ContentKey Content, bool _hideUnselected) rowsOf = (Content, _hideUnselected);
         if (rowsOf != _rowsOf)
         {
             _rowsOf = rowsOf;
@@ -951,7 +951,7 @@ public class FrameStatsPanel : DockPanel
     private HeaderStrings HeaderText()
     {
         if (_header?.Locale == Loc.CurrentLocale) return _header;
-        TooltipContent Tip(string key) => new(Loc.Get(key));
+        static TooltipContent Tip(string key) => new(Loc.Get(key));
         return _header = new HeaderStrings
         {
             Locale = Loc.CurrentLocale,
@@ -1277,7 +1277,7 @@ public class FrameStatsPanel : DockPanel
         /// <summary>Totals over the newest <paramref name="columns"/> columns.</summary>
         public Totals Summarise(int categoryCount, int columns)
         {
-            var of = (Version, categoryCount, columns);
+            (long Version, int categoryCount, int columns) of = (Version, categoryCount, columns);
             if (of == _totalsOf) return _totals;
             _totalsOf = of;
             _totals = Total(categoryCount, columns);

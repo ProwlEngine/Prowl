@@ -91,7 +91,7 @@ public sealed class MenuItemAttribute : Attribute
     private sealed record Entry(string Path, Action Action, int Priority, string Icon, Type DeclaringType, bool Separator = false, bool SelectionWide = false);
 
     private static readonly List<Entry> _entries = [];
-    private static readonly Dictionary<string, Func<bool>> _validators = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, Func<bool>> _validators = [with(StringComparer.Ordinal)];
     private static bool _dirty;
     private static List<Entry>? _sorted;
 
@@ -175,8 +175,8 @@ public sealed class MenuItemAttribute : Attribute
             else
             {
                 string key = rest.Substring(0, slash);
-                if (!branches.ContainsKey(key)) { branches[key] = []; branchOrder.Add(key); }
-                branches[key].Add(e);
+                if (!branches.TryGetValue(key, out List<Entry>? branch)) { branches[key] = branch = []; branchOrder.Add(key); }
+                branch.Add(e);
             }
         }
 
@@ -263,8 +263,8 @@ public sealed class MenuItemAttribute : Attribute
             else
             {
                 string key = rest.Substring(0, slash);
-                if (!branches.ContainsKey(key)) { branches[key] = []; branchOrder.Add(key); }
-                branches[key].Add(e);
+                if (!branches.TryGetValue(key, out List<Entry>? branch)) { branches[key] = branch = []; branchOrder.Add(key); }
+                branch.Add(e);
             }
         }
 

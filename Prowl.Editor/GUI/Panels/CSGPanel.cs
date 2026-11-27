@@ -11,6 +11,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.CSG;
+using Prowl.Scribe;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -25,7 +26,7 @@ public class CSGPanel : DockPanel
 
     public override void OnGUI(Paper paper, float width, float height)
     {
-        var font = EditorTheme.DefaultFont;
+        FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
         CSGModel? model = CSGSelection.ActiveModel();

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace Prowl.Editor;
 
@@ -23,10 +24,10 @@ public struct FileEvent
 /// Watches the Assets/ directory for file changes using FileSystemWatcher.
 /// Debounces and coalesces events for processing on the main thread.
 /// </summary>
-public class AssetWatcher : IDisposable
+public sealed class AssetWatcher : IDisposable
 {
     private FileSystemWatcher? _watcher;
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly List<FileEvent> _pendingEvents = [];
     private DateTime _lastEventTime = DateTime.MinValue;
     private const double DebounceMs = 300;

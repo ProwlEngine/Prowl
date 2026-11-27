@@ -220,8 +220,8 @@ public static class CSGSelection
     }
 
     // What each object under the models was last seen as, so only what changes since is tidied
-    private static readonly Dictionary<GameObject, Float3> s_seenScale = new();
-    private static readonly Dictionary<CSGBrush, int> s_seenVersion = new();
+    private static readonly Dictionary<GameObject, Float3> s_seenScale = [];
+    private static readonly Dictionary<CSGBrush, int> s_seenVersion = [];
 
     /// <summary>
     /// Keeps a model's brushes tidy after each change: a scale given to a brush or anything holding brushes is baked into

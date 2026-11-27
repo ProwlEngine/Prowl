@@ -18,9 +18,9 @@ using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.CSharp;
 using Prowl.OrigamiUI.Graphite;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 
 using TextAlignment = Prowl.PaperUI.TextAlignment;
@@ -371,14 +371,14 @@ public class ScriptEditorWindow : DockPanel
         {
             if (s_window == null || SaveManager.IsAutoSave) return null;
             var saved = new List<string>();
-            foreach (var tab in s_window._tabs)
+            foreach (ScriptTab tab in s_window._tabs)
                 if (tab.Editor.IsDirty && Save(tab)) saved.Add(tab.Name);
             return saved.Count == 0 ? null : Loc.Get("save.script", new { name = string.Join(", ", saved) });
         };
         SaveManager.CollectUnsaved += unsaved =>
         {
             if (s_window == null) return;
-            foreach (var tab in s_window._tabs)
+            foreach (ScriptTab tab in s_window._tabs)
                 if (tab.Editor.IsDirty) unsaved.Add(Loc.Get("save.script", new { name = tab.Name }));
         };
     }
@@ -407,14 +407,14 @@ public class ScriptEditorWindow : DockPanel
     public static void OpenFor(string path, int line = 0, int column = 1)
     {
         if (Path.IsPathRooted(path)) path = Path.GetFullPath(path);
-        var window = s_window;
+        ScriptEditorWindow? window = s_window;
         bool created = window == null;
         window ??= new ScriptEditorWindow();
 
         int index = window._tabs.FindIndex(t => SamePath(t.Path, path));
         if (index < 0)
         {
-            var tab = window.Load(path);
+            ScriptTab? tab = window.Load(path);
             if (tab == null)
             {
                 if (created) s_window = null;
@@ -428,7 +428,7 @@ public class ScriptEditorWindow : DockPanel
         if (created) EditorApplication.Instance?.OpenPanelInstance(window, 960, 720);
         else EditorApplication.Instance?.FocusPanelInstance(window);
 
-        var editor = window._tabs[index].Editor;
+        CodeEditor editor = window._tabs[index].Editor;
         editor.Focus();
         if (line > 0) editor.GoToLine(line, column);
     }
@@ -472,7 +472,7 @@ public class ScriptEditorWindow : DockPanel
         if (s_keymap != null && s_keymapVersion == ShortcutManager.Version) return s_keymap;
         s_keymapVersion = ShortcutManager.Version;
 
-        var keymap = CodeEditorKeymap.Default.Clone();
+        CodeEditorKeymap keymap = CodeEditorKeymap.Default.Clone();
         foreach (CodeEditorCommand command in Enum.GetValues<CodeEditorCommand>())
         {
             string id = ShortcutCategory + command;
@@ -487,7 +487,7 @@ public class ScriptEditorWindow : DockPanel
     internal static void ApplyPreferences()
     {
         if (s_window == null) return;
-        foreach (var tab in s_window._tabs) ApplyOptions(tab.Editor, tab.ReadOnly);
+        foreach (ScriptTab tab in s_window._tabs) ApplyOptions(tab.Editor, tab.ReadOnly);
     }
 
     // Code shown outside the project it builds in would light up with errors that are not real, so it gets no diagnostics or reference counts.
@@ -544,14 +544,14 @@ public class ScriptEditorWindow : DockPanel
         bool readOnly = library || !InAssets(path);
 
         bool onFallback = false;
-        var shaderKind = ShaderLanguage.KindFor(Path.GetExtension(path));
+        ShaderFileKind? shaderKind = ShaderLanguage.KindFor(Path.GetExtension(path));
         CodeLanguage language = shaderKind is { } kind
             ? new ShaderLanguage(ShaderWorkspaces.Shared, kind, path)
             : new RoslynCSharpLanguage(ScriptWorkspaces.Get(path, out onFallback), path);
         var editor = new OrigamiUI.CodeEditor(text, language) { FilePath = path };
         ApplyOptions(editor, readOnly);
 
-        var backend = EditorAssetBackend.Instance;
+        EditorAssetBackend? backend = EditorAssetBackend.Instance;
         var tab = new ScriptTab
         {
             Path = path, Editor = editor, Id = ++s_nextTabId,
@@ -569,10 +569,10 @@ public class ScriptEditorWindow : DockPanel
     // Scripts opened before their unit compiled start on the fallback workspace and move once a compile has placed them.
     private void OnWorkspacesRefreshed()
     {
-        foreach (var tab in _tabs)
+        foreach (ScriptTab tab in _tabs)
         {
             if (!tab.OnFallback) continue;
-            var workspace = ScriptWorkspaces.Get(tab.Path, out tab.OnFallback);
+            CSharpWorkspace workspace = ScriptWorkspaces.Get(tab.Path, out tab.OnFallback);
             if (!tab.OnFallback) tab.Editor.Language = new RoslynCSharpLanguage(workspace, tab.Path);
         }
     }
@@ -581,7 +581,7 @@ public class ScriptEditorWindow : DockPanel
     {
         CheckDisk(paper);
         TickAutoSave();
-        var m = Origami.Current.Metrics;
+        OrigamiMetrics m = Origami.Current.Metrics;
         const float tabsH = 32, toolbarH = 30;
 
         using (paper.Column("se_root").Width(width).Height(height).Enter())
@@ -592,12 +592,12 @@ public class ScriptEditorWindow : DockPanel
                 return;
             }
             _active = Math.Clamp(_active, 0, _tabs.Count - 1);
-            var active = _tabs[_active];
+            ScriptTab active = _tabs[_active];
 
-            var tabs = Origami.Tabs(paper, "se_tabs", _active, i => { _active = i; _tabs[i].Editor.Focus(); })
+            TabsBuilder tabs = Origami.Tabs(paper, "se_tabs", _active, i => { _active = i; _tabs[i].Editor.Focus(); })
                 .Width(UnitValue.Stretch()).Height(tabsH)
                 .Closeable(i => CloseTab(i));
-            foreach (var tab in _tabs) tabs.Tab(tab.ReadOnly ? tab.Name + " (read only)" : tab.Editor.IsDirty ? tab.Name + " *" : tab.Name);
+            foreach (ScriptTab tab in _tabs) tabs.Tab(tab.ReadOnly ? tab.Name + " (read only)" : tab.Editor.IsDirty ? tab.Name + " *" : tab.Name);
             tabs.Show();
 
             using (paper.Row("se_bar").Width(UnitValue.Stretch()).Height(toolbarH)
@@ -636,7 +636,7 @@ public class ScriptEditorWindow : DockPanel
         bool focusLost = _wasFocused && !focused;
         _wasFocused = focused;
 
-        foreach (var tab in _tabs)
+        foreach (ScriptTab tab in _tabs)
         {
             if (!tab.Editor.IsDirty) continue;
             bool due = prefs.AutoSave switch
@@ -652,7 +652,7 @@ public class ScriptEditorWindow : DockPanel
     private void CloseTab(int index, bool save = true)
     {
         if (index < 0 || index >= _tabs.Count) return;
-        var tab = _tabs[index];
+        ScriptTab tab = _tabs[index];
         if (save && tab.Editor.IsDirty) Save(tab);
         tab.Editor.Dispose();
         _tabs.RemoveAt(index);
@@ -665,7 +665,7 @@ public class ScriptEditorWindow : DockPanel
         if (paper.Time < _nextDiskCheck) return;
         _nextDiskCheck = paper.Time + 1.0;
 
-        foreach (var tab in _tabs.ToArray())
+        foreach (ScriptTab tab in _tabs.ToArray())
         {
             if (tab.Asking || tab.IsLibrary) continue;
             if (tab.ReadOnly)
@@ -695,7 +695,7 @@ public class ScriptEditorWindow : DockPanel
     // A file gone from its path was renamed or deleted. The asset database is the judge, by GUID, once it has caught up.
     private void CheckMissing(ScriptTab tab)
     {
-        var backend = EditorAssetBackend.Instance;
+        EditorAssetBackend? backend = EditorAssetBackend.Instance;
         string? relative = tab.Guid != Guid.Empty ? backend?.GuidToPath(tab.Guid) : null;
         if (relative != null && Project.Current is { } project)
         {
@@ -708,8 +708,13 @@ public class ScriptEditorWindow : DockPanel
         }
 
         tab.Asking = true;
-        var dialog = new DialogModal { Title = "Script deleted", Width = 420, OnDismissed = _ => tab.Asking = false };
-        dialog.DrawContent = paper => Origami.Label(paper, "se_missing_msg", $"{tab.Name} was deleted outside the Script Editor. Close its tab, or keep it open to save it again?").Show();
+        var dialog = new DialogModal
+        {
+            Title = "Script deleted",
+            Width = 420,
+            OnDismissed = _ => tab.Asking = false,
+            DrawContent = paper => Origami.Label(paper, "se_missing_msg", $"{tab.Name} was deleted outside the Script Editor. Close its tab, or keep it open to save it again?").Show()
+        };
         dialog.Button("Close", () => { Modal.Remove(dialog); tab.Asking = false; CloseTab(_tabs.IndexOf(tab), save: false); }, OrigamiVariant.Primary);
         dialog.Button("Keep Open", () => { Modal.Remove(dialog); tab.Asking = false; tab.Gone = true; tab.Guid = Guid.Empty; });
         Modal.Push(dialog);
@@ -725,8 +730,13 @@ public class ScriptEditorWindow : DockPanel
         }
 
         tab.Asking = true;
-        var dialog = new DialogModal { Title = "Script changed", Width = 420, OnDismissed = _ => tab.Asking = false };
-        dialog.DrawContent = paper => Origami.Label(paper, "se_reload_msg", $"{reason} Reload it, or close its tab? Reloading discards your unsaved edits here.").Show();
+        var dialog = new DialogModal
+        {
+            Title = "Script changed",
+            Width = 420,
+            OnDismissed = _ => tab.Asking = false,
+            DrawContent = paper => Origami.Label(paper, "se_reload_msg", $"{reason} Reload it, or close its tab? Reloading discards your unsaved edits here.").Show()
+        };
         dialog.Button("Reload", () => { Modal.Remove(dialog); tab.Asking = false; Reload(tab); }, OrigamiVariant.Primary);
         dialog.Button("Close", () => { Modal.Remove(dialog); tab.Asking = false; CloseTab(_tabs.IndexOf(tab), save: false); });
         Modal.Push(dialog);
@@ -736,7 +746,7 @@ public class ScriptEditorWindow : DockPanel
     private static void Reload(ScriptTab tab)
     {
         if (tab.IsLibrary || !TryRead(tab.Path, out string text, out bool bom, out DateTime time)) return;
-        var caret = tab.Editor.Caret;
+        TextPosition caret = tab.Editor.Caret;
         tab.Editor.SetText(text);
         tab.HadBom = bom;
         tab.DiskTime = time;
@@ -769,7 +779,7 @@ public class ScriptEditorWindow : DockPanel
         if (s_window is not { } window || Project.Current is not { } project) return;
         Guid guid = EditorAssetBackend.Instance?.PathToGuid(newRelative) ?? Guid.Empty;
         string oldPath = Path.GetFullPath(Path.Combine(project.AssetsPath, oldRelative));
-        var tab = window._tabs.Find(t => (guid != Guid.Empty && t.Guid == guid) || SamePath(t.Path, oldPath));
+        ScriptTab? tab = window._tabs.Find(t => (guid != Guid.Empty && t.Guid == guid) || SamePath(t.Path, oldPath));
         if (tab == null) return;
 
         string newPath = Path.GetFullPath(Path.Combine(project.AssetsPath, newRelative));
@@ -790,9 +800,9 @@ public class ScriptEditorWindow : DockPanel
     /// </summary>
     internal static void ApplyEditsAndSave(IReadOnlyDictionary<string, IReadOnlyList<CodeTextEdit>> edits)
     {
-        foreach (var (path, fileEdits) in edits)
+        foreach ((string? path, IReadOnlyList<CodeTextEdit>? fileEdits) in edits)
         {
-            var open = s_window?._tabs.Find(t => SamePath(t.Path, Path.GetFullPath(path)));
+            ScriptTab? open = s_window?._tabs.Find(t => SamePath(t.Path, Path.GetFullPath(path)));
             if (open == null)
             {
                 RewriteOnDisk(path, fileEdits);
@@ -811,7 +821,7 @@ public class ScriptEditorWindow : DockPanel
             byte[] bytes = File.ReadAllBytes(path);
             bool bom = HasBom(bytes);
             var text = new StringBuilder(new UTF8Encoding(false).GetString(bytes, bom ? 3 : 0, bytes.Length - (bom ? 3 : 0)));
-            foreach (var e in fileEdits.OrderByDescending(e => e.Start))
+            foreach (CodeTextEdit e in fileEdits.OrderByDescending(e => e.Start))
                 text.Remove(e.Start, e.Length).Insert(e.Start, e.NewText);
             File.WriteAllText(path, text.ToString(), new UTF8Encoding(bom));
             ImportAndRecompile(path);
@@ -891,7 +901,7 @@ public class ScriptEditorWindow : DockPanel
     // At the caret, in the external script editor when one is set, otherwise with the system's app.
     private static void OpenExternally(ScriptTab tab)
     {
-        var caret = tab.Editor.Caret;
+        TextPosition caret = tab.Editor.Caret;
         if (!ExternalTools.OpenScript(tab.Path, caret.Line + 1, caret.Column + 1))
             ExternalTools.OpenWithSystem(tab.Path);
     }
@@ -916,9 +926,9 @@ public class ScriptEditorWindow : DockPanel
     // Rename and some code actions touch other scripts. Open ones get the edits in their tab, closed ones are rewritten on disk.
     private void ApplyExternalEdits(IReadOnlyDictionary<string, IReadOnlyList<CodeTextEdit>> edits)
     {
-        foreach (var (path, fileEdits) in edits)
+        foreach ((string? path, IReadOnlyList<CodeTextEdit>? fileEdits) in edits)
         {
-            var open = _tabs.Find(t => SamePath(t.Path, path));
+            ScriptTab? open = _tabs.Find(t => SamePath(t.Path, path));
             if (open is { ReadOnly: true }) continue;
             if (open != null) open.Editor.ApplyEdits(fileEdits);
             else if (Path.IsPathRooted(path) && InAssets(path)) RewriteOnDisk(path, fileEdits);
@@ -929,7 +939,7 @@ public class ScriptEditorWindow : DockPanel
     {
         if (_tabs.Count == 0 || Project.Current is not { } project) return false;
         var scripts = new JsonArray();
-        foreach (var tab in _tabs)
+        foreach (ScriptTab tab in _tabs)
             if (!tab.ReadOnly) scripts.Add(Path.GetRelativePath(project.AssetsPath, tab.Path));
         state["scripts"] = scripts;
         state["active"] = _active;
@@ -939,7 +949,7 @@ public class ScriptEditorWindow : DockPanel
     public override void RestoreState(JsonObject state)
     {
         if (Project.Current is not { } project || state["scripts"] is not JsonArray scripts) return;
-        foreach (var node in scripts)
+        foreach (JsonNode? node in scripts)
         {
             if (node?.GetValue<string>() is not { } relative) continue;
             string path = Path.GetFullPath(Path.Combine(project.AssetsPath, relative));
@@ -952,7 +962,7 @@ public class ScriptEditorWindow : DockPanel
     {
         if (s_window == this) s_window = null;
         ScriptWorkspaces.Refreshed -= OnWorkspacesRefreshed;
-        foreach (var tab in _tabs)
+        foreach (ScriptTab tab in _tabs)
         {
             if (tab.Editor.IsDirty) Save(tab);
             tab.Editor.Dispose();

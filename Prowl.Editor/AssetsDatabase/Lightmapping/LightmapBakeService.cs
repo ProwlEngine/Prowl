@@ -9,9 +9,8 @@ using System.Runtime.InteropServices;
 
 using Prowl.Aperture;
 using Prowl.Echo;
-using Prowl.Editor.Importers;
-
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Importers;
 using Prowl.Editor.Projects;
 using Prowl.Photonic;
 using Prowl.Runtime;
@@ -542,7 +541,7 @@ public sealed class LightmapBakeService
         }
         float range = peak > 0f ? peak : RgbmRange;
 
-        var pages = new byte[targets.Count][];
+        byte[][] pages = new byte[targets.Count][];
         for (int i = 0; i < pages.Length; i++)
             pages[i] = targets[i].ReadRGBM(range);
         return (pages, range / RgbmRange);

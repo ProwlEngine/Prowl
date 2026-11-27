@@ -48,8 +48,8 @@ public sealed class CodeColorScheme
     {
         Name = name,
         Base = Base,
-        Colors = new(Colors),
-        Styles = new(Styles),
+        Colors = [with(Colors)],
+        Styles = [with(Styles)],
     };
 }
 
@@ -83,7 +83,7 @@ public static class CodeColorSchemes
     /// <summary>The palette for the named scheme. The same object is returned until the scheme or theme changes, so the editor keeps its caches.</summary>
     public static CodeEditorColors Palette(string name, OrigamiTheme theme)
     {
-        var key = (name, s_version, theme);
+        (string name, int s_version, OrigamiTheme theme) key = (name, s_version, theme);
         if (s_palette != null && s_paletteKey == key) return s_palette;
         s_paletteKey = key;
         return s_palette = Find(name).Build(theme);
